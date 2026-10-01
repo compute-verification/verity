@@ -113,7 +113,9 @@ if [ "${GATE:-1}" = 1 ]; then
 fi
 # NSYS=1: a profile, not a point: the step's prove process under Nsight Systems' CUDA trace (out/nsys/prove-<pid>.nsys-rep, and
 # its kernel, memcpy and API summaries beside it), unpacked into NSYS_ROOT (default FLOCK_WORK/nsys-root) as 71-gemm-slowdown.sh
-# does; no metrics, result.json or hillclimb.json, since the trace slows the prove. Pass GATE=0: the gate proves nothing it needs
+# does; no metrics, result.json or hillclimb.json, since the trace slows the prove. Pass GATE=0: the gate proves nothing it needs.
+# NSYS_ARGS replaces the trace's options (default: CUDA and NVTX, no CPU sampling); `nsys status -e` in the pod goes to
+# out/nsys/status.txt, so a CPU-sampled profile records whether the pod could sample
 NSW=
 if [ "${NSYS:-0}" = 1 ]; then
   NR=${NSYS_ROOT:-$FLOCK_WORK/nsys-root}; NS=$NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
@@ -122,31 +124,45 @@ if [ "${NSYS:-0}" = 1 ]; then
       https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/nsight-systems-2026.1.3_2026.1.3.425-1_amd64.deb; }) || exit 1
     for d in $NR/debs/*.deb; do dpkg-deb -x $d $NR; done
   fi
-  mkdir -p $R/out/nsys; NSW="$NS profile -t cuda,nvtx --sample=none --cpuctxsw=none -o $R/out/nsys/prove-%p"
+  mkdir -p $R/out/nsys; $NS status -e > $R/out/nsys/status.txt 2>&1
+  NSW="$NS profile ${NSYS_ARGS:--t cuda,nvtx --sample=none --cpuctxsw=none} -o $R/out/nsys/prove-%p"
 fi
 # NCU=1: a profile, not a point: one kernel (NCU_KERNEL, default zerocheck's round 1) under Nsight Compute, from NCU_ROOT (an ncu
 # CLI tree, default FLOCK_WORK/ncu-root). A kernel replayed over several passes has every allocation it can reach saved first, to
-# host memory once the GPU's is full, so the full section set runs on the gate's B = 16 statement (two launches, one per rep) and
-# the step's statement gets only NCU_M35_METRICS, single-pass counters (no save: its 70+ GiB would not fit the job's memory), on
-# the two launches after the warm session's. out/ncu/{b16,m35}-<pid>.ncu-rep and their CSV pages. Pass GATE=0; not with NSYS=1
+# host memory once the GPU's is full, so the full section set runs on the gate's B = 16 statement (NCU_B16_COUNT launches,
+# default 2: one per rep) and the step's statement gets only NCU_M35_METRICS, single-pass counters (no save: its 70+ GiB would
+# not fit the job's memory), on NCU_COUNT launches (default 2) after the first NCU_SKIP (default 2: the warm session's). The B = 16
+# statement takes NCU_M35_METRICS on one launch first: unless ncu collects them in one pass there, the step's statement gets
+# NCU_M35_FALLBACK (out/ncu/m35-metrics.txt says which). out/ncu/{b16,m35}-<pid>.ncu-rep and their CSV pages. Pass GATE=0; not
+# with NSYS=1
 NCW=
 if [ "${NCU:-0}" = 1 ]; then
   [ -n "$NSW" ] && { echo "NCU=1 and NSYS=1: one profiler at a time"; exit 1; }
   NC=${NCU_ROOT:-$FLOCK_WORK/ncu-root}/ncu; [ -x $NC ] || { echo "no ncu at $NC"; exit 1; }
   mkdir -p $R/out/ncu; NCW="$NC --kernel-name regex:${NCU_KERNEL:-zerocheck_first_round_cpu_structured} --clock-control none"
+  M35=${NCU_M35_METRICS:-gpu__time_duration.sum,dram__bytes_op_read.sum,dram__bytes_op_write.sum,smsp__inst_executed.sum,sm__cycles_elapsed.avg}
+  b16() {   # b16 NAME NCU-OPTION...: the B = 16 statement under ncu, out/stamps-NAME.tsv and out/ncu/NAME-<pid>.ncu-rep
+    local n=$1; shift
+    ph ncu-$n start
+    OUT=$S/$n RESEARCH_RUN_DIR=$S/$n \
+      WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps-$n.tsv -- $NCW $* -o $R/out/ncu/$n-%p" \
+      bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=0 PORT=7720 > $R/out/$n.log 2>&1 || ok=0
+    ph ncu-$n end
+    keep $n
+  }
   if [ $ok = 1 ]; then
-    ph ncu-b16 start
-    OUT=$S/b16 RESEARCH_RUN_DIR=$S/b16 \
-      WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps-b16.tsv -- $NCW --set full --launch-count 2 -o $R/out/ncu/b16-%p" \
-      bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=0 PORT=7720 > $R/out/b16.log 2>&1 || ok=0
-    ph ncu-b16 end
-    keep b16
+    b16 b16 --set full --launch-count ${NCU_B16_COUNT:-2}
     for f in $R/out/ncu/b16-*.ncu-rep; do
       [ -f "$f" ] && { $NC --import $f --page details --csv > ${f%.ncu-rep}.details.csv; $NC --import $f --page raw --csv > ${f%.ncu-rep}.raw.csv; }
     done
   fi
-  M35=${NCU_M35_METRICS:-gpu__time_duration.sum,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed.sum,sm__cycles_elapsed.avg}
-  NSW="$NCW --metrics $M35 --launch-skip ${NCU_SKIP:-2} --launch-count 2 -o $R/out/ncu/m35-%p"
+  if [ $ok = 1 ]; then
+    b16 passes --metrics $M35 --launch-count 1
+    grep -qE -- '- 1 pass\s*$' $R/out/stamps-passes.tsv && ! grep -qE -- ' passes\s*$' $R/out/stamps-passes.tsv \
+      || M35=${NCU_M35_FALLBACK:-gpu__time_duration.sum,smsp__inst_executed.sum,sm__cycles_elapsed.avg}
+    echo "$M35" > $R/out/ncu/m35-metrics.txt
+  fi
+  NSW="$NCW --metrics $M35 --launch-skip ${NCU_SKIP:-2} --launch-count ${NCU_COUNT:-2} -o $R/out/ncu/m35-%p"
 fi
 if [ $ok = 1 ]; then
   ph sweep start
@@ -159,7 +175,7 @@ if [ $ok = 1 ]; then
 fi
 kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null
 if [ -n "$NCW" ]; then
-  for f in $R/out/ncu/m35-*.ncu-rep; do [ -f "$f" ] && $NC --import $f --page raw --csv > ${f%.ncu-rep}.raw.csv; done
+  for f in $R/out/ncu/passes-*.ncu-rep $R/out/ncu/m35-*.ncu-rep; do [ -f "$f" ] && $NC --import $f --page raw --csv > ${f%.ncu-rep}.raw.csv; done
   [ $ok = 1 ] && ls $R/out/ncu/b16-*.ncu-rep $R/out/ncu/m35-*.ncu-rep > /dev/null; exit
 fi
 if [ -n "$NSW" ]; then
