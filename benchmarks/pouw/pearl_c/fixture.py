@@ -3,7 +3,9 @@ kernels write, for both formings and the plain baseline.  Forming, lines and has
 `verity_pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
 `verity.ml.kernels.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
 `checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
-and A's rows and the tile leaves committed as `verity_pouw.audit` commits them (frame-b3), whose roots must agree too.
+and A's rows and the tile leaves committed as `verity_pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
+forming's seed_A is its unit's over its own A rows' root (`pearl_c.unit_seed_a`), as the device derives it, so E_A's lines,
+A's forming and the tickets follow A's commitment.
 run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
@@ -28,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "protocols" / "pouw" / "tests"))
 
 import pearl_c_vectors as CV  # noqa: E402
-from verity.commitments.blake3 import keyed  # noqa: E402
+from verity.commitments.blake3 import blake3, keyed  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
 from verity.ml.tc import fp32  # noqa: E402
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
@@ -230,21 +232,18 @@ def context(m: int, n: int, k: int) -> Context:
 def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     assert m % 128 == 0 and n % 128 == 0 and k % 1024 == 0, (m, n, k)
     out_dir.mkdir(parents=True, exist_ok=True)
-    ctx = context(m, n, k)
-    noise = C.PearlC().noise(ctx)
-    manifest = {"schema": "verity-pouw/pearl-c-gpu-check/v1", "shape": [m, n, k], "case": CASE,
-                "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
-                         "jackpot": P.subkey("jackpot", noise.seed_a).hex(), "dom_a": a_domain(ctx).domain_id.hex(),
-                         "dom_t": t_domain(ctx, (m // 64) * (n // 64)).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
+    job = context(m, n, k)                      # the salt, the unit and root_B; each forming's root_A is its A rows' root
+    seed_b = C.PearlC().noise(job).seed_b
+    manifest = {"schema": "verity-pouw/pearl-c-gpu-check/v2", "shape": [m, n, k], "case": CASE,
+                "keys": {"salt": job.salt.hex(), "root_b": job.root_b.hex(), "seed_key": blake3(C.LABELS["seed-A"]).hex(),
+                         "line_b": P._line_key(seed_b).hex(), "dom_a": a_domain(job).domain_id.hex(),
+                         "dom_t": t_domain(job, (m // 64) * (n // 64)).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
                          "k_leaf": C.H1_KEYS["leaf"].hex()},
-                "hashing": HASHING,
-                "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "formings": {}}
-    lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
-             for name, seed, side, count in (("ea", noise.seed_a, 0, m), ("eb", noise.seed_b, 1, n))}
+                "unit": {"index": job.matmul.index}, "hashing": HASHING, "seeds": {"seed_b": seed_b.hex()}, "formings": {}}
+    lines = {"eb": np.array([P.sample_line(seed_b, 1, 0, t) for t in range(n)], np.uint8)}
     common = Out(out_dir)
-    for name, x in lines.items():
-        common.put(f"{name}_codes", x, "u8")
-        common.put(f"{name}_tiled", tiled(x, 128), "u8")
+    common.put("eb_codes", lines["eb"], "u8")
+    common.put("eb_tiled", tiled(lines["eb"], 128), "u8")
     manifest["common"] = common.files
 
     # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
@@ -254,6 +253,17 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             fdir.mkdir(exist_ok=True)
             o = Out(fdir)
             norm = C.PearlC(forming=forming).line_norm
+            make = CV.rows if forming == "v0" else CV.rows_f32
+            ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)
+            tree_a = tree_bytes(a_domain(job), ra, ROW_SCHEMA)
+            ctx = Context(job.salt, job.matmul, tree_a[-32:], job.root_b)
+            noise = C.PearlC().noise(ctx)
+            assert noise.seed_a == C.unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index) and noise.seed_b == seed_b
+            o.put("seed_a", noise.seed_a, "u8")
+            o.put("a_keys", P._line_key(noise.seed_a) + P.subkey("jackpot", noise.seed_a), "u8")
+            lines["ea"] = np.array([P.sample_line(noise.seed_a, 0, 0, t) for t in range(m)], np.uint8)
+            o.put("ea_codes", lines["ea"], "u8")
+            o.put("ea_tiled", tiled(lines["ea"], 128), "u8")
             for name, side in (("fa", 0), ("fb", 1)):
                 lines[name] = np.array(C._basis(noise.seed_b, side, k, norm), np.uint8)
                 o.put(f"{name}_codes", lines[name], "u8")
@@ -264,8 +274,6 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             g = product(padded(lines["fb"].T, 128), lines["fa"].T.copy())
             o.put("g", g, "u32")
             assert all(int(g[p, q]) == C.gram(noise.seed_b, k, norm)[p][q] for p, q in ((0, 0), (3, 17), (31, 31)))
-            make = CV.rows if forming == "v0" else CV.rows_f32
-            ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)
             o.put("xa", b"".join(ra), "u8")
             o.put("xb", b"".join(rb), "u8")
             a, e_a, na = form(pool, forming, ra, 0, noise.seed_a, noise.seed_b, k)
@@ -308,7 +316,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             lv = leaves(dg, m, n)
             o.put("leaves", lv, "u8")
             o.put("tickets", tickets(c, noise.seed_a), "u8")
-            o.put("tree_a", tree_bytes(a_domain(ctx), ra, ROW_SCHEMA), "u8")
+            o.put("tree_a", tree_a, "u8")
             o.put("tree_t", tree_bytes(t_domain(ctx, len(lv)), lv, TILE_SCHEMA), "u8")
 
             if forming == "v0":
@@ -336,9 +344,59 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
 
             agree = crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n)
             manifest["formings"][forming] = {"scheme": C.PearlC(forming=forming, hashing=HASHING).name, "files": o.files,
-                                             "crosscheck": agree}
+                                             "seed_a": noise.seed_a.hex(), "crosscheck": agree}
+    x, y = ieee_inputs()
+    ops, q = ieee_reference(x, y)
+    ieee = Out(out_dir)
+    for name, w in (("ieee_x", x), ("ieee_y", y), ("ieee_ops", ops), ("ieee_q", q)):
+        ieee.put(name, w.astype("<u4"), "u32")
+    manifest["ieee"] = {"count": int(x.size), "files": ieee.files, "coverage": ieee_coverage(x, y, ops)}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return manifest
+
+
+# ---- the IEEE test kernels' words (ieee_ops, ieee_q: the sequences ftz_gate.py admits) -------------------------------------
+
+F448, ONE = 0x43E00000, 0x3F800000
+
+
+def ieee_inputs(seed: int = 20260930) -> tuple[np.ndarray, np.ndarray]:
+    """x > 0 and y ≠ 0, finite FP32 words: subnormal x (and the smallest normals), quotients x / y and x / 448 that are
+    subnormal, x at or above 2^126 (a subnormal reciprocal), subnormal y, and random normals, with y of both signs.  bf16(x)
+    is finite and bf16(y) nonzero, so every reference is defined."""
+    rng = np.random.default_rng(seed)
+    sub = np.concatenate([[1, 2, 3, 0x7FFFFF, 0x400000, 0x7FFFFE], rng.integers(1, 0x800000, 250)])
+    tiny = rng.integers(0x00800000, 0x0D800000, 250)                 # 2^-126 .. 2^-100: subnormal x / y, x / 448
+    big = rng.integers(0x7E800000, 0x7F7F0000, 150)                  # 2^126 .. : a subnormal 1 / x
+    normal = rng.integers(0x00800000, 0x7F7F0000, 800)
+    edges = np.array([0x00800000, 0x00800001, ONE, F448, 0x7F7F0000, 0x3E800000, 0x01000000])
+    x = np.concatenate([sub, tiny, big, normal, edges]).astype(np.uint32)
+    ymag = np.concatenate([rng.integers(0x3F000000, 0x40800000, sub.size),        # 0.5 .. 4
+                           rng.integers(0x43800000, 0x54000000, tiny.size),       # 2^8 .. 2^41
+                           rng.integers(0x00800000, 0x7F7F0000, big.size),
+                           np.where(rng.random(normal.size) < 0.1, rng.integers(0x8001, 0x800000, normal.size),
+                                    rng.integers(0x00800000, 0x7F7F0000, normal.size)),
+                           [ONE, 0x7F7F0000, 0x8001, F448, 0x00800000, 0x3F800001, 0x4B000000]])
+    y = (ymag | (rng.integers(0, 2, ymag.size) << 31)).astype(np.uint32)
+    return x, y
+
+
+def ieee_reference(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """ieee_ops' six words per element (x / y, 448 / x, x / 448, 1 / x, sqrt x, bf16(x) / bf16(y)) and ieee_q's 448 / x, each
+    correctly rounded with subnormals kept (`verity.ml.tc.fp32`)."""
+    bx, by = rne_bf16(x).astype(np.uint32) << 16, rne_bf16(y).astype(np.uint32) << 16
+    ops = np.array([[fp32.div(int(a), int(b)), fp32.div(F448, int(a)), fp32.div(int(a), F448), fp32.div(ONE, int(a)),
+                     fp32.sqrt(int(a)), int(rne_bf16(np.array([fp32.div(int(p), int(q))], np.uint32))[0])]
+                    for a, b, p, q in zip(x, y, bx, by)], np.uint32)
+    return ops, ops[:, 1].copy()
+
+
+def ieee_coverage(x: np.ndarray, y: np.ndarray, ops: np.ndarray) -> dict[str, int]:
+    """How many subnormal inputs and outputs the words exercise, per operand and op."""
+    sub = lambda w: int((((w & 0x7F800000) == 0) & ((w & 0x7FFFFF) != 0)).sum())  # noqa: E731
+    names = ("x / y", "448 / x", "x / 448", "1 / x", "sqrt x")
+    return {"subnormal x": sub(x), "subnormal y": sub(y), **{f"subnormal {n}": sub(ops[:, j]) for j, n in enumerate(names)},
+            "subnormal bf16 quotient": int((((ops[:, 5] & 0x7F80) == 0) & ((ops[:, 5] & 0x7F) != 0)).sum())}
 
 
 def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict:
@@ -346,7 +404,7 @@ def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict
     trees' roots as `verity_pouw.audit` commits A's rows and the tile leaves."""
     s = C.PearlC(forming=forming, hashing=HASHING)
     root_a = commit_rows(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ra, s.commitment_hash).commitment.root
-    assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a
+    assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a == ctx.root_a
     tree_t = MerkleTree(t_domain(ctx, len(lv)), dict(enumerate(lv)), lambda _: TILE_SCHEMA)
     assert tree_bytes(t_domain(ctx, len(lv)), lv, TILE_SCHEMA)[-32:] == tree_t.commitment.root
     rows, cols = range(64, 128), range(n - 64, n)

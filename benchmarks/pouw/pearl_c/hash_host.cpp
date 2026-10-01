@@ -37,7 +37,8 @@ struct Kernel { const char* name; void (*fn)(const Args); bool syncs; };
 const Kernel KERNELS[] = {{"hash_msg", hash_msg, false},       {"hash_leaf", hash_leaf, false},
                           {"hash_rows", hash_rows, true},      {"hash_pad", hash_pad, false},
                           {"hash_node_keys", hash_node_keys, false}, {"hash_nodes", hash_nodes, false},
-                          {"hash_tree_leaves", hash_tree_leaves, false}, {"tickets", tickets, false}};
+                          {"hash_tree_leaves", hash_tree_leaves, false}, {"tickets", tickets, false},
+                          {"b3_seeds", b3_seeds, false},       {"seed_subkeys", seed_subkeys, false}};
 constexpr int COUNT = sizeof KERNELS / sizeof *KERNELS;
 }  // namespace
 
