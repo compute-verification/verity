@@ -33,7 +33,8 @@ The Lean model is `p3Scheme` (POUS `lean/submissions/p3-meets/P3Meets.lean`) ove
 `docs/p3-instantiation.md`. Where they disagree, the code follows Lean, except where the instantiation deliberately
 changes the scheme (items 3, 5 and 6). `p3Scheme` has not absorbed those changes, but the concrete-`H` model has:
 `Pous.P3Concrete.p3SchemeC` and `p3SchemeNC` over `Pous.Sponge.p3ChainModel` (`lean/Pous/Model/P3Chain.lean`). The pins
-`P3ConcreteMeets64`, `P3ConcreteMeets14GB` and `P3ConcreteMeets64D12` are proved over it with no hypothesis (`lean/PousProofs/Chain/Flat.lean`).
+`P3ConcreteMeets64`, `P3ConcreteMeets14GB` and `P3ConcreteMeets64D12` are proved over it with no hypothesis (`lean/PousProofs/Chain/Flat.lean`),
+at the code's parameters, but their chain starts from another `h_0` (item 16), so P3 has no certificate.
 
 | # | Topic | Lean model | Prose | This code |
 |---|---|---|---|---|
@@ -52,6 +53,7 @@ changes the scheme (items 3, 5 and 6). `p3Scheme` has not absorbed those changes
 | 13 | Key inputs | full parent labels (P3.0) | P3.1 digest keys, later dropped | P3.0 |
 | 14 | Encoder and coins | `enc W ω salt`, with the salt uniform in `Coins` after `W` | the server encodes after committing to `W`; the verifier draws the salt and computes `vk` itself (§2c) | the prose's protocol (`setup`), which matches Lean's order when the commitment precedes the salt |
 | 15 | Bytes | `Bits` via `codeEquiv` | little-endian integers (instantiation) | consistent: bit `i` of a string is bit `i mod 8` of byte `⌊i/8⌋` |
+| 16 | `H`'s initial state | `p3ChainModel`'s `keyP3c` starts from `iv(domP3 tag L v) = 0^m ‖ tag_s ‖ u256(2v + L)`: the domain fills the 512-bit capacity part, no header, no call (the dense chain's `iv(dom)`, D1) | the 48-byte header `"pous-p3-v1-H" ‖ tag_s ‖ u8(layer) ‖ u16(v) ‖ u8(npar)` in the low bytes, zero-filled (instantiation §1) | the instantiation's (`primitives.OverwriteChain.initial`), so the concrete-`H` pins are not about the code's `H`, and `schemes.P3` has no certificate (`test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans`). Closing it takes Lean's `h_0` in the code (a new byte format) or a Lean transfer to the header |
 
 **Item 9, the column game's units.** `n10prime` grants `⌊(D + 1)/2⌋` game rounds for `D` oracle rounds: two rounds per
 level, and one for a top whose key is ready. A meet-in-the-middle holding gets more than that from the oracle model.

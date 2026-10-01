@@ -289,6 +289,21 @@ def test_certificates_name_proved_pins():
     assert checked == 2
 
 
+def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
+    """P3's operating point has the parameters of `Pous.Pinned.P3ConcreteMeets64` (`n = 220`, `wc = 2384`,
+    `B(220, 12)`, one segment) but not its `H`.  Lean's overwrite chain starts from `iv(domP3 tag L v)`: zeros, then
+    the tag and `2v + L` in the 512-bit capacity part.  The code's starts from the instantiation's header in the low
+    bytes, with the capacity part zero.  So P3 has no certificate; when the two agree, this fails and one is due."""
+    sch = schemes.get("p3/v1")
+    p = sch.params
+    assert (p.n, p.wc, p.k, p.segments) == (220, 2384, 12, 1)
+    tag, layer, v = int.from_bytes(SALT + (3).to_bytes(8, "little"), "little"), 1, 5
+    lean_h0 = (tag | (2 * v + layer) << 256) << p.m
+    h0 = sch.prims.h.initial(tag, layer, v, len(p.parents(v)))
+    assert h0 != lean_h0 and h0 >> p.m == 0 and lean_h0 & ((1 << p.m) - 1) == 0
+    assert sch.certificate is None
+
+
 def _fake_vk(sch: protocol.Scheme) -> VerifierKey:
     return VerifierKey.from_leaves(sch.params, SALT, [hashlib.sha256(bytes([i % 251])).digest()
                                                      for i in range(sch.params.blocks)])

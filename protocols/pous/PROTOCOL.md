@@ -124,6 +124,13 @@ independently.
 The operating point is `params.OPERATING_POINT`: `n = 220`, `k = 12`, `wc = 2384` bits, so `m = 65,560` B and a segment
 is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets` is about.
 
+P3 has no certificate. `Pous.Pinned.P3ConcreteMeets64` (one segment), `P3ConcreteMeets14GB` (971 segments) and
+`P3ConcreteMeets64D12` (`B(220, 16)` at `D = 12`) are proved, with no hypothesis, for P3 over the overwrite chain in
+the ideal two-permutation model, at the operating point's parameters, `D = 10`, `Q = 2^20` and `k = 106`. But Lean's
+chain starts from `iv(domP3 tag L v)`: zeros, then `tag_s ‖ u256(2v + L)` in the 512-bit capacity part. The code's
+`h_0` is the instantiation's 48-byte header ("Backends") in the low bytes, with the capacity part zero. The pins are
+about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 16).
+
 ## Lifecycle
 
 1. **Commit.** The server commits to `W` before any salt exists (`setup.commit`: tagged SHA-256 over the parameters and
@@ -214,9 +221,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
 
-  P3 has no certificate for the
-  implemented `H`. Lean's `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final` (k 117, D 10, 64 KB and 971
-  segments) are about a random-oracle `H` and an ideal tweakable `P`, while the code's `H` is the overwrite chain.
+  P3 has no certificate: the concrete-`H` pins have its parameters, but their chain starts from a different `h_0`
+  ("P3 (research)").
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
@@ -333,8 +339,8 @@ A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` 
 `(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the adversary's fastest oracle call, and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
 `CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
-`Pous.Pinned.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on `B(220, 16)`. The
-column-game certificate `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level
+`Pous.Pinned.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on `B(220, 16)`,
+both for Lean's `h_0`, not yet the code's ("P3 (research)"). The column-game certificate `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level
 (`Π₂` of the oldest parent, `Π₂` of the pad, `P`) reads as 28 rounds; no `Meets` statement covers that reading.
 
 `adversary.schedule` computes, for any holding, the fewest rounds after which each value is known. It covers keys
