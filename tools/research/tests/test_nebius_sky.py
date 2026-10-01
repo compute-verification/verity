@@ -332,6 +332,39 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     assert "cached" not in other.stdout and (jobs / "count").read_text() == "run\nrun\n"                  # another role bootstraps
 
 
+def test_a_leased_jobs_real_bootstrap_takes_its_gpu_from_the_lease_and_a_cached_or_cpu_one_none(tmp_path):
+    """A leased job's pod (GPU_LEASE set) has no GPU of its own: a real GPU-mode bootstrap runs pod_bootstrap.sh under the lease tool,
+    so its CUDA checks see only the leased GPU; a cached one, and a --cpu one, never call the tool."""
+    import os
+    import shutil
+    import subprocess
+    tree = tmp_path / "tree"
+    sky = tree / "tools/research/src/research/pods/nebius/sky"
+    sky.mkdir(parents=True)
+    shutil.copy(SKY / "vllm_bootstrap.sh", sky / "vllm_bootstrap.sh")
+    ops = tree / "integrations/vllm/verity_vllm/ops"
+    ops.mkdir(parents=True)
+    (ops / "pod_bootstrap.sh").write_text('echo "cvd=${CUDA_VISIBLE_DEVICES-unset}" >> "$WORK/seen"; echo BOOTSTRAP-OK\n')
+    jobs = tmp_path / "jobs"
+    (jobs / "venv312/lib/python3.12/site-packages").mkdir(parents=True)
+    lease = tmp_path / "gpu-lease"
+    lease.write_text('#!/usr/bin/env bash\necho "$*" >> "$VY_JOBS/lease"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
+                     'export CUDA_VISIBLE_DEVICES=3\nexec "$@"\n')
+    lease.chmod(0o755)
+    env = {**os.environ, "VY_JOBS": str(jobs), "HF_HOME": str(tmp_path / "hf"), "GPU_LEASE": str(lease), "CUDA_VISIBLE_DEVICES": ""}
+
+    def boot(*args: str) -> str:
+        return subprocess.run(["bash", str(sky / "vllm_bootstrap.sh"), *args, "--out", str(jobs / "b")], env=env, capture_output=True,
+                              text=True, check=True).stdout
+
+    assert boot("--cases", "B0").strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "lease").read_text() == "1 --wait --max-min 60 --mem-gb 0 -- bash verity_vllm/ops/pod_bootstrap.sh --cases B0 --out " \
+        f"{jobs / 'b'}\n" and (jobs / "seen").read_text() == "cvd=3\n"
+    assert "cached" in boot("--cases", "B0") and (jobs / "lease").read_text().count("\n") == 1
+    assert boot("--cases", "B1", "--cpu").strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "lease").read_text().count("\n") == 1 and (jobs / "seen").read_text() == "cvd=3\ncvd=\n"
+
+
 def test_submit_names_the_tools_it_is_missing(tmp_path):
     import os
     import shutil
