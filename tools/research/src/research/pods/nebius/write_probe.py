@@ -269,17 +269,19 @@ def relay(ns: argparse.Namespace) -> int:
             seen = state["lines"].get(host, 0)
             f = f"{ns.out}/unmatched.jsonl"
             r = subprocess.run(["ssh", "-o", "ConnectTimeout=10", host,
-                                f"[ -f {f} ] || {{ echo 0; exit 0; }}; wc -l < {f}; tail -n +{seen + 1} {f}"],
+                                f"[ -f {f} ] || {{ echo missing; exit 0; }}; wc -l < {f}; tail -n +{seen + 1} {f}"],
                                capture_output=True, text=True)
             lines = r.stdout.splitlines()
             if r.returncode or not lines:
                 print(f"write_probe relay: {host} unreadable ({r.stderr.strip()[:120]})", file=sys.stderr)
                 continue
+            if lines[0].strip() == "missing":   # /workspace unmounted (a cutover): resetting here replayed every old row
+                continue
             total = int(lines[0].strip() or 0)
             if total < seen:
                 state["lines"][host] = 0
                 continue
-            for ln in lines[1:]:
+            for n, ln in enumerate(lines[1:], seen + 1):
                 try:
                     row = json.loads(ln)
                 except ValueError:
@@ -289,6 +291,8 @@ def relay(ns: argparse.Namespace) -> int:
                     slack._post(slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=ns.dry_run), channel, ns.handle,
                                 alert_text(row), ns.agent_url)
                     state["posted"][row["key"]] = time.time()
+                    state["lines"][host] = min(n, total)
+                    state_path.write_text(json.dumps(state))   # a later post that raises must not repeat this one
             state["lines"][host] = total
         state_path.write_text(json.dumps(state))
         if ns.once:

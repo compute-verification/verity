@@ -44,6 +44,9 @@ pub mod zk_hooks;
 pub mod zk_veil;
 #[cfg(feature = "sha512")]
 pub mod sha512_native;
+// needs flock-vtime-b684b12.patch, which the pods apply with the SHA-512 patches
+#[cfg(feature = "sha512")]
+pub mod session_verify;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 #[cfg(feature = "gpu")]
@@ -1062,6 +1065,11 @@ pub trait StatementVerifier: Send {
     fn statement_publics(&self, table: &str, publics: &[u8]) -> Result<Option<[u8; 32]>, String> {
         if publics.is_empty() { Ok(None) } else { Err(format!("{table}: this statement takes no public words")) }
     }
+    /// The phase timers of this verifier's last `verify` call (wall-clock seconds, for the verdict; never part of a proof),
+    /// where it keeps them.
+    fn take_phases(&self) -> Option<Value> {
+        None
+    }
 }
 
 /// What the verifier's record holds for one table when its proofs are replayed: the link points it drew, the y the
@@ -1637,12 +1645,15 @@ impl Server {
         let t = std::time::Instant::now();
         let record = Arc::new(self.streams.clone());
         let msgs = Arc::new(self.round_msg.clone());
+        let record_clone_s = t.elapsed().as_secs_f64();
         let n_pts = self.cfg.link.as_ref().map(|l| l.points).unwrap_or(0);
         for (ti, table) in self.cfg.tables.clone().into_iter().enumerate() {
             let publics = self.commit.as_ref().and_then(|c| c.publics.get(&table.name).cloned()).unwrap_or_default();
             let y: Vec<F128> = self.y.get(ti * n_pts..(ti + 1) * n_pts).map(|s| s.to_vec()).unwrap_or_default();
             for rep in 0..self.cfg.reps {
                 let root = rep_stream(&table.name, rep);
+                // wall-clock seconds by phase, for the verdict only
+                let mut timing = json!({});
                 let res: Result<(), String> = (|| {
                     let bytes = self.proofs.get(&(table.name.clone(), rep)).ok_or(format!("R7: no proof for {root} (lone rep)"))?;
                     let rec = record.get(&root).ok_or(format!("no live session stream for {root}"))?;
@@ -1653,23 +1664,33 @@ impl Server {
                         return Err(format!("{root}: no complete link context in the session"));
                     }
                     let ctx = LinkCtx { points: &self.points, y: &y, publics: &publics };
-                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch, &ctx).map_err(|e| match ch.first_failure() {
+                    let tv = std::time::Instant::now();
+                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch, &ctx);
+                    timing["verifier_s"] = json!(tv.elapsed().as_secs_f64());
+                    timing["replay_squeeze_s"] = json!(ch.squeeze_s());
+                    let cap = cap.map_err(|e| match ch.first_failure() {
                         Some(r) => format!("{r} (then the verifier: {e})"),
                         None => e,
                     })?;
-                    ch.finish()?;
+                    let tf = std::time::Instant::now();
+                    let fin = ch.finish();
+                    timing["replay_finish_s"] = json!(tf.elapsed().as_secs_f64());
+                    fin?;
                     if rec.cap.as_ref() != Some(&cap) {
                         return Err(format!("{root}: proof root differs from the root committed in the session"));
                     }
                     Ok(())
                 })();
+                if let Some(p) = self.verifier.take_phases() {
+                    timing["phases"] = p;
+                }
                 if let Err(e) = &res {
                     if ok {
                         why = e.clone();
                     }
                     ok = false;
                 }
-                reps_out.push(json!({"stream": root, "ok": res.is_ok(), "why": res.err().unwrap_or_default()}));
+                reps_out.push(json!({"stream": root, "ok": res.is_ok(), "why": res.err().unwrap_or_default(), "timing": timing}));
             }
         }
         if self.cfg.prime_live {
@@ -1696,6 +1717,7 @@ impl Server {
             "accepted": ok, "why": why, "reps": reps_out, "streams": self.streams.len(), "rounds": rounds,
             "rounds_without_prover_message": empty, "prime_rounds": self.prime.len(), "prime_before_commit": self.prime_before_commit,
             "verify_s": t.elapsed().as_secs_f64(), "session_s": self.t0.elapsed().as_secs_f64(), "handle_s": self.handle_s,
+            "record_clone_s": record_clone_s,
         });
         let mut v = v;
         if let Some((seed, nonce, c, _, k)) = &self.seed {
@@ -1999,6 +2021,8 @@ struct ReplayState {
     msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>,
     used: BTreeMap<String, usize>,
     failures: Vec<String>,
+    /// time spent checking rounds at squeezes, every stream of the rep (the verdict's `replay_squeeze_s`)
+    squeeze_ns: u64,
 }
 
 /// The verifier's challenger over a recorded session. See the crate docs.
@@ -2016,7 +2040,7 @@ impl ReplayChallenger {
     }
 
     pub fn with_messages(record: Arc<BTreeMap<String, StreamRec>>, msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>, root: &str, domain: &[u8]) -> Self {
-        let st = Arc::new(Mutex::new(ReplayState { record, msgs, used: BTreeMap::new(), failures: Vec::new() }));
+        let st = Arc::new(Mutex::new(ReplayState { record, msgs, used: BTreeMap::new(), failures: Vec::new(), squeeze_ns: 0 }));
         Self::stream(st, root.to_string(), frame_domain(domain))
     }
 
@@ -2037,10 +2061,11 @@ impl ReplayChallenger {
         let content = std::mem::take(&mut self.pending);
         let k = self.rounds as usize;
         self.rounds += 1;
+        let t = std::time::Instant::now();
         let mut st = self.st.lock().unwrap();
         *st.used.get_mut(&self.stream).unwrap() = k + 1;
         let rec = st.record.get(&self.stream).and_then(|s| s.rounds.get(k)).cloned();
-        match rec {
+        let coins = match rec {
             None => {
                 st.failures.push(format!("R2: {} round {k}: the verifier issued no such coin", self.stream));
                 vec![F128::default(); n]
@@ -2061,11 +2086,18 @@ impl ReplayChallenger {
                 c.resize(n, F128::default());
                 c
             }
-        }
+        };
+        st.squeeze_ns += t.elapsed().as_nanos() as u64;
+        coins
     }
 
     pub fn first_failure(&self) -> Option<String> {
         self.st.lock().unwrap().failures.first().cloned()
+    }
+
+    /// Seconds spent checking the rep's rounds at its squeezes (every stream of the rep).
+    pub fn squeeze_s(&self) -> f64 {
+        self.st.lock().unwrap().squeeze_ns as f64 * 1e-9
     }
 
     /// After the Flock verifier returns: no replay failure, and every recorded round of this rep's streams consumed.

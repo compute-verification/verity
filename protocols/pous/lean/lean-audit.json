@@ -22,6 +22,11 @@
    "imports": ["Mathlib", "Pous"],
    "except": [],
    "why": "the trusted layer imports no proofs"
+  },
+  "Pous.P2": {
+   "imports": ["Mathlib", "Pous.Game", "Pous.Model", "Pous.Accounting", "Pous.P2"],
+   "except": [],
+   "why": "the m1p pins read only the game, the models and the parameters"
   }
  },
  "pins": {
@@ -232,6 +237,53 @@
    "assumptions": [],
    "type_hash": "78a3b5c4a214c89de8600e205823606d0e21b31f5b470228bf221252454f51c3"
   },
+  "PousMargin.raw_b19_128": {
+   "signature": [
+    "PousMargin.raw_b19_128 (p b D Q k : Nat) (hk : instLENat.le k 100) (ε : ENNReal) :",
+    "  Not (PousMargin.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 128 D Q k ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "d95ec3bc907a7d1059180620d4e1191d5865d58920a25b6fb561a1acc05404cc"
+  },
+  "PousMargin.raw_b19_256": {
+   "signature": [
+    "PousMargin.raw_b19_256 (p b D Q k : Nat) (hk : instLENat.le k 121) (ε : ENNReal) :",
+    "  Not (PousMargin.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 256 D Q k ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "8b4dcabce1c0eed2e44358b698e56b94aa0b4be109cb3959f1c4be7ef9875a06"
+  },
+  "PousMargin.raw_b19_64": {
+   "signature": [
+    "PousMargin.raw_b19_64 (p b D Q k : Nat) (hk : instLENat.le k 92) (ε : ENNReal) :",
+    "  Not (PousMargin.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 64 D Q k ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "4259d27326624f116cd8cbb3386f3155490f32b8b9ffa3bee1c93e03ddfb415d"
+  },
+  "PousP2p.family_k85_fails": {
+   "signature": [
+    "PousP2p.family_k85_fails :",
+    "  Exists fun B =>",
+    "    Exists fun x =>",
+    "      And (instLENat.le (instHPow.hPow 2 8) B)",
+    "        (And (instLENat.le B (instHPow.hPow 2 23))",
+    "          (∀ (b D Q : Nat),",
+    "            Not",
+    "              (Pous.Meets (Pous.m1p B 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b) Pous.Reveal.sequential D Q",
+    "                85 Pous.Params.εMax)))"
+   ],
+   "assumptions": [],
+   "type_hash": "539239f5a4204266c1efe0c0694e45c906566dbc03ef16a069d2e0061b013779"
+  },
+  "PousP2p.not_meets_m1p_b19_k85": {
+   "signature": [
+    "PousP2p.not_meets_m1p_b19_k85 (p b D Q : Nat) :",
+    "  Not (Pous.Meets (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential D Q 85 Pous.Params.εMax)"
+   ],
+   "assumptions": [],
+   "type_hash": "2ab62120a27e6db327a196277e5f4f37a697391f1ccc08f4b51262e6bdbdd1d4"
+  },
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
    "assumptions": [],
@@ -389,6 +441,36 @@
    "assumptions": [],
    "type_hash": "58c8e580dd827db0c95acb367b31d26822be7a4e9e3168080a25cad7c446ab2e"
   },
+  "PousProofs.P2ErrorSplitB19Uncond": {
+   "signature": ["PousProofs.P2ErrorSplitB19Uncond : Pous.Pinned.P2ErrorSplitB19Uncond"],
+   "assumptions": [],
+   "type_hash": "3e147eb20d6c92c3053bedcd352dafd4a3d7df90b4894ff2328a8195f65f28f4"
+  },
+  "PousProofs.P2MeetsM1pB19Uncond": {
+   "signature": ["PousProofs.P2MeetsM1pB19Uncond : Pous.Pinned.P2MeetsM1pB19Uncond"],
+   "assumptions": [],
+   "type_hash": "f6fbc02194d4c5d573e5301c6550a1a84a6303577ba46ae56e2371a837b9ed43"
+  },
+  "PousProofs.P2MeetsM1pFamilyUncond": {
+   "signature": ["PousProofs.P2MeetsM1pFamilyUncond : Pous.Pinned.P2MeetsM1pFamilyUncond"],
+   "assumptions": [],
+   "type_hash": "628b65a77dc2bc779a1ec47d0040daa58043b235362e292bd9003b0b3876d158"
+  },
+  "PousProofs.P2MeetsM1pW8192Uncond": {
+   "signature": ["PousProofs.P2MeetsM1pW8192Uncond : Pous.Pinned.P2MeetsM1pW8192Uncond"],
+   "assumptions": [],
+   "type_hash": "6d4c3e3ca9db6af1177ad5154091ae88f68a6e753c334fc474d8653e789e1bd5"
+  },
+  "PousProofs.P2SlackB19Uncond": {
+   "signature": ["PousProofs.P2SlackB19Uncond : Pous.Pinned.P2SlackB19Uncond"],
+   "assumptions": [],
+   "type_hash": "f107184d54214d86f12415ee61d1981d32f3a85353eb8024b18a9ca1b4f9a7b5"
+  },
+  "PousProofs.P2SlackFamilyUncond": {
+   "signature": ["PousProofs.P2SlackFamilyUncond : Pous.Pinned.P2SlackFamilyUncond"],
+   "assumptions": [],
+   "type_hash": "3bbeb1e1bc7ac61fd47e74f0a751f74f02c586ab8d5c3104768b2ae9da538cbc"
+  },
   "PousProofs.P3ConcreteMeets14GB": {
    "signature": ["PousProofs.P3ConcreteMeets14GB : Pous.Pinned.P3ConcreteMeets14GB"],
    "assumptions": [],
@@ -493,6 +575,11 @@
     "PousDenseReCert.dense_meets_64",
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.BandChainMeets64",
     "PousProofs.BandChainMeets64D12",
     "PousProofs.BandChainMeets64D5",
@@ -506,6 +593,12 @@
     "PousProofs.ChainDenseMeets64",
     "PousProofs.DenseMeets",
     "PousProofs.KFloor",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond",
     "PousProofs.P3ConcreteMeets14GB",
     "PousProofs.P3ConcreteMeets64",
     "PousProofs.P3ConcreteMeets64D12"
@@ -564,6 +657,11 @@
     "PousDenseReCert.segTag_auditSecure",
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
     "PousProofs.A6RederiveTimed",
@@ -585,6 +683,12 @@
     "PousProofs.DenseMeets",
     "PousProofs.FibreCount",
     "PousProofs.N10Refuted",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond",
     "PousProofs.P3ConcreteMeets14GB",
     "PousProofs.P3ConcreteMeets64",
     "PousProofs.P3ConcreteMeets64D12",
@@ -625,6 +729,11 @@
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousDenseReCert.tag_injective_14",
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A1CompressionPr",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
@@ -647,6 +756,12 @@
     "PousProofs.DenseMeets",
     "PousProofs.FibreCount",
     "PousProofs.N10Refuted",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond",
     "PousProofs.P3ConcreteMeets14GB",
     "PousProofs.P3ConcreteMeets64",
     "PousProofs.P3ConcreteMeets64D12",
@@ -694,6 +809,11 @@
     "PousDenseReCert.segTag_auditSecure",
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
     "PousProofs.A6RederiveTimed",
@@ -709,6 +829,12 @@
     "PousProofs.ChainDenseMeets111",
     "PousProofs.ChainDenseMeets64",
     "PousProofs.DenseMeets",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond",
     "PousProofs.P3ConcreteMeets14GB",
     "PousProofs.P3ConcreteMeets64",
     "PousProofs.P3ConcreteMeets64D12",
@@ -933,6 +1059,11 @@
     "PousDenseReCert.segTag_auditSecure",
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.BandChainMeets64",
     "PousProofs.BandChainMeets64D12",
     "PousProofs.BandChainMeets64D5",
@@ -945,9 +1076,39 @@
     "PousProofs.ChainDenseMeets111",
     "PousProofs.ChainDenseMeets64",
     "PousProofs.DenseMeets",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond",
     "PousProofs.P3ConcreteMeets14GB",
     "PousProofs.P3ConcreteMeets64",
     "PousProofs.P3ConcreteMeets64D12"
+   ]
+  },
+  "Pous.Model.M1p": {
+   "digest": "f4278a53bf16f28e3cd41aad23c22e58200fff7e6e7c96a36f6ae9bcbf6ba59d",
+   "definitions": {
+    "Pous.bitsEquiv": "a4e75c31de09e59b059dddb3dd85f0e7a9923f12aa6eae716dcb4c973a0041fa",
+    "Pous.bitsOfNat": "87e93600979b00578af9ebd098ab66b77f77430e08e312c32b062418003fe308",
+    "Pous.bitsVal": "9ca9dd69750d9238934510695357469b0393ec4ba4b314b456379b5c612664d5",
+    "Pous.m1p": "0136119d15da16d669ec7199b39de9d6b1b50b63ac595e753a1116ca4b4a65d6",
+    "Pous.permAct": "57f826c894c3dc492df3da7be0515db5713131866bf421543f0b4667df76f265",
+    "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
+   },
+   "pins": [
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond"
    ]
   },
   "Pous.Model.P3Chain": {
@@ -1079,6 +1240,11 @@
     "PousDenseReCert.segTag_auditSecure",
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2p.family_k85_fails",
+    "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
     "PousProofs.A6RederiveTimed",
@@ -1096,6 +1262,12 @@
     "PousProofs.ChainDenseMeets64",
     "PousProofs.DenseMeets",
     "PousProofs.FibreCount",
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond",
     "PousProofs.P3ConcreteMeets14GB",
     "PousProofs.P3ConcreteMeets64",
     "PousProofs.P3ConcreteMeets64D12",
@@ -1107,6 +1279,25 @@
     "PousProofs.Theorem1iiSeq",
     "PousProofs.Theorem1iiTimed",
     "PousProofs.Theorem1iiiTimed"
+   ]
+  },
+  "Pous.P2.Pinned": {
+   "digest": "ff09e0a2e145578094fc4ac768a58c764f3fe3c59a72cbc4814c140aeaee4047",
+   "definitions": {
+    "Pous.Pinned.P2ErrorSplitB19Uncond": "007dae42a4ad66ef04ce0e2ce8c97293b4abfefc4d2e54cc790d6c87196f1631",
+    "Pous.Pinned.P2MeetsM1pB19Uncond": "84165c025bc0e8d28c43c941dae8f3025b0b41997640877b4693c6a08d06c0d2",
+    "Pous.Pinned.P2MeetsM1pFamilyUncond": "25c31c994d2e2da4ba70647eb26b4211c76776e2fbf9ea957854b053d679f084",
+    "Pous.Pinned.P2MeetsM1pW8192Uncond": "2b3be3b5842d67a90f63b4ef8c44af0b41c6a173971f7dafa0bcee267cef7bc2",
+    "Pous.Pinned.P2SlackB19Uncond": "31cc874a7a48a3425de2a9d2fd6d93c6ce40069436eecb4fbeaacdaaefc852c2",
+    "Pous.Pinned.P2SlackFamilyUncond": "affd5a9e0587b4724146a4e87d847195f8779303912535414c8505450ddb3b30"
+   },
+   "pins": [
+    "PousProofs.P2ErrorSplitB19Uncond",
+    "PousProofs.P2MeetsM1pB19Uncond",
+    "PousProofs.P2MeetsM1pFamilyUncond",
+    "PousProofs.P2MeetsM1pW8192Uncond",
+    "PousProofs.P2SlackB19Uncond",
+    "PousProofs.P2SlackFamilyUncond"
    ]
   },
   "Pous.Pinned": {
@@ -1234,6 +1425,13 @@
    },
    "pins": ["PousDenseReCert.segTag_auditSecure"]
   },
+  "PousProofs.P2.Margin": {
+   "digest": "0b940699c0752d72e8dd9b2efaf9aa65d2927b590179ee781d0178d1ca09870d",
+   "definitions": {
+    "PousMargin.MeetsWithSlack": "2c6f7405db1b18b55a375256bf239ffedef676b6228b5fbad6cd7a45546e3fc2"
+   },
+   "pins": ["PousMargin.raw_b19_128", "PousMargin.raw_b19_256", "PousMargin.raw_b19_64"]
+  },
   "PousProofs.P3.Column.BandComb": {
    "digest": "60a338189f53ebbffb4708d5e3f04b52ca741a5edd3a9cea5828d3456b2de0ca",
    "definitions": {
@@ -1251,11 +1449,11 @@
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
-  "batteries": "e03e397af9fb0838e4e21d9b32e512f18603e964649945aa2c154127c030c83e",
+  "batteries": "936e379f1cfb8605fe05b36d6a5b605dc1a0d31e8d52173adb0d5c39a4b50ab5",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "1aa99b432632aed3e0ca6e1ab359e50f45670d8f03bf79ed6fae2a4b3846b590",
+  "mathlib": "34e477c930b06a6646b078f71a1d9d57245d3b132b1f76db225ecb7fed53bb1e",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
-  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
-  "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"
+  "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
+  "toolchain": "b8447e3c3284903832b19df647c0de94cae577066dd373fbc877ed2a52bbccc7"
  }
 }
