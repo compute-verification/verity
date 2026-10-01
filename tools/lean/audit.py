@@ -34,9 +34,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
                  are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
-                 one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
-                 only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
-                 differ from those the `.olean` files recorded; a replay killed by a signal is reported as a kill
+                 one import of what they import from outside, one declaration per task on Lean's threads
+                 (`LEAN_NUM_THREADS`): a declaration that skipped the kernel shows no axiom, and only this catches it
+                 (the `kernel` control); or the axioms found by walking the replayed environment differ from those the
+                 `.olean` files recorded; a replay killed by a signal is reported as a kill
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
