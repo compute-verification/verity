@@ -16,6 +16,9 @@
   commitment to values captured from serving (`stand-in`, whose link to the served root is provenance, not proof).
 * **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
+* **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
+  "domain"}, ...]`, the program's weights, constants and tables committed once under hiding leaves (`registered`), and R7
+  holds them to the verifier's own list. A record registers values exactly when it is v2; v1's bytes are unchanged.
 """
 from __future__ import annotations
 
@@ -30,10 +33,11 @@ from verity.commitments.merkle import CommitmentDomain
 from verity.ir.codec import canonical_json
 from verity.ir.program import Program
 
-from . import draw as D, partition as P
+from . import draw as D, partition as P, registered as G
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
+FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
 SERVED_DOMAIN = "verity/one-stage/served-domain/v0"
@@ -57,20 +61,37 @@ def served_domain(program: str, partition: str, port: str, schema: str, leaves: 
 def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
            previous: str | None = None, partition: Mapping[str, Any] | None = None,
-           work_table: Mapping[str, Any] | None = None) -> dict[str, Any]:
+           work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
     `law` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
-    `work` rule its strata sized by `work_table`)."""
+    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
+    which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
-    return {"format": FORMAT, "protocol": PROTOCOL, "program": part["program"], "query": query_digest(part["query"]),
-            "partition": P.digest(part), "population": P.units(program, query), "law": D.derive(program, query, law, work_table),
-            "scheme": scheme,
-            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
-            "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
+    rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],
+           "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
+           "law": D.derive(program, query, law, work_table), "scheme": scheme,
+           "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
+           "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
+    if registered:
+        rec["registered"] = [{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in G.ENTRY_KEYS} for e in registered]
+    return rec
 
 
 def digest(rec: Mapping[str, Any]) -> str:
-    return hashlib.sha512(FORMAT.encode() + b"\0" + canonical_json(dict(rec))).hexdigest()
+    """`SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag."""
+    tag = FORMAT_V2 if rec.get("format") == FORMAT_V2 else FORMAT
+    return hashlib.sha512(tag.encode() + b"\0" + canonical_json(dict(rec))).hexdigest()
+
+
+def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+    """The verifier's own `{value: {"leaves", "words", "domain"}}` for the parameters it expects registered
+    (`values`: `{parameter: words}`), from its own program."""
+    prog = P.program_sha512(program)
+    out = {}
+    for v, w in values.items():
+        n = G.shape(program, v, w)
+        out[v] = {"leaves": n, "words": int(w), "domain": G.domain(prog, v, w, n).domain_id.hex()}
+    return out
 
 
 def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) -> dict[str, Any]:
@@ -82,19 +103,25 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None) -> Verdict:
-    """R1-R6 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
-    (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, and its log of this prover's
-    earlier records.  `partition`: the verifier's own partition object when it isn't the canonical one (a record made
-    before the canonical envelope); its program must still be `program`'s, and the population is `query`'s.  R1 holds
-    the registered law to the verifier's own law expanded over its program and query (`draw.derive`): for `stratified`,
-    the strata by template descriptor id and each stratum's k by the rule; for `work`, also its own `work_table`."""
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
+          registered_roots: Mapping[str, str] | None = None) -> Verdict:
+    """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
+    (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
+    earlier records, and the parameters it expects registered (`registered`: `{parameter: words}`).  `partition`: the
+    verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
+    program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
+    law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
+    each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
+    own (`registered_entries`) and, for a value whose root the verifier already holds (`registered_roots`, from a
+    registration it accepted), to that root: a value is committed once."""
     c = _Collect()
-    if not isinstance(rec, Mapping) or set(rec) != _KEYS:
-        c.fail("keys", sorted(set(rec) ^ _KEYS) if isinstance(rec, Mapping) else rec)
+    v2 = bool(registered)
+    keys = _KEYS | {"registered"} if v2 else _KEYS
+    if not isinstance(rec, Mapping) or set(rec) != keys:
+        c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
         return c.verdict()
     # R1
-    if (rec["format"], rec["protocol"]) != (FORMAT, PROTOCOL):
+    if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
         mine = D.derive(program, query, law, work_table)
@@ -156,7 +183,35 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-previous", rec["previous"])
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
+    # R7
+    if v2:
+        _check_registered(c, rec["registered"], program, registered, registered_roots or {})
     return c.verdict()
+
+
+def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str]) -> None:
+    try:
+        mine = registered_entries(program, values)
+    except ValueError as e:
+        c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
+        return
+    if not isinstance(got, list) or not all(isinstance(e, Mapping) and set(e) == set(G.ENTRY_KEYS) for e in got):
+        c.fail("R7-registered", got)
+        return
+    by_value = {e["value"]: e for e in got}
+    if len(by_value) != len(got) or set(by_value) != set(mine):
+        c.fail("R7-values", {"registered": [e["value"] for e in got], "verifier": sorted(mine)})
+    for v, want in mine.items():
+        e = by_value.get(v)
+        if e is None:
+            continue
+        if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.match(e["root"])):
+            c.fail("R7-root", v)
+        for k in ("leaves", "words", "domain"):
+            if e[k] != want[k]:
+                c.fail(f"R7-{k}", {"value": v, "registered": e[k], "verifier": want[k]})
+        if v in held and e["root"] != held[v]:
+            c.fail("R7-held", {"value": v, "registered": e["root"], "verifier": held[v]})
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
@@ -175,5 +230,5 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
     return c.verdict()
 
 
-__all__ = ["FORMAT", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "matches_public", "query_digest",
-           "receipt", "record", "served_domain"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "matches_public",
+           "query_digest", "receipt", "record", "registered_entries", "served_domain"]
