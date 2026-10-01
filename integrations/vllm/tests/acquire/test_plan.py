@@ -280,3 +280,31 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     p4, _, _ = make_plan(rows, rt=rt)
     assert p4.digest == p1.digest and p4.body()["runtime_source"] == "other" != p1.body()["runtime_source"]
     assert P.plan_digest(p1.to_json()) == p1.digest                     # the saved document re-digests to itself (load_plan's check)
+
+
+def _body_by_site_scan(p):
+    """The plan body as `values_at` gives it: one scan of every Value per site (the reference the one-pass body must equal)."""
+    b = p.body()
+    b["hooks"] = [{**h, "values": p.values_at(s)} for h, s in zip(b["hooks"], p.hooks())]
+    b["sites"] = [{**h, "values": p.values_at(s)} for h, s in zip(b["sites"], p.chosen_sites())]
+    b["counts"]["sites_by_kind"] = {k: len(v) for k, v in sorted(p.sites_by_kind().items())}
+    return b
+
+
+def test_a_call_boundary_sized_plan_serialises_in_one_pass(monkeypatch):
+    """Gemma-2-2B B1 1024/128 (m007): 75,112 call-boundary Values, one site each.  `body()` read `values_at` per site -- a scan of every
+    Value per site -- and never finished writing the plan (47 min in prep.committer_setup; 468 s at B16 256/32's 19,432).  One index
+    pass gives the same document, so the same digest."""
+    p, _, _ = make_plan(base_rows())
+    many = [P.ValuePlan(f"body.blocks.0.norm_in/mul_{i}", "out", "call_boundaries", 1, status="chosen",
+                        chosen=P.Site("registered_input", f"body.blocks.0.norm_in/mul_{i}", "out")) for i in range(3000)]
+    shared = [P.ValuePlan(f"body.blocks.0.act/v{i}", "out", "instance_outputs", 2, status="chosen", chosen=p.values[0].chosen) for i in range(5)]
+    p.values = p.values + many + shared + [P.ValuePlan("body.gone", "out", "instance_outputs", 1, why="no legal site")]
+    want = _body_by_site_scan(p)
+    assert p.body() == want and P.plan_digest(want) == p.digest and p.body()["counts"]["unsupported"] == 1
+
+    def scan(self, site):
+        raise AssertionError("body() scans the Values per site")
+
+    monkeypatch.setattr(P.AcquisitionPlan, "values_at", scan)
+    assert p.body()["counts"]["sites"] == len(p.chosen_sites())

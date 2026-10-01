@@ -114,6 +114,17 @@ def test_a_queued_run_holds_its_cpu_allocation_through_custody_and_its_gpu_lease
     assert argv[argv.index("--", len(wrap)) + 1:][: len(lease)] == lease
 
 
+def test_a_queued_run_with_a_disk_request_is_admitted_on_the_machine_ahead_of_its_allocation(tmp_path):
+    req, runs_root = _request(tmp_path, "d1", [PY, "-c", "print('ok')"])
+    doc = json.loads(req.read_text())
+    doc["queue"] = {"disk_gb": 0.001}
+    req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    assert out["started"] and _wait_terminal(runs_root / "d1")["state"] == "done"
+    argv = json.loads((runs_root / "d1" / "launch.json").read_text())["argv"]
+    assert argv[1:5] == ["-m", "research", "disk-hold", "--gb"] and argv[argv.index("--") + 1:][1:4] == ["-m", "research", "run"]
+
+
 def test_bad_schema_is_refused_without_side_effects(tmp_path):
     req, runs_root = _request(tmp_path, "bad", ["true"])
     doc = json.loads(req.read_text()); doc["schema"] = "nope"; req.write_text(json.dumps(doc))
