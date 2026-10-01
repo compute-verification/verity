@@ -16,7 +16,8 @@ products (E4M3 values are integers in units of 2^-9, so every sum is an exact in
   down-bh, down-bh<B>  down-perm, then a keyed block-diagonal Haar rotation (blocks of 2,048, or of B): an online rotation, not
                        foldable
 
-Rows are quantized per row (absmax to 448, E4M3 round-to-nearest-even), A's tokens and B's weight rows both.  Starts: `zero`
+Rows are quantized per row (absmax to 448, E4M3 round-to-nearest-even), A's tokens and B's weight rows both; A's rows are
+sampled from its distinct rows (equal codes up to sign are one row, as R1's per-row rules credit them; --no-dedup samples all).  Starts: `zero`
 (+0), and `h<H>`: word (i, j) starts at H_ij = s_ij 2^(round(log2 r_ij) + H) (1 + u_ij / 2), r_ij = sqrt(32) |a_i| |b_j| / k
 (the atom sum's rms), s and u keyed per word; `p<H>`, the separable form a kernel computes with one FMUL per word
 (`separable_start`); the output is fl(C - H), whose error against the exact product is reported
@@ -133,7 +134,7 @@ def operands(cls: str, layer: int, args, key: str) -> tuple[np.ndarray, np.ndarr
     else:
         w = st.get(p + ("self_attn.o_proj.weight" if kind == "o" else "mlp.down_proj.weight"))
     g = rng(key, "sample", layer, kind)
-    a = np.asarray(x[np.sort(g.choice(len(x), args.rows, replace=False))], np.float64)
+    a = np.asarray(x[args.first_row:], np.float64)
     b = np.asarray(w[np.sort(g.choice(len(w), args.cols, replace=False))], np.float64)
     del w
     k = a.shape[1]
@@ -285,6 +286,15 @@ def separable_start(av: np.ndarray, bv: np.ndarray, h: int, g: np.random.Generat
     return hv.ravel().view(np.uint32)
 
 
+def distinct_rows(codes: np.ndarray) -> np.ndarray:
+    """The first row of each class of rows equal in codes up to sign (per-row scaling makes any proportional copy one)."""
+    c = np.where((codes & 0x7F) == 0, 0, codes).astype(np.uint8)
+    first = c[np.arange(len(c)), (c != 0).argmax(axis=1)]
+    c = np.where(((first >> 7) == 1)[:, None], c ^ np.where(c != 0, np.uint8(0x80), np.uint8(0)), c)
+    _, idx = np.unique(np.ascontiguousarray(c).view(np.dtype((np.void, c.shape[1]))).ravel(), return_index=True)
+    return np.sort(idx)
+
+
 def start_words(start: str, av: np.ndarray, bv: np.ndarray, g: np.random.Generator) -> np.ndarray:
     """`zero` (+0), `h<H>` (hot_start, keyed per word) or `p<H>` (separable_start)."""
     if start == "zero":
@@ -309,14 +319,18 @@ def error(ac: np.ndarray, bc: np.ndarray, start: str, g: np.random.Generator) ->
 def job(layer: int, cls: str, args, key: str, out: Path) -> str:
     t0 = time.monotonic()
     a, b = operands(cls, layer, args, key)
-    ac, bc = quantize(a), quantize(b)
+    every, bc = quantize(a), quantize(b)
+    keep = distinct_rows(every) if args.dedup else np.arange(len(every))
+    pick = np.sort(rng(key, "rows", layer, cls).choice(keep, min(args.rows, len(keep)), replace=False))
+    ac = every[pick]
     av, bv = values(ac), values(bc)
     rows, cols, k = len(ac), len(bc), ac.shape[1]
     span = min(k, 32 * args.atoms)
     res = {"layer": layer, "class": cls, "rows": rows, "cols": cols, "k": k, "census_atoms": span // 32, "key": key,
            "zero_codes": {"a": float(((ac & 0x7F) == 0).mean()), "b": float(((bc & 0x7F) == 0).mean())},
            "subnormal_codes": {"a": float(((ac & 0x78) == 0).mean()), "b": float(((bc & 0x78) == 0).mean())},
-           "repeated_slices": {"a": repeated_slices(ac), "b": repeated_slices(bc)},
+           "a_rows": {"all": len(every), "distinct": len(keep), "dedup": args.dedup},
+           "repeated_slices": {"a": repeated_slices(every), "a_distinct": repeated_slices(every[keep]), "b": repeated_slices(bc)},
            "starts": {}}
     path = out / f"L{layer:03d}-{cls}.json"
     y_true = (av[:, :span] @ bv[:, :span].T).ravel()
@@ -352,6 +366,9 @@ def main() -> int:
     ap.add_argument("--err-rows", type=int, default=64)
     ap.add_argument("--err-cols", type=int, default=32)
     ap.add_argument("--key", default="r1-census/v0")
+    ap.add_argument("--first-row", type=int, default=0, help="A's rows from this token position on (long-context workloads)")
+    ap.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,
+                    help="sample A's rows from its distinct rows (codes up to sign), as the per-row rules credit them")
     ap.add_argument("--workers", type=int, default=os.cpu_count())
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
