@@ -913,7 +913,7 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 2                                             # a status line reaches the root's poster
 
 
-def test_a_thread_rings_one_inbox_at_most_six_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
+def test_one_author_rings_one_inbox_from_a_thread_at_most_six_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
@@ -922,8 +922,11 @@ def test_a_thread_rings_one_inbox_at_most_six_times_an_hour_then_says_so_once(fa
     rung = bells(fake, box)
     assert sum(m["text"].startswith("from infra:") for m in rung) == 6 and sum("paused" in m["text"] for m in rung) == 1
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
-    assert len(notices) == 1 and notices[0]["text"].startswith("routing to circuits paused here for the hour")
+    assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
+    for who in ("proofs", "lean", "console", "comms", "top", "pr-captain", "memory-accounting"):    # a roll call is not a loop
+        assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
+    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == 13
 
 
 def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
@@ -1107,3 +1110,26 @@ def test_research_msg_is_the_front_door(registry, capsys):
     assert cli.main(["msg", "send", "--as", "infra", "--text", "x", "--to", "@infra"]) == 2
     assert capsys.readouterr().err.startswith("research msg: ")
 
+
+
+def test_a_single_file_in_a_checkout_older_than_the_registry_reads_it_from_origin(tmp_path, registry):
+    import subprocess
+    import sys
+    single, repo = tmp_path / "vmsg.py", tmp_path / "old-checkout"
+    shutil.copy(slack.__file__, single)
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+    repo.mkdir()
+    git("init", "-q", "-b", "main")
+    (repo / slack.REGISTRY_REL).parent.mkdir(parents=True)
+    shutil.copy(registry, repo / slack.REGISTRY_REL)
+    git("add", ".")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "registry")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("rm", "-q", "-r", ".agents")                                                # this tree predates the registry
+    env = {k: v for k, v in os.environ.items() if k != "RESEARCH_SLACK_REGISTRY"} | {"PYTHONPATH": "", "TMPDIR": str(tmp_path)}
+    out = subprocess.run([sys.executable, str(single), "handles"], capture_output=True, text=True, cwd=repo, env=env)
+    assert out.returncode == 0, out.stderr
+    assert "@circuits" in out.stdout
+    git("update-ref", "-d", "refs/remotes/origin/main")
+    out = subprocess.run([sys.executable, str(single), "handles"], capture_output=True, text=True, cwd=repo, env=env)
+    assert out.returncode == 2 and "after `git fetch origin main`" in out.stderr

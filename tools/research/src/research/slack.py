@@ -74,6 +74,7 @@ except ImportError:                                                 # run as a s
 
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
+REGISTRY_REFS = ("origin/main", "origin/cursor/slack-routing-b252")   # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
@@ -116,7 +117,7 @@ LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
 QUIET = "(quiet)"                                                # in a post: ring no doorbell
-CAP_PER_HOUR = 6                                                 # doorbells into one inbox from one thread
+CAP_PER_HOUR = 6                                                 # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 150
 INBOX_HEAD = "Inbox for @"
 TAG_SEP = " \u00b7 "
@@ -141,7 +142,14 @@ def registry_path(explicit: str | None = None) -> Path:
     for d in (Path.cwd(), *Path.cwd().parents, *here.parents):
         if (d / REGISTRY_REL).is_file():
             return d / REGISTRY_REL
-    raise SlackError(f"no {REGISTRY_REL} here or above; pass --registry (`git show origin/main:{REGISTRY_REL} > /tmp/r.json`)")
+    for ref in REGISTRY_REFS:                                       # a checkout whose tree predates the registry
+        out = __import__("subprocess").run(["git", "show", f"{ref}:{REGISTRY_REL}"], capture_output=True)
+        if out.returncode == 0 and out.stdout:
+            p = Path(__import__("tempfile").gettempdir()) / f"verity-slack-registry-{re.sub(r'[^A-Za-z0-9]+', '-', ref)}.json"
+            p.write_bytes(out.stdout)
+            return p
+    raise SlackError(f"no {REGISTRY_REL} here or above, nor at {' or '.join(REGISTRY_REFS)} in this checkout: run from your "
+                     f"verity checkout after `git fetch origin main`, or pass --registry")
 
 
 def load_registry(path: Path) -> dict:
@@ -694,6 +702,10 @@ def doorbell(author: str, link: str, text: str, urgent: bool = False) -> str:
     return f"from {author}{' (URGENT)' if urgent else ''}: {link} {first[:DOORBELL_MAX]}".rstrip()
 
 
+def _from(text: str, author: str) -> bool:
+    return text.startswith((f"from {author}:", f"from {author} (", f"from router: paused {author} "))
+
+
 def _mentions_thread(text: str, thread: str) -> bool:
     return f"thread_ts={thread}" in text or f"/p{thread.replace('.', '')}" in text
 
@@ -735,14 +747,14 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
         rung = [m for m in rung if m.get("ts") != r["inbox_ts"]]
         if any(link in (m.get("text") or "") for m in rung):
             continue
-        n = sum(_mentions_thread(m.get("text") or "", src) for m in rung)
-        if n >= CAP_PER_HOUR:
+        n = sum(_mentions_thread(m.get("text") or "", src) and _from(m.get("text") or "", author) for m in rung)
+        if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
             if n == CAP_PER_HOUR:
                 api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
-                         text=f"routing to {to} paused here for the hour ({CAP_PER_HOUR} doorbells from this thread) {QUIET}")
+                         text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
                 api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                         text=f"from router: paused {link}")
-            lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from this thread)")
+                         text=f"from router: paused {author} {link}")
+            lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
             continue
         api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                  unfurl_media="false", text=doorbell(author, link, msg.get("text", ""), urgent))
@@ -1616,7 +1628,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
     p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it)")
-    p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and a checkpoint shows them first")
+    p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True, url=True)
     p.add_argument("--declined", default=None, metavar="WHY")
@@ -1634,7 +1646,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--deliver", choices=DELIVER, default="digest", help="wake: a doorbell now; digest: in `read --as` (default)")
     p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
-    p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT, and a checkpoint shows it first")
+    p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
     p.add_argument("--to", nargs="+", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
