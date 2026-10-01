@@ -20,7 +20,7 @@
 #      STATEMENT_DIGEST=1 (with STAGE_ONLY: each staged statement's digest, as the verifier builds it, in its record)
 #      FLOCK_PACK_WORDS=1 (narrow words share u16 leaves: four FP4 or two FP8 elements a leaf; a different statement)
 #      FLOCK_CORE_ROWS=1 (an FP GEMM coordinate's rows are core's bit rows, sha512/row/v2, x and W each with its scales; packed; a
-#      different statement, refused where a row is not whole SHA-512 blocks)
+#      different statement, of any row length: the verifiers derive a row's fill bits and padding from it)
 #      SERVE_ONLY=DIR (no GPU: stage the shapes and serve their WARM + RUNS sessions on this pod's address, published under DIR
 #      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)  SERVE_POINTS=1 (with SERVE_ONLY: that many provers'
 #      sessions, one prover after another, on the same verifier processes)

@@ -2171,6 +2171,8 @@ struct Plan {
     salt_forged: bool,
     midstate_forged: bool,
     pad_forged: bool,
+    fill_forged: bool,
+    mixed_pad_forged: bool,
     mask_random: bool,
     cut_flip: bool,
     tail_swapped: bool,
@@ -2234,7 +2236,8 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let rows = Arc::new(rows);
     let salts = Arc::new(inst.instance_salts(st.c.ports.len()).expect("the prover's instance file has the salts"));
     let (s1, r1, sa1) = (st.clone(), rows.clone(), salts.clone());
-    let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged };
+    let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged,
+                             fill_flip: plan.fill_forged, mixed_pad_flip: plan.mixed_pad_forged };
     let rowin: Arc<dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync + Send> = Arc::new(move |b| {
         if zero { s1.row_inputs(None, None, b, tamper) } else { s1.row_inputs(Some(&r1), Some(&sa1), b, tamper) }
     });
@@ -2778,6 +2781,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("row_salt_forged", false, true),
     ("row_midstate_forged", false, true),
     ("padding_block_forged", false, true),
+    ("row_fill_bit_set", false, true),
+    ("row_padding_bit_forged_beside_its_bytes", false, true),
     ("coins_before_y", false, false),
     ("reps_with_different_witness", false, false),
     ("reps_differ_prover_stops", false, false),
@@ -2838,6 +2843,8 @@ fn skipped(st: &Stmt, name: &str) -> bool {
     let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
         .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
     (name == "chaining_value_forged" && !multi_block)
+        || (name == "row_fill_bit_set" && !st.c.ports.iter().any(|p| p.v2 && p.bits % 8 != 0))
+        || (name == "row_padding_bit_forged_beside_its_bytes" && !st.c.ports.iter().any(|p| p.v2 && p.bytes() % 128 != 0))
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
         || (is_zk(st) && NOT_ZK.contains(&name))
         || (!is_zk(st) && name.starts_with("zk_"))
@@ -2858,6 +2865,8 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "row_salt_forged" => Plan { salt_forged: true, ..h },
         "row_midstate_forged" => Plan { midstate_forged: true, ..h },
         "padding_block_forged" => Plan { pad_forged: true, ..h },
+        "row_fill_bit_set" => Plan { fill_forged: true, ..h },
+        "row_padding_bit_forged_beside_its_bytes" => Plan { mixed_pad_forged: true, ..h },
         "coins_before_y" => Plan { no_y: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, skip_level0_check: true, ..h },
         "reps_differ_prover_stops" => Plan { rep1_other_witness: true, ..h },

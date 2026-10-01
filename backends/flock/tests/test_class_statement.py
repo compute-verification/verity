@@ -258,28 +258,41 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
         assert all(frame.verify_path(p, root, len(leaves), r, leaves[r], frame.path(p, leaves, r)) for r in range(len(leaves)))
 
 
-def test_core_rows_refuse_partial_blocks_tiles_and_sources_that_are_not_whole_parameters(monkeypatch, tmp_path: Path):
+def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_not_whole_parameters(monkeypatch, tmp_path: Path):
+    """A bit row of any length stages, its leaves ``ceil(bits / 16)`` words: NVF4 K=256's rows are 1152 bits, 144 bytes, one
+    compression and then a last block that holds 16 row bytes and SHA-512's padding. NVF4 K=128's (576 bits, 72 bytes) fit the
+    padding block with no compression before it, which the circuit refuses (its ``sha512x3`` range, the pin's, would hold no
+    slot). A source that is not one whole parameter, a row length that is not its leaves', and tiling are refused."""
+    from verity_flock import sha512_circuit as S
+
+    units, s, cl, act, uc, groups = _fp_class("nvf4", 256)
+    st = CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k256", b"k" * 32, core_rows=True)
+    assert st["row_schemas"] == [["hm96-sha512/row/v2", 1152]] * 2 and st["ports"] == [72, 72]
+    meta = json.loads((tmp_path / "k256" / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert [c for _p, _w, c in meta["ports"]] == [1, 1] and [r["pad"] for r in meta["rows"]] == [S.pad_tail(128 + 144).hex()] * 2
     units, s, cl, act, uc, groups = _fp_class("nvf4", 128)
-    with pytest.raises(ValueError, match="576 bits is 72 bytes, not whole SHA-512 blocks"):
-        CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path, b"k" * 32, core_rows=True)
+    with pytest.raises(ValueError, match="no row has a compression before its last block"):
+        CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k128", b"k" * 32, core_rows=True)
     merged, _joins, bits = CS.element_rows(act, uc, groups)
-    CS.whole_blocks("cells", [ROW_BITS["nvf4"](2048), ROW_BITS["mxf4"](4096), ROW_BITS["e4m3"](128), ROW_BITS["nvf4"](16384)])
-    for n_bits, size in ((ROW_BITS["mxf4"](2048), 1088), (ROW_BITS["nvf4"](1024), 576), (ROW_BITS["e4m3"](64), 64), (1023, 128)):
-        with pytest.raises(ValueError, match=f"{n_bits} bits is {size} bytes, not whole"):
-            CS.whole_blocks("cells", [n_bits])
     for bad in ([groups[0][:64], groups[0][64:], *groups[1:]], [groups[0][::-1], *groups[1:]], [groups[0] + groups[1], *groups[2:]]):
         with pytest.raises(ValueError, match="not one whole parameter"):
             CS.element_rows(act, uc, bad)
     low = CS.class_lowering(act, uc, "unit-class/padded", merged, packed=True)
     sub, _iset = CS._shims("padded", b"padded", 2)
-    with pytest.raises(ValueError, match="a row of 576 bits is not its 64 u16 leaves"):
+    with pytest.raises(ValueError, match="a row of 576 bits is 36 u16 leaves, not 64"):
         FC.compose(low, sub, port_bits=bits)
     meta = {"ports": [["p0", 64, 1]], "row_schemas": [["hm96-sha512/row-e4m3/v1", 1024]]}
     with pytest.raises(ValueError, match="hm96-sha512/row/v2"):
         FC._meta_ports(meta)
-    meta["row_schemas"] = [["hm96-sha512/row/v2", 1016]]
-    with pytest.raises(ValueError, match="1016 bits is not its 64 u16 leaves"):
+    meta["row_schemas"] = [["hm96-sha512/row/v2", 1000]]
+    with pytest.raises(ValueError, match="1000 bits is 63 u16 leaves, not 64"):
         FC._meta_ports(meta)
+    meta["row_schemas"] = [["hm96-sha512/row/v2", 1 << 64]]
+    with pytest.raises(ValueError, match="a u64 number of bits"):
+        FC._meta_ports(meta)
+    assert [p.bits for p in FC._meta_ports({**meta, "row_schemas": [["hm96-sha512/row/v2", 1009]]})] == [1009]
+    with pytest.raises(ValueError, match="a row of 1009 bits has a bit set past its length"):
+        FC._commit_strings([FC._port("p0", 64, 1009)], {"p0": np.full((1, 64), 1 << 1, np.uint16)}, {"p0": [bytes(192)]})
     monkeypatch.setattr(CS, "CORE_ROWS", True)
     with pytest.raises(ValueError, match="FLOCK_CORE_ROWS"):
         CS.stage_tiled(units, "q-word", s, cl, (), tmp_path, b"", 4, 4, 1)
@@ -288,7 +301,8 @@ def test_core_rows_refuse_partial_blocks_tiles_and_sources_that_are_not_whole_pa
 def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list | None]:
     """At (dtype, K), from the coordinate Definition's parameters through the stager's own layout and core's prefixes: the default
     and packed frames' port prefixes (one ``sha512/row/v1`` row per parameter, its words as `class_lowering` pads them) and the
-    new frame's, ``(prefix, bits)`` per row, or None where `whole_blocks` refuses the shape."""
+    new frame's, ``(prefix, bits)`` per row, or None where the circuit refuses the shape (no row with a compression before its
+    last block)."""
     gemm_fp = _gemm_fp()
     fn = gemm_fp.coordinate(dtype, K)
     sig = dict(fn.signature()[0])
@@ -296,11 +310,10 @@ def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list | None]:
     old = {fr: [FC.Port(f"p{i}", CS._pad(CS._slots(w, fr == "packed")[1], CS.BLOCK_WORDS)).layout().prefix for i, w in enumerate(params)]
            for fr in ("default", "packed")}
     bits = [sum(sig[nm].n * sig[nm].elem.w for nm in row) for row in CS.ELEMENT_ROWS[fn.id.split("{")[0]]]
-    try:
-        CS.whole_blocks(fn.id, bits)
-    except ValueError:
+    ports = [FC._port(f"p{i}", -(-b // 16), b) for i, b in enumerate(bits)]
+    if all(p.comps == 0 for p in ports):
         return old, None
-    return old, [(FC.Port(f"p{i}", b // 16, b).layout().prefix, b) for i, b in enumerate(bits)]
+    return old, [(p.layout().prefix, p.bits) for p in ports]
 
 
 def _gemm_fp():
@@ -316,8 +329,9 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
     """Every port's prefix in the new, default and packed frames, at the test shapes, K = 64 ... 16384 (the 12 cells among them):
     each new prefix is core's ``P(l)`` for the row's own bits (codes then scales), so a prefix names a length and nothing else, x
     and W rows of one shape share it (by design: the frame leaf binds the port's domain), and none equals an old-frame prefix;
-    the refused shapes are exactly the partial-block ones (of the cells, MXF4 K=2048). The derivation agrees with the stager's
-    own lowering and `element_rows` at K=128."""
+    the refused shapes are exactly those whose rows fit SHA-512's padding block (at most 111 bytes: no compression before it),
+    so every cell stages, MXF4 K=2048's partial last block among them. The derivation agrees with the stager's own lowering
+    and `element_rows` at K=128."""
     from verity.commitments.rowleaf import sha512_row_v2_prefix
 
     shapes = [(d, k) for d in ROW_BITS for k in (64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384)]
@@ -336,7 +350,7 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
         for prefix, b in rows:
             assert new.setdefault(prefix, b) == b, (dtype, K, b, new[prefix])
     assert not set(new) & old
-    assert refused == [("e4m3", 64)] + [("nvf4", k) for k in (64, 128, 256, 512, 1024)] + [("mxf4", k) for k in (64, 128, 256, 512, 1024, 2048)]
+    assert refused == [("e4m3", 64), ("nvf4", 64), ("nvf4", 128), ("mxf4", 64), ("mxf4", 128)]
     assert len(new) == len({ROW_BITS[d](k) for d, k in shapes if (d, k) not in refused})
 
     for dtype in ROW_BITS:

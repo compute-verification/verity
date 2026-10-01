@@ -32,7 +32,7 @@
 #      STATEMENT_DIGEST=1 (with STAGE_ONLY: each staged statement's digest in out/staged.jsonl, as the verifier builds it)
 #      FLOCK_PACK_WORDS=1 (an FP row's elements packed four FP4 or two FP8 a u16 leaf: a different statement, its point flagged)
 #      FLOCK_CORE_ROWS=1 (an FP row is core's bit row, sha512/row/v2, its codes then its scales: a different statement,
-#      its point flagged; the verifiers of record refuse it until they derive its prefixes)
+#      its point flagged; any row length, the verifiers deriving its prefix, fill bits and padding from it)
 #      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the preflight check's and the step's statements and serve their
 #      sessions on the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR
 #      alone (the GPU job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the

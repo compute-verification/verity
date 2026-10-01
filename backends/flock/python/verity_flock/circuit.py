@@ -5,8 +5,11 @@ Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.commi
 ``x = SHA-512(sha512_row_prefix || row)`` (``sha512/row/v1``), its hiding commit string ``b || c`` with ``b = x XOR M(key) y`` and
 ``c = SHA-512(salt_prefix || y)`` for a 192-byte salt ``y`` (``hm96.SHA512``, key its ``default_key``), and the frame leaf binds
 ``hm96.SHA512.tree_leaf(key, b || c)``. Both hashes are proved here: the rows and their salts are private. A port may instead
-hold a bit row of ``Port.bits`` bits, its u16 leaves low bit first (``sha512/row/v2``, its leaf ``hm96-sha512/row/v2``; META
-names each port's schema and length in ``row_schemas``), with the same compressions over the same bytes and another first block.
+hold a bit row of any ``Port.bits`` bits below 2^64 (``sha512/row/v2``, its leaf ``hm96-sha512/row/v2``; META names each port's
+schema and length in ``row_schemas``): its ``ceil(bits / 16)`` u16 leaves the row's bits low first, its message after the
+prefix ``P(bits)`` the row's ``ceil(bits / 8)`` bytes then SHA-512's padding. The verifiers derive from the length the
+prefix, the blocks, and every message bit at or past it (the last byte's fill bits, then the padding: a whole padding block,
+a last block of the row's bytes and padding, or an extra block of padding alone) as Δ constants.
 
 Private by default. The public data are the frame-v3-sha512 roots, each row's ``b || c`` (the serving tree's leaves are
 functions of it), the declared outputs, and the layout below. Every other word (every compression's chaining value, every
@@ -18,10 +21,14 @@ One or more whole instances (VUs) per block. A block is the same for every block
 ranges of slots of a few types:
 
 * ``sha512x3``: three independent SHA-512 compressions (:mod:`sha512_circuit`, 2^18 bits): a row's blocks after its constant
-  first block, chained by Δ (the first from the prefix's midstate, a Δ constant), the row's bytes the message bits;
-* ``hm96``: one per input port (``per_vu`` a power of two): the row's padding compression (the padding block a Δ constant),
-  then ``b || c`` from the salt; its ``bc`` output is the public region of the row;
-* ``unit``: the template's identical units (2^unit_log bits), each input bit a copy of the message bit that hashes it;
+  first block but its last, chained by Δ (the first from the prefix's midstate, a Δ constant), the row's bits the message
+  bits (a bit row's message bits past its length Δ constants);
+* ``hm96``: one per input port (``per_vu`` a power of two): the row's last compression (its last block: a ``sha512/row/v1``
+  row's padding block, a Δ constant; a bit row's last bytes, if any, and padding, its bits past the length Δ constants; its
+  chaining value the previous compression's, or for a row of no other compression the midstate), then ``b || c`` from the
+  salt; its ``bc`` output is the public region of the row;
+* ``unit``: the template's identical units (2^unit_log bits), each input bit a copy of the message bit that hashes it (a bit
+  row's leaf bits past its length: of the forced-zero row);
 * ``mask``: 2^14 free cells (``A = B = I``), reserved for zero-knowledge masks and filled by the prover's mask hook (zeros in
   M0), apart from the forced-zero padding (positions no range covers).
 
@@ -140,21 +147,37 @@ def _log2(x: int) -> int:
 
 @dataclass
 class Port:
-    """An input port's rows: ``words`` u16 leaves, framed as ``sha512/row/v1`` x rows of u16 words, or (``bits``) as core's bit
-    row ``sha512/row/v2`` of ``bits`` bits over the same bytes (``verity.commitments.rowleaf``; ``bits`` is ``16 * words``)."""
+    """An input port's rows: ``words`` u16 leaves, framed as ``sha512/row/v1`` x rows of u16 words (whole SHA-512 blocks), or
+    (``bits``) as core's bit row ``sha512/row/v2`` of ``bits`` bits (``verity.commitments.rowleaf``): its leaves the row's bits
+    low first, ``words = ceil(bits / 16)``, the bits past ``bits`` zero."""
 
     name: str
     words: int
     bits: int | None = None
 
     @property
+    def n_bits(self) -> int:
+        """The row's length in bits (a ``sha512/row/v1`` row's: its words')."""
+        return 16 * self.words if self.bits is None else self.bits
+
+    @property
     def bytes(self) -> int:
-        return 2 * self.words
+        """The row bytes its digest hashes after the prefix: ``2 * words``, or a bit row's ``ceil(bits / 8)``."""
+        return 2 * self.words if self.bits is None else -(-self.bits // 8)
 
     @property
     def comps(self) -> int:
-        """Compressions after the constant first block (the padding block is the hm96 slot's)."""
-        return self.bytes // 128
+        """Compressions after the constant first block: the message's blocks but its last, which the hm96 slot compresses (the
+        row's last bytes, if any, then SHA-512's padding: ``ceil((bytes + 17) / 128)`` blocks in all)."""
+        return -(-(self.bytes + 17) // 128) - 1
+
+    def message(self) -> bytes:
+        """The message after the prefix with every row bit zero: ``bytes`` zero bytes, then SHA-512's padding. A message bit is
+        the row's bit ``8 j + t`` (bit ``t`` of byte ``j``) below ``n_bits``, and this constant from there on (the fill bits
+        of the last row byte, then the padding)."""
+        from . import sha512_circuit as S
+
+        return bytes(self.bytes) + S.pad_tail(128 + self.bytes)
 
     @property
     def schema(self) -> str:
@@ -175,11 +198,16 @@ class Port:
 
 
 def _port(name: str, words: int, bits: int | None = None) -> Port:
-    """A port of whole SHA-512 blocks; a bit row's bits are exactly its leaves' (no fill bits, which no slot pins to zero)."""
-    if (2 * words) % 128:
-        raise ValueError(f"port {name}: {2 * words}-byte rows are not whole SHA-512 blocks")
-    if bits is not None and bits != 16 * words:
-        raise ValueError(f"port {name}: a row of {bits} bits is not its {words} u16 leaves ({16 * words} bits)")
+    """A ``sha512/row/v1`` port of whole SHA-512 blocks, or a bit row of any u64 length in its ``ceil(bits / 16)`` leaves (the
+    verifiers derive its fill bits and padding as Δ constants)."""
+    if bits is None:
+        if words <= 0 or (2 * words) % 128:
+            raise ValueError(f"port {name}: {2 * words}-byte rows are not whole SHA-512 blocks (sha512/row/v1)")
+        return Port(name, words)
+    if isinstance(bits, bool) or not isinstance(bits, int) or not 0 <= bits < 1 << 64:
+        raise ValueError(f"port {name}: a row's length is a u64 number of bits, not {bits!r}")
+    if words != -(-bits // 16):
+        raise ValueError(f"port {name}: a row of {bits} bits is {-(-bits // 16)} u16 leaves, not {words}")
     return Port(name, words, bits)
 
 
@@ -195,7 +223,8 @@ def _meta_ports(meta: dict) -> list[Port]:
 
 
 def _row_consts(p: Port) -> dict:
-    """A row's constants: its schema's first block (core's prefix), the chaining value after it, the padding block."""
+    """A row's constants: its schema's first block (core's prefix), the chaining value after it, SHA-512's padding after its
+    bytes (a whole block for ``sha512/row/v1``)."""
     from . import sha512_circuit as S
 
     prefix = p.layout().prefix
@@ -290,13 +319,15 @@ def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:
 
 
 def _row_wires(ports: list[Port]) -> list:
-    """Each row's chain (compression k's ``cv`` from compression k-1's ``out``) and its hm96 slot's ``cv`` (from the last)."""
+    """Each row's chain (compression k's ``cv`` from compression k-1's ``out``) and its hm96 slot's ``cv`` (from the last; a
+    row of no compression gives its hm96 slot the midstate, a Δ constant)."""
     _, where = _row_slots(ports)
     wires = []
     for p, w in enumerate(where):
         for k in range(1, len(w)):
             wires.append([SHA_NET, w[k][0], 2 * w[k][1], SHA_NET, w[k - 1][0], w[k - 1][1]])
-        wires.append([HM_NET, p, 0, SHA_NET, w[-1][0], w[-1][1]])
+        if w:
+            wires.append([HM_NET, p, 0, SHA_NET, w[-1][0], w[-1][1]])
     return wires
 
 
@@ -335,6 +366,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     lk = {t: {"table": t, "sha256": IL.TABLES[t], "in_bits": TL.TABLE_BITS[t], "out_bits": TL.VALUE_BITS, "lo_bits": LOOKUP_LO[TL.TABLE_BITS[t]]}
           for t in lookups}
     n_sha, _ = _row_slots(ports)
+    if n_sha == 0:
+        raise ValueError(f"{low.name}: no row has a compression before its last block (the {SHA_NET} range, the pin's, would hold no slot)")
     n_hm = _pow2(len(ports))
 
     def fits(G: int):
@@ -397,7 +430,8 @@ def _expanded(lay: IL.Layout, name: str) -> str:
 
 
 def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
-    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1`` or ``sha512/row/v2``, and its salt)."""
+    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1`` or ``sha512/row/v2`` of the leaves' first
+    ``Port.bytes`` bytes, and its salt). Refuses a bit row whose leaves have a bit set past its length."""
     from verity.commitments import hm96
 
     inst = hm96.SHA512
@@ -405,7 +439,10 @@ def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, lis
     for p in ports:
         lay = p.layout()
         r = np.ascontiguousarray(rows[p.name], dtype="<u2")
-        out[p.name] = [inst.commit_string(inst.default_key, lay.digest(r[i].tobytes()), salts[p.name][i]) for i in range(len(r))]
+        if p.bits is not None and 16 * p.words > p.bits:
+            if np.any(r[:, -1] >> np.uint16(p.bits - 16 * (p.words - 1))):
+                raise ValueError(f"port {p.name}: a row of {p.bits} bits has a bit set past its length")
+        out[p.name] = [inst.commit_string(inst.default_key, lay.digest(r[i].tobytes()[:p.bytes]), salts[p.name][i]) for i in range(len(r))]
     return out
 
 

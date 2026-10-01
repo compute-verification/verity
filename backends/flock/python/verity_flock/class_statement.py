@@ -140,8 +140,8 @@ def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> t
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
-    bits. Refuses a Definition that is not such a coordinate and a source that is not one whole parameter in element order
-    (`whole_blocks` refuses a row that is not whole SHA-512 blocks)."""
+    bits. Refuses a Definition that is not such a coordinate and a source that is not one whole parameter in element order. A
+    row of any length is staged: the verifiers derive its fill bits and SHA-512 padding from the length."""
     family = act.fn.id.split("{")[0]
     if family not in ELEMENT_ROWS:
         raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id} is not an FP GEMM coordinate ({sorted(ELEMENT_ROWS)})")
@@ -169,25 +169,14 @@ def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> t
     return merged, joins, bits
 
 
-def whole_blocks(name: str, bits: list[int]) -> None:
-    """Refuse bit rows that are not whole SHA-512 blocks (NVFP4 k < 2048 or not a multiple of it, MXFP4 likewise at 4096,
-    E4M3 at 128). ``sha512/row/v2`` takes any length, but this circuit hashes a row's whole blocks after the prefix and then a
-    constant padding block, and no slot pins fill bits or a padding block that shares a row's last bytes; so such a shape is not
-    staged."""
-    for b in bits:
-        if b % 1024:
-            raise ValueError(f"FLOCK_CORE_ROWS: {name}: a row of {b} bits is {-(-b // 8)} bytes, not whole SHA-512 blocks "
-                             "(refused: this circuit hashes whole blocks)")
-
-
 def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
-                   packed: bool = False) -> IL.Lowering:
+                   packed: bool = False, blocks: bool = True) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
-    words laid out by `_slots` (``packed``: narrow words share leaves), each padded to whole 64-word SHA-512 blocks, and
-    ``out0 .. out{W_out-1}``."""
+    words laid out by `_slots` (``packed``: narrow words share leaves), each padded to whole 64-word SHA-512 blocks (not
+    ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``."""
     groups = groups or [list(range(len(uc.inputs)))]
     slots = [_slots([uc.in_widths[t] for t in g], packed) for g in groups]
-    port_words = tuple(_pad(used, BLOCK_WORDS) for _at, used in slots)
+    port_words = tuple(_pad(used, BLOCK_WORDS) if blocks else used for _at, used in slots)
     C = gf2.Circuit()
     leaves = []
     for i, w in enumerate(port_words):
@@ -471,9 +460,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     bits = None
     if core_rows:
         groups, joins, bits = element_rows(act, uc, groups)
-        whole_blocks(act.fn.id, bits)
         idents = [list(zip(*(idents[i] for i in j))) for j in joins] if idents is not None else None
-    low = class_lowering(act, uc, f"unit-class/{name}", groups, packed)
+    low = class_lowering(act, uc, f"unit-class/{name}", groups, packed, blocks=not core_rows)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b""), len(groups))
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packed)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
@@ -520,14 +508,15 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
 def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
-    """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``)."""
+    """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
     from verity.commitments.rowleaf import bit_row
 
     for i, (g, n_bits) in enumerate(zip(groups, bits)):
         rows = per_port[f"p{i}"]
         for lane in range(min(lanes, len(rows))):
-            want = bit_row(*(([int(ins[t][lane])], uc.in_widths[t]) for t in g))
-            if (rows[lane].astype("<u2").tobytes(), 16 * rows.shape[1]) != want or want[1] != n_bits:
+            want, got_bits = bit_row(*(([int(ins[t][lane])], uc.in_widths[t]) for t in g))
+            row = rows[lane].astype("<u2").tobytes()
+            if got_bits != n_bits or rows.shape[1] != -(-n_bits // 16) or row[:len(want)] != want or any(row[len(want):]):
                 raise AssertionError(f"class {name}: port p{i} lane {lane} is not core's bit row of its elements")
 
 
