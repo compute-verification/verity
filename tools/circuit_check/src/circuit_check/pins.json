@@ -1,10 +1,19 @@
 {
  "definitions": {
+  "AddScalarBf16Element_v1{K=1065353216}": {
+   "and": 621
+  },
   "AddScalarBf16_v2{N=8,C=1.0}": {
    "and": 4968
   },
+  "AddScalarF32Element_v1{K=897988541}": {
+   "and": 742
+  },
   "AddScalarF32_v2{N=8,C=1e-06}": {
    "and": 5936
+  },
+  "AddWidenedBf16Element_v1": {
+   "and": 666
   },
   "AddWidenedBf16_v2{N=8}": {
    "and": 5328
@@ -26,6 +35,18 @@
   },
   "Bf16MulF32_v2": {
    "and": 1220
+  },
+  "Bf16MulScalarElement_v1{K=1023969417}": {
+   "and": 865
+  },
+  "Bf16MulScalarElement_v1{K=1106247680}": {
+   "and": 629
+  },
+  "Bf16MulScalarTensorElement_v1": {
+   "and": 781
+  },
+  "Bf16MulScalarTensorScalar_v1": {
+   "and": 18
   },
   "Bf16MulScalarTensor_v2{N=8}": {
    "and": 6266
@@ -105,6 +126,18 @@
   "I32Add_v2": {
    "and": 31
   },
+  "MoeRouterNormalize_v1{E=8,VPT=4}": {
+   "and": 26738
+  },
+  "MoeRouterSelect_v1{E=8,TOPK=2}": {
+   "and": 2261
+  },
+  "MoeRouterShift_v1{E=8,VPT=4}": {
+   "and": 6268
+  },
+  "MoeSumCoordinate_v2{TOPK=8}": {
+   "and": 5222
+  },
   "MoeSum_v2{TOPK=8,H=8}": {
    "and": 41776
   },
@@ -132,14 +165,32 @@
   "RsqrtApprox_v2": {
    "and": 1134
   },
+  "ScaleRowBf16Element_v1": {
+   "and": 1136
+  },
+  "ScaleRowBf16Scalar_v1": {
+   "and": 50
+  },
   "ScaleRowBf16_v2{N=8}": {
    "and": 9138
+  },
+  "ScaleRowF32Element_v1": {
+   "and": 2396
+  },
+  "ScaleRowF32Scalar_v1": {
+   "and": 34
   },
   "ScaleRowF32_v2{N=8}": {
    "and": 19202
   },
+  "SquareBf16Element_v1": {
+   "and": 628
+  },
   "SquareBf16_v2{N=8}": {
    "and": 5024
+  },
+  "SquareF32Element_v1": {
+   "and": 1978
   },
   "SquareF32_v2{N=8}": {
    "and": 15824
