@@ -1,5 +1,5 @@
-"""The records' liveness screen of the Pearl-C device path (`pouw_pearl_c_device`), and the copy its CUDA graphs scatter a call's
-outputs with.  `screen` is the per-row rules in torch; `screen_into` runs them as one fused Triton program a row on the GPU (or
+"""The records' liveness screen of the Pearl-C device path (`pouw_pearl_c_device`), and the kernel its CUDA graphs scatter a
+call's outputs with.  `screen` is the per-row rules in torch; `screen_into` runs them as one fused Triton program a row on the GPU (or
 as `screen`'s torch operations elsewhere); `excluded` gives the rows the rules exclude, deciding the band's rows exactly.
 """
 from __future__ import annotations
@@ -82,23 +82,34 @@ def _screen_kernel():
     return _SCREEN_KERNEL[0]
 
 
-_COPY_KERNEL: list = []
+_SCATTER_KERNEL: list = []
+#: bytes a program of the scatter copies
+SCATTER_BLOCK = 1024
 
 
-def copy_kernel():
-    """n bytes from src to dst at the byte offset `offs[which]`, read on the device (a graph's scatter into the pass)."""
-    if not _COPY_KERNEL:
+def scatter_kernel():
+    """A graph's scatter into the pass, one launch: `n_leaves` bytes from `leaves`, `n_flags` from `flags` and A's 32-byte
+    `root`, each to its destination at the byte offset `offs[0]`, `offs[1]`, `offs[2]` read on the device.  The first
+    ⌈n_leaves / BLOCK⌉ programs copy the leaves, the next ⌈n_flags / BLOCK⌉ the flags, the last one the root."""
+    if not _SCATTER_KERNEL:
         import triton
         import triton.language as tl
 
         @triton.jit
-        def copy_at(src, dst, offs, which, n, BLOCK: tl.constexpr):
-            o = tl.load(offs + which)
-            i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-            live = i < n
-            tl.store(dst + o + i, tl.load(src + i, mask=live), mask=live)
-        _COPY_KERNEL.append(copy_at)
-    return _COPY_KERNEL[0]
+        def scatter_at(leaves, leaves_to, flags, flags_to, root, roots_to, offs, n_leaves, n_flags, BLOCK: tl.constexpr):
+            p, b0 = tl.program_id(0), tl.cdiv(n_leaves, BLOCK)
+            b1 = tl.cdiv(n_flags, BLOCK)
+            if p < b0:
+                i = p * BLOCK + tl.arange(0, BLOCK)
+                tl.store(leaves_to + tl.load(offs) + i, tl.load(leaves + i, mask=i < n_leaves), mask=i < n_leaves)
+            elif p < b0 + b1:
+                i = (p - b0) * BLOCK + tl.arange(0, BLOCK)
+                tl.store(flags_to + tl.load(offs + 1) + i, tl.load(flags + i, mask=i < n_flags), mask=i < n_flags)
+            else:
+                i = tl.arange(0, BLOCK)
+                tl.store(roots_to + tl.load(offs + 2) + i, tl.load(root + i, mask=i < 32), mask=i < 32)
+        _SCATTER_KERNEL.append(scatter_at)
+    return _SCATTER_KERNEL[0]
 
 
 def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:

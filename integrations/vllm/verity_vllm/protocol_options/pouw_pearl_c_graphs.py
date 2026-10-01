@@ -22,7 +22,7 @@ from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c_work as PW
 
 from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
-from .pouw_pearl_c_screen import copy_kernel, excluded, screen_into
+from .pouw_pearl_c_screen import SCATTER_BLOCK, excluded, scatter_kernel, screen_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -328,11 +328,11 @@ class GraphCalls:
         """The graph's last step: the call's leaves, flags (when it screened) and A root into the pass's buffers, at the
         offsets in its weight's slot."""
         size, offs = pipe.size["tree_a"], self.offs[self.order[w]]
-        root, flags, copy = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), copy_kernel()
+        root, flags, kernel = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), scatter_kernel()
+        src = g.flags if flag_rows else g.leaves                  # with no flags, any pointer: no program reads it
+        n0, n1, B = 32 * tiles, 2 * flag_rows, SCATTER_BLOCK
+        grid = (-(-n0 // B) - (-n1 // B) + 1,)
 
         def scatter():
-            copy[(-(-32 * tiles // 1024),)](g.leaves, self.leaves, offs, 0, 32 * tiles, BLOCK=1024)
-            if flag_rows:
-                copy[(-(-2 * flag_rows // 1024),)](g.flags, flags, offs, 1, 2 * flag_rows, BLOCK=1024)
-            copy[(1,)](root, self.roots_buf, offs, 2, 32, BLOCK=1024)
+            kernel[grid](g.leaves, self.leaves, src, flags, root, self.roots_buf, offs, n0, n1, BLOCK=B)
         return scatter
