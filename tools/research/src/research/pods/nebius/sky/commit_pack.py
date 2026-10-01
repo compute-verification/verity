@@ -69,7 +69,9 @@ FAULT_EXIT = 87
 QUIET = ((12, 30), (13, 30))
 CLIENT_FAULT = re.compile(r"illegal memory access|unspecified launch failure|CUDA_ERROR_MPS|cudaErrorMps|MPS server|"
                           r"CUDA-capable device\(s\) is/are busy|uncorrectable ECC|GPU is lost|Xid", re.IGNORECASE)
-MPS_LOG_FAULT = re.compile(r"exited with status [1-9-]|fault|\bERROR\b|failed to", re.IGNORECASE)
+MPS_LOG_FAULT = re.compile(r"exited with status [1-9-]|\bfault|\bERROR\b|failed to", re.IGNORECASE)
+# the server logs this whenever a client exits, cleanly or not: the client's own exit status and output tell which
+MPS_LOG_CLIENT_EXIT = re.compile(r"assuming client \{[^}]*\} exit\s*$", re.IGNORECASE)
 
 
 def now_utc() -> str:
@@ -222,7 +224,7 @@ class Mps:
             except OSError:
                 continue
             for line in new.splitlines():
-                if MPS_LOG_FAULT.search(line):
+                if MPS_LOG_FAULT.search(line) and not MPS_LOG_CLIENT_EXIT.search(line):
                     return f"MPS {p.name}: {line.strip()[:300]!r}"
         return None
 

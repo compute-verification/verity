@@ -284,6 +284,23 @@ def test_a_bundle_linked_into_another_sweep_counts_once(pilot, tmp_path):
     assert pilot.bundle_bytes(pilot.BUNDLE_GLOBS) == 10
 
 
+def test_a_client_exiting_is_no_mps_fault_but_a_server_fault_is(pilot, tmp_path):
+    mps = pilot.Mps(tmp_path / "scratch")
+    mps.logs.mkdir(parents=True)
+    (mps.logs / "control.log").write_text(
+        "[2026-10-01 00:01:15.101 Control   790] NEW CLIENT 814 from user 1000: Server already exists\n"
+        "[2026-10-01 00:01:15.102 Control   790] User did not send valid credentials\n"
+        "[2026-10-01 00:01:22.590 Control   790] Server 805 has 2 active worker threads. Server will not shutdown.\n"
+        "[2026-10-01 00:01:22.591 Control   790] Cmd:set_default_active_thread_percentage 100\n")
+    (mps.logs / "server.log").write_text(
+        "[2026-10-01 00:01:22.584 Server   805] Server failed to recevie command with status 806, "
+        "assuming client {PID: 814, Context ID: 0} exit\n")
+    assert mps.log_fault() is None
+    with open(mps.logs / "server.log", "a") as f:
+        f.write("[2026-10-01 00:02:00.000 Server   805] Client {PID: 815, Context ID: 0} encountered a fatal GPU fault\n")
+    assert "fatal GPU fault" in mps.log_fault()
+
+
 def test_claim_has_one_winner(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "only", "exit 0")
