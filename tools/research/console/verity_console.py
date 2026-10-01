@@ -535,6 +535,13 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     except Exception as e:  # noqa: BLE001  the other panels still go out
         errors.append(f"node2-hours: {type(e).__name__}: {e}")
     try:
+        readings = idle_readings({"node 1": minutes["n1"], "node 2": minutes["n2"]}, now)
+        if ns.key.exists():
+            record_readings(readings)
+        out.append(idle_panel(readings, now))
+    except Exception as e:  # noqa: BLE001  the other panels still go out
+        errors.append(f"held-idle: {type(e).__name__}: {e}")
+    try:
         pool = json.loads(POOL.read_text()) if POOL.exists() else {}
         out += pool_panels(pool, n1_from_prom(summary, urows, grows, now), now, errors, minutes)
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
@@ -841,6 +848,80 @@ def owner_panels(name: str, host: str, minutes: list[tuple], now: datetime, src:
 
 def uc_hour(t: float) -> str:
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+
+
+# ---------------------------------------------------------------------------------------------------------------- held idle (infra/*)
+
+IDLE_READINGS = Path("/workspace/usage/held-idle-hourly.jsonl")  # one line per completed UTC hour, node and lane; infra's relay alerts on it
+IDLE_TARGETS = {("node 1", "circuits"): 40.0}  # the 11:30 AM PDT Oct 1 set: circuits' Commits at or below 40% held idle on node 1
+N1_LANES = [(re.compile(p), lane) for p, lane in (
+    (r"^gpu-pool-circuits-", "circuits"), (r"^gpu-pool-\d", "proofs"),
+    (r"^Kueue (vllm-|commit-pack|circuits-|mps-golden|n2-build)", "circuits"), (r"^Kueue (proofs-|backend-sweep|assumption-)", "proofs"),
+    (r"^SkyPilot (cfgtp2|sm120|vcd)-", "circuits"), (r"^SkyPilot (m0|tcdefs|as)-", "proofs"))]
+N2_LANES = {"bc-17cc41f1": "infra", "bc-8416bc72": "proofs", "bc-b8aaadaa": "circuits", "bc-e90634dd": "compute-accounting",
+            "bc-15ada664": "memory-accounting", "bc-ecea50f6": "network-accounting", "bc-ddee017b": "console"}
+
+
+def lane_of(node: str, holder: str) -> str:
+    """The lane a holder's GPU-time counts to: node 1's by job name, node 2's by the coordinator's id; anything else by its label."""
+    if node == "node 1":
+        return next((lane for rx, lane in N1_LANES if rx.search(holder)), holder)
+    m = re.search(r"bc-[0-9a-f]{8}", holder)
+    return N2_LANES.get(m.group(0), holder) if m else holder
+
+
+def idle_readings(minutes: dict, now: datetime) -> list[dict]:
+    """Per UTC hour, node and lane: held GPU-hours and the held-idle share, with the change from the lane's hour before."""
+    acc: dict = defaultdict(lambda: [0.0, 0.0])
+    for node, rows in minutes.items():
+        for r in rows or []:
+            if r[6] and r[2] + r[3]:
+                for lane in (lane_of(node, r[6]), "(all holders)"):
+                    a = acc[(uc_hour(r[0]), node, lane)]
+                    a[0] += (r[2] + r[3]) / 60
+                    a[1] += r[3] / 60
+    out, cur = [], uc_hour(now.timestamp())
+    for (h, node, lane), (held, idle) in sorted(acc.items()):
+        prev = next((o for o in reversed(out) if o["node"] == node and o["lane"] == lane), None)
+        pct_idle = round(100 * idle / held, 1)
+        out.append({"hour": h, "node": node, "lane": lane, "complete": h != cur, "held_gpu_h": round(held, 2),
+                    "held_idle_gpu_h": round(idle, 2), "held_idle_pct": pct_idle, "target_pct": IDLE_TARGETS.get((node, lane)),
+                    "change_pts": round(pct_idle - prev["held_idle_pct"], 1) if prev and prev["hour"] == uc_hour(
+                        datetime.strptime(h, "%Y-%m-%dT%H:00Z").replace(tzinfo=timezone.utc).timestamp() - 3600) else None})
+    return out
+
+
+def record_readings(readings: list[dict], path: Path = IDLE_READINGS) -> int:
+    """Append each completed hour's readings not yet in the file; returns how many lines it wrote."""
+    have = set()
+    if path.exists():
+        for ln in path.read_text().splitlines():
+            try:
+                d = json.loads(ln)
+            except ValueError:
+                continue
+            have.add((d.get("hour"), d.get("node"), d.get("lane")))
+    new = [r for r in readings if r["complete"] and (r["hour"], r["node"], r["lane"]) not in have]
+    if new:
+        with open(path, "a") as f:
+            f.writelines(json.dumps({k: v for k, v in r.items() if k != "complete"}) + "\n" for r in new)
+    return len(new)
+
+
+def idle_panel(readings: list[dict], now: datetime) -> dict:
+    rows = [[r["hour"] + ("" if r["complete"] else " (so far)"), r["node"], r["lane"], sig(r["held_gpu_h"], 3),
+             sig(r["held_idle_gpu_h"], 3), sig(r["held_idle_pct"], 3), r["target_pct"], r["change_pts"]]
+            for r in sorted(sorted(readings, key=lambda r: (r["lane"] != "(all holders)", -r["held_gpu_h"])),
+                            key=lambda r: (r["hour"], r["node"]), reverse=True)
+            if r["held_gpu_h"] >= 0.05 or r["lane"] == "(all holders)"]
+    return fit(panel("held-idle-hourly", "Held but idle, per hour, node and lane", "table",
+                     ["Hour (UTC)", "Node", "Lane", "Held GPU-h", "Held idle GPU-h", "Held idle %", "Target %", "Change (pts)"],
+                     rows[:1000], updated_at=iso(now),
+                     source="vy-nebius-1's DCGM (per minute) and vy-nebius-2's POUS sampler (10 s), as in node1-owner-hours",
+                     note="Held idle %: the share of a lane's held GPU-hours with utilization 0. Node 1's lanes come from job names "
+                          "(gpu-pool-circuits-* is circuits' lease pool, gpu-pool-<n> proofs'); node 2's from the coordinator's id, "
+                          "else the holder's label. Change: points against the lane's hour before. Infra alerts the lane and "
+                          "top-level when a lane above its target improves by less than 5 points in an hour. Newest first."))
 
 
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)
