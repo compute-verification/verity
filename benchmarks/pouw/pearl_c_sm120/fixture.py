@@ -72,7 +72,7 @@ def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes, hash: str) -> t
     root)."""
     dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), hash)
     tree_b = H.tree_bytes(dom_b, b_rows, ROW_SCHEMA)
-    return Epoch.start(Workload((matmul,)), {matmul.weight: tree_b[-32:]}, beacon), tree_b, tree_b[-32:]
+    return Epoch.unverified(Workload((matmul,)), {matmul.weight: tree_b[-32:]}, beacon), tree_b, tree_b[-32:]
 
 
 def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
