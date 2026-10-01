@@ -28,11 +28,13 @@ def test_only_an_item_with_a_lease_tool_is_leased_and_its_devices_are_hidden_out
     assert env == {"CUDA_VISIBLE_DEVICES": ""}
 
 
-def test_the_commit_runs_under_one_leased_gpu_for_at_most_its_timeout():
+def test_the_commit_runs_under_its_tasks_leased_gpus_for_at_most_its_timeout():
     argv = GL.wrap(["python", "-m", "commit"], 2400, "/row/gpu_lease.started", {"GPU_LEASE": "/l/gpu-lease"})
     assert argv[:9] == ["/l/gpu-lease", "1", "--wait", "--max-min", "40", "--mem-gb", "0", "--", "bash"]
     assert argv[-4:] == ["/row/gpu_lease.started", "python", "-m", "commit"]
     assert GL.max_min(61) == 2 and GL.max_min(1) == 1
+    tp2 = GL.wrap(["python"], 2400, "/s", {"GPU_LEASE": "/l/gpu-lease", "GPU_LEASE_N": "2"})
+    assert tp2[:2] == ["/l/gpu-lease", "2"]
 
 
 def test_the_commit_sees_only_the_leased_gpu_and_the_lease_is_recorded(tmp_path):

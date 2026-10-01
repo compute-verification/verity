@@ -3,7 +3,7 @@ node's lease tool (``gpu-lease``), and only its GPU phase holds a GPU.
 
 Before the lease and after its release the row's processes see no CUDA device (``CUDA_VISIBLE_DEVICES`` empty), so nothing outside
 the lease can open a context on any GPU of the node. The GPU phase (engine build, run, Commit and its checks: the Commit process)
-runs as ``"$GPU_LEASE" 1 --wait --max-min M --mem-gb 0 -- CMD``, which sets ``CUDA_VISIBLE_DEVICES`` to the leased GPU and ends
+runs as ``"$GPU_LEASE" N --wait --max-min M --mem-gb 0 -- CMD``, which sets ``CUDA_VISIBLE_DEVICES`` to the leased GPUs and ends
 CMD after M minutes, M the Commit's timeout. Prechecks, manifest and weights of record come before it; the verdict, the row's
 records and the research run's publish after. Without ``GPU_LEASE`` nothing changes.
 
@@ -37,8 +37,9 @@ def max_min(timeout_s: int) -> int:
 
 
 def wrap(cmd: list[str], timeout_s: int, started: str, environ: dict[str, str]) -> list[str]:
-    """``cmd`` under one leased GPU for at most the Commit's timeout; ``started`` is written (UTC) once the GPU is held."""
-    return [environ["GPU_LEASE"], "1", "--wait", "--max-min", str(max_min(timeout_s)), "--mem-gb", "0", "--",
+    """``cmd`` under the task's leased GPUs (``GPU_LEASE_N``, which dispatch sets to the task's GPU count; else one) for at most
+    the Commit's timeout; ``started`` is written (UTC) once the GPUs are held."""
+    return [environ["GPU_LEASE"], environ.get("GPU_LEASE_N") or "1", "--wait", "--max-min", str(max_min(timeout_s)), "--mem-gb", "0", "--",
             "bash", "-c", 'date -u +%Y-%m-%dT%H:%M:%SZ > "$0"; exec "$@"', started, *cmd]
 
 
