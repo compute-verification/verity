@@ -4,8 +4,8 @@ The leaf pieces are Boolean and pinned; the split output word keeps every AND, a
 return. Each piece agrees with its word primitives on special words (every bf16 word for the squares) and on random ones. Both
 norms agree with `b1`'s word Definitions on special and random rows, at small widths and at the served ones (with
 ``VERITY_VLLM_BOOLEAN_NORMS_FULL``: 80k rows at N = 576 and 4096 at each other served width, about 40 minutes). Every part
-partitions under `Q_word_v1{X=16,W=32}` with no recompute, inside a Call or across a norm's Calls (bar the MUFU bridges' shared
-packing of rms); the only word ids left are the MUFU bridges'.
+partitions under `Q_word_v1{X=16,W=32}` with no recompute, inside a Call or across a norm's Calls; the only word gates left are
+the MUFU word ids and the packing between bits and words around them.
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ PINS = {
     "RMSNormOutTriton_v1": (2386, 4038, 189, "44e7dccc15889c6632c4f639f05f040ae06fb35063c3e829236279e91973e314"),
 }
 
-#: (N, EPS) -> And gates of the parts a served Program calls (`_parts`, the MUFU bridges and F32Mul_v3 aside)
+#: (N, EPS) -> And gates of the parts a served Program calls (`_parts`, the MUFU sub-Calls, their packing and F32Mul_v3 aside)
 PART_ANDS = {
     (576, 1e-5): [774720, 453096, 15692, 50, 1365120, 1076400, 56028, 4840, 34, 1374336],
     (960, 1e-5): [1291200, 755160, 25406, 50, 2275200, 1794000, 94192, 5558, 34, 2290560],
@@ -381,47 +381,55 @@ def test_the_parts_and_gates_at_the_served_widths_are_pinned() -> None:
         assert [_ands(p, memo) for p in _parts(N, EPS)] == want, (N, EPS)
 
 
-def test_the_cuda_norm_recomputes_nothing_across_its_calls() -> None:
-    r = members_check(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD))
-    assert r["ok"] and r["recomputed_gates"] == 0
+def _top(which: str, N: int, EPS: float):
+    return bind(BN.RMSNormFusedCuda, N=N, EPS=EPS, **BN.CUDA_WORD) if which == "cuda" else \
+        bind(BN.RMSNormTriton, N=N, EPS=EPS, **BN.TRITON_WORD)
 
 
-def test_the_triton_norm_recomputes_only_the_mufu_bridges_packing_of_rms() -> None:
-    r = members_check(bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD))
-    assert r["recomputed_gates"] == 63
-    assert {(a["definition"], a["gates"]) for a in r["recomputes"]} == {("DivFullRcpBits_v1", 63)}
-    assert all("DivFullScaleABits_v1" in e[1] for a in r["recomputes"] for e in a["examples"])
+@pytest.mark.parametrize("which", ["cuda", "triton"])
+def test_the_norm_recomputes_nothing_across_its_calls(which) -> None:
+    r = members_check(_top(which, 16, 1e-5))
+    assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]
 
 
-def _reached(fn) -> tuple[set[str], set[str]]:
-    """(the Definitions ``fn`` reaches outside the MUFU bridges, the bridges)."""
-    seen, bridges, stack = set(), set(), [fn]
+#: Definitions a norm's word gates are confined to: the MUFU word ids, the packing between bits and words, and SCALEA's numerator
+_WORDY = {"PackF32_v1", "UnpackF32_v1", "Const32[0x3f800000]_v1"} | {d.id for d in BN.MUFU_WORD.values()}
+
+
+def _reached(fn) -> set[str]:
+    """The Definitions ``fn`` reaches outside ``_WORDY``."""
+    seen, stack = set(), [fn]
     while stack:
         d = stack.pop()
-        if d.id in seen or d.id in bridges:
-            continue
-        if d.id in BN.BRIDGES:
-            bridges.add(d.id)
+        if d.id in seen or d.id in _WORDY:
             continue
         seen.add(d.id)
         if not isinstance(d, PrimitiveDefinition):
             stack += [n.fn for n in d.body.nodes]
-    return seen, bridges
+    return seen
 
 
 @pytest.mark.parametrize("which", ["cuda", "triton"])
-def test_only_the_mufu_bridges_are_word_ids(which) -> None:
+def test_only_the_mufu_sub_calls_are_word_ids(which) -> None:
     from verity.ir.defs import REGISTRY
-    top = bind(BN.RMSNormFusedCuda, N=1536, EPS=1e-6, **BN.CUDA_WORD) if which == "cuda" else \
-        bind(BN.RMSNormTriton, N=1536, EPS=1e-6, **BN.TRITON_WORD)
-    seen, bridges = _reached(top)
-    want = {"cuda": {"RsqrtApproxBits_v1"}, "triton": {"MufuSqrtFtzBits_v1", "DivFullScaleABits_v1", "DivFullRcpBits_v1"}}
-    assert bridges == want[which]
-    prims = {i for i in seen if isinstance(REGISTRY.defs.get(i), PrimitiveDefinition)}
+    top = _top(which, 1536, 1e-6)
+    prims = {i for i in _reached(top) if isinstance(REGISTRY.defs.get(i), PrimitiveDefinition)}
     assert prims <= {"And2_v1", "Xor2_v1", "Not_v1", "Const1[0x0]_v1", "Const1[0x1]_v1"}, prims
     assert not BL.is_boolean(top)
-    for k, b in (BN.CUDA_WORD if which == "cuda" else BN.TRITON_WORD).items():
-        assert TR.word_of(b).id in BN._MUFU_WORDS[k]
+    calls = sorted(n.fn.id for n in top.body.nodes if n.fn.id in _WORDY)
+    want = {"cuda": ["PackF32_v1", "RsqrtApprox_v1", "UnpackF32_v1"],
+            "triton": ["Const32[0x3f800000]_v1", "DivFullRcp_v1", "DivFullScaleA_v1", "MufuSqrtFtz_v1", "PackF32_v1",
+                       "UnpackF32_v1", "UnpackF32_v1"]}
+    assert calls == want[which]
+    for k, d in (BN.CUDA_WORD if which == "cuda" else BN.TRITON_WORD).items():
+        assert BN._mufu_word(d).id in BN._MUFU_WORDS[k]
+
+
+def test_packing_is_the_identity_on_every_special_word_and_on_random_ones() -> None:
+    v = np.concatenate([F32_SPECIALS, _rand_f32(np.random.default_rng(9), 4096)])
+    bits = ((v[:, None] >> np.arange(32, dtype=np.uint64)) & np.uint64(1)).astype(np.uint64)
+    assert np.array_equal(_run(bind(BN.PackF32), bits).reshape(-1), v)
+    assert np.array_equal(_run(bind(BN.UnpackF32), v[:, None]), bits)
 
 
 def test_word_views_and_refusals() -> None:
@@ -435,5 +443,3 @@ def test_word_views_and_refusals() -> None:
         _ = bind(BN.RMSNormThreadsTriton, N=60).body
     with pytest.raises(ValueError, match="a warp has 1 to 32 lanes, not 33"):
         _ = bind(BN.RMSNormWarpCuda, L=33).body
-    with pytest.raises(TypeError, match="must take and return 32-bit words"):
-        BN._on_bits(P.F2fpBf16)
