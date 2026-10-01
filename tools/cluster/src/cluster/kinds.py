@@ -22,6 +22,7 @@ from pathlib import Path
 
 SHAPES: dict[str, dict[str, int | bool]] = {
     "cpu-s": {"gpus": 0, "cpus": 2, "memory_gib": 8},
+    "cpu-io": {"gpus": 0, "cpus": 4, "memory_gib": 8},     # network- or disk-bound: a model fetch, a copy
     "cpu-m": {"gpus": 0, "cpus": 8, "memory_gib": 32},
     "cpu-l": {"gpus": 0, "cpus": 32, "memory_gib": 128},
     "gpu1": {"gpus": 1, "cpus": 8, "memory_gib": 64},

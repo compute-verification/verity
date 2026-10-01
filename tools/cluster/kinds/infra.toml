@@ -1,0 +1,7 @@
+[kinds."model.fetch"]
+phase = "cpu-io"
+max_wall_min = 240
+question = "Is REPO@REV on this node, verified?"
+outputs = ["the cache entry /workspace/models/<org>--<name>@<rev>/ and its .entry.json, on the node it ran on",
+           "$RESEARCH_RUN_DIR/out/model-entry.json"]
+restart = "idempotent"

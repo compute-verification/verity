@@ -89,6 +89,17 @@ def test_the_repos_kinds_load_and_lean_audit_is_proofs_cpu_m():
     assert kinds.kinds_dir(NEBIUS) == KINDS.resolve()
 
 
+def test_model_fetch_is_infras_cpu_io_kind_and_the_queue_places_it_without_warnings():
+    reg = kinds.load(KINDS)
+    k = reg["model.fetch"]
+    assert (k.owner, k.phase, k.shape, k.restart) == ("infra", "cpu-io", {"gpus": 0, "cpus": 4, "memory_gib": 8}, "idempotent")
+    assert k.question == "Is REPO@REV on this node, verified?"
+    out = submit.submit(model.load(NEBIUS), reg, run_id="r1", now=T, kind="model.fetch", project="verity", submitter="circuits",
+                        question="Is org/tiny@93efa2f097d58c2a74874c7e644dbc9b0cee75a2 on vy-nebius-2, verified?",
+                        node="vy-nebius-2")
+    assert out["node"] == "vy-nebius-2" and out["warnings"] == [] and (out["job"]["cpus"], out["job"]["memory_gib"]) == (4, 8)
+    assert out["max_s"] == 240 * 60 and "GPU_LEASE_WHO=model.fetch:circuits" in out["wrap"]
+
 def test_a_registered_kind_supplies_what_the_job_leaves_unsaid_and_names_itself_in_the_lease():
     out = submit.submit(model.load(NEBIUS), kinds.load(KINDS), run_id="r1", now=T, kind="lean-audit", project="verity",
                         submitter="proofs-w", custody_s=900)
