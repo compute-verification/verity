@@ -29,10 +29,11 @@ from verity.ir import boolean as BL
 from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.types import Array
 from verity.ml.boolean import fp
-from verity.ml.boolean.forms import NOT, ONE, ZERO, L, OR, add, and_reduce, const_bits, or_reduce, sub
+from verity.ml.boolean.forms import NOT, ONE, ZERO, OR, add, and_reduce, const_bits, or_reduce, sub
 from verity.ml.boolean.trace import definition
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry.boolean_activation import band
 
 __all__ = ["BAND_HI", "BAND_LO", "SiluMul", "SiluMulBf16", "band_table", "silu_bf16", "silu_mul"]
 
@@ -56,47 +57,9 @@ def band_table() -> tuple[int, ...]:
     return tuple(out)
 
 
-def _blocks(ks) -> dict[int, int]:
-    out: dict[int, int] = {}
-    for k in ks:
-        out[k >> 2] = out.get(k >> 2, 0) | 1 << (k & 3)
-    return out
-
-
 def _band(C, g):
-    """The band's 15 magnitude bits, zero off the band. A column's XOR of low minterms is a chain over blocks of four in
-    ascending order, each block's part a chain over its minterms, so equal parts and equal prefixes are one wire."""
-    m, e, s = g[:7], g[7:15], g[15]
-    lo = fp.decode(C, list(m) + [e[0]])                       # index bits 0..7
-    hi = fp.decode(C, list(e[1:4]) + [s])                     # index bits 8..11
-    nibble = {7: and_reduce(C, [NOT(e[7]), e[6], e[5], e[4]]), 8: and_reduce(C, [e[7], NOT(e[6]), NOT(e[5]), NOT(e[4])])}
-    parts: dict = {}
-
-    def part(b: int, mask: int):
-        if (b, mask) not in parts:
-            top = mask.bit_length() - 1
-            rest = mask ^ 1 << top
-            parts[(b, mask)] = part(b, rest) ^ lo[4 * b + top] if rest else lo[4 * b + top]
-        return parts[(b, mask)]
-
-    table = band_table()
-    out = [ZERO] * 15
-    for sign in (0, 1):
-        for e0 in range(BAND_LO, BAND_HI[sign] + 1, 2):
-            h = (e0 & 0xF) >> 1 | sign << 3
-            row = C.AND(hi[h], nibble[e0 >> 4])
-            for j in range(15):
-                ones = [k for k in range(256) if table[h << 8 | k] >> j & 1]
-                if len(ones) == 256:
-                    out[j] = out[j] ^ row
-                elif ones:
-                    blocks, zeros = _blocks(ones), _blocks(sorted(set(range(256)) - set(ones)))
-                    pick, flip = (blocks, False) if len(blocks) <= len(zeros) else (zeros, True)
-                    col = None
-                    for b in sorted(pick):
-                        col = part(b, pick[b]) if col is None else col ^ part(b, pick[b])
-                    out[j] = out[j] ^ C.AND(row, NOT(col) if flip else col)
-    return out
+    """The band's 15 magnitude bits, zero off the band (`boolean_activation.band` over `band_table`)."""
+    return band(C, g, band_table(), [(sign, e0) for sign in (0, 1) for e0 in range(BAND_LO, BAND_HI[sign] + 1, 2)])
 
 
 def silu_bf16(C, g):
