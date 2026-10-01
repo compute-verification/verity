@@ -16,6 +16,7 @@
 #      N= with BATCH=fixed (instances per statement, the bit cap still applies)
 #      STAGE_ONLY=1 (no GPU: build, stage the shapes into FLOCK_STAGE_CACHE and prove nothing; give SM, nvidia-smi is absent)
 #      STATEMENT_DIGEST=1 (with STAGE_ONLY: each staged statement's digest, as the verifier builds it, in its record)
+#      FLOCK_PACK_WORDS=1 (narrow words share u16 leaves: four FP4 or two FP8 elements a leaf; a different statement)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail

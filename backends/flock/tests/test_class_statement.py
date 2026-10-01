@@ -11,6 +11,7 @@ import os
 import threading
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 pytest.importorskip("verity.ir.units")
@@ -61,6 +62,68 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
+
+
+def _fp_class(dtype: str, K: int):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
+    gemm_fp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gemm_fp)
+    CS.cache_slot_circuits()
+    units = PU.partition_units(gemm_fp.program(dtype, K, 4), "q-word")
+    ((s, cl),) = units.classes().items()
+    act, uc = units.activation(cl.definition), cl.representative
+    return units, s, cl, act, uc, CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
+
+
+@pytest.mark.parametrize("dtype", ["e4m3", "nvf4", "mxf4"])
+def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(dtype, tmp_path: Path):
+    """FLOCK_PACK_WORDS's layout on an sm_120 FP coordinate: four FP4 or two FP8 elements a u16 leaf, so a row's little-endian
+    bytes are its tensor's packed bytes (two FP4 a byte, low nibble first; one FP8 or scale a byte), every leaf bit before the
+    block padding is read, the unit has the default layout's gates, and on circuit-check's vectors it equals the IR evaluator."""
+    from circuit_check import checks as CK
+    from circuit_check import vectors as V
+    from verity.evaluation.reference import signature_of
+
+    units, s, cl, act, uc, groups = _fp_class(dtype, 128)
+    plain = CS.class_lowering(act, uc, "unit-class/plain", groups)
+    low = CS.class_lowering(act, uc, "unit-class/packed", groups, packed=True)
+    same = ("ands", "xors", "nots", "outputs", "lookups")
+    assert {k: low.layout.counts.get(k) for k in same} == {k: plain.layout.counts.get(k) for k in same}
+    assert low.layout.counts["rows"] < plain.layout.counts["rows"]
+    widths = [[uc.in_widths[t] for t in g] for g in groups]
+    assert all(sum(w) % 16 == 0 and CS._slots(w, True)[1] == sum(w) // 16 for w in widths)
+    assert low.definition.port_words == tuple(CS._pad(sum(w) // 16, CS.BLOCK_WORDS) for w in widths)
+
+    ins, want, _ids = CS.class_lanes(units, cl, PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0}), 4, CS.broadcast_params(units))
+    st = CS.stage(units, "q-word", s, cl, (ins, want), tmp_path, hashlib.sha256(b"test").digest(), packed=True)
+    assert st["packed"] is True and st["ports"] == list(low.definition.port_words)
+    _rows, _outs, per_port = CS.pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, True)
+    for i, (g, w) in enumerate(zip(groups, widths)):
+        for lane in range(4):
+            x = [ins[t][lane] for t in g]
+            packed = bytes(a | b << 4 for a, b in zip(x[::2], x[1::2])) if w[0] == 4 else bytes(x)
+            row = per_port[f"p{i}"][lane].astype("<u2").tobytes()
+            assert row == packed + bytes(len(row) - len(packed))
+
+    fn = cl.definition
+    params, _ret = signature_of(fn)
+    arrays = V.vectors(params, 48, 20260926)
+    ref, _raised = CK.reference_outputs(fn, params, arrays)
+    leaves = V.flat(arrays)
+    lanes = [leaves[:, -1 - k] for k in uc.inputs]
+    got = {}
+    for name, lw, pk in (("plain", plain, False), ("packed", low, True)):
+        rows, _o, _p = CS.pack(uc, lanes, [[0] * len(arrays[0])], lw.definition.w_in, lw.definition.w_out, groups, lw.definition.port_words, pk)
+        out, _cut, ok = lw.evaluate(rows.astype(np.uint64))
+        got[name] = (out.astype(np.uint64), int(ok))
+    assert np.array_equal(got["plain"][0], got["packed"][0]) and got["plain"][1] == got["packed"][1]
+    out, ok = got["packed"]
+    (w_out,) = uc.out_widths
+    word = sum(out[:, h] << np.uint64(16 * h) for h in range(CS._words(w_out)))
+    checked = [j for j, r in enumerate(ref) if r is not None and ok >> j & 1]
+    assert len(checked) >= 24 and all(int(word[j]) == ref[j][0] for j in checked)
 
 
 def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):

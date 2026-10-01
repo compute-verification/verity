@@ -8,8 +8,11 @@ M0's statement proves a template's identical units with every instance's input r
 
 * one unit per instance: the class's circuit (`partition_units.lower_class`), its inputs packed into one u16 row port per source
   (`sources`: a Call parameter it reads, or a class of producing units whose committed outputs it reads; a word of w bits takes
-  ceil(w / 16) consecutive u16 leaves, low half first; each row padded with unread zero words to a whole number of 64-word SHA-512
-  blocks, as frame-v3 rows are), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
+  ceil(w / 16) consecutive u16 leaves, low half first, or under ``FLOCK_PACK_WORDS=1`` a word narrower than 16 bits takes the
+  next w bits of the current leaf, low bits first, when they fit there and the next leaf's low bits when not, so four FP4 or two
+  FP8 elements share a leaf and the row's little-endian bytes are the elements' packed memory layout; each row padded with
+  unread zero words to a whole number of 64-word SHA-512 blocks, as frame-v3 rows are), its outputs into one u16 output port
+  ``out`` (each output padded with zero bits to whole u16 words);
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
@@ -70,6 +73,29 @@ def _pad(n: int, to: int) -> int:
     return max(to, -(-n // to) * to)
 
 
+#: FLOCK_PACK_WORDS=1: words narrower than a leaf share it (`_slots`); a different circuit and statement from the default layout's
+PACK_WORDS = os.environ.get("FLOCK_PACK_WORDS") == "1"
+
+
+def _slots(widths: Sequence[int], packed: bool = False) -> tuple[list[tuple[int, int]], int]:
+    """Each word's (first leaf, first bit) in its row, and the leaves the row's words take: a word of 16 bits or more starts a
+    leaf and takes ceil(w / 16); packed, a narrower one takes the current leaf's next w bits when they fit, else the next leaf's
+    first w (a word never spans two leaves)."""
+    at, leaf, bit = [], 0, 0
+    for w in widths:
+        if packed and w < 16:
+            if bit + w > 16:
+                leaf, bit = leaf + 1, 0
+            at.append((leaf, bit))
+            bit += w
+        else:
+            if bit:
+                leaf, bit = leaf + 1, 0
+            at.append((leaf, 0))
+            leaf += _words(w)
+    return at, leaf + (1 if bit else 0)
+
+
 @dataclass
 class ClassDefinition:
     """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array."""
@@ -101,22 +127,23 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None) -> IL.Lowering:
-    """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), each
-    padded to whole 64-word SHA-512 blocks, and ``out0 .. out{W_out-1}``."""
+def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+                   packed: bool = False) -> IL.Lowering:
+    """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
+    words laid out by `_slots` (``packed``: narrow words share leaves), each padded to whole 64-word SHA-512 blocks, and
+    ``out0 .. out{W_out-1}``."""
     groups = groups or [list(range(len(uc.inputs)))]
-    port_words = tuple(_pad(sum(_words(uc.in_widths[t]) for t in g), BLOCK_WORDS) for g in groups)
+    slots = [_slots([uc.in_widths[t] for t in g], packed) for g in groups]
+    port_words = tuple(_pad(used, BLOCK_WORDS) for _at, used in slots)
     C = gf2.Circuit()
     leaves = []
     for i, w in enumerate(port_words):
         leaves += [C.input(f"in{len(leaves) + j}", 16) for j in range(w)]
     wires, base = {}, 0
-    for g, w_port in zip(groups, port_words):
-        at = base
-        for t in g:
+    for g, (at, _used), w_port in zip(groups, slots, port_words):
+        for t, (leaf, bit) in zip(g, at):
             w = uc.in_widths[t]
-            wires[act.absolute(uc.inputs[t])] = [b for word in leaves[at:at + _words(w)] for b in word][:w]
-            at += _words(w)
+            wires[act.absolute(uc.inputs[t])] = [b for word in leaves[base + leaf:base + leaf + _words(bit + w)] for b in word][bit:bit + w]
         base += w_port
     IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
     out_bits = []
@@ -134,21 +161,24 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
 
 
 def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
-         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None):
+         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
-    the packing `class_lowering` reads."""
+    the layout `class_lowering` reads (``packed`` as there)."""
     groups = groups or [list(range(len(uc.inputs)))]
     port_words = port_words or [w_in]
     n = len(ins[0]) if ins else len(want[0])
     rows = np.zeros((n, w_in), np.uint16)
     base = 0
     for g, wp in zip(groups, port_words):
-        at = base
-        for t in g:
+        at, _used = _slots([uc.in_widths[t] for t in g], packed)
+        for t, (leaf, bit) in zip(g, at):
+            w = uc.in_widths[t]
             v = np.asarray(ins[t], dtype=np.uint64)
-            for h in range(_words(uc.in_widths[t])):
-                rows[:, at + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
-            at += _words(uc.in_widths[t])
+            if packed and w < 16:
+                rows[:, base + leaf] |= ((v & np.uint64((1 << w) - 1)) << np.uint64(bit)).astype(np.uint16)
+                continue
+            for h in range(_words(w)):
+                rows[:, base + leaf + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
         base += wp
     outs = np.zeros((n, w_out), np.uint16)
     at = 0
@@ -370,19 +400,21 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
     return ins, want, rows
 
 
-def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes) -> dict:
+def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
+          packed: bool | None = None) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
-    source identities share equal rows)."""
+    source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS)."""
+    packed = PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
     uc = cl.representative
-    name = shape[:16]
+    name = shape[:16] + ("-packed" if packed else "")
     ins, want, idents = lanes_ if len(lanes_) == 3 else (*lanes_, None)
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
-    low = class_lowering(act, uc, f"unit-class/{name}", groups)
-    sub, iset = _shims(name, uc.form.encode(), len(groups))
-    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words)
+    low = class_lowering(act, uc, f"unit-class/{name}", groups, packed)
+    sub, iset = _shims(name, uc.form.encode() + (b"/packed" if packed else b""), len(groups))
+    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packed)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
     text = FC.compose(low, sub, partition=partition, program=program)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
@@ -419,7 +451,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
-            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
+        ({"packed": True} if packed else {})
 
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
@@ -446,6 +479,8 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
     vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
     tile's leaf maps."""
+    if PACK_WORDS:
+        raise ValueError("FLOCK_PACK_WORDS: a tile is staged in the default layout only")
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
@@ -621,7 +656,7 @@ def _stage_cache(s: str) -> Path | None:
         c["source_digest"] = _source_digest()
     a = c["a"]
     ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
-             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE]
+             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 

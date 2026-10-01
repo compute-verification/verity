@@ -438,6 +438,9 @@ def metrics(a) -> None:
     # one, or a record that can't say, is still a cost, not a claim
     if st.get("tile") or not rec.get("stage"):
         flags.append("draft-554-unreviewed")
+    # four FP4 or two FP8 elements a u16 leaf (FLOCK_PACK_WORDS=1): another statement and input commitment, not reviewed yet
+    if st.get("packed"):
+        flags.append("packed-statement-unreviewed")
     flags.extend(verifier_flags(Path(a.root), os.environ.get("FC_LINCHECK")))
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
