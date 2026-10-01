@@ -115,6 +115,12 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
 // toward zero, folded into H, and exact in FP32 when 256 | K.
 DEV float r1h_factor(int K) { return __fsub_rn(1.0f, __fmul_rn((float)(K / 32), 0x1p-25f)); }
 DEV float r1h_u(float c, float h, float hf) { return __fsub_rn(c, __fmul_rn(h, hf)); }
+// |acc - H| in H's ulps while acc is in H's binade; for H = +-1.5 2^E, at least 2^22 once it leaves it (the bits are monotone
+// in |x| within a sign, and a change of sign moves them by more than 2^30)
+DEV unsigned r1h_ulps(float acc, float h) {
+  const unsigned d = __float_as_uint(acc) - __float_as_uint(h);
+  return (int)d < 0 ? 0u - d : d;
+}
 // acc = H for one thread's fragments of a WM x 32 warp tile whose fragment (mi, ni) has rows row0 + 16 mi (+ 8) and columns
 // col0 + 8 ni (+ 1)
 template <int MI, int NI>
@@ -310,11 +316,14 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
 // the tile's last part to arrive takes C = H + W.  By the per-atom lemma (§1.3) every C_s - H is a sum of per-atom roundings
 // while the part stays in H's binade, and C = H + W is the serial chain's word whenever the parts' largest |acc - H| sum to
 // under |H| / 4: the serial chain's partial sums are then within that sum of H, so it stays in H's binade too, and every
-// partial sum of W is an exact multiple of H's ulp.  CHECK: each part adds its largest |acc - H| over its steps into Mx, and
+// partial sum of W is an exact multiple of H's ulp.  W and Mx count H's ulps in integers, as bits(acc) - bits(H), exact in
+// H's binade and at least 2^22 outside it: sm_120's FP32 atomic add flushes subnormals (ATOMG.ADD.F32.FTZ), which the
+// harness's SASS gate refuses.  CHECK: each part adds its largest |acc - H| over its steps (at most 2^24 ulps) into Mx, and
 // the last part counts the words whose sum reaches |H| / 4 in p15 (their C may not be the chain's; the arm's gate requires
 // none).  The last part writes C and y = bf16(U sa sb), U = fl(C - H'), and zeroes its tile of W and Mx and its counter.
-// p0 A (M x K), p1 B (N x K), p2 C (M x N FP32), p4 y, p5 P (M FP32), p6 Q (N FP32), p7 sa, p8 sb, p12 W and p13 Mx (M x N
-// FP32, zero), p14 the tiles' counters (int, zero), p15 the count of words failing the check; i0 M, i1 N, i2 K, i3 group, i4 S
+// p0 A (M x K), p1 B (N x K), p2 C (M x N FP32), p4 y, p5 P (M FP32), p6 Q (N FP32), p7 sa, p8 sb, p12 W (M x N int32) and
+// p13 Mx (M x N uint32), both zero, p14 the tiles' counters (int, zero), p15 the count of words failing the check; i0 M, i1 N,
+// i2 K, i3 group, i4 S
 template <bool CHECK> DEV void r1h_body(const Args& a) {
   constexpr int TM = 64, BN = 64, WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
   constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
@@ -333,8 +342,8 @@ template <bool CHECK> DEV void r1h_body(const Args& a) {
   const float* Q = reinterpret_cast<const float*>(a.p[6]);
   const float* rs = reinterpret_cast<const float*>(a.p[7]);
   const float* cs = reinterpret_cast<const float*>(a.p[8]);
-  float* W = reinterpret_cast<float*>(a.p[12]);
-  float* Mx = reinterpret_cast<float*>(a.p[13]);
+  unsigned* W = reinterpret_cast<unsigned*>(a.p[12]);
+  unsigned* Mx = reinterpret_cast<unsigned*>(a.p[13]);
   int* cnt = reinterpret_cast<int*>(a.p[14]);
   unsigned* fails = reinterpret_cast<unsigned*>(a.p[15]);
   const float hf = r1h_factor(K);
@@ -357,14 +366,15 @@ template <bool CHECK> DEV void r1h_body(const Args& a) {
       cp_commit();
     }
     const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
-    float acc[MI][NI][4], h[MI][NI][4], mx[MI][NI][4];
+    float acc[MI][NI][4], h[MI][NI][4];
+    unsigned mx[MI][NI][4];
     r1h_start(P, Q, row0, col0, h);
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
 #pragma unroll
       for (int ni = 0; ni < NI; ni++)
 #pragma unroll
-        for (int e = 0; e < 4; e++) { acc[mi][ni][e] = h[mi][ni][e]; mx[mi][ni][e] = 0.0f; }
+        for (int e = 0; e < 4; e++) { acc[mi][ni][e] = h[mi][ni][e]; mx[mi][ni][e] = 0u; }
 
     for (int kb = 0; kb < KP; kb++) {
       cp_wait<STAGES - 2>();
@@ -396,7 +406,7 @@ template <bool CHECK> DEV void r1h_body(const Args& a) {
             qmma(acc[mi][ni], fa[mi], fb[ni]);
             if constexpr (CHECK) {
 #pragma unroll
-              for (int e = 0; e < 4; e++) mx[mi][ni][e] = fmaxf(mx[mi][ni][e], fabsf(__fsub_rn(acc[mi][ni][e], h[mi][ni][e])));
+              for (int e = 0; e < 4; e++) mx[mi][ni][e] = max(mx[mi][ni][e], r1h_ulps(acc[mi][ni][e], h[mi][ni][e]));
             }
           }
       }
@@ -413,8 +423,8 @@ template <bool CHECK> DEV void r1h_body(const Args& a) {
 #pragma unroll
           for (int e = 0; e < 4; e++) {
             const size_t at = (size_t)(row0 + 16 * mi + 8 * (e >> 1)) * N + col0 + 8 * ni + (e & 1);
-            atomicAdd(W + at, __fsub_rn(acc[mi][ni][e], h[mi][ni][e]));
-            if constexpr (CHECK) atomicAdd(Mx + at, mx[mi][ni][e]);
+            atomicAdd(W + at, __float_as_uint(acc[mi][ni][e]) - __float_as_uint(h[mi][ni][e]));
+            if constexpr (CHECK) atomicAdd(Mx + at, min(mx[mi][ni][e], 1u << 24));
           }
       __threadfence();
       __syncthreads();
@@ -433,11 +443,12 @@ template <bool CHECK> DEV void r1h_body(const Args& a) {
 #pragma unroll
             for (int e = 0; e < 4; e++) {
               const size_t at = (size_t)(row0 + 16 * mi + 8 * (e >> 1)) * N + col0 + 8 * ni + (e & 1);
-              acc[mi][ni][e] = __fadd_rn(h[mi][ni][e], __ldcg(W + at));
-              __stcg(W + at, 0.0f);
+              const unsigned hb = __float_as_uint(h[mi][ni][e]);
+              acc[mi][ni][e] = __uint_as_float(hb + __ldcg(W + at));
+              __stcg(W + at, 0u);
               if constexpr (CHECK) {
-                bad += !(__ldcg(Mx + at) < __fmul_rn(0.25f, fabsf(h[mi][ni][e])));
-                __stcg(Mx + at, 0.0f);
+                bad += !(4u * __ldcg(Mx + at) < ((hb & 0x7fffffu) | 0x800000u));
+                __stcg(Mx + at, 0u);
               }
             }
         if (CHECK && bad) atomicAdd(fails, bad);

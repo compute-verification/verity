@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # R1's deciding primitive on one RTX PRO 6000 (the store's docs/pouw/new-designs.md §2.1).  Builds pearl_c_sm120.cubin as
 # build.sh does, with the node's CUDA 13.0.1 (CUDA, default /usr/local/cuda-13.0; the harness gate's other pinned toolkit,
-# 12.9.1, spills gemm_plain), refuses it unless sass_gate.py passes, and with `bench` runs the harness's arms (ARMS, default
+# 12.9.1, spills gemm_plain), refuses it unless this directory's sass_gate.py (registers, spills, MMA counts) and the harness's
+# (no .FTZ or FP32 MUFU outside a pinned IEEE sequence) pass, and with `bench` runs the harness's arms (ARMS, default
 # R1's r1_arm.py; R1-H's is r1h_arm:R1HChainSm120) against the autotuned plain FP8 GEMMs at Llama-3.1-8B's linears, prefill
 # (m 2,048) and decode (m 32).
 #
@@ -30,6 +31,8 @@ FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxa
   || { tail -40 "$SHIP/ptxas.txt" >&2; exit 1; }
 PATH="$CUDA_HOME/bin:$PATH" "$CUDA_HOME/bin/cuobjdump" -sass "$SHIP/pearl_c_sm120.cubin" > "$SCRATCH/sass.txt"
 python3 benchmarks/pouw/pearl_c_sm120/sass_gate.py "$SHIP/ptxas.txt" "$SCRATCH/sass.txt" "$SHIP/sass.json"
+PATH="$CUDA_HOME/bin:$PATH" POUW_SASS_GATE_CACHE=none python3 benchmarks/pouw/harness/sass_gate.py "$SHIP/pearl_c_sm120.cubin" \
+  --json "$SHIP/harness-sass-gate.json"
 { "$CUDA_HOME/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$SHIP/toolchain.txt"
 sha256sum "$SHIP/pearl_c_sm120.cubin" | tee "$SHIP/cubin.sha256"
 [[ "$mode" == build ]] && exit 0
