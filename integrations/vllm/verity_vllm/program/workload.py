@@ -28,7 +28,7 @@ from typing import Any
 
 from verity.ir.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ir.defs import Body, CompositeDefinition, Node, SpecializedDefinition
-from verity.ir.program import Program
+from verity.ir.program import Program, is_input
 from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
 from verity.ir.types import Tuple as TupleT, Type
 from verity_vllm.program.sampling_event import is_sampling_event
@@ -37,7 +37,7 @@ SCHEMA = "verity/workload-program/v1"
 
 
 def _is_input_node(n: Node) -> bool:
-    return n.form == "batch" and (getattr(n.fn, "family", None) == "Input" or n.fn.id.startswith("Input"))
+    return n.form == "batch" and is_input(n.fn)
 
 
 def _remap(r: Refs, K: int, logs: dict[int, tuple[PartLog, PartLog]] | None = None) -> Refs:

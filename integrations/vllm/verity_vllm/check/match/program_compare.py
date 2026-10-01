@@ -34,6 +34,7 @@ import sys
 import time
 from dataclasses import dataclass
 
+from verity.ir.program import RUN, input_id
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import option
@@ -87,7 +88,7 @@ class Prog:
             from verity_vllm.program.compact import lean_root
             lr = lean_root(desc, _registry())
             for k, fid, form, args6, out, n in lr["nodes"]:
-                if form == "batch" and fid.startswith("Input"):
+                if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
                     continue
                 self.inst.append({"k": k, "spec": fid if form != "batch" else f"batch:{fid}", "form": form, "args": args6, "out": out})
@@ -103,7 +104,7 @@ class Prog:
             body = root.body if hasattr(root, "body") else root.defn.body
             for k, n in enumerate(body.nodes):
                 fid = _spec_id(n.fn)
-                if n.form == "batch" and fid.startswith("Input"):
+                if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
                     continue
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
@@ -123,7 +124,8 @@ class Prog:
         # `seed_<i>` per seeded request in request order, fold._header) are lowered to `Input64_v1` batch nodes of one 64-bit value
         # (the root's params are lowered to Input batches, `program._lower_root`; names are not kept).  They canonicalise as
         # ("SEED", lo, hi) on both sides; `seed_index[k]` = the ordinal of seed node k = the index of the request it belongs to.
-        seed_in = sorted(k for k, (fid, n) in self.inputs.items() if fid.startswith("Input64") and n == 1)
+        # A seed is bound per run: a `RegisteredInput64_v1` node is never one.
+        seed_in = sorted(k for k, (fid, n) in self.inputs.items() if input_id(fid) == (RUN, 64) and n == 1)
         self.seed_nodes = set(seed_in)
         self.seed_index = {k: i for i, k in enumerate(seed_in)}
         self.weight_fields = weight_fields  # input node index -> field name
