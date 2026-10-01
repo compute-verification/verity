@@ -79,8 +79,9 @@ def defs(a) -> None:
 
 
 def dmon(a) -> None:
-    """nvidia-smi dmon -s u at 1 s until SIGTERM, each line prefixed with the epoch seconds it arrived."""
-    p = subprocess.Popen(["nvidia-smi", "dmon", "-s", "u", "-d", "1"] + (["-i", a.gpu] if a.gpu else []), stdout=subprocess.PIPE, text=True)
+    """nvidia-smi dmon -s um (utilization and framebuffer MiB) at 1 s until SIGTERM, each line prefixed with the epoch seconds
+    it arrived."""
+    p = subprocess.Popen(["nvidia-smi", "dmon", "-s", "um", "-d", "1"] + (["-i", a.gpu] if a.gpu else []), stdout=subprocess.PIPE, text=True)
 
     def stop(*_):
         p.terminate()
@@ -91,6 +92,68 @@ def dmon(a) -> None:
         for ln in p.stdout:
             out.write(f"{time.time():.3f}\t{ln}")
             out.flush()
+
+
+def _cpulist(s: str) -> set[int]:
+    """'96-111,120' -> {96, ..., 111, 120}"""
+    out: set[int] = set()
+    for part in s.strip().split(","):
+        lo, _, hi = part.partition("-")
+        out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def cores(a) -> None:
+    """Every `every` seconds until killed: the busy cores among the job's own (`--cpus`; /proc/stat counts the host's) and the
+    cores used by the processes the job can see (its pod's) that are pinned inside them. The difference is load from anything
+    else on those cores, another job pinned to the same ones above all: node 1 runs every dispatched job under one cpuset."""
+    cpus, tick = _cpulist(a.cpus), os.sysconf("SC_CLK_TCK")
+
+    def busy() -> float:
+        t = 0
+        with open("/proc/stat") as f:
+            for ln in f:
+                if ln[:3] == "cpu" and ln[3].isdigit():
+                    name, *v = ln.split()
+                    if int(name[3:]) in cpus:
+                        t += sum(map(int, v)) - int(v[3]) - int(v[4])
+        return t / tick
+
+    def own() -> float:
+        t = 0
+        for d in os.listdir("/proc"):
+            if d.isdigit():
+                try:
+                    with open(f"/proc/{d}/status") as f:
+                        allowed = next(ln.split(":", 1)[1] for ln in f if ln.startswith("Cpus_allowed_list:"))
+                    if not _cpulist(allowed) <= cpus:
+                        continue
+                    with open(f"/proc/{d}/stat") as f:
+                        s = f.read().rsplit(")", 1)[1].split()
+                except (OSError, StopIteration):
+                    continue
+                t += sum(int(x) for x in s[11:15])
+        return t / tick
+
+    b0, o0, t0 = busy(), own(), time.time()
+    with open(a.out, "a") as out:
+        while True:
+            time.sleep(a.every)
+            b1, o1, t1 = busy(), own(), time.time()
+            sl, mine = (b1 - b0) / (t1 - t0), max(0.0, o1 - o0) / (t1 - t0)
+            out.write(f"{t1:.3f}\t{sl:.2f}\t{mine:.2f}\t{max(0.0, sl - mine):.2f}\n")
+            out.flush()
+            b0, o0, t0 = b1, o1, t1
+
+
+def _slice(path: Path | None, t0: float, t1: float) -> dict | None:
+    """The cores sampler's means over [t0, t1]: the slice's busy cores, the job's, and another job's on the same cores."""
+    rows = [[float(x) for x in ln.split("\t")] for ln in (path.read_text().splitlines() if path and path.exists() else []) if ln.count("\t") == 3]
+    inside = [r for r in rows if t0 <= r[0] <= t1]
+    if not inside:
+        return None
+    return {"samples": len(inside), "slice_busy": _mean([r[1] for r in inside]), "own": _mean([r[2] for r in inside]),
+            "others": _mean([r[3] for r in inside]), "others_max": max(r[3] for r in inside)}
 
 
 def stamp(a) -> None:
@@ -131,8 +194,8 @@ def _prove_process(path: Path) -> tuple[float | None, float | None, list[tuple[f
     return start, end, live
 
 
-def _dmon(path: Path) -> list[tuple[float, float | None, float | None]]:
-    """(epoch, sm %, mem %) per sample of the one GPU dmon watched."""
+def _dmon(path: Path) -> list[tuple[float, float | None, float | None, float | None]]:
+    """(epoch, sm %, mem %, framebuffer MiB used) per sample of the one GPU dmon watched."""
     cols, out, gpus = None, [], set()
     for ln in path.read_text().splitlines() if path.exists() else []:
         t, _, rest = ln.partition("\t")
@@ -148,7 +211,7 @@ def _dmon(path: Path) -> list[tuple[float, float | None, float | None]]:
         row = dict(zip(cols, f))
         gpus.add(row["gpu"])
         num = lambda k: float(row[k]) if row.get(k, "-").replace(".", "", 1).isdigit() else None  # noqa: E731
-        out.append((float(t), num("sm"), num("mem")))
+        out.append((float(t), num("sm"), num("mem"), num("fb")))
     if len(gpus) > 1:
         raise SystemExit(f"dmon watched GPUs {sorted(gpus)}: pass --gpu to 74-gemm-hill.sh's sampler")
     return out
@@ -159,13 +222,14 @@ def _mean(xs: list[float]) -> float | None:
 
 
 def _window(samples, t0: float | None, t1: float | None) -> dict:
-    """Mean sm and mem % of the samples in [t0, t1] (fractions), and how many."""
+    """Mean sm and mem % of the samples in [t0, t1] (fractions), how many, and the most framebuffer MiB any sample saw."""
     if t0 is None or t1 is None:
-        return {"t0": t0, "t1": t1, "s": None, "samples": 0, "sm": None, "mem": None}
+        return {"t0": t0, "t1": t1, "s": None, "samples": 0, "sm": None, "mem": None, "fb_mib_max": None}
     inside = [s for s in samples if t0 <= s[0] <= t1]
     sm, mem = _mean([s[1] for s in inside if s[1] is not None]), _mean([s[2] for s in inside if s[2] is not None])
+    fb = [s[3] for s in inside if len(s) > 3 and s[3] is not None]
     return {"t0": t0, "t1": t1, "s": round(t1 - t0, 3), "samples": len(inside), "sm": sm / 100 if sm is not None else None,
-            "mem": mem / 100 if mem is not None else None}
+            "mem": mem / 100 if mem is not None else None, "fb_mib_max": max(fb) if fb else None}
 
 
 def _pod_start() -> float | None:
@@ -270,6 +334,7 @@ def metrics(a) -> None:
                         "why": "--session-tables J: the tables share one link exchange and both reps one root (Session.lean); "
                                "the device prover proves one table per session, so J = 1 on the GPU"},
             "gpu_util_job": job["sm"] * job["s"] / held if job["sm"] is not None and held else None, "gpu_held_s_job": held,
+            "gpu_mem_peak_gib": job["fb_mib_max"] / 1024 if job.get("fb_mib_max") is not None else None,
             "verify_s_per_statement": statistics.median([v for v in verify if v is not None]) if any(v is not None for v in verify) else None,
             "session_s_per_statement": statistics.median([v for v in session if v is not None]) if any(v is not None for v in session) else None,
             "timed_runs": runs, "sessions": [{"t": t, "warm": bool(x.get("warm")), "e2e_s": x.get("e2e_s"), "prove_total_s": x.get("prove_total_s"),
@@ -278,6 +343,7 @@ def metrics(a) -> None:
             "windows": {"steady": steady, "prove_process": _window(samples, start, end), "job": {**job, "held_since": held_since, "held_s": held},
                         **{k: _window(samples, *v) for k, v in phases.items() if k != "job"}},
             "others_cores_steady": _others(Path(a.others) if a.others else None, t0, t1),
+            "slice_cores_steady": _slice(Path(a.slice) if a.slice else None, t0, t1),
             "prover_peak_gb": lv.get("prover_peak_gb"), "verifier_peak_gb": lv.get("verifier_peak_gb"), "buckets": lv.get("buckets"),
             "setup_s": rec.get("stage_s"), "domain": rec.get("domain"),
         })
@@ -286,6 +352,9 @@ def metrics(a) -> None:
         if st.get("tile") and a.K == 2048:
             flags.append("tile-statement-unreviewed")
         out["session"]["label"] = f"batched-J{out['session']['tables']}"
+        # another job on the job's own cores for more than half a core over the timed sessions
+        if (out["slice_cores_steady"] or {}).get("others", 0) > 0.5:
+            flags.append("cpu-slice-shared")
     # #554 is a draft, its statements unreviewed: these are costs, not claims, and a changed statement digest starts a new curve
     flags.append("draft-554-unreviewed")
     if not out["peak"]["matches_gpu"]:
@@ -336,6 +405,8 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
               *([contract.measurement("t.total_live", max(total, out["session_s_per_statement"]))] if out.get("session_s_per_statement") else []),
               *([contract.measurement("verifier.seconds", out["verify_s_per_statement"])] if out.get("verify_s_per_statement") is not None else []),
               *([contract.measurement("fixed.setup_seconds", out["setup_s"])] if out.get("setup_s") is not None else []),
+              # nvidia-smi's framebuffer use at 1 s samples over the job: a lower bound on the device peak
+              *([contract.measurement("mem.peak_device_bytes", int(out["gpu_mem_peak_gib"] * 2**30))] if out.get("gpu_mem_peak_gib") else []),
               *[{"name": f"hill.{k}", "value": out[k], "unit": u} for k, u in (
                   ("overhead", "ratio"), ("overhead_prove_only", "ratio"), ("t_session_s_per_coord", "s"), ("t_native_s_per_coord", "s"),
                   ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"),
@@ -389,7 +460,8 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "session": (out.get("session") or {}).get("label"), "flags": flags,
             "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
-            "gpu_util_job": out.get("gpu_util_job")}
+            "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
+            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others")}
 
 
 def rollup(a) -> None:
@@ -525,6 +597,10 @@ def main() -> None:
     dm = sub.add_parser("dmon")
     dm.add_argument("--out", required=True)
     dm.add_argument("--gpu", default=None)
+    c = sub.add_parser("cores")
+    c.add_argument("--cpus", required=True)
+    c.add_argument("--out", required=True)
+    c.add_argument("--every", type=float, default=5.0)
     s = sub.add_parser("stamp")
     s.add_argument("--out", required=True)
     s.add_argument("cmd", nargs=argparse.REMAINDER)
@@ -536,6 +612,7 @@ def main() -> None:
     m.add_argument("--dmon", required=True)
     m.add_argument("--phases")
     m.add_argument("--others")
+    m.add_argument("--slice")
     m.add_argument("--gpu-csv")
     m.add_argument("--census", default="census/hardware.json")
     m.add_argument("--peak-id", default=PEAK_ID)
@@ -555,7 +632,7 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--put", action="store_true")
     a = ap.parse_args()
-    {"defs": defs, "dmon": dmon, "stamp": stamp, "metrics": metrics, "rollup": rollup, "plot": plot}[a.cmd_](a)
+    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "rollup": rollup, "plot": plot}[a.cmd_](a)
 
 
 if __name__ == "__main__":

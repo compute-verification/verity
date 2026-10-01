@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # BF16 GemmCoordinate hillclimb, one step at one K (gemm_hill.py): the gate (byte identity at B = 16: the GPU's proofs and
 # transcripts equal the CPU prover's, and the device paths agree), then one m = 35 statement of
-# GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1} proved warm once and timed three times, nvidia-smi dmon sampling the GPU every
-# second from the start; result.json (the campaign contract's) and out/metrics.json carry the overhead against the census's spec
+# GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1} proved warm once and timed three times, nvidia-smi dmon sampling the GPU's
+# utilization and memory every second from the start, and the job's own cores sampled every 5 s (out/slice_cores.tsv: another
+# job pinned to them flags the point cpu-slice-shared); result.json (the campaign contract's) and out/metrics.json carry the overhead against the census's spec
 # peak, the throughput, the GPU utilization and the verifier's seconds, out/results.jsonl the statement's record, and
 # hillclimb.json the step's verity/hillclimb-point/v0 record (declared in outputs.json, so the store keeps it as its own artifact).
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
@@ -50,6 +51,8 @@ python3 backends/flock/pod/gemm_hill.py dmon --out $R/out/dmon.tsv $DG &
 DMON=$!
 python3 backends/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt --every 5 &
 SAMPLER=$!
+python3 backends/flock/pod/gemm_hill.py cores --cpus $HILL_PINNED --out $R/out/slice_cores.tsv --every 5 &
+SLICE=$!
 # the phase's records and logs into the run dir: not its circuits, instance files or proofs (listed with their sizes instead)
 keep() {
   [ -d $S/$1 ] || return 0
@@ -57,7 +60,7 @@ keep() {
   (cd $S/$1 && find . -type f ! -name '*.bin' ! -name circuit.txt -size -8M -print0 | xargs -0 -r cp --parents -t $R/out/$1/)
   (cd $S/$1 && find . -type f \( -name '*.bin' -o -name circuit.txt -o -size +8M \) -printf '%p\t%s\n') > $R/out/$1/not-kept.tsv
 }
-done_() { kill $DMON $SAMPLER 2>/dev/null; wait $DMON $SAMPLER 2>/dev/null; rm -rf $S; }
+done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu"
 ok=1
@@ -78,13 +81,13 @@ if [ $ok = 1 ]; then
   keep m35
   cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
 fi
-kill $DMON $SAMPLER 2>/dev/null; wait $DMON $SAMPLER 2>/dev/null
+kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
   $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
-  --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --gpu-csv $R/out/gpu.csv \
-  --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
+  --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
+  --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
 [ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json
