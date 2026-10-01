@@ -225,7 +225,7 @@ def _boolean_roots() -> list[Any]:
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8),
-            bind(BSL.SiluMulV4, I=8), bind(QS.SiluMul, I=8), bind(BA.Bf16Tanh, N=8)]
+            bind(BSL.SiluMulExpf, I=8), bind(QS.SiluMul, I=8), bind(BA.Bf16Tanh, N=8)]
 
 
 def _kernel_roots() -> list[Any]:
