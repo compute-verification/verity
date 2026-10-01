@@ -18,7 +18,9 @@
 #
 # --on LIST takes the N GPUs only from LIST, comma-separated indices or UUIDs (GPU-...), in that order; a GPU outside the allowed
 # set is refused.  CMD gets GPU_LEASE_UUID, the UUIDs it holds (comma-separated), to record with its results.  The holder is named
-# by $GPU_LEASE_WHO (else $RESEARCH_LANE, else the user), so `status` says who holds what and for how long.
+# by $GPU_LEASE_WHO (else $RESEARCH_LANE, else the user), so `status` says who holds what and for how long.  A job a goal Commit
+# needs names it in $GPU_LEASE_GOAL (`research run --queue --goal`; letters, digits and ._:-, at most 64, else it is dropped with a
+# warning): its wait and owner lines record goal=, and tools/cluster's `cluster watch` alerts its owner when it waits 30 min.
 # GPU_LEASE_UUID_TABLE overrides the UUIDs nvidia-smi reports, comma-separated in index order (tests).
 #
 # Waiting is first come, first served, so a whole-node request (`gpu-lease 8 --wait`) is not starved by shorter leases starting
@@ -200,7 +202,7 @@ queue_me() {
   # MYWAIT: this request's wait file, locked while it waits
   exec {wfd}>"$dir/.wait.$$"
   flock -x "$wfd"
-  echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_}${goal:+ goal=$goal} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "${maxmin:+max=$maxmin }${memgb:+mem=${memgb}G }${preempt:+preempt=1 }${timed:+timed=1 }" >&"$wfd"
   MYWAIT="$dir/wait.$(date -u +%s%N).$$"
   mv "$dir/.wait.$$" "$MYWAIT"
@@ -390,6 +392,11 @@ mkdir -p "$dir" 2>/dev/null
 [ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
 
 who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
+goal=${GPU_LEASE_GOAL:-}
+case $goal in
+  *[!A-Za-z0-9._:-]*) echo "gpu-lease: GPU_LEASE_GOAL isn't letters, digits and ._:-, so the lease records no goal" >&2; goal="" ;;
+esac
+if [ "${#goal}" -gt 64 ]; then echo "gpu-lease: GPU_LEASE_GOAL is over 64 characters, so the lease records no goal" >&2; goal=""; fi
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 scope=()
 if [ "$memgb" != 0 ]; then
@@ -444,7 +451,7 @@ uuids=()
 for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
   uuids+=("${u:--}")
-  echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
+  echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_}${goal:+ goal=$goal} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
     "${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
 done
 if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
