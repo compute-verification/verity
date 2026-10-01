@@ -45,6 +45,7 @@ def load_registries() -> None:
 
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -213,8 +214,9 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64; the steps, the cast and
-    attention's softmax operations (`verity.ml.boolean.attention`) are static-free."""
+    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64; the steps, the cast,
+    attention's softmax operations (`verity.ml.boolean.attention`) and the MUFU operations (`verity.ml.boolean.mufu`) are
+    static-free."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
 

@@ -3,6 +3,12 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "DivFullRcp_v2": {
+   "and": 4508
+  },
+  "DivFullScaleA_v3": {
+   "and": 1427
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
@@ -41,6 +47,18 @@
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "MufuEx2Ftz_v2": {
+   "and": 1354
+  },
+  "MufuRcpFtz_v2": {
+   "and": 902
+  },
+  "MufuSqrtFtz_v2": {
+   "and": 879
+  },
+  "RsqrtApprox_v2": {
+   "and": 1668
   }
  },
  "pieces": {
