@@ -89,14 +89,16 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (10:56 AM PDT): only leads get handles (a name in `research msg`), never individual workers; a worker is
+  reached through its lead. A new lead is a line in `.agents/skills/using-slack/registry.json`, and `names open`
+  refuses any other name.
 - 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
-  A handoff, an order or an ask goes on Slack (`research slack`), or to your own Cursor workers as a follow-up; a note
+  A handoff, an order or an ask goes on Slack (`research msg`), or to your own Cursor workers as a follow-up; a note
   written as a message reaches nobody.
 - 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
   message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
-  needs no Slack admin. Comms owns the routing (`@<lane>` at the start of a post wakes that lane's agent); until it
-  lands, workers still reach other agents through their coordinator.
+  needs no Slack admin. Comms owns the routing (`@<name>` at the start of a post wakes that lead's agent).
 
 - 2026-10-01 (12:05 AM PDT): a protocol's README is an outline, signposts and its core API, and Lean is the source of
   truth for a mature protocol. A protocol keeps a `PROTOCOL.md` only while it is experimental (Python is the truth until
