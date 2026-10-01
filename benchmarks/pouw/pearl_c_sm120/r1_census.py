@@ -36,7 +36,8 @@ columns).  Per window length L, U(M) is the maximum over every start; a unit pas
 when U(M) < W*(L, M) at every M.  --cols 0 takes every weight row (the linear's own n), computed in column blocks.
 
 --adv FAMILY replaces A's rows with rows the prover writes in the transformed basis (a token-programmable crafted model):
-`flat` (every code +-448, keyed signs), `flat-z50` and `flat-z75` (flat with that share of codes zero, keyed positions).
+`flat` (every code +-448, keyed signs), `flat-z50` and `flat-z75` (flat with that share of codes zero, keyed positions),
+`pow2` and `pow2-z50` (codes +-256 but the first, a power of two: the coarsest products a written row can have).
 
   python r1_census.py --acts DIR --weights SNAPSHOT --out DIR [--layers 0,8,16,28] [--classes ...] [--rows 1024 --cols 512]
   python r1_census.py --acts DIR --weights SNAPSHOT --out DIR --starts p10 --atoms 16 --rows 1024 --cols 0 [--adv flat]
@@ -67,10 +68,10 @@ STARTS = ("zero", "h8", "h10", "h12", "h14")
 WIN = 32
 PREFIXES = (1, 2, 4, 6, 8, 10, 16, 32)
 LEMMA = (1 / 8, 1 / 16)
-BOUND_WINDOWS = (4, 6, 8, 9, 10, 12)
+BOUND_WINDOWS = (4, 6, 8, 9, 10, 12, 16, 24, 32)
 BOUND_ROWS = (8, 16, 32, 64, 128, 256, 368, 512, 768, 1024)
 BOUND_COLS = (64, 256, 1024, 1536, 2048, 4096, 8192, 16384)
-ADV_ZEROS = {"flat": 0.0, "flat-z50": 0.5, "flat-z75": 0.75}
+ADV_ZEROS = {"flat": 0.0, "flat-z50": 0.5, "flat-z75": 0.75, "pow2": 0.0, "pow2-z50": 0.5}
 HEAD_DIM, Q_HEADS, KV_HEADS = 128, 32, 8
 UNIT = 2.0 ** 18
 
@@ -181,9 +182,13 @@ def operands(cls: str, layer: int, args, key: str) -> tuple[np.ndarray, np.ndarr
 
 def written(family: str, rows: int, k: int, g: np.random.Generator) -> np.ndarray:
     """Rows a prover writes in the transformed basis: +-1 with keyed signs (codes +-448 after the quantizer), with a keyed
-    share ADV_ZEROS[family] of them zero."""
+    share ADV_ZEROS[family] of them zero.  `pow2*` writes +-4/7 instead, with the first code +1: codes +-256 (one significant
+    bit, against 448's three) and one 448 that sets the row's scale."""
     a = np.where(g.integers(0, 2, (rows, k)) == 1, -1.0, 1.0)
     a[g.random((rows, k)) < ADV_ZEROS[family]] = 0.0
+    if family.startswith("pow2"):
+        a *= 4 / 7
+        a[:, 0] = 1.0
     return a
 
 
