@@ -21,7 +21,8 @@
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
 k-unit replay (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
 ``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
-it and writes ``config_record.json``.  The **plan** stage (``row_plan``, on CPU) derives what the Commit needs before the GPU is held.
+it and writes ``config_record.json``.  The **plan** stage (``row_plan``, on CPU) derives what the Commit needs before the GPU is held;
+a Build without the Commit or a plan stage of its own ends with it, and its FAIL leaves the Commit to derive what it would have held.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 15 plan FAIL; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the
@@ -80,6 +81,8 @@ class SingleRow(Row):
                 self.build()
                 if self.config_run:
                     RC.word_check(self)
+                if not (stage_on(self.stages, "plan") or stage_on(self.stages, "commit")):
+                    RP.plan(self, required=False)
             if stage_on(self.stages, "plan"):
                 RP.plan(self)
             if stage_on(self.stages, "match") and not self.config_run:
