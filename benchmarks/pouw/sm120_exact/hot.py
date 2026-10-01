@@ -20,8 +20,10 @@ public-constant rule (`const`, c0 = 64); the +0 chain starts every word at +0.
    u = 1 .. --units: A and B, 8,192 rows of k = 8,192 each, formed on the card by pearl_c.form_v1's rule (the host computes
    s5_stats, E' and C = α·x with the scheme's own functions; the card runs the atom and Pearl's cast).  Rows: near-cap as
    pearlc_hot_start.units draws them (columns first, then rows; unit 1 at its salt "near-cap/8192/compat-wide", unit u at
-   ".../u"); a census family from census.family_rows(fam, k, 1.0, 8192, 8192, u) at salt "<fam>/8192/hot-full/<u>";
-   `cancel-pair@t4` (opt-in) as the assessor's hot_late_start.py draws it, from a generator seeded by that salt's SHA-256.
+   ".../u"); a census family from census.family_rows(fam, k, 1.0, 8192, 8192, u) at salt "<fam>/8192/hot-full/<u>"; the
+   assessor's seven late-start families (opt-in: `cancel-pair@t4`, `cancel-pair@spiky`, `cancel-pair@flat`, `cancel-atom@t4`,
+   `cancel-atom@spiky`, `saturated@spiky`, `saturated@flat`) as internal/pouw/red-team/hot_late_start.py's family() draws
+   them, B first, from a generator seeded by that salt's SHA-256.
    Then both chains, and per chain each atom's exactness as row bitsets and column bitsets:
    `<out>/units/<fam>@<u>/{hot,zero}.{rows,cols}.u32` (T x 8,192 x 256 uint32 each, 2 GiB), `okA.npy`/`okB.npy` (the rows
    and columns Π admits: noise floor and liveness, pearl_c.PearlC.admissible's per-row rule; `unit.json`'s `rows_live`
@@ -70,7 +72,8 @@ from sm120_chain.run import Nvml, emit  # noqa: E402
 
 HS = HV = C = D = P = None  # pearlc_hot_start, pearlc_v1_hot and the scheme's modules, imported from --ref and PYTHONPATH
 FAMILIES = (*census.ACTIVATION_FAMILIES, *census.FREEZE_FAMILIES, "near-cap")
-CANCEL_FAMILIES = ("cancel-pair@t4",)  # opt-in (--families), not in the default set
+LATE_FAMILIES = ("cancel-pair@t4", "cancel-pair@spiky", "cancel-pair@flat", "cancel-atom@t4", "cancel-atom@spiky",
+                 "saturated@spiky", "saturated@flat")  # opt-in (--families), not in the default set
 CHAINS = ("hot", "zero")
 MODE_CHAINS = {"v2hot": CHAINS, "v1hot": ("v1hot", "v1")}
 GROUP = 128                # v1's group depth: G = 4 atoms of 32
@@ -113,23 +116,47 @@ def words(X: np.ndarray) -> np.ndarray:
     return W
 
 
-def cancel_pair_t4(rng: np.random.Generator, rows: int, k: int) -> tuple[np.ndarray, np.ndarray]:
-    """internal/pouw/red-team/hot_late_start.py's `cancel-pair@t4`: B's columns Student-t(4) with B[2l+1] = B[2l]; A's rows
-    A[2l] = v, A[2l+1] = -v, v's first half random signs and the rest N(0, 0.1²); B drawn first."""
-    B = rng.standard_t(4, (rows, k))
-    v = rng.standard_normal((rows, k // 2)) * 0.1
-    v[:, : k // 4] = np.sign(rng.standard_normal((rows, k // 4)))
-    A = np.empty((rows, k))
-    A[:, 0::2], A[:, 1::2] = v, -v
-    B[:, 1::2] = B[:, 0::2]
-    return A, B
+def sat_values(rng: np.random.Generator, rows: int, n: int) -> np.ndarray:
+    v = rng.standard_normal((rows, n)) * 0.1
+    v[:, : n // 2] = np.sign(rng.standard_normal((rows, n // 2)))
+    return v
+
+
+def late_start(name: str, rows: int, k: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+    """internal/pouw/red-team/hot_late_start.py's family(name, rows, rows, k, rng), B drawn first: B's columns `t4`
+    (Student-t(4)), `spiky` (N(0, 0.05²) and one 1.0 per column) or `flat` (signs); A `saturated` (first half signs, the rest
+    N(0, 0.1²)), `cancel-pair` (A[2l+1] = -A[2l], B[2l+1] = B[2l]) or `cancel-atom` (A's atoms alternate in sign, B repeats
+    its first atom)."""
+    base, _, kind = name.partition("@")
+    if kind == "t4":
+        B = rng.standard_t(4, (rows, k))
+    elif kind == "spiky":
+        B = rng.standard_normal((rows, k)) * 0.05
+        B[np.arange(rows), rng.integers(0, k, rows)] = 1.0
+    elif kind == "flat":
+        B = np.sign(rng.standard_normal((rows, k)))
+    else:
+        raise ValueError(name)
+    if base == "saturated":
+        return sat_values(rng, rows, k), B
+    if base == "cancel-pair":
+        v = sat_values(rng, rows, k // 2)
+        A = np.empty((rows, k))
+        A[:, 0::2], A[:, 1::2] = v, -v
+        B[:, 1::2] = B[:, 0::2]
+        return A, B
+    if base == "cancel-atom":
+        a = sat_values(rng, rows, 32)
+        sign = np.where((np.arange(k) // 32) % 2 == 0, 1.0, -1.0)
+        return np.tile(a, k // 32) * sign, np.tile(B[:, :32], k // 32)
+    raise ValueError(name)
 
 
 def draw(fam: str, k: int, rows: int, u: int) -> tuple[np.ndarray, np.ndarray, str]:
     """X_A and X_B (rows x k FP32 words) and the unit's salt."""
-    if fam in CANCEL_FAMILIES:
+    if fam in LATE_FAMILIES:
         salt = f"{fam}/{k}/hot-full/{u}"
-        XA, XB = cancel_pair_t4(np.random.default_rng(list(hashlib.sha256(salt.encode()).digest())), rows, k)
+        XA, XB = late_start(fam, rows, k, np.random.default_rng(list(hashlib.sha256(salt.encode()).digest())))
         return words(XA), words(XB), salt
     if fam == "near-cap":
         salt = f"near-cap/{k}/compat-wide" + ("" if u == 1 else f"/{u}")
