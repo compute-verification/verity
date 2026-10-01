@@ -130,7 +130,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
         roots = {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}
-        epoch = Epoch.start(Workload(matmuls), roots, bytes.fromhex(man["beacon"]))
+        epoch = Epoch.unverified(Workload(matmuls), roots, bytes.fromhex(man["beacon"]))
         if epoch.salt.hex() != man["salt"]:
             raise ValueError("the manifest's salt is not the beacon's and the weights'")
         records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),

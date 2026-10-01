@@ -31,6 +31,7 @@ from math import lcm
 from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits, verify_opening
 from verity.randomness import derive
 
+from .beacon import QUICKNET, Chain, Round, check_after
 from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
@@ -95,10 +96,23 @@ class Epoch:
         return weights_root(self.weight_roots)
 
     @classmethod
-    def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], beacon: bytes) -> Epoch:
+    def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], beacon: Round, recorded_at: float,
+              chain: Chain = QUICKNET) -> Epoch:
+        """The epoch whose salt is keyed by a verified beacon round after the weight roots: `recorded_at` is the
+        verifier's clock (UNIX s) when it recorded them, and the round must verify under `chain`'s pinned key and be at
+        least `beacon.MARGIN` rounds after the one due then (`beacon.check_after`)."""
+        reason = check_after(chain, beacon, recorded_at)
+        if reason is not None:
+            raise DomainError(f"the salt's {reason}")
+        return cls.unverified(workload, weight_roots, beacon.value)
+
+    @classmethod
+    def unverified(cls, workload: Workload, weight_roots: Mapping[int, bytes], seed: bytes) -> Epoch:
+        """The epoch whose salt is keyed by bare bytes, with no beacon rule: test instances, replays of recorded runs,
+        and integrations that don't claim `beacon-unpredictability`.  `start` salts by its round's value this way."""
         if set(weight_roots) != set(workload.weights()):
             raise DomainError("every weight of the workload is committed, and only those")
-        salt = derive(beacon, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
+        salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt)
 
 

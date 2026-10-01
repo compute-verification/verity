@@ -29,6 +29,13 @@ def _pearl_c(forming: str, device: str = "h100", hashing: str = "h0") -> Callabl
     return make
 
 
+def _pearl_c4(fmt: str) -> Callable[..., PoUWScheme]:
+    def make(**config: Any) -> PoUWScheme:
+        from .pearl_c4 import PearlC4
+        return PearlC4(fmt, **config)
+    return make
+
+
 #: name -> factory of the configured scheme (keyword arguments configure it, as a commitment scheme's ports do)
 SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "ncp-v1": _ncp("word"),
@@ -39,6 +46,7 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-c-h100-v1-h1": _pearl_c("v1", hashing="h1"),
     "pearl-c-h100-v1-h2": _pearl_c("v1", hashing="h2"),
     "pearl-c-sm120-v1": _pearl_c("v1", "sm120"),
+    "pearl-c-nvfp4-v0": _pearl_c4("nvfp4"),
 }
 
 
