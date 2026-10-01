@@ -195,10 +195,63 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
     e = CK.check_definition(fn, OPTS, as_call=True)
     assert "partition/gate-recomputed CircuitCheckRecompute_v1 (1 gate(s))" in [f["name"] for f in e["failures"]]
+    assert e["partition"]["q_word"] == 1                                # a word Call keeps v1: the recompute fails
     assert e["partition"]["whole"]["q_word_v2"] == {"codes": [], "recomputed_across": 1}   # v2 reports it, refuses nothing
     inner = CK.check_definition(fn, OPTS, as_call=False)                 # not a Call: its copies are redundant gates, not a failure
     assert not [f for f in inner["failures"] if f["check"] == "partition"] and inner["partition"]["isolated"]
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
+
+
+def _boolean_recompute(name):
+    """A Boolean Definition whose two output bits are the same And of its inputs, each returned by its own unit."""
+    from verity.ir import boolean as BL
+    from verity.ir.refs import array_of
+    from verity.ir.types import Array, Value
+
+    return _composite(name, ((("x", Array(2, Value(1))),), Array(2, Value(1))),
+                      lambda B, S, x: array_of([B.call(BL.AND, x), B.call(BL.AND, x)]))
+
+
+def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
+    """A Boolean Call is judged by `Q_word` v2: the value two units compute is recorded, in the entry and the summary, not failed."""
+    from verity.ir import boolean as BL
+
+    fn = _boolean_recompute("CircuitCheckBoolRecompute")
+    assert BL.is_boolean(fn)
+    e = CK.check_definition(fn, OPTS, as_call=True)
+    assert not [f for f in e["failures"] if f["check"] == "partition"], e["failures"]
+    assert e["partition"]["q_word"] == 2 and e["partition"]["recomputed_across"] == 1
+    assert CK.summarize([e])["recomputed_across"] == {fn.id: 1}
+
+
+def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
+    """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
+    from verity.ir.partition import CutVerdict
+    from verity_vllm.query import word as W
+
+    real = W.units
+
+    def wide(G, *a, **k):
+        R = real(G, *a, **k)
+        c = R["cut"]
+        detail = {**c.detail, "unit-too-wide": {"n": 1, "gates": [[0, 2, 2]], "limits": [16, 32, 0]}}
+        return {**R, "cut": CutVerdict(False, tuple(c.codes) + ("unit-too-wide",), detail)}
+
+    monkeypatch.setattr(W, "units", wide)
+    fn = _boolean_recompute("CircuitCheckBoolWide")
+    e = CK.check_definition(fn, OPTS, as_call=True)
+    names = [f["name"] for f in e["failures"] if f["check"] == "partition"]
+    assert names == ["partition/unit-too-wide CircuitCheckBoolWide_v1 (1 gate(s))"], names
+    assert e["partition"]["recomputed_across"] == 1
+
+
+def test_the_boolean_versions_of_the_served_calls_are_calls():
+    """Sigma's image of the word Call families (`boolean_version`, the switch's `word=` table) is held as Calls."""
+    calls = TG.call_families()
+    assert {"RMSNormFusedCuda_v3", "RMSNormTriton_v2", "Gemm_v3", "Attention_v8", "RoPE_v2", "SiluMul_v3", "TokenSelect_v2",
+            "Embedding_v2"} <= calls
+    assert {"RMSNormFusedCuda_v2", "RMSNormTriton_v1", "Gemm_v1"} <= calls
+    assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
