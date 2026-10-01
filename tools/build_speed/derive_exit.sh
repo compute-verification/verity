@@ -3,6 +3,8 @@
 # takes between `main` returning and the parent seeing it exit, and the Program digest it derived. Measurement only
 # (cursor/build-speed-measure-8c79), never merged.
 #   derive_exit.sh ROW LP T MML VARIANT...     VARIANT = exit (sys.exit) | freeze (gc.freeze(), then sys.exit) | osexit (flush, os._exit)
+#                                              | nofreeze (sys.exit, gc_tuning's exit freeze not registered)
+# Every atexit registration is logged ([exit-ab] atexit <qualname>), so the hooks that run before gc_tuning's are named.
 set -euo pipefail
 ROW=$1 LP=$2 T=$3 MML=$4
 shift 4
@@ -27,7 +29,15 @@ for V in "$@"; do
     t0=$(date +%s.%N)
     rc=0
     EXIT_VARIANT=$V $PY -c "
-import gc, os, sys, time
+import atexit, gc, os, sys, time
+_reg = atexit.register
+def _logged(f, *a, **k):
+    print(f'[exit-ab] atexit {getattr(f, \"__module__\", \"?\")}.{getattr(f, \"__qualname__\", repr(f))}', file=sys.stderr, flush=True)
+    return _reg(f, *a, **k)
+atexit.register = _logged
+if os.environ['EXIT_VARIANT'] == 'nofreeze':
+    from verity_vllm.pipeline import gc_tuning
+    gc_tuning._freeze_registered = True
 from verity_vllm.pipeline import cli
 sys.argv = ['cli', *sys.argv[1:]]
 rc = cli.main()
