@@ -69,7 +69,7 @@ from verity_vllm.check.replay.opening import CommittedStore, model_weights_provi
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, plan_vu, replay_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
-from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
+from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population, taps_in_draw
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
 from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
 
@@ -484,8 +484,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # identity by identity and carry query_total / sampled_strata / uncovered_by_name on the record (a required identity the exact replay
     # has no VU for is NAMED with its mechanism of record -- never inside the grade, never silently "qualified")
     evaluated_keys = {(vu["request_id"], int(vu["step"]), vu["op_path"]) for vu, rec, _dt in results if rec.get("result") is not None}
-    qpop = query_population(manifest, addresses, evaluated_keys, ranks=ranks, strata=strata, executed_prefix=executed_prefix,
-                            controller_rows=controller_rows_of(programs, indices))   # [R4 c2] the replay's own guard-row count per request
+    qpop = taps_in_draw(query_population(manifest, addresses, evaluated_keys, ranks=ranks, strata=strata, executed_prefix=executed_prefix,
+                            controller_rows=controller_rows_of(programs, indices)), bmap, addresses, executed_prefix, arrivals, manifest)   # [R4 c2] the replay's own guard-row count per request
     return {"schema": SCHEMA, "method": "sampled-exact-replay", "result": result, "grade": grade, "why": why, "catch_probability": catch,
             "population": {"vus": len(all_vus), "source": "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)",
                            "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)), "not_evaluable_by_family": dict(not_ev_fam),
