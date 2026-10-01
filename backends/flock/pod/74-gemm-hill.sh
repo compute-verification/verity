@@ -77,8 +77,10 @@ keep() {
 }
 done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
-# the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, under 5 GB of the GPU's)
-GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial SELFTEST_JOBS=3"
+GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
+# the gate's three GPU cases at once, each its own process, only where one case's device memory is measured (K = 2048, B = 16:
+# at most 4.7 GiB of the GPU's, 7-10 GB of host memory; r20261001-044422-bc17); at other K one at a time
+[ -n "$GS" ] && [ "$K" = 2048 ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=6144"
 ok=1
 if [ "${SERVE_ONLY:-0}" = 1 ]; then
   : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR, where the GPU job finds the addresses}"

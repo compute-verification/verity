@@ -33,6 +33,7 @@ import os
 import re
 import resource
 import subprocess
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -497,13 +498,23 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
         cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)] + (["--gpu"] if gpu else [])
-        r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True, timeout=timeout)
+        t0 = time.monotonic()
+        try:
+            r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True,
+                               timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return {"all_pass": False, "cases": 0, "failed": [], "finished": False, "timed_out": True, "exit_code": None,
+                    "wall_s": round(time.monotonic() - t0, 3)}
         lines = [ln for ln in r.stdout.splitlines() if ln.startswith(("SELFTEST", "NEG"))]
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("NEG")]
         head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), None)
         failed = [c.get("case") for c in neg if c.get("pass") is not True]
         all_pass = head.get("all_pass") if head is not None else (bool(neg) and not failed)     # --only prints its one case, no summary
-        return {"all_pass": all_pass, "cases": len(neg), "failed": failed} | \
+        # a process that ends without its verdict (killed, out of memory) is no verdict: its exit code and stderr say why
+        finished = r.returncode == 0 and bool(lines)
+        return {"all_pass": all_pass, "cases": len(neg), "failed": failed, "finished": finished, "timed_out": False,
+                "exit_code": r.returncode, "wall_s": round(time.monotonic() - t0, 3)} | \
+            ({} if finished else {"stderr_tail": r.stderr[-600:]}) | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
     pin = FC.digest(circ.read_text())
     # FC_VERIFIERS=DIR: the verifier runs in another pod (`--serve-only DIR`), serving this statement's sessions at the addresses
@@ -810,6 +821,98 @@ def _staged(jobs: list[str], workers: int):
                                "broke": {"at": "statement", "why": "its staging worker died twice (killed, likely out of memory)"}}
 
 
+#: seconds between the device-memory samples of selftest cases run at once
+SELFTEST_SAMPLE_S = 0.5
+
+
+def _gpu_free_mib() -> int | None:
+    """The least free memory of the GPUs this process sees (nvidia-smi), or None when it can't be read."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"], capture_output=True,
+                           text=True, timeout=60)
+        return min(int(v) for v in r.stdout.split()) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _case_device_mib() -> dict[str, int] | None:
+    """Each running selftest case process's device memory in MiB, by case (nvidia-smi's compute apps, whose pids the driver
+    gives in this pod's pid namespace; a case process is named by its ``--only`` argument), or None when it can't be read."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    out: dict[str, int] = {}
+    for ln in r.stdout.splitlines():
+        try:
+            pid, mib = (int(v) for v in ln.split(","))
+            argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+        except (ValueError, OSError):
+            continue
+        if b"--only" in argv[:-1]:
+            case = argv[argv.index(b"--only") + 1].decode()
+            out[case] = out.get(case, 0) + mib
+    return out
+
+
+def _selftest_cases(binary: str, d: Path, n: int, port: int, cases: Sequence[str], gpu: bool, jobs: int,
+                    case_mib: int | None) -> tuple[list[dict], dict | None]:
+    """Each case in its own selftest process, up to ``jobs`` at once, the records in case order, and how they ran (None for
+    ``jobs`` 1). On the GPU they run at once only while ``jobs`` x ``case_mib`` (one case process's device memory, measured)
+    fits the GPU's free memory, else one at a time, as when either is unknown; each case process's device memory is sampled
+    while they run."""
+    def one(c: str) -> dict:
+        return prove(binary, d, n, port, selftest=c, gpu=gpu)
+
+    if jobs <= 1:
+        return [one(c) for c in cases], None
+    how: dict[str, Any] = {"jobs_asked": jobs, "jobs": min(jobs, len(cases))}
+    if gpu and how["jobs"] > 1:
+        free = _gpu_free_mib()
+        how |= {"free_mib": free, "case_bound_mib": case_mib}
+        if free is None or case_mib is None or how["jobs"] * case_mib > free:
+            why = ("the GPU's free memory can't be read" if free is None else "no per-case device memory bound" if case_mib is None
+                   else f"{how['jobs']} x {case_mib} MiB is more than the {free} MiB free")
+            how |= {"jobs": 1, "fallback": why}
+    peak: dict[str, int] = {}
+    stop = threading.Event()
+
+    def sample() -> None:
+        while True:
+            now = _case_device_mib()
+            if now is None:
+                how["sampler"] = "nvidia-smi's compute apps can't be read"
+            else:
+                how["samples"] = how.get("samples", 0) + 1
+                for c, mib in now.items():
+                    peak[c] = max(peak.get(c, 0), mib)
+                how["sum_peak_mib"] = max(how.get("sum_peak_mib", 0), sum(now.values()))
+            if stop.wait(SELFTEST_SAMPLE_S):
+                return
+
+    sampler = threading.Thread(target=sample, daemon=True) if gpu else None
+    if sampler:
+        how["sampled_every_s"] = SELFTEST_SAMPLE_S
+        sampler.start()
+    try:
+        if how["jobs"] <= 1:
+            runs = [one(c) for c in cases]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(how["jobs"]) as ex:
+                runs = list(ex.map(one, cases))
+    finally:
+        stop.set()
+        if sampler:
+            sampler.join()
+    for c, x in zip(cases, runs):
+        x["device_peak_mib"] = peak.get(c)
+    return runs, how
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
@@ -833,6 +936,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
     ap.add_argument("--selftest-jobs", type=int, default=1, help="case processes run at once (a read-bearing circuit's or "
                     "--selftest-cases'; each still its own process, the records in case order); each parses the circuit itself")
+    ap.add_argument("--selftest-case-mib", type=int, default=None, help="with --selftest-jobs above 1 on the GPU: one case "
+                    "process's device memory (measured); the cases run at once only while N of them fit the GPU's free memory")
     ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
                     help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
@@ -937,14 +1042,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
-                        if a.selftest_jobs <= 1:
-                            runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
-                        else:
-                            from concurrent.futures import ThreadPoolExecutor
-                            with ThreadPoolExecutor(min(a.selftest_jobs, len(cases))) as ex:
-                                runs = list(ex.map(lambda c: prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g), cases))
+                        runs, how = _selftest_cases(sb, d, rec["stage"]["n"], a.port, cases, g, a.selftest_jobs, a.selftest_case_mib)
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
-                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)} | \
+                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases),
+                                           "did_not_finish": [c for c, x in zip(cases, runs) if not x["finished"]],
+                                           "per_case": [{"case": c} | {k: x.get(k) for k in ("wall_s", "exit_code", "timed_out", "device_peak_mib",
+                                                                                                "stderr_tail") if k in x}
+                                                        for c, x in zip(cases, runs)]} | \
+                            ({"run": how} if how else {}) | \
                             ({"gpu_cases": gc} if (gc := [c for x in runs for c in x.get("gpu_cases", [])]) else {})
                     else:
                         rec["selftest"] = prove(sb, d, rec["stage"]["n"], a.port, selftest=True, gpu=g)

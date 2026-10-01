@@ -9,6 +9,8 @@
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
 #      SELFTEST_JOBS=1 (case processes run at once, each its own process; each parses the circuit, so memory grows with it)
+#      SELFTEST_CASE_MIB= (with SELFTEST_JOBS above 1 on the GPU: one case process's device memory, measured; they run at once
+#      only while that many fit the GPU's free memory, else one at a time)
 #      FLOCK_WORK=/workspace (the builds, venvs and cached binaries under it)  PROTOCOL=sweep-v0  OUT=$RESEARCH_RUN_DIR/out  RESUME=path/to/results.jsonl (an earlier run's records: those shapes are skipped)
 #      SELFTEST_LARGEST=0 (selftest every SELFTEST-th shape only, not also each Definition's largest)
 #      BATCH_ANDS= MAX_STATEMENT_BITS= (larger statements: --batch auto's AND budget and the witness-bit cap per statement)
@@ -73,4 +75,4 @@ SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \
-  ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} $G_
+  ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} ${SELFTEST_CASE_MIB:+--selftest-case-mib $SELFTEST_CASE_MIB} $G_

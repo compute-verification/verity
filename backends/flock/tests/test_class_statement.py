@@ -84,39 +84,80 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
 def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_in_case_order(monkeypatch, tmp_path: Path):
     cases = ["gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial"]
-    st: dict = {}
+    mib = dict(zip(cases, (4000, 4500, 4700)))
+    st: dict = {"lock": threading.Lock()}
 
     def run(cmd, **_kw):
         case = cmd[cmd.index("--only") + 1]
-        st["argv"][case] = cmd
         on = "caller" if threading.current_thread() is st["caller"] else "pool"
+        with st["lock"]:
+            st["argv"][case] = cmd
+            st["running"].add(case)
         if on == "pool":
-            st["started"].wait()                                   # every case's process is running before any returns
+            st["started"].wait()                                   # every case's process is running before any returns,
+            st["sampled"].wait()                                   # with its device memory sampled meanwhile,
             if case != cases[-1]:
                 st["returned"][cases[cases.index(case) + 1]].wait()   # and they return last case first
-        st["finished"].append(case)
+        with st["lock"]:
+            st["running"].discard(case)
+            st["finished"].append(case)
         st["returned"][case].set()
         return CS.subprocess.CompletedProcess(cmd, 0, stdout=f"NEG\t{json.dumps({'case': case, 'pass': True, 'on': on})}\n", stderr="")
 
+    def device():
+        with st["lock"]:
+            now = {c: mib[c] for c in st["running"]}
+        if len(now) == len(cases):
+            st["sampled"].set()
+        return now
+
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(CS.subprocess, "run", run)
+    monkeypatch.setattr(CS, "_case_device_mib", device)
+    monkeypatch.setattr(CS, "SELFTEST_SAMPLE_S", 0.001)
     monkeypatch.setattr(CS, "cache_slot_circuits", lambda: None)
     monkeypatch.setattr(CS, "_stage_job", lambda s: {"shape": s, "stage": {"n": 16}, "table_reads": {}})
     args = ["--model", "tiny", "--partition", "q-word", "--sample", "1", "--selftest-only", "--selftest", "1", "--selftest-gpu",
-            "--selftest-cases", ",".join(cases), "--selftest-binary", "flock-circuit-seeded"]
-    argvs = {}
-    for jobs, on, order in (("1", "caller", cases), ("3", "pool", cases[::-1])):
-        st.update(argv={}, finished=[], started=threading.Barrier(len(cases)), returned={c: threading.Event() for c in cases},
-                  caller=threading.current_thread())
+            "--selftest-cases", ",".join(cases), "--selftest-binary", "flock-circuit-seeded", "--selftest-case-mib", "6144"]
+    argvs, sel = [], {}
+    # jobs, the GPU's free MiB, where the cases ran, the order they returned in
+    for jobs, free, on, order in (("1", 96000, "caller", cases), ("3", 96000, "pool", cases[::-1]),
+                                  ("3", 3 * 6144 - 1, "caller", cases), ("3", None, "caller", cases)):
+        monkeypatch.setattr(CS, "_gpu_free_mib", lambda free=free: free)
+        st.update(argv={}, running=set(), finished=[], started=threading.Barrier(len(cases)), sampled=threading.Event(),
+                  returned={c: threading.Event() for c in cases}, caller=threading.current_thread())
         (tmp_path / "selftests.jsonl").unlink(missing_ok=True)
         assert CS.main([*args, "--selftest-jobs", jobs, "--out", str(tmp_path)]) == 0
         (rec,) = [json.loads(ln) for ln in (tmp_path / "selftests.jsonl").read_text().splitlines()]
+        s = sel[jobs, free] = rec["selftest"]
         assert st["finished"] == order
-        assert rec["selftest"]["all_pass"] is True and rec["selftest"]["subset"] == cases
-        assert rec["selftest"]["gpu_cases"] == [{"case": c, "pass": True, "on": on} for c in cases]
-        argvs[jobs] = st["argv"]
-    assert argvs["3"] == argvs["1"]                                # each case its own process, with the same binary and arguments
-    assert all(cmd[0] == "flock-circuit-seeded" and "--gpu" in cmd and cmd[-2:] == ["--only", c] for c, cmd in argvs["3"].items())
+        assert s["all_pass"] is True and s["subset"] == cases and s["did_not_finish"] == []
+        assert s["gpu_cases"] == [{"case": c, "pass": True, "on": on} for c in cases]
+        assert [(p["case"], p["exit_code"], p["timed_out"], type(p["wall_s"])) for p in s["per_case"]] == [(c, 0, False, float) for c in cases]
+        argvs.append(st["argv"])
+    assert all(a == argvs[0] for a in argvs)                       # each case its own process, with the same binary and arguments
+    assert all(cmd[0] == "flock-circuit-seeded" and "--gpu" in cmd and cmd[-2:] == ["--only", c] for c, cmd in argvs[0].items())
+    assert "run" not in sel["1", 96000]
+    at_once = sel["3", 96000]
+    assert {k: at_once["run"][k] for k in ("jobs_asked", "jobs", "free_mib", "case_bound_mib", "sum_peak_mib")} == \
+        {"jobs_asked": 3, "jobs": 3, "free_mib": 96000, "case_bound_mib": 6144, "sum_peak_mib": 13200}
+    assert "fallback" not in at_once["run"] and [p["device_peak_mib"] for p in at_once["per_case"]] == [4000, 4500, 4700]
+    assert sel["3", 18431]["run"]["jobs"] == 1 and sel["3", 18431]["run"]["fallback"] == "3 x 6144 MiB is more than the 18431 MiB free"
+    assert sel["3", None]["run"]["jobs"] == 1 and sel["3", None]["run"]["fallback"] == "the GPU's free memory can't be read"
+
+
+def test_a_case_process_that_ends_without_its_verdict_is_recorded_as_not_finished(monkeypatch, tmp_path: Path):
+    def run(cmd, **_kw):
+        if cmd[-1] == "gpu_proofs_match_cpu":
+            raise CS.subprocess.TimeoutExpired(cmd, 3600)
+        return CS.subprocess.CompletedProcess(cmd, -9, stdout="", stderr="CUDA_ERROR_OUT_OF_MEMORY: out of memory\n")
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    hung = CS.prove("flock-circuit", tmp_path, 4, 0, selftest="gpu_proofs_match_cpu", gpu=True)
+    assert (hung["all_pass"], hung["finished"], hung["timed_out"], hung["exit_code"]) == (False, False, True, None)
+    oom = CS.prove("flock-circuit", tmp_path, 4, 0, selftest="gpu_paths_agree", gpu=True)
+    assert (oom["all_pass"], oom["finished"], oom["timed_out"], oom["exit_code"]) == (False, False, False, -9)
+    assert "out of memory" in oom["stderr_tail"] and "gpu_cases" not in oom
 
 
 def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):

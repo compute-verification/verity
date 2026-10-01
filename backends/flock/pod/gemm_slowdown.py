@@ -125,8 +125,10 @@ def gate(path: Path | None, shapes_needed: int = 2) -> dict:
         st = r.get("selftest") or {}
         cases = {c.get("case"): c for c in st.get("gpu_cases", [])}
         good = all((cases.get(c) or {}).get("pass") is True for c in GATE_CASES)
+        # a case whose process ended without its verdict (timed out, killed, out of memory) fails the gate but is no verdict
         shapes[r.get("definition")] = {"pass": good, "digest": ((r.get("live") or {}).get("statement_digest")),
-                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in GATE_CASES}}
+                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in GATE_CASES}} | \
+            ({"did_not_finish": st["did_not_finish"]} if st.get("did_not_finish") else {})
         ok &= good
     ok &= len(shapes) >= shapes_needed
     return {"status": "passed" if ok else "failed", "shapes": shapes}
