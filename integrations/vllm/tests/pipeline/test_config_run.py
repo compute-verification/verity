@@ -499,6 +499,18 @@ def test_family_strata_draw_k_units_with_every_family_at_least_once():
     assert family_strata(vus, None, 2) == (vus, 2), "without k: the row's per-stratum sample, untouched"
 
 
+def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
+    vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
+           for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
+    keyed, per = family_strata(vus, 460, draw="uniform")
+    assert per == 460 and {v["stratum"] for v in keyed} == {"all|all|all|all|all|all"}
+    assert {v["family"] for v in keyed} == {"Gemm_v1", "RoPE_v1", "Embedding_v1"}, "each unit keeps its family for the record"
+    picked, strata, tgt = sample(keyed, per, seed=11)
+    assert len(picked) == tgt["stratified"] == 460 and len({(v["family"], v["i"]) for v in picked}) == 460, "without replacement"
+    assert strata == {"all|all|all|all|all|all": {"population": 1303, "sampled": 460}}
+    assert picked != sample(keyed, per, seed=12)[0]
+
+
 # ---------------------------------------------------------------------------------------------------------------- the sweep driver
 
 def test_estimates_follow_the_plan_s_classes():
