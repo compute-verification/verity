@@ -65,8 +65,9 @@ The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Se
 ## The band scheme (secure-first)
 
 `band.SECURE_FIRST` is `BandParams(512, 524288, d = 12)`: 512 blocks of 65,536 B per segment (32 MiB), audited with
-`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs (`band_meets_64`, for every
-`d ≥ 5`, given `ChainExPostFactoG`). Segment `s` is exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs
+(`Pous.Pinned.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis). Segment `s` is
+exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
 below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, ..., C_{max(0, v-d)}` (Lean
 `parentsDesc (bandDAG B d) v`), then the pad.
 
@@ -85,8 +86,8 @@ below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, 
 `dense.POINT_64K` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
 `k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. The 111 is what
-`chain_meets_64` (POUS `lean/submissions/sponge-dense/ChainEPF.lean`) certifies for this overwrite-chain `H`, given
-`ChainExPostFacto`; a random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
+`Pous.Pinned.ChainDenseMeets64` certifies for this overwrite-chain `H`, for one segment, with no hypothesis; a
+random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
 
 ~~~text
@@ -147,8 +148,11 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
    `chainScheme_encDec`, pending red-team §40). It also proves that the public game is equivalent to the private one
    for any scheme with that property (`pubAuditSecure_exact_iff`, `pubMeets_exact`), so the certificates carry over
    at `k = 111`:
-   - the band: `band_pub_meets_64` (`band-chain/BandPubEncoder.lean`), for every `d ≥ 5`, given `ChainExPostFactoG`;
-   - dense: `dense_pub_meets_64`, `seg_pub_meets_14`, and `chain_pub_meets_64`, the last given `ChainExPostFacto`.
+   - the band: `Pous.Pinned.BandPubMeets64`, `BandPubMeets14` and `BandPubMeets14Global`, for every `d ≥ 5`, with no
+     hypothesis, under the deployment conditions in their docstrings;
+   - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
+     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/PousProofs/Chain/Flat.lean`; not
+     pinned).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
    encode-after-decode lemma is not proved.
@@ -184,15 +188,14 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `theorem`, and its open `hypotheses`;
   - `claims`: ids in `verity.claims`' format.
 
-  At the frozen point, the band's certificates are given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
-  `d`.
-  - One segment is `band_meets_64`.
-  - 448 segments (14 GB) is `band_meets_14`, from POUS `lean/submissions/band-multi/`, red team §47 GO. It is one
-    `Meets` for the whole store: challenges are uniform over all its blocks, the state bound is the whole store's, and
-    one permutation serves every segment.
-  - Other segment counts are gaps in the storage profile.
+  Each `theorem` is the `Pous.Pinned` statement it rests on. At the frozen point, the band's certificate is
+  `Pous.Pinned.BandMultiMeetsFamily`, with no hypothesis: k 111, D 5, Q 2^20, 483 µs, cliff at `d`, for every segment
+  count from 1 to `2^64` (all that `BandParams` allows). It is one `Meets` for the whole store: challenges are uniform
+  over all its blocks, the state bound is the whole store's, and one permutation serves every segment. At one segment
+  it is also `BandChainMeets64`, and at 448 (14 GB) `BandMultiMeets14`.
 
-  Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P2 (`schemes/p2.py`) is **experimental**:
+  Dense is `Pous.Pinned.ChainDenseMeets64`, with no hypothesis and no cliff, for one segment; other segment counts are
+  gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, and no hash call.
   - It follows the P2 spec (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, draft v0) except for its
     expander:
@@ -225,7 +228,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
-  other than the theorem's. The band's certificate is `band_meets_64` at one segment and `band_meets_14` at 448.
+  other than the theorem's. The band's certificate covers every segment count, and dense's one segment.
   `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`

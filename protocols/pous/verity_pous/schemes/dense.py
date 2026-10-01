@@ -1,8 +1,9 @@
 """`dense-chain/v1`, selectable: the band scheme's construction on the complete DAG (Lean `chainDense B ℓ 512 (dom
 tag_s)` per segment), encoded and decoded by the reference codec `verity_pous.dense`.
 
-Its certificate at `dense.POINT_64K` is `chain_meets_64`, given `ChainExPostFacto` (which `ChainExPostFactoG` implies):
-the band's terms, with no cliff.
+Its certificate at `dense.POINT_64K` is `Pous.Pinned.ChainDenseMeets64`, with no hypothesis (in the ideal-permutation
+model): the band's terms, with no cliff, for one segment. No pinned statement covers the dense chain scheme at more
+segments, so a profile of more carries that gap.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ class Dense(Scheme):
     def certificate(self) -> Certificate | None:
         if (self.params.blocks_per_segment, self.params.m) != POINT:
             return None
-        return chain_certificate("chain_meets_64", "ChainExPostFacto", None)
+        return chain_certificate("Pous.Pinned.ChainDenseMeets64", None, 1)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return dense_codec.encode_segment(self.params, self.prims, salt, s, w_seg)
