@@ -154,63 +154,75 @@ def _attention(B, T: int, NH: int, KVH: int, D: int, head, q, kc, vc):
     return Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 
-def _on_bits(name: str, version: int, statics: list[str], signature: Callable, word: CompositeDefinition):
-    """Decorator: the Boolean composite ``name_v{version}``, documented by its body's docstring, whose word view
+def _on_bits(name: str, version: int, statics: list[str], signature: Callable, body: Callable,
+             word: CompositeDefinition) -> CompositeDefinition:
+    """The Boolean composite ``name_v{version}`` with body ``body``, documented by its docstring, whose word view
     (`trace.word_of`) is ``word`` at its bindings, the Boolean ``DOT`` and ``INV`` read as their word views."""
-    def deco(body: Callable) -> CompositeDefinition:
-        d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
-                                conformance="exact-model-tested")
-        d.word = lambda b: bind(word, **{k: (word_of(x) if k in ("DOT", "INV") else x) for k, x in b.items()})  # type: ignore[attr-defined]
-        return d
-    return deco
+    d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
+                            conformance="exact-model-tested")
+    d.word = lambda b: bind(word, **{k: (word_of(x) if k in ("DOT", "INV") else x) for k, x in b.items()})  # type: ignore[attr-defined]
+    return d
 
 
-@_on_bits("AttnBlock", 6, ["D", "NVIS", "FIRST", "BN"], _block_type, AttnBlockV3)
-def AttnBlockV6(B, S, q, k, v, m_prev, l_prev, o_prev):
+def _fa2_block(B, S, q, k, v, m_prev, l_prev, o_prev):
     """`AttnBlock_v3`'s body on bits: one BN-key block of FA2's online softmax for one query row, NVIS visible columns."""
     return _block(B, "AttnBlock_v6", S.D, S.NVIS, S.FIRST, S.BN, BG.AmpereBF16TcDot16, q, k, v, m_prev, l_prev, o_prev)
 
 
-@_on_bits("AttentionHead", 6, ["T", "D", "BN"], _head_type, AttentionHeadV3)
-def AttentionHeadV6(B, S, q, k, v):
+AttnBlockV6 = _on_bits("AttnBlock", 6, ["D", "NVIS", "FIRST", "BN"], _block_type, _fa2_block, AttnBlockV3)
+
+
+def _fa2_head(B, S, q, k, v):
     """`AttentionHead_v3`'s body on bits over `AttnBlock_v6`, epilogue `Fa2InvSum_v2`."""
     return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV6, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN), BA.Fa2InvSum,
                  q, k, v)
 
 
-@_on_bits("Attention", 6, ["T", "NH", "KVH", "D", "BN"], _attention_type, AttentionV3)
-def AttentionV6(B, S, q, kc, vc):
+AttentionHeadV6 = _on_bits("AttentionHead", 6, ["T", "D", "BN"], _head_type, _fa2_head, AttentionHeadV3)
+
+
+def _fa2_attention(B, S, q, kc, vc):
     """`Attention_v3`'s body on bits over `AttentionHead_v6`."""
     return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV6, T=S.T, D=S.D, BN=S.BN), q, kc, vc)
 
 
-@_on_bits("AttnBlock", 7, ["D", "NVIS", "FIRST", "BN", "DOT"], _block_type, AttnBlockV2)
-def AttnBlockV7(B, S, q, k, v, m_prev, l_prev, o_prev):
+AttentionV6 = _on_bits("Attention", 6, ["T", "NH", "KVH", "D", "BN"], _attention_type, _fa2_attention, AttentionV3)
+
+
+def _dot_block(B, S, q, k, v, m_prev, l_prev, o_prev):
     """`AttnBlock_v2`'s body on bits: `AttnBlock_v6` with the Boolean k16 step `DOT` a static (FA2 on mma.sync, FA3 on wgmma)."""
     return _block(B, "AttnBlock_v7", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev)
 
 
-@_on_bits("AttentionHead", 7, ["T", "D", "BN", "DOT", "INV"], _head_type, AttentionHeadV2)
-def AttentionHeadV7(B, S, q, k, v):
+AttnBlockV7 = _on_bits("AttnBlock", 7, ["D", "NVIS", "FIRST", "BN", "DOT"], _block_type, _dot_block, AttnBlockV2)
+
+
+def _dot_head(B, S, q, k, v):
     """`AttentionHead_v2`'s body on bits over `AttnBlock_v7{..., DOT}`, epilogue `INV` (`Fa2InvSum_v2` or `Fa3InvSum_v2`)."""
     return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV7, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT),
                  S.INV, q, k, v)
 
 
-@_on_bits("Attention", 7, ["T", "NH", "KVH", "D", "BN", "DOT", "INV"], _attention_type, AttentionV2)
-def AttentionV7(B, S, q, kc, vc):
+AttentionHeadV7 = _on_bits("AttentionHead", 7, ["T", "D", "BN", "DOT", "INV"], _head_type, _dot_head, AttentionHeadV2)
+
+
+def _dot_attention(B, S, q, kc, vc):
     """`Attention_v2`'s body on bits over `AttentionHead_v7`."""
     return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV7, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV), q, kc, vc)
 
 
-@_on_bits("AttnBlock", 8, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"], _block_type, AttnBlockV5)
-def AttnBlockV8(B, S, q, k, v, m_prev, l_prev, o_prev):
+AttentionV7 = _on_bits("Attention", 7, ["T", "NH", "KVH", "D", "BN", "DOT", "INV"], _attention_type, _dot_attention, AttentionV2)
+
+
+def _checked_block(B, S, q, k, v, m_prev, l_prev, o_prev):
     """`AttnBlock_v5`'s body on bits: `AttnBlock_v7` with FA2's per-iteration `Check_inf` as the static `CHECK`."""
     return _block(B, "AttnBlock_v8", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev, check=S.CHECK)
 
 
-@_on_bits("AttentionHead", 8, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _head_type, AttentionHeadV5)
-def AttentionHeadV8(B, S, q, k, v):
+AttnBlockV8 = _on_bits("AttnBlock", 8, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"], _block_type, _checked_block, AttnBlockV5)
+
+
+def _checked_head(B, S, q, k, v):
     """`AttentionHead_v5`'s body on bits over `AttnBlock_v8`: block b runs with `CHECK = b >= MASKED_FROM`."""
     nb = (S.T + S.BN - 1) // S.BN
     if not 0 <= S.MASKED_FROM <= nb - 1:
@@ -220,11 +232,18 @@ def AttentionHeadV8(B, S, q, k, v):
                                                                 CHECK=b >= S.MASKED_FROM), S.INV, q, k, v)
 
 
-@_on_bits("Attention", 8, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _attention_type, AttentionV5)
-def AttentionV8(B, S, q, kc, vc):
+AttentionHeadV8 = _on_bits("AttentionHead", 8, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _head_type, _checked_head,
+                           AttentionHeadV5)
+
+
+def _checked_attention(B, S, q, kc, vc):
     """`Attention_v5`'s body on bits over `AttentionHead_v8`; every head of the row shares its tile, so one MASKED_FROM."""
     return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV8, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV,
                                                      MASKED_FROM=S.MASKED_FROM), q, kc, vc)
+
+
+AttentionV8 = _on_bits("Attention", 8, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _attention_type,
+                       _checked_attention, AttentionV5)
 
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV
