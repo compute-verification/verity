@@ -1,7 +1,7 @@
 """`boolean_attention`: the v6 chain (`AttnBlock_v6` / `AttentionHead_v6` / `Attention_v6`), the v7 chain on both of its
-profiles (FA2 on mma.sync, FA3 on wgmma) and `Fa3InvSum_v2` are Boolean, agree with their word views (the v3 and v2 chains
-and `Fa3InvSum_v1`) on random words and on words that reach every guard (a zero query, signed zeros, subnormals, infinities,
-NaNs, scores that overflow), and are pinned by gate count and program digest."""
+profiles (FA2 on mma.sync, FA3 on wgmma), the v8 chain at the served FA2 binding and `Fa3InvSum_v2` are Boolean, agree with
+their word views (the v3, v2 and v5 chains and `Fa3InvSum_v1`) on random words and on words that reach every guard (a zero
+query, signed zeros, subnormals, infinities, NaNs, scores that overflow), and are pinned by gate count and program digest."""
 from __future__ import annotations
 
 import numpy as np
@@ -36,16 +36,27 @@ PINS = {
         (659504, 1288432, 56302, "4e58aef2275351298fa711950888b1d07fc50d72f76c5e62d6a51b33e45ddd0a"),
     "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
         (2638016, 5153728, 225208, "7e98b2335269aeb4fe3ebc80427d7995aa116540a7014abea5517a64e54e7b8e"),
+    "AttnBlock_v8{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
+        (428229, 839552, 36508, "ca47a0cd1099ca8c223a0e85a00ad393616e22532d00e9f34034ae6d389a99b0"),
+    "AttentionHead_v8{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}":
+        (1145961, 2245710, 97955, "50f5098203a04e2196cbba1fcd9e66d0e7b7c7d958857d64d894f90f16469ecd"),
+    "Attention_v8{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0}":
+        (2638016, 5153728, 225236, "eb4a392c51e80c3cc829c1bc7e3a03e68ceeadef2d7087f3a1ce6c855463fcac"),
 }
 
 FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3
+#: the served FA2 row's `Attention_v5` binding (`kernels.rows`): the wgmma step and FA2's inverse sum
+FA2_CHECK = {"DOT": FA3["DOT"], "INV": FA2["INV"]}
 PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnBlockV6, D=16, NVIS=16, FIRST=False, BN=16),
           bind(BAt.AttentionHeadV6, T=20, D=16, BN=16), bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16), bind(BAt.Fa3InvSum),
           bind(BAt.AttnBlockV7, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"]), bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA2),
-          bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA3), bind(BAt.AttentionV7, T=20, NH=4, KVH=2, D=16, BN=16, **FA3)]
+          bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA3), bind(BAt.AttentionV7, T=20, NH=4, KVH=2, D=16, BN=16, **FA3),
+          bind(BAt.AttnBlockV8, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
+          bind(BAt.AttentionHeadV8, T=40, D=16, BN=16, MASKED_FROM=1, **FA2_CHECK),
+          bind(BAt.AttentionV8, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=0, **FA2_CHECK)]
 
 #: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
-#: profiles
+#: profiles; v8 with an unguarded block, a head whose last block is unguarded, and GQA
 AGREEMENT = PINNED[:2] + [bind(BAt.AttnBlockV6, D=16, NVIS=9, FIRST=False, BN=32), bind(BAt.AttentionHeadV6, T=5, D=16, BN=16),
                           bind(BAt.AttentionHeadV6, T=16, D=16, BN=16), bind(BAt.AttentionHeadV6, T=40, D=16, BN=32),
                           bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16)] + PINNED[5:] + [
@@ -111,9 +122,29 @@ def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
 def test_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
-    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 3 if target.defn.version == 6 else 2, lifted)
+    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, {6: 3, 7: 2, 8: 5}[target.defn.version], lifted)
     inputs = _inputs(word, 96, sum(map(ord, target.id)))
     got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64)
     ref = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64)
     bad = np.flatnonzero((got != ref).reshape(len(got), -1).any(axis=1))
     assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} instances differ from {word.id}, first {bad[:5]}"
+
+
+def test_an_unguarded_block_rescales_by_the_running_max_as_it_is() -> None:
+    """A block entered with the running max at -inf and scores of -inf only (an infinite query against negative keys) keeps it at
+    -inf: `AttnBlock_v8{CHECK=False}` rescales by exp2(-inf - -inf), a NaN, as `AttnBlock_v5{CHECK=False}` does, and with `CHECK`
+    by exp2(-inf - 0) = 0, so the static is read."""
+    blocks = [bind(BAt.AttnBlockV8, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=c) for c in (False, True)]
+    inputs = _inputs(TR.word_of(blocks[0]), 12, 85)
+    q, k, m_prev = inputs[0], inputs[1], inputs[3]
+    q[:6] = 0
+    q[:6, 0] = 0x7F80
+    k[:6] = 0
+    k[:6, :, 0] = 0xBF80
+    m_prev[:6] = 0xFF800000
+    outs = []
+    for target in blocks:
+        got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64)
+        assert np.array_equal(got, np.asarray(E.evaluate_batch(TR.word_of(target), *inputs)).astype(np.uint64)), target.id
+        outs.append(got.reshape(len(got), -1))
+    assert (outs[0][:6] != outs[1][:6]).any(axis=1).all()
