@@ -95,9 +95,10 @@ simp with that.
   hypothesis, or move a verifier check into an assumption. That list is also what the statement reviewer checks.
 - **Pin what you cite.** When a ledger row, a table or a PR description says a theorem is proved, add its name under
   `pins` and run `python tools/lean/audit.py --update PKG`. Commit the record with the proof.
-- **Watch upstream for what you assume.** A new named assumption, or a lemma you prove by hand that ArkLib, VCVio or
-  CompPoly could prove, gets an entry under `upstream.watch` in the package's `lean-audit.json`. The entry lists the
-  constants its statement is about. The audit fails when the pinned dependency proves an unacknowledged theorem about
+- **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
+  (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
+  The entry lists the dependency's constants that the statement is about. An assumption stated over the package's own
+  definitions gets none: no upstream theorem can mention them, so the entry could never fire. The audit fails when the pinned dependency proves an unacknowledged theorem about
   them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
