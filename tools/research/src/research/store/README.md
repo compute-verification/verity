@@ -392,7 +392,9 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 - A registry entry is *tracked* (git holds it; a tracked file is at most 256 KiB) or *fetched* (its path is gitignored).
 - `fetchset.py` fetches any set of ids, `--jobs` at a time: local objects, else the private remote when reachable, else the public
-  export (`HttpRemote`: `GET <url>/manifests/<hex>.json`, `<url>/objects/sha256/<hex>`). A manifest must hash to its id and a blob
+  export (`HttpRemote`: `GET <url>/manifests/<hex>.json`, `<url>/objects/sha256/<hex>`; `<url>` is `fetchset.PUBLIC_URL`, the
+  site's `/store`, which redirects to the `verity-public` bucket, unless `--public-url` or `$RESEARCH_PUBLIC_URL` names another,
+  and an empty one means none). A manifest must hash to its id and a blob
   to its sha256 and size, or the next source is tried. The registry is one caller; a snapshot's members can be another.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
@@ -534,8 +536,8 @@ the launcher mints an action-scoped temporary key
 (§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
-attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of every file in the run dir (stdout.log, stderr.log,
-launcher.log, job.json, status.json, outputs; markers excluded), pushes and verifies it (`preserved.check`, head; retried), deletes
+attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims
+(listed in `meta.trimmed`, no bytes; .agents/skills/writing-runs/SKILL.md), pushes and verifies it (`preserved.check`, head; retried), deletes
 the key, and writes `<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256).
 The marker is written only when every file now in the run dir is in the record by content; from the record on, the runner's own
 output goes to `<root>/requests/<run id>/custody/publish.log`, not launcher.log, so nothing it prints can make the run dir differ

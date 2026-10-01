@@ -18,6 +18,10 @@ units run over `σ`'s stratum.
 * `flock_e2e_drawn_exec`, `flock_e2e_count_exec`: `flock_e2e_drawn` and `flock_e2e_count` (`E2E.lean`) at that law, the
   count curve bounded by `Law.stratified`'s `miss`.
 
+The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`). The live draw,
+`Flock.Draw.drawOS`, extends a stream that runs out and reruns, rather than drawing every unit; `ExecDrawOS.lean` proves the
+same bounds for it.
+
 `stratumK` is the count law's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
 -/
 
@@ -36,8 +40,9 @@ def ExecStrata (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.D
   ∀ s, (S s).k = k s ∧ (S s).size = (stratum σ s).card ∧
     (range (S s).size).image (S s).unit = (stratum σ s).map Fin.valEmbedding
 
-/-- The verifier's executable stratified draw as a law: stratum `s`'s stream is `L s` uniform bytes, and a draw whose
-stream runs out draws every unit. -/
+/-- The verifier's executable stratified draw as a law: stratum `s`'s stream is `L s` uniform bytes (A3), and a draw
+whose stream runs out draws every unit. The live draw extends such a stream and reruns instead: `execOS`
+(`ExecDrawOS.lean`). -/
 def execStratified (S : Fin m → Flock.Draw.Stratum) (L : Fin m → ℕ) : Law n where
   Ω := (s : Fin m) → Fin (L s) → Fin 256
   draw ω := match Flock.Draw.stratified (Array.ofFn S) (Array.ofFn fun s => streamOf (ω s)) with
@@ -95,7 +100,10 @@ theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array By
   rw [← hD', DrawExec.mem_qsort]
   exact hmem j hj
 
-/-- **The executable stratified draw escapes no more often than the model's.** -/
+/-- **The executable stratified draw escapes no more often than the model's.** Its probability space is independent
+uniform streams: that the verifier's bytes are uniform is A3 (`Assumptions.UniformRandomBytes`,
+`uniform/io-getrandombytes`), which `drawOS_stratified_escape_le` (`ExecDrawOS.lean`) takes for the live draw, reruns
+included. -/
 theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     prCoin (fun f : (s : Fin m) → Fin (L s) → Fin 256 =>
@@ -207,21 +215,18 @@ theorem flock_e2e_drawn_exec
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N))
-    (hL1 : P.RowsL1 PB proj ones)
+    (hL1 : P.RowsL1 PB proj ones) (hConst : P.ConstCols plan tab dp.place ones)
+    (zeros : Finset (Fin C.N)) (hZero : P.ZeroCols plan tab dp.place zeros)
     {Dh : Type} {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont (Law.execStratified St Ls) Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb (Law.execStratified St Ls) c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t')))
     (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
-    (hOne : ∀ g ∈ ones, P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw g = true) :
-    prob (fun o => execAccept o ∧ ¬ Disjoint (PB.wrong (proj (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
+    prob (fun o => execAccept o ∧
+        ¬ Disjoint (PB.wrong (proj (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)))) o.2)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := Law.execStratified St Ls) plan tab vb k Rw M ρ t' :=
-  P.flock_e2e_drawn H E plan tab hExec dp PB proj ones hL1 vb hk hRw hM hρ hr ht hCR σ hOne
+  P.flock_e2e_drawn H E plan tab hExec dp PB proj ones hL1 hConst zeros hZero vb hk hRw hM hρ hr ht σ hCR
 
 /-- **The e2e count curve at the executable's law**: `flock_e2e_count` with `L := Law.execStratified St Ls`, its count
 curve bounded by `Law.stratified`'s `miss` for the strata the executable's describe (`ExecStrata`). -/
@@ -230,22 +235,20 @@ theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks :
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N))
-    (hL1 : P.RowsL1 PB proj ones)
+    (hL1 : P.RowsL1 PB proj ones) (hConst : P.ConstCols plan tab dp.place ones)
+    (zeros : Finset (Fin C.N)) (hZero : P.ZeroCols plan tab dp.place zeros)
     {Dh : Type} {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont (Law.execStratified St Ls) Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb (Law.execStratified St Ls) c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t')))
     (K : ℕ) (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
-    (hOne : ∀ g ∈ ones, P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw g = true) :
-    prob (fun o => execAccept o ∧ K ≤ (PB.wrong (proj (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
+    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
+    prob (fun o => execAccept o ∧
+        K ≤ (PB.wrong (proj (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)))).card)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       (Law.stratified σs ks hks).miss K + ksAvgBE H E plan k (reg σ) (cont σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab vb k Rw M ρ t' := by
-  refine (P.flock_e2e_count H E plan tab hExec dp PB proj ones hL1 vb hk hRw hM hρ hr ht hCR K σ hOne).trans ?_
+  refine (P.flock_e2e_count H E plan tab hExec dp PB proj ones hL1 hConst zeros hZero vb hk hRw hM hρ hr ht K
+    σ hCR).trans ?_
   gcongr
   exact Law.execStratified_miss_le σs ks hks St hS Ls K
 
