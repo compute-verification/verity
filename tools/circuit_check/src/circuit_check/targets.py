@@ -217,16 +217,24 @@ def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64; the steps, the cast,
     attention's softmax operations (`verity.ml.boolean.attention`) and the element-wise operations
     (`verity.ml.boolean.elementwise`) are static-free. The served norms on bits (`boolean_norms`) at N = 16 with their MUFU
-    statics at the word ids, the fused norm's lanes at two elements per thread, and the word Definitions of its constant steps."""
+    statics at the word ids, the fused norm's lanes at two elements per thread, and the word Definitions of its constant steps;
+    `registry.dense`'s norm chain on bits (`boolean_dense_norm`) at N = 16, its constant steps at Gemma-2's, the rsqrt at its
+    word id, and the mean at N = 1030 (two chunks, one element per thread)."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
+    from verity_vllm.program.registry import boolean_dense_norm as DN
     from verity_vllm.program.registry import boolean_norms as BN
+    from verity_vllm.program.registry import prims as P
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
             bind(BN.RMSNormLanesCuda, N=40, BLOCK=32), bind(BN.RMSNormVarEpsCudaWord, N=16, EPS=1e-5),
-            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5)]
+            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5),
+            *(bind(f, N=16) for f in (DN.SquareBf16, DN.SquareF32, DN.AddWidenedBf16, DN.MeanTriton, DN.ScaleRowBf16,
+                                      DN.ScaleRowF32, DN.MulVecF32, DN.NarrowF32ToBf16)),
+            bind(DN.MeanTriton, N=1030), bind(DN.AddScalarF32, N=1, C=1e-6), bind(DN.AddScalarBf16, N=16, C=1.0),
+            bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox)]
 
 
 def _kernel_roots() -> list[Any]:

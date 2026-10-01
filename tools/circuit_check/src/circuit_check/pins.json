@@ -1,7 +1,22 @@
 {
  "definitions": {
+  "AddScalarBf16_v2{N=16,C=1.0}": {
+   "and": 9936
+  },
+  "AddScalarF32_v2{N=1,C=1e-06}": {
+   "and": 742
+  },
+  "AddWidenedBf16El_v1": {
+   "and": 666
+  },
+  "AddWidenedBf16_v2{N=16}": {
+   "and": 10656
+  },
   "AmpereBF16TcDot16_v3": {
    "and": 8260
+  },
+  "Bf16AddConstF32_v1{C=1.0}": {
+   "and": 621
   },
   "Bf16AddF2fp_v2": {
    "and": 717
@@ -15,8 +30,14 @@
   "F2fpBf16_v2": {
    "and": 66
   },
+  "F32AddConst_v1{C=1e-06}": {
+   "and": 742
+  },
   "F32AddFtz_v3": {
    "and": 888
+  },
+  "F32AddZero_v1": {
+   "and": 399
   },
   "F32Add_v3": {
    "and": 812
@@ -59,6 +80,51 @@
   },
   "I32Add_v2": {
    "and": 31
+  },
+  "MeanCombineTriton_v1{N=1030}": {
+   "and": 5897
+  },
+  "MeanCombineTriton_v1{N=16}": {
+   "and": 1896
+  },
+  "MeanDivTriton_v1{N=1030}": {
+   "and": 1452
+  },
+  "MeanDivTriton_v1{N=16}": {
+   "and": 699
+  },
+  "MeanThreadTriton_v1{K=1}": {
+   "and": 2793
+  },
+  "MeanThreadTriton_v1{K=4}": {
+   "and": 4032
+  },
+  "MeanThreadTriton_v1{K=8}": {
+   "and": 5684
+  },
+  "MeanThreadsTriton_v1{N=16}": {
+   "and": 16128
+  },
+  "MeanTriton_v2{N=16}": {
+   "and": 25248
+  },
+  "MeanWarpTriton_v1{L=32}": {
+   "and": 25172
+  },
+  "MeanWarpTriton_v1{L=4}": {
+   "and": 7224
+  },
+  "MeanWarpTriton_v1{L=6}": {
+   "and": 9646
+  },
+  "MeanWarpsTriton_v1{N=16}": {
+   "and": 7224
+  },
+  "MulVecF32_v2{N=16}": {
+   "and": 38880
+  },
+  "NarrowF32ToBf16_v2{N=16}": {
+   "and": 1056
   },
   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
    "and": 1673
@@ -122,6 +188,36 @@
   },
   "RMSNormWarpsTriton_v1{N=16}": {
    "and": 812
+  },
+  "ScaleRowBf16El_v1": {
+   "and": 1136
+  },
+  "ScaleRowBf16Scale_v1": {
+   "and": 50
+  },
+  "ScaleRowBf16_v2{N=16}": {
+   "and": 18226
+  },
+  "ScaleRowF32El_v1": {
+   "and": 2396
+  },
+  "ScaleRowF32Scale_v1": {
+   "and": 34
+  },
+  "ScaleRowF32_v2{N=16}": {
+   "and": 38370
+  },
+  "SquareBf16El_v1": {
+   "and": 628
+  },
+  "SquareBf16_v2{N=16}": {
+   "and": 10048
+  },
+  "SquareF32El_v1": {
+   "and": 1978
+  },
+  "SquareF32_v2{N=16}": {
+   "and": 31648
   }
  },
  "pieces": {
