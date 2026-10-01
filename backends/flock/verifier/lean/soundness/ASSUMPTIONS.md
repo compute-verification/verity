@@ -350,7 +350,11 @@ and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
 `flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
 `flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
-The headline, `Prog.flock_headline`, is not pinned yet: its record waits on its statement review.
+So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
+as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
+`tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
+`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Law.execOS_miss_le`, `Prog.flock_e2e_count` and
+`Prog.flock_e2e_drawn`, and the certificate's `IsRowsUnit.computes_of_cert`, `RowsCert.sound` and `GateRows.rows_sound`.
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
