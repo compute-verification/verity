@@ -132,17 +132,17 @@
     "ack": ["AdditiveNTT.novelPolynomialBasis_is_basisVectors"]
    },
    "collision-resistance": {
-    "about": "A2 (SHA512ExpectedTimeCR) and the explicit collision finders",
+    "about": "SHA512CRStrict (cr/sha-512) and SHA512CRExpected (ecr/sha-512, A2), and the explicit collision finders",
     "mentions": ["CollisionResistance.crAdvantage"],
     "ack": []
    },
    "keyed-cr": {
-    "about": "A2, keyed form",
+    "about": "SHA512CRStrict and SHA512CRExpected, keyed form",
     "mentions": ["CollisionResistance.keyedCRAdvantage"],
     "ack": []
    },
    "rom-cr": {
-    "about": "A2's random-oracle shadow (an expected-query birthday bound)",
+    "about": "the random-oracle shadow of SHA512CRStrict (the birthday bound) and SHA512CRExpected (an expected-query birthday bound)",
     "mentions": ["CollisionResistance.romCRAdvantage"],
     "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
    },

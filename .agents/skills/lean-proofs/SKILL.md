@@ -49,7 +49,7 @@ simp with that.
 ## Assumptions and pins
 
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
-  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`), and stated in the ledger
+  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`), and stated in the ledger
   (`ASSUMPTIONS.md`). Never an `axiom`, never a `sorry` on `main`, never `native_decide`, never an option that skips
   the kernel. A statement you can't prove yet is a hypothesis, or a theorem in a lane branch, not on `main`.
 - **Freeze the statement, then prove it.** In your lane branch, state the theorem on a `sorry` stub, check it against the

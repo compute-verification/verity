@@ -10,32 +10,46 @@ named hypothesis, and `assumptions/e2e-checklist.md` lists them with their owner
 doesn't say yet: that the acceptance is the executable verifier's (`hExec`), and that the units' rows are the ones the
 verifier derives (`dp`, `hL1`).
 
-## Named assumptions (taken without proof)
+## Soundness's assumptions (taken without proof)
 
-There are three, each a `Prop` taken as a hypothesis:
-- A2 (`Assumptions.SHA512ExpectedTimeCR`), for the link finders of the prover bounded (`LinkCR`), which the end-to-end
-  theorems take as `hCR`;
-- A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems take as `ht`;
-- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
-- A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
-- `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
-  (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
-`README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
+Soundness rests on three, each a `Prop` in `FlockSoundness/Assumptions.lean` taken as a hypothesis: SHA-512's collision
+resistance in two forms, and the verifier's randomness (Daniel, Sep 30). The development declares no `axiom`. So a
 mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
-**A2. Expected-time collision resistance of SHA-512** (in CDGSY24's expected-time sense, ePrint 2024/1434), for the
-audit's value layer (Daniel, Sep 27; constant corrected the same day).
+| `Prop` | Claim id | Bound | Taken for |
+|---|---|---|---|
+| `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, and `δ_tree` |
+| `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
+| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`) |
+
+Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
+evaluations, since collisions exist, so neither is stated for all finders: each theorem takes it for the finders it builds
+from the prover it bounds. Neither is asked of every prover at once, which SHA-512 can't meet: a prover that hard-codes two
+openings of one commit string has finders that find a collision (red-team review of #511, C1). A finder is a game with a
+fixed strategy, whose outcomes record the pair it outputs and the SHA-512 evaluations it made, `t` for each run of the
+prover. Its success is a collision because Merkle binding is proved (`Merkle.opening_binding`): two openings that verify
+under one cap and differ give two distinct inputs with one SHA-512 output.
+
+**`SHA512CRStrict`. Strict-time collision resistance of SHA-512** (`cr/sha-512`).
+
+- **Statement.** A collision finder that makes at most `q` SHA-512 evaluations on every outcome succeeds with probability
+  at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
+- **Where it is used.** The compiled term's rewinding finders (`Adv_{r,ℓ}`: two continuations after a rep's level-`ℓ`
+  cap) and its self-clash finder (one run that opens a position two ways), the knowledge term's level-0 finder (`Adv₀`:
+  two runs after the level-0 cap), and the serving roots' Merkle binding (`δ_tree`: two continuations after the
+  registration). A rewinding finder makes `2t` evaluations plus two verifications, a one-run finder `t` plus one.
+  `FlockSoundness/StrictCR.lean` restates each term at those finders (What is restated over the two forms, below).
+
+**`SHA512CRExpected`. Expected-time collision resistance of SHA-512** (A2, `ecr/sha-512`; in CDGSY24's expected-time
+sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant corrected the same day).
 
 - **Statement.** A collision finder whose expected number of SHA-512 evaluations is `T` succeeds with probability at
-  most `T/2^256`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
-  record the pair output and the evaluations made, `t` for each run of the prover.
-- **Per finder, and per prover.** Some finder outputs a collision after no evaluations, since collisions exist. So the
-  `Prop` is not stated for all finders: the link theorem takes it for the finders it builds from the prover it bounds
-  (`LinkCR … R τ …`). It is not asked of every prover at once, which SHA-512 can't meet: a prover that hard-codes two
-  openings of one commit string has finders that find a collision. `flock_batched_linkSoundE` gives the bound at each
-  prover whose finders satisfy A2, and `⊤` at any other (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s
-  finders alone (red-team review of #511, C1).
-- **Why it is plausible, and where it is used:** `assumptions/a2-sha512-expected-time-cr.md`.
+  most `T/2^256`. The fixed-budget form doesn't extend to finders that stop adaptively, and the link finders do: they rerun
+  the prover until a rerun accepts.
+- **Where it is used.** The link theorem takes it for the finders it builds from the prover it bounds (`LinkCR … R τ …`).
+  `flock_batched_linkSoundE` gives the bound at each prover whose finders satisfy it, and `⊤` at any other
+  (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s finders alone.
+- **Why it is plausible:** `assumptions/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The verifier's operating-system randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
@@ -59,6 +73,17 @@ unit draw.
   as their probability space, the same assumption.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
+## Other named assumptions
+
+Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
+prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSoundness/Assumptions.lean` and
+`docs/zk-proof-public.md`.
+- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
+- A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
+- `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
+  (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
+`README.md` §1.5 names one more, L1, about the lowering, stated below.
+
 **A4. `verity.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
 (`prf/sha-256`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
 (`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`).
@@ -69,7 +94,7 @@ unit draw.
   `η`. `Randomness.lean` is the Lean spec of `verity.randomness` v1: it reproduces
   `packages/verity/tests/randomness/vectors.json`, and Python matches its vectors
   (`backends/flock/tests/test_randomness_spec.py`).
-- **Per test, as A2 is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
+- **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
   misses `B`), and `η` enters its bound.
 - **What it assumes of SHA-256.** Its compression function `f` is a pseudorandom function in two ways.
@@ -117,7 +142,8 @@ not cryptographic, and to be proved: verified-lowering design, phase 2i).
   slots read. `HmRows.Computes` instantiates it at the drawn units' rows, with SHA-512 and the executable's key.
 - **What it gives.** With the layout's facts (`Binding.Layout`, `Binding.HmRows`), the registration fact: a satisfying
   witness's rows have the registered leaves. Then `ValueBinding` (`HmRows.binding`) and `registered_weights` hold with
-  A2 as the only cryptographic assumption, and `collide` an explicit SHA-512 collision (`ExplicitLeaf.hm96`).
+  `SHA512CRExpected` as the only cryptographic assumption, and `collide` an explicit SHA-512 collision
+  (`ExplicitLeaf.hm96`).
 - **At the registered leaves.** The `_hm96` bounds are bounds at the leaves the registration commits to
   (`Layout.regLeaf`). An audit bound read from registered roots also needs the roots' Merkle binding, `δ_tree` under
   SHA-512 collision resistance (`cr/sha-512`; `DESIGN.md` §1), which those bounds leave out (red-team review of #513, C2).
@@ -158,7 +184,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | Hypothesis | Term | Meaning | To be discharged by |
 |---|---|---|---|
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`README.md` §1.3), after Jensen over the prover's states |
-| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (A2, `ValueBinding`) |
+| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (`SHA512CRExpected`, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
 | `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse transcript's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
@@ -172,15 +198,15 @@ before the session's first coin, not bounds state by state.
 
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; for the serving rows it is `HmRows.binding`, from `HmRowComputes` and the layout's facts); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
+| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under `SHA512CRExpected` for each commit string's finder and `ValueBinding` (named; for the serving rows it is `HmRows.binding`, from `HmRowComputes` and the layout's facts); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
 | `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3) and L1. `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
 
 ## Cryptographic assumptions and coins
 
-- **Collision resistance of SHA-512** (`cr/sha-512`) for the Merkle openings (spec §14, with SHA-512 leaves and nodes).
-  It is the only hash assumption of the compiled theorem: plain collision resistance, for every classical prover.
-  The audit's value layer adds A2 (above).
-  DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's width.
+- **SHA-512 for the Merkle openings** (spec §14, with SHA-512 leaves and nodes), under the two forms above: the
+  compiled theorem needs only `SHA512CRStrict`, for every classical prover, and the audit's value layer adds
+  `SHA512CRExpected`. DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's
+  width.
 - **No assumption for the rounds.** The verifier keeps each round's bytes, then draws that round's coins, and the
   replay compares bytes. This replaces the SHA-256 round digests. Keeping the bytes costs about the proof size, 0.7 MB
   per rep.
@@ -199,7 +225,7 @@ before the session's first coin, not bounds state by state.
   claimed.
 - **Table 1** cites Flock's soundness under the `live-verifier` model and the collision resistance of each row's hashes
   (`cr/sha-512` in the C-Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
-  would add A2 as `ecr/sha-512`, a `verity.claims` id that no row cites yet.
+  would add `SHA512CRExpected` as `ecr/sha-512`, a `verity.claims` id that no row cites yet.
 
 ## What is pinned
 
@@ -209,8 +235,8 @@ pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec`
 `Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
 and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
-`linkBoundCR`: finite exactly at the provers whose link finders satisfy A2. The end-to-end skeleton's `flock_e2e_count` and
-`flock_e2e_drawn` are pinned too; they take A2 for `σ`'s link finders as `hCR`. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
+`linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
+`flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
 
@@ -220,7 +246,7 @@ Whether a dependency proves what these theorems assume, or what they prove by ha
 watch list is the `upstream` section of `lean-audit.json`, one entry per statement:
 
 - `A1-johnson-mca` and `udr-mca`: A1 (proved here from DKT26) and its unique-decoding fallback;
-- `collision-resistance`, `keyed-cr` and `rom-cr`: A2, in three forms;
+- `collision-resistance`, `keyed-cr` and `rom-cr`: SHA-512's collision resistance, in three forms;
 - `list-size` and `list-size-code`: the Johnson list bound (`ListSize.closeMsgs_card_le`);
 - `tensor-fold`: the fold union in `LigeritoLevels`;
 - `novel-basis`: the novel basis (`Arith.Correct.xhat_poly`, `L ≤ 40`).

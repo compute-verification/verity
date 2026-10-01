@@ -11,18 +11,21 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-There are four for soundness, one circuit fact, and two for zero knowledge. Assumption 2 is a hypothesis about one
-explicit finder, for the audit's link term. Assumption 3 is a hypothesis about the byte source the verifier draws its units
-from. Assumption 4 is a hypothesis about one test of `verity.randomness`'s keyed streams, for the PoUW window draw, and
-Assumption 5 one about the window's secret. `HmRowComputes` is not cryptographic: it says the circuit's row-hashing slots
-compute SHA-512, a fact about the circuit that is still to prove (phase 2i), named here so that the value binding's theorems
-take it as a hypothesis. Zero knowledge's are hm96 leaf hiding (T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain
-(`PadNonvanishing`).
-Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved
-(`mcaError_le_bchks25`, from DKT26). Merkle binding is proved too (VCVio's binding theorem,
-`Merkle`), and SHA-256's collision resistance enters the compiled theorem as an explicit
-probability term (the probability that an explicit, efficient reduction finds a collision), not
-as a hypothesis.
+Soundness rests on three: SHA-512's collision resistance in two forms, each a hypothesis about one explicit finder, and the
+verifier's randomness. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of evaluations: the
+compiled and knowledge terms' collision finders and `δ_tree`'s. `SHA512CRExpected` (`ecr/sha-512`, Assumption 2) bounds
+a finder by its expected number: the link term's. Assumption 3 is a hypothesis about the byte source the verifier draws its
+units from.
+
+The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
+keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
+cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
+(phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
+(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`).
+
+Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
+Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
+is what lets each finder's success be read as a collision of SHA-512.
 -/
 
 namespace FlockSoundness.Assumptions
@@ -30,8 +33,28 @@ namespace FlockSoundness.Assumptions
 open Game
 open scoped ENNReal
 
-/-- **Assumption 2: expected-time collision resistance of SHA-512**, for the audit's value layer, in
-the expected-time sense of Chiesa, Dall'Agnol, Guan, Spooner and Yogev (ePrint 2024/1434): a finder
+/-- **`SHA512CRStrict` (`cr/sha-512`): strict-time collision resistance of SHA-512**, for the compiled and knowledge
+terms' collision finders and the serving roots' Merkle binding (`δ_tree`): a finder that makes at most `q` SHA-512
+evaluations on every outcome outputs a collision with probability at most `q² / 2^513`.
+
+It is the generic birthday bound for a hash with `N = 2^512` outputs: `q` evaluations, a budget fixed in advance, find a
+collision with probability at most `q(q - 1)/(2N) ≤ q²/2^513` (`DESIGN.md` §1). A finder that stops adaptively is outside
+it: its cost is a worst case here, and its expected cost is `SHA512CRExpected`'s.
+
+A finder is a game `g` played by a fixed strategy `s`, so a randomized algorithm with finitely many coin outcomes. On
+outcome `b` it outputs `out b` after `cost b` evaluations of `H` (SHA-512), counting `t` for each run of the prover it
+plays; `q` bounds `cost` on every outcome. The rewinding finders run the prover twice after one commitment and verify the
+two openings, so `q` is `2t` plus two verifications; a finder that reads one run is `t` plus one.
+
+It is a predicate on one finder, not a statement about all of them: some finder outputs a collision of `H` after no
+evaluations, since collisions exist. The theorems take it for the finders they build from the prover. -/
+def SHA512CRStrict {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Strategy g)
+    (out : β → Option (List UInt8 × List UInt8)) (cost : β → ℝ) (q : ℝ) : Prop :=
+  (∀ b, cost b ≤ q) →
+    (prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ H x = H y) g s).toReal ≤ q ^ 2 / 2 ^ (513 : ℝ)
+
+/-- **`SHA512CRExpected` (`ecr/sha-512`, Assumption 2): expected-time collision resistance of SHA-512**, for the audit's
+value layer, in the expected-time sense of Chiesa, Dall'Agnol, Guan, Spooner and Yogev (ePrint 2024/1434): a finder
 whose expected number of SHA-512 evaluations is `T` outputs a collision with probability at most
 `T / 2^256`.
 
@@ -48,9 +71,9 @@ many coin outcomes. On outcome `b` it outputs `out b` after `cost b` evaluations
 
 It is a predicate on one finder, not a statement about all of them: some finder outputs a
 collision of `H` after no evaluations, since collisions exist. The link theorem takes it for the
-finder it builds from the prover, as the compiled theorem charges strict-time collision
-resistance to explicit reductions. -/
-def SHA512ExpectedTimeCR {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Strategy g)
+finder it builds from the prover, as the compiled theorem takes `SHA512CRStrict` for its
+explicit reductions. -/
+def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Strategy g)
     (out : β → Option (List UInt8 × List UInt8)) (cost : β → ℝ) : Prop :=
   (prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ H x = H y) g s).toReal ≤
     expect cost g s / 2 ^ (256 : ℝ)
@@ -83,7 +106,7 @@ index `idx i` is `Randomness.stream key (idx i) (L i)`, its first `L i` bytes, t
 probability that independent uniform streams of those lengths do, plus `η`, when the source is uniform and the indices'
 framings (`Randomness.frames`, the bytes each stream hashes after the key) are pairwise distinct.
 
-It is a predicate on one test, as A2 is on one finder. A statement for every test would be refutable, since `2^(8S)`
+It is a predicate on one test, as `SHA512CRExpected` is on one finder. A statement for every test would be refutable, since `2^(8S)`
 sources give at most that many stream tuples. The theorems take it for the test they need, whether the draw computed
 from the streams misses a given set, and `η` enters their bound.
 

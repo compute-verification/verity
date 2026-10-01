@@ -36,7 +36,7 @@ theorem's bound for the prover's strategy after each draw, averaged over the dra
 $$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK)\big],$$
 from `table_knowledge_sound_joint_tight`, with no named assumption. The link term
 stays a named hypothesis (`LinkSound`) until the link theorem, under expected-time collision
-resistance (`Assumptions.SHA512ExpectedTimeCR`, DESIGN.md §3).
+resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
 `flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
