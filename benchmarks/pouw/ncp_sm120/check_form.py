@@ -72,25 +72,26 @@ def _b3_xof(data: bytes, n: int) -> bytes:
     return out[:n]
 
 
-def _stream(xof: str, left: bool, k: int, line: int) -> bytes:
+def _stream(xof: str, left: bool, k: int, line: int, salt: bytes | None = None) -> bytes:
     fam, c = _REF["fam"], _REF["context"]
     name = "E1" if left else "F1"
+    salt = c["salt"] if salt is None else salt
     if xof in ("shake", "shake2"):
-        ctx = _REF["Context"](c["salt"], _REF["Matmul"](c["index"], _REF["Shape"](1, k, 1), c["weight"]), c["root_a"], b"")
+        ctx = _REF["Context"](salt, _REF["Matmul"](c["index"], _REF["Shape"](1, k, 1), c["weight"]), c["root_a"], b"")
         return fam.stream(name, ctx, line)
     frame = _REF["frame"]
     msg = f"verity/pouw/fp8-is/{fam.tag}/{name}".encode() + b"\0" + b"".join(
-        frame(p) for p in (c["salt"], c["index"], c["root_a"], c["weight"], line))
+        frame(p) for p in (salt, c["index"], c["root_a"], c["weight"], line))
     return _b3_xof(msg, 2 * k)
 
 
 def _form(job: tuple) -> tuple:
-    """(xof, left, k, line, codes) -> the formed row (3k codes) and its stream."""
-    xof, left, k, line, codes = job
+    """(xof, left, k, line, codes[, salt]) -> the formed row (3k codes) and its stream (the context's salt by default)."""
+    xof, left, k, line, codes, *salt = job
     fam, fp8_is = _REF["fam"], _REF["fp8_is"]
     pi, inv = fp8_is.ncp_perm(k, fam.P_SEED)
     h = fam.parse(bytes(codes), k, left)
-    stream = _stream(xof, left, k, line)
+    stream = _stream(xof, left, k, line, *salt)
     return bytes(fam.side(h, stream, pi, inv, left)), stream
 
 
