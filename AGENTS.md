@@ -72,7 +72,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
+ stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its draws from the verifier's own randomness, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
@@ -243,7 +243,9 @@ rather than accumulating them.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
-jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
+jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan. Before
+starting work another agent could plausibly be doing, read the notes' `kb/onboarding.md`: check `research notes approaches`
+and claim yours at your first checkpoint (`research notes claim`).
 
 Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
@@ -259,6 +261,9 @@ When writing or launching a job for `research run` (its cwd, its outputs, `--dec
 
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
+
+GPU kernel work (PoUW kernels on sm_120: what's been tried, gates, timing, recording every attempt, vLLM hookup):
+`.agents/skills/kernel-engineering/SKILL.md`.
 
 Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or `research merge`,
 a required review, a file every PR must update), assess its effect on research velocity with
