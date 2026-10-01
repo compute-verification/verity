@@ -3401,7 +3401,8 @@ fn with_tail(text: &str) -> (String, String) {
 /// The session verifier's lincheck three ways (`FC_LINCHECK`: upstream's flat fold, the structured `comb_partial`, both): one
 /// honest session's record and proofs re-verified offline under each, then with rep 0's lincheck `z_partial` or first round
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
-/// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason.
+/// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
+/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -3417,8 +3418,8 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         ps
     };
     let reencoded = alter(&|_| {}) == proofs;
-    let sets = [("honest", proofs.clone()), ("z_partial", alter(&|p| p.lincheck.z_partial[3] += F128::ONE)),
-                ("round", alter(&|p| p.lincheck.rounds[0].0 += F128::ONE))];
+    let sets = [("honest", proofs.clone()), ("honest", proofs.clone()), ("honest", proofs.clone()),
+                ("z_partial", alter(&|p| p.lincheck.z_partial[3] += F128::ONE)), ("round", alter(&|p| p.lincheck.rounds[0].0 += F128::ONE))];
     // the record binds each proof's digest: an altered proof's is written in, so that the verifier, not the record, judges it
     let cfg = config(st, inst);
     let rec_for = |ps: &[Vec<u8>]| {
@@ -3438,9 +3439,8 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
             Ok(mut s) => {
                 let f = s.finish();
                 let reps = f["reps"].as_array().cloned().unwrap_or_default();
-                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"],
-                       "lincheck": reps.iter().map(|r| json!({"mode": r["timing"]["phases"]["lincheck_mode"], "s": r["timing"]["phases"]["lincheck_s"],
-                                                               "comb": r["timing"]["phases"]["lincheck_comb"]})).collect::<Vec<_>>()})
+                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "verify_s": f["verify_s"],
+                       "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
             }
             Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
         }
