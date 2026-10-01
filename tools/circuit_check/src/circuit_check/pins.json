@@ -4,10 +4,10 @@
    "and": 8260
   },
   "DivFullRcp_v2": {
-   "and": 4508
+   "and": 1152
   },
   "DivFullScaleA_v3": {
-   "and": 1427
+   "and": 531
   },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
@@ -49,7 +49,7 @@
    "and": 7872
   },
   "MufuEx2Ftz_v2": {
-   "and": 1354
+   "and": 1073
   },
   "MufuRcpFtz_v2": {
    "and": 902
@@ -58,7 +58,7 @@
    "and": 879
   },
   "RsqrtApprox_v2": {
-   "and": 1668
+   "and": 1134
   }
  },
  "pieces": {
