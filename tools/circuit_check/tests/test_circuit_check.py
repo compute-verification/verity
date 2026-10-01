@@ -64,6 +64,26 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
 
 
+def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
+    """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
+    `boolean_gather.gather_bf16(n)` builds), and an id neither knows still raises."""
+    from verity_vllm.query import word as W
+
+    real = W.specialization
+
+    def unregistered(fam, statics):
+        if fam.startswith("GatherBf16x"):
+            raise KeyError(f"primitive {fam} is not in the registry")
+        return real(fam, statics)
+
+    monkeypatch.setattr(W, "specialization", unregistered)
+    monkeypatch.setattr(TG, "suite", lambda: SUITE)
+    for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
+        assert TG.definition(fid) is SUITE[fid]
+    with pytest.raises(KeyError):
+        TG.definition("NoSuchDefinition_v9")
+
+
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.circuit_suite

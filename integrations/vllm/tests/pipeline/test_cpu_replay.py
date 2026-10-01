@@ -160,6 +160,15 @@ def test_a_bundle_that_is_not_the_records_is_refused(tmp_path, tamper, why):
         CPU.of_record(RB.open_bundle(RB.path(out, 1)), out)
 
 
+def test_the_replay_takes_the_commits_workers_unless_told_otherwise():
+    ctx = {"args": {"replay_workers": None, "programs_root": "x", "program_dir": "y"}}
+    o = CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c")
+    assert CPU.replay_args(o, ctx).replay_workers is None
+    assert CPU.replay_args(o, {"args": {**ctx["args"], "replay_workers": 12}}).replay_workers == 12
+    a = CPU.replay_args(CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c", replay_workers=4), ctx)
+    assert a.replay_workers == 4 and a.program_dir == "/row/build_request" and ctx["args"]["replay_workers"] is None
+
+
 STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5), ("model.layers.0.self_attn.qkv_proj", b"\x07" * 900)],
          1: [("model.embed_tokens", bytes(reversed(range(256))) * 3), ("runner.sampler", b"\x01\x02\x03\x04")],
          2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000)))]}
