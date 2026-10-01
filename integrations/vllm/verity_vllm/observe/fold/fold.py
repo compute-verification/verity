@@ -43,9 +43,9 @@ Per step (see `tree.step_events`, `resolver.resolve_step`):
        recorded by the position it produces (`logits_rows[j].position + 1`), which is how a re-fed generated token
        (preemption → recompute) finds its producing TokenSelect output when the observer emitted no StepLink for it.
 
-Identity: `CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), signature, _replayer(body), register=False)`
+Identity: `CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), signature, replayer(body), register=False)`
 bound to PROFILE=header.profile_id and WORKLOAD=sha256 of the canonical workload JSON, exactly the `derive.py`
-pattern (`_replayer`), so `Program(spec)` works unchanged and `Node.name` hints do not enter the digest.
+pattern (`program.replay.replayer`), so `Program(spec)` works unchanged and `Node.name` hints do not enter the digest.
 
 KV: attention operands are `GatherMany(kv_cache_view, slots per request position)` read through the memory
 model (`MemoryModel.read_rows`) — O(T) parts per instance, no separate KV identity (D64).
@@ -91,7 +91,6 @@ from typing import Any
 
 from verity.ir.codec import encode_program, program_digest
 from verity.ir.defs import (
-    Body,
     Builder,
     CompositeDefinition,
     bind,
@@ -100,6 +99,7 @@ from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll, Refs, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.registry import b1
+from verity_vllm.program.replay import replayer
 from verity.ir.types import Array, Record, Type, Value
 from verity.ir.types import Tuple as TupleT
 
@@ -220,37 +220,6 @@ def fold(events: Iterable[Event], profile: Profile, *, strict: bool | None = Non
     strict = bool(profile.accepted) if strict is None else bool(strict)
     f = _Fold(profile, strict)
     return f.run(events, with_program)
-
-
-# ---------------------------------------------------------------------------------------------------------
-# flat-body replay (verbatim `verity_vllm/program/frontend/derive.py:_substitute/_replayer`; derive imports torch)
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _substitute(refs, env: dict[tuple[str, int], Any]):
-    """`refs` with every `(space, idx)` run replaced by the corresponding run of `env[(space, idx)]`."""
-    parts = [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in runs(refs)]
-    return concat(parts) if parts else refs
-
-
-def _replayer(body: Body):
-    """A body builder that re-emits a recorded flat body over new argument collections (used when the program
-    function is inlined into the root: `Program` calls `defn.body(B, S, *inputs)`)."""
-
-    def replay(B: Builder, S, *args: Coll) -> Coll:
-        env: dict[tuple[str, int], Any] = {("p", i): a.refs for i, a in enumerate(args)}
-        for k, node in enumerate(body.nodes):
-            colls = [Coll(a.type, _substitute(a.refs, env)) for a in node.args]
-            if node.form in ("call", "primitive"):
-                out = B.call(node.fn, *colls, name=node.name)
-            elif node.form == "batch":
-                out = B.batch(node.fn, *colls, axes=node.axes, n=node.n, name=node.name)
-            else:
-                out = B.scan(node.fn, colls[0], xs=colls[1:1 + node.n_xs], shared=colls[1 + node.n_xs:], n=node.n, name=node.name)
-            env[("n", k)] = out.refs
-        return Coll(body.ret_type, _substitute(body.ret, env))
-
-    return replay
 
 
 def workload_digest(workload: dict) -> str:
@@ -1188,7 +1157,7 @@ class _Fold:
             self.B.params = self.params
         body = self.B.finish(out)
         params, ret_type = self.params, out.type
-        defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=params, _r=ret_type: (_p, _r), _replayer(body),
+        defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=params, _r=ret_type: (_p, _r), replayer(body),
                                    doc=f"captured from a raw observation log under profile {h.profile_id}",
                                    conformance="derived: capture fold", register=False)
         spec = bind(defn, PROFILE=h.profile_id, WORKLOAD=workload_digest(h.workload))

@@ -382,7 +382,10 @@ BLACKWELL_SM120_E4M3_M16N8K32 = GroupSum(
     validated=(
         "RTX PRO 6000 Blackwell Server Edition (sm_120, driver 595.91.07, nvcc 12.8), lane vllm-sm120-tc-gemm: tc_probe run "
         "r20260930-030915-23f3 fitted by r20260930-031244-ecbc, 6,434,816 finite elements in 13 families, 0 mismatches; Ada's (16,16)/14, "
-        "Hopper wgmma's (32,)/14 and the sm_90 two-HMMA lowering are refuted (4.91M / 4.81M / 0.76M mismatches)"
+        "Hopper wgmma's (32,)/14 and the sm_90 two-HMMA lowering are refuted (4.91M / 4.81M / 0.76M mismatches); the fresh-seed capture "
+        "r20260930-041757-0bde (25,040,128 elements, 14 families) evaluated under total semantics by r20260930-052000-e32d: 0 mismatches, "
+        "the specials family included; the fresh-seed sweep r20260930-063457-5410 (driver 580.173.02, CUDA 13.0, SM clock locked at "
+        "2,100 MHz, seed 20260931): 25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline: 19,033,876)"
     ),
 )
 
@@ -396,7 +399,9 @@ BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
     zero_exponent=-133,
     validated=(
         "RTX PRO 6000 Blackwell Server Edition (sm_120), lane vllm-sm120-tc-gemm: tc_probe and fit run r20260930-031447-a5ad, "
-        "6,434,816 finite elements in 13 families, 0 mismatches (BLACKWELL_SM120_E4M3_M16N8K32's pipeline with e5m2 products)"
+        "6,434,816 finite elements in 13 families, 0 mismatches (BLACKWELL_SM120_E4M3_M16N8K32's pipeline with e5m2 products); the "
+        "fresh-seed sweep r20260930-063527-4d6b (driver 580.173.02, CUDA 13.0, SM clock locked at 2,100 MHz, seed 20260931): "
+        "25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline with e5m2 products: 15,747,373)"
     ),
 )
 

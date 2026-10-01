@@ -1,4 +1,4 @@
-"""Word casts between FP32, BF16 and E4M3 encodings, as pure integer (and exact rational) functions.
+"""Word casts between FP32, BF16, E4M3 and E2M1 encodings, as pure integer (and exact rational) functions.
 
 Promoted from ``veritor`` ``verity.ir/registry/prims.py`` (``bf16_to_f32_bits``, ``f32_to_bf16_rn_bits``, ``f32_is_nan``)
 and ``src/veritor/core/tc.py`` (the word-level casts); the numpy array forms were left behind.  The E4M3 cast is the
@@ -13,8 +13,9 @@ BF16_NAN_HARDWARE = 0x7FFF   # SASS F2FP.BF16.F32.PACK_AB / cvt.rn.bf16.f32: mea
 F32_NAN_CANONICAL = 0x7FC00000
 E4M3_NAN = 0x7F              # OCP E4M3 (float8_e4m3fn): NaN 0x7F / 0xFF, max finite 0x7E = 448, no infinities
 
-__all__ = ["BF16_NAN_HARDWARE", "BF16_NAN_SOFTWARE", "E4M3_NAN", "F32_NAN_CANONICAL", "bf16_is_nan", "bf16_to_f32_word",
-           "f32_is_nan", "f32_to_bf16_hw_word", "f32_to_bf16_rn_word", "f32_to_bf16_word", "f32_to_e4m3_sat_word"]
+__all__ = ["BF16_NAN_HARDWARE", "BF16_NAN_SOFTWARE", "E2M1_UP", "E4M3_NAN", "F32_NAN_CANONICAL", "bf16_is_nan", "bf16_to_f32_word",
+           "e4m3_to_f32_word", "f32_is_nan", "f32_to_bf16_hw_word", "f32_to_bf16_rn_word", "f32_to_bf16_word", "f32_to_e2m1_sat_word",
+           "f32_to_e4m3_sat_word"]
 
 
 def f32_is_nan(u: int) -> bool:
@@ -91,3 +92,39 @@ def f32_to_e4m3_sat_word(u: int) -> int:
         e2 -= 1
     m3 = int((val / (Fraction(2) ** e2) - 1) * 8)
     return sign | ((e2 + 7) << 3) | m3
+
+
+def e4m3_to_f32_word(b: int) -> int:
+    """An E4M3 byte widened to f32, exactly (``float(__nv_fp8_e4m3)``: ``cvt.rn.f16x2.e4m3x2`` then ``cvt.f32.f16``, both exact
+    on finite bytes).  NaN (``0x7F`` / ``0xFF``) -> the f16 canonical NaN ``0x7FFF`` widened, ``0x7FFFE000``, sign dropped: the
+    documented conversion chain, not a measurement."""
+    b &= 0xFF
+    if b & 0x7F == E4M3_NAN:
+        return 0x7FFFE000
+    sign = (b & 0x80) << 24
+    e, m = (b >> 3) & 0xF, b & 0x7
+    if e == 0:
+        if m == 0:
+            return sign
+        p = m.bit_length() - 1                    # m * 2^-9 = (1 + (m - 2^p) / 2^p) * 2^(p - 9)
+        return sign | ((p - 9 + 127) << 23) | ((m - (1 << p)) << (23 - p))
+    return sign | ((e - 7 + 127) << 23) | (m << 20)
+
+
+#: ``cvt.rn.satfinite.e2m1x2.f32``'s round-to-nearest-even onto the E2M1 magnitudes {0, .5, 1, 1.5, 2, 3, 4, 6} as the seven
+#: code boundaries (|x| as an f32 word, True when a tie on the boundary rounds up to the even code): the code is how many of them
+#: |x| passes.  0.25, 1.25, 2.5 and 5 tie down, 0.75, 1.75 and 3.5 tie up; beyond 5 (inf included) saturates to 6.
+E2M1_UP: tuple[tuple[int, bool], ...] = ((0x3E800000, False), (0x3F400000, True), (0x3FA00000, False), (0x3FE00000, True),
+                                         (0x40200000, False), (0x40600000, True), (0x40A00000, False))
+
+
+def f32_to_e2m1_sat_word(u: int, nan: int = 0x7) -> int:
+    """``cvt.rn.satfinite.e2m1x2.f32``, one lane (SASS ``F2FP.SATFINITE.E2M1.F32.PACK_AB``): the sign bit kept (a signed zero
+    included), the magnitude rounded to nearest even onto the E2M1 grid, ``|x| > 5`` and ±inf saturated to ±6 (code 7).  E2M1
+    has no NaN: a NaN input gives the code ``nan``, its sign dropped (as the E4M3 cast drops it)."""
+    u &= 0xFFFFFFFF
+    sign = 0x8 if u >> 31 else 0
+    mag = u & 0x7FFFFFFF
+    if mag > 0x7F800000:
+        return nan
+    return sign | sum(1 for bound, up in E2M1_UP if mag > bound or (up and mag == bound))

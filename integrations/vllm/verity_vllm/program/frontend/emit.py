@@ -21,7 +21,7 @@ from typing import Any
 
 import torch
 
-from verity.ir.refs import Affine, Coll, Concat, Strided
+from verity.ir.refs import Affine, Coll, Concat, Strided, prefix_runs
 from verity.ir.types import Record
 from verity_vllm.program.frontend.torch_frontend import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
@@ -136,6 +136,55 @@ def _locate(index: dict | None, space: str, i: int, lo: int, hi: int) -> tuple[i
         if rlo <= lo and hi <= rhi:
             return off + (lo - rlo), off + (hi - rlo)
     return None
+
+
+def _arg_runs(refs) -> tuple[list[tuple[str, int, int, int]] | None, Any, int]:
+    """`(_runs(refs), log, s)`: for a `Concat` of `Affine`s cut from a `PartLog`, the first `s` runs are the log's shared runs
+    (`prefix_runs`); otherwise `log` is None."""
+    if isinstance(refs, Concat) and refs.prefix is not None:
+        log, j = refs.prefix
+        if log.affine_parts(j) and all(isinstance(p, Affine) for p in refs.parts[j:]):
+            rs, log, s = prefix_runs(refs)
+            return (rs, log, s) if len(rs) <= MAX_RUNS else (None, None, 0)
+    return _runs(refs), None, 0
+
+
+def _locate_shared(index: dict, rs: list[tuple[str, int, int, int]], log, s: int, memo: dict) -> tuple[int, int] | None | bool:
+    """`_locate_runs(index, rs)` when the first `s` runs of `rs` are `log`'s shared runs: their spans are located once per
+    (index, log) and kept in `memo`, so a longer cut of the same log locates only its own runs."""
+    st = memo.get((id(index), id(log)))
+    if st is None or st[0] is not log or st[1] is not index:
+        st = memo[(id(index), id(log))] = [log, index, [], None, None]   # log, index, spans, first unlocated run, first gap
+    spans = st[2]
+    if st[3] is None and len(spans) < s:
+        for space, i, lo, hi in log.shared_runs(len(spans), s):
+            r = _locate(index, space, i, lo, hi)
+            if r is None:
+                st[3] = len(spans)
+                break
+            if spans and st[4] is None and r[0] != spans[-1][1]:
+                st[4] = len(spans)
+            spans.append(r)
+    if st[3] is not None and st[3] < s:
+        return False
+    rest: list[tuple[int, int]] = []
+    for space, i, lo, hi in rs[s:]:
+        r = _locate(index, space, i, lo, hi)
+        if r is None:
+            return False
+        rest.append(r)
+    if not s and not rest:
+        return False
+    if st[4] is not None and st[4] < s:
+        return None
+    a, b = spans[0] if s else rest[0]
+    if s:
+        b = spans[s - 1][1]
+    for lo, hi in (rest if s else rest[1:]):
+        if lo != b:
+            return None
+        b = hi
+    return a, b
 
 
 def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | bool:
@@ -344,7 +393,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         occ_outputs.append(out_index)
 
     # -- calls: Call k -> occurrence + return slots + argument slots --------------------------------------------------------------
-    calls: list[dict] = []
+    calls, located = [], {}   # located: (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
     for k, nd in enumerate(body.nodes):
         fx = node_fx.get(k)
         if fx is None:
@@ -376,7 +425,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                 found["input"], found["leaves"] = whole, [0, int(a.type.leaves)]
                 args.append(found)
                 continue
-            rs = _runs(a.refs)
+            rs, log, s = _arg_runs(a.refs)
             if rs is None:
                 found["unlocated"] = f"runs>{MAX_RUNS}"
                 args.append(found)
@@ -384,7 +433,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             for j, (_fx_arg, _v, index) in enumerate(occ_inputs[o]):
                 if not index:
                     continue
-                r = _locate_runs(index, rs)
+                r = _locate_runs(index, rs) if log is None else _locate_shared(index, rs, log, s, located)
                 if r is False:
                     continue
                 found["input"] = j
