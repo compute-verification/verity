@@ -332,6 +332,24 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
     assert seen["replay"] and seen["replay"] <= seen["plan"], sorted(seen["replay"] - seen["plan"])[:4]
 
 
+def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
+    bmap, committed = world.bmap_and_reader()
+    progs, seen = _programs(world), {"cold": [], "warm": []}
+
+    def reader(key):
+        def read(step, name, lo, hi):
+            seen[key].append((step, name, lo, hi))
+            return committed(step, name, lo, hi)
+        return read
+
+    memo: dict = {}
+    SR.populate(progs, [0], {}, {}, None, attention_paths=None, tp=None, program_dirs=None, manifest=None, memo=memo)
+    assert any(k[0] == "population" for k in memo)
+    cold = SR.sampled_replay(progs, bmap, reader("cold"), None, per_stratum=2, seed=3, plan=True)
+    warm = SR.sampled_replay(progs, bmap, reader("warm"), None, per_stratum=2, seed=3, plan=True, memo=memo)
+    assert warm["picked"] == cold["picked"] and seen["warm"] == seen["cold"] and seen["cold"]
+
+
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
     def mutate(store, entries):
         k = (0, "model.layers.0.mlp.gate_up_proj/0")
