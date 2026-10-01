@@ -89,6 +89,17 @@ def test_the_lease_tool_ending_first_ends_the_commit(tmp_path):
     assert r.returncode == -9 and "GPU lease ended under the Commit" in r.stderr, r.stderr
 
 
+def test_a_commit_that_touched_cuda_before_its_lease_takes_none(tmp_path, monkeypatch):
+    env = {"GPU_LEASE": "/l/missing-gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started"), "CUDA_VISIBLE_DEVICES": ""}
+    monkeypatch.setattr(GL, "cuda_initialised", lambda: True)
+    try:
+        GL.acquire(environ=env)
+        raise AssertionError("acquired")
+    except SystemExit as e:
+        assert "CUDA was initialised before the lease" in str(e)
+    assert not (tmp_path / "gpu_lease.requested").exists() and env["CUDA_VISIBLE_DEVICES"] == ""
+
+
 def test_a_commit_that_never_got_its_gpu_records_no_start(tmp_path):
     rc, rec = GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, {"GPU_LEASE": "/l/gpu-lease"},
                      lambda to, argv: 75, clock=lambda: 0.0)
