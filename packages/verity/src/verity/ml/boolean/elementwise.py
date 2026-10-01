@@ -23,7 +23,8 @@ and fixed XORs of them).
 A row of an element-wise operation computes no value twice (`Q_word`'s no-recompute rule) when an operand every member shares
 is decoded once: `shared_operand` cuts a builder's circuit into the gates that read only that operand (one Call per row) and the
 rest (one per member). A constant operand is not an operand at all: `specialized` traces the builder for each binding of its
-statics, so the constant is folded into the gates.
+statics, so the constant is folded into the gates. `on_bits` is a composite of such Calls whose word view is a word composite
+at the same statics.
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ import operator
 from typing import Any, Callable, Sequence
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.types import Array, Type
 
 from .. import fp32 as W
@@ -42,7 +43,7 @@ from .forms import NOT, ZERO, add, and_reduce
 from .trace import Traced, _body, definition, trace
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32Div", "F32Fma", "F32Mul", "I32Add", "bf16_band",
-           "shared_operand", "specialized"]
+           "on_bits", "shared_operand", "specialized"]
 
 F32 = I32 = Array(32, BL.BIT)
 BF16 = Array(16, BL.BIT)
@@ -175,6 +176,16 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
                             register=register)
     d.traced = traced  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
+    return d
+
+
+def on_bits(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word: Any,
+            register: bool = True) -> CompositeDefinition:
+    """The Boolean composite ``name_v{version}{statics}`` with body ``body`` (whose Calls are Boolean Definitions), documented by
+    ``body``'s docstring, whose word view is the word Definition ``word`` bound at the same statics (`trace.word_of`)."""
+    d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
+                            conformance="exact-model-tested", register=register)
+    d.word = lambda b: bind(word, **{k: b[k] for k in statics})  # type: ignore[attr-defined]
     return d
 
 

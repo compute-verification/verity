@@ -35,7 +35,7 @@ carry chain each. No sub-Call is a word Definition.
 from __future__ import annotations
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
+from verity.ir.defs import bind
 from verity.ir.types import Array, Tuple
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
@@ -51,13 +51,6 @@ __all__ = ["MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouter
 
 BF16 = Array(16, BL.BIT)
 F32 = I32 = Array(32, BL.BIT)
-
-
-def _on_bits(name: str, statics: tuple[str, ...], signature, body, word) -> CompositeDefinition:
-    """The Boolean composite ``name_v2`` with body ``body``, whose word view is ``word`` at the same statics."""
-    d = CompositeDefinition(name, 2, statics, signature, body, doc=body.__doc__ or "", conformance="exact-model-tested")
-    d.word = lambda b: bind(word, **{k: b[k] for k in statics})  # type: ignore[attr-defined]
-    return d
 
 
 def _plus_zero(C, w):
@@ -84,8 +77,8 @@ def _moe_sum(B, S, y):
     return B.batch(bind(MoeSumCoordinate, TOPK=S.TOPK), y, axes=(1,))
 
 
-MoeSum = _on_bits("MoeSum", ("TOPK", "H"), lambda S: ((("y", Array(S.TOPK, Array(S.H, BF16))),), Array(S.H, BF16)), _moe_sum,
-                  M.MoeSum)
+MoeSum = EW.on_bits("MoeSum", 2, ("TOPK", "H"), lambda S: ((("y", Array(S.TOPK, Array(S.H, BF16))),), Array(S.H, BF16)),
+                    _moe_sum, M.MoeSum)
 
 
 # --- the router's exponential --------------------------------------------------------------------------------------------------
@@ -153,7 +146,7 @@ def _nv_expf(B, S, x):
     return B.call(NvExpfOut, B.call(MufuEx2Ftz, fj[0]), fj[1])
 
 
-NvExpf = _on_bits("NvExpf", (), lambda S: ((("x", F32),), F32), _nv_expf, M.NvExpf)
+NvExpf = EW.on_bits("NvExpf", 2, (), lambda S: ((("x", F32),), F32), _nv_expf, M.NvExpf)
 
 
 # --- the router's probabilities ------------------------------------------------------------------------------------------------
@@ -234,8 +227,8 @@ def _probs(B, S, logits):
     return B.call(bind(MoeRouterNormalize, E=S.E, VPT=S.VPT), B.batch(NvExpf, d, axes=(0,)))
 
 
-MoeRouterProbs = _on_bits("MoeRouterProbs", ("E", "VPT"), lambda S: ((("logits", Array(S.E, BF16)),), Array(S.E, F32)), _probs,
-                          M.MoeRouterProbs)
+MoeRouterProbs = EW.on_bits("MoeRouterProbs", 2, ("E", "VPT"), lambda S: ((("logits", Array(S.E, BF16)),), Array(S.E, F32)),
+                            _probs, M.MoeRouterProbs)
 
 
 # --- the router's selection ----------------------------------------------------------------------------------------------------
@@ -310,6 +303,6 @@ def _topk(B, S, logits):
     return B.call(bind(MoeRouterSelect, E=S.E, TOPK=S.TOPK), p)
 
 
-MoeRouterTopKOrdered = _on_bits("MoeRouterTopKOrdered", ("E", "TOPK", "VPT"),
-                                lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
-                                _topk, M.MoeRouterTopKOrdered)
+MoeRouterTopKOrdered = EW.on_bits("MoeRouterTopKOrdered", 2, ("E", "TOPK", "VPT"),
+                                  lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
+                                  _topk, M.MoeRouterTopKOrdered)

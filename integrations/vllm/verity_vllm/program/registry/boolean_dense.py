@@ -54,7 +54,7 @@ from __future__ import annotations
 import numpy as np
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind
+from verity.ir.defs import bind
 from verity.ir.types import Array
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
@@ -113,20 +113,13 @@ GeluTanhMulBf16 = definition("GeluTanhMulBf16", 2, gelu_tanh_mul, (("g", BF16), 
                                  "bf16(f32(bf16(gelu_tanh(g))) * (f32(u) + 0.0f)), NaN 0x7FFF")
 
 
-def _on_bits(name: str, statics: tuple[str, ...], signature, body, word) -> CompositeDefinition:
-    """The Boolean composite ``name_v2`` with body ``body``, whose word view is ``word`` at the same statics."""
-    d = CompositeDefinition(name, 2, statics, signature, body, doc=body.__doc__ or "", conformance="exact-model-tested")
-    d.word = lambda b: bind(word, **{k: b[k] for k in statics})  # type: ignore[attr-defined]
-    return d
-
-
 def _gelu_tanh_mul(B, S, gu):
     """vLLM `gelu_tanh_and_mul` on bits: `out[i] = GeluTanhMulBf16_v2(gu[i], gu[I + i])`."""
     return B.batch(GeluTanhMulBf16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
 
 
-GeluTanhMul = _on_bits("GeluTanhMul", ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
-                       _gelu_tanh_mul, D.GeluTanhMul)
+GeluTanhMul = EW.on_bits("GeluTanhMul", 2, ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
+                         _gelu_tanh_mul, D.GeluTanhMul)
 
 
 def _f32_bits(c: float) -> int:
@@ -221,19 +214,20 @@ def _bf16_mul_scalar_tensor(B, S, x, s):
     return B.batch(Bf16MulScalarTensorElement, x, s[0], B.call(Bf16MulScalarTensorScalar, s[0]), axes=(0, None, None))
 
 
-SquareBf16 = _on_bits("SquareBf16", ("N",), _row(BF16, F32), _square_bf16, D.SquareBf16)
-SquareF32 = _on_bits("SquareF32", ("N",), _row(F32, F32), _square_f32, D.SquareF32)
-AddScalarF32 = _on_bits("AddScalarF32", ("N", "C"), _row(F32, F32), _add_scalar_f32, D.AddScalarF32)
-AddScalarBf16 = _on_bits("AddScalarBf16", ("N", "C"), lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)), _add_scalar_bf16,
-                         D.AddScalarBf16)
-AddWidenedBf16 = _on_bits("AddWidenedBf16", ("N",), _row(BF16, F32, ("r", (None, BF16))), _add_widened_bf16, D.AddWidenedBf16)
-ScaleRowBf16 = _on_bits("ScaleRowBf16", ("N",), _row(BF16, F32, ("s", (1, F32))), _scale_row_bf16, D.ScaleRowBf16)
-ScaleRowF32 = _on_bits("ScaleRowF32", ("N",), _row(F32, F32, ("s", (1, F32))), _scale_row_f32, D.ScaleRowF32)
-MulVecF32 = _on_bits("MulVecF32", ("N",), _row(F32, F32, ("w", (None, F32))), _mul_vec_f32, D.MulVecF32)
-Bf16DivScalar = _on_bits("Bf16DivScalar", ("N", "C"), _row(BF16, BF16), _bf16_div_scalar, D.Bf16DivScalar)
-Bf16MulScalar = _on_bits("Bf16MulScalar", ("N", "C"), _row(BF16, BF16), _bf16_mul_scalar, D.Bf16MulScalar)
-Bf16MulScalarTensor = _on_bits("Bf16MulScalarTensor", ("N",), _row(BF16, BF16, ("s", (1, BF16))), _bf16_mul_scalar_tensor,
-                               b1.Bf16MulScalarTensor)
+SquareBf16 = EW.on_bits("SquareBf16", 2, ("N",), _row(BF16, F32), _square_bf16, D.SquareBf16)
+SquareF32 = EW.on_bits("SquareF32", 2, ("N",), _row(F32, F32), _square_f32, D.SquareF32)
+AddScalarF32 = EW.on_bits("AddScalarF32", 2, ("N", "C"), _row(F32, F32), _add_scalar_f32, D.AddScalarF32)
+AddScalarBf16 = EW.on_bits("AddScalarBf16", 2, ("N", "C"), lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)),
+                           _add_scalar_bf16, D.AddScalarBf16)
+AddWidenedBf16 = EW.on_bits("AddWidenedBf16", 2, ("N",), _row(BF16, F32, ("r", (None, BF16))), _add_widened_bf16,
+                            D.AddWidenedBf16)
+ScaleRowBf16 = EW.on_bits("ScaleRowBf16", 2, ("N",), _row(BF16, F32, ("s", (1, F32))), _scale_row_bf16, D.ScaleRowBf16)
+ScaleRowF32 = EW.on_bits("ScaleRowF32", 2, ("N",), _row(F32, F32, ("s", (1, F32))), _scale_row_f32, D.ScaleRowF32)
+MulVecF32 = EW.on_bits("MulVecF32", 2, ("N",), _row(F32, F32, ("w", (None, F32))), _mul_vec_f32, D.MulVecF32)
+Bf16DivScalar = EW.on_bits("Bf16DivScalar", 2, ("N", "C"), _row(BF16, BF16), _bf16_div_scalar, D.Bf16DivScalar)
+Bf16MulScalar = EW.on_bits("Bf16MulScalar", 2, ("N", "C"), _row(BF16, BF16), _bf16_mul_scalar, D.Bf16MulScalar)
+Bf16MulScalarTensor = EW.on_bits("Bf16MulScalarTensor", 2, ("N",), _row(BF16, BF16, ("s", (1, BF16))),
+                                 _bf16_mul_scalar_tensor, b1.Bf16MulScalarTensor)
 
 
 #: the exponent fields `tanh_bf16` reads from its table, per sign
@@ -268,4 +262,4 @@ def _bf16_tanh(B, S, x):
     return B.batch(Bf16TanhElement, x, axes=(0,))
 
 
-Bf16Tanh = _on_bits("Bf16Tanh", ("N",), _row(BF16, BF16), _bf16_tanh, D.Bf16Tanh)
+Bf16Tanh = EW.on_bits("Bf16Tanh", 2, ("N",), _row(BF16, BF16), _bf16_tanh, D.Bf16Tanh)
