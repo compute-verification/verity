@@ -514,18 +514,16 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 ## Not here yet
 
-Done in the random-oracle model, and in this package (`lean/PousProofs/Dense/`): the dense re-certificate at
-`POINT_64K` (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB), and its form for the code's
-per-segment `tag_s` domains (`segTag_meets_14`). The band's statements are proved (`lean/submissions/band-chain/`,
-red-team §39), and the red team is verifying the proofs (§40). Pending:
+Done, in this package: in the random-oracle model, the dense re-certificate at `POINT_64K` (`dense_meets_64`), the
+multi-segment lemma (`seg_meets_14`, 14 GB) and its form for the code's per-segment `tag_s` domains
+(`segTag_meets_14`), in `lean/PousProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
+`ChainExPostFactoG` and `ChainExPostFacto` (`chainExPostFactoG_v6`, `chainExPostFacto_v6`), and from them the band,
+the dense chain scheme and P3 with the concrete `H` ("Pinned statements"), in `lean/PousProofs/Chain/Flat.lean`.
+Pending:
 
-- `ChainExPostFactoG`, the hypothesis of `band_meets_64` (the band at `k = 111`), and its complete-DAG form
-  `ChainExPostFacto`, the hypothesis of `chain_meets_64` (dense). Both carry the certificate from the random oracle to
-  the overwrite chain (`DISCREPANCIES.md` D5, B1).
+- P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
-- A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at
-  3 calls, and `n10prime` over all segments (`DISCREPANCIES.md`).
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
-- In `lean/`: the band's proofs (`lean/submissions/band-chain/`), N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`,
-  `n10prime`) and `p3-meets` come in later PRs.
+- In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
+  `p3-meets` (P3 with a random-oracle `H`) come in later PRs.
