@@ -761,5 +761,46 @@
         "deliveries": []
       }
     ]
+  },
+  "doorbells": {
+    "about": "slack.doorbell(author, thread, ts, text, urgent): the doorbell's text, posted as `router` in each woken name's inbox thread. A doorbell is for the post whose ts is its `reply R`, or, with no reply, its `thread T` (that is how delivery dedupes).",
+    "cases": [
+      {
+        "name": "a top-level post: its user-group mention as @name, its footer dropped",
+        "author": "infra",
+        "thread": "1700000100.000001",
+        "ts": "1700000100.000001",
+        "urgent": false,
+        "text": "<!subteam^SCIRCUITS|@circuits> can node 2 take a job?\n\n_ask_",
+        "doorbell": "from infra, thread 1700000100.000001: @circuits can node 2 take a job?"
+      },
+      {
+        "name": "an urgent reply: old footer dropped, link label kept with its url, escapes and date tokens undone",
+        "author": "circuits",
+        "thread": "1700000100.000001",
+        "ts": "1700000200.000002",
+        "urgent": true,
+        "text": "@infra yes &lt;after 3 PM&gt; by <!date^1700006400^{time}|1:00 PM PST (21:00Z)>, see <https://x/plan|the plan> &amp; <https://x/z>\n\n_posted by <https://cursor.com/agents/bc-1|@circuits's agent> · urgent_",
+        "doorbell": "from circuits (URGENT), thread 1700000100.000001, reply 1700000200.000002: @infra yes <after 3 PM> by 1:00 PM PST (21:00Z), see the plan (https://x/plan) & https://x/z"
+      },
+      {
+        "name": "runs of blank lines collapse to one",
+        "author": "proofs",
+        "thread": "1700000300.000003",
+        "ts": "1700000300.000003",
+        "urgent": false,
+        "text": "@infra first\n\n\n\nsecond",
+        "doorbell": "from proofs, thread 1700000300.000003: @infra first\n\nsecond"
+      },
+      {
+        "name": "a long post is cut at 600 characters, with where to read the rest",
+        "author": "lean",
+        "thread": "1700000400.000004",
+        "ts": "1700000400.000005",
+        "urgent": false,
+        "text": "@proofs xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "doorbell": "from lean, thread 1700000400.000004, reply 1700000400.000005: @proofs xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (the rest: `research msg read --thread 1700000400.000004`)"
+      }
+    ]
   }
 }

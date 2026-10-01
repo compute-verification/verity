@@ -1043,6 +1043,13 @@ def test_the_delivery_rule_matches_every_subscription_vector(v):
     assert [d["name"] for d in got if d["why"] == "addressed"] == slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]))
 
 
+@pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])
+def test_a_doorbell_matches_every_doorbell_vector(v):
+    bell = slack.doorbell(v["author"], v["thread"], v["ts"], v["text"], v["urgent"])
+    assert bell == v["doorbell"] and slack._rang(bell, v["ts"], "-") and not slack._rang(bell, "1.000000", "-")
+    assert slack._mentions_thread(bell, v["thread"]) and slack._from(bell, v["author"]) and not bell.startswith("@")
+
+
 # ---- the messages API: send, close, list, subscribe, read --as ----------------------------------------------------------------------
 
 def posted(fake, out: str) -> dict:
