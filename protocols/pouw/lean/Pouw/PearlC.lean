@@ -8,6 +8,7 @@ import Pouw.PearlC.ChainOnlyGamma
 import Pouw.PearlC.Defs
 import Pouw.PearlC.Device
 import Pouw.PearlC.DeviceCapGamma
+import Pouw.PearlC.DeviceCapRev1Gamma
 import Pouw.PearlC.DeviceChainCap
 import Pouw.PearlC.DeviceChainCapGamma
 import Pouw.PearlC.DeviceChainCapKernel
