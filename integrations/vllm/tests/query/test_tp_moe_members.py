@@ -86,19 +86,25 @@ STORED = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-ea
           "art:8f0d249acddbaa2f8c019b6ec5f52d78ff15e62fa157a98154f55feea7f1f465",
           "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
           "art:82931d609f9f8df3df847190a4e63de2302dc1c2b12c3d722a227e79dc527d37"}
-#: the sha256 of the manifest.json each row's `build-global` writes: main 33828711's, built in one process (2026-09-29).  The parallel
-#: build (`--jobs`: the word check's cuts prefetched, the components built in forked processes) writes the same bytes; a change to
-#: what the manifest says re-pins them (the failure prints the new digest)
+#: the sha256 of the manifest.json each row's `build-global` writes.  The parallel build (`--jobs`: the word check's cuts prefetched,
+#: the components built in forked processes) writes the same bytes; a change to what the manifest says re-pins them (the failure
+#: prints the new digest).  The bytes include the query header, whose `named_residuals` lists every `required.NAMED_RESIDUALS` row,
+#: so a row added there moves these pins while `MANIFEST_DIGEST` stays
 MANIFEST_SHA256 = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
-                   "1fbe75e6852597533a12ad2f04283c2cfcccf56b97b8eb6317f8ae906d5f3ae2",
+                   "6924898319e392efe2667c844339ac9a500fe0dd4c6bf84b75e903625c80ccd1",
                    "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
-                   "3322490bd048abd7526321ab34ce843ec610ed1b634790119865da4a3c803848"}
+                   "12eaa76e9b6b93bae3ba07349b45647492d27b276ec64bb79dad7219ec57458f"}
+#: each row's `manifest_digest`: the digest of its identities alone, what the Commit must cover
+MANIFEST_DIGEST = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
+                   "57194b91524710a7b4e4ec20f51b3c83c62cd89785d2c2b68859bd0217fbf489",
+                   "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
+                   "4e4dcf8decfbc261b42d555a62a17617abb0fdcd84aefd993b5de658727dfebd"}
 
 
 @pytest.mark.parametrize("row", sorted(STORED))
 def test_the_stored_tp2_moe_builds_merge_with_every_peer_bound(tmp_path, row):
     """#75 and #70: the TP row's own `build-global` over the stored rank Programs (`TpRow.manifest_global`'s arguments) is complete,
-    and is the manifest of record byte for byte (`MANIFEST_SHA256`)."""
+    requires the identities of record (`MANIFEST_DIGEST`), and is the manifest of record byte for byte (`MANIFEST_SHA256`)."""
     from tests.regression import store_io
     if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():
         pytest.skip("the evidence store is not reachable here")
@@ -119,4 +125,5 @@ def test_the_stored_tp2_moe_builds_merge_with_every_peer_bound(tmp_path, row):
     assert p.returncode == 0, p.stderr[-3000:]
     m = json.loads(out.read_text())
     assert m["complete"] and m["tp_peer_binding"]["n_unbound"] == 0 and not any("two producers" in k for k in m["unmodelled"]), m["tp_peer_binding"]
+    assert m["manifest_digest"] == MANIFEST_DIGEST[row]
     assert hashlib.sha256(out.read_bytes()).hexdigest() == MANIFEST_SHA256[row]
