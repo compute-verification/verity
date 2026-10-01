@@ -229,6 +229,16 @@ def test_hot_unsafe_flags_are_refused_by_commit_delta(argv, unsafe, monkeypatch)
     assert cd.hot_unsafe_reasons(cli.parse("commit", ["--out", "o"], {}))
 
 
+def test_the_commit_takes_hash_threads_from_the_job_s_environment():
+    """HASH_THREADS sets the Commit's hash pool (only the work is parallel: the leaves and the root are the same); on a hot worker it is
+    the job's, not the environment the worker was started with."""
+    pytest.importorskip("torch")
+    assert cli.parse("commit", ["--out", "o"], {}).hash_threads == 2
+    assert cli.parse("commit", ["--out", "o"], {"HASH_THREADS": "12"}).hash_threads == 12
+    assert cli.parse("commit", ["--out", "o", "--hash-threads", "4"], {"HASH_THREADS": "12"}).hash_threads == 4
+    assert "HASH_THREADS" in hc.ENV_PER_JOB
+
+
 @pytest.mark.parametrize("argv,env,unsafe", [
     (["--out", "o"], {}, False),
     (["--out", "o", "--arms", "a,b"], {}, True),
