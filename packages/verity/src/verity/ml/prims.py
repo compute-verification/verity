@@ -178,9 +178,11 @@ def _block_scaled_sum_negative(model, acc: int, a: list[int], b: list[int], sa: 
 
 @primitive("BlackwellMxf4OmmaDot64", 1, [("acc", F32), ("a", A64_4), ("b", A64_4), ("sa", A2_8), ("sb", A2_8)], F32,
            conformance="exact-model-tested; pinned on sm_120 (dossier art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92: "
-                       "RTX 5090, lane fp4-re's 7,389,184 words and lane fp4-proof's 9,658,368, 0 mismatches); rules 2 and 3 below "
-                       "are those runs' record-only specials family; rule 1 is BlackwellNvf4OmmaDot64_v1's for the UE8M0 NaN byte, "
-                       "documented, not measured; not yet swept on the RTX PRO 6000")
+                       "RTX 5090, lane fp4-re's 7,389,184 words and lane fp4-proof's 9,658,368, 0 mismatches); on the RTX PRO 6000 "
+                       "Blackwell Server Edition (driver 580.173.02, CUDA 13.0, SASS-checked) lane proofs-tc-defs' run "
+                       "r20261001-000520-2440, 1,089,536 gated words against the model, 0 mismatches, and its record-only edge "
+                       "families (fixtures tc-sm120-mxf4-2026-10-01: 73,728 words, 9,216 under a 0xFF scale byte, overflowing and "
+                       "cancelling blocks, ±inf and NaN accumulators) every rule below exact")
 def BlackwellMxf4OmmaDot64(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64 ... e2m1.e2m1.f32.ue8m0`
     on sm_120a (SASS `OMMA.SF.16864.F32.E2M1.E2M1.E8`): 64 E2M1 codes per operand in two blocks of 32, one UE8M0 scale byte
