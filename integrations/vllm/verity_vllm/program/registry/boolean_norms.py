@@ -231,13 +231,17 @@ def _word_view(word, statics: tuple[str, ...], mufu: tuple[str, ...] = ()) -> Ca
     return view
 
 
-def _on_bits(name: str, version: int, statics: list[str], signature: Callable, word: Callable[[dict], object]):
+def _on_bits(name: str, version: int, statics: list[str], signature: Callable, word: Callable[[dict], object],
+             word_statics: dict | None = None):
     """Decorator: the Boolean composite ``name_v{version}``, documented by its body's docstring, whose word view
-    (`trace.word_of`) is ``word`` of its bindings."""
+    (`trace.word_of`) is ``word`` of its bindings. ``word_statics`` names, for each MUFU static, the word Definition it
+    computes; the switch (`verity_vllm.program.boolean`) binds that static to the Definition's Boolean version."""
     def deco(body: Callable) -> CompositeDefinition:
         d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
                                 conformance="exact-model-tested")
         d.word = word  # type: ignore[attr-defined]
+        if word_statics is not None:
+            d.word_statics = word_statics  # type: ignore[attr-defined]
         return d
     return deco
 
@@ -521,7 +525,7 @@ def rmsnorm_cuda_calls(B, N: int, EPS: float, RSQRT, x: Coll, res: Coll, w: Coll
 @_on_bits("RMSNormFusedCuda", 3, ["N", "EPS", "RSQRT"],
           lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
                      Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-          _word_view(b1.RMSNormFusedCuda, ("N", "EPS"), ("RSQRT",)))
+          _word_view(b1.RMSNormFusedCuda, ("N", "EPS"), ("RSQRT",)), word_statics=CUDA_WORD)
 def RMSNormFusedCuda(B, S, x, res, w):
     """`RMSNormFusedCuda_v2` on bits (`rmsnorm_cuda_calls`): vLLM's generic `fused_add_rms_norm_kernel<bf16, 0, true>`,
     `s = rsqrtf(variance / N + eps)` with ``RSQRT`` computing `RsqrtApprox_v1`. Returns (normed, res')."""
@@ -612,7 +616,7 @@ def rmsnorm_triton_calls(B, N: int, EPS: float, SQRT, SCALEA, RCP, x: Coll, w: C
 
 @_on_bits("RMSNormTriton", 2, ["N", "EPS", "SQRT", "SCALEA", "RCP"],
           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
-          _word_view(b1.RMSNormTriton, ("N", "EPS"), ("SQRT", "SCALEA", "RCP")))
+          _word_view(b1.RMSNormTriton, ("N", "EPS"), ("SQRT", "SCALEA", "RCP")), word_statics=TRITON_WORD)
 def RMSNormTriton(B, S, x, w):
     """`RMSNormTriton_v1` on bits (`rmsnorm_triton_calls`): vLLM's batch-invariant Triton `_rms_norm_kernel`,
     `inv = div.full(1, sqrt.approx.ftz(fma(rcp(N), sum, eps)))` with ``SQRT``, ``SCALEA`` and ``RCP`` computing `MufuSqrtFtz_v1`,

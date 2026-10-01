@@ -1,27 +1,19 @@
-"""`registry.dense`'s RMSNorm chain on bits: the unfused norm a model runs when its RMSNorm is `forward_native` (Gemma-2's
-`GemmaRMSNorm`), each Definition the next version of its word Definition, the same function on bits.
+"""`registry.dense`'s RMSNorm chain on bits, the steps `boolean_dense`'s element-wise rows leave: the unfused norm a model runs
+when its RMSNorm is `forward_native` (Gemma-2's `GemmaRMSNorm`), each Definition the next version of its word Definition, the
+same function on bits.
 
-    SquareBf16_v2{N}       (x: Array<N, BF16>) -> Array<N, F32>           f32(x_j) * f32(x_j)               word view: SquareBf16_v1{N}
-    SquareF32_v2{N}        (x: Array<N, F32>) -> Array<N, F32>            x_j * x_j                          SquareF32_v1{N}
-    MeanTriton_v2{N}       (x: Array<N, F32>) -> Array<1, F32>            batch-invariant `mean_kernel`      MeanTriton_v1{N}
-    AddScalarF32_v2{N, C}  (x: Array<N, F32>) -> Array<N, F32>            x_j + f32(C)                       AddScalarF32_v1{N, C}
-    AddScalarBf16_v2{N, C} (w: Array<N, BF16>) -> Array<N, F32>           f32(w_j) + f32(C)                  AddScalarBf16_v1{N, C}
-    AddWidenedBf16_v2{N}   (x, r: Array<N, BF16>) -> Array<N, F32>        f32(x_j) + f32(r_j)                AddWidenedBf16_v1{N}
+    MeanTriton_v2{N}       (x: Array<N, F32>) -> Array<1, F32>            batch-invariant `mean_kernel`      word view: MeanTriton_v1{N}
     RsqrtF32_v2{N, RSQRT}  (x: Array<N, F32>) -> Array<N, F32>            rsqrt.approx.f32(x_j)              RsqrtF32_v1{N}
-    ScaleRowBf16_v2{N}     (x: Array<N, BF16>, s: Array<1, F32>) -> ...   f32(x_j) * s                       ScaleRowBf16_v1{N}
-    ScaleRowF32_v2{N}      (x: Array<N, F32>, s: Array<1, F32>) -> ...    x_j * s                            ScaleRowF32_v1{N}
-    MulVecF32_v2{N}        (x, w: Array<N, F32>) -> Array<N, F32>         x_j * w_j (`F32Mul_v3`)            MulVecF32_v1{N}
     NarrowF32ToBf16_v2{N}  (x: Array<N, F32>) -> Array<N, BF16>           cvt.rn.bf16.f32 (`F2fpBf16_v1`)    NarrowF32ToBf16_v1{N}
 
 (F32 and BF16 are 32 and 16 bits.) Gemma-2-2B (H = 2304, EPS = 1e-6) calls SquareBf16, MeanTriton, AddScalarF32{1, EPS},
 RsqrtF32{1} and ScaleRowBf16, then MulVecF32 by AddScalarBf16{H, 1.0} of the weight, then NarrowF32ToBf16; with a residual it
 starts from AddWidenedBf16, squares and scales that f32 sum (SquareF32, ScaleRowF32), and narrows it once more as the residual.
+The other steps' Boolean versions are `boolean_dense`'s (`SquareBf16_v2`, `SquareF32_v2`, `AddScalarF32_v2`, `AddScalarBf16_v2`,
+`AddWidenedBf16_v2`, `ScaleRowBf16_v2`, `ScaleRowF32_v2`, `MulVecF32_v2`).
 
-Each element-wise Definition is a batch of a leaf traced from `fp`'s builders with the word primitives' NaN words, so a bf16
-operand's 16 zero bits and a constant specialize it. A row scale's own gates are a Call of their own, once per row
-(`ScaleRowBf16Scale_v1`, `ScaleRowF32Scale_v1`, by `boolean_norms._split`), so the row's members share no gate.
-
-`MeanTriton_v2` is the word body's reduction in its order, cut into Calls a root can hold (`mean_triton_calls`):
+`NarrowF32ToBf16_v2` is a batch of a leaf traced from `fp`'s builder with F2FP's NaN word. `MeanTriton_v2` is the word
+body's reduction in its order, cut into Calls a root can hold (`mean_triton_calls`):
 `MeanThreadsTriton_v1{N}` (each thread's 8 registers added in register order, `MeanThreadTriton_v1{K}`),
 `MeanWarpsTriton_v1{N}` (lane 0 of each warp's xor butterfly 16, 8, 4, 2, 1, `MeanWarpTriton_v1{L}`) and
 `MeanCombineTriton_v1{N}` (each chunk's (w0 + w2) + (w1 + w3), the chunks added in order from +0, then the division). Masked
@@ -31,8 +23,9 @@ or a NaN; 0 + x and x + 0 are one function of x), and +0 + +0, which is +0, is f
 divisor's magnitude is in [2^-126, 2^126], as f32(N) always is, and DivFullRcp_v1(f32(N)) is a constant, so the division is
 `MeanDivTriton_v1{N}`, acc * rcp(N), and the mean reads no MUFU.
 
-MUFU: ``RSQRT`` is `RsqrtApprox_v1` itself until proofs' Boolean Definition exists (`boolean_norms.MUFU_WORD`); on the word id
-each element is packed (`PackF32_v1`) and its result unpacked (`UnpackF32_v1`) once.
+MUFU: ``RSQRT`` is a Definition computing `RsqrtApprox_v1`: proofs' Boolean `RsqrtApprox_v2` (`verity.ml.boolean.mufu`, which
+the switch binds through ``word_statics``), or the word id itself, on which each element is packed (`PackF32_v1`) and its result
+unpacked (`UnpackF32_v1`) once.
 """
 from __future__ import annotations
 
@@ -46,11 +39,11 @@ from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean import trace as TR
 from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _bits, _f32, _on_bits, _on_word,
-                                                        _rcp_n, _split, _traced, _word_view)
+from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _on_bits, _on_word, _rcp_n,
+                                                        _traced, _word_view)
 
-__all__ = ["AddScalarBf16", "AddScalarF32", "AddWidenedBf16", "MeanTriton", "MulVecF32", "NarrowF32ToBf16", "RsqrtF32",
-           "ScaleRowBf16", "ScaleRowF32", "SquareBf16", "SquareF32", "mean_triton_calls"]
+__all__ = ["MeanTriton", "NarrowF32ToBf16", "RsqrtF32", "mean_triton_calls"]
 
 WARP = 32
 #: f32 registers per thread per 1024-column chunk (`BLOCK_SIZE / THREADS`, either layout)
@@ -63,27 +56,8 @@ def _one(name: str, params, build, doc: str):
     return _traced(name, 1, (), lambda S: (params, F32), lambda S: TR.trace(build, [t for _, t in params], F32), doc)
 
 
-def _const_leaf(name: str, param, build, doc: str):
-    return _traced(name, 1, ("C",), lambda S: ((param,), F32), lambda S: TR.trace(build(S), [param[1]], F32), doc)
-
-
-SquareBf16El = _one("SquareBf16El", (("x", BF16),),
-                    lambda C, x: fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(x), ir_nan=True),
-                    "RN32(f32(x) * f32(x)) (Bf16ToF32_v1, F32Mul_v1): one element of SquareBf16_v1")
-SquareF32El = _one("SquareF32El", (("x", F32),), lambda C, x: fp.f32_mul(C, x, x, ir_nan=True),
-                   "RN32(x * x) (F32Mul_v1): one element of SquareF32_v1")
-AddWidenedBf16El = _one("AddWidenedBf16El", (("x", BF16), ("r", BF16)),
-                        lambda C, x, r: fp.f32_add(C, fp.bf16_to_f32(x), fp.bf16_to_f32(r), ir_nan=True),
-                        "RN32(f32(x) + f32(r)) (F32Add_v1): one element of AddWidenedBf16_v1")
 F32AddZero = _one("F32AddZero", (("x", F32),), lambda C, x: fp.f32_add(C, x, fp.f32_const(0), ir_nan=True),
                   "F32Add_v1(x, +0), which is F32Add_v1(+0, x): the mean's add of a masked register, idle lane or idle warp")
-F32AddConst = _const_leaf("F32AddConst", ("x", F32),
-                          lambda S: lambda C, x: fp.f32_add(C, x, fp.f32_const(_f32(float(S.C))), ir_nan=True),
-                          "F32Add_v1(x, f32(C)), C folded: one element of AddScalarF32_v1{N, C}")
-Bf16AddConstF32 = _const_leaf("Bf16AddConstF32", ("w", BF16),
-                              lambda S: lambda C, w: fp.f32_add(C, fp.bf16_to_f32(w), fp.f32_const(_f32(float(S.C))),
-                                                                ir_nan=True),
-                              "F32Add_v1(f32(w), f32(C)), C folded: one element of AddScalarBf16_v1{N, C}")
 # not `verity.ml.boolean.gemm`'s `F2fpBf16_v2`: `catalog.load` imports this module, and importing `gemm` registers
 # `AmpereBF16TcDot16_v3` beside `_v2`, which leaves the torch frontend's unversioned `AmpereBF16TcDot16` ambiguous
 NarrowF32ToBf16El = _traced("NarrowF32ToBf16El", 1, (), lambda S: ((("x", F32),), BF16),
@@ -95,78 +69,10 @@ MeanDivTriton = _traced("MeanDivTriton", 1, ("N",), lambda S: ((("acc", F32),), 
                         "(DivFullScaleA_v1(acc, f32(N)) is acc)")
 
 
-# --- the row scales: the scale's own gates once per row, then one member per element -------------------------------------------
-
-@cache
-def _scale_parts(kind: str):
-    """(the scale's own gates, the rest) of x_j * s: over (x: bf16 widened, s) or (x: f32, s)."""
-    if kind == "bf16":
-        T = TR.trace(lambda C, x, s: fp.f32_mul(C, fp.bf16_to_f32(x), s, ir_nan=True), [BF16, F32], F32)
-        widths = [16, 32]
-    else:
-        T = TR.trace(lambda C, x, s: fp.f32_mul(C, x, s, ir_nan=True), [F32, F32], F32)
-        widths = [32, 32]
-    scale, _, rest = _split(T, widths, shared=1, own=None)
-    return scale, rest
-
-
-def _scale_bits(kind: str) -> int:
-    return len(_scale_parts(kind)[0].outputs)
-
-
-ScaleRowBf16Scale = _traced("ScaleRowBf16Scale", 1, (), lambda S: ((("s", F32),), _bits(_scale_bits("bf16"))),
-                            lambda S: _scale_parts("bf16")[0],
-                            "the gates of F32Mul_v1(f32(x), s) that read only s (`_split`): once per row of ScaleRowBf16_v2")
-ScaleRowF32Scale = _traced("ScaleRowF32Scale", 1, (), lambda S: ((("s", F32),), _bits(_scale_bits("f32"))),
-                           lambda S: _scale_parts("f32")[0],
-                           "the gates of F32Mul_v1(x, s) that read only s (`_split`): once per row of ScaleRowF32_v2")
-ScaleRowBf16El = _traced("ScaleRowBf16El", 1, (),
-                         lambda S: ((("x", BF16), ("s", F32), ("sd", _bits(_scale_bits("bf16")))), F32),
-                         lambda S: _scale_parts("bf16")[1],
-                         "F32Mul_v1(f32(x), s) from s's own gates sd (`ScaleRowBf16Scale_v1`): the gates that read x")
-ScaleRowF32El = _traced("ScaleRowF32El", 1, (),
-                        lambda S: ((("x", F32), ("s", F32), ("sd", _bits(_scale_bits("f32")))), F32),
-                        lambda S: _scale_parts("f32")[1],
-                        "F32Mul_v1(x, s) from s's own gates sd (`ScaleRowF32Scale_v1`): the gates that read x")
-
-
-# --- the element-wise families ------------------------------------------------------------------------------------------------
-
-@_on_bits("SquareBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, F32)), _word_view(D.SquareBf16, ("N",)))
-def SquareBf16(B, S, x):
-    """`SquareBf16_v1` on bits: `SquareBf16El_v1` per element (separable)."""
-    return B.batch(SquareBf16El, x, axes=(0,))
-
-
-@_on_bits("SquareF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)), _word_view(D.SquareF32, ("N",)))
-def SquareF32(B, S, x):
-    """`SquareF32_v1` on bits: `SquareF32El_v1` per element (separable)."""
-    return B.batch(SquareF32El, x, axes=(0,))
-
-
-@_on_bits("AddScalarF32", 2, ["N", "C"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-          _word_view(D.AddScalarF32, ("N", "C")))
-def AddScalarF32(B, S, x):
-    """`AddScalarF32_v1` on bits: `F32AddConst_v1{C}` per element (separable)."""
-    return B.batch(bind(F32AddConst, C=S.C), x, axes=(0,))
-
-
-@_on_bits("AddScalarBf16", 2, ["N", "C"], lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)),
-          _word_view(D.AddScalarBf16, ("N", "C")))
-def AddScalarBf16(B, S, w):
-    """`AddScalarBf16_v1` on bits: `Bf16AddConstF32_v1{C}` per element (separable)."""
-    return B.batch(bind(Bf16AddConstF32, C=S.C), w, axes=(0,))
-
-
-@_on_bits("AddWidenedBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("r", Array(S.N, BF16))), Array(S.N, F32)),
-          _word_view(D.AddWidenedBf16, ("N",)))
-def AddWidenedBf16(B, S, x, r):
-    """`AddWidenedBf16_v1` on bits: `AddWidenedBf16El_v1` per element (separable)."""
-    return B.batch(AddWidenedBf16El, x, r, axes=(0, 0))
-
+# --- the rsqrt and the narrow ---------------------------------------------------------------------------------------------------
 
 @_on_bits("RsqrtF32", 2, ["N", "RSQRT"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-          _word_view(D.RsqrtF32, ("N",), ("RSQRT",)))
+          _word_view(D.RsqrtF32, ("N",), ("RSQRT",)), word_statics={"RSQRT": P.RsqrtApprox})
 def RsqrtF32(B, S, x):
     """`RsqrtF32_v1` on bits: ``RSQRT`` (computing `RsqrtApprox_v1`) per element; on the word id, each element packed and its
     result unpacked."""
@@ -174,27 +80,6 @@ def RsqrtF32(B, S, x):
         words = B.batch(S.RSQRT, B.batch(PackF32, x, axes=(0,)), axes=(0,))
         return B.batch(UnpackF32, words, axes=(0,))
     return B.batch(S.RSQRT, x, axes=(0,))
-
-
-@_on_bits("ScaleRowBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, F32))), Array(S.N, F32)),
-          _word_view(D.ScaleRowBf16, ("N",)))
-def ScaleRowBf16(B, S, x, s):
-    """`ScaleRowBf16_v1` on bits: s's own gates once (`ScaleRowBf16Scale_v1`), then `ScaleRowBf16El_v1` per element."""
-    return B.batch(ScaleRowBf16El, x, s[0], B.call(ScaleRowBf16Scale, s[0]), axes=(0, None, None))
-
-
-@_on_bits("ScaleRowF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)), ("s", Array(1, F32))), Array(S.N, F32)),
-          _word_view(D.ScaleRowF32, ("N",)))
-def ScaleRowF32(B, S, x, s):
-    """`ScaleRowF32_v1` on bits: s's own gates once (`ScaleRowF32Scale_v1`), then `ScaleRowF32El_v1` per element."""
-    return B.batch(ScaleRowF32El, x, s[0], B.call(ScaleRowF32Scale, s[0]), axes=(0, None, None))
-
-
-@_on_bits("MulVecF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)), ("w", Array(S.N, F32))), Array(S.N, F32)),
-          _word_view(D.MulVecF32, ("N",)))
-def MulVecF32(B, S, x, w):
-    """`MulVecF32_v1` on bits: `F32Mul_v3` per element (separable)."""
-    return B.batch(EW.F32Mul, x, w, axes=(0, 0))
 
 
 @_on_bits("NarrowF32ToBf16", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, BF16)),

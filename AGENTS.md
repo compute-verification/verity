@@ -47,11 +47,15 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
     and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
     the word library as Boolean Definitions: C-Flock's linear-form builder and
-    pieces (`forms`, `fp`, `tc_step`, `softmax`), `trace.definition` (a builder
-    traced into And/Xor/Not gates, with `word_of` its word Definition), the BF16
-    dot and coordinate on bits (`gemm`: `DotBf16_v3`, `GemmCoordinate_v3`),
-    attention's softmax operations on bits (`attention`) and the element-wise
-    FP32, BF16 and I32 operations on bits (`elementwise`). `verity.ml.tc.relation`
+    pieces (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), the multiplexer tree (`gather`),
+    `trace.definition` (a builder traced into And/Xor/Not gates, with `word_of`
+    its word Definition), the BF16 dot, coordinate and GEMM and the E4M3, E5M2,
+    NVFP4 and MXFP4 steps and coordinates on bits (`gemm`: `DotBf16_v3`,
+    `GemmCoordinate_v3`, `Gemm_v3`, `GemmCoordinateE4m3_v2`, `GemmCoordinateNvf4_v2`,
+    `GemmCoordinateMxf4_v2`), attention's softmax operations and inverse sum on bits
+    (`attention`), the element-wise FP32, BF16 and I32 operations on bits
+    (`elementwise`), the bf16 widening on bits (`cast`), and the bf16 comparator,
+    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `verity.ml.tc.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its

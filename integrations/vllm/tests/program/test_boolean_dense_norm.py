@@ -1,13 +1,13 @@
 """`verity_vllm.program.registry.boolean_dense_norm`: `registry.dense`'s RMSNorm chain (Gemma-2's) on bits.
 
-The leaves are Boolean and pinned, and each is its word primitives on special words and random ones (every bf16 word where an
-operand is one bf16 word); `F32AddZero_v1` is both orders of `F32Add_v1` with +0, checked on every NaN word, the only words where
-the order could matter. Every family agrees with its `dense` word Definition on special and random rows at small widths,
-`MeanTriton_v2` at every layout (one chunk or several, 4 or 1 elements per thread, idle registers, lanes and warps), and the
-whole Gemma-2 chain at H = 2304 (with ``VERITY_VLLM_BOOLEAN_NORMS_FULL``: 80k rows of the mean and of the chain at 2304, with
-and without a residual, about 3.5 hours on one core in 9 tests).
-Every part partitions under `Q_word_v1{X=16,W=32}` with no recompute inside a Call, and the only word gates are
-`RsqrtF32_v2`'s MUFU word id and its packing.
+The chain is `boolean_dense`'s element-wise rows and this module's mean, rsqrt and narrow. The leaves are Boolean and pinned,
+and each is its word primitives on special words and random ones; `F32AddZero_v1` is both orders of `F32Add_v1` with +0, checked
+on every NaN word, the only words where the order could matter. Each family agrees with its `dense` word Definition on special
+and random rows at small widths, `MeanTriton_v2` at every layout (one chunk or several, 4 or 1 elements per thread, idle
+registers, lanes and warps), and the whole Gemma-2 chain at H = 2304, its rsqrt both proofs' Boolean `RsqrtApprox_v2` and the
+word id (with ``VERITY_VLLM_BOOLEAN_NORMS_FULL``: 80k rows of the mean and of the chain at 2304).
+Every part partitions under `Q_word_v1{X=16,W=32}` with no recompute inside a Call; with proofs' Boolean MUFU the chain is
+Boolean throughout, and on the word id its only word gates are `RsqrtApprox_v1` and its packing.
 """
 from __future__ import annotations
 
@@ -23,9 +23,13 @@ from verity.evaluation.reference import standalone_call
 from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import PrimitiveDefinition, bind
+from verity.ml.boolean import mufu as MU
 from verity.ml.boolean import trace as TR
+from verity_vllm.program.boolean import boolean_version
+from verity_vllm.program.registry import boolean_dense as BD
 from verity_vllm.program.registry import boolean_dense_norm as DN
 from verity_vllm.program.registry import boolean_norms as BN
+from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import prims as P
 from verity_vllm.query import word as QW
 from verity_vllm.query.cross_call import members_check
@@ -40,37 +44,27 @@ H, EPS, ONE = 2304, 1e-6, 1.0
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "SquareBf16El_v1": (628, 866, 69, "9ebd48e175c37c9a1df225b19e37389839e2796ccd86826db23f98503dfa82e9"),
-    "SquareF32El_v1": (1978, 4011, 103, "9ad0bb3d2de5af0250e0afa583ee62f5a9c7dd763f5a9ed0a4f8caaa69ac74bd"),
-    "AddWidenedBf16El_v1": (666, 995, 99, "d0e523e28b0687db65589e269fb30b35fb001dab8680ee94bca97072889a5b11"),
     "F32AddZero_v1": (399, 561, 61, "d75c70650ad64d29bb6236ff28aef56ffdd5ecc0942ae2119502a989afc9cd8d"),
-    "F32AddConst_v1{C=1e-06}": (742, 1191, 124, "36dcd6debd6cfebc306c5f67e13bb2523519707d8804831803ef0840f0cb8549"),
-    "F32AddConst_v1{C=1.0}": (719, 1145, 85, "3b3922d0b59cf7f0eff4efa7da24d82e12fa6476421b669bfce71e2f09f2df9b"),
-    "Bf16AddConstF32_v1{C=1.0}": (621, 873, 85, "1dbd7bf69c7b30bf6de55dab2da7ddaf44f04e6ed2f90c7e5cb4efe3a0ab63f1"),
     "MeanDivTriton_v1{N=2304}": (1474, 2867, 112, "44449ab59d5afdb08e7a280ddf9ad1e6887beed19484c75ffaa111e5a816dce1"),
-    "ScaleRowBf16Scale_v1": (50, 62, 2, "6d66437f1890263de6822cf3dd9670047468b496ded335928962b1cafcd8e1aa"),
-    "ScaleRowF32Scale_v1": (34, 62, 2, "74a63e615f8541c21e090e65157d60cd51ef1bee39eb7d63a007d847f2a413dd"),
-    "ScaleRowBf16El_v1": (1136, 1938, 87, "cb89cff17fb37b5882d30e336ea0c5a7d46d6d70b3ee7b7d2ad3d1ea4a8ca12c"),
-    "ScaleRowF32El_v1": (2396, 4588, 108, "a666c0e7a4b394740466005921d16f5f8fe0aee33072f088f5eed658bdc7f924"),
     "NarrowF32ToBf16El_v1": (66, 98, 15, "aac6bea5e40d08dd643086e3bde296fd2749c358c94536dd738c20cb0148ecbc"),
 }
-LEAVES = [bind(DN.SquareBf16El), bind(DN.SquareF32El), bind(DN.AddWidenedBf16El), bind(DN.F32AddZero),
-          bind(DN.F32AddConst, C=EPS), bind(DN.F32AddConst, C=ONE), bind(DN.Bf16AddConstF32, C=ONE),
-          bind(DN.MeanDivTriton, N=H), bind(DN.ScaleRowBf16Scale), bind(DN.ScaleRowF32Scale), bind(DN.ScaleRowBf16El),
-          bind(DN.ScaleRowF32El), bind(DN.NarrowF32ToBf16El)]
+LEAVES = [bind(DN.F32AddZero), bind(DN.MeanDivTriton, N=H), bind(DN.NarrowF32ToBf16El)]
+
+#: ``RSQRT``: proofs' Boolean `RsqrtApprox_v2`, which the switch binds, and the word id
+RSQRTS = [bind(MU.RsqrtApprox), P.RsqrtApprox]
 
 
-def _parts(N: int) -> list:
+def _parts(N: int, rsqrt=RSQRTS[0]) -> list:
     """The Calls Gemma-2's chain makes at width N (`MeanTriton_v2`'s three), in the order of `PART_ANDS`."""
-    return [bind(DN.SquareBf16, N=N), bind(DN.SquareF32, N=N), bind(DN.MeanThreadsTriton, N=N),
-            bind(DN.MeanWarpsTriton, N=N), bind(DN.MeanCombineTriton, N=N), bind(DN.AddScalarF32, N=1, C=EPS),
-            bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox), bind(DN.ScaleRowBf16, N=N), bind(DN.ScaleRowF32, N=N),
-            bind(DN.AddScalarBf16, N=N, C=ONE), bind(DN.MulVecF32, N=N), bind(DN.NarrowF32ToBf16, N=N),
-            bind(DN.AddWidenedBf16, N=N)]
+    return [bind(BD.SquareBf16, N=N), bind(BD.SquareF32, N=N), bind(DN.MeanThreadsTriton, N=N),
+            bind(DN.MeanWarpsTriton, N=N), bind(DN.MeanCombineTriton, N=N), bind(BD.AddScalarF32, N=1, C=EPS),
+            bind(DN.RsqrtF32, N=1, RSQRT=rsqrt), bind(BD.ScaleRowBf16, N=N), bind(BD.ScaleRowF32, N=N),
+            bind(BD.AddScalarBf16, N=N, C=ONE), bind(BD.MulVecF32, N=N), bind(DN.NarrowF32ToBf16, N=N),
+            bind(BD.AddWidenedBf16, N=N)]
 
 
-#: And gates of `_parts(H)` (`RsqrtF32_v2`'s are its packing's: none)
-PART_ANDS = [1446912, 4557312, 1713152, 251720, 9979, 742, 0, 2617394, 5520418, 1430784, 5598720, 152064, 1534464]
+#: And gates of `_parts(H)` (`RsqrtApprox_v2`'s 1134 in `RsqrtF32_v2`)
+PART_ANDS = [1446912, 4557312, 1713152, 251720, 9979, 742, 1134, 2617394, 5520418, 1430784, 5598720, 152064, 1534464]
 
 
 # --- words and bits ----------------------------------------------------------------------------------------------------------
@@ -140,14 +134,6 @@ def _finite(rng, n: int) -> np.ndarray:
             | rng.integers(0, 1 << 23, n, dtype=np.uint64))
 
 
-def _near(rng, n: int, c: float) -> np.ndarray:
-    """Random f32 words within 2^±26 of c's magnitude, either sign: where adding c rounds."""
-    e = (BN._f32(c) >> 23) & 0xFF
-    return (rng.integers(0, 2, n, dtype=np.uint64) << np.uint64(31)
-            | rng.integers(max(e - 26, 0), min(e + 27, 255), n, dtype=np.uint64) << np.uint64(23)
-            | rng.integers(0, 1 << 23, n, dtype=np.uint64))
-
-
 def _f32_words(rng, n: int) -> np.ndarray:
     return np.concatenate([F32_SPECIALS, _rand_f32(rng, n), _finite(rng, n)])
 
@@ -167,29 +153,12 @@ def test_leaves_are_boolean_and_pinned(target) -> None:
     assert codec.program_digest(codec.encode_program(prog)) == digest
 
 
-def test_the_bf16_leaves_are_their_word_primitives_on_every_bf16_word() -> None:
-    rng = np.random.default_rng(11)
-    z = np.arange(1 << 16, dtype=np.uint64)
-    zf = _f32(z)
-    assert np.array_equal(_words(bind(DN.SquareBf16El), z)[:, 0], _w(P.F32Mul, zf, zf))
-    for c in (ONE, 0.5, EPS):
-        assert np.array_equal(_words(bind(DN.Bf16AddConstF32, C=c), z)[:, 0], _w(P.F32Add, zf, _full(z, BN._f32(c))))
-    g = np.stack(np.meshgrid(BF16_SPECIALS, BF16_SPECIALS), -1).reshape(-1, 2)
-    x = np.concatenate([z, rng.permutation(z), g[:, 0]])
-    r = np.concatenate([rng.permutation(z), _bf16_rows(rng, 1, 1 << 16)[0], g[:, 1]])
-    assert np.array_equal(_words(bind(DN.AddWidenedBf16El), x, r)[:, 0], _w(P.F32Add, _f32(x), _f32(r)))
-
-
 def test_the_f32_leaves_are_their_word_primitives() -> None:
     rng = np.random.default_rng(12)
     v = _f32_words(rng, 60_000)
-    assert np.array_equal(_words(bind(DN.SquareF32El), v)[:, 0], _w(P.F32Mul, v, v))
     zero = _full(v, 0)
     got = _words(bind(DN.F32AddZero), v)[:, 0]
     assert np.array_equal(got, _w(P.F32Add, v, zero)) and np.array_equal(got, _w(P.F32Add, zero, v))
-    for c in (EPS, ONE):
-        u = np.concatenate([v, _near(rng, 60_000, c)])
-        assert np.array_equal(_words(bind(DN.F32AddConst, C=c), u)[:, 0], _w(P.F32Add, u, _full(u, BN._f32(c))))
     ties = rng.integers(0, 1 << 16, 30_000, dtype=np.uint64) << np.uint64(16) | rng.choice(
         np.array([0x7FFF, 0x8000, 0x8001], np.uint64), 30_000)
     u = np.concatenate([v, ties])
@@ -227,34 +196,12 @@ def test_the_mean_division_is_the_word_bodys(N) -> None:
     assert np.array_equal(_words(bind(DN.MeanDivTriton, N=N), v)[:, 0], want)
 
 
-@pytest.mark.parametrize("kind", ["bf16", "f32"])
-def test_a_row_scale_from_its_own_gates_is_the_product(kind) -> None:
-    rng = np.random.default_rng(14)
-    xs, wide = (BF16_SPECIALS, _f32) if kind == "bf16" else (F32_SPECIALS, lambda a: a)
-    g = np.stack(np.meshgrid(xs, F32_SPECIALS), -1).reshape(-1, 2)
-    near = rng.integers(57, 147, 50_000, dtype=np.uint64) << np.uint64(23) | rng.integers(0, 1 << 23, 50_000, dtype=np.uint64)
-    s = np.concatenate([g[:, 1], _rand_f32(rng, 50_000), near])
-    x = np.concatenate([g[:, 0], (_rand_bf16 if kind == "bf16" else _rand_f32)(rng, 100_000)])
-    scale, el = ((DN.ScaleRowBf16Scale, DN.ScaleRowBf16El) if kind == "bf16" else (DN.ScaleRowF32Scale, DN.ScaleRowF32El))
-    sd = _words(bind(scale), s)[:, 0]
-    assert np.array_equal(_words(bind(el), x, s, sd)[:, 0], _w(P.F32Mul, wide(x), s))
-
-
 # --- the families against `dense`'s word Definitions -----------------------------------------------------------------------------
 
 def _elementwise(rng, N: int, n: int) -> None:
-    f, b = _f32_inputs(rng, n, N), _bf16_inputs(rng, n, N)
-    m = len(b)
-    s = rng.permutation(np.concatenate([F32_SPECIALS, _near(rng, m, 1.0)]))[:m, None]
-    _agree(bind(DN.SquareBf16, N=N), b)
-    _agree(bind(DN.SquareF32, N=N), f)
-    _agree(bind(DN.AddScalarF32, N=N, C=EPS), f)
-    _agree(bind(DN.AddScalarBf16, N=N, C=ONE), b)
-    _agree(bind(DN.AddWidenedBf16, N=N), b, b[rng.permutation(m)])
-    _agree(bind(DN.RsqrtF32, N=N, RSQRT=P.RsqrtApprox), f)
-    _agree(bind(DN.ScaleRowBf16, N=N), b, s)
-    _agree(bind(DN.ScaleRowF32, N=N), f, f[rng.permutation(len(f)), :1])
-    _agree(bind(DN.MulVecF32, N=N), f, f[rng.permutation(len(f))])
+    f = _f32_inputs(rng, n, N)
+    for rsqrt in RSQRTS:
+        _agree(bind(DN.RsqrtF32, N=N, RSQRT=rsqrt), f)
     _agree(bind(DN.NarrowF32ToBf16, N=N), f)
 
 
@@ -284,35 +231,37 @@ def test_the_mean_is_its_word_definition_at_wide_layouts(N) -> None:
     _agree(bind(DN.MeanTriton, N=N), _f32_inputs(np.random.default_rng(N), 128, N))
 
 
-def _chain(N: int, x: np.ndarray, r: np.ndarray | None, w: np.ndarray) -> list[np.ndarray]:
+def _chain(N: int, x: np.ndarray, r: np.ndarray | None, w: np.ndarray, rsqrt=RSQRTS[0]) -> list[np.ndarray]:
     """Gemma-2's `GemmaRMSNorm.forward_native` at width N, each Call on bits against its word view (`_agree`): the output and,
     with a residual ``r``, the new residual."""
     if r is None:
-        h, square, scale = x, DN.SquareBf16, DN.ScaleRowBf16
+        h, square, scale = x, BD.SquareBf16, BD.ScaleRowBf16
     else:
-        h, square, scale = _agree(bind(DN.AddWidenedBf16, N=N), x, r), DN.SquareF32, DN.ScaleRowF32
+        h, square, scale = _agree(bind(BD.AddWidenedBf16, N=N), x, r), BD.SquareF32, BD.ScaleRowF32
     m = _agree(bind(DN.MeanTriton, N=N), _agree(bind(square, N=N), h))
-    s = _agree(bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox), _agree(bind(DN.AddScalarF32, N=1, C=EPS), m))
-    y = _agree(bind(DN.MulVecF32, N=N), _agree(bind(scale, N=N), h, s), _agree(bind(DN.AddScalarBf16, N=N, C=ONE), w))
+    s = _agree(bind(DN.RsqrtF32, N=1, RSQRT=rsqrt), _agree(bind(BD.AddScalarF32, N=1, C=EPS), m))
+    y = _agree(bind(BD.MulVecF32, N=N), _agree(bind(scale, N=N), h, s), _agree(bind(BD.AddScalarBf16, N=N, C=ONE), w))
     out = [_agree(bind(DN.NarrowF32ToBf16, N=N), y)]
     return out if r is None else out + [_agree(bind(DN.NarrowF32ToBf16, N=N), h)]
 
 
-def _chain_rows(N: int, n: int, seed: int) -> None:
+def _chain_rows(N: int, n: int, seed: int, rsqrt=RSQRTS[0]) -> None:
     rng = np.random.default_rng(seed)
     x, r = _bf16_inputs(rng, n, N), _bf16_inputs(rng, n, N)
     w = np.concatenate([_bf16_rows(rng, len(x) - 1, N), BF16_SPECIALS[rng.integers(0, len(BF16_SPECIALS), (1, N))]])
-    _chain(N, x, None, w)
-    _chain(N, x, r, w)
+    _chain(N, x, None, w, rsqrt)
+    _chain(N, x, r, w, rsqrt)
 
 
-def test_the_chain_is_gemmas_at_a_small_width() -> None:
-    _chain_rows(64, 32, 30)
+@pytest.mark.parametrize("rsqrt", RSQRTS, ids=lambda f: f.id)
+def test_the_chain_is_gemmas_at_a_small_width(rsqrt) -> None:
+    _chain_rows(64, 32, 30, rsqrt)
 
 
 @pytest.mark.slow
-def test_the_chain_is_gemmas_at_its_width() -> None:
-    _chain_rows(H, 32, 31)
+@pytest.mark.parametrize("rsqrt", RSQRTS, ids=lambda f: f.id)
+def test_the_chain_is_gemmas_at_its_width(rsqrt) -> None:
+    _chain_rows(H, 32, 31, rsqrt)
 
 
 @pytest.mark.skipif(not FULL, reason="VERITY_VLLM_BOOLEAN_NORMS_FULL: 80k rows of the mean at H = 2304 (about 30 minutes)")
@@ -331,31 +280,20 @@ def test_the_chain_is_gemmas_on_80k_rows(group) -> None:
 
 # --- partition, recompute, purity ------------------------------------------------------------------------------------------------
 
-def _boolean(parts: list) -> list:
-    return [p for p in parts if p.defn is not DN.RsqrtF32]
-
-
 def test_every_part_partitions_without_recompute_at_small_widths() -> None:
-    _assert_partitions(_boolean(_parts(16)) + _parts(1030)[2:5])
+    _assert_partitions(_parts(16) + _parts(1030)[2:5] + [bind(DN.RsqrtF32, N=4, RSQRT=RSQRTS[0])])
     r = QW.unit_rule(bind(DN.RsqrtF32, N=4, RSQRT=P.RsqrtApprox), 16, 32)
-    assert r["violations"] == [] and r["max_out_bits"] == 32  # RsqrtApprox_v1's word, until proofs' Boolean RSQRT
+    assert r["violations"] == [] and r["max_out_bits"] == 32  # on the word id, RsqrtApprox_v1's word
 
 
 @pytest.mark.slow
 def test_every_part_partitions_without_recompute_at_gemmas_width() -> None:
-    """The row scales aside (`test_the_row_scales_partition_at_gemmas_width`)."""
-    _assert_partitions([p for p in _boolean(_parts(H)) if p.defn not in (DN.ScaleRowBf16, DN.ScaleRowF32)])
+    """The row scales aside: `boolean_dense`'s, which its own tests cut."""
+    _assert_partitions([p for p in _parts(H) if p.defn not in (BD.ScaleRowBf16, BD.ScaleRowF32)])
 
 
-@pytest.mark.skipif(not FULL, reason="VERITY_VLLM_BOOLEAN_NORMS_FULL: the row scales' cut at H = 2304 (about 11 minutes)")
-def test_the_row_scales_partition_at_gemmas_width() -> None:
-    """A row scale is N members of one leaf beside one Call, the same cut at every N, which the small widths check; this
-    checks the served width itself."""
-    _assert_partitions([bind(DN.ScaleRowBf16, N=H), bind(DN.ScaleRowF32, N=H)])
-
-
-@pytest.mark.parametrize("fn", [bind(DN.MeanTriton, N=16), bind(DN.MeanTriton, N=1030), bind(DN.ScaleRowBf16, N=16),
-                                bind(DN.ScaleRowF32, N=16), bind(DN.RsqrtF32, N=4, RSQRT=P.RsqrtApprox)], ids=lambda f: f.id)
+@pytest.mark.parametrize("fn", [bind(DN.MeanTriton, N=16), bind(DN.MeanTriton, N=1030),
+                                *(bind(DN.RsqrtF32, N=4, RSQRT=r) for r in RSQRTS)], ids=lambda f: f.id)
 def test_nothing_is_recomputed_across_a_definitions_calls(fn) -> None:
     r = members_check(fn)
     assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]
@@ -371,18 +309,32 @@ def test_the_parts_and_gates_at_gemmas_width_are_pinned() -> None:
     memo: dict = {}
     assert [_ands(p, memo) for p in _parts(H)] == PART_ANDS
     assert _ands(bind(DN.MeanTriton, N=H), memo) == sum(PART_ANDS[2:5]) == 1974851
+    assert _ands(bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox), memo) == 0
     for N in (16, 20):
         mean = bind(DN.MeanTriton, N=N)
         assert _ands(mean, memo) == BS.compile(mean).counts["and"]
 
 
-#: the Definitions the chain's word gates are confined to: the MUFU word id and the packing around it
+#: the Definitions the chain's word gates are confined to on the word id: the MUFU word id and the packing around it
 _WORDY = {"PackF32_v1", "UnpackF32_v1", P.RsqrtApprox.id}
 
 
-def test_only_the_rsqrt_is_a_word_id() -> None:
-    for p in _boolean(_parts(H)):
+def test_with_proofs_boolean_mufu_the_chain_is_boolean() -> None:
+    for p in _parts(H):
         assert BL.is_boolean(p), p.id
+
+
+def test_the_switch_binds_the_rsqrt_to_proofs_boolean_mufu() -> None:
+    """`RsqrtF32_v1`'s word has no RSQRT: the switch binds it through ``word_statics`` to `RsqrtApprox_v1`'s Boolean version."""
+    on_bits = boolean_version(bind(D.RsqrtF32, N=1))
+    assert on_bits.id == "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}" and BL.is_boolean(on_bits)
+    for fn in (bind(D.MeanTriton, N=H), bind(D.NarrowF32ToBf16, N=H)):
+        assert boolean_version(fn).id == fn.id.replace("_v1{", "_v2{")
+
+
+def test_on_the_word_id_only_the_rsqrt_is_a_word_id() -> None:
+    for p in _parts(H, P.RsqrtApprox):
+        assert BL.is_boolean(p) == (p.defn is not DN.RsqrtF32), p.id
     rsqrt = bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox)
     assert not BL.is_boolean(rsqrt)
     assert sorted(n.fn.id for n in rsqrt.body.nodes) == sorted(_WORDY)
@@ -400,12 +352,10 @@ def test_only_the_rsqrt_is_a_word_id() -> None:
 
 def test_word_views_and_refusals() -> None:
     assert TR.word_of(bind(DN.MeanTriton, N=H)).id == f"MeanTriton_v1{{N={H}}}"
-    assert TR.word_of(bind(DN.AddScalarF32, N=1, C=EPS)).id == "AddScalarF32_v1{N=1,C=1e-06}"
-    assert TR.word_of(bind(DN.AddScalarBf16, N=H, C=ONE)).id == f"AddScalarBf16_v1{{N={H},C=1.0}}"
-    assert TR.word_of(bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox)).id == "RsqrtF32_v1{N=1}"
-    for fam in (DN.SquareBf16, DN.SquareF32, DN.AddWidenedBf16, DN.ScaleRowBf16, DN.ScaleRowF32, DN.MulVecF32,
-                DN.NarrowF32ToBf16):
-        assert TR.word_of(bind(fam, N=H)).id == f"{fam.name}_v1{{N={H}}}"
+    for rsqrt in RSQRTS:
+        assert TR.word_of(bind(DN.RsqrtF32, N=1, RSQRT=rsqrt)).id == "RsqrtF32_v1{N=1}"
+    assert DN.RsqrtF32.word_statics == {"RSQRT": P.RsqrtApprox}
+    assert TR.word_of(bind(DN.NarrowF32ToBf16, N=H)).id == f"NarrowF32ToBf16_v1{{N={H}}}"
     with pytest.raises(ValueError, match="RSQRT computes MufuSqrtFtz_v1, not RsqrtApprox_v1"):
         TR.word_of(bind(DN.RsqrtF32, N=1, RSQRT=P.MufuSqrtFtz))
     with pytest.raises(ValueError, match="a thread holds 1 to 8 live registers, not 9"):

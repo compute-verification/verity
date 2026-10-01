@@ -133,6 +133,8 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
         return f"larger than {node} allows ({job.gpus} GPUs, {job.cpus} CPUs, {job.memory_gib} GiB)"
     if set(job.gpu_ids) - {g.index for g in n.gpus}:
         return f"pins GPUs {sorted(set(job.gpu_ids) - {g.index for g in n.gpus})} that {node} lacks"
+    if job.gpu_pool and len(set(job.gpu_pool) & {g.index for g in n.gpus}) < job.gpus:
+        return f"its GPU pool {sorted(job.gpu_pool)} has fewer than {job.gpus} of {node}'s GPUs"
     return None
 
 
@@ -163,7 +165,7 @@ def fit(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation],
         mine = sum(len(a.gpus) for a in occ if a.job.workstream == w.name)
         if mine + job.gpus > w.gpus + w.borrow_gpus:
             return f"at workstream {w.name}'s GPUs on {node}"
-    free_gpus = sorted({g.index for g in n.gpus} - used_gpus)
+    free_gpus = sorted(({g.index for g in n.gpus} & set(job.gpu_pool or (g.index for g in n.gpus))) - used_gpus)
     if job.gpu_ids:
         if set(job.gpu_ids) & used_gpus:
             return "pinned GPUs are held"

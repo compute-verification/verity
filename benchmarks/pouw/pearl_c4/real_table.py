@@ -17,7 +17,9 @@ from fractions import Fraction
 from pathlib import Path
 
 RHO = Fraction(1, 400)
-TERMS = ("split", "int8", "identity", "dead_pairs", "forming", "subgrid", "windows")
+#: The debit's items (F1′ is `split`, F2 `int8`); `two_four` is the retired item 1, which summaries replayed before F1′
+#: carry in their place.
+TERMS = ("split", "int8", "two_four", "identity", "dead_pairs", "forming", "subgrid", "windows")
 
 
 def x_files(summary: dict, manifest: Path | None = None) -> dict[str, str]:
@@ -42,7 +44,7 @@ def rows(summaries: list[dict], rho: Fraction, manifest: Path | None = None) -> 
         for name, tiles in s["tiles"].items():
             x, w = s["inputs"].get(files.get(name, ""), {}), s["weights"].get(name, {})
             debited = [t for t in tiles if "ratio" in t]
-            split = [{term: float(Fraction(t["debit"][term]) / Fraction(t["cap"])) for term in TERMS} for t in debited]
+            split = [{term: float(Fraction(t["debit"].get(term, 0)) / Fraction(t["cap"])) for term in TERMS} for t in debited]
             size = next((t for t in tiles if "k_kept" in t), {})
             out.append({
                 "linear": name, "model": s.get("model"), "capture_sha256": s.get("manifest_sha256"),

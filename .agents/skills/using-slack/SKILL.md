@@ -203,6 +203,10 @@ research slack ask-daniel resolve <id> --choice no --note 'his reply: <permalink
   where both help. Convert in your head from the UTC `<timestamp>` your turn already carries: PDT = UTC−7 until 1 Nov, then
   PST = UTC−8. Don't make a tool call for it; `TZ=America/Los_Angeles date` is a fallback only. Machine timestamps stay UTC:
   note filenames, front matter, log lines, store and run ids, cron.
+- **When two agents act on the same thing in conflicting ways** (two pacers reactivating and holding the same jobs, two lanes
+  deleting or rebuilding the same data), say so at once in the thread where they work: tag both, name the one owner, and ask
+  the other to stop. Don't investigate privately first; post, then check.
+
 ## Changing the registry
 
 Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
