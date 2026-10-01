@@ -20,6 +20,11 @@
 #      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the gate's and the step's statements into FLOCK_STAGE_CACHE,
 #      default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the cache, so it holds its
 #      GPU from the gate's selftests on, and its point is flagged staged-on-gpu if it staged the step's statement itself)  SM=120
+#      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the gate's and the step's statements and serve their sessions on
+#      the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR alone (the GPU
+#      job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the pod network, so
+#      this pod holds only the prover); give both jobs the same K, N, WARM, RUNS and FC_VERIFY_AHEAD, and FC_VERIFY_SERVERS to
+#      the serving one
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -38,7 +43,8 @@ fi
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/gemm-hill}; mkdir -p $R/out
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLOCK_WORK/home
 export HOME=$FLOCK_WORK/home FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache}
-[ "${STAGE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
+[ "${STAGE_ONLY:-0}" = 1 ] || [ "${SERVE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
+[ -n "${VERIFIERS:-}" ] && [ "${SERVE_ONLY:-0}" != 1 ] && export FC_VERIFIERS=$VERIFIERS
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
 INST=${N:-}; unset N
 DEFS=$R/out/defs.json; INST=$(python3 backends/flock/pod/gemm_hill.py defs --K $K ${INST:+--n $INST} --out $DEFS) || exit 1
@@ -56,8 +62,8 @@ Q=name,uuid,driver_version,memory.total,compute_cap,clocks.sm,clocks.max.sm,powe
 { nvidia-smi -L; lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$HILL_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-} slice_wait_s=${SLICE_WAIT_S:-}"; free -g | head -2
   df -h /workspace | tail -1; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-} K=$K instances=$INST"; } > $R/out/host.txt 2>&1
 DG=; case "${CUDA_VISIBLE_DEVICES:-}" in ''|*,*|*-*) ;; *) DG="--gpu $CUDA_VISIBLE_DEVICES" ;; esac
-python3 backends/flock/pod/gemm_hill.py dmon --out $R/out/dmon.tsv $DG &
-DMON=$!
+DMON=
+if command -v nvidia-smi >/dev/null; then python3 backends/flock/pod/gemm_hill.py dmon --out $R/out/dmon.tsv $DG & DMON=$!; fi
 python3 backends/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt --every 5 &
 SAMPLER=$!
 python3 backends/flock/pod/gemm_hill.py cores --cpus $HILL_PINNED --out $R/out/slice_cores.tsv --every 5 &
@@ -73,6 +79,24 @@ done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/
 trap done_ EXIT
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
 ok=1
+if [ "${SERVE_ONLY:-0}" = 1 ]; then
+  : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR, where the GPU job finds the addresses}"
+  ph serve start
+  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 \
+    SELFTEST=0 > $R/out/gate.log 2>&1 &
+  GP=$!
+  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST \
+    MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 > $R/out/sweep.log 2>&1 &
+  SP=$!
+  wait $GP || ok=0
+  wait $SP || ok=0
+  ph serve end
+  cp $S/gate/classes/served.jsonl $R/out/gate-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
+  [ $ok = 1 ] && python3 -c 'import json, sys; r = [json.loads(l)["serve"] for f in sys.argv[1:] for l in open(f) if l.strip()]
+sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] and not x["timed_out"] for x in r) else 1)' \
+    $R/out/gate-served.jsonl $R/out/served.jsonl
+  exit
+fi
 if [ "${GATE:-1}" = 1 ]; then
   ph gate start
   OUT=$S/gate RESEARCH_RUN_DIR=$S/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \

@@ -223,15 +223,21 @@ def _mean(xs: list[float]) -> float | None:
     return sum(xs) / len(xs) if xs else None
 
 
+def _median(xs: list) -> float | None:
+    xs = [x for x in xs if x is not None]
+    return statistics.median(xs) if xs else None
+
+
 def _window(samples, t0: float | None, t1: float | None) -> dict:
-    """Mean sm and mem % of the samples in [t0, t1] (fractions), how many, and the most framebuffer MiB any sample saw."""
+    """Mean sm and mem % of the samples in [t0, t1] (fractions), how many, how many saw some kernel run (busy: sm > 0, infra's
+    measure, one sample a second), and the most framebuffer MiB any sample saw."""
     if t0 is None or t1 is None:
-        return {"t0": t0, "t1": t1, "s": None, "samples": 0, "sm": None, "mem": None, "fb_mib_max": None}
+        return {"t0": t0, "t1": t1, "s": None, "samples": 0, "busy": 0, "sm": None, "mem": None, "fb_mib_max": None}
     inside = [s for s in samples if t0 <= s[0] <= t1]
     sm, mem = _mean([s[1] for s in inside if s[1] is not None]), _mean([s[2] for s in inside if s[2] is not None])
     fb = [s[3] for s in inside if len(s) > 3 and s[3] is not None]
-    return {"t0": t0, "t1": t1, "s": round(t1 - t0, 3), "samples": len(inside), "sm": sm / 100 if sm is not None else None,
-            "mem": mem / 100 if mem is not None else None, "fb_mib_max": max(fb) if fb else None}
+    return {"t0": t0, "t1": t1, "s": round(t1 - t0, 3), "samples": len(inside), "busy": sum(1 for s in inside if (s[1] or 0) > 0),
+            "sm": sm / 100 if sm is not None else None, "mem": mem / 100 if mem is not None else None, "fb_mib_max": max(fb) if fb else None}
 
 
 def _pod_start() -> float | None:
@@ -336,12 +342,18 @@ def metrics(a) -> None:
                         "why": "--session-tables J: the tables share one link exchange and both reps one root (Session.lean); "
                                "the device prover proves one table per session, so J = 1 on the GPU"},
             "gpu_util_job": job["sm"] * job["s"] / held if job["sm"] is not None and held else None, "gpu_held_s_job": held,
+            "gpu_busy_s_job": job["busy"],
+            # where the verifier ran, and what a coin round trip costs the session: the 64-byte pings on each session's open
+            # connection before it starts, and the seconds the prover waited inside its round trips (the verifier's handling included)
+            "verifier": lv.get("verifier"), "open_rtt_ms": _median([x.get("open_rtt_ms") for _, x in timed]),
+            "wait_e2e_s": _median([x.get("wait_e2e_s") for _, x in timed]),
             "gpu_mem_peak_gib": job["fb_mib_max"] / 1024 if job.get("fb_mib_max") is not None else None,
             "verify_s_per_statement": statistics.median([v for v in verify if v is not None]) if any(v is not None for v in verify) else None,
             "session_s_per_statement": statistics.median([v for v in session if v is not None]) if any(v is not None for v in session) else None,
             "timed_runs": runs, "sessions": [{"t": t, "warm": bool(x.get("warm")), "e2e_s": x.get("e2e_s"), "prove_total_s": x.get("prove_total_s"),
                                               "witness_s": x.get("witness_s"), "wait_s": x.get("wait_s"), "verify_s": (x.get("verdict") or {}).get("verify_s"),
-                                              "session_s": (x.get("verdict") or {}).get("session_s")} for t, x in live],
+                                              "session_s": (x.get("verdict") or {}).get("session_s"), "open_rtt_ms": x.get("open_rtt_ms"),
+                                              "wait_e2e_s": x.get("wait_e2e_s")} for t, x in live],
             "windows": {"steady": steady, "prove_process": _window(samples, start, end), "job": {**job, "held_since": held_since, "held_s": held},
                         **{k: _window(samples, *v) for k, v in phases.items() if k != "job"}},
             "others_cores_steady": _others(Path(a.others) if a.others else None, t0, t1),
