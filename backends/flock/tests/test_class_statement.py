@@ -132,3 +132,29 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="honest")["all_pass"] is True
     assert "--gpu" in seen[0] and seen[0][-2:] == ["--only", "gpu_paths_agree"]
     assert "--gpu" not in seen[1]
+
+
+def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Path):
+    class Exited:
+        pid = 0
+
+        def poll(self):
+            return 0
+
+        def kill(self):
+            pass
+
+        def wait(self):
+            return 0
+
+    def served(name: str, verdicts: list[bool]) -> dict:
+        d = tmp_path / name
+        (d / "sessions").mkdir(parents=True)
+        (d / "sessions" / "index.jsonl").write_text("".join(json.dumps({"accepted": v, "verify_s": 0.5}) + "\n" for v in verdicts))
+        (d / "addrs.json").write_text("{}")
+        return {"file": d / "addrs.json", "srvs": [Exited()], "doc": {"sessions": 3}, "d": d, "t0": 0.0}
+
+    recs = CS.serve_wait([served("all", [True] * 3), served("short", [True] * 2), served("rejected", [True, False, True]),
+                          served("none", [])], 1.0)
+    assert [(r["served"], r["accepted"]) for r in recs] == [(3, True), (2, False), (3, False), (0, False)]
+    assert not any((tmp_path / n / "addrs.json").exists() for n in ("all", "short", "rejected", "none"))

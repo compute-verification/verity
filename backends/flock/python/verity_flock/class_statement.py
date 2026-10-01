@@ -624,7 +624,8 @@ def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
         idx = e["d"] / "sessions" / "index.jsonl"
         lines = [json.loads(ln) for ln in idx.read_text().splitlines() if ln.strip()] if idx.exists() else []
         vs = [x["verify_s"] for x in lines if x.get("verify_s") is not None]
-        out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and all(x.get("accepted") is True for x in lines),
+        out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and len(lines) == e["doc"]["sessions"]
+                               and all(x.get("accepted") is True for x in lines),
                                "timed_out": timed_out, "wall_s": round(time.time() - e["t0"], 3),
                                "verify_s_median": sorted(vs)[len(vs) // 2] if vs else None,
                                "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)})
