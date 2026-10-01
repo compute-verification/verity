@@ -573,6 +573,17 @@ useful    U/(α_A·α_B), glue
     the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
     ρ's accumulate, 2);
   - the weight side is `job_cost`.
+- **Registered weights (`check_registration`):**
+  - **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep). An unrotated checkpoint
+    registers only from the curated list, the fallback.
+  - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
+    5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
+    heads. They are never applied on an unrotated checkpoint, curated or not.
+  - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
+    V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
+    because the two were measured only together, after the rotation (research store `internal/pouw/keyed-transforms/`).
+  - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
+    registration's own.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
   row needs:

@@ -675,6 +675,36 @@ def b_ovf(n: int) -> Fraction:
     return next((b for nb, b in reversed(B_OVF) if nb <= n), B_OVF[0][1])
 
 
+#: Registered weights' keyed transforms (`check_registration`; Daniel, 1:36 PM and 5:52 PM PDT on 30 Sep, research store
+#: internal/pouw/rtx-pro/server.md and internal/pouw/keyed-transforms/): the keyed 8-block rotation (rung 3) is the rule,
+#: and the keyed V/O rotation (each KV head's v_proj rows and o_proj columns) plus the keyed head interleave (o_proj's
+#: heads) are adopted inside it, after it.
+ROTATION_8 = "keyed-8-block-rotation"
+VO_ROTATION = "keyed-vo-rotation"
+HEAD_INTERLEAVE = "keyed-head-interleave"
+#: The transform stacks a registration may apply, in their order; an unrotated checkpoint takes none and must be curated
+REGISTRATION_STACKS = ((ROTATION_8,), (ROTATION_8, VO_ROTATION, HEAD_INTERLEAVE))
+
+
+def check_registration(transforms: Sequence[str], curated: bool = False) -> None:
+    """Refuse a registration of a checkpoint's weights outside Pearl-C4's rules.  `transforms` are the keyed transforms
+    it applies, in order; `curated` says the checkpoint is on the curated list, the fallback for an unrotated one.
+
+    The keyed 8-block rotation is the registered-weights rule, alone or followed by the V/O rotation and the head
+    interleave together (the stack measured and adopted).  V/O or the interleave on an unrotated checkpoint is refused,
+    curated or not.  This reads what the registration declares; applying the transforms and keying them are the
+    registration's own."""
+    t = tuple(transforms)
+    if t in REGISTRATION_STACKS or (not t and curated):
+        return
+    if ROTATION_8 not in t and {VO_ROTATION, HEAD_INTERLEAVE} & set(t):
+        raise DomainError(f"registration {t}: the V/O rotation and the head interleave apply inside the keyed 8-block "
+                          "rotation only, never on an unrotated checkpoint")
+    if not t:
+        raise DomainError("registration: an unrotated checkpoint must be on the curated list")
+    raise DomainError(f"registration {t}: not an adopted stack, one of {REGISTRATION_STACKS}")
+
+
 def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
     """The noisy amax interval [lo, hi) whose block takes scale byte s."""
     if fmt is MXFP4:
@@ -1113,6 +1143,10 @@ class PearlC4:
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k, tiles of "
                               f"{self.tile}, m <= 2^24, {self.n_min} <= n <= 2^18")
 
+    def check_registration(self, transforms: Sequence[str], curated: bool = False) -> None:
+        """The registered-weights rule (`check_registration`)."""
+        check_registration(transforms, curated)
+
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
 
@@ -1238,5 +1272,5 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "dnf", "e2m1", "form", "hw_scales", "line",
-           "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]
+__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1", "form",
+           "hw_scales", "line", "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]

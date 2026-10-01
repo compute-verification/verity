@@ -176,6 +176,33 @@ def test_domain_and_registry():
     V.scheme("nvfp4", True).check(Matmul(0, Shape(16, 128, 16), 0))
 
 
+def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_only():
+    """Daniel's 5:52 PM PDT ruling: the keyed V/O rotation plus the head interleave register inside the keyed 8-block
+    rotation, and the same transforms on an unrotated checkpoint are refused, curated or not."""
+    s = get("pearl-c-nvfp4-v0")
+    vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
+    for curated in (False, True):
+        s.check_registration((F.ROTATION_8, *vo), curated)
+        for unrotated in (vo, vo[:1], vo[1:]):
+            with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+                s.check_registration(unrotated, curated)
+
+
+def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
+    """The keyed 8-block rotation is the registered-weights rule, and an unrotated checkpoint registers only from the curated
+    list (Daniel, 1:36 PM PDT).  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
+    s = get("pearl-c-nvfp4-v0")
+    s.check_registration((F.ROTATION_8,))
+    s.check_registration((), curated=True)
+    with pytest.raises(DomainError, match="curated list"):
+        s.check_registration(())
+    for bad in ((F.ROTATION_8, F.VO_ROTATION), (F.ROTATION_8, F.HEAD_INTERLEAVE),
+                (F.ROTATION_8, F.HEAD_INTERLEAVE, F.VO_ROTATION), (F.VO_ROTATION, F.ROTATION_8, F.HEAD_INTERLEAVE),
+                (F.ROTATION_8, F.ROTATION_8), (F.ROTATION_8, "an-unnamed-transform")):
+        with pytest.raises(DomainError, match="not an adopted stack"):
+            s.check_registration(bad, curated=True)
+
+
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
     """Entries at `value` at unsampled positions: at 256 (well past 9.5ρ) each screens its scale block; at 2^16 the row's
     a_E is subnormal (D-NF)."""
