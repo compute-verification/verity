@@ -156,8 +156,8 @@ class NativeRangeOpenings:
                 return None
             padded = -(-self._gpu_blocks[step][1] // C) * C
             layout = self._gpu_layout(step, padded // 4)
-            return [scheme.chunk_leaf(scheme.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), mv[k * C:(k + 1) * C])
-                    for k in range(hi - lo)]
+            return self._leaf_rule([scheme.chunk_leaf(scheme.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), mv[k * C:(k + 1) * C])
+                                    for k in range(hi - lo)], salts)
         if step in self._streams:
             end = len(self._streams[step]) - lo * C
         else:

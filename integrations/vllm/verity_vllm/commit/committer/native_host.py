@@ -821,8 +821,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`)."""
+                 geo_digest: bytes | None = None, leaf_scheme: str = hiding.DEFAULT_LEAF_SCHEME) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: hm96-sha256/v1 hiding leaves over the vllm-v1 leaves (default) or the bare vllm-v1 leaves (`hiding.LeafSchemeRule`)."""
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
@@ -832,7 +832,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.run_id = run_id
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
-        self.spans = Spans(scheme.NAME)
+        self.spans = Spans(hiding.commitment_scheme(leaf_scheme))
         self.x03_expected = 0
         self.x03_committed = 0
         # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
@@ -890,7 +890,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if gpu_tree:
             self.name = f"{self.name}_gputree"
             self.chunk = GPU_CHUNK_BYTES
-        self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
+        self._init_leaf_scheme(leaf_scheme, type(self)._commit_step is not NativeHostCommitter._commit_step and not (gpu_tree and self.HM96_DEVICE_PATHS), device=gpu_tree)
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
         self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
@@ -1279,21 +1279,21 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._orig = {}
         self.installed = False
 
-    def reset(self) -> None:
-        """Forget the previous run's commitment (roots, levels, values) and recycle the pinned blocks; the engine stays pristine."""
+    def reset(self, salts_of: Any = None) -> None:
+        """Forget the previous run's commitment (roots, levels, values) and recycle the pinned blocks; the engine stays pristine; `salts_of`: the run the next one replays (its salts)."""
         self.x03_expected = 0
         self.x03_committed = 0
         self._done = {}
         self._levels = {}
         self._layouts = {}
         self._streams = {}
-        self._salts = {}
+        self._salt_reset(salts_of)
         self._gpu_blocks = {}
         self._gpu_levels = {}
         self._padding = {}
         self.padding_stats = None
         self._step_index = 0
-        self.spans = Spans(scheme.NAME)
+        self.spans = Spans(self.commitment_scheme)
         self.pool.reset()
         self.errors = []
 
@@ -1431,7 +1431,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             ev = [torch.cuda.Event(enable_timing=True) for _ in range(3)]
             ev[0].record(side)
             memtrace("worker: before leaves", job.step)
-            leaves = e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0)
+            leaves = self._hide_device(e, e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0), job.step, 0)
             ev[1].record(side)
             levels = e.tree_levels(leaves)
             ev[2].record(side)
@@ -1475,7 +1475,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         buf = bytes(stream) + b"\0" * (padded - used)
         layout = self._gpu_layout(step, padded // 4)
         leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
-        lv_bytes = scheme.fold_levels(leaves)
+        lv_bytes = scheme.fold_levels(leaves := self._hide_host(step, leaves))
         levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
         keep = torch.frombuffer(bytearray(buf), dtype=torch.uint8).clone() if self.retain != "none" else None
         if keep is not None and self.retain == "device":
@@ -2392,7 +2392,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             levels = values_from._gpu_levels[step]
                     value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
                     path = self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index)
-                    out.append(Opening(step, index, value, tuple(path), ident))
+                    out.append(Opening(step, index, value, tuple(path), ident, self._salts_of(step, index, index + 1)))
                     continue
                 if ident.get("packed"):
                     value = bytes(self._streams[step][ident["byte_lo"]:ident["byte_hi"]])
@@ -2433,10 +2433,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             used = self._gpu_blocks[opening.step][1]
             if len(opening.value) != self.chunk:
                 return False
-            padded = -(-used // self.chunk) * self.chunk
-            leaf = scheme.chunk_leaf(scheme.chunk_header(self._gpu_layout(opening.step, padded // 4), opening.step, opening.index, self.chunk // 4,
-                                                        self.GPU_TREE_SRC), opening.value)
-            merkle = scheme.fold_path(leaf, opening.index, list(opening.path))
+            if (leaves := self._leaf_rule([scheme.chunk_leaf(scheme.chunk_header(self._gpu_layout(opening.step, -(-used // self.chunk) * self.chunk // 4), opening.step,
+                                                                                opening.index, self.chunk // 4, self.GPU_TREE_SRC), opening.value)], opening.salt)) is None:
+                return False
+            merkle = scheme.fold_path(leaves[0], opening.index, list(opening.path))
         else:
             leaves = self._leaf_rule([scheme.pos_leaf(opening.value)], opening.salt)
             if leaves is None or len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:

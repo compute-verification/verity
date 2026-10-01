@@ -38,14 +38,14 @@ class _LearnOnly(NativeHostCommitter):
 
 
 def test_a_learn_only_pass_finalizes_without_a_run_root():
-    full = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM).commit_offline(stream())
-    part = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM).commit_offline(stream())
+    full = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME).commit_offline(stream())
+    part = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME).commit_offline(stream())
     assert part.run_root == b""
     assert part.steps[1].root == b"" and [s.root for s in part.steps[::2]] == [s.root for s in full.steps[::2]]
 
 
 def test_a_run_whose_steps_all_have_roots_folds_as_before():
-    c = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    c = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME)
     run = c.commit_offline(stream())
     assert len(run.run_root) == 32
     assert run.run_root == scheme.run_root(PROGRAM, c._geo_digest, [s.root for s in run.steps])
@@ -54,13 +54,13 @@ def test_a_run_whose_steps_all_have_roots_folds_as_before():
 def test_a_run_without_a_run_root_verifies_no_opening():
     """The placeholder path can never pass: every opening is verified up to the run root, and an empty run root matches nothing -- not
     even the empty root recomputed from the placeholder step, nor a forged 32-byte run root over it."""
-    c = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    c = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME)
     run = c.commit_offline(stream())
     ops = c.open([(s, i) for s in (0, 2) for i in range(run.steps[s].n_leaves)])
     assert ops and not any(c.verify(run, o) for o in ops)
     forged = dataclasses.replace(run, run_root=scheme.run_root(PROGRAM, c._geo_digest, [s.root or b"\0" * 32 for s in run.steps]))
     assert not any(c.verify(forged, o) for o in ops)
-    whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME)
     full = whole.commit_offline(stream())
     assert all(whole.verify(full, o) for o in whole.open([(0, 0), (2, 1)]))
 
@@ -68,7 +68,7 @@ def test_a_run_without_a_run_root_verifies_no_opening():
 def test_a_run_without_a_run_root_verifies_no_range_opening():
     """The range verifier (`verify_range`) is held to the same run root: a placeholder run's recomputed run root is None, never the empty
     root, so no range of a real step passes -- with or without a forged run root, and not through the per-step roots cache either."""
-    c = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    c = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME)
     run = c.commit_offline(stream())
     ros = [c.open_range(0, 0, 3), c.open_range(2, 16, 20)]
     assert all(ro is not None for ro in ros)
@@ -76,6 +76,6 @@ def test_a_run_without_a_run_root_verifies_no_range_opening():
     for r in (run, forged):
         cache: dict[int, bytes] = {}
         assert not any(c.verify_range(r, ro) for ro in ros) and not any(c.verify_range(r, ro, cache) for ro in ros) and cache == {}
-    whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM, leaf_scheme=scheme.NAME)
     full = whole.commit_offline(stream())
     assert all(whole.verify_range(full, whole.open_range(s, lo, hi)) for s, lo, hi in ((0, 0, 3), (2, 16, 20)))

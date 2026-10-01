@@ -11,6 +11,7 @@ import random
 import pytest
 
 from verity_vllm.acquire.committer_api import Opening, RunCommitment
+from verity_vllm.commit import scheme
 from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
@@ -23,8 +24,8 @@ def stream(seed: int = 3, steps: int = 3, tensors: int = 4, nbytes: int = 1000) 
 
 
 def committer(run_id: str = "run-A") -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id=run_id, chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
-
+    return NativeHostCommitter(None, run_id=run_id, chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(b"program").digest(),
+                               leaf_scheme=scheme.NAME)          # compares the bare trees of two commitments
 
 def test_roundtrip_all_leaves_open_and_verify():
     c = committer()

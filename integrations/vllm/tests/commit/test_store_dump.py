@@ -40,7 +40,7 @@ def test_the_dump_hashes_every_step_file_as_it_writes_it(tmp_path, monkeypatch):
     got = {}
     SD.dump(com, rc, tmp_path, threads=3, digests=got)
     files = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.bin"))
-    assert sorted(got) == files and len(files) == 2 * len(STEPS)
+    assert sorted(got) == files and len(files) == 2 * len(STEPS) + 1 and "salts/stream.bin" in files
     assert all(got[f] == hashlib.sha256((tmp_path / f).read_bytes()).hexdigest() for f in files)
     assert _reads(OC.OpenedReader(*SD.load(tmp_path))) == _reads(OC.OpenedReader(com, rc))
 
@@ -121,3 +121,86 @@ def test_a_dumped_store_dumps_again_slim(tmp_path):
         want = OC.OpenedReader(store, run)(1, "runner.sampler", 0, 4)
     SD.dump(store, run, tmp_path / "slim", touched=t)
     assert OC.OpenedReader(*SD.load(tmp_path / "slim"))(1, "runner.sampler", 0, 4) == want == b"\x01\x02\x03\x04"
+
+
+def test_touching_a_read_records_what_the_verified_read_opens():
+    com, rc = commit_steps(STEPS)
+    reads = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (1, "runner.sampler", 0, 4), (2, "model.layers.0.mlp.down_proj", 900, 2500)]
+    with SD.touched(com) as verified:
+        rd = OC.OpenedReader(com, rc)
+        for r in reads:
+            rd(*r)
+    with SD.touched(com) as touched:
+        SD.touch(com, reads + [(0, "no.such.member", 0, 4)])
+    assert touched.ranges == verified.ranges and touched.nodes == verified.nodes and touched.ranges[2]
+
+
+def test_a_full_hm96_dump_carries_the_salt_key_and_a_slim_one_only_the_salts_of_its_leaves(tmp_path):
+    import json
+
+    from verity_vllm.commit import hiding
+
+    com, rc = commit_steps(STEPS)
+    assert com.leaf_scheme == hiding.NAME and com.salt_rule == hiding.SALT_STREAM
+    SD.dump(com, rc, tmp_path / "full")
+    doc = json.loads((tmp_path / "full" / "store.json").read_text())
+    assert (doc["leaf_scheme"], doc["salt_rule"], doc["salt_epoch"]) == (hiding.NAME, hiding.SALT_STREAM, com.stream.epoch)
+    assert sorted(p.name for p in (tmp_path / "full" / "salts").iterdir()) == ["stream.bin"]
+    with SD.touched(com) as t:
+        OC.OpenedReader(com, rc)(0, "model.layers.0.self_attn.qkv_proj", 10, 20)
+    SD.dump(com, rc, tmp_path / "slim", touched=t)
+    doc = json.loads((tmp_path / "slim" / "store.json").read_text())
+    assert "salt_epoch" not in doc and not (tmp_path / "slim" / "salts" / "stream.bin").exists()
+    held = {s["step"]: sum(b - a for a, b in s["salts"]) for s in doc["steps"]}
+    assert held[0] == sum(-(-hi // com.chunk) - lo // com.chunk for lo, hi in doc["steps"][0]["ranges"]) > 0 and held[1] == held[2] == 0
+    assert (tmp_path / "slim" / "salts" / "s0.bin").stat().st_size == hiding.SALT_BYTES * held[0]
+    a, b = doc["steps"][0]["salts"][0]
+    assert (tmp_path / "slim" / "salts" / "s0.bin").read_bytes()[:hiding.SALT_BYTES] == com.stream.salts(0, a, a + 1)
+
+
+def test_a_full_dump_of_a_sparse_retainer_carries_only_the_salts_of_the_bytes_it_holds(tmp_path):
+    import json
+
+    from verity_vllm.commit import hiding
+
+    com, rc = commit_steps(STEPS)
+    keep2, used2 = com._gpu_blocks[2]
+    com._gpu_blocks[2] = (_HostRanges([(0, 1024, keep2[:1024]), (2048, int(keep2.numel()), keep2[2048:])], used2), used2)
+    SD.dump(com, rc, tmp_path)
+    doc = json.loads((tmp_path / "store.json").read_text())
+    assert not (tmp_path / "salts" / "stream.bin").exists() and "salt_epoch" not in doc
+    assert doc["steps"][2]["salts"] == [[0, 4], [8, rc.steps[2].n_leaves]]
+    assert (tmp_path / "salts" / "s2.bin").read_bytes() == com.stream.salts(2, 0, 4) + com.stream.salts(2, 8, rc.steps[2].n_leaves)
+    assert doc["steps"][0]["salts"] == [[0, rc.steps[0].n_leaves]] and hiding.SALT_BYTES * rc.steps[0].n_leaves == (tmp_path / "salts" / "s0.bin").stat().st_size
+    store, run = SD.load(tmp_path)
+    assert _reads(OC.OpenedReader(store, run)) == _reads(OC.OpenedReader(com, rc))
+
+
+def test_a_flipped_dumped_salt_does_not_verify(tmp_path):
+    com, rc = commit_steps(STEPS)
+    with SD.touched(com) as t:
+        OC.OpenedReader(com, rc)(0, "model.layers.0.self_attn.qkv_proj", 10, 20)
+    SD.dump(com, rc, tmp_path, touched=t)
+    assert OC.OpenedReader(*SD.load(tmp_path))(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == b"\x07" * 10
+    p = tmp_path / "salts" / "s0.bin"
+    b = bytearray(p.read_bytes())
+    b[-1] ^= 1
+    p.write_bytes(bytes(b))
+    with pytest.raises(OV.OpeningNotVerified, match="qkv_proj"):
+        OC.OpenedReader(*SD.load(tmp_path))(0, "model.layers.0.self_attn.qkv_proj", 10, 20)
+
+
+def test_a_vllm_v1_store_dumps_without_salts(tmp_path, monkeypatch):
+    import json
+
+    from tests.check import opened
+    from verity_vllm.commit import scheme
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+
+    monkeypatch.setattr(opened, "NativeHostCommitter", lambda engine, **kw: NativeHostCommitter(engine, leaf_scheme=scheme.NAME, **kw))
+    com, rc = commit_steps(STEPS)
+    SD.dump(com, rc, tmp_path)
+    doc = json.loads((tmp_path / "store.json").read_text())
+    assert "leaf_scheme" not in doc and not (tmp_path / "salts").exists()
+    store, run = SD.load(tmp_path)
+    assert store.hiding is None and _reads(OC.OpenedReader(store, run)) == _reads(OC.OpenedReader(com, rc))

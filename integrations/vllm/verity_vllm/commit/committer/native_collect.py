@@ -56,6 +56,7 @@ from typing import Any
 
 import torch
 
+from verity_vllm.commit import scheme
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
@@ -571,6 +572,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     R11 `native_hooks=True` (collector v2, `native_collect_v2`): the module.forward wrappers are C++ callables (`HookFwd`) and the FA2
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default."""
+    HM96_DEVICE_PATHS = True               # every GPU-tree step path below salts its leaves (`_hide_device`); the native worker step defers to it
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
@@ -1181,8 +1183,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         job.metas = self._metas_for(job)
         if self.fault == "release_before_keep":
             return self._commit_step_gpu_faulty(job)
-        if self.native_worker and job.arena is not None and not job.overflow:
-            return self._commit_step_native(job)
+        if self.native_worker and job.arena is not None and not job.overflow and self.hiding is None:
+            return self._commit_step_native(job)                   # StepHasher.commit hashes bare vllm-v1 leaves; hm96 steps take the GPU path
         return super()._commit_step(job)
 
     # ------------------------------------------------------------------ P0 (R13): windowed absorb / release
@@ -1246,10 +1248,9 @@ class NativeCollectCommitter(NativeHostCommitter):
         step's padded length is already known (hit plan, or layout v2), hand the slot back.  After the step ended: (v1 learning step) re-upload
         the host windows one at a time through the scratch window and hash them with the now-known length; tree over all leaves; bind the
         root.  The logical stream, chunk indices, headers and tree are exactly those of the single-block path -> identical roots."""
-        from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
-        self._gpu_ext_load()
+        hide = lambda lv, first, ext=self._gpu_ext_load(): self._hide_device(ext, lv, job.step, first)  # noqa: E731  (hm96 leaves of the step)
         side = self._side_stream()
         nc, H, W, C = self._nc, self._hasher, self.win_bytes, GPU_CHUNK_BYTES
         if getattr(nc, "win_dead", False):
@@ -1422,14 +1423,14 @@ class NativeCollectCommitter(NativeHostCommitter):
                 # in-place hashing only while the step stays inside the plan's length: a window running past it means the plan changed
                 # mid-step (learning) -> the length in every header is wrong -> the step is re-hashed from the host windows below
                 if inplace and padded_k and state and (k << j) + padded_k // C <= state["n_total"]:
-                    lv_k = H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
+                    lv_k = hide(H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream), (k * W) // C)
                     absorb(k, lv_k)                                             # syncs the side stream: the slot's reads are done here
                     del lv_k
                 elif inplace and padded_k and self.layout_v2:
                     # v2 learning step: the header does not bind the step length, so the window is hashed in place now; its leaves (1/8 of
                     # the bytes) wait on PINNED HOST until the step's length is known and the subtrees can be laid into the host level slices
                     # (on device they were 1/8 of the step: 16 GB at B=64 -> OOM at step 0, 08:25Z); re-uploaded per window below
-                    lv_k = H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, 0, side.cuda_stream)
+                    lv_k = hide(H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, 0, side.cuda_stream), (k * W) // C)
                     hb = self.pool.take_block(int(lv_k.numel()) * 4)
                     hv_k = hb[:int(lv_k.numel()) * 4].view(torch.int32).view(lv_k.shape)
                     hv_k.copy_(lv_k, non_blocking=True)
@@ -1541,7 +1542,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                     if not n:
                         continue
                     self.win_scratch[:n].copy_(hv[:n], non_blocking=True)     # H2D pinned; same stream as the leaf kernel -> ordered
-                    lv_k = H.leaves_window(self.win_scratch, n, (kk * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
+                    lv_k = hide(H.leaves_window(self.win_scratch, n, (kk * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream), (kk * W) // C)
                     absorb(kk, lv_k)
                     del lv_k
             self._win_reupload_bytes = getattr(self, "_win_reupload_bytes", 0) + padded
@@ -1557,7 +1558,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             pending = []
         if not padded:
             with torch.inference_mode(), torch.cuda.stream(side):
-                lv_all = torch.zeros((0, 8), dtype=torch.int32, device="cuda")
+                lv_all = hide(torch.zeros((0, 8), dtype=torch.int32, device="cuda"), 0)
             levels, mr, tree_ms = H.tree(lv_all, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
             del lv_all
         else:
@@ -1649,7 +1650,6 @@ class NativeCollectCommitter(NativeHostCommitter):
     def _commit_step_native(self, job: _StepJob) -> None:
         """Candidate B worker step: `StepHasher.commit` (C++, GIL released) does wait-event, zero pad, chunk leaves, tree levels, retained
         copy, root D2H and the done-synchronisation -- the same sequence as `_commit_step_gpu`; Python only binds the root."""
-        from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
         self._gpu_ext_load()                                       # openings use HG.gpu_open on the levels (loaded once)
@@ -1720,7 +1720,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 m.stream_off = m.dev_off
                 m.dev_block = None
             stream_i32 = job.arena[:padded].view(torch.int32)
-            leaves = e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0)
+            leaves = self._hide_device(e, e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0), job.step, 0)
             levels = e.tree_levels(leaves)
             mr_t = levels[-1].to("cpu", non_blocking=True)
             torch.cuda.current_stream().synchronize()
@@ -1735,7 +1735,6 @@ class NativeCollectCommitter(NativeHostCommitter):
             torch.cuda.current_stream().synchronize()
         mr = mr_t.numpy().astype("uint32").tobytes()
         t1 = time.perf_counter()
-        from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
         n = int(leaves.shape[0])
@@ -1805,8 +1804,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                                       "fa2_wrap": {s.short_name: s.stats for s in self.sources if hasattr(s, "sync_stats")}}
         return rc
 
-    def reset(self) -> None:
-        super().reset()
+    def reset(self, salts_of: Any = None) -> None:
+        super().reset(salts_of)
         self._py_committed = 0
         self._nc.reset_stats()          # plans are kept across runs (the same shape classes recur); metas/digest caches too
         self.learned_only_steps = []    # [R17 fp8] per-run bounded-staging counters (the plans learned stay)
