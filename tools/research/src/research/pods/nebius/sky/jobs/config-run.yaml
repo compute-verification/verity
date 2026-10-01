@@ -1,0 +1,377 @@
+# A vLLM deployment (a config run, --config-run 1) on the Nebius cluster: three chained managed-job tasks, the Build and the replay
+# in queue deployments-cpu and the Commit in deployments-gpu (kueue.yaml: GPU generation and CPU checking in separate queues).
+# When the tree has the CPU replay (PR B registers vllm.replay; REPLAY_DEFERRED=auto, the default) the Commit seals a replay bundle
+# in <sweep>/<row>/commit/replay_bundle_p1/ and the replay task replays it on CPU; an older tree's Commit replays on its GPU and the
+# replay task exits at once. --env REPLAY_DEFERRED=1 or 0 forces either. Interface agreed with the vLLM coordinator
+# (lanes/nebius-infra/20260930T0729Z-answer-from-vllm-coordinator-config-run-split.md):
+#   build: CPU only (0 GPU)   `row stage build  ROW ROLE REPO REV --config-run 1 --replay-k 460`   Build + the strict word check
+#   gpu:   1 GPU (TP2: 2)     `row stage commit ROW ROLE REPO REV --config-run 1 --replay-k 460`   one instrumented engine run, the
+#                              460-unit host replay, config_record.json: about 5-15 min for a small or medium cell
+# Config runs have no Match stage. Both tasks use the same row directory on the host (SWEEP_DIR/<row>): the Commit reads the Build's
+# Programs and manifest there. Each task runs its `row stage` as one `research run --tool vllm.<stage>` Attempt (the Commit citing the
+# Build's artifact); the gpu task's carries ov.noisy (it runs beside Builds).
+# Full rows (Build, Match, Commit) use config-run-row.yaml. This is the coverage default: the GPU is held only for the Commit.
+# Needs #536 in the submitted tree: without it the GPU-less Build fails with "Device string must not be empty". Its build task
+# finds libcuda.so.1 in /workspace/jobs/cuda-driver, which cluster_up.sh keeps in step with the host's driver.
+#
+#   VY_ROW_CLASS=dense tools/research/src/research/pods/nebius/sky/submit.sh config-run cov-k07 \
+#     --env ROW=<row> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
+#   (or VY_BUILD_MEMORY=<GB> VY_GPU_MEMORY=<GB>, e.g. from `verity-vllm sweep plan`'s ram_gb, instead of a class)
+#
+# Build memory per class, provisional (the coordinator's table; epoch-run's measured peaks replace it: a 4k-context Build uses
+# 100-127 GiB). The gpu task requests 64 GB below batch 8 (a Commit uses ~6 GiB there); batch 8 and up use ~130 GiB (the pinned
+# staging pool alone is 105 GiB; epoch-run 16:35Z), so those pass VY_GPU_MEMORY=170 or a class below:
+#   class   build task   gpu task          vLLM deployments
+#   small   64 GB        64 GB             small dense, B < 8 (bounded staging)
+#   dense   160 GB       170 GB            1-7B dense, B 8-32
+#   long    160 GB       170 GB            long context 4096/512 (the measured Build peak is 124.5 GB, #11)
+#   moe     256 GB       170 GB            OLMoE, Qwen3-30B-A3B
+#   b64     256 GB       170 GB            batch 64
+#   tp2     160 GB       340 GB, 2 GPUs    TP2 (per-rank Builds in one task; #499, until then TP deployments are unsupported)
+name: config-run
+
+---
+
+name: build
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 4          # the request Kueue counts; a Build uses ~2-9 cores (15:52Z) and bursts onto idle ones: no CPU limit
+  labels:
+    budget-line: nebius-config-run
+  memory: 160
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "16"
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  HOT_ROOT: /workspace/jobs/hot
+  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
+  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
+  GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
+  BUILD_JOBS: auto
+  BUILD_RAM_BUDGET_GB: "160"
+  VERITY_UNIT_RULE_CACHE: /workspace/jobs/cache/unit-rules
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+  chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
+  mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
+  cd "$SRC/integrations/vllm"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  export PATH=$CUDA_HOME/bin:$PATH
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  # a pod with no GPU has no driver libraries, but importing vLLM's CUDA platform (#536) loads libcuda.so.1: the host's copy, which
+  # can't reach a GPU without the /dev/nvidia* devices a GPU-less pod lacks (cluster_up.sh keeps it in step with the driver)
+  export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+  # one Attempt per task, as `row chain` runs a stage: the workload is plain argv, from which the Tool reads the row's key params.
+  # The gpu task reads this run id back from the row directory to cite the Build's artifact
+  mkdir -p "$SWEEP_DIR/$ROW"
+  run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
+  echo "$run_id" > "$SWEEP_DIR/$ROW/two-task-build-run"
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --id "$run_id" --tool vllm.build --project verity --cwd "$SRC" \
+    --campaign "$CAMPAIGN" -- "$PY" -m verity_vllm.pipeline.cli row stage build "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-cpu
+          kueue.x-k8s.io/priority-class: circuits
+          verity.dev/build: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
+
+---
+
+name: gpu
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 4          # 4 per GPU (submit.sh's tp2 class: 8), the GPU queue's fixed share; a Commit uses ~2-4 cores and bursts
+  labels:
+    budget-line: nebius-config-run
+  memory: 64         # below batch 8 (a Commit uses ~6 GiB); batch 8+ ~130 GiB: VY_GPU_MEMORY=170 (the class table above)
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "8"
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  HOT_ROOT: /workspace/jobs/hot
+  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
+  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
+  GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
+  OV_NOISY: "true"
+  REPLAY_DEFERRED: auto     # auto: defer when the tree has the CPU replay (PR B); 1 or 0 forces it
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  mkdir -p /workspace/jobs/hot /workspace/jobs/dm
+  cd "$SRC/integrations/vllm"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  export PATH=$CUDA_HOME/bin:$PATH
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
+  # compiled kernels persist per tree on the host, so every cell of a tree after the first skips Triton's JIT of vLLM's
+  # batch-invariant kernels (the TP2 lane's lines, 14:45Z). Eager rows only: a compiled row records triton_cache_dir in its
+  # generated_kernels header. The fixed JIT build dirs only for trees whose native_jit stages its sources (#561); an older tree would
+  # rewrite their build.ninja and cost fixed trees a rebuild
+  case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
+  if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+    export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
+  fi
+  # the Commit's Attempt cites the Build task's artifact (--input build=art:...), as `row chain` does
+  build_run=$(cat "$SWEEP_DIR/$ROW/two-task-build-run" 2> /dev/null || true)
+  build_art=""
+  [ -z "$build_run" ] || build_art=$(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$build_run" --json 2> /dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
+    2> /dev/null || true)
+  echo "commit cites the Build: run ${build_run:-none}, artifact ${build_art:-none}"
+  # the replay task reads this run id back to cite the Commit, as this task cites the Build
+  run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
+  echo "$run_id" > "$SWEEP_DIR/$ROW/pipeline-commit-run"
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
+    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  fi
+  research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
+  # >>> commit watchdog: stop a Commit whose commit.log hasn't changed for COMMIT_STALL_S (default 15 min), so a hung Commit frees
+  # its GPU (Gemma-2-2B Commits held GPUs 50-90 min with no output, 2 PM PDT Sep 30). The runner starts the workload in a session of
+  # its own, so the watchdog lowers the run's timeout (tele set-timeout) and the harness stops that session and records the attempt
+  # as cancelled; only if the run is still alive COMMIT_STALL_GRACE_S later are the workload's group and the runner killed. Exit 86,
+  # so the replay task doesn't run
+  watch_commit() {   # watch_commit LOG RUN_DIR CMD...: CMD is the `research run` whose attempt dir is RUN_DIR
+    local log=$1 dir=$2 pid last now m waited pg
+    shift 2
+    set +m             # so setsid execs in place: $pid is then the runner's process group
+    setsid "$@" &
+    pid=$!
+    last=$(date +%s)
+    while kill -0 "$pid" 2> /dev/null; do
+      sleep "${COMMIT_STALL_POLL_S:-30}"
+      m=$(stat -c %Y "$log" 2> /dev/null || echo 0)
+      [ "$m" -le "$last" ] || last=$m
+      now=$(date +%s)
+      if [ $((now - last)) -ge "${COMMIT_STALL_S:-900}" ]; then
+        echo "$(date -u +%FT%TZ) commit watchdog: $log unchanged for $((now - last)) s; stopping the Commit" | tee -a "$(dirname "$log")/row.log" >&2
+        "${research[@]}" tele set-timeout --attempt-dir "$dir" --timeout-s 1 --actor guardian \
+          --reason "commit watchdog: commit.log unchanged for $((now - last)) s" || true
+        waited=0
+        while kill -0 "$pid" 2> /dev/null && [ "$waited" -lt "${COMMIT_STALL_GRACE_S:-300}" ]; do sleep 5; waited=$((waited + 5)); done
+        if kill -0 "$pid" 2> /dev/null; then
+          echo "$(date -u +%FT%TZ) commit watchdog: the run outlived its timeout by ${waited} s; killing it" | tee -a "$(dirname "$log")/row.log" >&2
+          pg=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("pgid") or "")' "$dir/status.json" 2> /dev/null || true)
+          [ -z "$pg" ] || kill -KILL -- "-$pg" 2> /dev/null || true
+          kill -KILL -- "-$pid" 2> /dev/null || true
+        fi
+        wait "$pid" 2> /dev/null || true
+        return 86
+      fi
+    done
+    wait "$pid"
+  }
+  # <<< commit watchdog
+  deferred=()
+  [ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)
+  rc=0
+  watch_commit "$SWEEP_DIR/$ROW/commit.log" "$RESEARCH_RUNS/$run_id" "${research[@]}" run --id "$run_id" --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
+    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"} || rc=$?
+  # a failed Commit's sealed bundle is never replayed (the replay task doesn't run), and a retry seals a new one
+  if [ "$rc" != 0 ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*; fi
+  exit "$rc"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-gpu
+          kueue.x-k8s.io/priority-class: circuits-gpu      # ahead of queued 0-GPU Builds
+          ov.noisy: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
+
+---
+
+name: replay
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 8          # a batch-8 replay runs 6-16 min of CPU (vLLM coordinator 16:09Z); it bursts onto idle cores
+  labels:
+    budget-line: nebius-config-run
+  memory: 64         # the sealed bundle plus the weight fields it opens; VY_REPLAY_MEMORY overrides
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "8"
+  REPLAY_DEFERRED: auto     # resolved as the gpu task resolves it, from the same tree: 0 means the Commit replayed on its GPU
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  HOT_ROOT: /workspace/jobs/hot
+  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
+  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
+  GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
+  VERITY_UNIT_RULE_CACHE: /workspace/jobs/cache/unit-rules
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
+    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  fi
+  [ "$REPLAY_DEFERRED" = 1 ] || exit 0          # nothing deferred: no tree copy, no bootstrap
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+  chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
+  mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
+  cd "$SRC/integrations/vllm"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
+    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  fi
+  if [ "$REPLAY_DEFERRED" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
+  # a Commit dispatched on an older template replayed on its GPU, and its verdict has no replay_deferred (a deferred one always does)
+  verdict=$SWEEP_DIR/$ROW/commit/verdict.json rc=0
+  [ ! -s "$verdict" ] || python3 -c 'import json,sys; sys.exit(0 if "replay_deferred" in json.load(open(sys.argv[1])) else 3)' "$verdict" || rc=$?
+  if [ "$rc" = 3 ]; then echo "replay: the Commit's verdict has no replay_deferred, so it replayed on its GPU; nothing to replay"; exit 0; fi
+  export PATH=/workspace/jobs/venv312/bin:$PATH
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  export PATH=$CUDA_HOME/bin:$PATH
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}   # as the build task: no GPU, the host's libcuda
+  # one Attempt citing the Build's and the Commit's artifacts (research tool vllm.replay, from PR B)
+  art() {   # outputs[$2] of the published Attempt whose run id is in $1, "" when none
+    local run; run=$(cat "$1" 2> /dev/null || true)
+    [ -n "$run" ] || return 0
+    /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$run" --json 2> /dev/null \
+      | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get(sys.argv[1], ""))' "$2" \
+      2> /dev/null || true
+  }
+  build_art=$(art "$SWEEP_DIR/$ROW/two-task-build-run" build)
+  commit_art=$(art "$SWEEP_DIR/$ROW/pipeline-commit-run" verdict)
+  echo "replay cites the Build ${build_art:-none} and the Commit ${commit_art:-none}"
+  rc=0
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --tool vllm.replay --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
+    ${build_art:+--input "build=$build_art"} ${commit_art:+--input "commit=$commit_art"} \
+    -- "$PY" -m verity_vllm.pipeline.cli row stage replay "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 || rc=$?
+  # the sealed bundle (several GB at batch 8) goes once its replay has written the record; a failed replay keeps it for a retry
+  if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*; fi
+  exit "$rc"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-cpu
+          kueue.x-k8s.io/priority-class: circuits-gpu      # ahead of queued Builds, so bundles drain first (circuits, 3:53 PM PDT)
+          verity.dev/build: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

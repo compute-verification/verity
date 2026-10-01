@@ -109,7 +109,7 @@ def install(model, args, beacon: bytes, state: dict):
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     roots = PPD.weight_roots(kernel, weights, scheme)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
-    salt = Epoch.start(declared, roots, beacon).salt
+    salt = Epoch.unverified(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True)
 
     def make(original):

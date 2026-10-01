@@ -1,0 +1,514 @@
+{
+ "uid": "nebius-overview",
+ "title": "Nebius overview: busy, held, queued",
+ "tags": [
+  "nebius",
+  "kueue",
+  "gpu"
+ ],
+ "timezone": "utc",
+ "refresh": "1m",
+ "time": {
+  "from": "now-12h",
+  "to": "now"
+ },
+ "schemaVersion": 39,
+ "version": 1,
+ "editable": false,
+ "panels": [
+  {
+   "type": "timeseries",
+   "title": "GPU busy % per Kueue queue (of the GPUs its pods hold)",
+   "description": "DCGM engine-active, averaged over the GPUs held by each queue's running pods (vy_pod_queue). A queue holding no GPU has no line.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100 * avg by (queue) (max by (namespace, pod, gpu) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{service=\"nvidia-dcgm-exporter\", pod!=\"\"}) * on (namespace, pod) group_left (queue) max by (namespace, pod, queue) (label_replace(label_replace(vy_pod_queue, \"pod\", \"$1\", \"holder_pod\", \"(.+)\"), \"namespace\", \"$1\", \"holder_namespace\", \"(.+)\")))",
+     "legendFormat": "{{queue}}",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "GPUs held vs nominal quota, per queue",
+   "description": "Kueue's admitted usage against each ClusterQueue's nominal quota (vy_exporter.py).",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "min": 0,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "vy_queue_usage{resource=\"nvidia.com/gpu\"}",
+     "legendFormat": "{{queue}} held",
+     "interval": "1m"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "vy_queue_nominal{resource=\"nvidia.com/gpu\"}",
+     "legendFormat": "{{queue}} nominal",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Node 1 GPU busy: engine-active and utilization (all 8 GPUs)",
+   "description": "Busy is engine-active; held is any GPU with more than 1 GiB in use.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100 * avg(max by (gpu) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{service=\"nvidia-dcgm-exporter\"}))",
+     "legendFormat": "engine-active %",
+     "interval": "1m"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "avg(max by (gpu) (DCGM_FI_DEV_GPU_UTIL{service=\"nvidia-dcgm-exporter\"}))",
+     "legendFormat": "utilization %",
+     "interval": "1m"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100 * count(max by (gpu) (DCGM_FI_DEV_FB_USED{service=\"nvidia-dcgm-exporter\"}) > 1024) / 8",
+     "legendFormat": "held % (memory > 1 GiB)",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Workloads pending and admitted, per queue",
+   "description": "Pending workloads wait for quota; ready jobs are the dispatcher's ready files.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "min": 0,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "vy_queue_pending",
+     "legendFormat": "{{queue}} pending",
+     "interval": "1m"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "vy_queue_admitted",
+     "legendFormat": "{{queue}} admitted",
+     "interval": "1m"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(vy_ready_jobs)",
+     "legendFormat": "ready jobs",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Per-GPU busy % (engine-active)",
+   "description": "",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100 * max by (gpu) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{service=\"nvidia-dcgm-exporter\"})",
+     "legendFormat": "GPU {{gpu}}",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "CPU busy % and queue CPU use",
+   "description": "Node CPU from node-exporter (all 192 threads); Kueue's admitted CPU requests as a share of the node.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])))",
+     "legendFormat": "node CPU busy %",
+     "interval": "1m"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100 * vy_queue_usage{resource=\"cpu\"} / 192",
+     "legendFormat": "{{queue}} CPU requested %",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "GPU memory used per GPU",
+   "description": "",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 24,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "min": 0,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "max by (gpu) (DCGM_FI_DEV_FB_USED{service=\"nvidia-dcgm-exporter\"}) * 1048576",
+     "legendFormat": "GPU {{gpu}}",
+     "interval": "1m"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "GPU power per GPU",
+   "description": "",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 24,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "watt",
+     "min": 0,
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "max by (gpu) (DCGM_FI_DEV_POWER_USAGE{service=\"nvidia-dcgm-exporter\"})",
+     "legendFormat": "GPU {{gpu}}",
+     "interval": "1m"
+    }
+   ]
+  }
+ ],
+ "templating": {
+  "list": []
+ },
+ "annotations": {
+  "list": []
+ }
+}
