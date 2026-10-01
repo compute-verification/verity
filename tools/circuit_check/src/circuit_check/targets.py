@@ -225,8 +225,9 @@ def _core_roots() -> list[Any]:
 
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
-    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s row at I = 8
-    (`verity_vllm.program.registry.boolean_silu`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
+    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s rows at I = 8
+    (`verity_vllm.program.registry.boolean_silu`: `SiluMul_v3` and `SiluMul_v4`, and v4's word view, the quarantined
+    `SiluMul_v2`, which that module registers), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
     and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
@@ -259,6 +260,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import gumbel_boolean as GB
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
+    from verity_vllm.program.registry.quarantine.act import silu_mul as QS
 
     rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
                                    BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
@@ -270,7 +272,7 @@ def _boolean_roots() -> list[Any]:
             bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
             bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
             bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
-            bind(BSL.SiluMul, I=8),
+            bind(BSL.SiluMul, I=8), bind(BSL.SiluMulV4, I=8), bind(QS.SiluMul, I=8),
             bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
             bind(SB.TokenSelect, V=4161),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
