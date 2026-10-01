@@ -1,10 +1,12 @@
 """`verity.ml.boolean.cast` and `verity.ml.boolean.gather`: the Boolean bf16 widening agrees with `Bf16ToF32_v1` on every bf16
-and is pinned by gate count and program digest; the multiplexer tree selects ``words[idx]``, else its fill, at every index of
-its width and costs the ANDs its docstring states; and a Boolean Program's prescribed inputs are `Input1_v1` leaves, so the word
-Programs' `Input16_v1` and `Input32_v1` need no Boolean version."""
+and is pinned by gate count and program digest; the f32 -> bf16 rounding (`gemm.F2fpBf16_v2`) agrees with `F2fpBf16_v1` on every
+f32 word of its special chunks, and on all 2^32 when ``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is set; the multiplexer tree selects
+``words[idx]``, else its fill, at every index of its width and costs the ANDs its docstring states; and a Boolean Program's
+prescribed inputs are `Input1_v1` leaves, so the word Programs' `Input16_v1` and `Input32_v1` need no Boolean version."""
 from __future__ import annotations
 
 import json
+import os
 
 import numpy as np
 import pytest
@@ -48,6 +50,28 @@ def test_the_widening_agrees_with_bf16_to_f32_v1_on_every_bf16() -> None:
     got = BS.evaluate_words(WIDEN, a).astype(np.uint64)
     assert np.array_equal(got, E.evaluate_batch(P.Bf16ToF32, a).astype(np.uint64))
     assert np.array_equal(got, a.astype(np.uint64) << np.uint64(16))
+
+
+def _every_f32_chunks(chunks) -> None:
+    """`F2fpBf16_v2` against `F2fpBf16_v1` on every f32 word whose high 12 bits are one of ``chunks`` (2^20 words each)."""
+    f2fp = bind(BG.F2fpBf16)
+    low = np.arange(1 << 20, dtype=np.uint32)
+    for c in chunks:
+        words = np.uint32(c << 20) | low
+        got = BS.evaluate_words(f2fp, words).astype(np.uint64)
+        assert np.array_equal(got, E.evaluate_batch(P.F2fpBf16, words).astype(np.uint64)), f"chunk {c:#05x}"
+
+
+def test_the_rounding_agrees_with_f2fp_v1_on_every_word_of_its_special_chunks() -> None:
+    """±0 and the small subnormals, 1.0's neighbourhood, the largest finite words (which round to ±inf), ±inf and the NaNs whose
+    payload is only in the low bits, and the quiet NaNs."""
+    _every_f32_chunks([0x000, 0x3F8, 0x7F7, 0x7F8, 0x7FF, 0x800, 0xFF7, 0xFF8])
+
+
+@pytest.mark.skipif(not os.environ.get("VERITY_ML_BOOLEAN_EXHAUSTIVE"),
+                    reason="every f32 word (2^32 instances, about 20 minutes); set VERITY_ML_BOOLEAN_EXHAUSTIVE=1")
+def test_the_rounding_agrees_with_f2fp_v1_on_every_f32_word() -> None:
+    _every_f32_chunks(range(1 << 12))
 
 
 def test_boolean_programs_take_their_inputs_as_input1_leaves() -> None:
