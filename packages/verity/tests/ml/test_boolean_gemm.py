@@ -1,4 +1,4 @@
-"""`verity.ml.boolean.gemm`: the Boolean BF16 steps, cast and coordinate agree with their word Definitions (`word_of`) on
+"""`verity.ml.boolean.gemm`: the Boolean BF16 steps, cast, dot and coordinate agree with their word Definitions (`word_of`) on
 sampled and special words and on every hardware capture the word Definitions replay, carry exactly their builders' live ANDs,
 and are pinned by gate count and program digest."""
 from __future__ import annotations
@@ -26,6 +26,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 AMPERE_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE)
 HOPPER_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER)
+DOTS = [bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=48, **BG.GEMM_HOPPER)]
 STEPS = [bind(BG.AmpereBF16TcDot16), bind(BG.HopperBF16WgmmaDot16)]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -35,8 +36,10 @@ PINS = {
     "HopperBF16WgmmaDot16_v2": (7872, 15049, 761, "4cef800bab64f8f7133d3e1ae3a36565f6de93553800e06023bc4225de1d12f0"),
     AMPERE_K64.id: (33106, 62966, 3455, "3547dde5e8fc8eaced08c40e120042eeae46922f17689c3112cb0cd552e65503"),
     HOPPER_K64.id: (31554, 60294, 3059, "8dcec5922c2388c3c1c13cba0be0023338d856d8068d84470b545df02d4024e7"),
+    DOTS[0].id: (33040, 62868, 3440, "c71d572a2958f817da93a41fe847a5be35b6c1549f76e43aa48f43ca92efbc4d"),
+    DOTS[1].id: (23616, 45147, 2283, "6350b7661f2b2a0e9d522371c3222f0bfc59fc9e486a68116011e14403e0fdf3"),
 }
-TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64]
+TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -83,6 +86,14 @@ def test_the_cast_agrees_with_f2fp_v1() -> None:
 def test_the_steps_agree_with_their_word_steps(target) -> None:
     params, _ = E.batch.signature_of(TR.word_of(target))
     _agree(target, K.sample_tc(np.random.default_rng(12), 20_000, params))
+
+
+@pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id)
+def test_the_dot_agrees_with_dot_bf16_v2(target) -> None:
+    word = TR.word_of(target)
+    assert word.id == f"DotBf16_v2{{K={target.bindings['K']},DOT={TR.word_of(target.bindings['DOT']).id}}}"
+    params, _ = E.batch.signature_of(word)
+    _agree(target, K.sample_tc(np.random.default_rng(15), 4000, params))
 
 
 @pytest.mark.parametrize("target", [AMPERE_K64, HOPPER_K64], ids=lambda t: t.id)

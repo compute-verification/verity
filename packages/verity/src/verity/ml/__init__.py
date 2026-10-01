@@ -11,7 +11,8 @@
     verity.ml.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER;
                       the sm_120 GemmCoordinateE4m3 / GemmCoordinateNvf4 / GemmCoordinateMxf4 and their GEMM_SM120_* bindings
     verity.ml.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`, `softmax`), `trace` (Boolean
-                      Definitions from builders), and `gemm`: the BF16 steps, cast and GemmCoordinate_v3 on bits
+                      Definitions from builders), `gemm`: the BF16 steps, cast, DotBf16_v3 and GemmCoordinate_v3 on bits, and
+                      `attention`: FA2's FTZ f32 operations, max and -inf guard on bits
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
                       `verity.evaluation` and self-checked against `verity.ml.tc`
 """
