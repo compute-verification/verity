@@ -35,7 +35,7 @@ use std::{
 };
 
 use flock_core::{
-    lincheck::{CscCircuit, LincheckCircuit, pack_z_lincheck_from_packed},
+    lincheck::{LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
     proof::eq_skip_weights,
     r1cs::{BlockR1cs, SparseBinaryMatrix, WitnessLayout},
     verifier::ExtraClaim,
@@ -1463,9 +1463,8 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
-    /// per slot type: its log size and its circuit, column-major: the fold gathers each column's rows, where a row scatter
-    /// would give each of its ~4 chunks per thread an accumulator as wide as the slot (2^21 to 2^24 columns for a GEMM unit)
-    pub types: Vec<(usize, CscCircuit)>,
+    /// per slot type: its log size and its circuit
+    pub types: Vec<(usize, SparseMatrixCircuit<'static>)>,
     /// per slot type: a generated read's table-direct B side
     pub tables: Vec<Option<TableSide>>,
     /// (type index, first position, count) per range
@@ -1820,6 +1819,10 @@ fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
 
+fn leak<T>(x: T) -> &'static T {
+    Box::leak(Box::new(x))
+}
+
 impl Stmt {
     pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
         let k_log = c.k_log;
@@ -1829,7 +1832,7 @@ impl Stmt {
         shape_in_range(m, PT_LOCAL + nbl)?;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
-        let mut types: Vec<(usize, CscCircuit)> = Vec::new();
+        let mut types: Vec<(usize, SparseMatrixCircuit<'static>)> = Vec::new();
         let mut tables: Vec<Option<TableSide>> = Vec::new();
         let mut type_of: BTreeMap<String, usize> = BTreeMap::new();
         let mut ranges = Vec::new();
@@ -1844,12 +1847,12 @@ impl Stmt {
                         let net = &c.nets[i].1;
                         let k = 1usize << net.unit_log;
                         let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                        CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b))
+                        SparseMatrixCircuit::new(leak(pad(&net.a)), leak(pad(&net.b)))
                     }
                     Kind::Mask => {
                         let k = 1usize << r.slot_log;
                         let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
-                        CscCircuit::from_matrices(&id, &id)
+                        SparseMatrixCircuit::new(leak(id.clone()), leak(id))
                     }
                 };
                 types.push((r.slot_log, circ));
@@ -2753,41 +2756,6 @@ mod tests {
         let mut got = vec![F128::ZERO; n];
         TableSide::of(&ln).fold(&eq, &mut got);
         assert!(ln.k == 31 && got == want);
-    }
-
-    /// Every slot type's column-major fold is upstream's row-scatter fold of the same rows (`SparseMatrixCircuit`), both
-    /// sides and α-batched, at random weights: units with rows, units with none but the constant, and the mask.
-    #[test]
-    fn slot_type_folds_are_the_row_folds() {
-        use flock_core::lincheck::SparseMatrixCircuit;
-        let c = Composite::parse(&typed_statement(), None).unwrap();
-        let st = Stmt::new(c.clone(), 2, json!({})).unwrap();
-        let mut s = 11u64;
-        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
-        let alpha = rnd();
-        let mut seen = BTreeSet::new();
-        for (r, &(t, _, _)) in c.ranges.iter().zip(&st.circuit.ranges) {
-            if !seen.insert(t) {
-                continue;
-            }
-            let k = 1usize << r.slot_log;
-            let (a, b) = match r.kind {
-                Kind::Net(i) => {
-                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
-                }
-                Kind::Mask => {
-                    let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
-                    (id.clone(), id)
-                }
-            };
-            let eq: Vec<F128> = (0..k).map(|_| rnd()).collect();
-            let (rows, cols) = (SparseMatrixCircuit::new(&a, &b), &st.circuit.types[t].1);
-            assert_eq!(cols.fold_alpha_batched(alpha, &eq), rows.fold_alpha_batched(alpha, &eq), "{:?}", r.kind);
-            assert_eq!(cols.fold_split(&eq), rows.fold_split(&eq), "{:?}", r.kind);
-        }
-        assert_eq!(seen.len(), st.circuit.types.len());
-        assert!(c.ranges.iter().any(|r| r.kind == Kind::Mask) && c.nets.iter().any(|n| n.1.a.iter().filter(|x| !x.is_empty()).count() > 1));
     }
 
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.
