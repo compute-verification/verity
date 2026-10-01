@@ -196,3 +196,45 @@ def test_rows_form_s_writes_the_row_leaves_and_s5_stats(k):
         got = [int.from_bytes(buf.raw[n * r:n * r + 4], "little") for buf, n in ((alpha, 4), (beta, 4), (ia, 4), (aux, 8))]
         got.append(int.from_bytes(aux.raw[8 * r + 4:8 * r + 8], "little"))
         assert got == [a_, b_, fp32.div(0x3F800000, a_), s_, rho], (k, r)
+
+
+def bf16_cut(words: np.ndarray) -> tuple[bytes, bytes]:
+    """FP32 words cut to BF16 (each word's upper half): the BF16 values, and their exact widening (the lower halves zero)."""
+    w = words & np.uint32(0xFFFF0000)
+    return (w >> 16).astype(np.uint16).tobytes(), w.tobytes()
+
+
+def rows_stats(kernel: str, rows: bytes, m: int, m_real: int, rb: int, d: CommitmentDomain) -> list[bytes]:
+    """`kernel` (hash_rows_b3s_stats or its _bf16 form) over m rows of rb FP32 bytes, hashing m_real (ranks 3 on): its
+    leaves, level keys, alpha, beta, 1/alpha and (s, rho), each written over 0xA5."""
+    tmpl, tlen = template(ROW)
+    nseg, poison = rb // 256, b"\xa5"
+    outs = [T.buffer(poison * 32 * m), T.buffer(poison * 32 * 10), *(T.buffer(poison * n * m) for n in (4, 4, 4, 8))]
+    T.launch(kernel, m, 32 * -(-nseg // 32), [T.buffer(rows), outs[0], T.buffer(d.domain_id), outs[1], T.buffer(tmpl), *outs[2:]],
+             [m_real, rb, 3, tlen, m], smem=nseg * (32 + 33))
+    return [b.raw for b in outs]
+
+
+@pytest.mark.parametrize("rb", [256, 1024, 4096, 16384, 57344])
+def test_bf16_row_leaves_are_their_widenings(rb):
+    """hash_rows_b3s_bf16 over 3 BF16 rows of k = rb / 4 values (ranks 5–7; k = 14,336 is Llama-3.1-8B's down projection):
+    each leaf is frame-b3s's over the row's FP32 widening, the bytes hash_rows_b3s hashes."""
+    m, d = 3, domain(8)
+    half, wide = bf16_cut(np.frombuffer(data(f"bf16 rows {rb}", m * rb), np.uint32))
+    tmpl, tlen = template(ROW)
+    nseg = rb // 256
+    out = T.buffer(32 * m)
+    T.launch("hash_rows_b3s_bf16", m, 32 * -(-nseg // 32), [T.buffer(half), out, T.buffer(d.domain_id), None, T.buffer(tmpl)],
+             [m, rb, 5, tlen])
+    assert out.raw == rows_b3s(wide, m, rb, d, rank0=5)
+    assert out.raw == b"".join(d.leaf(5 + r, 5 + r, ROW, wide[r * rb:(r + 1) * rb]) for r in range(m))
+
+
+@pytest.mark.parametrize("k", [256, 1024, 4096])
+def test_bf16_rows_form_s_is_its_widening(k):
+    """hash_rows_b3s_stats_bf16 over BF16 rows writes what hash_rows_b3s_stats writes over their FP32 widening, byte for byte:
+    the leaves (m_real = 8 of m = 12), the level keys, and every row's stats, the filler rows' (read for their stats alone)
+    included."""
+    m, m_real, rb, d = 12, 8, 4 * k, domain(16)
+    half, wide = bf16_cut(f32_rows(f"bf16 rows form s {k}", m, k))
+    assert rows_stats("hash_rows_b3s_stats_bf16", half, m, m_real, rb, d) == rows_stats("hash_rows_b3s_stats", wide, m, m_real, rb, d)

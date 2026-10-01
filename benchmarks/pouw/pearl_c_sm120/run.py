@@ -282,6 +282,10 @@ B3S_SEG, B3S_MAX_SEGS = 256, 512
 #: hash_rows_b3s_stats, A's row leaves and stats_a's words in one pass over A (step `hash_rows_a`; forming drops stats_a).
 #: GPU 1's `s` for -h1 (h1_rows_stats) is on its forms branch, not here.
 ROWS_FORMS = ("w", "s")
+#: A's kernels over BF16 rows (Pipeline's `a_bf16`, -h2 only): each reads A's BF16 values as their exact FP32 words, so it
+#: writes what its FP32 kernel writes over the widened rows
+A_BF16_KERNELS = {"hash_rows_b3s": "hash_rows_b3s_bf16", "hash_rows_b3s_stats": "hash_rows_b3s_stats_bf16",
+                  "stats_s5": "stats_s5_bf16", "form_s5": "form_s5_bf16"}
 
 
 def pow2(n: int) -> int:
@@ -362,6 +366,9 @@ class Pipeline:
     hash_rows_b3s, under segment level keys it derives itself and its first CTA stores in `skeys_<tree>`; the tile tree's
     leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.  `rows_form` is A's
     row-leaf form (ROWS_FORMS): under -h2 `s` hashes A's m_real rows and writes stats_a's words for all m in one pass.
+    With `a_bf16` (-h2 only), xa holds A's rows as BF16 (2k bytes a row) and A's kernels are A_BF16_KERNELS', which widen
+    them as they load them: every buffer is as with xa their FP32 widening, A's row leaves (over the FP32 words) included.
+    The baselines and form_alt read A's FP32 words, so they don't run on it.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
@@ -372,7 +379,7 @@ class Pipeline:
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
-                 fused: bool | None = None, hashing: str = "h1", rows_form: str = "w"):
+                 fused: bool | None = None, hashing: str = "h1", rows_form: str = "w", a_bf16: bool = False):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
@@ -391,6 +398,9 @@ class Pipeline:
         if rows_form not in ROWS_FORMS or rows_form == "s" and hashing != "h2":
             raise ValueError(f"rows_form {rows_form!r}: one of {ROWS_FORMS}, and `s` only under -h2 on this tree")
         self.rows_form = rows_form
+        if a_bf16 and hashing != "h2":
+            raise ValueError("a_bf16: A's BF16 rows are read by -h2's kernels alone (A_BF16_KERNELS)")
+        self.a_bf16 = a_bf16
         self.fusable = self.bm == BM and self.m_real == m
         if fused and not self.fusable:
             raise ValueError(f"gemm_pearlc_b digests every row of 128 x 128 tiles: m = {m} rows at bm = {self.bm}, m_real = "
@@ -404,7 +414,7 @@ class Pipeline:
         self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
         self.allocated: list[str] = []
         self.b["xa"], self.b["xb"] = xa, xb
-        self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
+        self.size["xa"], self.size["xb"] = m * (2 * k if a_bf16 else self.row_bytes), n * self.row_bytes
         if self.bm == BM:
             self.encode_maps()
 
@@ -443,6 +453,10 @@ class Pipeline:
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
 
+    def kernel_of(self, tag: str, name: str) -> str:
+        """The kernel `name` over side `tag`'s rows: A_BF16_KERNELS' for A's under `a_bf16`."""
+        return A_BF16_KERNELS[name] if tag == "a" and self.a_bf16 else name
+
     def root(self, tag: str) -> int:
         """The device address of a tree's root, its last node."""
         return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - 32
@@ -477,13 +491,13 @@ class Pipeline:
         d, b, rb = self.dev, self.b, self.row_bytes
         if self.hashing == "h2" and tag == "a" and self.rows_form == "s":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
-            leaves = lambda: d.launch("hash_rows_b3s_stats", self.m, threads, b3s_stats_smem(rb),  # noqa: E731
+            leaves = lambda: d.launch(self.kernel_of(tag, "hash_rows_b3s_stats"), self.m, threads, b3s_stats_smem(rb),  # noqa: E731
                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"],
                                          b["alpha_a"], b["beta_a"], b["ia_a"], b["aux_a"]),
                                       i=(count, rb, 0, b3s_template_len(ROW_SCHEMA), self.m))
         elif self.hashing == "h2":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
-            leaves = lambda: d.launch("hash_rows_b3s", count, threads,  # noqa: E731
+            leaves = lambda: d.launch(self.kernel_of(tag, "hash_rows_b3s"), count, threads,  # noqa: E731
                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"]),
                                       i=(count, rb, 0, b3s_template_len(ROW_SCHEMA)))
         else:
@@ -507,6 +521,8 @@ class Pipeline:
 
     def form_alt_launch(self, tag: str, kernel: str) -> None:
         """`kernel` (one of FORM_ALTS) over one side's rows into at2."""
+        if tag == "a" and self.a_bf16:
+            raise ValueError(f"{kernel} reads A's FP32 words, and A's rows are BF16 (a_bf16)")
         b, rows = self.b, self.m if tag == "a" else self.n
         self.dev.launch(kernel, (self.k // 128, rows // 64), 128,
                         p=(b[f"x{tag}"], b[f"alpha_{tag}"], b[f"ep{tag}_codes"], b[f"f{tag}_codes"], b["at2"]), i=(rows, self.k))
@@ -588,11 +604,12 @@ class Pipeline:
 
         def form_side(tag, rows, x, e_codes, f_codes, out):
             ep = f"ep{tag}_codes"
-            steps = [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                      b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
+            steps = [(f"stats_{tag}", lambda: d.launch(self.kernel_of(tag, "stats_s5"), cdiv(rows, 8), 256,
+                                                       p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"]),
+                                                       i=(rows, k))),
                      (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
                                                         i=(rows,))),
-                     (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
+                     (f"form_{tag}", lambda: d.launch(self.kernel_of(tag, "form_s5"), (k // 128, rows // 64), 128,
                                                       p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
             return steps[1:] if tag == "a" and self.rows_form == "s" else steps
 
@@ -633,7 +650,7 @@ class Pipeline:
         tag = lambda phase, xs: [(nm, phase, f) for nm, f in xs]  # noqa: E731
         out = (tag("epoch", epoch) + tag("unit", unit) + tag("job", job) + tag("commit", commit) + tag("forming", forming)
                + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing))
-        if m % BM == 0:
+        if m % BM == 0 and not self.a_bf16:
             out += tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted)
         return out
 
@@ -718,6 +735,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         pipe.free()
         dev.free(xa)
         dev.free(xb)
+        res.update(check_bf16(dev, man, base, variant, keys))
         failed = sorted(nm for nm, r in res.items() if not r["ok"])
         results[variant] = {"buffers": len(res), "failed": failed,
                             "pearl_c_ok": not [x for x in failed if x.split("@")[0] not in PLAIN_BUFFERS],
@@ -726,6 +744,47 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
     for p in keys.values():
         dev.free(p)
     return results
+
+
+#: check_bf16's cases: A's rows forms, and whether filler rows follow A's m_real (m - 48 of m: the stats read rows the
+#: hashing doesn't, and the chain runs unfused)
+BF16_CASES = (("s", 0), ("w", 0), ("s", 48), ("w", 48))
+#: buffers check_bf16 doesn't compare: the rows (inputs), the tensor maps (addresses), scratch, and the baselines'
+BF16_SKIP = {"xa", "xb", "tma", "diff", "at2"} | PLAIN_BUFFERS
+
+
+def check_bf16(dev: Dev, man: dict, base: str, variant: str, keys: dict[str, int]) -> dict:
+    """A's BF16 rows (`a_bf16`) held to their FP32 widenings: under -h2, in each of BF16_CASES, a pipeline over the fixture's
+    A with each word's low half dropped (exactly BF16) and one over those BF16 values, every buffer they write from 0xAB
+    compared byte for byte (`<name>@bf16/<form>/<m_real>`)."""
+    m, n, k = man["shape"]
+    read = lambda f: open(os.path.join(base, f["file"]), "rb").read()  # noqa: E731
+    raw = read(man["common"]["xa"])
+    half, wide = bytearray(len(raw) // 2), bytearray(len(raw))
+    half[0::2], half[1::2] = raw[2::4], raw[3::4]
+    wide[2::4], wide[3::4] = raw[2::4], raw[3::4]
+    xs = {False: dev.put(bytes(wide)), True: dev.put(bytes(half))}
+    xb = dev.put(read(man["common"]["xb"]))
+    full = {**keys, "t_row": dev.put(b3s_template(ROW_SCHEMA)), "t_tile": dev.put(b3s_template(TILE_SCHEMA))}
+    res = {}
+    for form, short in BF16_CASES:
+        want = {}
+        for bf16 in (False, True):
+            pipe = Pipeline(dev, m, n, k, variant, full, xs[bf16], xb, m_real=m - short, hashing="h2", rows_form=form,
+                            a_bf16=bf16)
+            names = [x for x in pipe.size if x not in BF16_SKIP and x in pipe.b]
+            for x in names:
+                dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), 0xAB, pipe.size[x])
+            pipe.run_all()
+            if bf16:
+                for x in names:
+                    res[f"{x}@bf16/{form}/{m - short}"] = compare(dev, pipe, x, want[x])
+            else:
+                want = {x: dev.read(pipe.b[x], pipe.size[x]) for x in names}
+            pipe.free()
+    for p in (*xs.values(), xb, full["t_row"], full["t_tile"]):
+        dev.free(p)
+    return res
 
 
 # ---- the diagnostic timing ----------------------------------------------------------------------------------------
