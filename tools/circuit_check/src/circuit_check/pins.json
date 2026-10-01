@@ -41,6 +41,12 @@
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "SiluMulBf16_v3": {
+   "and": 1372
+  },
+  "SiluMul_v3{I=8}": {
+   "and": 10976
   }
  },
  "pieces": {
