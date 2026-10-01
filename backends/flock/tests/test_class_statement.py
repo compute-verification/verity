@@ -6,6 +6,7 @@ loopback session accepts each."""
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -59,6 +60,25 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
+
+
+def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
+    def hit(s):
+        d = tmp_path / "cache" / s[:16]
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "rec.json").write_text(json.dumps({"shape": s}))
+        return d
+
+    built = []
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(CS, "cache_slot_circuits", lambda: built.append(1))
+    monkeypatch.setattr(CS, "_stage_job_fresh", lambda s: {"shape": s, "broke": {"at": "test"}})
+    args = ["--model", "tiny", "--partition", "q-word", "--stage-only", "--sample", "2"]
+    monkeypatch.setattr(CS, "_stage_cache", hit)
+    assert CS.main([*args, "--out", str(tmp_path / "hit")]) == 0 and built == []
+    assert all(json.loads(ln)["stage_cached"] for ln in (tmp_path / "hit" / "staged.jsonl").read_text().splitlines())
+    monkeypatch.setattr(CS, "_stage_cache", lambda s: None)
+    assert CS.main([*args, "--out", str(tmp_path / "miss")]) == 0 and built == [1]
 
 
 def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
