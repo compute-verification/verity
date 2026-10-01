@@ -182,14 +182,16 @@ def test_a_failed_plan_that_is_not_required_leaves_no_plan_and_does_not_stop(tmp
     assert not Path(RP.path(r)).exists() and "plan FAIL" in (Path(r.d) / "stages.txt").read_text()
 
 
-@pytest.mark.parametrize("stages, planned", [("build", [False]), ("build,plan", [True]), ("build,commit", []), ("plan", [True])])
-def test_a_build_without_the_commit_or_its_own_plan_stage_ends_with_the_plan(tmp_path, monkeypatch, stages, planned):
-    """A Build task ahead of a separate Commit task derives the plan on CPU, so the Commit never derives its producer facts on the GPU;
-    the plan is not required there (`required=False`)."""
+@pytest.mark.parametrize("stages, config_run, planned", [("build", True, [False]), ("build,plan", True, [True]), ("build,commit", True, []),
+                                                      ("plan", True, [True]), ("build", False, [])])
+def test_a_config_runs_build_without_the_commit_or_its_own_plan_stage_ends_with_the_plan(tmp_path, monkeypatch, stages, config_run, planned):
+    """A config run's Build task ahead of its Commit task derives the plan on CPU, so the Commit never derives its producer facts on the
+    GPU; the plan is not required there (`required=False`)."""
     r, _ = _row_with_build(tmp_path, monkeypatch)
-    r.stages, r.config_run, ran = stages, False, []
+    r.stages, r.config_run, ran = stages, config_run, []
     for name in ("prepare", "build", "commit", "research_result", "timeline_report"):
         monkeypatch.setattr(r, name, lambda *a, **k: None)
+    monkeypatch.setattr(RC, "word_check", lambda row: None)
+    monkeypatch.setattr(RC, "config_record", lambda row: None)
     monkeypatch.setattr(RP, "plan", lambda row, required=True: ran.append(required))
     assert r.run() == 0 and ran == planned
-
