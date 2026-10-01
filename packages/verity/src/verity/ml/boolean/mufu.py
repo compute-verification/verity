@@ -93,7 +93,8 @@ class Fit:
         idx = np.asarray(idx, dtype=np.int64)
         u, g = idx & ((1 << self.nb) - 1), idx >> self.nb
         c0, c1, c2 = (np.asarray(c, np.int64)[g] for c in (self.C0, self.C1, self.C2))
-        return self.base + ((c0 + c1 * u + ((c2 * self.square(u)) << self.square_shift)) >> self.shift)
+        q = self.square(np.arange(1 << self.nb))[u]
+        return self.base + ((c0 + c1 * u + ((c2 * q) << self.square_shift)) >> self.shift)
 
 
 @cache
