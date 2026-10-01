@@ -216,8 +216,9 @@ env = {k: str(v) for k, v in (d.get("env") or {}).items() if k != "HF_HOME"}
 n2 = d["n2"]
 env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_key"], BUILD_ART=n2.get("build_art") or "",
            COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="0" if n2.get("proof") else "1", PROOF="1" if n2.get("proof") else "",
-           QUESTION=d.get("question") or f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every"
-                                         " sampled unit, as node 1's Commits of its Build do?")
+           QUESTION=d.get("question") or "",
+           N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit,"
+                       " as node 1's Commits of its Build do?")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 print("ITEM_ARGS=(" + " ".join(shlex.quote(a) for a in
       [x for k, v in {**(d.get("env") or {}), "REPLAY_DEFERRED": "1"}.items() for x in ("--env", f"{k}={v}")]
@@ -257,9 +258,14 @@ home() {  # home RUN_ID [RSYNC-ARG...]
   rsync -a "${sudo_rsync[@]}" "$@" "$SWEEP_DIR/$ROW/" "$N1:$SWEEP_DIR/$ROW/"
   rsync -a "${sudo_rsync[@]}" "/workspace/jobs/runs/$run_id/" "$N1:/workspace/jobs/runs/$run_id/"
   ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
-  # the job's research question goes on the Attempt as its `question` label; --off-vocab for job trees older than that key
-  ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data label \
-    $run_id question $(printf %q "$QUESTION") --by n2-commits --ref $run_id --off-vocab" > /dev/null || echo "$run_id: no question label" >&2
+  # the Attempt's `question` labels: the research owner's (the item's "question"), then node 2's; --off-vocab for job trees older
+  # than that key
+  local q
+  for q in "$QUESTION" "$N2_QUESTION"; do
+    [ -n "$q" ] || continue
+    ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data label \
+      $run_id question $(printf %q "$q") --by n2-commits --ref $run_id --off-vocab" > /dev/null || echo "$run_id: no question label" >&2
+  done
   if [ -n "${R2_ENDPOINT:-}" ] && [ "$(du -sm "/workspace/jobs/runs/$run_id" | cut -f1)" -lt 64 ]; then
     PYTHONPATH=$SRC/tools/research/src "${research[@]}" data push "$run_id" && echo "$run_id: pushed to R2 from node 2"
   else
