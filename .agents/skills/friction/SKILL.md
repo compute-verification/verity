@@ -89,6 +89,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (2:43 PM PDT): a decision Daniel must make goes where Slack notifies him, never only in a note or a lead's
+  thread. Use one question per post, with its options, your recommendation, and its deadline or default:
+  `research msg ask-daniel` (the card mentions him), or, if the card fails, `research msg send --to @daniel`.
 - 2026-10-01 (12:37 PM PDT): lanes work around the clock, so timelines are planned in hours: a pilot, trial or rollout gets
   hours (about eight for a process pilot), not the days or weeks a human team would give it.
 - 2026-10-01 (10:56 AM PDT): only leads get handles (a name in `research msg`), never individual workers; a worker is
