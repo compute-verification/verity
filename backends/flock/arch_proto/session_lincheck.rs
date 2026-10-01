@@ -23,7 +23,7 @@ use std::{env, fs, time::Instant};
 use flock_core::{
     challenger::{Challenger, FsChallenger},
     lincheck::{
-        LincheckGrinding, QuirkyPoint, SkipPoint, SparseMatrixCircuit, build_quirky_eq_table_from_weights,
+        CscCircuit, LincheckGrinding, QuirkyPoint, SkipPoint, build_quirky_eq_table_from_weights,
         pack_z_lincheck, prove, verify,
     },
     r1cs::SparseBinaryMatrix,
@@ -90,8 +90,8 @@ fn block(t: &Tmpl, k: usize, rng: &mut Rng) -> (usize, Vec<(u32, u32, Option<usi
     (pin, da, db)
 }
 
-/// `per` flattened copies of T with the chain edges between them.
-fn unit_matrices(t: &Tmpl, per: usize) -> SparseMatrixCircuit<'static> {
+/// `per` flattened copies of T with the chain edges between them, column-major as C-Flock's slot types are.
+fn unit_matrices(t: &Tmpl, per: usize) -> CscCircuit {
     let size = per << SL;
     let (mut a, mut b): (Vec<Vec<usize>>, Vec<Vec<usize>>) = (Vec::with_capacity(size), Vec::with_capacity(size));
     for s in 0..per {
@@ -106,13 +106,7 @@ fn unit_matrices(t: &Tmpl, per: usize) -> SparseMatrixCircuit<'static> {
             }
         }
     }
-    let leak = |m: SparseBinaryMatrix| &*Box::leak(Box::new(m));
-    SparseMatrixCircuit::new(leak(SparseBinaryMatrix::new(size, size, a)), leak(SparseBinaryMatrix::new(size, size, b)))
-}
-
-/// Another handle on the same leaked matrices (the circuit is not `Clone`).
-fn again(m: &SparseMatrixCircuit<'static>) -> SparseMatrixCircuit<'static> {
-    SparseMatrixCircuit::new(m.a_0, m.b_0)
+    CscCircuit::from_matrices(&SparseBinaryMatrix::new(size, size, a), &SparseBinaryMatrix::new(size, size, b))
 }
 
 fn apply(t_rows: &[Vec<u32>], k: usize, delta: &[(u32, u32)], z: &[bool]) -> Vec<bool> {
@@ -156,16 +150,16 @@ fn main() {
             da3.iter().filter(|e| !e.2.is_some_and(inside)).map(|&(r, c, _)| (r, c)).collect()
         };
         let unit_ty = unit_matrices(&t, per);
-        let bc = |types: Vec<(usize, SparseMatrixCircuit<'static>)>, ranges: Vec<(usize, usize, usize)>, da: Vec<(u32, u32)>| {
+        let bc = |types: Vec<(usize, CscCircuit)>, ranges: Vec<(usize, usize, usize)>, da: Vec<(u32, u32)>| {
             let tables = vec![None; types.len()];
             BlockCircuit { k_log: k, pin, types, tables, ranges, da, db: db.clone() }
         };
-        let step = bc(vec![(SL, again(&step_ty))], vec![(0, 0, 1 << (k - SL))], all.clone());
-        let unit = bc(vec![(ul, again(&unit_ty))], vec![(0, 0, units)], outside(&|s| s % per != 0));
+        let step = bc(vec![(SL, step_ty.clone())], vec![(0, 0, 1 << (k - SL))], all.clone());
+        let unit = bc(vec![(ul, unit_ty.clone())], vec![(0, 0, units)], outside(&|s| s % per != 0));
         // the last unit's copies as steps, in two ranges split at an odd copy
         let (first, last) = ((units - 1) * per, units * per);
         let split = (first + per / 2 + 1).min(last);
-        let mixed = (units >= 2).then(|| bc(vec![(ul, again(&unit_ty)), (SL, again(&step_ty))],
+        let mixed = (units >= 2).then(|| bc(vec![(ul, unit_ty.clone()), (SL, step_ty.clone())],
                                             vec![(0, 0, units - 1), (1, first, split - first), (1, split, last - split)],
                                             outside(&|s| s % per != 0 && s < first)));
 
@@ -212,7 +206,7 @@ fn main() {
                 let (r, nx, s, ph) = run(&proof, c);
                 let same = r.as_ref() == Ok(&claim) && nx == next;
                 let rejects = run(&bad_z, c).0.is_err() && run(&bad_r, c).0.is_err();
-                let mut wrong = BlockCircuit { k_log: k, pin, types: c.types.iter().map(|(l, m)| (*l, again(m))).collect(),
+                let mut wrong = BlockCircuit { k_log: k, pin, types: c.types.clone(),
                                                tables: c.tables.clone(), ranges: c.ranges.clone(), da: c.da.clone(), db: c.db.clone() };
                 wrong.da[7].1 ^= 1;
                 let rejects_delta = run(&proof, &wrong).0.is_err();
