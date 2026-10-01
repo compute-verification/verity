@@ -26,6 +26,10 @@ ranges of slots of a few types:
 A padding instance (the block's unused instances and every block past the last) is the all-zero instance with zero salts; its
 ``b || c`` and outputs are pinned here (``dummy``), so the verifier knows every public value of every block.
 
+A lowering with values (a program's constants, :mod:`ir_lower`'s ``values``) has one more input port, ``values``, after the
+Definition's: every instance's values row, committed and hidden like any row, its words copied into every unit's value ports
+(``leaf_cuts``). The padding instance's values row is zero too, so nothing public depends on the values.
+
 The composite circuit (``flock-circuit``) is the statement's meaning: a ``META`` line (ports, ranges, each row's constants,
 the wires, the units' leaf and output maps, the pinned dummy values, the leaf-commitment scheme, the program digests, the
 partition digest), then each slot type's ``flock-ir-unit/v2`` circuit. Its sha256 is the pin. The verifier derives Δ, the public
@@ -287,6 +291,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         lookups[table] = lookups.get(table, 0) + 1
     lv = low.leaves
     ports = [_port(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])]
+    if "values" in lv:
+        ports.append(_port(IL.VALUES_PORT, lv["in_ports"][-1][0]))
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
@@ -321,8 +327,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
               **{f"lookup:{t}": c for t, c in lookups.items()}}
     tail_wires = _wires(low, tail) if tail else []
     public = dict(getattr(U, "public", []))
-    # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16
+    # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16; so is
+    # a value port, from the values row
     leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
+    leaf_cuts += [["unit", u, j, leaf] for u, vs in enumerate(lv.get("values", [])) for j, leaf in vs]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = [j for j, tag in enumerate(tail.stages[-1].outs) if tag[0] == "ret"] if U.tail_rets else []
     programs = program_digests(sub, statics)
@@ -370,12 +378,15 @@ def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, lis
 
 def _dummy(low: IL.Lowering, ports: list[Port], sub=None) -> dict:
     """The all-zero instance's ``b || c`` (zero rows, zero salts; per port) and output words (every output leaf), as the padding
-    instances hold (a tail that returns the outputs: the template's reference evaluation of the zero instance)."""
+    instances hold (a tail that returns the outputs: the template's reference evaluation of the zero instance; with values,
+    the IR's on the zero values row)."""
     n_in = sum(p.words for p in ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
-    if low.units.tail_rets:
+    if low.units.tail_rets and low.units.value_widths:
+        outs = IL.reference_outputs(low, zero)
+    elif low.units.tail_rets:
         ev = sub.evaluate({p.name: [np.zeros(w, dtype=np.uint16)] for p, w in zip(sub.inputs, [q.words for q in ports])})
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     bc = _commit_strings(ports, {p.name: np.zeros((1, p.words), np.uint16) for p in ports}, {p.name: [bytes(SALT_BYTES)] for p in ports})
@@ -456,7 +467,7 @@ def share(rows: dict) -> tuple[dict, dict]:
 
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
-          refs: dict | None = None, salts: dict | None = None) -> dict:
+          refs: dict | None = None, salts: dict | None = None, values: list | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
     sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
     every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
@@ -470,7 +481,9 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
     ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``): the shared-row tables and refs as given, in their
     order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt). ``salts``
-    (``{port: [192-byte salt, ...]}``, one per table row, or per instance without tables): the committer's own salts."""
+    (``{port: [192-byte salt, ...]}``, one per table row, or per instance without tables): the committer's own salts.
+    ``values``: a circuit with a ``values`` port's row (:attr:`ir_lower.Lowering.value_row`), every instance's own copy, when
+    ``rows`` holds none."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
@@ -492,6 +505,10 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     else:
         if rows is None:
             rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
+        if any(p.name == IL.VALUES_PORT for p in ports) and IL.VALUES_PORT not in rows:
+            if values is None:
+                raise ValueError("the circuit has a values row: pass values (the lowering's value_row)")
+            rows = {**rows, IL.VALUES_PORT: np.tile(np.asarray(values, dtype=np.uint16), (n, 1))}
         refs = None
         if share_rows:
             rows, refs = share({p.name: rows[p.name] for p in ports})
@@ -550,7 +567,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
         if not (out / "circuit-forged.txt").exists():
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows, values=low.value_row or None)
     return pub if public_only else inst
 
 

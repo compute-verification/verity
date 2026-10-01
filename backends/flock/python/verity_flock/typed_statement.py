@@ -226,8 +226,8 @@ def instance_type(low: IL.Lowering, tail) -> Instance:
             args = []
             for j, (kind, k) in enumerate(U.in_src[u]):
                 width = U.in_widths[j]
-                if kind == "leaf":
-                    args.append(fit([((x,), 0) for x in leaf_wires[k]], width))
+                if kind in ("leaf", "value"):
+                    args.append(fit([((x,), 0) for x in leaf_wires[k if kind == "leaf" else U.n_args + k]], width))
                 elif kind == "zero":
                     args.append([zero] * width)
                 elif k in cut:
@@ -431,7 +431,8 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
             forged = compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics)
             (out / "circuit-forged.txt").write_text(forged.text)
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    C.write(typed.text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    C.write(typed.text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows,
+            values=low.value_row or None)
     return pub if public_only else inst
 
 
