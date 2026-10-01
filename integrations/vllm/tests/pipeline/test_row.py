@@ -297,7 +297,8 @@ def test_auto_derives_as_many_as_the_memory_and_cpus_hold_at_the_largest_shape()
     per = R.derive_bytes(1024, 127, 16)
     assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32) == 8
     assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=4) == 4
-    assert R.build_jobs_auto(shapes[:3], 16, headroom=10 * per, cpus=32) == 3
+    assert R.build_jobs_auto(shapes[:3], 16, headroom=10 * per, cpus=32) == 4     # the step's derive and the three shapes'
+    assert R.build_jobs_auto(shapes[:1], 16, headroom=10 * per, cpus=32) == 2     # B=1: the step's beside the request's
     assert R.build_jobs_auto(shapes, 16, headroom=per, cpus=32) == 1
     assert R.build_jobs_auto(shapes, None, headroom=100 << 30, cpus=32) == 5       # the model's layers unknown: 20 GiB per derive
     # a sweep's per-config share of a packed host: the budget, not the host's headroom, sizes auto
