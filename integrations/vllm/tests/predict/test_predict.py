@@ -2,7 +2,7 @@
 
 The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
 (`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7, Qwen2.5-0.5B from
-cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5, Llama-3.2-1B's TP2 ranks from cov-p000,
+cov-k03-8 (its biased q/k/v linear one `GemmBias_v2{K,N,DOT}` Call), Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5, Llama-3.2-1B's TP2 ranks from cov-p000,
 Gemma-2-2B's from cov-p058-2, Qwen3-30B-A3B's from cov-p081 and OLMoE's from cov-p069.
 A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
@@ -38,7 +38,7 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
     ("smollm2-135m", "53aa6ed20e8dd0c1e74a0a332f359bda5dc36c40da38383d3a2e0a54a9c2a9c4"),
     ("llama32-1b", "e0b060772e8179fcab09da11adc3998c7fcca7d124111d50a02be73bbf123408"),
     ("tinyllama-11b", "c0a2fef1966af8284024e60603d3f63929903fd9ddcbd4349e184e7842b27a48"),
-    ("qwen25-05b", "312cae23ded0630175327fc649a7428a55f3617d415a10a58b8108cead775860"),
+    ("qwen25-05b", "421d0b9a08507c2ddea45cc78fc973615b637207e57b621f012923549e5237d0"),
     ("phi3-mini", "4ed042b63f2bee015bf60be7b44b0eb29be3251ecf51c4cc199182584a14c21b"),
     ("qwen3-4b", "0af57f58fe6aa8df3f878faac16ad2b03b7295f01a82cc9d6dfbd7652613cfcd"),
     ("olmoe-1b-7b", "84fb48c7110b00c236474e7cb97f14e79c65937c41bf1339bc8e4df335153ebb"),
@@ -147,14 +147,15 @@ def test_weights_record_follows_the_module_order():
         gemma.index("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
 
 
-@pytest.mark.parametrize("target,fused", [({"compute_capability": [8, 0], "num_sms": 108}, True), (RTXPRO6000, False)])
-def test_the_biased_linear_follows_the_targets_rule(target, fused):
+@pytest.mark.parametrize("target,kind", [({"compute_capability": [8, 0], "num_sms": 108}, "GemmBias_v1"), (RTXPRO6000, "GemmBias_v2")])
+def test_the_biased_linear_follows_the_targets_rule(target, kind):
     """Qwen2's q/k/v bias: one `GemmBias_v1{K,N}` Call per row under the accepted kinds (A100, FA2), and where the target's record
-    names no biased-linear step (rtxpro6000) the target's GEMM, then `BiasAdd_v1` per row."""
+    names a biased-linear step (`gemm_bias_dot`: rtxpro6000) one `GemmBias_v2{K,N,DOT}` Call with the target's step; never the GEMM
+    then `BiasAdd_v1`, which only a family whose record names no step would keep."""
     cfg = {**TINY, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32}
     r = build_program(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target, workload={"requests": []}), "step")
     names = {re.match(r"\w+", k).group() for k in r.desc["definitions"]}
-    assert ("GemmBias_v1" in names, "BiasAdd_v1" in names) == (fused, not fused)
+    assert names & {"GemmBias_v1", "GemmBias_v2", "BiasAdd_v1"} == {kind}
 
 
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
