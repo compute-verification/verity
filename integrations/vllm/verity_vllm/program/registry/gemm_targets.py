@@ -115,6 +115,14 @@ class GemmTarget:
     tuned_table: Mapping[tuple[int, int], dict[str, Any]] = field(default_factory=dict)
     evidence: tuple[str, ...] = ()
     kind: str = "Gemm_v1{K,N}"
+    #: the per-tensor FP8 linear (`_C.cutlass_scaled_mm`), as measured (`evidence`): `fp8_dot` names its e4m3 k32 step (`targets.FP8_DOTS`)
+    #: and `fp8_scale_order` its epilogue, "no_swap" = bf16(s_x * (s_w * acc)) with ScaleA = s_x.  None = not a target fact: cc 9.0's
+    #: batch-invariant dispatch swaps (ScaleA = s_w) for the B1 shapes, and its FP8 program binds ScaledMmFp8_v1 in its own composites.
+    fp8_dot: str | None = None
+    fp8_scale_order: str | None = None
+    #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
+    #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
+    fp4_dot: str | None = None
 
     def launch_config(self, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int, str]:
         """vLLM `_get_matmul_config(M, N, K, bf16, default)` on this target: `(constexprs, num_warps, num_stages, source)`;
@@ -183,7 +191,8 @@ REGISTERED: dict[str, GemmTarget] = {
     # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
     "blackwell_consumer": GemmTarget(
         key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
-        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_dot="BlackwellE4m3QmmaDot32", fp8_scale_order="no_swap",
+        fp4_dot="BlackwellNvf4OmmaDot64",
         evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
@@ -195,7 +204,16 @@ REGISTERED: dict[str, GemmTarget] = {
                   "without a bias is bit-exact against the ascending HopperBF16WgmmaDot16_v1 chain (181M sampled coordinates, both tile tails kept; "
                   "the step cross-checked against the registered primitive on 1.2M), and every GPU rerun is bit-identical. A linear with a bias is "
                   "bit-exact at M >= 2 with the bias added in FP32 before the rounding (cuBLASLt's epilogue, not GemmBias_v1's bf16 add after it); "
-                  "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)")),
+                  "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)",
+                  "the per-tensor FP8 linear: vLLM's cc 12.0 CUTLASS FP8 dispatch (d9105ea80) has no swap_ab, so ScaleA = the activation "
+                  "scale: bf16(s_x * (s_w * acc)) over the ascending BlackwellE4m3QmmaDot32_v1 chain, 15,728,640 coordinates exact on an "
+                  "RTX PRO 6000 without a bias (run r20260930-041842-76a2); with a bias bf16(fma(s_x, s_w * acc, b)) (ScaledEpilogueBias), "
+                  "786,432 coordinates exact (run r20260930-090150-a42a); "
+                  "the swapped order misses 89 of its 125 discriminating coordinates (red team fp8-per-tensor-scale-order, reproducer "
+                  "r20260930-081238-476e); the step is pinned (trust dossier "
+                  "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)",
+                  "the NVFP4 linear: both checkpoint formats run CutlassNvFp4LinearKernel, whose only MMA is OMMA.SF.16864.F32.E2M1.E2M1."
+                  "UE4M3.4X, the pinned block-scaled step (attention lane, art:3bc1b2c4)")),
 }
 
 
