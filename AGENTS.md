@@ -62,11 +62,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
- The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its draws from the verifier's own randomness, and verification plans. See its
- `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
- audit: registration, the verifier's draw over a partition's proof units, and the
- audit record with its profile; `benchmarks/one_stage` runs it end to end with
+ The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
+ audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
+ audit record with its profile), the two-stage law, its draws from the verifier's own
+ randomness, and verification plans. The Lean states it; its `README.md` signposts that
+ Lean and lists what it does not state yet. `benchmarks/one_stage` runs the one-stage audit end to end with
  C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
  that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
