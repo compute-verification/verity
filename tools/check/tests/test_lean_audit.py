@@ -29,6 +29,7 @@ from pathlib import Path
 a = sys.argv[1:]
 root, out = Path(a[a.index("--root") + 1]), Path(a[a.index("--out") + 1])
 out.mkdir(parents=True, exist_ok=True)
+(out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
 for pol in sorted(root.rglob("lean-audit.json")):
     pkg = pol.parent
@@ -94,6 +95,14 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and doc["cached"] == {}
     (root / "tools/lean/audit.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
+
+
+def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tree(tmp_path, monkeypatch):
+    """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `fixtures/tc/vectors`), so the
+    audit, run from the scratch tree, is told where the checkout is."""
+    root = _tree(tmp_path, monkeypatch)
+    _run(tmp_path, 1)
+    assert (tmp_path / "out1" / "repo.txt").read_text() == str(root)
 
 
 def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_machine(tmp_path, monkeypatch):

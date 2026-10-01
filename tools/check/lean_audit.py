@@ -15,9 +15,9 @@ When one package misses, the audit runs on a scratch tree holding only the misse
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, the controls first. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
-in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record, which
-the key covers, holds for it, so it cannot pass a test on other data. The package's own Python tests check that the generator
-still writes that data.
+in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
+it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
+generator still writes that data.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
@@ -352,7 +352,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(work),
-                            "--out", str(out)], cwd=work, env=env)
+                            "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
