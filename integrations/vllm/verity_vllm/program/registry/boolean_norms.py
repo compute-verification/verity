@@ -209,7 +209,7 @@ _MUFU_WORDS = {"RSQRT": {P.RsqrtApprox.id}, "SQRT": {P.MufuSqrtFtz.id}, "RCP": {
 
 def _on_word(d) -> bool:
     """Whether the MUFU static ``d`` is still a word id (it returns a 32-bit word, not 32 bits)."""
-    return d.signature()[1] == F32W
+    return (bind(d) if isinstance(d, CompositeDefinition) else d).signature()[1] == F32W
 
 
 def _mufu_word(d):
