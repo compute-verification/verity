@@ -124,7 +124,8 @@ link term per audit.
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
   layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
-  the end-to-end theorems with that binding.
+  the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
+  with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline).
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from

@@ -13,6 +13,9 @@ rows to another circuit: what a correct unit computes is its certificate's (The 
 hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`; in the
 `_hm96` forms, the serving roots' rewinding `tr`, which adds `δ_tree`).
 
+**The headline** is `Prog.flock_headline` (`FlockSoundness/Headline.lean`), the one statement the others specialize into
+(The headline, below).
+
 ## Soundness's assumptions (taken without proof)
 
 Soundness rests on three, each a `Prop` in `FlockSoundness/Assumptions.lean` taken as a hypothesis: SHA-512's collision
@@ -23,7 +26,7 @@ mis-stated assumption can make a theorem vacuous, but it can never make Lean pro
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, and `δ_tree` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
-| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`) |
+| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline) |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
 evaluations, since collisions exist, so neither is stated for all finders: each theorem takes it for the finders it builds
@@ -95,7 +98,37 @@ enters through `tr : StrictCR.TreeRewind`, a rewinding at the serving roots (the
 unit draw in place of the proof coins) whose `covers` says that the executable accepting while the model at the
 registered leaves rejects is no likelier than a run opening a serving root off its plurality. That cover is the link from
 the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis; the skeleton's `hExec` (every
-executable accept is the model's) gives one with no positions, at `δ_tree = 0`.
+executable accept is the model's) gives one with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`, `ofNever_bound`).
+
+## The headline
+
+`Prog.flock_headline` (`FlockSoundness/Headline.lean`) is the count curve with every choice made:
+- **the circuit** is the statement's rows' (`p.circuit outs`), each drawn unit's place from its table's statement
+  (`pp : ProgPlaces`);
+- **the hash** is SHA-512 (`Refine.H512`, `Refine.enc512`), for the session's leaves and nodes and for the rows' commit
+  strings, with the rows' value binding (`flock_e2e_count_hm96`);
+- **the draw** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), whose count
+  curve is at most `Law.stratified`'s under A3 (`Law.execOS_miss_le`).
+
+Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`. Its signature takes the three assumptions, each for the finders
+built from the prover bounded, and nothing else cryptographic: `SHA512CRStrict` (`hKS`, `hT`), `SHA512CRExpected`
+(`hCR`) and A3 (`hA3`). The rest are the named obligations of `assumptions/e2e-checklist.md`:
+- W6 (`pp.placed`: the table's statement holds the program's rows) and `Layout.Aliased` (`pp.aliased`);
+- `HmRowComputes` (`hHm`) and the layout's facts (`lay`, `rs`), in place of `vb`;
+- the serving roots' rewinding (`tr`), in place of `hExec`, which gives one at `δ_tree = 0` (`TreeRewind.ofNever`);
+- `hConst` and `hZero`.
+
+**What it bounds.** The headline bounds wrong units of the pinned rows circuit; "computes the Definition" additionally
+needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).
+Once every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir; Daniel, Sep 30), a generic
+Boolean-semantics lemma replaces the per-template `RowsCert`.
+
+**Its coins.** The statement is for live uniform OS coins drawn each round: the model's proof coins are uniform and
+drawn after the prover's message, as the verifier's `os` coins are (Cryptographic assumptions and coins, below). M0 does
+not use them today: the non-ZK session derives every coin from one OS seed through a SHA-256 PRF
+(`live/src/bin/flock-circuit.rs`, `config_with` sets `cfg.coin_seed = true`; `live/src/coin_seed.rs`). That rests on
+one more assumption, the PRF, which the headline doesn't take. Moving M0 to per-round OS coins is lane proofs-verify-overlap's. Until then the
+headline is cited only for runs that use per-round OS coins.
 
 ## Other named assumptions
 
@@ -184,13 +217,16 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 ## Named hypotheses of the proof
 
 - **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
-  the statement's rows make, each unit its template's rows; "wrong" is measured there. What a correct unit computes is a
-  separate theorem, `IsRowsUnit.computes_of_cert` (`FlockSoundness/Certificate.lean`): when the unit's rows are the rows
-  `GateRows.rows G L` derives from a gate circuit `G` (`RowsCert`) and `G` computes a definition `D`
-  (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in Python, not Lean), a unit that is not wrong, with its
-  constant 1, carries on each committed output wire `D`'s output on its input wires (`GateRows.rows_sound`). Both
-  premises are equalities a checker evaluates, not assumptions. `Rope.rope_sound` is `RowsCert.sound`'s conclusion for
-  RoPE's pinned rows, checked in the kernel.
+  the statement's rows make, each unit its template's rows; "wrong" is measured there. The headline bounds wrong units
+  of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
+  Boolean semantics in Lean. That is a separate theorem, `IsRowsUnit.computes_of_cert`
+  (`FlockSoundness/Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
+  `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
+  Python, not Lean), a unit that is not wrong, with its constant 1, carries on each committed output wire `D`'s output on
+  its input wires (`GateRows.rows_sound`). Both premises are equalities a checker evaluates, not assumptions, once `D` is
+  stated in Lean. `Rope.rope_sound` is `RowsCert.sound`'s conclusion for RoPE's pinned rows, checked in the kernel. Once
+  every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma
+  replaces the per-template `RowsCert`.
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
   statements of PROTOCOL.md §16 satisfy it.
@@ -241,9 +277,10 @@ before the session's first coin, not bounds state by state.
   this theorem.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
   come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit draw it is
-  A3.
-- **`seed` coins** (PR #83, `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and
-  SHA-256 in counter mode is a PRF. They are needed only if the seed mode becomes the verifier of record's source.
+  A3. The theorems, the headline among them, are for these coins.
+- **`seed` coins** (PR #83, `coin-commit/sha256/v1`; M0's non-ZK session today, `cfg.coin_seed`, `coin-commit/sha512`)
+  add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
+  so a run on seed coins is outside the headline (The headline, its coins).
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
 - **Quantum provers** (DESIGN.md §9). The oracle layer holds against them, but the compiled theorem is classical. The
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
@@ -264,6 +301,7 @@ and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
 `flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
 `flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
+The headline, `Prog.flock_headline`, is not pinned yet: its record waits on its statement review.
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.

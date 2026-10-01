@@ -5,6 +5,15 @@
 - `flock_e2e_drawn`, the drawn units;
 - `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`, both on the circuit of the statement's rows (`Prog.circuit`).
 
+**The headline** is `Prog.flock_headline` (`FlockSoundness/Headline.lean`; `ASSUMPTIONS.md`, The headline): the count
+curve on `p.circuit outs` with `pp : ProgPlaces`, SHA-512 as the session's hash and the rows' (`flock_e2e_count_hm96`),
+at the live draw `Law.execOS` composed with A3 (`Law.execOS_miss_le`). Its signature takes `SHA512CRStrict` (`hKS`,
+`hT`), `SHA512CRExpected` (`hCR`) and A3 (`hA3`), and the obligations below: `pp.placed` (W6), `pp.aliased`
+(`Layout.Aliased`), `hHm`, `lay` and `rs` (for `vb`), `tr` (for `hExec`), `hConst` and `hZero`. It bounds wrong units of
+the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
+Boolean semantics in Lean, which a generic Boolean-semantics lemma replaces once lane proofs-ir lands. It is for live
+uniform OS coins drawn each round, so it is cited only for runs that use them (`ASSUMPTIONS.md`, its coins).
+
 **What it says.** Suppose the audit accepts a batched session's proofs for the drawn units under the partition. Then,
 except with `ε_ks(σ) + δ_link` (plus `miss_L(K)` for the count), the integrity profile holds for the committed circuit
 (the circuit the statement's rows make, chosen on the untrusted side; the lowering does no optimizing, Daniel, Sep 30) at
@@ -47,6 +56,7 @@ time.
 | `lay : Layout`, `rs : HmRows` (in `_hm96`) | the layout's facts: the decoder reads the rows the witness holds (`decode_row`); the `b ‖ c` the witness holds at a row hashes to the registered leaf (`bc_registered`: the statement's regions pin the `hm96` outputs to the public `b ‖ c`, which `HmRow.checkPublic` hashes into the registered frame-v3-sha512 roots); the returned outputs' leaves (`other_registered`) | lean-value-binding, with flock-verifier (S4) | from the placement (`DerivedPlaces`, `UnitPlace`) and the refinement of `HmRow.regions` and `checkPublic` (R11). Discharging `bc_registered` and `other_registered` from registered roots also pays the roots' Merkle binding: `δ_tree`, under `SHA512CRStrict` (`DESIGN.md` §1), which the `_hm96` bounds add (`tr`, `hT`). `decode_row` counts as discharged only with the fixed readers `rowAt`, `saltAt` |
 | `hCR` (`SHA512CRExpected`, A2) | SHA-512 expected-time collision resistance for the link finders of the prover bounded, `σ` (`LinkCR … (reg σ) (cont σ) …`), not of every prover at once | the assumption of record | not discharged: it is the theorem's cryptographic assumption |
 | `hKS`, `hT` (`SHA512CRStrict`, in `_hm96`) | SHA-512 strict-time collision resistance for the knowledge term's finders of each table after each draw (`TableCR`, budgets `qF`, `qS`) and for `tr`'s finder (budget `qT`) | the assumption of record | not discharged: the `_hm96` forms' second cryptographic assumption |
+| `hA3` (A3, in the headline) | the verifier's byte source is uniform (`UniformRandomBytes`), so the live draw's count curve is at most `Law.stratified`'s | the assumption of record | not discharged: the headline's third assumption |
 
 **Why the constant is public.** The rows multiply outputs by the constant: each output is a copy row `(form) · 1`, and
 the constant's row is `1 · 1`. At a transcript whose constant is 0, a unit's rows hold with every output 0 while the
@@ -68,7 +78,7 @@ padding when `hZero` is discharged, and not before.
 
 **How to use this list.**
 - Each PR that discharges a hypothesis changes the skeleton to prove it: an argument becomes a theorem applied. It also
-  deletes that row here. When only `hCR`, `hKS` and `hT` remain, the end-to-end theorem is proved.
+  deletes that row here. When only `hCR`, `hKS`, `hT` and `hA3` remain, the end-to-end theorem is proved.
 - The numeric side conditions (`hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`) are parameters of the bound, not gaps. They are the
   same as in `flock_batched_count_placed`. `ones` and `zeros`, the statement's public gates, are parameters too.
 - `ε_ks(σ)` is the knowledge-soundness term (`ksAvgBE`), which `flock_batched_knowledgeSoundE` bounds; under
