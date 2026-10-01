@@ -123,6 +123,7 @@ import FlockSoundness.Refine
 import FlockSoundness.E2E
 import FlockSoundness.Certificate
 import FlockSoundness.StrictCR
+import FlockSoundness.Teeth
 import FlockSoundness.Types.Units
 import FlockSoundness.Types.Program
 import FlockSoundness.Types.ProgramPlaces

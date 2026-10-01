@@ -36,6 +36,11 @@ fixed strategy, whose outcomes record the pair it outputs and the SHA-512 evalua
 prover. Its success is a collision because Merkle binding is proved (`Merkle.opening_binding`): two openings that verify
 under one cap and differ give two distinct inputs with one SHA-512 output.
 
+**Teeth** (`FlockSoundness/Teeth.lean`). Both forms hold for every finder of an injective hash (`strict_of_injective`,
+`expected_of_injective`, the latter for a nonnegative cost), and both fail for a constant hash, at the finder that outputs
+two different strings after no evaluations (`not_strict_const`, `not_expected_const`). So neither form is true of every
+hash, nor false of every hash.
+
 **`SHA512CRStrict`. Strict-time collision resistance of SHA-512** (`cr/sha-512`).
 
 - **Statement.** A collision finder that makes at most `q` SHA-512 evaluations on every outcome succeeds with probability
