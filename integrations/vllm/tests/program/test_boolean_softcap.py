@@ -76,15 +76,15 @@ def _attention(**kw):
 #: id -> (And, Xor, Not gates, standalone program digest), with ``TANH`` = `_TANH`
 PINS = {
     "AttnBlockSoftcap_v3{D=16,NVIS=5,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=TanhClosedRegions_v1,"
-    "EX2=MufuEx2Ftz_v2}": (213535, 415563, 19315, "cf5f7a55b5194a6c1b583980ddc28ae61cb065415a92b87bdb3d55a697b360b0"),
+    "EX2=MufuEx2Ftz_v2}": (212130, 411818, 19240, "eba0b1d8b0b19753df854ddb565069138f3af3d08d24e97b31bb83da8fbbd04b"),
     "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=TanhClosedRegions_v1,"
-    "EX2=MufuEx2Ftz_v2}": (469541, 916576, 38780, "2921ce8c06ee0db8e750e8b8619761156cb871eff34a3b3d5851ec93f59c4a14"),
+    "EX2=MufuEx2Ftz_v2}": (464764, 903843, 38525, "ba4e729d9d0440837cc2c43852959de87a788625be93cae59abca28e82bd42e2"),
     "AttentionHeadSoftcap_v3{T=20,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
-    "TANH=TanhClosedRegions_v1,EX2=MufuEx2Ftz_v2}": (711144, 1384712, 59149,
-                                                     "cc673891543987f40adc0a719c36d97c64e2eaf671c59232d55f34694fd637b9"),
+    "TANH=TanhClosedRegions_v1,EX2=MufuEx2Ftz_v2}": (705243, 1368154, 58865,
+                                                     "4a2fbf4a4919f5e5e6543ef84e5e6eadfb2603ab37e688b639e1b2171afd882a"),
     "AttentionSoftcap_v3{T=20,NH=4,KVH=2,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
-    "TANH=TanhClosedRegions_v1,EX2=MufuEx2Ftz_v2}": (2844576, 5538848, 236596,
-                                                     "9b69ff9700bc0cdd8bf654f237cbe49d2e27914af96b8b5a2ae8db54cb4a9036"),
+    "TANH=TanhClosedRegions_v1,EX2=MufuEx2Ftz_v2}": (2820972, 5472616, 235460,
+                                                     "230f856335413af5c343e3f3397edcf813d5fe363f4415f775b6266ac148dc53"),
 }
 
 PINNED = [_block(NVIS=5, FIRST=True, BN=16, CHECK=True), _block(NVIS=16, FIRST=False, BN=16, CHECK=True),
