@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# BF16 GemmCoordinate hillclimb, one step at one K (gemm_hill.py): the gate (byte identity at B = 16: the GPU's proofs and
-# transcripts equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving equal those
-# verified one at a time), then one m = 35 statement of
+# BF16 GemmCoordinate hillclimb, one step at one K (gemm_hill.py): the preflight check (byte identity at B = 16: the GPU's
+# proofs and transcripts equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving
+# equal those verified one at a time), then one m = 35 statement of
 # GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1} proved warm once and timed three times, nvidia-smi dmon sampling the GPU's
 # utilization and memory every second from the start, and the job's own cores sampled every 5 s (out/slice_cores.tsv: another
 # job pinned to them flags the point cpu-slice-shared); result.json (the campaign contract's) and out/metrics.json carry the
@@ -13,20 +13,21 @@
 # env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
 #      pin to, inside the job's affinity)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices; pass CPUS=16).
 #      Node 1's dispatcher starts every `provers` task on the same cores (128-175), so a job holds a lock on every slice it pins
-#      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds  GATE=1  WARM=1  RUNS=3
-#      PEAK_ID=rtx-pro-6000-server/bf16
+#      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds
+#      PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  QUESTION= (the job's research question, else the
 #      campaign's)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
-#      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the gate's and the step's statements into FLOCK_STAGE_CACHE,
-#      default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the cache, so it holds its
-#      GPU from the gate's selftests on, and its point is flagged staged-on-gpu if it staged the step's statement itself)  SM=120
-#      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the gate's and the step's statements and serve their sessions on
-#      the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR alone (the GPU
-#      job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the pod network, so
-#      this pod holds only the prover); give both jobs the same K, N, WARM, RUNS and FC_VERIFY_AHEAD, and FC_VERIFY_SERVERS to
-#      the serving one
+#      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the preflight check's and the step's statements into
+#      FLOCK_STAGE_CACHE, default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the
+#      cache, so it holds its GPU from the preflight check's selftests on, and its point is flagged staged-on-gpu if it staged
+#      the step's statement itself)  SM=120
+#      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the preflight check's and the step's statements and serve their
+#      sessions on the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR
+#      alone (the GPU job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the
+#      pod network, so this pod holds only the prover); give both jobs the same K, N, WARM, RUNS and FC_VERIFY_AHEAD, and
+#      FC_VERIFY_SERVERS to the serving one
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -80,15 +81,15 @@ keep() {
 done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
-# the gate's three GPU cases at once, each its own process, only where one case's device memory is measured (K = 2048, B = 16:
-# at most 4.7 GiB of the GPU's, 7-10 GB of host memory; r20261001-044422-bc17); at other K one at a time
+# the preflight check's three GPU cases at once, each its own process, only where one case's device memory is measured
+# (K = 2048, B = 16: at most 4.7 GiB of the GPU's, 7-10 GB of host memory; r20261001-044422-bc17); at other K one at a time
 [ -n "$GS" ] && [ "$K" = 2048 ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=6144"
 ok=1
 if [ "${SERVE_ONLY:-0}" = 1 ]; then
   : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR, where the GPU job finds the addresses}"
   ph serve start
-  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 \
-    SELFTEST=0 > $R/out/gate.log 2>&1 &
+  OUT=$S/preflight RESEARCH_RUN_DIR=$S/preflight SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 \
+    SELFTEST=0 > $R/out/preflight.log 2>&1 &
   GP=$!
   OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST \
     MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 > $R/out/sweep.log 2>&1 &
@@ -96,20 +97,20 @@ if [ "${SERVE_ONLY:-0}" = 1 ]; then
   wait $GP || ok=0
   wait $SP || ok=0
   ph serve end
-  keep gate; keep m35
-  cp $S/gate/classes/served.jsonl $R/out/gate-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
+  keep preflight; keep m35
+  cp $S/preflight/classes/served.jsonl $R/out/preflight-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
   [ $ok = 1 ] && python3 -c 'import json, sys; r = [json.loads(l)["serve"] for f in sys.argv[1:] for l in open(f) if l.strip()]
 sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] and not x["timed_out"] for x in r) else 1)' \
-    $R/out/gate-served.jsonl $R/out/served.jsonl
+    $R/out/preflight-served.jsonl $R/out/served.jsonl
   exit
 fi
-if [ "${GATE:-1}" = 1 ]; then
-  ph gate start
-  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \
-    > $R/out/gate.log 2>&1 || ok=0
-  ph gate end
-  keep gate
-  cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
+if [ "${PREFLIGHT:-${GATE:-1}}" = 1 ]; then
+  ph preflight start
+  OUT=$S/preflight RESEARCH_RUN_DIR=$S/preflight bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \
+    > $R/out/preflight.log 2>&1 || ok=0
+  ph preflight end
+  keep preflight
+  cp $R/out/preflight/binary.sha256 $R/out/ 2>/dev/null
 fi
 if [ $ok = 1 ]; then
   ph sweep start
@@ -122,13 +123,13 @@ if [ $ok = 1 ]; then
 fi
 kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
 if [ "${STAGE_ONLY:-0}" = 1 ]; then
-  cp $S/gate/classes/staged.jsonl $R/out/gate-staged.jsonl; cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
+  cp $S/preflight/classes/staged.jsonl $R/out/preflight-staged.jsonl; cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
   [ $ok = 1 ] && grep -q '"stage"' $R/out/staged.jsonl; exit
 fi
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
-  $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
+  $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/results.jsonl \
   --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
   --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0

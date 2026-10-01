@@ -1,8 +1,8 @@
 """BF16 GemmCoordinate hillclimb: one K's proving overhead against its GPU's spec peak, its throughput and its GPU utilization.
 
-An attempt (74-gemm-hill.sh) gates the prover's byte identity at B = 16 (the GPU's proofs and transcripts equal the CPU prover's,
-the device paths agree, and sessions verified beside the next ones' proving equal those verified one at a time), then proves one
-m = 35 statement of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}` (the BF16 dot of 16 that sm_90's wgmma and sm_120's
+An attempt (74-gemm-hill.sh) runs a preflight check of the prover's byte identity at B = 16 (the GPU's proofs and transcripts
+equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving equal those verified one at
+a time), then proves one m = 35 statement of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}` (the BF16 dot of 16 that sm_90's wgmma and sm_120's
 mma.m16n8k16 run) untiled, warm once and timed three times, with nvidia-smi sampling the GPU every second from the job's start.
 Per coordinate (one FP32 output word of a K-long dot product):
 
@@ -27,7 +27,7 @@ gpu_held_s_per_vu over the timed sessions, the verifier's verdicts included), wh
     python gemm_hill.py defs --K 8192 --out defs.json [--n 1024]      # the Gemm_v2 row whose coordinates are the statement's lanes
     python gemm_hill.py dmon --out dmon.tsv [--gpu 0]                  # nvidia-smi dmon -s u every second, each line after its epoch
     python gemm_hill.py stamp --out stamps.tsv -- BINARY prove ...    # the prover, its stdout passed through and each line stamped
-    python gemm_hill.py metrics --K 8192 --gate gate.jsonl --sweep results.jsonl --stamps stamps.tsv --dmon dmon.tsv \
+    python gemm_hill.py metrics --K 8192 --preflight preflight.jsonl --sweep results.jsonl --stamps stamps.tsv --dmon dmon.tsv \
         --phases phases.tsv --census census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json
     python gemm_hill.py rollup --point hillclimb.json --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
     python gemm_hill.py plot POINTS... --out DIR [--put]   # per K, the three panels over the steps (roll-ups, points or run ids)
@@ -301,9 +301,9 @@ def metrics(a) -> None:
     recs = [r for r in _records(Path(a.sweep)) if (m := DEFINITION.fullmatch(r.get("definition") or "")) and int(m.group(1)) == a.K]
     rec = recs[-1] if recs else {}
     lv, st = rec.get("live") or {}, rec.get("stage") or {}
-    g = GS.gate(Path(a.gate) if a.gate else None, shapes_needed=1)
+    g = GS.preflight(Path(a.preflight) if a.preflight else None, shapes_needed=1)
     if g["status"] == "passed" and rec.get("definition") not in g["shapes"]:
-        g = {**g, "status": "failed", "why": f"the gate proved {sorted(g['shapes'])}, not {rec.get('definition')}"}
+        g = {**g, "status": "failed", "why": f"the preflight check proved {sorted(g['shapes'])}, not {rec.get('definition')}"}
     start, end, live = _prove_process(Path(a.stamps))
     timed = [(t, x) for t, x in live if not x.get("warm")]
     warm = [(t, x) for t, x in live if x.get("warm")]
@@ -453,8 +453,8 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
                                                                                     "device": peak.get("device")},
         coins=out.get("coins"), session=out.get("session"), flags=out["flags"], hill={"step": a.step, "label": a.label})
     return {"schema": contract.RESULT_SCHEMA, "run_id": out["run_id"] or "local", "workload_fingerprint": fp,
-            "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.GATE_CASES),
-                           "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/gate/classes/results.jsonl"]},
+            "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.PREFLIGHT_CASES),
+                           "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/preflight/classes/results.jsonl"]},
             "measurements": ms, "measurement_files": ["out/metrics.json", "out/results.jsonl"], "artifacts": ["hillclimb.json"]}
 
 
@@ -533,7 +533,7 @@ def _points(src: str, research: str) -> list[dict]:
 def plot(a) -> None:
     """Per subcircuit, the console's three panels over the steps: overhead (log, best-so-far over byte-identical points) with
     the prove-only overhead beside it, throughput, and GPU utilization with GPU-held and prove-only seconds per VU on their own
-    axis; a point that fails the gate is hollow. Only the points under the last point's coins and session are drawn."""
+    axis; a point that fails its preflight check is hollow. Only the points under the last point's coins and session are drawn."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -637,7 +637,7 @@ def main() -> None:
     s.add_argument("cmd", nargs=argparse.REMAINDER)
     m = sub.add_parser("metrics")
     m.add_argument("--K", type=int, required=True)
-    m.add_argument("--gate")
+    m.add_argument("--preflight", "--gate", dest="preflight")    # --gate: its old name
     m.add_argument("--sweep", required=True)
     m.add_argument("--stamps", required=True)
     m.add_argument("--dmon", required=True)

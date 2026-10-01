@@ -585,8 +585,8 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
 
 
 def _served_name(pin: str, n: int, sessions: int) -> str:
-    """The file a verifier pod publishes its addresses in: one circuit serves statements of several instance counts (a gate's
-    and a step's), each for its own sessions."""
+    """The file a verifier pod publishes its addresses in: one circuit serves statements of several instance counts (a preflight
+    check's and a step's), each for its own sessions."""
     return f"{pin[:32]}-n{n}-s{sessions}.json"
 
 
