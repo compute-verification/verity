@@ -1,0 +1,18 @@
+# The model cache (`cluster models`, src/cluster/models.py): one per node at `root`. GB are 10^9 bytes. A node's
+# `[nodes.<name>]` table, found by the host's name, overrides any key below for that node.
+root = "/workspace/models"
+expires_h = 72    # an entry expires this long after its last fetch or use, unless the fetch asks otherwise
+# A fetch is refused that would leave the filesystem fuller than this (df's Capacity). 75, not 85: `research disk-hold`
+# holds every queued run past 80% until the disk falls to 75% (research/disk.py, node 1's vy-disk-guard), so a cache
+# filled past 80% would hold every lane's runs.
+max_use_pct = 75
+
+[quota_gb]        # what one owner's entries may hold on one node; an owner not named gets `default`
+default = 200
+circuits = 500    # circuits' model-checkpoint plan (30 Sep), approved by Daniel
+
+[nodes.vy-nebius-1]
+hostname = "computeinstance-e05amxa2h7v3z4mpz9"
+
+[nodes.vy-nebius-2]
+hostname = "computeinstance-e05v9sztsjcjsw4hm2"

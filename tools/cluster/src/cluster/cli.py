@@ -13,6 +13,7 @@
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
   cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
+  cluster models fetch|ls|use|release|evict ...         # this node's model-checkpoint cache (models.py)
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -47,6 +48,10 @@ def _action(a: plan.Action) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["models"]:
+        from . import models
+        return models.main(argv[1:])
     ap = argparse.ArgumentParser(prog="cluster", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     v = sub.add_parser("validate")
@@ -113,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
     st.add_argument("--json", action="store_true")
+    sub.add_parser("models", help="this node's model-checkpoint cache: fetch, ls, use, release, evict (models.py)")
     a = ap.parse_args(argv)
 
     if a.cmd == "status":
