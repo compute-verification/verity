@@ -254,10 +254,12 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   (`FlockSoundness/Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
   `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
   Python, not Lean), a unit that is not wrong, with its constant 1, carries on each committed output wire `D`'s output on
-  its input wires (`GateRows.rows_sound`). Both premises are equalities a checker evaluates, not assumptions, once `D` is
-  stated in Lean. `Rope.rope_sound` is `RowsCert.sound`'s conclusion for RoPE's pinned rows, checked in the kernel. Once
-  every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma
-  replaces the per-template `RowsCert`.
+  its input wires (`GateRows.rows_sound`). `RowsCert` is a fact about finite data, which a kernel computation checks
+  (RoPE's facts, by `decide +kernel`); `∀ x, G.eval x = D x` is not, since it ranges over every input, and nothing in
+  Lean ties `D` to a Definition until the Definition's Boolean semantics is stated there. `Rope.rope_sound` is
+  `RowsCert.sound`'s conclusion for RoPE's pinned rows, checked in the kernel. Once every Definition lowers to a Boolean
+  circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma replaces the per-template
+  `RowsCert`.
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
   statements of PROTOCOL.md §16 satisfy it.

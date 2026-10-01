@@ -11,8 +11,10 @@ outputs on its input columns (`IsRowsUnit.computes_of_cert`, from `GateRows.rows
 a definition `D`, its Boolean export, they are `D`'s.
 
 So nothing about the rows is assumed: the circuit is the rows the untrusted side chose, and the lowering does no
-optimizing (Daniel, Sep 30), so "the rows compute `D`" is two checkable equalities, the certificate's rows against
-`GateRows.rows G L` and `G` against `D`, rather than a named hypothesis.
+optimizing (Daniel, Sep 30). "The rows compute `D`" takes two premises rather than a named hypothesis. The certificate's
+rows against `GateRows.rows G L` (`RowsCert`) is a fact about finite data, which a kernel computation checks. `G` against
+`D` (`∀ x, G.eval x = D x`) ranges over every input, and nothing in Lean ties `D` to a Definition until the Definition's
+Boolean semantics is stated there.
 
 * `RowsCert R G L`: `R`'s input columns are `L`'s input region, its computed rows are the AND and output rows of
   `rows G L` as masks, its constant is `rows G L`'s, and the side conditions of `rows_sound` hold. Its rows read, among
