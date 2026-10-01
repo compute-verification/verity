@@ -237,6 +237,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
     from verity.ir.defs import bind
     from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import boolean_attention
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -252,6 +253,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Prefill_v1", lambda: bind(lifted.Prefill, C=TINY, LP=3, **lifted_profile)),
         ("StepBody_v1", lambda: bind(lifted.StepBody, C=TINY, T=4, **lifted_profile)),
         ("AttentionN_v1", lambda: bind(spec.AttentionN, T=5, NH=2, KVH=1, D=16, BN=16)),
+        # about 7 minutes a target: the smallest Boolean chain whose second block rescales (T = BN + 1)
+        ("Attention_v6", lambda: bind(boolean_attention.AttentionV6, T=17, NH=1, KVH=1, D=16, BN=16)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
