@@ -102,7 +102,11 @@ CHAIN_PAIRS = [False]
 the squeezing and absorbing sponges of a row on two lanes, a warp per scheduler taking (rows, call) tasks, the lanes
 bit-interleaved, and `X` read from an interleaved copy of `C` (1 GB more device memory for the 0.5B weight set's 30
 segments).  `band_chain_kernel`'s 15,360 threads fill 480 of the RTX PRO 6000's 752 schedulers; this fills them all, and
-decodes at 2.80 against 1.60 GB/s there (untimed screens)."""
+decodes at 2.80 against 1.60 GB/s there (untimed screens, art:4354a29314cf against art:468c10537551).  It runs from
+`CHUNKED_MIN_ROWS` rows (two segments), so a gates-only run on two segments exercises it."""
+
+DECODE_PATHS: list[tuple[str, int]] = []
+"""`(kernel, rows)` of each `decode_blocks` call, in order; the harness takes and clears them to record which decode ran."""
 
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
@@ -263,15 +267,18 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     seg, blk, ln = segs[order], blocks[order], length[order]
     r = len(order)
     base = seg * per_segment
-    if (CHUNKED[0] and CHUNKED_WHOLE[0] and r >= max(CHUNKED_MIN_ROWS[0], CHUNKED_SPLIT_MAX_ROWS[0]) and width == 65_536
-            and c_flat.is_contiguous()):
+    whole_from = CHUNKED_MIN_ROWS[0] if CHAIN_PAIRS[0] else max(CHUNKED_MIN_ROWS[0], CHUNKED_SPLIT_MAX_ROWS[0])
+    if CHUNKED[0] and CHUNKED_WHOLE[0] and r >= whole_from and width == 65_536 and c_flat.is_contiguous():
+        DECODE_PATHS.append(("band_chain_pairs" if CHAIN_PAIRS[0] else "band_chain", r))
         return _decode_whole(c_flat, seg, blk, ln, tags, base, order, width)
     starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0]:
+        DECODE_PATHS.append(("feistel_chunked per step", r))
         w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]
         out = torch.empty_like(w)
         out[order] = w
         return out
+    DECODE_PATHS.append(("codec.permute per step", r))
     state = torch.zeros(r, 2 * width + 64, dtype=torch.uint8, device=c_flat.device)
     state[:, 2 * width:2 * width + 32] = tags[seg]
     state[:, 2 * width + 32] = (blk & 0xFF).to(torch.uint8)

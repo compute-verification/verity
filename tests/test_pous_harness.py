@@ -157,9 +157,11 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
                                   vectors=_vectors(params))
     gates = body["gates"]
     assert body["segments"] == 3 and body["blocks"] == 48 and body["weight_bytes"] == 2560
-    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control",
-              "segment_tags"):
+    for g in ("vector", "reference_encode", "round_trip", "decode_after_timing", "timed_audit", "value_control", "late_control",
+              "recompute_control", "segment_tags"):
         assert gates[g]["passed"], (g, gates[g])
+    assert set(body["implementation"]["decode_paths"]) == {"gates", "loop", "audits"}   # the CPU stand-in runs no dense decode
+    assert body["pous_arm_graphed"] is False and body["metrics"]["loop"]["decode_memory"] is None
     assert gates["reference_encode"]["segments"] == [0, 2]
     assert not gates["certificate"]["passed"] and "no certificate" in gates["certificate"]["reason"]   # the small point has none
     m = body["metrics"]
@@ -198,6 +200,45 @@ def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
     assert not body["gates"]["round_trip"]["passed"]
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]   # a failed gate stops
     assert "timed_audit" not in body["gates"] and body["profile"] is None
+
+
+def test_a_decode_wrong_only_after_the_round_trip_publishes_nothing(tmp_path):
+    params = _small()
+    backend = _backend(params)
+    right, seen = backend.decode, []
+
+    def decode(c, t):          # right for the round-trip gate, then wrong, as a race under timing would be
+        seen.append(right(c, t) if not seen else seen[0])
+        out = seen[-1].clone()
+        if len(seen) > 1:
+            out.view(-1)[0] ^= 1
+        return out
+
+    backend.decode = decode
+    body = _bench().BandGpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=backend, base=params, vectors=_vectors(params))
+    assert body["gates"]["round_trip"]["passed"] and not body["gates"]["decode_after_timing"]["passed"]
+    assert body["metrics"] is None and body["measurements"] == [] and "nothing is published" in body["stopped"]
+
+
+def test_the_lane_pair_decode_runs_from_two_segments_and_every_decode_records_its_kernel(monkeypatch):
+    harness = _harness()
+    from band_gpu import dense
+
+    stub = lambda c, seg, blk, *rest: torch.zeros(len(blk), c.shape[1], dtype=torch.uint8)  # noqa: E731
+    monkeypatch.setattr(dense, "_decode_whole", stub)
+    monkeypatch.setattr(dense, "_decode_chunked", stub)
+    width, bps = 65_536, 512
+    c, tags, blocks = torch.zeros(2 * bps, width, dtype=torch.uint8), torch.zeros(2, 32, dtype=torch.uint8), torch.arange(2 * bps)
+    before = harness.set_kernels({})
+    try:
+        harness.take_decode_paths()
+        for settings in (harness.KERNELS, {"chain_pairs": False}):
+            harness.set_kernels(settings)
+            dense.decode_blocks(c, tags, blocks // bps, blocks % bps, bps, 12)
+        assert harness.take_decode_paths() == [{"kernel": "band_chain_pairs", "rows": 1024, "calls": 1},
+                                               {"kernel": "feistel_chunked per step", "rows": 1024, "calls": 1}]
+    finally:
+        harness.set_kernels(before)
 
 
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
@@ -271,7 +312,8 @@ def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_
     body = _bench().BandGpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=backend, base=params, vectors=_vectors(params))
     assert body["timed"] is False and body["audits"] == "skipped (untimed placement)" and body["profile"] is None
     gates = body["gates"]
-    assert set(gates) == {"vector", "reference_encode", "round_trip", "segment_tags"} and all(g["passed"] for g in gates.values())
+    assert set(gates) == {"vector", "reference_encode", "round_trip", "decode_after_timing", "segment_tags"}
+    assert all(g["passed"] for g in gates.values())
     m = body["metrics"]
     assert m["timed"] is False and m["step_floor"]["min_s"] == 7e-4 and set(m["loop"]["overhead"]) == {1, 8}
     assert not {"audit", "deadline", "calibration", "value_control", "late_control", "recompute_control"} & set(m)
