@@ -3,14 +3,16 @@
 # transcripts equal the CPU prover's, and the device paths agree), then one m = 35 statement of
 # GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1} proved warm once and timed three times, nvidia-smi dmon sampling the GPU's
 # utilization and memory every second from the start, and the job's own cores sampled every 5 s (out/slice_cores.tsv: another
-# job pinned to them flags the point cpu-slice-shared); result.json (the campaign contract's) and out/metrics.json carry the overhead against the census's spec
-# peak, the throughput, the GPU utilization and the verifier's seconds, out/results.jsonl the statement's record, and
-# hillclimb.json the step's verity/hillclimb-point/v0 record (declared in outputs.json, so the store keeps it as its own artifact).
+# job pinned to them flags the point cpu-slice-shared); result.json (the campaign contract's) and out/metrics.json carry the
+# overhead against the census's spec peak, the throughput, the GPU utilization and the verifier's seconds, out/results.jsonl
+# the statement's record, and hillclimb.json the step's verity/hillclimb-point/v0 record (declared in outputs.json, so the
+# store keeps it as its own artifact).
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
 # env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
-#      pin to, e.g. 96-111: node 1's dispatched jobs all share 96-159, so jobs run side by side each take their own slice)
-#      CPUS=48 (without CPUSET: the first CPUS of the job's cores)  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
+#      pin to, e.g. 96-111)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices). Node 1's dispatched jobs all
+#      share 96-159, so a job holds a lock on every slice it pins (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and
+#      waits for slices another job holds  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
@@ -21,8 +23,9 @@ set -uxo pipefail
 if [ -z "${HILL_PINNED:-}" ]; then
   use=$(df --output=pcent /workspace 2>/dev/null | tail -1 | tr -dc 0-9)
   if [ -n "$use" ] && [ "$use" -ge "${DISK_MAX:-80}" ]; then echo "/workspace is at $use%: not starting"; exit 1; fi
-  cpus=${CPUSET:-$(python3 -c "import os; c = sorted(os.sched_getaffinity(0)); print(','.join(map(str, c[:int(os.environ.get('CPUS', '48'))])))")}
-  cpus=$(taskset -c "$cpus" python3 -c "import os; print(','.join(map(str, sorted(os.sched_getaffinity(0)))))") || exit 1
+  . backends/flock/pod/cpu-slices.sh
+  hold_slices "${CPUSET:-}" "${CPUS:-48}"
+  cpus=$(taskset -c "$SLICE_CPUS" python3 -c "import os; print(','.join(map(str, sorted(os.sched_getaffinity(0)))))") || exit 1
   export HILL_PINNED=$cpus RAYON_NUM_THREADS=$(echo $cpus | tr ',' '\n' | wc -l) HILL_T0=$(date +%s.%N)
   export OMP_NUM_THREADS=$RAYON_NUM_THREADS
   exec taskset -c $cpus bash "$0" "$@"
@@ -44,7 +47,7 @@ ph() { printf '%s\t%s\t%s\n' "$1" "$2" "$(date +%s.%N)" >> $R/out/phases.tsv; }
 printf 'job\tstart\t%s\n' "$HILL_T0" >> $R/out/phases.tsv
 Q=name,uuid,driver_version,memory.total,compute_cap,clocks.sm,clocks.max.sm,power.limit,temperature.gpu
 { echo $Q; nvidia-smi --query-gpu=$Q --format=csv,noheader,nounits 2>/dev/null | head -1; } > $R/out/gpu.csv
-{ nvidia-smi -L; lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$HILL_PINNED rayon=$RAYON_NUM_THREADS"; free -g | head -2
+{ nvidia-smi -L; lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$HILL_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-} slice_wait_s=${SLICE_WAIT_S:-}"; free -g | head -2
   df -h /workspace | tail -1; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-} K=$K instances=$INST"; } > $R/out/host.txt 2>&1
 DG=; case "${CUDA_VISIBLE_DEVICES:-}" in ''|*,*|*-*) ;; *) DG="--gpu $CUDA_VISIBLE_DEVICES" ;; esac
 python3 backends/flock/pod/gemm_hill.py dmon --out $R/out/dmon.tsv $DG &
