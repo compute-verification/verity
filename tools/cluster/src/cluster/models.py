@@ -713,11 +713,12 @@ def release(root: Path, r: Ref, owner: str, scan_: Callable[[], Scan] = scan) ->
 def evict(root: Path, now: int, scan_: Callable[[], Scan] = scan, dry_run: bool = False,
           stale_s: int = STALE_S) -> dict[str, Any]:
     """Entries past `expires`, and downloads and incomplete entries untouched for `stale_s` that no fetch holds, deleted,
-    except what a process holds open or mapped. Refused, deleting nothing, when some processes' files can't be seen."""
+    except what a process holds open or mapped. Refused, deleting nothing, when some processes' files can't be seen.
+    `hidden` counts those processes, and is None when nothing was due, so /proc wasn't read."""
     root = Path(root)
     due = [n for n, e in entries(root).items() if instant(e["expires"]) <= now]
     stale = [x for x in incomplete(root) if not x["running"] and now - x["mtime"] > stale_s]
-    rep: dict[str, Any] = {"root": str(root), "now": iso(now), "dry_run": dry_run, "hidden": 0, "deleted": [], "kept": []}
+    rep: dict[str, Any] = {"root": str(root), "now": iso(now), "dry_run": dry_run, "hidden": None, "deleted": [], "kept": []}
     if not due and not stale:
         return rep
     s = scan_()

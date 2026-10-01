@@ -365,7 +365,8 @@ def test_evict_deletes_expired_entries_and_stale_downloads_but_nothing_in_use_or
     assert {Path(x["path"]).name: x["why"] for x in rep["kept"]} == {
         mapped.name: "in use by pid 77", locked.name: "locked: a fetch, use or release of it is running"}
     assert not gone.exists() and not stale.exists() and all(d.exists() for d in (live, mapped, locked, fresh))
-    assert models.evict(tmp_path, T - 10, lambda: pytest.fail("nothing is due, so nothing is scanned"))["deleted"] == []
+    idle = models.evict(tmp_path, T - 10, lambda: pytest.fail("nothing is due, so nothing is scanned"))
+    assert (idle["deleted"], idle["hidden"]) == ([], None) and (dry["hidden"], rep["hidden"]) == (0, 0)
 
 
 def test_evict_refuses_to_delete_when_it_cannot_see_every_process(tmp_path):
