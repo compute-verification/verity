@@ -356,6 +356,9 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
     assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([fp8, "-q", "--strict"]) == 1
+    capsys.readouterr()
+    assert cli.main([BOOL_RECOMPUTE, "-q"]) == 0
+    assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 
 
 def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):
