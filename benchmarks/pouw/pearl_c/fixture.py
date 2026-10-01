@@ -20,7 +20,8 @@ import hashlib
 import json
 import struct
 import sys
-from multiprocessing import Pool
+import multiprocessing
+from multiprocessing.pool import Pool
 from pathlib import Path
 
 import numpy as np
@@ -245,7 +246,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     common.put("eb_tiled", tiled(lines["eb"], 128), "u8")
     manifest["common"] = common.files
 
-    with Pool() as pool:
+    # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+    with multiprocessing.get_context("fork").Pool() as pool:
         for forming in ("v0", "v1"):
             fdir = out_dir / forming
             fdir.mkdir(exist_ok=True)

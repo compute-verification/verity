@@ -60,6 +60,8 @@ __all__ = [
     "ADA_E4M3_M16N8K32",
     "ADA_E5M2_M16N8K32",
     "AMPERE_BF16_M16N8K16",
+    "BLACKWELL_SM120_E4M3_M16N8K32",
+    "BLACKWELL_SM120_E5M2_M16N8K32",
     "BLACKWELL_SM120_MXF4",
     "BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED",
     "BLACKWELL_SM120_NVF4",
@@ -364,6 +366,38 @@ HOPPER_E5M2_K32 = GroupSum(
     width=14,
     zero_exponent=-139,
     validated="H100 (sm_90a), lane tc-probe-fp8 run r20260922-183837-940b: wgmma m64n8k32 e5m2, 25,554,432 elements, 0 mismatches (HOPPER_E4M3_K32's pipeline with e5m2 products)",
+)
+
+# Blackwell consumer (sm_120) FP8 mma.sync (SASS QMMA.16832): one group of all 32 products plus the accumulator in the 26-bit adder of
+# its BF16 pipeline, so unlike Ada's and Hopper's 14-bit FP8 adders the accumulator is not truncated.  No FP8 product is below 2^-32,
+# so the floor is unobservable anywhere in [-150, -124]; -133 is the BF16 pipeline's.
+BLACKWELL_SM120_E4M3_M16N8K32 = GroupSum(
+    name="blackwell_sm120_e4m3_m16n8k32",
+    arch="sm_120",
+    dtype="e4m3",
+    operand_bits=8,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        "RTX PRO 6000 Blackwell Server Edition (sm_120, driver 595.91.07, nvcc 12.8), lane vllm-sm120-tc-gemm: tc_probe run "
+        "r20260930-030915-23f3 fitted by r20260930-031244-ecbc, 6,434,816 finite elements in 13 families, 0 mismatches; Ada's (16,16)/14, "
+        "Hopper wgmma's (32,)/14 and the sm_90 two-HMMA lowering are refuted (4.91M / 4.81M / 0.76M mismatches)"
+    ),
+)
+
+BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
+    name="blackwell_sm120_e5m2_m16n8k32",
+    arch="sm_120",
+    dtype="e5m2",
+    operand_bits=8,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        "RTX PRO 6000 Blackwell Server Edition (sm_120), lane vllm-sm120-tc-gemm: tc_probe and fit run r20260930-031447-a5ad, "
+        "6,434,816 finite elements in 13 families, 0 mismatches (BLACKWELL_SM120_E4M3_M16N8K32's pipeline with e5m2 products)"
+    ),
 )
 
 PIPELINES: dict[str, GroupSum] = {
@@ -823,6 +857,8 @@ MODELS: dict[str, Model] = {
         HOPPER_BF16_WGMMA_K16,
         ADA_E5M2_M16N8K32,
         HOPPER_E5M2_K32,
+        BLACKWELL_SM120_E4M3_M16N8K32,
+        BLACKWELL_SM120_E5M2_M16N8K32,
         BLACKWELL_SM120_NVF4,
         BLACKWELL_SM120_MXF4,
         BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,

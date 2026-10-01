@@ -4,6 +4,9 @@
 // stream, grid, block, dynamic shared memory, the 16 pointers and 16 ints of Args) is appended to $FAKE_LOG as one JSON line.
 // Streams are handles only: work runs in issue order, and a launch or wait on a destroyed stream fails.  Kernels do nothing, except
 // the *_smem probes, which write $FAKE_SMEM (default 197728).  Functions are the names in $FAKE_KERNELS (comma-separated).
+// Launches and asynchronous copies log their stream.
+// The device is an H100 unless $FAKE_NAME, $FAKE_SMS, $FAKE_MAXDYN (the opt-in dynamic shared memory limit), $FAKE_CC
+// ("major.minor") and $FAKE_UUID (32 hex digits) say otherwise.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,9 +20,10 @@ typedef unsigned long long CUdeviceptr;
 enum { CUDA_SUCCESS = 0, CUDA_ERROR_INVALID_VALUE = 1, CUDA_ERROR_OUT_OF_MEMORY = 2, CUDA_ERROR_INVALID_DEVICE = 101,
        CUDA_ERROR_INVALID_IMAGE = 200, CUDA_ERROR_INVALID_CONTEXT = 201, CUDA_ERROR_INVALID_HANDLE = 400, CUDA_ERROR_NOT_FOUND = 500,
        CUDA_ERROR_ILLEGAL_ADDRESS = 700 };
-enum { CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8 };
+enum { CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75,
+       CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8 };
 
-enum { MAX_ALLOC = 4096, MAX_FN = 64 };
+enum { MAX_ALLOC = 4096, MAX_FN = 128 };
 struct Alloc { uintptr_t base; size_t size; };
 static struct Alloc g_alloc[MAX_ALLOC];
 static int g_nalloc, g_mod, g_ctx;
@@ -49,10 +53,24 @@ static void load_names(void) {
 
 CUresult CUDAAPI cuInit(unsigned int flags) { return flags ? CUDA_ERROR_INVALID_VALUE : CUDA_SUCCESS; }
 CUresult CUDAAPI cuDriverGetVersion(int* v) { *v = 12090; return CUDA_SUCCESS; }
+static int env_int(const char* name, int dflt) { const char* v = getenv(name); return v ? atoi(v) : dflt; }
+static int max_dyn(void) { return env_int("FAKE_MAXDYN", 232448); }
+CUresult CUDAAPI cuDeviceGetCount(int* n) { *n = 1; return CUDA_SUCCESS; }
 CUresult CUDAAPI cuDeviceGet(CUdevice* d, int ordinal) { if (ordinal) return CUDA_ERROR_INVALID_DEVICE; *d = 0; return CUDA_SUCCESS; }
-CUresult CUDAAPI cuDeviceGetName(char* name, int len, CUdevice d) { (void)d; snprintf(name, len, "NVIDIA H100 80GB HBM3"); return CUDA_SUCCESS; }
+CUresult CUDAAPI cuDeviceGetName(char* name, int len, CUdevice d) {
+  (void)d; const char* v = getenv("FAKE_NAME"); snprintf(name, len, "%s", v ? v : "NVIDIA H100 80GB HBM3"); return CUDA_SUCCESS;
+}
+CUresult CUDAAPI cuDeviceGetUuid_v2(char* uuid, CUdevice d) {
+  (void)d; const char* v = getenv("FAKE_UUID");
+  for (int i = 0; i < 16; i++) { unsigned b = 0; if (v && strlen(v) >= 32) sscanf(v + 2 * i, "%2x", &b); uuid[i] = (char)b; }
+  return CUDA_SUCCESS;
+}
 CUresult CUDAAPI cuDeviceGetAttribute(int* v, CUdevice_attribute a, CUdevice d) {
-  (void)d; *v = a == CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT ? 132 : 0; return CUDA_SUCCESS;
+  (void)d; const char* cc = getenv("FAKE_CC"); int major = 9, minor = 0;
+  if (cc) sscanf(cc, "%d.%d", &major, &minor);
+  *v = a == CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT ? env_int("FAKE_SMS", 132)
+     : a == CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR ? major : a == CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR ? minor : 0;
+  return CUDA_SUCCESS;
 }
 CUresult CUDAAPI cuDevicePrimaryCtxRetain(CUcontext* c, CUdevice d) { (void)d; *c = (CUcontext)&g_ctx; return CUDA_SUCCESS; }
 CUresult CUDAAPI cuCtxSetCurrent(CUcontext c) { return c == (CUcontext)&g_ctx ? CUDA_SUCCESS : CUDA_ERROR_INVALID_CONTEXT; }
@@ -71,7 +89,7 @@ CUresult CUDAAPI cuModuleGetFunction(CUfunction* f, CUmodule m, const char* name
 }
 CUresult CUDAAPI cuFuncSetAttribute(CUfunction f, CUfunction_attribute a, int v) {
   const int i = (int)(uintptr_t)f - 1;
-  if (i < 0 || i >= g_nfn || a != CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES || v < 0 || v > 232448) return CUDA_ERROR_INVALID_VALUE;
+  if (i < 0 || i >= g_nfn || a != CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES || v < 0 || v > max_dyn()) return CUDA_ERROR_INVALID_VALUE;
   g_maxdyn[i] = v;
   return CUDA_SUCCESS;
 }
@@ -108,6 +126,14 @@ CUresult CUDAAPI cuMemcpyDtoH_v2(void* h, CUdeviceptr d, size_t n) {
 CUresult CUDAAPI cuMemcpyDtoD_v2(CUdeviceptr d, CUdeviceptr s, size_t n) {
   if (!find((uintptr_t)d, n) || !find((uintptr_t)s, n)) return CUDA_ERROR_INVALID_VALUE;
   memmove((void*)(uintptr_t)d, (void*)(uintptr_t)s, n); return CUDA_SUCCESS;
+}
+CUresult CUDAAPI cuMemcpyDtoDAsync_v2(CUdeviceptr d, CUdeviceptr s, size_t n, CUstream st) {
+  if (!find((uintptr_t)d, n) || !find((uintptr_t)s, n)) return CUDA_ERROR_INVALID_VALUE;
+  memmove((void*)(uintptr_t)d, (void*)(uintptr_t)s, n);
+  fprintf(log_file(), "{\"op\":\"copy\",\"dst\":%llu,\"src\":%llu,\"bytes\":%zu,\"stream\":%llu}\n", d, s, n,
+          (unsigned long long)(uintptr_t)st);
+  fflush(log_file());
+  return CUDA_SUCCESS;
 }
 CUresult CUDAAPI cuMemGetInfo_v2(size_t* f, size_t* t) { *f = 80ull << 30; *t = 80ull << 30; return CUDA_SUCCESS; }
 

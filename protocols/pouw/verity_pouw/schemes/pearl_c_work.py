@@ -225,7 +225,8 @@ def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[in
     the credited cells' credit, the unit's `creditOf` at |K| times their share |rows|·|cols|/(m·n) (the per-tile
     statement's `tileShare`).  A row's own terms (its forming and A′·F_B) so count once across its row band, a
     |cols|/n share in each tile, not whole in every tile."""
-    debit = D.debit_units(D.chain_atoms(a_codes, b_codes), D.forming_elements(a_codes, b_codes), scheme.prices)
+    d = scheme.device
+    debit = D.debit_units(D.chain_atoms(a_codes, b_codes, d), D.forming_elements(a_codes, b_codes), scheme.prices, d)
     return debit, D.CAP * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
@@ -410,6 +411,9 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
            ) -> WorkAudit:
     if getattr(scheme, "forming", "v1") != "v1":
         raise ValueError("the work law is stated for forming v1")
+    device = getattr(scheme, "device", None)
+    if device is not None and ALIGN % device.window:
+        raise ValueError(f"k_unit's alignment {ALIGN} is not whole promotion windows of {scheme.name}")
     w_ref, credit = work(scheme, records)
     job = job_costs(scheme, records)
 

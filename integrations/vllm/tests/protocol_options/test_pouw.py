@@ -17,10 +17,10 @@ from verity_pouw.audit import Epoch, Workload, activation_binding, commit_rows, 
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import Matmul, Shape, Tile
 from verity_pouw.schemes import SCHEMES, get
-
 from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
+from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 BEACON = "5a" * 32
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
@@ -69,11 +69,29 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_is_executed():
-    assert pouw.schemes() == tuple(sorted(SCHEMES)) and "ncp-v1" in pouw.schemes()
-    assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == ()
+def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_executed():
+    from verity_pouw import circuit
+    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES})) and "ncp-v1" in pouw.schemes()
+    assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
-    assert "not wired" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
+    assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
+
+
+def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
+    scheme = "pearl-c-sm120-v1-h1"
+    assert scheme in pouw.EXECUTED
+    assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
+    on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
+    assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
+    assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
+    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings=on)
+    assert any("no Definition" in r for r in PO.refusals(commit))
+
+
+def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
+    assert PPD.refusals("pearl-c-sm120-v1-h1", {0: (4096, 4096), 1: (6144, 4096), 2: (4096, 14336), 3: (28672, 4096)}) == []
+    bad = PPD.refusals("pearl-c-sm120-v1-h1", {0: (3584, 3584), 1: (4096, 896), 2: (4160, 4096)})
+    assert [r.split(":")[0] for r in bad] == ["linear 0", "linear 1", "linear 2"] and "1,024" in bad[0]
 
 
 @pytest.mark.parametrize("kw,match", [({"enforce_eager": False}, "graph-capturable"),
@@ -86,11 +104,14 @@ def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
 
-def test_pouw_executes_the_linear_apply_and_is_refused_beside_sampled_proofs_until_traced():
+def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampled_proofs():
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
-    assert pouw.traced_as("ncp-v1", _serve("pouw:ncp-v1")) is None
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v1", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
-    assert any("no Definition" in r for r in PO.refusals(commit))
+    assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
+    for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
+        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+        assert any("no Definition" in r for r in PO.refusals(commit)), scheme
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+    assert PO.refusals(commit) == ()
 
 
 def test_a_layer_outside_the_domain_is_refused_at_install_and_leaves_nothing():
@@ -100,6 +121,23 @@ def test_a_layer_outside_the_domain_is_refused_at_install_and_leaves_nothing():
         PO.install(model, _serve("pouw:ncp-v1"))
     assert hooks.live("pouw:ncp-v1") == () and model.layers[0].quant_method.apply == before
 
+
+
+@pytest.mark.parametrize("quantized", ["float8_e4m3fn", "int8"])
+def test_a_quantized_layer_is_refused_at_install_not_misread(quantized):
+    """The executor quantizes an unquantized weight itself; a layer served quantized (an FP8 checkpoint's float8, an int8
+    one) is refused by name before anything is patched, never read as if it were the model's weight."""
+    w = _rng(1).standard_normal((N, K), np.float32)
+    if quantized == "int8":
+        q = np.clip(np.rint(w * 16), -127, 127).astype(np.int8)
+    else:
+        torch = pytest.importorskip("torch")
+        q = torch.from_numpy(w).to(getattr(torch, quantized))
+    model = Model(_rng(2).standard_normal((N, K), np.float32), q)
+    before = [layer.quant_method.apply for layer in model.layers]
+    with pytest.raises(ValueError, match=rf"linear 1: its weight is {quantized}, .*refused, not misread"):
+        PO.install(model, _serve("pouw:ncp-v1"))
+    assert hooks.live("pouw:ncp-v1") == () and [layer.quant_method.apply for layer in model.layers] == before
 
 # --- install, serve, close ---------------------------------------------------------------------------------------------------
 

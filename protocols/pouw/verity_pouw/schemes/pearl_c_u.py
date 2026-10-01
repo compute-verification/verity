@@ -11,8 +11,8 @@ be_B,j the peel's scaled noise rows (32 BF16 words: bf16(β·bf16(E)) under v0, 
 named; RN is round to nearest, ties to even, no flush to zero; every operation below rounds once.
 
 ~~~text
-chain(a, b)   total = +0;  for each window of 128 products, in order:
-                local = +0;  local = atom(local, a[s:s+32], b[s:s+32]) for its four slices s in order;
+chain(a, b)   total = +0;  for each window of 32·G products (G = 4: 128), in order:
+                local = +0;  local = atom(local, a[s:s+32], b[s:s+32]) for its G slices s in order;
                 total = RN_f32(total + local)                                   (promotion every 4 atoms; −0 never arises)
 C̃_ij          chain(A′_i, B̃_j)
 AF_ip         chain(A′_i, F_B[:, p])            BF_jq = chain(B̃_j, F_A[:, q])            G_pq = chain(F_B[:, p], F_A[:, q])
@@ -23,7 +23,10 @@ U_ij          acc = C̃_ij;  acc = k16(acc, P_A,i[16s:16s+16], P_B,j[16s:16s+16]
 ~~~
 
 **The two tensor-core steps in integers** (`grouped`; ``verity.ml.tc``'s ``HOPPER_E4M3_K32`` and ``HOPPER_BF16_WGMMA_K16``
-restated, and equal to them on every vector and the random sweep in the tests):
+restated, and equal to them on every vector and the random sweep in the tests).  The device (`pearl_c_device`, the H100 by
+default) gives each step as Lean's `Pipeline` (`Device.pipelines`): its groups in k order, the width W and the floor F.  A
+step of several groups runs `grouped` once per group, the accumulator joining the first and each group's word the next
+(Ada's E4M3 atom: two groups of 16).  The table's W and F are the H100's:
 
 ~~~text
 terms    the accumulator word: magnitude m (24 bits, the hidden bit set when normal) at exponent E − 127 (−126 when
@@ -45,6 +48,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from verity.ml.tc import fp32
+
+from .pearl_c_device import H100, Device
 
 STATUS = "cpu-pinned"
 R, WINDOW, SLICE, PEEL_K = 32, 128, 32, 64
@@ -80,9 +85,12 @@ def _product(fmt: str, x: int, y: int) -> tuple[bool, int, int]:
     return ((x ^ y) >> (top - 1)) & 1 == 1, max(ex, 1) + max(ey, 1) + offset, (sx * sy) << shift
 
 
-def grouped(fmt: str, acc: int, x: Sequence[int], y: Sequence[int]) -> int:
-    """One grouped truncating step, acc + Σ x_t·y_t, FP32 words in and out (the module docstring's integer statement)."""
-    _, _, _, _, width, floor = FORMATS[fmt]
+def grouped(fmt: str, acc: int, x: Sequence[int], y: Sequence[int], width: int | None = None, floor: int | None = None
+            ) -> int:
+    """One grouped truncating sum, acc + Σ x_t·y_t, FP32 words in and out (the module docstring's integer statement), at
+    the table's W and F unless given."""
+    _, _, _, _, w0, f0 = FORMATS[fmt]
+    width, floor = w0 if width is None else width, f0 if floor is None else floor
     terms = [t for t in [_acc_term(acc), *(_product(fmt, a, b) for a, b in zip(x, y, strict=True))] if t[2]]
     top = max([floor, *(e for _, e, _ in terms)])
     rescale = width - 24
@@ -108,14 +116,25 @@ def grouped(fmt: str, acc: int, x: Sequence[int], y: Sequence[int]) -> int:
     return int(neg) << 31 | field << 23 | (mag & 0x7FFFFF)
 
 
-def atom(acc: int, a: Sequence[int], b: Sequence[int]) -> int:
-    """HOPPER_E4M3_K32: one k32 E4M3 atom into the accumulator."""
-    return grouped("e4m3", acc, a, b)
+def _pipeline(fmt: str, pipeline: tuple[tuple[int, ...], int, int], acc: int, x: Sequence[int], y: Sequence[int]) -> int:
+    groups, width, floor = pipeline
+    if len(x) != sum(groups) or len(y) != sum(groups):
+        raise ValueError(f"the step takes {sum(groups)} operand pairs")
+    start = 0
+    for size in groups:
+        acc = grouped(fmt, acc, x[start:start + size], y[start:start + size], width, floor)
+        start += size
+    return acc
 
 
-def k16(acc: int, x: Sequence[int], y: Sequence[int]) -> int:
-    """HOPPER_BF16_WGMMA_K16: one k16 BF16 step into the accumulator."""
-    return grouped("bf16", acc, x, y)
+def atom(acc: int, a: Sequence[int], b: Sequence[int], device: Device = H100) -> int:
+    """The device's k32 E4M3 atom into the accumulator (HOPPER_E4M3_K32 on the H100)."""
+    return _pipeline("e4m3", device.pipelines["atom"], acc, a, b)
+
+
+def k16(acc: int, x: Sequence[int], y: Sequence[int], device: Device = H100) -> int:
+    """The device's k16 BF16 step into the accumulator (HOPPER_BF16_WGMMA_K16 on the H100)."""
+    return _pipeline("bf16", device.pipelines["peel"], acc, x, y)
 
 
 # ---- the order --------------------------------------------------------------------------------------------------
@@ -134,16 +153,24 @@ def rn_bf16(word: int) -> int:
     return out
 
 
-def chain(a: Sequence[int], b: Sequence[int], trace: dict | None = None) -> int:
-    """C̃ (or A′·F_B, B̃·F_A, G): windows of 128 products, four atoms from +0 each, promoted by one RN FP32 add.  `trace`
-    collects each atom's local word ("atoms") and each promotion's total ("totals")."""
+def chain(a: Sequence[int], b: Sequence[int], trace: dict | None = None, device: Device = H100) -> int:
+    """C̃ (or A′·F_B, B̃·F_A, G): windows of 32·G products, G atoms from +0 each, promoted by one RN FP32 add.  `trace`
+    collects each atom's local word ("atoms") and each promotion's total ("totals").  Unpromoted (G None): one window over
+    the whole of k and no promotion, so the word is the last atom's."""
     if len(a) != len(b) or len(a) % SLICE:
         raise ValueError("the chain multiplies in atoms of k = 32")
-    total = 0
-    for ws in range(0, len(a), WINDOW):
+    if device.g is None:
         local = 0
-        for s in range(ws, min(ws + WINDOW, len(a)), SLICE):
-            local = _finite(atom(local, a[s:s + SLICE], b[s:s + SLICE]))
+        for s in range(0, len(a), SLICE):
+            local = _finite(atom(local, a[s:s + SLICE], b[s:s + SLICE], device))
+            if trace is not None:
+                trace.setdefault("atoms", []).append(local)
+        return local
+    total, window = 0, SLICE * device.g
+    for ws in range(0, len(a), window):
+        local = 0
+        for s in range(ws, min(ws + window, len(a)), SLICE):
+            local = _finite(atom(local, a[s:s + SLICE], b[s:s + SLICE], device))
             if trace is not None:
                 trace.setdefault("atoms", []).append(local)
         total = _finite(fp32.add(total, local))
@@ -174,11 +201,11 @@ def pb_row(be: Sequence[int], bf: Sequence[int], g: Sequence[Sequence[int]], tra
     return mid + [x ^ 0x8000 for x in be]
 
 
-def u(c: int, pa: Sequence[int], pb: Sequence[int], trace: list | None = None) -> int:
+def u(c: int, pa: Sequence[int], pb: Sequence[int], trace: list | None = None, device: Device = H100) -> int:
     """U_ij from C̃_ij: four k16 steps over P_A,i and P_B,j in slice order.  `trace` collects the word after each step."""
     acc = c
     for s in range(0, PEEL_K, 16):
-        acc = _finite(k16(acc, pa[s:s + 16], pb[s:s + 16]))
+        acc = _finite(k16(acc, pa[s:s + 16], pb[s:s + 16], device))
         if trace is not None:
             trace.append(acc)
     return acc
