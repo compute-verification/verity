@@ -524,16 +524,52 @@ def _name(x: dict[str, Any]) -> str:
     return f"{x['definition']}: {x['class']}{what}, {x['calls']} Call(s){where}"
 
 
+#: the reads `_inputs_committed` takes per numpy step
+_READS_PER_STEP = 1 << 24
+
+
+def _inputs_committed(P: Any, committed: frozenset, literals: frozenset[int]) -> list[bool] | None:
+    """Per Call of a columnar body: is every Value it reads committed or a literal's?  numpy passes over the read columns, since a
+    request Program's attention reads every earlier token's keys and values (B1 4096/512: 3.4e8 reads).  None for any other body."""
+    cols = getattr(P, "columns", None)
+    if cols is None:
+        return None
+    n = cols.n
+    port_index = {name: i for i, name in enumerate(cols.port_names)}
+    keys = np.fromiter(((v.call << 16) | port_index[v.port] for v in committed if v.port in port_index), np.int64)
+    keys.sort()
+    literal = np.zeros(n, bool)
+    literal[np.fromiter(literals, np.int64, len(literals))] = True
+    off = np.frombuffer(cols.read_off, cols.read_off.typecode)
+    call = np.frombuffer(cols.read_call, cols.read_call.typecode)
+    port = np.frombuffer(cols.read_port, cols.read_port.typecode)
+    short = np.zeros(n, bool)                            # a Call reading some Value that is neither
+    k0 = 0
+    while k0 < n:
+        k1 = min(n, max(k0 + 1, int(np.searchsorted(off, off[k0] + _READS_PER_STEP, "right")) - 1))
+        lo, hi = int(off[k0]), int(off[k1])
+        c = call[lo:hi]
+        key = (c.astype(np.int64) << 16) | port[lo:hi]
+        at = np.minimum(np.searchsorted(keys, key), max(len(keys) - 1, 0))
+        ok = keys[at] == key if len(keys) else np.zeros(hi - lo, bool)
+        made = c >= 0
+        ok |= made & literal[np.where(made, c, 0)]
+        short[np.searchsorted(off, np.flatnonzero(~ok) + lo, "right") - 1] = True
+        k0 = k1
+    return (~short).tolist()
+
+
 def call_groups(P: Any, Q: Any) -> list[dict[str, Any]]:
     """The Calls of `P` grouped for `check_calls` under the population `Q` (`required.Population`: `Q_module_body_v1` + its
     policy): committed = the required values, and a literal's output (written in the descriptor)."""
     committed = Q.required.values
     literals = Q.literals
+    inputs_committed = _inputs_committed(P, committed, literals)
     groups: dict[tuple, dict[str, Any]] = {}
     for c in P.calls:
         if c.id in literals:
             continue
-        ins = all(r in committed or r.call in literals for r in c.reads)
+        ins = inputs_committed[c.id] if inputs_committed is not None else all(r in committed or r.call in literals for r in c.reads)
         outs = all((c.id, p.name) in committed for p in c.port_table)
         where = Q.program_path(c.id)
         k = (c.definition, where, ins, outs)
