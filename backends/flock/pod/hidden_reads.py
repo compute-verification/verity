@@ -577,9 +577,114 @@ def stage(unit: str, ns: list[int], out: Path, **shape) -> dict:
     return info
 
 
+# --- prover seconds -----------------------------------------------------------------------------------------------------------
+
+def _live(run: Path) -> list[dict]:
+    out = []
+    for ln in (run / "live.tsv").read_text().splitlines():
+        unit, n, mode, js = ln.split("\t", 3)
+        v = json.loads(js)
+        wit = (v["witness_prebuilt_s"] or 0) + v["witness_s"]
+        out.append({"unit": unit, "n": int(n), "mode": mode, "warm": v["warm"], "accepted": v["accepted"], "m": v["dense_m"],
+                    "k_log": v["k_log"], "witness_s": wit, "proof_s": v["prove_total_s"], "prove_s": wit + v["prove_total_s"], "e2e_s": v["e2e_s"]})
+    return out
+
+
+def rates(runs: list[Path]) -> dict:
+    """Per unit and mode: the timed proofs' median prover seconds at each size (``prove_s``: the witness, built before the
+    session, and both reps' proofs), and the marginal seconds per committed bit between the two largest sizes (what a
+    construction's rows cost once fixed costs are paid)."""
+    import statistics
+
+    timed: dict = {}
+    for p in (p for r in runs for p in _live(r)):
+        if not p["accepted"]:
+            raise ValueError(f"a rejected proof: {p}")
+        if not p["warm"]:
+            timed.setdefault((p["unit"], p["mode"], p["n"]), []).append(p)
+    out: dict = {}
+    for (u, md, n), ps in sorted(timed.items()):
+        out.setdefault(f"{u}/{md}", {"points": []})["points"].append(
+            {"n": n, "m": ps[0]["m"], "k_log": ps[0]["k_log"], "proofs": len(ps), "prove_s": statistics.median(x["prove_s"] for x in ps),
+             **{k: statistics.median(x[k] for x in ps) for k in ("witness_s", "proof_s", "e2e_s")}})
+    for c in out.values():
+        a, b = c["points"][-2], c["points"][-1]
+        c["s_per_bit"] = (b["prove_s"] - a["prove_s"]) / (2 ** b["m"] - 2 ** a["m"])
+        c["s_per_instance"] = (b["prove_s"] - a["prove_s"]) / (b["n"] - a["n"])
+        c["ns_per_bit"] = round(1e9 * c["s_per_bit"], 3)
+        c["between"] = [a["m"], b["m"]]
+    return out
+
+
+def table(counts: dict, rt: dict, reads_per_block: tuple[int, ...] = (1024, 4096, 16384)) -> list[dict]:
+    """Case x construction: ANDs and committed rows per read (a table's binding amortized over a block's reads where the
+    construction needs the whole table in the block), and prover seconds per read at the measured rates (SHA-512-bound rows at
+    the merkle unit's, mux and sort rows at the mux unit's; rows packed densely, so a power-of-two slot can cost up to 2x)."""
+    lim = 1 << K_MAX_BLOCK
+    rows: list[dict] = []
+
+    def add(case, cons, ands, rws, kind, note="", feasible=True):
+        r = {"case": case, "construction": cons, "ands": int(ands), "rows": int(rws), "feasible": feasible, "note": note}
+        if feasible:
+            for md in ("m0", "zk"):
+                r[f"s_{md}"] = rws * rt[f"{kind}/{md}"]["s_per_bit"]
+        rows.append(r)
+
+    T, today = counts["tables"], counts["today"]
+    g, b, t = T["gelu_tanh_bf16"], T["gelu_band"], T["tanh_rn"]
+    add("gelu_tanh_bf16 (2^16 x 16)", "c today (public contents)", today["gelu_tanh_bf16_table_gates"]["and"],
+        today["gelu_tanh_bf16_table_gates"]["and"], "mux", "the rule forbids it: a program table's contents are a value")
+    add("gelu_tanh_bf16 (2^16 x 16)", "a merkle, packed leaf, c2", g["a_packed_c2"]["ands"], g["a_packed_c2"]["rows"], "merkle")
+    add("gelu_tanh_bf16 (2^16 x 16)", "a merkle, packed leaf, c1", g["a_packed_c1"]["ands"], g["a_packed_c1"]["rows"], "merkle")
+    add("gelu_tanh_bf16 (2^16 x 16)", "b mux over committed table", g["b_mux"]["ands"], g["b_mux"]["rows"] + g["binding_per_unit"]["rows"],
+        "mux", f"binding the table is {g['binding_per_unit']['rows']} rows per block (> 2^{K_MAX_BLOCK})", feasible=g["binding_per_unit"]["rows"] < lim)
+    d = g["d_sort"]["65536"]
+    add("gelu_tanh_bf16 (2^16 x 16)", "d sorted batch, 2^16 reads", d["ands"] / 65536, (d["rows"] + g["binding_per_unit"]["rows"]) / 65536, "mux",
+        f"{d['rows'] + g['binding_per_unit']['rows']} rows in one block (> 2^{K_MAX_BLOCK})", feasible=False)
+    gb = today["gelu_band_public"]
+    add("gelu band (3072 x 15, the Boolean IR's)", "c today (public band)", gb["ands"], gb["rows"], "mux",
+        f"the whole gelu_tanh_bf16 element is {today['gelu_tanh_bf16_boolean_ir']['ands']} ANDs")
+    add("gelu band (3072 x 15, the Boolean IR's)", "a merkle, packed leaf, c2", b["a_packed_c2"]["ands"], b["a_packed_c2"]["rows"], "merkle")
+    add("gelu band (3072 x 15, the Boolean IR's)", "a merkle, packed leaf, c1", b["a_packed_c1"]["ands"], b["a_packed_c1"]["rows"], "merkle")
+    bind = b["binding_per_unit"]["rows"]
+    for R in reads_per_block:
+        add("gelu band (3072 x 15, the Boolean IR's)", f"b mux over committed band, {R} reads/block", b["b_mux"]["ands"], b["b_mux"]["rows"] + bind / R,
+            "mux", f"binding {bind} rows per block", feasible=R * b["b_mux"]["rows"] + bind < lim)
+    for R in reads_per_block:
+        d = b["d_sort"][str(R)]
+        add("gelu band (3072 x 15, the Boolean IR's)", f"d sorted batch, {R} reads/block", d["ands"] / R, (d["rows"] + bind) / R, "mux",
+            f"M = {d['M']} records; a block-level slot, as today's MUFU lookup slots", feasible=d["rows"] + bind < lim)
+    tt = today["tanh_rn_table_gates"]
+    if "and" in tt:
+        add("tanh_rn (2^27 x 31)", "c today (public contents)", tt["and"], tt["and"], "mux", f"{tt['xor']} XOR terms in its linear rows")
+    add("tanh_rn (2^27 x 31)", "a merkle, packed leaf, c2", t["a_packed_c2"]["ands"], t["a_packed_c2"]["rows"], "merkle")
+    add("tanh_rn (2^27 x 31)", "a merkle, packed leaf, c1", t["a_packed_c1"]["ands"], t["a_packed_c1"]["rows"], "merkle")
+    add("tanh_rn (2^27 x 31)", "b mux / d sort", t["b_mux"]["ands"], t["b_mux"]["rows"], "mux",
+        f"binding the table is {t['binding_per_unit']['rows']} rows", feasible=False)
+    for model, e in counts["embedding"].items():
+        case = f"embedding {model} (V {e['V']} x H {e['H']})"
+        add(case, "row hashing alone (paid at a public position too)", e["row_hashing_public_position"]["ands"], e["row_hashing_public_position"]["rows"], "merkle")
+        add(case, f"a merkle path over the row, c2 (depth {e['depth']})", e["a_path_c2"]["ands"], e["a_path_c2"]["rows"], "merkle", "on top of the row hashing")
+        add(case, f"a merkle path over the row, c1 (depth {e['depth']})", e["a_path_c1"]["ands"], e["a_path_c1"]["rows"], "merkle", "on top of the row hashing")
+        add(case, "b mux over the table", e["b_mux"]["ands"], e["b_mux"]["ands"], "mux", feasible=False)
+    for fam, e in counts["moe"].items():
+        case = f"MoE {fam} (E {e['E']}, K {e['K']}), per weight row"
+        add(case, "row hashing alone (paid at a public position too)", e["row_hashing_public_position"]["ands"], e["row_hashing_public_position"]["rows"], "merkle")
+        add(case, "a expert-minor subtree, c2 (6 levels)", e["a_expert_minor_c2"]["ands"], e["a_expert_minor_c2"]["rows"], "merkle", "on top of the row hashing")
+        add(case, "a expert-minor subtree, c1 (6 levels)", e["a_expert_minor_c1"]["ands"], e["a_expert_minor_c1"]["rows"], "merkle", "on top of the row hashing")
+        add(case, "b mux over the experts' rows", e["b_mux_over_experts"]["ands"], e["b_mux_over_experts"]["ands"] + e["E"] * e["row_hashing_public_position"]["rows"],
+            "mux", "every expert's row bound in the block", feasible=e["E"] * e["row_hashing_public_position"]["rows"] < lim)
+    return rows
+
+
+#: the largest block a flock-circuit statement takes (verity_flock.circuit.K_MAX)
+K_MAX_BLOCK = 26
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["check", "counts", "stage"])
+    ap.add_argument("cmd", choices=["check", "counts", "stage", "summary"])
+    ap.add_argument("--runs", nargs="+", default=[], help="summary: run dirs whose out/ holds live.tsv (and one counts.json)")
     ap.add_argument("--unit", choices=["merkle", "mux"])
     ap.add_argument("--n", type=int, nargs="+", default=[])
     ap.add_argument("--out")
@@ -596,6 +701,18 @@ def main(argv=None) -> int:
         r = all_counts(a.heavy)
         Path(a.out).write_text(json.dumps(r, indent=1, sort_keys=True))
         print(json.dumps({k: r["tables"][k]["a_packed_c2"] for k in r["tables"]}))
+        return 0
+    if a.cmd == "summary":
+        outs = [Path(r) / "out" for r in a.runs]
+        counts_path = next(o / "counts.json" for o in outs if (o / "counts.json").exists() and "tanh_rn_table_gates" in
+                           json.loads((o / "counts.json").read_text())["today"])
+        rt = rates(outs)
+        r = {"runs": [Path(x).name for x in a.runs], "counts_from": counts_path.parent.parent.name, "rates": rt,
+             "table": table(json.loads(counts_path.read_text()), rt)}
+        Path(a.out).write_text(json.dumps(r, indent=1))
+        for row in r["table"]:
+            s = "  ".join(f"{row[k]:.4g}" if k in row else "-" for k in ("s_m0", "s_zk"))
+            print(f"{row['case'][:44]:44}  {row['construction'][:52]:52}  {row['ands']:>14,}  {row['rows']:>14,}  {s}  {row['note'][:70]}")
         return 0
     shape = {"depth": a.depth} if a.unit == "merkle" else {"tab_log": a.tab_log, "reads": a.reads}
     info = stage(a.unit, a.n, Path(a.out), **shape)
