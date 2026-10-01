@@ -8,8 +8,10 @@ bits, with every table read a plain And/Xor/Not circuit.
     DivFullRcp_v2       (b: Array<32, Value<1>>) -> Array<32, Value<1>>              word view: DivFullRcp_v1
     DivFullScaleA_v3    (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>           word view: DivFullScaleA_v1
 
-The bit rules around the tables are C-Flock's (`verity_flock.tail_pieces`: the exponent, sign and special-encoding logic of
-``fa2_model.cpp`` and ``rms_triton_model.cpp``); `DivFullScaleA_v3` reads no table.
+The exponent, sign and special-encoding rules around the tables are C-Flock's (`verity_flock.tail_pieces`, from
+``fa2_model.cpp`` and ``rms_triton_model.cpp``). The range scalings by 0.25 and 2^24 are not multiplies: the exponent moves,
+a subnormal is normalized by its leading-zero count (`_times_2_24`), and only `DivFullScaleA_v3` (which reads no table) rounds,
+where a * 0.25 is subnormal.
 
 A table read (`table_word`) is the special-function unit's own interpolator, exact on every index: a segment g of the index's
 top bits and the offset u below them give ``base + ((C0[g] + C1[g] u + (C2[g] Q(u)) << square_shift) >> shift)``, Q(u) the
@@ -38,8 +40,7 @@ from verity.ir import boolean as BL
 from verity.ir.types import Array
 
 from .. import mufu as M
-from . import fp
-from .forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, mux, or_reduce, sub
+from .forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
 from .softmax import _eq_const
 from .trace import definition
 
@@ -51,8 +52,6 @@ QUADRATIC = "mufu_quadratic.json"
 QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
-QUARTER = 0x3E800000   # 0.25
-TWO24 = 0x4B800000     # 2^24
 
 
 # --- the table encoding ------------------------------------------------------------------------------------------------------
@@ -251,30 +250,23 @@ def _word(C, cases, default):
 
 
 def mufu_ex2(C, x):
-    """``MufuEx2Ftz_v1``: x as a signed fixed-point value with 23 fraction bits; the table at its fraction, the integer part
-    added to the table word's exponent. A right shift past the mantissa is clamped (K = 0), so every |x| < 2^-23 reads the
-    table's first word."""
+    """``MufuEx2Ftz_v1``: x as the signed fixed-point value floor(x 2^23); the table at its fraction, the integer part n added
+    to the table word's exponent. Only |x| < 128 has a finite nonzero 2^x, so K = floor(|x| 2^23) is kept mod 2^30 (one
+    5-bit shift of the significand; e - 127 < -24 gives K = 0) and |x| >= 128 saturates. For x < 0 the fixed-point value is
+    -K or ~K (= -K - 1, when K has fraction bits), so its fraction is K's XOR (x < 0 and K has fraction bits) and n is
+    ``s ? ~int(K) + (K has none) : int(K)``."""
     s, e, m, e_max, e_zero, m_nz = _fields(C, x)
-    big = NOT(_ult_const(C, e, 157))                          # e - 127 >= 30
-    neg = _ult_const(C, e, 127)
-    d8 = sub(C, const_bits(127, 8), e, 8)[0]
-    d = d8[:6]
-    over = C.AND(neg, NOT(_ult_const(C, d8, 25)))
-    sh = mux(C, neg, sub(C, const_bits(24, 6), d, 6)[0], sub(C, e, const_bits(103, 8), 8)[0][:6])
-    K = fp.shl(C, m + [ONE] + [ZERO] * 53, sh)[24:77]          # mant << (e - 127), or the right shift above; 53 bits
-    K = [C.AND(NOT(over), k) for k in K]
+    sat = NOT(_ult_const(C, e, 134))                          # e - 127 >= 7
+    live = NOT(_ult_const(C, e, 103))                         # e - 127 >= -24
+    sig = [C.AND(live, b) for b in m] + [live]
+    K = shl_window(C, sig, sub(C, e, const_bits(103, 8), 8)[0][:5], 24, 54)
     z = NOT(or_reduce(C, K[:23]))
-    fixed = add(C, [k ^ s for k in K + [ZERO]], [C.AND(s, z)], width=54)   # s ? (z ? -K : ~K) : K
-    t = table_word(C, "ex2", fixed[:23])
-    n = fixed[23:54]
-    re = add(C, list(t[23:31]) + [ZERO] * 25, n + [n[30]] * 2, width=33)
-    neg = re[32]
-    zero = OR(C, neg, NOT(or_reduce(C, re)))
-    ovf = C.AND(NOT(neg), NOT(_ult_const(C, re[:32], 255)))
+    t = table_word(C, "ex2", [k ^ C.AND(s, NOT(z)) for k in K[:23]])
+    re = add(C, list(t[23:31]) + [ZERO, ZERO], [k ^ s for k in K[23:30]] + [s] * 3, C.AND(s, z), width=10)
+    zero = OR(C, re[9], NOT(or_reduce(C, re)))
     inf_or_zero = mux(C, s, const_bits(0, 32), const_bits(INF, 32))
     return _word(C, [(e_max, mux(C, m_nz, const_bits(QNAN_MUFU, 32), inf_or_zero)), (e_zero, const_bits(ONE_F, 32)),
-                     (big, inf_or_zero), (ovf, const_bits(INF, 32)), (zero, const_bits(0, 32))],
-                 list(t[:23]) + re[:8] + [ZERO])
+                     (sat, inf_or_zero), (zero, const_bits(0, 32))], list(t[:23]) + re[:8] + [ZERO])
 
 
 def rcp_post(C, xb, t):
@@ -294,16 +286,33 @@ def mufu_rcp(C, x):
     return rcp_post(C, x, table_word(C, "rcp", x[:23]))
 
 
-def _abs_gt_big(C, x):
-    """``|x| > 2^126`` as f32 compares it (false for NaN)."""
-    _, e, _, e_max, _, m_nz = _fields(C, x)
-    nan = C.AND(e_max, m_nz)
-    ge254 = C.AND(e[7], C.AND(e[6], C.AND(e[5], C.AND(e[4], C.AND(e[3], C.AND(e[2], e[1]))))))
-    return C.AND(NOT(nan), OR(C, ge254, C.AND(_eq_const(C, e, 253), m_nz)))
+def _times_2_24(C, x):
+    """``x * 2^24`` for ``|x| < 2^-126`` (exponent field 0), exact: the normal number ``m 2^-125`` or the zero x."""
+    v = [ZERO] * 9 + list(x[:23])
+    az, lz = lzc(C, v)
+    e = sub(C, const_bits(24, 8), lz + [ZERO] * 3, 8)[0]
+    return shl_window(C, v, lz, 8, 31) + [C.AND(NOT(az), b) for b in e] + [x[31]]
 
 
-def _scale(C, x, k: int):
-    return fp.f32_mul(C, x, const_bits(k, 32))
+def _quarter_rn(C, a):
+    """``RN(a * 0.25)`` as numpy float32 computes it: exponent - 2, a subnormal result rounded to nearest even, a NaN quieted."""
+    s, e, m, e_max, e_zero, m_nz = _fields(C, a)
+    low = _ult_const(C, e, 3)                                  # e <= 2: the significand shifts right 1 (e = 2) or 2 bits
+    sig = list(m) + [NOT(e_zero)]
+    one = C.AND(e[1], NOT(e[0]))
+    q = mux(C, one, sig[1:] + [ZERO], sig[2:] + [ZERO, ZERO])
+    guard = mux(C, one, [sig[0]], [sig[1]])[0]
+    up = C.AND(guard, OR(C, C.AND(NOT(one), sig[0]), q[0]))
+    body = mux(C, low, add(C, q, [up], width=31), list(m) + sub(C, e, const_bits(2, 8), 8)[0])
+    return mux(C, e_max, list(a[:22]) + [OR(C, a[22], m_nz)] + list(e), body) + [s]
+
+
+def _times_2_24_rn(C, a):
+    """``RN(a * 2^24)`` as numpy float32 computes it: exponent + 24 or infinity, a subnormal normalized, a NaN quieted."""
+    s, e, m, e_max, e_zero, m_nz = _fields(C, a)
+    normal = mux(C, NOT(_ult_const(C, e, 255 - 24)), const_bits(INF, 31), list(m) + add(C, e, const_bits(24, 8), width=8))
+    special = list(a[:22]) + [OR(C, a[22], m_nz)] + list(e)
+    return mux(C, e_max, special, mux(C, e_zero, _times_2_24(C, a)[:31], normal)) + [s]
 
 
 def _parity_index(xb):
@@ -320,12 +329,12 @@ def _rsq_post(C, xb, v):
 
 
 def rsqrt_approx(C, x):
-    """``RsqrtApprox_v1``: MUFU.RSQ with the subnormal range scaling (x * 2^24, the result * 2^12)."""
-    p0 = NOT(_fields(C, x)[4])
-    xs = mux(C, p0, x, _scale(C, x, TWO24))
+    """``RsqrtApprox_v1``: MUFU.RSQ with the subnormal range scaling (x * 2^24, the result * 2^12 unless it is inf or NaN)."""
+    small = _fields(C, x)[4]
+    xs = mux(C, small, _times_2_24(C, x), list(x))
     r = _rsq_post(C, xs, table_word(C, "rsq", _parity_index(xs)))
-    special = OR(C, _fields(C, r)[3], _fields(C, r)[4])
-    return mux(C, OR(C, p0, special), r, list(r[:23]) + add(C, r[23:31], const_bits(12, 8), width=8) + [r[31]])
+    up = C.AND(small, NOT(_eq_const(C, r[23:31], 0xFF)))
+    return mux(C, up, list(r[:23]) + add(C, r[23:31], const_bits(12, 8), width=8) + [r[31]], list(r))
 
 
 def mufu_sqrt_ftz(C, x):
@@ -338,20 +347,14 @@ def mufu_sqrt_ftz(C, x):
                      (e_zero, [ZERO] * 31 + [s]), (s, const_bits(QNAN_MUFU, 32))], list(v[:23]) + re)
 
 
-def _div_scale(C, a, b):
-    big = _abs_gt_big(C, b)
-    a1, b1 = mux(C, big, _scale(C, a, QUARTER), a), mux(C, big, _scale(C, b, QUARTER), b)
-    tiny = _fields(C, b1)[4]
-    return mux(C, tiny, _scale(C, a1, TWO24), a1), mux(C, tiny, _scale(C, b1, TWO24), b1)
-
-
 def div_full_rcp(C, b):
-    """``DivFullRcp_v1``: ``div.full.f32``'s reciprocal part: range-scale b, MUFU.RCP, times the matching scaled 1."""
-    big = _abs_gt_big(C, b)
-    tiny = _fields(C, b)[4]
-    fb = mux(C, big, _scale(C, b, QUARTER), mux(C, tiny, _scale(C, b, TWO24), b))
-    a2, b2 = _div_scale(C, const_bits(ONE_F, 32), fb)
-    return fp.f32_mul(C, a2, rcp_post(C, b2, table_word(C, "rcp", b2[:23])), ir_nan=True)
+    """``DivFullRcp_v1``: ``div.full.f32``'s reciprocal part: MUFU.RCP of b * 2^24 when ``|b| < 2^-126``, of b * 0.25 (exponent
+    - 2) when ``2^126 < |b| < inf``, else of b."""
+    _, e, _, e_max, e_zero, m_nz = _fields(C, b)
+    big = OR(C, C.AND(NOT(e_max), _eq_const(C, e[1:], 0x7F)), C.AND(_eq_const(C, e, 253), m_nz))
+    quarter = list(b[:23]) + sub(C, e, const_bits(2, 8), 8)[0] + [b[31]]
+    d = mux(C, e_zero, _times_2_24(C, b), mux(C, big, quarter, list(b)))
+    return rcp_post(C, d, table_word(C, "rcp", d[:23]))
 
 
 def div_full_scale_a(C, a, b):
@@ -359,8 +362,7 @@ def div_full_scale_a(C, a, b):
     mag = b[:31]
     big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
     small = _ult_const(C, mag, 0x00800000)
-    return mux(C, big, fp.f32_mul(C, a, fp.f32_const(QUARTER), ir_nan=True),
-               mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), ir_nan=True), list(a)))
+    return mux(C, big, _quarter_rn(C, a), mux(C, small, _times_2_24_rn(C, a), list(a)))
 
 
 # --- the Definitions -----------------------------------------------------------------------------------------------------------

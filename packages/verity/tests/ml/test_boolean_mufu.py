@@ -25,12 +25,12 @@ DEFS = [BM.MufuEx2Ftz, BM.MufuRcpFtz, BM.MufuSqrtFtz, BM.RsqrtApprox, BM.DivFull
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MufuEx2Ftz_v2": (1354, 5295, 113, "5d684763d1488840ed675e1ba68fa82079a79813f0ab6e28b95ce80a2d666427"),
+    "MufuEx2Ftz_v2": (1073, 4917, 76, "c2e2924f375157547e7c1bfe0c283037f0f324b841420177fafff23c01af7105"),
     "MufuRcpFtz_v2": (902, 5639, 70, "f49db0c381ce0b47b5548563e0c7a714b62284cf93b86b77261dcb783f171f00"),
     "MufuSqrtFtz_v2": (879, 5665, 89, "6431fb0de8d2779784fc068c1ac406596e147c63c15776479ee47eb889af5346"),
-    "RsqrtApprox_v2": (1668, 6835, 189, "1f862f77ae8f1054ce16d17100c0bcf3a294b6d18d9395c99cddb1c458500e29"),
-    "DivFullRcp_v2": (4508, 10567, 496, "cdad88305d284de9d4077a1fea3b4bb5bfc9f2498f6338865f245935665fb8f8"),
-    "DivFullScaleA_v3": (1427, 2048, 168, "3037c8906eed480e7c77e16b840f3f59aef6970406125fe8863899227967bb4c"),
+    "RsqrtApprox_v2": (1134, 6115, 134, "482071de38099933443314f94012941c01f7ea84ba1fd2dda78ab17f7f195197"),
+    "DivFullRcp_v2": (1152, 6001, 113, "d1c351899328070278c4a4229cb22f8b4a7aff2393e64a9f92d33126b2740a5e"),
+    "DivFullScaleA_v3": (531, 860, 94, "f8d0f52de422db61c053accdf13643773dc9b93ff29f099428f3299b70572011"),
 }
 
 #: each table's words that are not its interpolant: (index, word - interpolant)
@@ -115,18 +115,42 @@ def test_the_circuit_square_is_the_fit_square(name) -> None:
     assert (q == f.square(x)).all()
 
 
-#: (Definition, first word, end word): a binade (two for rsq / sqrt, by exponent parity) reads every index of its table
-_BINADES = [(BM.MufuEx2Ftz, 0x3F800000, 0x40000000), (BM.MufuRcpFtz, 0x3F800000, 0x40000000),
-            (BM.MufuSqrtFtz, 0x3F800000, 0x40800000), (BM.RsqrtApprox, 0x3F800000, 0x40800000)]
+def _agree(target, *words) -> None:
+    got = BS.evaluate_words(target, *words).astype(np.uint64).reshape(-1)
+    ref = E.evaluate_batch(TR.word_of(target), *words).astype(np.uint64).reshape(-1)
+    bad = np.flatnonzero(got != ref)
+    assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} differ, first {[[hex(int(w[i])) for w in words] for i in bad[:5]]}"
+
+
+def _span(*ranges) -> np.ndarray:
+    return np.concatenate([np.arange(lo, hi, dtype=np.uint64) for lo, hi in ranges]).astype(np.uint32)
+
+
+#: (id, Definition, word ranges): a binade (two for rsq / sqrt, by exponent parity) reads every index of its table; ex2's
+#: negative binade reads them through ~K, and its exponents 103 and 133 are the ends of its 5-bit shift; DivFullRcp's and
+#: RsqrtApprox's subnormals, and DivFullRcp's (2^126, inf], are their range scalings
+_RANGES = [("MufuEx2Ftz", BM.MufuEx2Ftz, [(0x3F800000, 0x40000000)]),
+           ("MufuEx2Ftz-negative-and-shift-ends", BM.MufuEx2Ftz, [(0xBF800000, 0xC0000000), (0x33800000, 0x34000000),
+                                                                  (0xC2800000, 0xC3000000)]),
+           ("MufuRcpFtz", BM.MufuRcpFtz, [(0x3F800000, 0x40000000)]),
+           ("MufuSqrtFtz", BM.MufuSqrtFtz, [(0x3F800000, 0x40800000)]),
+           ("RsqrtApprox", BM.RsqrtApprox, [(0x3F800000, 0x40800000)]),
+           ("RsqrtApprox-subnormal", BM.RsqrtApprox, [(0x00000000, 0x00800000)]),
+           ("DivFullRcp-scaled", BM.DivFullRcp, [(0x00000000, 0x00800000), (0xFE800000, 0xFF800001)])]
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("d, lo, hi", _BINADES, ids=[d.name for d, _, _ in _BINADES])
-def test_every_table_index_through_its_definition(d, lo, hi) -> None:
-    """Every index of the Definition's table (2^23 or 2^24 words, 10-30 s): the random words above reach about 1 % of them."""
-    target = bind(d)
-    x = np.arange(lo, hi, dtype=np.uint64).astype(np.uint32)
-    got = BS.evaluate_words(target, x).astype(np.uint64).reshape(-1)
-    ref = E.evaluate_batch(TR.word_of(target), x).astype(np.uint64).reshape(-1)
-    bad = np.flatnonzero(got != ref)
-    assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} differ, first {[hex(int(x[i])) for i in bad[:5]]}"
+@pytest.mark.parametrize("d, ranges", [r[1:] for r in _RANGES], ids=[r[0] for r in _RANGES])
+def test_every_word_of_a_range(d, ranges) -> None:
+    """Every word of the ranges (2^23 to 2^24 + 2^23 words, 10-35 s each): the random words above reach about 1 % of a table's
+    indices, and only a few hundred words of each scaled range."""
+    _agree(bind(d), _span(*ranges))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("b", [0x7E800001, 0x80000001], ids=["a*0.25", "a*2^24"])
+def test_div_full_scale_a_where_it_rounds_or_normalizes(b) -> None:
+    """Every a of exponent 0 to 2 (3 * 2^23 words, about 30 s) against a b of each scaling: where a * 0.25 is subnormal and
+    rounds, and where a * 2^24 normalizes a subnormal; random words reach a few thousand of them."""
+    a = _span((0x00000000, 0x01800000))
+    _agree(bind(BM.DivFullScaleA), a, np.full(len(a), b, np.uint32))
