@@ -4,7 +4,8 @@
 A fill job is an executable script in FILL_DIR/queue/.  Its header says what it needs:
 
     # fill: owner=bc-0de2d624 gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
-    #   gpus 0 or 1 (default 1); max_min <= 30 (default 25); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
+    #   gpus 0 or 1 (default 1), or 2 for a Commit guest (a TP2 row: two idle GPUs on one NUMA node); max_min <= 30 (default
+    #   25), a Commit guest's <= FILL_COMMIT_MAX_MIN (120); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
 #   index or indices the job may run on (3, 2-7 or 2,5; it waits for one of them); prio: higher starts first (default 0; give GPU-heavy jobs more than
 #   ones that hold a GPU while mostly computing on the CPU); within a prio, owners take turns (the owner with the fewest
 #   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
@@ -83,6 +84,8 @@ VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
 # takes a slot back by requeueing the newest lent job (143, as a preempted job)
 VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
 COMMIT_PREFIX = "verity-commit-"
+# a Commit reruns from the top when stopped, and a Gemma-2 Commit's CPU phases alone outlast 30 min; booked windows still bound it
+COMMIT_MAX_MIN = int(os.environ.get("FILL_COMMIT_MAX_MIN", "120"))
 CGROUP_ROOT = os.environ.get("FILL_CGROUP_ROOT", "/sys/fs/cgroup")
 
 running: dict[str, dict] = {}
@@ -109,9 +112,11 @@ def header(p: Path) -> dict:
         if m:
             for k, v in re.findall(r"(\w+)=(\S+)", m.group(1)):
                 h[k] = int(v) if v.isdigit() else v
-    h["gpus"] = 1 if int(h["gpus"]) >= 1 else 0
+    commit = p.name.startswith(COMMIT_PREFIX)
+    h["gpus"] = min(max(int(h["gpus"]), 0), 2 if commit else 1)
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
-    cap = MAX_MIN_EXCEPTIONS.get(p.name, 360 if h["project"] == "verity" and not h["gpus"] else 30)
+    cap = MAX_MIN_EXCEPTIONS.get(p.name, COMMIT_MAX_MIN if commit and h["gpus"] else
+                                 360 if h["project"] == "verity" and not h["gpus"] else 30)
     h["max_min"] = min(int(h["max_min"]), cap)
     return h
 
@@ -234,7 +239,7 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
         cmd = ["numactl", f"--membind={CPU_MEMBIND}", *cmd]
     if h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
-        cmd = [GPU_LEASE, "1", *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
+        cmd = [GPU_LEASE, str(h["gpus"]), *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
     elif shutil.which("systemd-run"):
         kind = "cpuset" if own else "verity" if verity else "lent"
         unit_name = f"fill-{kind}-{int(time.time() * 1000)}" if in_pool or own else None
@@ -262,6 +267,18 @@ def gpu_set(on, n: int) -> set[int] | None:
         if lo.isdigit() and (not hi or hi.isdigit()):
             out.update(i for i in range(int(lo), int(hi or lo) + 1) if i < n)
     return out
+
+
+def pick_gpus(idle: list[int], allowed: set[int] | None, g: int, n: int) -> list[int] | None:
+    """g of the idle GPUs (highest index first) for one job: two from one NUMA node (0..n/2-1, n/2..n-1) when they can be."""
+    ok = [i for i in reversed(idle) if allowed is None or i in allowed]
+    if len(ok) < g:
+        return None
+    for upper in (True, False):
+        same = [i for i in ok if (i >= n // 2) == upper]
+        if len(same) >= g:
+            return sorted(same[:g])
+    return sorted(ok[:g])
 
 
 def keep_free(n: int) -> set[int]:
@@ -454,7 +471,7 @@ def tick(n: int) -> str:
     timed = (n > 0 and all(leases) and len(holders) == 1) or any(l and " timed=1 " in f" {l} " for l in leases)
     window = not timed and any(w >= n for w in want)
     gpu_jobs = sorted((j["t0"], k) for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping"))
-    blockers = (n - free) - len(gpu_jobs)
+    blockers = (n - free) - sum(running[k]["h"]["gpus"] for _, k in gpu_jobs)
     need = RESERVE + sum(want)
     agent = agent_up()
     if timed or (window and blockers <= 0):
@@ -468,7 +485,7 @@ def tick(n: int) -> str:
             if deficit <= 0:
                 break
             stop(k, f"free {free} < needed {need}")
-            deficit -= 1
+            deficit -= running[k]["h"]["gpus"]
     frozen = cpu_frozen(timed, window)
     if frozen and any(not j["h"]["gpus"] and not j.get("stopping") and not j["paused"] for j in running.values()):
         event("freeze-memory", "-", timed=timed, waiting=window, **numa0_gb())
@@ -507,29 +524,32 @@ def tick(n: int) -> str:
         by_rank = [[x for x in ready if rank(x[0].name, x[1]) == r] for r in range(3)]
         left = by_rank[0] + (by_rank[1] or (by_rank[2] if free >= 2 else []))
         counts = Counter(j["h"]["owner"] for j in running.values() if j["h"]["gpus"])
-        # each job gets its own free GPU (--on), so jobs started in one tick don't take each other's
+        # each job gets its own free GPUs (--on), so jobs started in one tick don't take each other's
         slots = max(0, len(idle) - RESERVE)
         while left and slots > 0:
             best = next_job(left, counts)
             left.remove(best)
             p, h, _ = best
-            allowed = gpu_set(h.get("on"), n)
-            want_gpu = next((i for i in reversed(idle) if allowed is None or i in allowed), None)
-            if want_gpu is None or want_gpu not in idle:
+            got = pick_gpus(idle, gpu_set(h.get("on"), n), h["gpus"], n) if h["gpus"] <= slots else None
+            if not got:
                 continue
-            idle.remove(want_gpu)
-            start(p, {**h, "on": want_gpu}, backfill=backfill)
+            for i in got:
+                idle.remove(i)
+            start(p, {**h, "on": ",".join(map(str, got))}, backfill=backfill)
             counts[h["owner"]] += 1
-            slots -= 1
+            slots -= h["gpus"]
             started = True
         if not window:
-            # a Commit that found no free GPU takes the newest proofs (then pous) fill's, one per Commit, counting GPUs already freeing
-            waiting = sum(1 for p, h, _ in queued if h["gpus"] and rank(p.name, h) == 0 and p.exists() and clears(h, booked, t_now))
-            freeing = sum(1 for j in running.values() if j["h"]["gpus"] and j.get("stopping"))
+            # Commits that found too few free GPUs take the newest proofs (then pous) fills' GPUs, counting GPUs already freeing
+            waiting = sum(h["gpus"] for p, h, _ in queued if h["gpus"] and rank(p.name, h) == 0 and p.exists() and clears(h, booked, t_now))
+            short = waiting - len(idle) - sum(j["h"]["gpus"] for j in running.values() if j["h"]["gpus"] and j.get("stopping"))
             victims = sorted((k for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping") and rank(k, j["h"])),
                              key=lambda k: (-rank(k, running[k]["h"]), -running[k]["t0"]))
-            for k in victims[:max(0, waiting - freeing)]:
+            for k in victims:
+                if short <= 0:
+                    break
                 stop(k, "a Commit reclaims its GPU")
+                short -= running[k]["h"]["gpus"]
     if not timed:
         sets = cpu_sets()
         own = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity" and x[1]["owner"] in sets]

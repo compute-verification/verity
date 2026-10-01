@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1 project=verity` fill guests: node 2's fill runner
-# starts one only when no PoUW GPU job is ready and at least 2 GPUs are free, preempts it first, and stops it in every timed window
-# (it is requeued and reruns from the top). The Build stays where it ran; the CPU replay runs on node 2's
-# Verity CPUs (48-95) as a `gpus=0` guest.
+# Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1` (a TP2 row: `gpus=2`) `project=verity` fill
+# guests with max_min VY_N2_COMMIT_MAX_MIN (90): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
+# window, and stops them for a waiter or a timed window (requeued, rerun from the top). The Build stays where it ran; the CPU
+# replay runs on node 2's Verity CPUs (48-95) as a `gpus=0` guest.
 #
 #   on node 1:  n2_commit.sh submit KEY ITEM.json|- [NODE1_JOB]   (ITEM: the config-run item, as in a Job's verity.dev/item-json;
 #                                                                 NODE1_JOB: its queued Commit Job, deleted once node 2 has it)
 #   on node 1:  n2_commit.sh item NODE1_JOB                       (prints that Job's item)
-#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has,
-#                                                                 while node 1's deployments-gpu has no free GPU)
+#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has;
+#                                                                 VY_N2_FIRST=0: only while deployments-gpu has no free GPU)
 #   on node 1:  n2_commit.sh n1-free                              (the GPUs deployments-gpu could still admit)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
 #   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
 #
-# submit (as research on node 1) refuses a row that isn't TP1, whose Build hasn't passed on node 1 (no manifest.json or Build run),
+# submit (as research on node 1) refuses a row that isn't TP1 or TP2, whose Build hasn't passed on node 1 (no manifest.json or Build run),
 # or whose checkpoint REPO@REVISION isn't staged on node 2 as plain files (/workspace/jobs/hf, or PoUW's /workspace/hf, which is only
 # read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row (Programs, manifest), the bootstrap
 # stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has a timed window running or waiting,
@@ -74,8 +74,10 @@ check_item() {  # check_item KEY ITEM.json: exit 2 unless KEY is a key and ITEM 
   { read -r template; read -r row; read -r role; read -r repo; read -r rev; } < <(item_get "$item" template ROW ROLE REPO REVISION)
   [ "$template" = config-run ] || { echo "ITEM: a config-run item" >&2; exit 2; }
   [ -n "$row" ] && [ -n "$role" ] && [ -n "$repo" ] && [ -n "$rev" ] || { echo "ITEM: needs ROW, ROLE, REPO and REVISION" >&2; exit 2; }
-  [[ $row == *__tp1__* ]] || { echo "ITEM: $row isn't TP1; a node-2 guest has one GPU" >&2; exit 2; }
+  [[ $row =~ __tp[12]__ ]] || { echo "ITEM: $row isn't TP1 or TP2; a node-2 guest has one or two GPUs" >&2; exit 2; }
 }
+
+tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
 
 item() { ssh "$N1" "$KUBE get job $1 -o jsonpath='{.metadata.annotations.verity\.dev/item-json}'"; echo; }
 
@@ -155,7 +157,7 @@ d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art"
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=1 max_min=30 cpus=8 project=verity prio=$PRIO
+# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=${VY_N2_COMMIT_MAX_MIN:-90} cpus=8 project=verity prio=$PRIO
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF
@@ -248,9 +250,10 @@ gpu_env() {  # gpu_env OUT.json
 import json, os, socket, sys, time
 f = ["index", "uuid", "name", "driver_version", "clocks_gr_mhz", "clocks_sm_mhz", "clocks_mem_mhz", "clocks_app_gr_mhz", "clocks_max_gr_mhz",
      "power_limit", "clocks_event_reasons_active"]
-row = dict(zip(f, [x.strip() for x in os.environ["NV_Q"].split(",")]))
+rows = [dict(zip(f, [x.strip() for x in line.split(",")])) for line in os.environ["NV_Q"].splitlines() if line.strip()]
 json.dump({"schema": "n2-gpu-env/v0", "host": socket.gethostname(), "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "gpu": row, "vllm_version": os.environ["VLLM"],
+           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "gpu": rows[0] if rows else {}, "gpus": rows,
+           "vllm_version": os.environ["VLLM"],
            "nvidia_smi_clock": os.environ["NV_CLOCK"]}, open(sys.argv[1], "w"), indent=1)
 EOF
 }
@@ -294,7 +297,7 @@ run() {
   if [ -s "$marker" ]; then
     read -r run_id rc < "$marker"
   else
-    # a Commit stopped twice (the 30-min GPU cap, windows, waiters) goes back to node 1 rather than loop here
+    # a Commit stopped twice (its max_min, windows, waiters) goes back to node 1 rather than loop here
     local tries
     tries=$(( $(cat "$row_dir/.n2-tries" 2> /dev/null || echo 0) + 1 ))
     echo "$tries" > "$row_dir/.n2-tries"
@@ -413,7 +416,7 @@ for j in json.load(open(f"{d}/k8s.json"))["items"]:
         continue
     item = json.loads(a["verity.dev/item-json"])
     e = item.get("env") or {}
-    if item.get("template") != "config-run" or "__tp1__" not in e.get("ROW", ""):
+    if item.get("template") != "config-run" or not re.search(r"__tp[12]__", e.get("ROW", "")):
         continue
     if f"models--{e.get('REPO', '').replace('/', '--')}/snapshots/{e.get('REVISION')}" not in staged:
         continue
@@ -470,8 +473,8 @@ print(int(max(0, min(nom + bl - use, max(nom - use, idle)))))
 ' "${VY_N1_GPU_QUEUE:-deployments-gpu}"
 }
 
-# move each held Commit on a staged checkpoint to node 2 while node 1's deployments-gpu has no free GPU (n1_free prints 0; circuits,
-# approved by top-level 1 Oct 7:24 PM PDT: node 1 fills first, and node 2's disk is filling) and node 2 has fewer than
+# move each held Commit on a staged checkpoint to node 2 (node 2 first: top-level, 1 Oct 12:14 AM PDT, with node 2's GPUs idle and
+# its disk at 38%; VY_N2_FIRST=0 restores circuits' 30 Sep 7:24 PM rule, only while n1_free prints 0) while node 2 has fewer than
 # VY_N2_MAX_COMMITS Verity Commits queued; `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1,
 # as research)
 offload() {
@@ -485,8 +488,10 @@ offload() {
     reclaim
     while read -r job key n2key; do
       grep -qxF "$key" "$GUEST/reclaimed.txt" 2> /dev/null && continue
-      free=$(n1_free) || free=
-      [ "$free" = 0 ] || { echo "node 1 has ${free:-unknown (Kueue unreadable)} free GPUs in deployments-gpu; $job stays"; break; }
+      if [ "${VY_N2_FIRST:-1}" = 0 ]; then
+        free=$(n1_free) || free=
+        [ "$free" = 0 ] || { echo "node 1 has ${free:-unknown (Kueue unreadable)} free GPUs in deployments-gpu; $job stays"; break; }
+      fi
       queued=$(ssh -n "$N2" 'ls /workspace/pouw/fill/queue/ | grep -c "^verity-commit-"' || true)
       [ "${queued:-0}" -lt "${VY_N2_MAX_COMMITS:-16}" ] || { echo "node 2 has $queued Verity Commits waiting; $job stays"; break; }
       VY_COMMIT_KEY=$key bash "$0" submit "$n2key" "$tmp/$n2key.json" "$job" < /dev/null 2> >(grep -v '^rsync' >&2) \

@@ -707,6 +707,53 @@ def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhe
     assert remote.direct_cpus() == set()
 
 
+def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_cap(tmp_path, monkeypatch):
+    """Top-level's node-2-first order (1 Oct 12:14 AM PDT): a Commit guest may take 2 GPUs (a TP2 row), from one NUMA node when it
+    can, through `gpu-lease 2 --on a,b`; it runs up to FILL_COMMIT_MAX_MIN (a Gemma-2 Commit's CPU phases outlast 30 min) while
+    other GPU fill stays at 30 and gpus 1; and a TP2 Commit short of GPUs reclaims as many as it lacks."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    for d in ("queue", "running", "logs"):
+        (fill / d).mkdir(parents=True)
+    gl.mkdir()
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_tp2", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    for name, head, want in (("verity-commit-a.sh", "gpus=2 max_min=90", (2, 90)), ("verity-commit-b.sh", "gpus=4 max_min=500", (2, 120)),
+                             ("pn2g-x.sh", "gpus=2 max_min=90 project=verity", (1, 30))):
+        (tmp_path / name).write_text(f"# fill: owner=t {head}\n")
+        h = fr.header(tmp_path / name)
+        assert (h["gpus"], h["max_min"]) == want, name
+    assert fr.pick_gpus([0, 3, 5], None, 2, 8) == [0, 3] and fr.pick_gpus([3, 4, 6, 7], None, 2, 8) == [6, 7]
+    assert fr.pick_gpus([3, 5], None, 2, 8) == [3, 5] and fr.pick_gpus([5], None, 2, 8) is None
+    held: dict[int, str] = {}
+    started, stopped = [], []
+    monkeypatch.setattr(fr, "reap", lambda: None)
+    monkeypatch.setattr(fr, "verity_pool", lambda queued: None)
+    monkeypatch.setattr(fr, "lease", lambda i: held.get(i))
+    monkeypatch.setattr(fr, "waiters", lambda: [])
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append((p.name, h["on"])) or p.unlink())
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: stopped.append(k) or fr.running[k].update(stopping=True, why=why))
+    for gpu in (0, 1, 2, 5):
+        held[gpu] = "pid=1 run=- who=x since=2026-10-01T00:00:00Z cmd=x"
+    (fill / "queue" / "verity-commit-tp2.sh").write_text("# fill: owner=o gpus=2 max_min=90 project=verity prio=20\n")
+    (fill / "queue" / "verity-commit-tp1.sh").write_text("# fill: owner=o gpus=1 max_min=90 project=verity prio=20\n")
+    os.utime(fill / "queue" / "verity-commit-tp2.sh", (1, 1))
+    fr.tick(8)
+    assert started == [("verity-commit-tp2.sh", "6,7"), ("verity-commit-tp1.sh", "4")]
+    started.clear()
+    held.update({i: "pid=2 run=- who=x since=2026-10-01T00:00:00Z cmd=x" for i in (3, 4, 6, 7)})
+    held.pop(5)
+    for k, gpu in (("pn2g-a.sh", 0), ("pn2g-b.sh", 1)):
+        fr.running[k] = {"t0": gpu, "paused": False, "started": "-", "h": {"gpus": 1, "project": "verity", "owner": "o", "max_min": 10**9}}
+    (fill / "queue" / "verity-commit-tp2b.sh").write_text("# fill: owner=o gpus=2 max_min=90 project=verity prio=20\n")
+    fr.tick(8)
+    assert started == [] and stopped == ["pn2g-b.sh"]          # one GPU free, one more reclaimed: the newest proofs fill's
+    fr.tick(8)
+    assert stopped == ["pn2g-b.sh"]
+
+
 def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_scope(tmp_path, monkeypatch):
     """A Verity CPU guest (a vLLM Build, 2-50 min and some 1-4 h) may set max_min up to 360; every other job stays capped at 30.
     Its pause and stop go through its systemd scope, since `research run` starts the workload as its own process group."""
@@ -961,8 +1008,8 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_refuses_before_touching_a_node(tmp_path):
-    """n2_commit.sh's item checks run before any ssh: a bad key, a non-config-run item, a missing field or a TP2 row (a node-2
-    guest has one GPU) exits 2; a TP1 config-run item passes."""
+    """n2_commit.sh's item checks run before any ssh: a bad key, a non-config-run item, a missing field or a row wider than TP2 (a
+    node-2 guest has one or two GPUs) exits 2; a TP1 or TP2 config-run item passes."""
     script = NEBIUS / "n2_commit.sh"
     env = {"ENV": {"ROW": "llama32-1b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "ROLE": "LLAMA32_1B",
                    "REPO": "unsloth/Llama-3.2-1B", "REVISION": "9535bd9b"}}
@@ -978,7 +1025,8 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
     assert check("Cov_G153") == 2
     assert check("cov-g153", template="config-run-row") == 2
     assert check("cov-g153", env={**env["ENV"], "REVISION": ""}) == 2
-    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 2
+    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 0
+    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp4__")}) == 2
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
@@ -1013,7 +1061,7 @@ def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
-    """offload moves a held Commit only when n1-free prints 0 (node 1 fills first): deployments-gpu's own unused quota counts even
+    """With VY_N2_FIRST=0, offload moves a held Commit only when n1-free prints 0: deployments-gpu's own unused quota counts even
     while provers borrows it (Kueue reclaims it), the cohort's idle GPUs count up to the borrowing limit, and an unreadable Kueue
     prints nothing, so the Commit stays."""
     bin_ = tmp_path / "bin"
