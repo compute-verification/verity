@@ -1,4 +1,4 @@
-"""Acceptance of the torch frontend prototype (docs/frontend-pytorch-2026-09-07.md §5): (a) authored TA1
+"""Acceptance of the torch frontend prototype (frontend design §5): (a) authored TA1
 composites digest-equal TA1's registry definitions; (b) IFb's identity shapes translate with reference sharing
 preserved; (c) negatives fail closed with codes. Needs torch (runs on the TA1 pod)."""
 
