@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
@@ -33,6 +34,14 @@ def test_reference_equals_leans_own_evaluation(kind):
     assert NL.python_unbiased(kind) == pinned["unbiased"][kind]
     x = NL.inputs(kind)
     assert [[s[-1] for s in row] for row in got] == [[sum(p * q for p, q in zip(a, b)) for b in x["b"]] for a in x["a"]]
+
+
+def test_leans_evaluation_is_of_the_package_in_the_tree():
+    """`ncp_lean.json` records the SHA-256 of the Lean sources it was evaluated from; they are the files of `lean/` now, so an
+    edit to them fails here until `tests/ncp_lean.py` evaluates them again."""
+    pinned = json.loads(NL.PINNED.read_text())["sources_sha256"]
+    lean = Path(__file__).resolve().parents[1] / "lean"
+    assert {f: hashlib.sha256((lean / f).read_bytes()).hexdigest() for f in pinned} == pinned
 
 
 @pytest.mark.parametrize("kind", NL.CASES)

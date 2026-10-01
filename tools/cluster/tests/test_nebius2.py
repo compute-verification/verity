@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import os
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -157,7 +158,7 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
                GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"))
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
     holder = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", *pause], env=env,
-                              stdout=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, text=True, start_new_session=True)
     waiter = None
     try:
         assert holder.stdout.readline().strip() == "ready"
@@ -169,7 +170,7 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
         assert (gl / "wait.1.99999").exists(), "the adapter reads; it removes nothing (gpu-lease's next reader does)"
         waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "true"],
                                   env={**env, "GPU_LEASE_POLL_S": "3600", "GPU_LEASE_WHO": "bc-waiter"},
-                                  stderr=subprocess.PIPE, text=True)
+                                  stderr=subprocess.PIPE, text=True, start_new_session=True)
         assert waiter.stderr.readline().startswith("gpu-lease: waiting for 1 GPU(s), queued as wait.")
         obs = nebius2.read(0, gl)
         assert [a.id for a in nebius2.allocations(c, obs)] == [a.id]
@@ -178,7 +179,10 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
     finally:
         for p in (waiter, holder):
             if p is not None:
-                p.terminate()
+                try:
+                    os.killpg(p.pid, signal.SIGTERM)    # the waiter's bash alone would leave its `sleep 3600` orphaned
+                except ProcessLookupError:
+                    pass
                 p.wait()
 
 

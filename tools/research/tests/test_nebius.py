@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -163,7 +164,7 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
     lease.symlink_to(GPU_LEASE)
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
     holder = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", *pause], env=env,
-                              stdout=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, text=True, start_new_session=True)
     waiter = None
     try:
         assert holder.stdout.readline().strip() == "ready"
@@ -175,15 +176,53 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
         (tmp_path / "gl" / "wait.1.99999").write_text("pid=99999 n=4 run=- who=gone since=2026-09-30T00:00:00Z\n")
         assert fr.waiters() == []
         waiter = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", "true"],
-                                  env={**env, "GPU_LEASE_POLL_S": "3600"}, stderr=subprocess.PIPE, text=True)
+                                  env={**env, "GPU_LEASE_POLL_S": "3600"}, stderr=subprocess.PIPE, text=True, start_new_session=True)
         line = waiter.stderr.readline()
         assert line.startswith("gpu-lease: waiting for 1 GPU(s), queued as wait."), line
         assert fr.waiters() == [1]
     finally:
         for p in (waiter, holder):
             if p is not None:
-                p.terminate()
-                p.wait()
+                stop_group(p)
+
+
+def stop_group(p: subprocess.Popen) -> None:
+    """SIGTERM a process started with start_new_session and everything in its group. Terminating only the bash leaves the
+    `sleep` it waits on (GPU_LEASE_POLL_S=3600) or the leased command orphaned for the length of that sleep."""
+    try:
+        os.killpg(p.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    p.wait()
+
+
+def test_fill_runner_does_not_count_a_waiter_pinned_inside_keep_free(tmp_path, monkeypatch):
+    """Memory accounting's `gpu-lease 1 --on 7 --wait` requests, on node 2's kept-free GPU 7, stopped fill from starting on the
+    six free GPUs (pouw-node2, 1 Oct 13:05Z): fill never takes a kept-free GPU, so a waiter pinned inside keep-free holds none back.
+    A waiter pinned partly outside it, unpinned, or pinned by UUID still counts."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    gl.mkdir()
+    fill.mkdir()
+    (fill / "keep-free").write_text("6,7  # pous\n")
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_keep_free", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    locks = []
+    try:
+        for i, on in enumerate(["7", "6,7", "6-7", "5,7", None, "GPU-af0bf9e0"]):
+            f = gl / f"wait.{i}.{100 + i}"
+            f.write_text(f"pid={100 + i} n={i + 1}{f' on={on}' if on else ''} run=- who=w since=2026-10-01T13:00:00Z\n")
+            fd = os.open(f, os.O_RDONLY)
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            locks.append(fd)
+        assert fr.waiters() == [4, 5, 6]
+        (fill / "keep-free").unlink()
+        assert fr.waiters() == [1, 2, 3, 4, 5, 6]
+    finally:
+        for fd in locks:
+            os.close(fd)
 
 
 def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_path, monkeypatch):
@@ -1141,6 +1180,37 @@ def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
     assert free((6, 2, 6), (2, 1, 2), fail=True) == ""
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_1(tmp_path):
+    """submit's `place` asks `cluster submit` for node 2 with the row's research question and prints the placed.jsonl line; a
+    refusal exits 3, and a queue that gives no answer prints nothing and exits 0, so it never holds a row back. The queue is a
+    stand-in `cluster` package that echoes its arguments (tools/cluster's own tests cover the placement)."""
+    src = tmp_path / "cluster-src"
+    (src / "src" / "cluster").mkdir(parents=True)
+    (src / "descriptions").mkdir()
+    (src / "src" / "cluster" / "__init__.py").write_text("")
+    (src / "src" / "cluster" / "__main__.py").write_text(
+        "import json, sys\na = sys.argv[1:]\nv = lambda k: a[a.index(k) + 1]\n"
+        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--node') == 'vy-nebius-2'\n"
+        "if int(v('--gpus')) > 8:\n    print(json.dumps({'refused': 'vy-nebius-2 has 8 GPUs'}))\n    sys.exit(3)\n"
+        "print(json.dumps({'node': 'vy-nebius-2', 'why': 'starts now', 'question': v('--question'), 'max_s': int(v('--max-s'))}))\n")
+
+    def place(queue: Path, gpus: str = "1") -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "place", "commit", "vllm-epoch-run-cov-gm149", gpus, "40",
+                               "Does cov-gm149's Commit validate on vy-nebius-2?"], capture_output=True, text=True,
+                              env={**os.environ, "VY_QUEUE_SRC": str(queue)})
+
+    r = place(src)
+    assert r.returncode == 0, r.stderr
+    rec = json.loads(r.stdout)
+    assert (rec["kind"], rec["key"], rec["node"], rec["executor"]) == ("commit", "vllm-epoch-run-cov-gm149", "vy-nebius-2", "fill-queue")
+    assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
+    r = place(src, gpus="9")
+    assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
+    r = place(tmp_path / "no-cluster")
+    assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
+
+
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
@@ -1192,20 +1262,8 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
-@pytest.fixture
-def fences(tmp_path):
-    yield
-    for line in Path("/proc/locks").read_text().splitlines():
-        fields = [f for f in line.split() if f != "->"]   # a blocked waiter's line reads "N: -> TYPE ...", one field longer
-        pid = int(fields[4])
-        if "n1-lease-fence" in " ".join(Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")) \
-                if Path(f"/proc/{pid}").exists() else False:
-            if str(tmp_path) in Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace"):
-                os.killpg(pid, 15)
-
-
 @needs_flock
-def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, fences):
+def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, reap):
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
     s = m.Controller().tick(1_800_000_000.0)
     assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
@@ -1219,7 +1277,7 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
 
 
 @needs_flock
-def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, fences):
+def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
     c = m.Controller()
@@ -1247,7 +1305,7 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
 
 
 @needs_flock
-def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, fences):
+def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: "uid-job-pod")
@@ -1274,7 +1332,7 @@ def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(
 
 
 @needs_flock
-def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path, fences):
+def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
@@ -1313,7 +1371,7 @@ def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_h
 
 @needs_flock
 def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_sigkills_a_lease_that_outlives_sigterm(
-        monkeypatch, tmp_path, fences):
+        monkeypatch, tmp_path, reap):
     import fcntl
     t = 1_800_000_000.0
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3, VY_POOL_BORROW=1,
@@ -1352,7 +1410,7 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
 
 
 @needs_flock
-def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, fences):
+def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, reap):
     import fcntl
     brain = tmp_path / "brain.sh"
     brain.write_text('#!/bin/sh\n[ -e "$(dirname "$0")/down" ] && exit 1\ncat > /dev/null\n'

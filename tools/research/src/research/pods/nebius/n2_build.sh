@@ -87,6 +87,13 @@ submit() {
   # (node2-ops 1 Oct 03:40Z): MoE checkpoints take the cap, the class table's moe row
   [[ $repo =~ -A[0-9]+B|OLMoE|[Mm]o[Ee] ]] && mem=256
   mem=${VY_N2_MEM_GB:-$(( ${mem:-96} < 64 ? 64 : ${mem:-96} > 256 ? 256 : ${mem:-96} ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
+  # the queue's placement on node 2, with the item's research question (n2_commit.sh's `place`): a refusal keeps the Build on
+  # node 1, and the placement is recorded in node 1's placed.jsonl once the fill job is written
+  local question placed cpus=16
+  question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("question") or "")' "$item")
+  placed=$(bash "$(dirname "$0")/n2_commit.sh" place build "$key" 0 "$max_min" \
+    "${question:-Does $row's Build pass on vy-nebius-2's CPUs, so that node 1 can run its Commit?}" "$cpus" "$mem" kueue-fold) \
+    || { echo "not queued" >&2; exit 3; }
   local src
   src=$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")
   [ -d "/workspace/hf/hub/models--${repo//\//--}/snapshots/$rev" ] || { echo "no checkpoint $repo@$rev on node 1" >&2; exit 2; }
@@ -95,7 +102,6 @@ submit() {
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
-  local cpus=16
   python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"mem_gb":int(sys.argv[4]),"cpus":int(sys.argv[5]),"commit_key":sys.argv[6]}; print(json.dumps(d))' \
     "$item" "$key" "$src" "$mem" "$cpus" "${VY_COMMIT_KEY:-n2-build/$key}" | ssh "$N2" "mkdir -p $GUEST/items && rm -f $GUEST/items/$key.done && cat > $GUEST/items/$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-build-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
@@ -104,6 +110,7 @@ submit() {
 # Verity vLLM Build $row (node 1 key $key): n2_build.sh on infra/nebius; its Commit runs on node 1.
 exec bash $GUEST/bin/n2_build.sh run $key
 EOF
+  [ -z "$placed" ] || echo "$placed" >> "$GUEST/placed.jsonl"
   echo "queued verity-build-$key on node 2 ($row, ${mem} GB)"
 }
 

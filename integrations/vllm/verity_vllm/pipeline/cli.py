@@ -69,6 +69,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
     "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
+    "predict": ("verity_vllm.predict.cli", "ahead-of-time Program prediction from φ, scored against the traced Builds"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
