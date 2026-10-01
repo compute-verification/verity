@@ -58,9 +58,11 @@ QUESTION = ("what is BF16 GemmCoordinate_v2{K} proving overhead against the RTX 
             "utilization, at this step?")
 #: the campaign target whose operands and accumulator these are (verity_flock.bench.PROFILES["bf16-hopper"])
 PROFILE = "bf16-hopper-mma-draft/2026-09-22"
-#: a session's coins, from its verdict: `seed-mode` (M0's step-0 seed: a SHA-256 counter-mode PRF under a SHA-512 commitment,
-#: opened in the verdict) or `live-os` (the verifier's OS draws, round by round); points under different coin modes are never
-#: compared
+#: a session's coins, from its verdict: `os-seed-prf` (M0's default: the verifier's 256-bit OS-random seed, committed at Hello
+#: and opened in the verdict, every round's coins its SHA-256 counter-mode PRF) or `live-os` (the verifier's OS draws, round by
+#: round); points under different coin modes are never compared
+COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-512 commitment, its coins a SHA-256 counter-mode PRF",
+         "live-os": "live-os: the verifier's OS draws, round by round"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
 
 
@@ -262,10 +264,11 @@ def metrics(a) -> None:
             "overhead": t_session / t_native, "overhead_prove_only": t_prove / t_native,
             "throughput_coords_per_s": 1 / t_session, "throughput_prove_coords_per_s": 1 / t_prove,
             "gpu_util_steady": steady["sm"], "gpu_mem_util_steady": steady["mem"], "gpu_held_s_per_coord": t_session,
-            "coins": "seed-mode" if any(v.get("coin_seed") for v in verdicts) else "live-os",
+            "coins": "os-seed-prf" if any(v.get("coin_seed") for v in verdicts) else "live-os",
             "session": {"tables": len(timed[-1][1].get("tables") or [None]), "streams": verdicts[-1].get("streams"),
                         "rounds": verdicts[-1].get("rounds"), "round_trips": timed[-1][1].get("calls"),
-                        "batched": False, "why": "the device prover proves one table per session, each rep its own stream of round trips"},
+                        "why": "--session-tables J: the tables share one link exchange and both reps one root (Session.lean); "
+                               "the device prover proves one table per session, so J = 1 on the GPU"},
             "gpu_util_job": job["sm"] * job["s"] / held if job["sm"] is not None and held else None, "gpu_held_s_job": held,
             "verify_s_per_statement": statistics.median([v for v in verify if v is not None]) if any(v is not None for v in verify) else None,
             "session_s_per_statement": statistics.median([v for v in session if v is not None]) if any(v is not None for v in session) else None,
@@ -282,9 +285,9 @@ def metrics(a) -> None:
             flags.append(f"m-{lv.get('dense_m')}-not-{M}")
         if st.get("tile") and a.K == 2048:
             flags.append("tile-statement-unreviewed")
-        flags.append(f"coins-{out['coins']}")
-        if not out["session"]["batched"]:
-            flags.append("session-not-batched")
+        out["session"]["label"] = f"batched-J{out['session']['tables']}"
+    # #554 is a draft, its statements unreviewed: these are costs, not claims, and a changed statement digest starts a new curve
+    flags.append("draft-554-unreviewed")
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
     if out.get("accepted") and not rec.get("domain"):
@@ -344,9 +347,7 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
     fp = contract.fingerprint(
         profile=PROFILE, domain=out.get("domain") or "total", K=a.K, B=out.get("coords_per_statement") or 1, proof_class="NON_ZK_PROOF",
         authentication="included-hash", zk_mode=contract.ZK_NONE,
-        security={"target": -100, "profile": "fast100", "reps": 2, "coins": {
-            "seed-mode": "seed-mode: the step-0 seed's SHA-256 counter-mode PRF under a SHA-512 commitment, beyond SHA-512 collision resistance",
-            "live-os": "live-os: the verifier's OS draws, round by round"}.get(out.get("coins"), out.get("coins"))},
+        security={"target": -100, "profile": "fast100", "reps": 2, "coins": COINS.get(out.get("coins"), out.get("coins"))},
         hardware=contract.probe_hardware(),
         software={"backend": {"name": "flock-circuit", "configuration": "C-interactive/flock-circuit serve + prove --gpu (loopback verifier "
                               "in series)", "commit": out["commit"]["commit"], "dirty": out["commit"]["dirty"], "binary_sha256": _read(a.binary_sha),
@@ -385,7 +386,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "throughput_vu_per_s": out.get("throughput_coords_per_s"), "gpu_util": out.get("gpu_util_steady"),
             "gpu_held_s_per_vu": out.get("gpu_held_s_per_coord"), "verify_s_per_statement": out.get("verify_s_per_statement"),
             "byte_identical": g["status"] == "passed" and bool(out.get("accepted")), "coins": out.get("coins"),
-            "session": "batched" if (out.get("session") or {}).get("batched") else "per-rep-streams", "flags": flags,
+            "session": (out.get("session") or {}).get("label"), "flags": flags,
             "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job")}
@@ -393,13 +394,16 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
 
 def rollup(a) -> None:
     """Append a point to its subcircuit's roll-up (verity/hillclimb-rollup/v0), the whole file written beside it and renamed over
-    it; strings cut at 200 characters and the commit at 12. A point whose run is already there is not appended twice."""
+    it; strings cut at 200 characters and the commit at 12. Every point names its run, and a run already there is not appended
+    twice."""
     pt = json.loads(Path(a.point).read_text())
     f = Path(a.file)
     doc = json.loads(f.read_text())
     if doc.get("schema") != ROLLUP_SCHEMA or pt.get("schema") != POINT_SCHEMA or doc["subcircuit"]["id"] != pt["subcircuit"]["id"]:
         raise SystemExit(f"{f}: not the roll-up of {pt.get('subcircuit', {}).get('id')}")
-    if pt.get("run_id") and any(p.get("run_id") == pt["run_id"] for p in doc["points"]):
+    if not pt.get("run_id") or not pt.get("commit"):
+        raise SystemExit(f"{a.point}: a point names its run and commit")
+    if any(p.get("run_id") == pt["run_id"] for p in doc["points"]):
         print(f"{pt['run_id']} is already in {f}")
         return
     cut = lambda v: v[:200] if isinstance(v, str) else [cut(x) for x in v] if isinstance(v, list) else {k: cut(x) for k, x in v.items()} if isinstance(v, dict) else v  # noqa: E731
@@ -432,8 +436,9 @@ def _points(src: str, research: str) -> list[dict]:
 
 
 def plot(a) -> None:
-    """Per subcircuit, the console's three panels over the steps: overhead (log, best-so-far over byte-identical points),
-    throughput, and GPU utilization with GPU-held seconds per VU on its own axis; a point that fails the gate is hollow."""
+    """Per subcircuit, the console's three panels over the steps: overhead (log, best-so-far over byte-identical points) with
+    the prove-only overhead beside it, throughput, and GPU utilization with GPU-held and prove-only seconds per VU on their own
+    axis; a point that fails the gate is hollow. Only the points under the last point's coins and session are drawn."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -445,7 +450,10 @@ def plot(a) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "points.json").write_text(json.dumps(pts, indent=1))
     for sid in sorted({p["subcircuit"]["id"] for p in pts}, key=lambda s: (len(s), s)):
-        ps = sorted((p for p in pts if p["subcircuit"]["id"] == sid), key=lambda p: (p["step"], p.get("time_utc") or ""))
+        ps = sorted((p for p in pts if p["subcircuit"]["id"] == sid), key=lambda p: (p.get("time_utc") or ""))
+        mode = (ps[-1].get("coins"), ps[-1].get("session"))
+        other = len([p for p in ps if (p.get("coins"), p.get("session")) != mode])
+        ps = sorted((p for p in ps if (p.get("coins"), p.get("session")) == mode), key=lambda p: (p["step"], p.get("time_utc") or ""))
         good = [p for p in ps if p.get("byte_identical")]
         fig, ax = plt.subplots(3, 1, figsize=(8, 9), sharex=True)
 
@@ -455,7 +463,8 @@ def plot(a) -> None:
                     axi.plot(p["step"], p[key] * scale, "o", color=color, mfc=color if p.get("byte_identical") else "none", ms=8)
             axi.plot([], [], "o", color=color, label=label)
 
-        series(ax[0], "overhead", "C0", "overhead = peak / R_proved")
+        series(ax[0], "overhead", "C0", "overhead = peak / R, R over T_session (verifier included)")
+        series(ax[0], "overhead_prove_only", "C4", "prove-only overhead")
         best, lo = [], None
         for p in good:
             if p.get("overhead") is not None:
@@ -465,26 +474,31 @@ def plot(a) -> None:
             ax[0].step([s for s, _ in best], [v for _, v in best], where="post", color="C0", alpha=0.5, label=f"best so far {best[-1][1]:.3g}x")
         ax[0].set_yscale("log")
         ax[0].set_ylabel("x native peak (log)")
-        series(ax[1], "throughput_vu_per_s", "C1", "VUs / t_prove")
+        series(ax[1], "throughput_vu_per_s", "C1", "VUs / T_session")
         ax[1].set_ylabel("VUs (coordinates) / s")
-        series(ax[2], "gpu_util", "C2", "SM-active fraction (timed sessions, verifier included)")
+        series(ax[2], "gpu_util", "C2", "SM-active fraction (timed sessions)")
         ax[2].set_ylim(0, 1)
         ax[2].set_ylabel("GPU utilization")
         tw = ax[2].twinx()
         series(tw, "gpu_held_s_per_vu", "C3", "GPU-held s / VU")
-        tw.set_ylabel("GPU-held s / VU")
+        series(tw, "t_prove_only_s_per_vu", "C4", "prove-only s / VU")
+        tw.set_ylabel("s / VU")
         tw.set_ylim(bottom=0)
         steps = sorted({p["step"] for p in ps})
         ax[2].set_xticks(steps, [str(s) for s in steps])
         ax[2].set_xlabel("optimization step")
-        for axi in (*ax, tw):
+        for axi in ax[:2]:
             axi.legend(fontsize=7, loc="best")
+        ax[2].legend(fontsize=7, loc="upper left")
+        tw.legend(fontsize=7, loc="upper right")
         for axi in ax:
             axi.grid(alpha=0.3)
         last = ps[-1]
         flags = sorted({f for p in ps for f in (p.get("flags") or [])})
         fig.suptitle(f"{sid}, DOT={last['subcircuit']['dot']}\n{last['hardware']['gpu']} ({last['hardware'].get('vcpu')} vCPU); peak "
-                     f"{last['peak_census_id']} {last['peak_flop_per_s'] / 1e12:.0f} TFLOPS" + (f"\nflags: {', '.join(flags)}" if flags else "")
+                     f"{last['peak_census_id']} {last['peak_flop_per_s'] / 1e12:.0f} TFLOPS\ncoins {mode[0]}, session {mode[1]}"
+                     + (f" ({other} earlier points under other coins or sessions not drawn)" if other else "")
+                     + (f"\nflags: {', '.join(flags)}" if flags else "")
                      + ("; hollow: byte identity not passed" if len(good) < len(ps) else ""), fontsize=9)
         fig.tight_layout()
         fig.savefig(out / f"hill-{sid.replace('/', '-').replace('=', '')}.png", dpi=110)
