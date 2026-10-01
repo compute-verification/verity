@@ -1,5 +1,16 @@
 import Verity.SecurityProofs.Circuit
 import Verity.SecurityProofs.Boolean
+import Verity.SecurityProofs.Game.Basic
+import Verity.SecurityProofs.Game.Interleave
+import Verity.SecurityProofs.Game.Union
+import Verity.SecurityProofs.Game.Prob
+import Verity.SecurityProofs.Game.Poly
+import Verity.SecurityProofs.Game.Expect
+import Verity.SecurityProofs.Game.Runs
+import Verity.SecurityProofs.Game.Seq
+import Verity.SecurityProofs.Game.Lock
+import Verity.SecurityProofs.Game.Batch
+import Verity.SecurityProofs.Game.Rewinding
 
 /-!
 # Proofs of core's guarantees
