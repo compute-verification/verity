@@ -20,9 +20,7 @@
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
 k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
 ``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
-it and writes ``config_record.json``.  The **plan** stage (``plan``, on CPU, before the GPU is held) derives what the Commit would
-otherwise derive on the GPU without needing the engine: the manifest and the weights of record and the producer facts
-(``pipeline.commit_plan``), which the Commit takes from ``plan/commit_plan.json`` when the plan's key is its own.
+it and writes ``config_record.json``.  The **plan** stage (``row_plan``, on CPU) derives what the Commit needs before the GPU is held.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 15 plan FAIL; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the
@@ -42,6 +40,7 @@ from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
 
@@ -79,7 +78,7 @@ class SingleRow(Row):
                 if self.config_run:
                     RC.word_check(self)
             if stage_on(self.stages, "plan"):
-                self.plan()
+                RP.plan(self)
             if stage_on(self.stages, "match") and not self.config_run:
                 self.match()
             if stage_on(self.stages, "commit"):
@@ -728,46 +727,6 @@ class SingleRow(Row):
             self.tl("validate.manifest_verify", "end", ("rc", 1))
             self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
 
-    @property
-    def plan_path(self) -> str:
-        return f"{self.d}/plan/commit_plan.json"
-
-    def programs_args(self) -> list[str]:
-        """The Build's Programs the Commit reads (sampled replay, producer facts): the per-request Programs under the row dir at B >= 2,
-        the request Program at B = 1; none without the Build's instance set."""
-        pd_req = f"{self.d}/build_request"
-        if not os.path.isfile(f"{pd_req}/instances.json.gz"):
-            return []
-        return ["--programs-root", self.d] if self.B > 1 else ["--program-dir", pd_req]
-
-    def plan(self) -> None:
-        """The Commit's plan on a 0-GPU task, before the GPU is held: the manifest of record and the weights of record beside the
-        component Program, as the Commit stage would derive them, and the producer facts (`commit-plan`) in `plan/commit_plan.json`,
-        which the Commit stage passes (`--plan`).  A FAIL stops the row (exit 15)."""
-        d = self.d
-        self.tl("stage.plan", "start")
-        t0 = int(time.time())
-        if os.path.exists(self.plan_path):
-            os.remove(self.plan_path)
-        man, progs = self.manifest_of_record("plan"), self.programs_args()
-        if not (man and progs):
-            self.verdict("plan", "PASS", "nothing to plan: " + ("no manifest of record" if not man else "no Build Programs (instances.json.gz)"))
-            self.tl("stage.plan", "end", ("ok", "PASS"), ("planned", "false"))
-            return
-        self.weights_of_record("plan")
-        pdig = self.program_digest()
-        rc = self.run_tl("plan.commit_plan", CAP, f"{d}/plan.log", self.cli(
-            "commit-plan", "--workload", self.wl, "--required-manifest", man, *(["--program-digest", pdig] if pdig else []), *progs,
-            "--out", self.plan_path))
-        wall = int(time.time()) - t0
-        ok = "PASS" if rc == 0 and os.path.isfile(self.plan_path) else "FAIL"
-        self.verdict("plan", ok, f"rc={rc} wall={wall}s {_tail(f'{d}/plan.log')}")
-        self.tl("stage.plan", "end", ("ok", ok), ("wall_s", wall))
-        if ok != "PASS":
-            self.log("PLAN FAIL -> stop")
-            self.tl("row", "end", ("ok", "false"), ("stopped_at", "plan"))
-            raise Stop(15)
-
     def commit(self) -> None:
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
@@ -777,7 +736,6 @@ class SingleRow(Row):
         if not os.path.isfile(self.hidden_so):
             self.commit_stop(12, f"hidden .so missing: {self.hidden_so}")
         self.tl("commit.prepare", "start")
-        pd_req = f"{d}/build_request"
         if self.B <= 1:
             served = R.served_shape(d)
             if served:
@@ -803,17 +761,7 @@ class SingleRow(Row):
             self.log(f"C2 live oracle-compare armed: --match-dir {d}/match (Match record of this attempt; snapshot steps {snap})")
         elif self.B > 1:
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
-        progs = self.programs_args()
-        if progs:
-            cmd += progs
-            cmd += (ck.replay_args or "").split()
-            self.log(f"C2 of record armed: sampled exact VU replay + boundary linkage ({' '.join(progs)} {ck.replay_args or ''})")
-            cmd += self.weights_of_record()
-        else:
-            self.log(f"WARNING: C2 sampled replay NOT armed (no {pd_req}/instances.json.gz): C2 of record not run")
-        if os.path.isfile(self.plan_path):
-            cmd += ["--plan", self.plan_path]
-            self.log(f"plan: {self.plan_path} (the Commit takes its producer facts from it when the plan's key is its own, else plan_recomputed)")
+        cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
         t0 = int(time.time())
         if ck.hot_engine == "1":

@@ -151,6 +151,26 @@ def use(path: str, args: Any) -> tuple[tuple[dict[tuple[str, str], dict[str, Any
     return out, {**rec, "used": True, "plan_recomputed": False, "members": len(out[0] or {}), "check_s": round(time.monotonic() - t0, 3)}
 
 
+def derived(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
+            sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
+    """`oracle_producers_of_record`, with an exception as the named reason there are no facts (the manifest's own entries stand)."""
+    try:
+        return oracle_producers_of_record(args, required_manifest, reqs, sampling)
+    except Exception as e:  # noqa: BLE001  -- no facts: the reason is on the record
+        return None, {"used": False, "why": f"producer facts not derived: {e!r}"[:300]}
+
+
+def producer_facts(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]], sampling: dict[str, Any]
+                   ) -> tuple[tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]], dict[str, Any] | None]:
+    """The Commit's producer facts, from its plan (`--plan`) when `use` takes it, else `derived` here; and the plan's record (None
+    without a plan)."""
+    got, rec = use(args.plan, args) if getattr(args, "plan", None) else (None, None)
+    if rec is not None:
+        print(f"[delta] plan {args.plan}: " + (f"producer facts from the plan ({rec['members']} members, planned {rec.get('planned_utc')})"
+                                               if rec["used"] else f"plan_recomputed: {rec['why']}"), flush=True)
+    return got if got is not None else derived(args, required_manifest, reqs, sampling), rec
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     """Derive a Commit's plan (the producer facts of its manifest, keyed by what they are a function of) without an engine."""
