@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1` (a TP2 row: `gpus=2`) `project=verity` fill
-# guests with max_min VY_N2_COMMIT_MAX_MIN (90): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
+# guests with max_min VY_N2_COMMIT_MAX_MIN (40: node 2's gaps between booked windows run 5-60 min and its Commits took at most 20, so
+# a 90 never fit one; 90 for a longer row): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
 # window, and stops them for a waiter or a timed window (requeued, rerun from the top). The Build stays where it ran; the CPU
 # replay runs on node 2's Verity CPUs (48-95) as a `gpus=0` guest.
 #
@@ -157,7 +158,7 @@ d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art"
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=${VY_N2_COMMIT_MAX_MIN:-90} cpus=8 project=verity prio=$PRIO
+# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=${VY_N2_COMMIT_MAX_MIN:-40} cpus=8 project=verity prio=$PRIO
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF
