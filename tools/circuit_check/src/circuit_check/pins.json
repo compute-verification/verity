@@ -93,6 +93,9 @@
   "I32Add_v2": {
    "and": 31
   },
+  "MoeSum_v2{TOPK=8,H=8}": {
+   "and": 41776
+  },
   "MulVecF32_v2{N=8}": {
    "and": 19440
   },
