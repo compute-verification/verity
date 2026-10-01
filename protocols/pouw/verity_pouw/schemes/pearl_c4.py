@@ -294,8 +294,8 @@ def seed_b(salt: bytes, root_b: bytes) -> bytes:
 
 @lru_cache(maxsize=4)
 def basis(seed_b: bytes, role: int, k: int) -> tuple[tuple[int, ...], ...]:
-    """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t.  Cached: a unit's two bases cost about
-    four rows' F1′ to derive at k = 4,096, and `r1_row` forms one row at a time."""
+    """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t.  Cached: one costs about three rows'
+    F1′ to derive at k = 4,096, and `r1_row` forms one row at a time."""
     return tuple(tuple(line(seed_b, role, t)) for t in range(k))
 
 
