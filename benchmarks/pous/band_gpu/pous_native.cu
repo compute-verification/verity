@@ -912,8 +912,10 @@ __device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_
 // under the next call's first prefix, so every call after the first starts squeezing at once.  When another call follows,
 // round 9 writes only half 0's chunks from xch on (the next call's X overwrites words 0 .. 8191); a row's final call writes
 // W = A ^ C_blk in round 9 and has no round 10 (only half 0 is the key).
-// Persistent: the grid's warps take tasks (group g of PAIR_ROWS rows, call j) in call-major order from `next`, each waiting
-// for `done[g] >= j - 1`; between calls role 0's sponge goes through `sponge`.  Same inputs and output as band_chain.
+// Persistent: the grid's warps take tasks (group g of PAIR_ROWS rows, step s) in step-major order from `next`, each waiting
+// for `done[g] >= s`.  Step 0 is the first call's first absorb; step 2j - 1 is call j's rounds 1 .. 5 and step 2j its rounds
+// 6 .. 10, so that the last tasks to run are a fifth of a call each.  Between steps the one live sponge (the last round's
+// absorber's) goes through `sponge`.  Same inputs and output as band_chain.
 // Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
 // nothing on the squeezer.  U unrolls the Keccak round loop.
 constexpr int PAIR_ROWS = 16;
@@ -930,21 +932,21 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
                 "absorb_masked's layout: the last chunk holds two words, the carry, and the pad");
   constexpr unsigned ALL = 0xffffffffu;
   const int lane = threadIdx.x & 31, rl = lane & 15, role = lane >> 4;
-  const int64_t tasks = groups * calls;
+  const int64_t steps = 2 * (int64_t)calls + 1, tasks = groups * steps, cstride = pitch * SLOT_WORDS;
   for (;;) {
     int k = 0;
     if (lane == 0) k = atomicAdd(next, 1);
     k = __shfl_sync(ALL, k, 0);
     if (k >= tasks) break;
-    const int j = (int)(k / groups) + 1;
+    const int s = (int)(k / groups), j = s == 0 ? 1 : (s + 1) / 2, part = s == 0 ? 0 : (s - 1) & 1;
     const int64_t g = k % groups, n = g * PAIR_ROWS + rl, r = row0 + n;
     const int64_t L = n < rows ? len[r] : -1;
     const bool act = j <= L + 1, fin = j == L + 1, more = j <= L;
     if (!__any_sync(ALL, act)) continue;
     const bool any_more = __any_sync(ALL, more);
-    if (j > 1) {
+    if (s > 0) {
       if (lane == 0)
-        while (ld_acquire_gpu(done + g) < j - 1) __nanosleep(64);
+        while (ld_acquire_gpu(done + g) < s) __nanosleep(64);
       __syncwarp();
     }
 #define CHUNK_AT(h, cc) (st_words + (((int64_t)(h) * nch + (cc)) * pitch + r) * SLOT_WORDS)
@@ -957,25 +959,31 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
 #pragma unroll
     for (int k2 = 0; k2 < SLOT_VECS; ++k2) v[k2] = make_ulonglong2(0, 0);
     uint64_t* sp = sponge + (g * PAIR_ROWS + rl) * 25;
-    if (j == 1) {  // the first call's first absorb (half 1 under prefix 1), on role 0 alone
+    // keep: this step's last absorber's sponge, which the next step's first squeezer loads.
+    int keeper = 0;
+    if (s == 0) {  // the first call's first absorb (half 1 under prefix 1), on role 0 alone
       const uint64_t m = role == 0 ? ~0ull : 0;
       uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
-      if (role == 0 && act) slot_load_cg(CHUNK_AT(1, 0), v);
+      const uint64_t* p = CHUNK_AT(1, 0);
+      if (role == 0 && act) slot_load_cg(p, v);
       for (int64_t cc = 0; cc < nch; ++cc) {
         if (cc < full) absorb_masked<false>(x, v, carry, m);
         else absorb_masked<true>(x, v, carry, m);
-        if (role == 0 && act && cc + 1 < nch) slot_load_cg(CHUNK_AT(1, cc + 1), v);
+        p += cstride;
+        if (role == 0 && act && cc + 1 < nch) slot_load_cg(p, v);
         keccak_f_fd<U>(x);
       }
-    } else if (role == 0 && act) {
+    }
+    const int rounds = s == 0 ? 0 : any_more ? 10 : 9, i0 = part ? 6 : 1, i1 = s == 0 ? 0 : part ? rounds : 5;
+    if (s > 0 && role == ((i0 & 1) ? 0 : 1) && act) {
 #pragma unroll
       for (int w = 0; w < 25; ++w) x[w] = __ldcg(sp + w);
     }
+    if (s > 0) keeper = (i1 & 1) ? 1 : 0;
     const uint64_t* xrow = more ? c + (base[r] + blk[r] - j) * xwords : nullptr;
     const uint64_t* crow = fin ? c + (base[r] + blk[r]) * xwords : nullptr;
     uint64_t* orow = fin ? out + dest[r] * xwords : nullptr;
-    const int rounds = any_more ? 10 : 9;
-    for (int i = 1; i <= rounds; ++i) {
+    for (int i = i0; i <= i1; ++i) {
       const int h = (i & 1) ? 0 : 1;
       const bool sq = role == ((i & 1) ? 0 : 1), x_in = i == 1, to_out = fin && i == 9;
       const bool st_all = act && (i <= 8 || (i == 10 && more)), st_tail = more && i == 9;
@@ -986,7 +994,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       auto xword = [&](int64_t jj) -> uint64_t {
         return xrow ? __ldg(xrow + jj) : (jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull));
       };
-      auto src = [&](int64_t cc, ulonglong2 d[SLOT_VECS]) {
+      auto src = [&](int64_t cc, const uint64_t* p, ulonglong2 d[SLOT_VECS]) {
         if (x_in && cc < xch) {
 #pragma unroll
           for (int k2 = 0; k2 < SLOT_VECS; ++k2) {
@@ -994,7 +1002,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
             d[k2] = make_ulonglong2(xword(jj), 2 * k2 + 1 < RATE_WORDS ? xword(jj + 1) : 0);
           }
         } else {
-          slot_load_cg(CHUNK_AT(h, cc), d);
+          slot_load_cg(p, d);
           if (x_in && cc == xch) {
 #pragma unroll
             for (int w = 0; w < RATE_WORDS; ++w) {
@@ -1004,7 +1012,8 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
           }
         }
       };
-      if (sq && act) src(0, v);
+      uint64_t* p = CHUNK_AT(h, 0);  // chunk cc's slot, then (once stored) cc + 1's
+      if (sq && act) src(0, p, v);
       for (int64_t cc = 0; cc < nch; ++cc) {
 #pragma unroll
         for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
@@ -1016,26 +1025,27 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
               if (jj < xwords) orow[jj] = chunk_word(v, w) ^ __ldg(crow + jj);
             }
           } else if (st_all || (st_tail && cc >= xch)) {
-            slot_store_cg(CHUNK_AT(h, cc), v);
+            slot_store_cg(p, v);
           }
         }
+        p += cstride;
 #pragma unroll
         for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) = __shfl_xor_sync(ALL, chunk_word(v, w), 16);
         if (cc < full) absorb_masked<false>(x, v, carry, m);
         else absorb_masked<true>(x, v, carry, m);
-        if (sq && act && cc + 1 < nch) src(cc + 1, v);
+        if (sq && act && cc + 1 < nch) src(cc + 1, p, v);
         keccak_f_fd<U>(x);
       }
     }
 #undef CHUNK_AT
-    if (any_more) {
-      if (role == 0 && more) {
+    if (s == 0 || part == 0 || any_more) {
+      if (role == keeper && (s == 0 || part == 0 ? act : more)) {
 #pragma unroll
         for (int w = 0; w < 25; ++w) __stcg(sp + w, x[w]);
       }
       __threadfence();
       __syncwarp();
-      if (lane == 0) st_release_gpu(done + g, j);
+      if (lane == 0) st_release_gpu(done + g, s + 1);
     }
   }
 }
@@ -1056,21 +1066,24 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
   TORCH_CHECK(warps_per_sm >= 1 && (warps_per_sm <= 4 || warps_per_sm % 4 == 0), "warps_per_sm: 1 .. 4 or a multiple of 4");
   TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
-  TORCH_CHECK(unroll == 1 || unroll == 2 || unroll == 4 || unroll == 8 || unroll == 24, "unroll: 1, 2, 4, 8 or 24");
+  TORCH_CHECK(unroll >= 1 && unroll <= 24 && 24 % unroll == 0, "unroll: a divisor of 24 (1, 2, 3, 4, 6, 8, 12 or 24)");
   if (rows == 0) return;
   c10::cuda::CUDAGuard guard(state.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
   int sms = 0;
   C10_CUDA_CHECK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, state.get_device()));
   const int64_t groups = (rows + PAIR_ROWS - 1) / PAIR_ROWS;
-  TORCH_CHECK(groups * calls < (1ll << 30), "too many tasks");
+  TORCH_CHECK(groups * (2 * calls + 1) < (1ll << 30), "too many tasks");
   auto ctl = torch::zeros({groups + 1}, state.options().dtype(torch::kInt32));
   auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
   const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, PAIRS_WARPS_PER_BLOCK);
   const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / PAIRS_WARPS_PER_BLOCK, 1);
   auto kernel = unroll == 24 ? band_chain_pairs_kernel<24>
+                : unroll == 12 ? band_chain_pairs_kernel<12>
                 : unroll == 8 ? band_chain_pairs_kernel<8>
+                : unroll == 6 ? band_chain_pairs_kernel<6>
                 : unroll == 4 ? band_chain_pairs_kernel<4>
+                : unroll == 3 ? band_chain_pairs_kernel<3>
                 : unroll == 2 ? band_chain_pairs_kernel<2>
                               : band_chain_pairs_kernel<1>;
   kernel<<<blocks, threads, 0, stream>>>(

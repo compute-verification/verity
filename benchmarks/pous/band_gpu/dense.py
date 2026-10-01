@@ -103,7 +103,7 @@ the squeezing and absorbing sponges of a row on two lanes, `CHAIN_PAIRS_WPS` war
 scheduler holds a warp where `band_chain_kernel`'s 15,360 threads fill 480 of the RTX PRO 6000's 752."""
 CHAIN_PAIRS_WPS = [4]
 CHAIN_PAIRS_UNROLL = [4]
-"""The lane-pair chain's Keccak-f unrolls its round loop this many times (1, 2, 4, 8 or 24)."""
+"""The lane-pair chain's Keccak-f unrolls its round loop this many times (a divisor of 24)."""
 
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
