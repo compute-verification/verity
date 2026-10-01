@@ -820,20 +820,27 @@ __device__ __forceinline__ uint64_t xor3_64(uint64_t a, uint64_t b, uint64_t c) 
          xor3_32((uint32_t)a, (uint32_t)b, (uint32_t)c);
 }
 
+__device__ __forceinline__ void keccak_round_fd(uint64_t st[25], uint64_t rc) {
+  uint64_t bc[5];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) {
+    const uint64_t r1 = rotl64(bc[(i + 1) % 5], 1);
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
+  }
+  keccak_rho_pi_chi(st);
+  st[0] ^= rc;
+}
+
+// U2 unrolls the round loop twice.
+template <bool U2 = false>
 __device__ __forceinline__ void keccak_f_fd(uint64_t st[25]) {
 #pragma unroll 1
-  for (int r = 0; r < 24; ++r) {
-    uint64_t bc[5];
-#pragma unroll
-    for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
-#pragma unroll
-    for (int i = 0; i < 5; ++i) {
-      const uint64_t r1 = rotl64(bc[(i + 1) % 5], 1);
-#pragma unroll
-      for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
-    }
-    keccak_rho_pi_chi(st);
-    st[0] ^= KECCAK_RC[r];
+  for (int r = 0; r < 24; r += U2 ? 2 : 1) {
+    keccak_round_fd(st, KECCAK_RC[r]);
+    if (U2) keccak_round_fd(st, KECCAK_RC[r + 1]);
   }
 }
 
@@ -873,9 +880,12 @@ __device__ __forceinline__ void slot_store_cg(uint64_t* p, const uint64_t v[RATE
 // W = A ^ C_blk in round 9 and has no round 10 (only half 0 is the key).
 // Persistent: the grid's warps take tasks (group g of PAIR_ROWS rows, call j) in call-major order from `next`, each waiting
 // for `done[g] >= j - 1`; between calls role 0's sponge goes through `sponge`.  Same inputs and output as band_chain.
+// SMEM passes each chunk through shared memory instead of shuffles; U2 unrolls the Keccak round loop twice.
 constexpr int PAIR_ROWS = 16;
+constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 
-__global__ void __launch_bounds__(128) band_chain_pairs_kernel(
+template <bool SMEM, bool U2>
+__global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
     uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
     const int64_t* __restrict__ base, const int64_t* __restrict__ blk, const int64_t* __restrict__ len,
     const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next, int64_t groups, int calls) {
@@ -884,7 +894,9 @@ __global__ void __launch_bounds__(128) band_chain_pairs_kernel(
   constexpr int tail = (int)(msg - full * RATE);
   static_assert(nch == full + 1, "the pad falls inside the last chunk");
   constexpr unsigned ALL = 0xffffffffu;
+  __shared__ ulonglong2 pass[SMEM ? PAIRS_WARPS_PER_BLOCK : 1][PAIR_ROWS][SLOT_WORDS / 2];
   const int lane = threadIdx.x & 31, rl = lane & 15, role = lane >> 4;
+  ulonglong2* mine = pass[SMEM ? threadIdx.x / 32 : 0][rl];
   const int64_t tasks = groups * calls;
   for (;;) {
     int k = 0;
@@ -918,7 +930,7 @@ __global__ void __launch_bounds__(128) band_chain_pairs_kernel(
         for (int w = 0; w < RATE_WORDS; ++w) v[w] = nxt[w];
         if (role == 0 && act && cc + 1 < nch) slot_load_cg(CHUNK_AT(1, cc + 1), nxt);
         if (role == 0) absorb_chunk(x, v, cc, hw, full, tail, carry);
-        keccak_f_fd(x);
+        keccak_f_fd<U2>(x);
       }
     } else if (role == 0 && act) {
 #pragma unroll
@@ -971,11 +983,30 @@ __global__ void __launch_bounds__(128) band_chain_pairs_kernel(
           } else if (st_all || (st_tail && cc >= xch)) {
             slot_store_cg(CHUNK_AT(h, cc), v);
           }
-        }
+          if (SMEM) {
 #pragma unroll
-        for (int w = 0; w < RATE_WORDS; ++w) v[w] = __shfl_xor_sync(ALL, v[w], 16);
-        if (!sq) absorb_chunk(x, v, cc, hw, full, tail, carry);
-        keccak_f_fd(x);
+            for (int k2 = 0; k2 < SLOT_WORDS / 2; ++k2)
+              mine[k2] = make_ulonglong2(v[2 * k2], 2 * k2 + 1 < RATE_WORDS ? v[2 * k2 + 1] : 0);
+          }
+        }
+        if (SMEM) {
+          __syncwarp();
+          if (!sq) {
+#pragma unroll
+            for (int k2 = 0; k2 < SLOT_WORDS / 2; ++k2) {
+              const ulonglong2 p = mine[k2];
+              v[2 * k2] = p.x;
+              if (2 * k2 + 1 < RATE_WORDS) v[2 * k2 + 1] = p.y;
+            }
+            absorb_chunk(x, v, cc, hw, full, tail, carry);
+          }
+          __syncwarp();
+        } else {
+#pragma unroll
+          for (int w = 0; w < RATE_WORDS; ++w) v[w] = __shfl_xor_sync(ALL, v[w], 16);
+          if (!sq) absorb_chunk(x, v, cc, hw, full, tail, carry);
+        }
+        keccak_f_fd<U2>(x);
       }
     }
 #undef CHUNK_AT
@@ -993,7 +1024,7 @@ __global__ void __launch_bounds__(128) band_chain_pairs_kernel(
 
 void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t warps_per_sm, int64_t calls,
                       torch::Tensor c, torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest,
-                      torch::Tensor out) {
+                      torch::Tensor out, bool smem, bool u2) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
               "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
@@ -1016,9 +1047,11 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   TORCH_CHECK(groups * calls < (1ll << 30), "too many tasks");
   auto ctl = torch::zeros({groups + 1}, state.options().dtype(torch::kInt32));
   auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
-  const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, 4);
-  const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / 4, 1);
-  band_chain_pairs_kernel<<<blocks, threads, 0, stream>>>(
+  const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, PAIRS_WARPS_PER_BLOCK);
+  const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / PAIRS_WARPS_PER_BLOCK, 1);
+  auto kernel = smem ? (u2 ? band_chain_pairs_kernel<true, true> : band_chain_pairs_kernel<true, false>)
+                     : (u2 ? band_chain_pairs_kernel<false, true> : band_chain_pairs_kernel<false, false>);
+  kernel<<<blocks, threads, 0, stream>>>(
       reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
       reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
       len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(), reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()),
@@ -1589,7 +1622,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("band_chain_pairs", &band_chain_pairs, "band_chain on lane pairs, in a persistent launch", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("warps_per_sm"),
         pybind11::arg("calls"), pybind11::arg("c"), pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"),
-        pybind11::arg("dest"), pybind11::arg("out"));
+        pybind11::arg("dest"), pybind11::arg("out"), pybind11::arg("smem") = false, pybind11::arg("u2") = false);
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
