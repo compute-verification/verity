@@ -103,7 +103,11 @@ the run's `d` in `scheme` and `scheme_params`.
 (`CUDA_HOME`, `/usr/local/cuda`, or `/usr/local/cuda-13.0`, `-12.9` or `-12.8`). With CUDA 13 it uses torch 2.14.0 cu130 wheels,
 and with CUDA 12.8+ it uses 2.7.1 cu128. It builds `pous_native` for the device's capability (`native.arch_list`) and `libp2v1.so`
 for `ARCH=sm_120` on an RTX PRO 6000. Without a system `gmp.h`, CGBN's host pass takes gmpy2's wheel's from the venv.
-`WORK`, `VCPU`, `RCPU` and `WORKERS` place it on a shared node's directories and cores.
+`WORK`, `VCPU`, `RCPU` and `WORKERS` place it on a shared node's directories and cores. Every `nvidia-smi` query names the run's
+own GPU (`--id`): `GPU_LEASE_UUID`, else `CUDA_VISIBLE_DEVICES`' first, else the node's only GPU (the harness: the lease's,
+else the CUDA device's UUID). `pod.sh` refuses a GPU run on a node with several GPUs and neither. `bench-result.json`'s
+`device` records the id queried (`nvidia_smi_id`), the `index`, `uuid` and `pci.bus_id` that answered, and the CUDA device's
+own index and UUID. Each `clocks-*.txt` starts with the same id and answer.
 
 `AUDITS=0` (`bench.py --audits 0`, band-gpu and p2-v1-gpu only) is for an untimed, preemptible placement. The gates, encode,
 the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's SeqRoot root) run as in a timed run. No limit,

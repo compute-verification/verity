@@ -24,6 +24,10 @@
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
 # Blackwell Server Edition are known, and any other GPU, or none, needs HW=<census/hardware.json id>.
 #
+# Every nvidia-smi query names the run's own GPU (--id): the lease's (GPU_LEASE_UUID), else CUDA_VISIBLE_DEVICES' first, else
+# the node's only GPU, never GPU 0 by default; a GPU run on a node with more GPUs and neither is refused. The clocks-*.txt
+# files start with the id queried and the index, UUID and bus id that answered.
+#
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
 # frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity_pous. reference runs
@@ -33,7 +37,29 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
-GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+# the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
+gpu_uuid() {
+  local v=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}} l
+  v=${v%%,*}
+  case $v in
+    GPU-*|MIG-*) echo "$v" ;;
+    "") l=$(nvidia-smi -L 2>/dev/null | grep '^GPU ')
+        [ "$(printf '%s\n' "$l" | grep -c '^GPU ')" = 1 ] && echo "$l" | sed -n 's/.*(UUID: \([^)]*\)).*/\1/p' ;;
+    *) nvidia-smi --id="$v" --query-gpu=uuid --format=csv,noheader 2>/dev/null | head -1 ;;
+  esac
+}
+GPU_UUID=$(gpu_uuid)
+smi() { [ -n "$GPU_UUID" ] && nvidia-smi --id="$GPU_UUID" "$@"; }
+clocks() {  # clocks NAME: $O/clocks-NAME.txt, headed by the id queried and the GPU that answered (untraced: no -x lines in it)
+  local -; set +x
+  { echo "nvidia-smi --id=$GPU_UUID: $(smi --query-gpu=index,uuid,pci.bus_id --format=csv,noheader)"
+    smi -q -d CLOCK,PERFORMANCE,POWER; } > "$O/clocks-$1.txt" 2>&1 || true
+}
+if [ -z "$GPU_UUID" ] && [ "$IMPL" != reference ] && [ "$(nvidia-smi -L 2>/dev/null | grep -c '^GPU ')" -gt 1 ]; then
+  echo "several GPUs and neither GPU_LEASE_UUID nor CUDA_VISIBLE_DEVICES: name the run's GPU (gpu-lease, or" \
+       "CUDA_VISIBLE_DEVICES=<index|UUID>) so its clocks and facts are read from it"; exit 2
+fi
+GPU=$(smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
 case "$GPU" in                                            # the census id is the device's, never a default another GPU inherits
   *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
@@ -51,7 +77,7 @@ nvcc_release() { "$1/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-
 # is CUDA 13 or CUDA 12 (at least 12.8 on a Blackwell GPU: sm_100, sm_120)
 cuda_home() {
   local need=0 cc home major minor
-  cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
+  cc=$(smi --query-gpu=compute_cap --format=csv,noheader | head -1)
   [ "${cc%%.*}" -ge 10 ] 2>/dev/null && need=8
   for home in ${CUDA_HOME:-} /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.9 /usr/local/cuda-12.8; do
     read -r major minor <<< "$(nvcc_release "$home")"
@@ -81,7 +107,7 @@ gpu_env() {
 }
 # the host facts a result is re-derived with, and two distinct physical cores (not SMT siblings) for the verifier and responder
 record_host() {
-  nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-before.txt" 2>&1 || true
+  clocks before
   nvcc --version > "$O/nvcc.txt" 2>&1 || true
   lscpu -e > "$O/lscpu.txt" 2>&1 || true
   uv pip freeze --python "$PY" > "$O/pip-freeze.txt" 2>/dev/null || true
@@ -92,7 +118,7 @@ record_host() {
   read -r v r <<< "$(lscpu -p=CPU,CORE 2>/dev/null | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
   VCPU=${VCPU:-${v:-3}}; RCPU=${RCPU:-${r:-2}}
 }
-nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
+smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,noheader || true
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
 export PATH=$HOME/.local/bin:$PATH
@@ -108,7 +134,7 @@ if [ "$IMPL" = vllm-gpu ]; then
   PY=${VENV:-/workspace/venv312}/bin/python
   export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
   # torch cu129 needs a CUDA 12.9 driver; below R575 a datacenter GPU runs it through NVIDIA's forward-compatibility libraries
-  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
+  DRV=$(smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
   if [ "$DRV" -lt 575 ]; then
     if [ ! -e /usr/local/cuda-12.9/compat/libcuda.so.1 ]; then
       . /etc/os-release; CUDA_REPO=ubuntu${VERSION_ID/./}
@@ -131,14 +157,14 @@ elif [ "$IMPL" = band-gpu ]; then
     --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO \
     ${BAND_D:+--band-d "$BAND_D"}
   RC=$?
-  nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
+  clocks after
   exit $RC
 elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   gpu_env || exit 3
   record_host
   # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
   # gmpy2's wheel's in band-gpu's venv: nothing is installed on the system), the device's arch
-  ARCH=${ARCH:-sm_$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
+  ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
   GMPINC=
   if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
     uv pip install -q --python "$PY" gmpy2 || exit 3
@@ -161,7 +187,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"
     arm band-gpu "$O/bench/band" sub; RB=$?
-    nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-between.txt" 2>&1 || true
+    clocks between
     arm p2-v1-gpu "$O/bench/p2" sub; RP=$?
     if [ -n "$GO" ]; then   # gates only: no measurements to table
       RC=0
@@ -174,12 +200,12 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   else
     arm p2-v1-gpu "$O/bench"; RC=$?
   fi
-  nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
+  clocks after
   exit $RC
 elif [ "$IMPL" = p2-gpu ]; then
   # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for the device's arch
   export PATH=/usr/local/cuda/bin:$PATH
-  ARCH=${ARCH:-sm_$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
+  ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
   echo '#include <gmp.h>' | cpp >/dev/null 2>&1 || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
