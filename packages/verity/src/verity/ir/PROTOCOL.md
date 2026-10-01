@@ -6,7 +6,7 @@ implementation (the Lean port of `Q_word` first). It describes the bytes the cod
 
 - Reference: `verity.ir.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
-  `parts.n_members`, for §8 `cut`, and for §9 `boolean`.
+  `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, and for §9 `boolean`.
 - Vectors: `packages/verity/tests/ir/format_vectors.json`, written by
   `python packages/verity/tests/ir/test_format_spec.py --write`.
 - Conformance: `packages/verity/tests/ir/test_format_spec.py` checks the reference against every vector, and restates
@@ -322,7 +322,7 @@ changing any of them is a new version of the query.
   `query-inapplicable` (the definition, node, argument and reference). `cut.CallGraph` keeps a gate-level check (an operand
   inside the Call comes before its gate) as a backstop.
 - **Wiring** (`cut.WIRING`): the primitive ids `Bf16ToF32_v1`, `F32BitsShl23_v1` and `F32Fabs_v1`. Like constants
-  (primitives without parameters) their gates are structure: computed in no unit, readable by any, never committed. The list is
+  (primitives without parameters) their gates are structure: computed in no unit, readable by any, outside the committed set. The list is
   a set of ids, not derived from the descriptor; that each only rearranges bits is checked on the registry by a vLLM test.
 - **Wide gates**: a gate whose primitive has more than `cut.WIDE_FAN_IN` = 4096 parameter leaves, so more than 4096
   operands. The layout's operands are the same for every gate (the reference returns a lazy sequence for a wide gate, with the
@@ -387,3 +387,72 @@ consumer that credits work (PoUW) does not take `Q_word` v2.
 
 Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
 only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), which v2 accepts and reports.
+
+## 11. `Q_call` v1
+
+`Q_call` v1 (`partition_object.QUERIES`, `call_query`; the algorithm in `verity.ir.cut`'s docstring, `cut.evaluate_call`) is a
+query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 is the
+agreed value). It reads a Program through §1–§7. A *proof unit* is a set S of gates, with in(S) and out(S) as `verity.ir.parts`
+defines them, counted in bits at any gate width. The one rule is w_out(S) ≤ X; inputs are unbounded. This section is a delta
+on §8 and §10.
+
+What carries over from §8 and §10:
+
+- **Applicability.** §8's, with the same refusal: the program is topological, and every Call is a `call` or `primitive` node.
+  A root `batch` or `scan` is refused with `why: "root-form"`.
+- **Calls.** §8's Calls (the root's non-Input nodes, in body order). Each is cut as its Definition's activation in a one-Call
+  Program, every returned leaf a designated output, so activations of one Definition share their cut.
+- **Recomputes.** §10's report: a value computed in two units is `verify`'s `detail["recomputed_across"]`, never a code. The
+  §10 caveat holds: a count of units bounds wrong work but is not distinct work.
+
+What changes:
+
+- **Inputs.** A gate whose primitive has no parameters is an input: Input gates (§5.2) and constants, of any width. It is in no
+  unit and outside the committed set: like an Input gate, a constant is bound outside the partition, and the cut never reads its
+  value. Every other gate is *computing* and is in exactly one unit.
+- **No structure rules.** §8's wiring list (`cut.WIRING`), its constant folding (a gate computed from constants alone) and its
+  wide-gate convention (`cut.WIDE_FAN_IN`) do not apply. Every operand of every gate is read.
+- **Wide gates.** A computing gate whose declared width exceeds X makes the query inapplicable, with `why: "gate-too-wide"` and
+  the Call, Definition, local gate, primitive, width and X. Nothing else is refused for width.
+- **Pieces.** A piece is a gate interval of the Call's activation (§6): the Call itself, a body node, or a member or iteration of a
+  batch or scan node. Its outputs are its computing gates that a later gate of the Call reads, or that the Call returns. The layout
+  is topological, so no gate before the piece reads inside it, and these outputs are out(S) for S the piece's computing gates.
+- **The cut**, depth first in layout order from the Call:
+  - a piece without computing gates is no unit;
+  - a piece whose outputs total at most X bits is one unit;
+  - otherwise its children are the pieces: for a composite activation (the Call, a call node's callee, a composite member) its
+    body's nodes, and for a batch or scan node its members or iterations.
+
+  A primitive piece is one gate of at most X bits, so it always fits.
+- **Units.** Each unit is an interval `[lo, hi)` of the Call's local gates with a path of steps from the Call's activation: `[k]` is
+  body node k, and `[k, m]` is member m of node k. Units are numbered by Call, then in layout order. `CallPartition.locate`
+  gives the path, and `gates` gives the root interval. Input gates and constants inside an interval are in no unit.
+- **The committed set.** A computing gate is committed when a unit other than its own reads it, or when the Call returns it. A
+  unit's committed bits are its w_out. `verify` derives it from the reads (`cut.check_call_cut`) and checks the invariant
+  (`validate_unit_cut`, whose structure is the constants: gates any unit may read, bound outside the partition) and w_out ≤ X
+  (`unit-too-wide`). Served commits are numbered by the
+  Call's computing gates in layout order (`cut.CallGates.keep`) and checked as under §8.
+- **Recompute keys.** A key is (primitive id, operand tokens). A parameter leaf's token is interned from `("i", leaf)` and a
+  constant's from `("c", primitive id)`, so equal constants are equal operands. A computing gate whose key an earlier computing
+  gate had is a recomputed pair and takes that gate's token.
+
+Rules the IR left open, pinned here:
+
+- **A pass-through output** is a returned leaf that resolves to a parameter of the Call, or to a constant, rather than to a
+  computing gate of it. It is no output of any of the Call's units. The value is the Call's input, or a constant, bound outside
+  the partition like an input.
+- **A scan's carry** follows from the reads: an iteration's returned carry is an output of that iteration when the next iteration
+  reads it, and of the Call when it is the final carry. A carry an iteration passes through unchanged resolves to the scan's
+  `init` (§7), so it is a pass-through.
+- **A call node of no computing gates** (one that only rearranges its parameters, or returns constants) is no unit.
+- **A unit with no outputs** (a dead gate) is still a unit: every computing gate is in exactly one.
+- **An unread parameter leaf** is in the input unit and is not committed.
+
+Vectors: `qcall_vectors.json`, written by `python packages/verity/tests/ir/test_qcall_vectors.py --write`. They cover a word
+program and a Boolean program at two values of X. The word program has a Call that fits; one that splits into sub-Calls two levels
+down; a batch of a composite and of a primitive; a scan with a chained carry and one with a passed-through carry; pass-through
+outputs; a constant read by two units; a constant-derived gate committed across units; a 64-bit input and constant; a recompute
+across units and one within a unit; former wiring; a dead gate; and a gate of 4,097 operands. The Boolean program has a 32-bit
+Call, two 32-bit sub-Calls, constant bits, a 33-bit ripple-carry adder and a 5,000-input AND. The refusals are `gate-too-wide` (at
+X = 16 and for a 64-bit gate), `root-form` (batch, scan), not topological, another program, every served-commit check, and the
+objects `validate` refuses.
