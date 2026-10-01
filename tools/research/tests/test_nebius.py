@@ -1068,3 +1068,21 @@ def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_b
     assert started(fr, cmds, "b.sh", "gpus=0")[:2] == ["numactl", "--membind=1"]
     assert started(fr, cmds, "c.sh", "gpus=0 project=verity")[0] == "nice"
     assert started(fr, cmds, "d.sh", "gpus=1")[0] == fr.GPU_LEASE
+
+
+@pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")
+def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
+    src, status = tmp_path / "pouw", tmp_path / "status.txt"
+    (src / "jobs" / "a").mkdir(parents=True)
+    (src / "jobs" / "a" / "x.txt").write_text("x")
+    env = {**os.environ, "BACKUP_SRC": str(src), "BACKUP_LAST": str(tmp_path / "last"), "BACKUP_STATUS": str(status),
+           "BACKUP_QUIET_MAX_S": "0"}
+    for k, (line, rc) in enumerate((("t free GPUs 8/8, kept free -, waiters -, timed True, window waiting False", 75),
+                     ("t free GPUs 0/8, kept free -, waiters -, timed False, window waiting True", 75),
+                     ("t free GPUs 8/8, kept free -, waiters -, timed False, window waiting False", 0))):
+        status.write_text(line + "\n")
+        run = tmp_path / f"run{k}"
+        run.mkdir()
+        r = subprocess.run(["bash", str(NEBIUS / "backup.sh")], env={**env, "RESEARCH_RUN_DIR": str(run)}, capture_output=True, text=True)
+        assert r.returncode == rc, (line, r.stderr)
+        assert (run / "backup" / "tars").is_dir() and bool(list((run / "backup" / "tars").iterdir())) == (rc == 0)
