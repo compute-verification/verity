@@ -92,6 +92,8 @@ def test_replay_queue_fill_counts_queued_replays_and_running_commits(tmp_path):
     (tmp_path / "queue/verity-replay-z.sh").write_text("#!/usr/bin/env bash\n# fill: owner=o gpus=0 mem_gb=64\n")
     (tmp_path / "queue/verity-commit-q.sh").write_text("# fill: owner=o gpus=1\n")          # not running: reserves nothing
     (tmp_path / "running/verity-commit-r.sh").write_text("# fill: owner=o gpus=1\n")
+    (tmp_path / "running/.verity-commit-r.sh.pgid").write_text("4242\n")                    # the runner's, not a job
+    (tmp_path / "running/.verity-commit-r.sh.unit").write_text("fill-verity-commit-r\n")
     (tmp_path / "queue/aw-other.sh").write_text("# fill: owner=o mem_gb=500\n")
     q = P.replay_queue_fill(tmp_path, floor_gb=90.0)
     assert (q["queued"], q["gb"]) == (3, 380.0)

@@ -106,10 +106,13 @@ def replay_queue_kueue(workloads: list[dict], floor_gb: float) -> dict[str, Any]
 
 def replay_queue_fill(fill_dir: Path, floor_gb: float) -> dict[str, Any]:
     """Node 2's replay RAM to come: queued `*replay*` fill jobs (max(mem_gb, floor)) and running `*commit*` jobs, each of which
-    queues a replay of its bundle when it ends (at the floor). A queued Commit reserves nothing until it runs."""
+    queues a replay of its bundle when it ends (at the floor). A queued Commit reserves nothing until it runs. The runner's
+    dotfiles beside a running job (`.<job>.pgid`, `.<job>.unit`) are not jobs."""
     items = []
     for sub, pat in (("queue", "replay"), ("running", "commit")):
         for f in sorted((Path(fill_dir) / sub).glob(f"*{pat}*")):
+            if f.name.startswith("."):
+                continue
             try:
                 head = f.read_text(errors="replace")[:2000]
             except OSError:
