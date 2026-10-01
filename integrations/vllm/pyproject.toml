@@ -10,6 +10,7 @@ dependencies = [
     "verity-pous",
     "verity-pouw",
     "numpy>=1.26",
+    "blake3>=1.0",
 ]
 
 [project.scripts]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import struct
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -119,14 +120,17 @@ def test_a_tree_that_is_not_the_committed_root_opens_nothing_of_record(world):
 
 # ------------------------------------------------------------------------------------------------ the bundle is the record's
 
-def _deferred(tmp_path):
+def _deferred(tmp_path, steps=None):
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
 
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    com, rc = commit_steps(steps or {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     p = RB.partial(tmp_path, 1)
     SD.dump(com, rc, p / "store")
+    (p / "weights" / "extra").mkdir(parents=True)
+    (p / "weights" / "tree.json").write_text(json.dumps({"names": [], "extra": {"model.rotary_emb.cos_sin_cache": 0}}))
+    (p / "weights" / "extra" / "0.bin").write_bytes(COS_SIN.tobytes())
     (tmp_path / "binding_map_p1.json").write_text(json.dumps({"entries": []}))
     sr, lk = RB.deferred_records(RB.path(tmp_path, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr, "boundary_linkage": lk}}
@@ -163,6 +167,63 @@ def test_the_replay_takes_the_commits_workers_unless_told_otherwise():
     assert CPU.replay_args(o, {"args": {**ctx["args"], "replay_workers": 12}}).replay_workers == 12
     a = CPU.replay_args(CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c", replay_workers=4), ctx)
     assert a.replay_workers == 4 and a.program_dir == "/row/build_request" and ctx["args"]["replay_workers"] is None
+
+
+STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5), ("model.layers.0.self_attn.qkv_proj", b"\x07" * 900)],
+         1: [("model.embed_tokens", bytes(reversed(range(256))) * 3), ("runner.sampler", b"\x01\x02\x03\x04")],
+         2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000)))]}
+PICKS = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (1, "runner.sampler", 0, 4)]
+
+
+def _kept(tmp_path):
+    from verity_vllm.check import oracle_compare as OC
+    from verity_vllm.commit import store_dump as SD
+
+    out = _deferred(tmp_path, STEPS)
+    b = RB.open_bundle(RB.path(out, 1))
+    _rows, _row, _verdict, store, run = CPU.of_record(b, out)
+    with SD.touched(store) as t:
+        want = {(s, n): OC.OpenedReader(store, run)(s, n, lo, hi) for s, n, lo, hi in PICKS}
+    c = {"commit_pass": True, "sampled_replay": {"sample": {"picked": 2}, "programs": {"r0": {"dir": "/b", "program_digest": "ef" * 32}}}}
+    plan = {"plan": True, "picked": 2, "picks": [["r0", s, 5 + s, n] for s, n, _lo, _hi in PICKS]}
+    return out, b, store, run, t, want, c, plan
+
+
+def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(tmp_path):
+    from verity_vllm.check import oracle_compare as OC
+    from verity_vllm.commit import opened as OV
+    from verity_vllm.commit import store_dump as SD
+
+    out, b, store, run, t, want, c, plan = _kept(tmp_path)
+    doc = CPU.keep(out, b, store, run, t, plan, c)
+    k = CPU.slim_path(out, 1)
+    assert json.loads((k / CPU.SLIM_DOC).read_text()) == doc and not k.with_name(k.name + ".partial").exists()
+    assert (doc["schema"], doc["pair"], doc["run_root"], doc["picked"], doc["picks"], doc["commit_pass"]) == (
+        CPU.SLIM_SCHEMA, 1, run.run_root.hex(), 2, plan["picks"], True)
+    assert doc["binding_map_sha256"] == b["manifest"]["files"]["binding_map.json"]["sha256"] and doc["bundle_manifest_sha256"] == b["manifest_sha256"]
+    assert doc["programs"] == c["sampled_replay"]["programs"]
+    on_disk = {x.relative_to(k).as_posix() for x in k.rglob("*") if x.is_file()} - {CPU.SLIM_DOC}
+    assert set(doc["files"]) == on_disk and {"binding_map.json", "context.json", "weights/tree.json", "weights/extra/0.bin", "store/store.json"} <= on_disk
+    assert all(RB._sha256(k / r) == f["sha256"] and (k / r).stat().st_size == f["bytes"] for r, f in doc["files"].items())
+    bundled = sum(x.stat().st_size for x in (Path(b["path"]) / "store").rglob("*.bin"))
+    assert sum(f["bytes"] for r, f in doc["files"].items() if r.endswith(".bin") and r.startswith("store/")) < bundled
+    slim, srun = SD.load(k / "store")
+    assert slim._run_root(srun) == run.run_root, "the slim store folds to the run root of record"
+    rd = OC.OpenedReader(slim, srun)
+    assert all(rd(s, n, lo, hi) == want[(s, n)] is not None for s, n, lo, hi in PICKS), "every pick re-opens against the run root"
+    assert rd(2, "model.layers.0.mlp.down_proj", 0, 100) is None and rd(0, "model.embed_tokens", 0, 64) is None, "and nothing else"
+    raw = k / "store" / "raw" / "s1.bin"
+    raw.write_bytes(bytes(x ^ 1 for x in raw.read_bytes()))
+    with pytest.raises(OV.OpeningNotVerified):
+        OC.OpenedReader(*SD.load(k / "store"))(1, "runner.sampler", 0, 4)
+
+
+def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
+    out, b, store, run, t, _want, c, plan = _kept(tmp_path)
+    for bad in (dict(plan, picked=1), {k: v for k, v in plan.items() if k != "plan"}, dict(plan, picks=plan["picks"][:1])):
+        assert CPU.keep(out, b, store, run, t, bad, c) is None
+    assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}) is None
+    assert not list(out.glob("replay_slim_p*"))
 
 
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):

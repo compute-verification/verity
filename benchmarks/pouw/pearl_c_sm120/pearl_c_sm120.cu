@@ -570,6 +570,8 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
 }
 
+#include "h2_rows_stats.cuh"   // -h2's rows form `s`, stats_s5's outputs from hash_rows_b3s's loads (after S5_LINE, S5_FLOOR)
+
 // E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32); i0 rows
 extern "C" __global__ void eprime(const Args a) {
   const int row = blockIdx.x * blockDim.x + threadIdx.x;

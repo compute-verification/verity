@@ -102,3 +102,14 @@ def test_root_from_the_layout_alone():
         k = key(dom, b"\x02" + bytes([lv]))
         level = [key(k, level[i] + level[i + 1]) for i in range(0, len(level), 2)]
     assert level[0].hex() == PINNED["root"]
+
+
+@pytest.mark.parametrize("hash", ["blake3", "blake3-s256"])
+def test_the_domain_message_hashed_is_the_domain_id(hash):
+    """`domain_message` is the frame hash's message for a domain: a native hash of it is the domain's id."""
+    from verity.commitments.merkle import domain_message
+
+    for count, owner in ((1, -2), (5, 3), (8192, 1 << 40)):
+        d = domain(count, owner, hash)
+        positions = bytes.fromhex(d.positions.identity_digest)
+        assert blake3(domain_message(BINDING, owner, positions, count, hash)) == d.domain_id

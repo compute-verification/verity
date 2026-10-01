@@ -9,8 +9,12 @@ Its certificates at the frozen point (`band.SECURE_FIRST`: `B = 512`, 64 KiB blo
   the whole store: challenges uniform over its 229,376 blocks, the state bound of the whole store, one permutation.
   It needs the segment tags injective across segments (`tag_s = salt ‖ u64 s`, `segDom_inj`); with a shared domain,
   identical segments get identical labels and the audit accepts with probability 1 (`shared_domain_breaks`).
+- every other segment count N with 2 ≤ N ≤ 2^64: `band_meets_family` (`lean/submissions/band-multi/BandMultiFamily.lean`,
+  the 14 GB statement with 448 replaced by every such N; red-team read GO). It is again one `Meets` for the whole store
+  at k = 111, with the implementation's per-segment tags; `2^64` is where `u64(s)` stops being injective. The trusted pin
+  of its unconditional form is `Pous.Pinned.BandMultiMeetsFamily`, which lands with PR #431 (on PR #428).
 
-Other segment counts are not stated in Lean; their profiles carry that gap.
+A segment count beyond 2^64 is not stated in Lean; its profile carries that gap.
 """
 
 from __future__ import annotations
@@ -35,6 +39,9 @@ POINT = (512, 524_288)
 
 MULTI_SEGMENTS = 448
 """The segment count of `band_meets_14` (14 GB of 32 MiB segments)."""
+
+FAMILY_SEGMENTS = 1 << 64
+"""The largest segment count of `band_meets_family`, which states every N with 1 ≤ N ≤ 2^64."""
 
 
 def chain_certificate(theorem: str, hypothesis: str, cliff: int | None, segments: int = 1) -> Certificate:
@@ -64,6 +71,8 @@ class Band(Scheme):
             return None
         if p.segments == MULTI_SEGMENTS:
             return chain_certificate("band_meets_14", "ChainExPostFactoG", p.d, MULTI_SEGMENTS)
+        if 1 < p.segments <= FAMILY_SEGMENTS:
+            return chain_certificate("band_meets_family", "ChainExPostFactoG", p.d, p.segments)
         return chain_certificate("band_meets_64", "ChainExPostFactoG", p.d)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
@@ -73,4 +82,4 @@ class Band(Scheme):
         return dense_codec.decode_segment(self.params, self.prims, salt, s, blocks)
 
 
-__all__ = ["CHAIN_CLAIMS", "MULTI_SEGMENTS", "POINT", "Band", "chain_certificate"]
+__all__ = ["CHAIN_CLAIMS", "FAMILY_SEGMENTS", "MULTI_SEGMENTS", "POINT", "Band", "chain_certificate"]

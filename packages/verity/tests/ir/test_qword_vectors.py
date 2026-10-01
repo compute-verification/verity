@@ -3,6 +3,7 @@ exercise every step of `verity.ir.cut`'s algorithm (X packing narrow outputs, wi
 twice, the dead-unit second pass, the separable branches, primitive Calls, all three wiring primitives), every refusal of `validate`
 and `verify`, and the seeded random corpus of the Lean port's conformance run (`backends/flock/verifier/qword_agree.py`, same
 generator and seed), as digests of its cases and of core's answers.  Programs are descriptor bytes; the evaluation is from the bytes.
+`v2`: `Q_word` v2 on the same programs (v1's evaluation; a value computed in two units reported, not refused).
 `python packages/verity/tests/ir/test_qword_vectors.py --write` rewrites the file."""
 from __future__ import annotations
 
@@ -171,6 +172,8 @@ ORDER = [
 #: (label, program, X, W): verify refuses the program's own object
 REFUSED = [("a value two units compute", "recompute", 16, 32), ("a 64-bit output at W = 32", "too-wide", 16, 32),
            ("32-bit outputs at W = 16", "wiring-and-dead", 16, 16), ("a root batch", "root-batch", 16, 32), ("a root scan", "root-scan", 16, 32)]
+#: (program, the queries it is evaluated at) under Q_word v2: v1's evaluations, and the program v1 refuses only for `gate-recomputed`
+V2_EVALUATED = EVALUATED + [("recompute", [(16, 32)])]
 
 
 def _obj(q=None):
@@ -185,12 +188,18 @@ MALFORMED = [
     ("another format", dict(_obj(), format="verity/partition/v0")),
     ("a program that is not SHA-512 hex", dict(_obj(), program="F" * 128)),
     ("a query without params", dict(_obj(), query={"name": "Q_word", "version": 1})),
-    ("an unknown version", _obj({"name": "Q_word", "version": 2, "params": {"X": 16, "W": 32}})),
+    ("an unknown version", _obj({"name": "Q_word", "version": 3, "params": {"X": 16, "W": 32}})),
     ("a missing parameter", _obj({"name": "Q_word", "version": 1, "params": {"X": 16}})),
     ("X = 0", _obj({"name": "Q_word", "version": 1, "params": {"X": 0, "W": 32}})),
     ("X past 2^16", _obj({"name": "Q_word", "version": 1, "params": {"X": 65537, "W": 32}})),
     ("a float X", _obj({"name": "Q_word", "version": 1, "params": {"X": 16.0, "W": 32}})),
     ("a boolean W", _obj({"name": "Q_word", "version": 1, "params": {"X": 16, "W": True}})),
+]
+#: (label, object): validate refuses it, its X and W checked as v1's
+MALFORMED_V2 = [
+    ("v2 without W", _obj({"name": "Q_word", "version": 2, "params": {"X": 16}})),
+    ("v2 with X = 0", _obj({"name": "Q_word", "version": 2, "params": {"X": 0, "W": 32}})),
+    ("v2 with an EXTRAS", _obj({"name": "Q_word", "version": 2, "params": {"X": 16, "W": 32, "EXTRAS": 0}})),
 ]
 
 
@@ -206,11 +215,14 @@ def _canon(program) -> str:
 
 
 def _codes(v) -> dict:
-    return {"ok": v.ok, "codes": list(v.codes), "cut": [[f["call"], f["codes"]] for f in v.detail.get("cut", {}).get("gates", [])]}
+    out = {"ok": v.ok, "codes": list(v.codes), "cut": [[f["call"], f["codes"]] for f in v.detail.get("cut", {}).get("gates", [])]}
+    if "recomputed_across" in v.detail:                                                 # Q_word v2's report
+        out["recomputed_across"] = v.detail["recomputed_across"]
+    return out
 
 
-def evaluation(D, X: int, W: int) -> dict:
-    q = PO.query(X, W)
+def evaluation(D, X: int, W: int, version: int = 1) -> dict:
+    q = PO.query(X, W, version)
     obj = PO.build(D, q)
     part = PO.evaluate(D, q)
     calls = []
@@ -225,9 +237,9 @@ def evaluation(D, X: int, W: int) -> dict:
             "verify": _codes(PO.verify(obj, D))}
 
 
-def served_cases(D) -> list:
+def served_cases(D, version: int = 1) -> list:
     """`verify`'s held-to-derived check of what serving commits, on the wiring-and-dead program (its last Call is QDead)."""
-    obj = PO.build(D)
+    obj = PO.build(D, PO.query(version=version))
     part = PO.evaluate(D)
     full = {k: part.committed(p) for p, (k, _c) in enumerate(part.calls)}
     p = len(part.calls) - 1
@@ -362,7 +374,21 @@ def build() -> dict:
         "object_refusals": [[label, repr(obj) if not isinstance(obj, (dict, list)) or 1 in obj else obj, list(PO.validate(obj).codes)]
                             for label, obj in MALFORMED],
         "corpora": [corpus(*c) for c in CORPORA],
+        "v2": v2(decoded),
     }
+
+
+def v2(decoded: dict) -> dict:
+    """Q_word v2 on the same programs: the evaluations, every verify refusal of v1 and the served cases (v1's but for
+    `gate-recomputed`, and the report), and the objects validate refuses."""
+    refused = [[label, name, X, W, _codes(PO.verify(PO.build(decoded[name], PO.query(X, W, 2)), decoded[name]))]
+               for label, name, X, W in REFUSED]
+    other = copy.deepcopy(PO.build(decoded["narrow"], PO.query(version=2)))
+    other["program"] = "f" * 128
+    refused.append(["another program", "narrow", 16, 32, _codes(PO.verify(other, decoded["narrow"]))])
+    return {"evaluations": [[name, [evaluation(decoded[name], X, W, 2) for X, W in qs]] for name, qs in V2_EVALUATED],
+            "verify_refusals": refused, "served": served_cases(decoded["wiring-and-dead"], 2),
+            "object_refusals": [[label, obj, list(PO.validate(obj).codes)] for label, obj in MALFORMED_V2]}
 
 
 VECTORS = json.loads(PATH.read_text()) if PATH.exists() else {}
@@ -445,6 +471,51 @@ def test_validate_refuses(live):
 @pytest.mark.parametrize("n", range(len(CORPORA)), ids=[f"seed{s}-n{n}-g{g}" for s, n, g in CORPORA])
 def test_the_random_corpus(live, n):
     assert live["corpora"][n] == VECTORS["corpora"][n]
+
+
+def test_the_v2_vectors(live):
+    assert live["v2"] == VECTORS["v2"]
+
+
+def _without_report(c: dict) -> dict:
+    return {k: v for k, v in c.items() if k != "recomputed_across"}
+
+
+def test_v2_evaluates_as_v1():
+    """v2's Calls, graphs, owners, units, committed sets, `locate` and owners digest are v1's; only the object (its version) differs.
+    `verify` accepts v1's recompute-free programs at both versions (v2 reporting no recompute across units), and the program v1 refuses
+    for `gate-recomputed` at v2 alone, with the same cut."""
+    v1 = dict(VECTORS["evaluations"])
+    rec = codec.decode_program(json.loads(VECTORS["descriptors"]["recompute"]), registry())
+    v1["recompute"] = [evaluation(rec, 16, 32)]
+    for name, runs in VECTORS["v2"]["evaluations"]:
+        for a, b in zip(v1[name], runs, strict=True):
+            assert b["object"]["query"] == dict(a["object"]["query"], version=2) and b["object_digest"] != a["object_digest"]
+            same = ("X", "W", "population", "owners_digest", "calls", "locate")
+            assert {k: b[k] for k in same} == {k: a[k] for k in same}, name
+            assert b["verify"]["ok"], name
+            if name == "recompute":
+                assert a["verify"]["cut"][0][1] == ["gate-recomputed"] and b["verify"]["recomputed_across"]["n"] == 1
+            else:
+                assert _without_report(b["verify"]) == a["verify"] and b["verify"]["recomputed_across"] == {"n": 0, "gates": []}
+
+
+def test_v2_reports_what_v1_refuses_and_refuses_the_rest_as_v1():
+    """The one change: a value two members compute (each copy committed: both are returned) is v1's `gate-recomputed` and v2's report;
+    every other refusal, and the served checks, are v1's word for word."""
+    v1 = {r[0]: r[4] for r in VECTORS["verify_refusals"]}
+    v2 = {r[0]: r[4] for r in VECTORS["v2"]["verify_refusals"]}
+    assert v1.keys() == v2.keys()
+    k = v1["a value two units compute"]["cut"][0][0]
+    assert v1["a value two units compute"]["cut"] == [[k, ["gate-recomputed"]]]
+    assert v2["a value two units compute"] == {"ok": True, "codes": [], "cut": [],
+                                               "recomputed_across": {"n": 1, "gates": [{"call": k, "n": 1, "gates": [[1, 0]]}]}}
+    for label in v1.keys() - {"a value two units compute"}:
+        assert _without_report(v2[label]) == v1[label] and not v2[label]["ok"], label
+    served = {label: v for label, _s, v in VECTORS["served"]}
+    for label, _s, v in VECTORS["v2"]["served"]:
+        assert _without_report(v) == served[label], label
+    assert all(codes == ["query-params"] for _l, _o, codes in VECTORS["v2"]["object_refusals"])
 
 
 if __name__ == "__main__" and "--write" in sys.argv:

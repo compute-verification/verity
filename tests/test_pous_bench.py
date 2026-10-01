@@ -38,7 +38,7 @@ def test_harness_registry_and_certificate_gate():
     from verity_pous import schemes
 
     bench = _bench()
-    assert set(bench.IMPLS) == {"reference", "vllm-gpu", "p2-gpu"}
+    assert set(bench.IMPLS) == {"reference", "vllm-gpu", "band-gpu", "p2-v1-gpu", "p2-gpu"}
     assert set(bench.VllmGpu.MODELS) == {ws["id"] for ws in json.loads((BENCH / "weight_sets.json").read_text())["weight_sets"]}
     one = schemes.get()
     gate, gaps = bench.certificate_gate(one, 111, 536_800)
@@ -46,5 +46,8 @@ def test_harness_registry_and_certificate_gate():
     gate, gaps = bench.certificate_gate(one, 111, 3_000_000)
     assert not gate["passed"] and "covers 5" in gate["refusals"][0]
     _, gaps = bench.certificate_gate(schemes.get(segments=30), 111, 536_800)
-    assert gaps == ("W has 30 segments; band_meets_64 is about 1",)
+    assert gaps == ()
+    dense = schemes.get("dense-chain/v1", segments=30)
+    _, gaps = bench.certificate_gate(dense, 111, 536_800)
+    assert gaps[-1] == f"W has 30 segments; {dense.certificate.theorem} is about 1"
     assert bench.conformance_gate("band-chain/d12/v1")["passed"]

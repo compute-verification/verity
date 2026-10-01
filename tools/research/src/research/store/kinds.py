@@ -64,11 +64,17 @@ KINDS: dict[str, str] = {
     # vLLM integration (integrations/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
+    "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
+                           "plan/commit_plan.json (the key and the producer facts) + the plan stage's logs; meta {row, program_digest, "
+                           "plan_key, stage_status}; refs.build = the vllm-build/v1 planned from",
     "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
                             "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
                             "match_ok?}; refs.build = the vllm-build/v1 consumed",
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
                        "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
+    "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
+                           "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
+                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
