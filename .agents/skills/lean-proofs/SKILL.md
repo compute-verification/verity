@@ -124,6 +124,10 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
+  because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
+  `path` require changes no revision, so a feature PR may add it. Python's protocols still import only `verity` and
+  themselves (`tests/test_protocol_boundaries.py`).
 - 2026-10-01: there are theorems and assumptions, and a theorem is **proved under its assumptions**; there is no third
   status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one than a
   fact about our own circuit that we mean to prove (`HmRowComputes`). So what a theorem assumes is explicit and hard to
