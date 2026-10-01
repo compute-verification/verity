@@ -22,9 +22,10 @@ One run, in order:
    - the honest audit, under POUS forwards as load (completed forwards counted);
    - the value control: one block in ten of `C` zeroed, which must reject on the value;
    - the late control: one answer in ten held past the limit, which must reject on time (`late > 0`, `wrong = 0`), since the
-     deadline is what POUS rests on and nothing else here exercises it;
-   - the recompute control: a fraction of `C` dropped and each challenged dropped block recomputed on the device, as an
-     adversary would, so its answer latency against the limit is the measured margin the certificate's headroom only models.
+     deadline is what POUS rests on and nothing else here exercises it; no other control's answer is held;
+   - the recompute control: a fraction of `C` dropped and each challenged dropped block recomputed on the device (its key
+     decoded and `W`'s block XORed in, timed together), as an adversary would; the limit minus each recomputed answer's
+     recorded device time is the measured margin the certificate's headroom only models.
 6. **The step floor.** The fastest single `Π₂` call on one row over the Feistel kernels (`STEP_VARIANTS`) — the fastest honest
    kernel, an upper bound on an attacker's, who picks its best kernel and may overclock. The SM clock is sampled while it runs,
    and the floor is scaled to the maximum clock and to a +15% overclock; a single Keccak-f latency is measured beside it. A
@@ -99,13 +100,22 @@ def quantiles(xs: list[float]) -> dict[str, float]:
 
 # --- the responder for the controls: a Python socket server, its answer chosen by the harness -----------------------------
 
+def busy_wait(ns: int) -> None:
+    end = time.perf_counter_ns() + ns
+    while time.perf_counter_ns() < end:
+        pass
+
+
 class ControlResponder:
     """A responder speaking `pous_native.cu`'s wire (`live.py`), whose answer to each challenge the harness supplies through
-    `answer(i) -> (block, device_ns, server_ns)`.  `real_delay` busy-waits the reported server time before sending, so on the
-    wall clock a held answer is really late; the CPU tests read the reported time through the verifier's logical clock instead."""
+    `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
+    (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
+    recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
+    server time through the verifier's logical clock instead."""
 
-    def __init__(self, block_bytes: int, answer: Callable[[int], tuple[bytes, int, int]], real_delay: bool = False) -> None:
-        self.block_bytes, self.answer, self.real_delay = block_bytes, answer, real_delay
+    def __init__(self, block_bytes: int, answer: Callable[[int], tuple[bytes, int, int, int]], real_delay: bool = False,
+                 wait: Callable[[int], None] = busy_wait) -> None:
+        self.block_bytes, self.answer, self.real_delay, self.wait = block_bytes, answer, real_delay, wait
         self.counts = {"answered": 0, "pings": 0}
         self.sock = socket.create_server(("127.0.0.1", 0))
         self.thread = threading.Thread(target=self._serve, daemon=True)
@@ -143,11 +153,9 @@ class ControlResponder:
                     self.counts["pings"] += 1
                     conn.sendall(struct.pack("<QQQ", 0, 0, 0) + bytes(self.block_bytes))
                     continue
-                block, device_ns, server_ns = self.answer(arg)
-                if self.real_delay and server_ns:
-                    end = time.perf_counter_ns() + server_ns
-                    while time.perf_counter_ns() < end:
-                        pass
+                block, device_ns, server_ns, hold_ns = self.answer(arg)
+                if self.real_delay and hold_ns:
+                    self.wait(hold_ns)
                 self.counts["answered"] += 1
                 conn.sendall(struct.pack("<QQQ", 0, int(device_ns), int(server_ns)) + block)
 
@@ -169,8 +177,9 @@ class Backend:
     native responder over `c`.  `timer(fn)` is `fn`'s seconds on the device clock.  The optional members are the GPU's, absent
     in the CPU stand-in: `graphed(fn)` replays `fn` from a CUDA graph (raising when the path is not capturable), `copy_bw()` is
     a device-copy bandwidth in GB/s, `clock_mhz()` samples the SM clock, `step(settings, reps)` times single-row `Π₂` calls,
-    `keccak_latency(reps)` is one Keccak-f's seconds, and `recompute(store, tags, i)` decodes block `i` of `store` alone (with
-    `store`'s block `i` zeroed that is its key, `key ⊕ W_i` the block), with the seconds it took."""
+    `keccak_latency(reps)` is one Keccak-f's seconds, and `recompute(store, tags, i)` is a call that decodes block `i` of `store`
+    alone on the device (with `store`'s block `i` zeroed that is its key, `key ⊕ W_i` the block), its inputs staged so the
+    harness times the call alone."""
 
     device: Any
     encode: Callable[[Any, Any], Any]
@@ -184,7 +193,7 @@ class Backend:
     clock_mhz: Callable[[], float] | None = None
     step: Callable[[dict[str, Any], int], list[float]] | None = None
     keccak_latency: Callable[[int], float] | None = None
-    recompute: Callable[[Any, Any, int], tuple[Any, float]] | None = None
+    recompute: Callable[[Any, Any, int], Callable[[], Any]] | None = None
     facts: Callable[[], dict[str, Any]] = dict
 
 
@@ -278,13 +287,12 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
         s = statistics.median(_reps_raw(timer, lambda: ext.keccak_bench(out, 1, iters, 0, 128), reps))
         return s / iters
 
-    def recompute(store: Any, tags: Any, i: int) -> tuple[Any, float]:
+    def recompute(store: Any, tags: Any, i: int) -> Callable[[], Any]:
         bps = scheme.params.blocks_per_segment
         segs = torch.tensor([i // bps], device=device)
         blks = torch.tensor([i % bps], device=device)
-        held: list[Any] = []
-        seconds = timer(lambda: held.append(dense.decode_blocks(store.view(-1, width), tags, segs, blks, bps, window)))
-        return held[0][0], seconds
+        rows = store.view(-1, width)
+        return lambda: dense.decode_blocks(rows, tags, segs, blks, bps, window)[0]
 
     def tag_bytes(salt: bytes, n: int) -> list[bytes]:
         return [bytes(row) for row in codec.segment_tags(salt, list(range(n)), "cpu").tolist()]
@@ -477,22 +485,32 @@ def recompute_drops(blocks_per_segment: int, segments: int, window: int | None) 
 
 def control_answers(c_host: bytes, width: int, *, zero: set[int] = frozenset(), late_every: int = 0, late_ns: int = 0,
                     recompute: Callable[[int], tuple[bytes, int]] | None = None,
-                    dropped: set[int] = frozenset()) -> Callable[[int], tuple[bytes, int, int]]:
-    """The `ControlResponder`'s answer: block `i` from `c_host` (zeroed for `zero`), recomputed for `dropped` (its device time
-    the reported server time), or held past the limit every `late_every`-th answer."""
+                    dropped: set[int] = frozenset()) -> Callable[[int], tuple[bytes, int, int, int]]:
+    """The `ControlResponder`'s answer `(block, device_ns, server_ns, hold_ns)`: block `i` from `c_host` (zeroed for `zero`),
+    recomputed for `dropped` (its device time the reported server time, and never held: the recompute has already run), or
+    held past the limit every `late_every`-th answer (the only answers held)."""
     state = {"n": 0}
 
-    def answer(i: int) -> tuple[bytes, int, int]:
+    def answer(i: int) -> tuple[bytes, int, int, int]:
         state["n"] += 1
         if i in dropped and recompute is not None:
             block, device_ns = recompute(i)
-            return block, device_ns, device_ns
+            return block, device_ns, device_ns, 0
         block = bytes(width) if i in zero else c_host[i * width:(i + 1) * width]
         if late_every and state["n"] % late_every == 0:
-            return block, 0, late_ns
-        return block, 0, 1_000
+            return block, 0, late_ns, late_ns
+        return block, 0, 1_000, 0
 
     return answer
+
+
+def recompute_margins(doc: dict[str, Any], dropped: set[int], limit_ns: int) -> dict[str, Any]:
+    """The recompute control's margins from each recomputed answer's recorded device time: the adversary's latency taken as its
+    device time alone, with no transport or responder overhead (in the adversary's favour), against the limit.  The fastest
+    recompute's margin is `max`: positive when a recompute beats the limit."""
+    device = [a["device_ns"] for rec in doc.get("records") or [] for a in rec["answers"] if a["index"] in dropped]
+    return {"recomputed_answers": len(device), "recompute_device_s": quantiles([d / 1e9 for d in device]),
+            "device_margin_s": quantiles([(limit_ns - d) / 1e9 for d in device])}
 
 
 def _plain_arm(backend: Backend, w: Any, pl: list[tuple[str, int, int, int, int]], xs: dict[int, dict[int, Any]], tokens: list[int],
@@ -507,23 +525,27 @@ def _plain_arm(backend: Backend, w: Any, pl: list[tuple[str, int, int, int, int]
 
 def _recomputer(backend: Backend, c: Any, tags: Any, dropped: list[int], w_host: bytes, bps: int,
                 width: int) -> Callable[[int], tuple[bytes, int]]:
-    """The recompute control's adversary: it holds `C` without `dropped` and `W` (free), and answers a challenged dropped block
-    by decoding it alone from its kept parents (its own block zeroed, that is its key) and XORing `W`'s block in."""
+    """The recompute control's adversary: it holds `C` without `dropped` and `W` (free, its dropped blocks on the device), and
+    answers a challenged dropped block by decoding it alone from its kept parents (its own block zeroed, that is its key) and
+    XORing `W`'s block in, both on the device and timed together."""
     import torch
 
     store = c.clone()
     store.view(-1, width)[torch.tensor(dropped, dtype=torch.long, device=store.device)] = 0
+    w_rows = torch.frombuffer(bytearray(b"".join(w_host[i * width:(i + 1) * width] for i in dropped)),
+                              dtype=torch.uint8).to(store.device).view(len(dropped), width)
+    row = {i: j for j, i in enumerate(dropped)}
+
+    def key_call(i: int) -> Callable[[], Any]:
+        if backend.recompute is not None:
+            return backend.recompute(store, tags, i)
+        s_, v_ = divmod(i, bps)
+        return lambda: backend.decode(store[s_:s_ + 1], tags[s_:s_ + 1])[0, v_]
 
     def rc(i: int) -> tuple[bytes, int]:
-        if backend.recompute is not None:
-            key, seconds = backend.recompute(store, tags, i)
-        else:
-            s_, v_ = divmod(i, bps)
-            held: list[Any] = []
-            seconds = backend.timer(lambda: held.append(backend.decode(store[s_:s_ + 1], tags[s_:s_ + 1])[0, v_]))
-            key = held[0]
-        k_bytes = bytes(key.reshape(-1).cpu().numpy())
-        return bytes(x ^ y for x, y in zip(k_bytes, w_host[i * width:(i + 1) * width])), round(seconds * 1e9)
+        key, w_i, held = key_call(i), w_rows[row[i]], []
+        seconds = backend.timer(lambda: held.append(torch.bitwise_xor(key().reshape(-1), w_i)))
+        return bytes(held[0].cpu().numpy()), round(seconds * 1e9)
 
     return rc
 
@@ -680,7 +702,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     honest = audit_round(native_start, fields, LIVE, leaves, out, "honest", a,
                          (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
-    def control(tag: str, answer: Callable[[int], tuple[bytes, int, int]]) -> dict[str, Any]:
+    def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: ControlResponder(width, answer, real_delay=a.clock == "wall")  # noqa: E731
         return audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
 
@@ -693,7 +715,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                                          dropped=set(dropped)))
     recompute = {"dropped_fraction": len(dropped) / p.blocks, "dropped_blocks": len(dropped),
                  "pattern": f"every {window + 1}-th block of a segment (the cliff's)" if window else "each segment's last block",
-                 **recompute_ctl}
+                 **recompute_ctl, **recompute_margins(recompute_ctl, set(dropped), limit)}
 
     cert = scheme.certificate
     step = step_floor(backend, a.step_reps, cert.call_ns if cert is not None else None, facts)
@@ -709,7 +731,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     gates["recompute_control"] = {"passed": recompute.get("wrong", 1) == 0 and bool(recompute.get("answers")),
                                   "audits_accepted": recompute.get("audits_accepted"), "late": recompute.get("late"),
                                   "note": "passes when every recomputed answer is correct; whether it beats the limit is the "
-                                          "measured margin, recompute_margin_s"}
+                                          "measured margin, device_margin_s (from each recomputed answer's device time)"}
     gaps = ()
     if step and step["below_certificate"]:
         gaps = (f"a Π₂ call took {step['min_s'] * 1e9:,.0f} ns on this device ({step['fastest']} kernel), under the "
@@ -735,7 +757,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     rows += [(f"audit_answer_{q}_s", (honest.get("elapsed_s") or {}).get(q), "s") for q in ("p50", "p99.9", "max")]
     rows += [("audit_margin_min_s", deadline["honest_margin_min_s"], "s"), ("audit_limit_s", limit / 1e9, "s")]
     rows += [("recompute_answer_p99.9_s", (recompute.get("elapsed_s") or {}).get("p99.9"), "s"),
-             ("recompute_margin_min_s", (recompute.get("margin_s") or {}).get("min"), "s")]
+             ("recompute_margin_min_s", recompute["device_margin_s"].get("min"), "s"),
+             ("recompute_margin_max_s", recompute["device_margin_s"].get("max"), "s")]
     rows += [("certificate_headroom_s", deadline["certificate_headroom_ns"] / 1e9, "s")] if covered is not None else []
     rows += [("step_floor_min_s", step["min_s"], "s")] if step else []
     rows += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []

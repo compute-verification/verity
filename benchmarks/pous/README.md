@@ -35,8 +35,9 @@ Implementations:
   - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote verifier's round trip
     adds to it), then timed audits against the native responder under POUS forwards, and three controls against that one
     limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
-    reject on time alone), and a recompute control (a fraction of `C` dropped, each challenged dropped block recomputed on
-    the device from its kept parents, as an adversary would: its latency against the limit is the measured margin);
+    reject on time alone; the only answers held), and a recompute control (a fraction of `C` dropped, each challenged dropped
+    block recomputed on the device from its kept parents, `W`'s block XORed in on the device, as an adversary would: the limit
+    minus each recomputed answer's recorded device time is the measured margin);
   - the `Π₂` step floor, the fastest honest kernel (an upper bound on an attacker's), with the SM clock sampled while it
     runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
@@ -53,9 +54,11 @@ Implementations:
   - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
     reference's decode and keys, no kernel flag; a failed gate stops the run;
   - audits at k = 105 (`p2_v1/live.py`: v1 leaves, `verity/pous/audit-challenge/v2`), against a limit fixed before load (the spec
-    caps the allowance at 1 ms), with the value, late and recompute controls (a dropped block re-encoded from `W` on demand);
+    caps the allowance at 1 ms), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
+    re-encoded on demand from its decoded row `Dec(C_i)`, which is `W_i` in the encoded head);
   - encode GB/s over the first `--p2-encode-blocks` blocks (the rest of `C` is random canonical blocks), and one block's two
-    roots against twice the limit (SeqRoot; the root is untuned, so an upper bound on the fastest GPU root).
+    roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
+    bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**

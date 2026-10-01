@@ -17,12 +17,14 @@ the two compare side by side.
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
 4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which the spec
    caps at 1 ms); `p2_v1/live.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
-   (one block in ten zeroed), the late control (one answer in ten held past the limit) and the recompute control (one block
-   in ten dropped, each challenged dropped block re-encoded on the device from `W`, which the game gives the prover free:
-   two roots, whose latency against the limit is the measured margin).
-5. **SeqRoot.** One block's encode on one warp is two roots in sequence: half of it against twice the audit's limit, which
-   SeqRoot says a root outlasts. The kernel's root is an addition chain on CGBN's generic squaring, not tuned, so this is an
-   upper bound on the fastest GPU root, not a floor. The SM clock is sampled beside it.
+   (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
+   recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
+   decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
+   recomputed answer's recorded device time).
+5. **SeqRoot.** One block's encode on one warp is two roots in sequence: half of the fastest of `--reps` encodes of a
+   pseudo-random block against twice the audit's limit, which SeqRoot says a root outlasts. The kernel's root is an addition
+   chain on CGBN's generic squaring, not tuned, so this is an upper bound on the fastest GPU root, not a floor. The SM clock is
+   sampled beside it.
 6. **NVMe and clocks**, as the band's.
 """
 from __future__ import annotations
@@ -167,24 +169,31 @@ def profile(k: int, limit_ns: int, gaps: tuple[str, ...]) -> dict[str, Any]:
             "experimental": "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"}
 
 
-def _m_row(w_host: bytes, i: int, params: R.Params) -> bytes:
-    """Block `i`'s payload as a big-endian row (the adversary's free copy of `W`)."""
-    pay = w_host[i * params.payload_bytes:(i + 1) * params.payload_bytes]
-    return bytes(params.width_bytes - params.payload_bytes) + pay + bytes(params.payload_bytes - len(pay))
-
-
-def _recomputer(backend: Backend, bound: Any, w_host: bytes, params: R.Params) -> Callable[[int], tuple[bytes, int]]:
-    """The recompute control's adversary: it holds `C` without the dropped blocks and `W` (free), and answers a challenged
-    dropped block by encoding it again on the device, two roots."""
+def plaintext_rows(bound: Any, c: Any, dropped: list[int]) -> Any:
+    """The dropped blocks' decoded rows `Dec(C_i)`, on the device: the plaintext the game gives the adversary free.  Every block
+    of `C` is the encoding of its decode, so re-encoding these rows gives back `C_i` for the encoded head (where `Dec(C_i)` is
+    `W_i`'s payload row) and for the random canonical rest alike."""
     import torch
 
+    return bound.decode(c, 0)[torch.tensor(dropped, dtype=torch.long, device=c.device)].contiguous()
+
+
+def _recomputer(backend: Backend, bound: Any, rows_: Any, dropped: list[int]) -> Callable[[int], tuple[bytes, int]]:
+    """The recompute control's adversary: it holds `C` without the dropped blocks and their plaintext rows (`plaintext_rows`,
+    free), and answers a challenged dropped block by encoding its row again on the device, two roots."""
+    row = {i: j for j, i in enumerate(dropped)}
+
     def rc(i: int) -> tuple[bytes, int]:
-        m = torch.tensor(list(_m_row(w_host, i, params)), dtype=torch.uint8, device=backend.device).view(1, -1)
-        held: list[Any] = []
+        m, held = rows_[row[i]:row[i] + 1], []
         seconds = backend.timer(lambda: held.append(bound.encode(m, i)))
         return bytes(held[0][0].cpu().numpy()), round(seconds * 1e9)
 
     return rc
+
+
+def seqroot_block(dropped: list[int]) -> int:
+    """SeqRoot's block: a pseudo-random one of the dropped blocks, whose plaintext row the recompute control holds."""
+    return dropped[int.from_bytes(hashlib.sha256(b"verity-pous/bench/p2-v1/seqroot").digest()[:8], "big") % len(dropped)]
 
 
 def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments: int, total: int, used: int,
@@ -272,19 +281,26 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     honest = H.audit_round(native_start, fields, LIVE, leaves, out, "p2-honest", a,
                            (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
-    def control(tag: str, answer: Callable[[int], tuple[bytes, int, int]]) -> dict[str, Any]:
+    def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: H.ControlResponder(nb, answer, real_delay=a.clock == "wall")  # noqa: E731
         return H.audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
 
     value = control("p2-value", H.control_answers(c_host, nb, zero=set(range(0, blocks, 10))))
     late = control("p2-late", H.control_answers(c_host, nb, late_every=10, late_ns=limit + H.LATE_EXTRA_NS))
-    dropped = set(range(0, blocks, RECOMPUTE_EVERY))
-    rec = control("p2-recompute", H.control_answers(c_host, nb, recompute=_recomputer(backend, bound, w_host, P), dropped=dropped))
+    dropped = list(range(0, blocks, RECOMPUTE_EVERY))
+    plain_rows = plaintext_rows(bound, c, dropped)
+    rec = control("p2-recompute", H.control_answers(c_host, nb, recompute=_recomputer(backend, bound, plain_rows, dropped),
+                                                    dropped=set(dropped)))
     recompute = {"dropped_fraction": len(dropped) / blocks, "dropped_blocks": len(dropped),
-                 "pattern": f"one block in {RECOMPUTE_EVERY}, each re-encoded from W on demand", **rec}
+                 "pattern": f"one block in {RECOMPUTE_EVERY} of all of C, each re-encoded on demand from its decoded row Dec(C_i)",
+                 **rec, **H.recompute_margins(rec, set(dropped), limit)}
 
     clocks = []
-    one = backend.timer(lambda: bound.encode(torch.zeros(1, nb, dtype=torch.uint8, device=backend.device), 0))
+    j = seqroot_block(dropped)
+    m_j = plain_rows[dropped.index(j):dropped.index(j) + 1]
+    root_reps = H._reps_raw(backend.timer, lambda: bound.encode(m_j, j), max(3, a.reps))
+    one = min(root_reps)
+    del plain_rows
     if backend.clock_mhz is not None and backend.clock_mhz():
         clocks.append(backend.clock_mhz())
     nvme = H.nvme_probe(a.nvme_dir, c_host, nb, a.nvme_samples) if a.nvme_dir else None
@@ -300,11 +316,12 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     gates["recompute_control"] = {"passed": recompute.get("wrong", 1) == 0 and bool(recompute.get("answers")),
                                   "audits_accepted": recompute.get("audits_accepted"), "late": recompute.get("late"),
                                   "note": "passes when every recomputed answer is correct; whether it beats the limit is the "
-                                          "measured margin, recompute_margin_s"}
+                                          "measured margin, device_margin_s (from each recomputed answer's device time)"}
     point = {"k": k == R.K_AUDIT, "rtt_allowance": bool(honest.get("rtt_allowance_within_spec")),
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
-    seqroot = {"encode_one_block_s": one, "root_s": one / 2, "twice_limit_s": 2 * limit / 1e9,
+    seqroot = {"block": j, "encode_one_block_s": one, "encode_one_block_reps_s": root_reps, "root_s": one / 2,
+               "twice_limit_s": 2 * limit / 1e9,
                "root_over_twice_limit": (one / 2) / (2 * limit / 1e9) if limit else None, "sampled_sm_mhz": clocks or None,
                "label": "untuned root (an addition chain on CGBN's generic squaring): an upper bound on the fastest GPU root, "
                         "not a SeqRoot floor"}
@@ -328,7 +345,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     rows_ += [(f"audit_answer_{q}_s", (honest.get("elapsed_s") or {}).get(q), "s") for q in ("p50", "p99.9", "max")]
     rows_ += [("audit_margin_min_s", deadline["honest_margin_min_s"], "s"), ("audit_limit_s", limit / 1e9, "s"),
               ("recompute_answer_p99.9_s", (recompute.get("elapsed_s") or {}).get("p99.9"), "s"),
-              ("recompute_margin_min_s", (recompute.get("margin_s") or {}).get("min"), "s"),
+              ("recompute_margin_min_s", recompute["device_margin_s"].get("min"), "s"),
+              ("recompute_margin_max_s", recompute["device_margin_s"].get("max"), "s"),
               ("seqroot_root_s", seqroot["root_s"], "s")]
     rows_ += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
     return {"implementation": {"name": "p2-v1-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
