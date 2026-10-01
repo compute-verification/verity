@@ -28,7 +28,9 @@ the run's ``ledger/``: ``--tier`` says what kind of run it was (2a a one-GPU scr
 rows can stand on the panel's plots), ``--hypothesis`` is the attempt's one line, ``--parent`` the attempt it changes, and
 ``--outcome``/``--reason`` the lane's verdict when it already has one. γ is looked up from the Lean-pinned price twins on
 the priced path the variant declares, never typed: an arm whose lineage declares ``gamma`` gets no record, and the run
-says so. ``--publish`` puts the records into the evidence store
+says so. The records are also declared in the run's ``outputs.json``, so under ``research run --on`` the runner publishes
+and pushes them with the attempt, with the store key the workload doesn't hold. ``--publish`` puts the records into the
+evidence store from here
 (``--push``: onto its remote); a publish that fails is reported and doesn't change the exit code, and ``ledger.py publish
 RUN_DIR`` retries it from wherever the run's files are.
 """
@@ -244,6 +246,8 @@ def ledger(result: dict, a: argparse.Namespace, log) -> dict:
         recs = L.records(result, run_id=a.run_id, commit=a.commit, tier=a.tier, hypothesis=a.hypothesis, parent=a.parent,
                          outcome=a.outcome, reason=a.reason, by=a.by)
         out["records"] = [str(p.relative_to(run_dir)) for p in L.write(run_dir, recs)]
+        if recs:
+            out["outputs"] = str(L.write_outputs(run_dir, recs).relative_to(run_dir))
         out["refused"] = L.typed_gamma(result)
         for arm, why in out["refused"].items():
             log(f"ledger: REFUSED {arm}'s records: {why}")
