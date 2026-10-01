@@ -13,6 +13,7 @@
 #      BATCH_ANDS= MAX_STATEMENT_BITS= (larger statements: --batch auto's AND budget and the witness-bit cap per statement)
 #      N= with BATCH=fixed (instances per statement, the bit cap still applies)
 #      STAGE_ONLY=1 (no GPU: build, stage the shapes into FLOCK_STAGE_CACHE and prove nothing; give SM, nvidia-smi is absent)
+#      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
@@ -43,6 +44,7 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   exec 8>&-
   BINARY=$BIN/flock-circuit; SELFTEST_BINARY=$BIN/flock-circuit-selftest
 fi
+[ "${BUILD_ONLY:-0}" = 1 ] && { echo "BINARY=$BINARY"; echo "SELFTEST_BINARY=${SELFTEST_BINARY:-$BINARY}"; exit 0; }
 B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
 # WRAP: a command the prover's prove sessions run under (71-gemm-slowdown.sh NSYS=1); binary.sha256 is the prover's own
 if [ -n "${WRAP:-}" ]; then
