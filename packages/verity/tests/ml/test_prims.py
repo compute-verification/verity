@@ -284,6 +284,28 @@ def test_the_sm120_mxfp4_step_is_total() -> None:
         step.evaluate(acc, *c, *s)                                                # defined on every encoding
 
 
+def test_the_sm120_mxfp4_step_reproduces_the_pro_6000_edge_capture() -> None:
+    """Every word of run r20261001-000520-2440's four record-only MXFP4 edge families (RTX PRO 6000, one
+    OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile; fixtures/README.md), which the run recorded but did not assert: 73,728 words, 9,216
+    of them under a 0xFF scale byte, the rest overflowing or cancelling blocks and ±inf / NaN accumulators."""
+    import numpy as np
+
+    step = P.BlackwellMxf4OmmaDot64
+    root = Path(__file__).parent / "fixtures" / "tc-sm120-mxf4-2026-10-01"
+    words = nan_scale = 0
+    for name in ("tiles_mxf4_nan_scale", "tiles_mxf4_overflow_cancel", "tiles_mxf4_overflow_edge", "tiles_mxf4_inf_acc_overflow"):
+        z = np.load(root / f"{name}.npz")
+        A, Bt, SFA, SFB, C, D = (z[k].tolist() for k in ("A", "Bt", "SFA", "SFB", "C", "D"))
+        for t in range(len(A)):
+            for i in range(16):
+                for j in range(8):
+                    sa, sb = SFA[t][i], SFB[t][j]
+                    assert step.evaluate(C[t][i][j] & 0xFFFFFFFF, *A[t][i], *Bt[t][j], *sa, *sb) == D[t][i][j] & 0xFFFFFFFF, (name, t, i, j)
+                    words += 1
+                    nan_scale += 0xFF in sa or 0xFF in sb
+    assert (words, nan_scale) == (73728, 9216)
+
+
 def test_the_e2m1_cast_rounds_to_nearest_even_and_saturates() -> None:
     f = lambda v: struct.unpack("<I", struct.pack("<f", v))[0]  # noqa: E731
     grid = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
