@@ -14,7 +14,7 @@ DISK_STATE=${VY_DISK_STATE:-/var/lib/vy-disk-guard/held}
 
 policy() { $K get clusterqueue "$1" -o jsonpath='{.spec.stopPolicy}'; }
 set_policy() { $K patch clusterqueue "$1" --type=merge -p "{\"spec\":{\"stopPolicy\":\"$2\"}}" > /dev/null; }
-held() { tr '\n' ' ' < "$STATE" 2> /dev/null | sed 's/ *$//'; }
+held() { [ ! -f "$STATE" ] || tr '\n' ' ' < "$STATE" | sed 's/ *$//'; }
 say() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
 case ${1:-status} in

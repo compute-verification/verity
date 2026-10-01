@@ -160,7 +160,7 @@ def stop_policy_node(tmp_path: Path, start: dict[str, str]):
                "VY_DISK_STATE": str(tmp_path / "disk-held"), "VY_DISK_OUTBOX": str(tmp_path / "outbox"),
                "VY_QUIET_STATE": str(tmp_path / "quiet-held")}
         r = subprocess.run(["sh", str(SKY / script), verb], env=env, capture_output=True, text=True)
-        assert r.returncode == 0, r.stderr
+        assert r.returncode == 0 and r.stderr == "", r.stderr
         return r.stdout
 
     return run, lambda: {q: (kq / q).read_text().strip() for q in start}
@@ -197,6 +197,7 @@ def test_the_quiet_hour_releases_only_the_holds_it_set(tmp_path):
     has since taken as its own."""
     run, policies = stop_policy_node(tmp_path, {q: "Hold" if q == "deployments-gpu" else "None" for q in QUEUES})  # a lane's hold
     kq = tmp_path / "cq"
+    assert run("quiet_hour.sh", "release") == "" and run("quiet_hour.sh", "status").startswith("held by the quiet hour: \n")
     out = run("quiet_hour.sh", "hold")
     assert "deployments-gpu stopPolicy=Hold, held by someone else: left alone" in out
     assert set(policies().values()) == {"None", "Hold"} and policies()["circuits"] == policies()["deployments-cpu"] == "Hold"
