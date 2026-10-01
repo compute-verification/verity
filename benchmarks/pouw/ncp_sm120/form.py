@@ -21,7 +21,7 @@ The messages are #295's (`D3Family.stream`): SHAKE256 / BLAKE3 of "verity/pouw/f
 them (form_sm120.cu); NCP's permutation is #295's `ncp_perm(k, b"verity/pouw/fp8-is/d3s/P")`, restated here (stdlib).
 
   python3 form.py OUT   (env: CUDA, SHAPES="p d", XOFS="shake b3", UNIT_ARMS="chash:4 chash:8 hash_ir:1", REPS=5,
-                         CHAIN_P=1, CHAIN_D=1, NCP_LIBCUDA)
+                         CHAIN_P=1, CHAIN_D=1, NCP_LIBCUDA, and run.py's NCP_DEFINES for its GEMM)
 """
 
 from __future__ import annotations
@@ -392,7 +392,8 @@ def main(argv: list[str]) -> int:
     d = Dev(cubin, form_cubin)
     ident = {"name": d.name, "uuid": d.uuid, "cc": d.cc, "sms": d.sms, "driver": d.driver, "count": d.count,
              "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-             "cubin_sha256": hashlib.sha256(cubin).hexdigest(), "form_cubin_sha256": hashlib.sha256(form_cubin).hexdigest()}
+             "cubin_sha256": hashlib.sha256(cubin).hexdigest(), "form_cubin_sha256": hashlib.sha256(form_cubin).hexdigest(),
+             "defines": ncp.DEFINES}
     emit({"part": "identity", **ident})
     if d.cc != (12, 0) or not d.name.startswith(pc.NAME_PREFIX) or d.count != 1:
         emit({"part": "refused", "why": "not exactly one RTX PRO 6000 Blackwell (sm_120) visible"})
