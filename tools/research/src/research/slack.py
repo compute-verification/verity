@@ -937,7 +937,8 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
     for pin in ships:
         url, _, sha = pin.partition("#sha256=")
         lines.append(f"*Pinned:* commit `{pin[4:]}`" if pin.startswith("git:") else f"*Pinned:* {url} sha256 `{sha}` (don't run it if the checksum fails)")
-    lines.append("*Close it with a status line:* `research msg close --thread <this ts>` (or `--declined WHY`)")
+    if verify:
+        lines.append("*Close it with a status line:* `research msg close --thread <this ts>` (or `--declined WHY`)")
     return "\n".join(lines)
 
 
