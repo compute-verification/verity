@@ -538,7 +538,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
 HILLCLIMB = Path("/workspace/usage/hillclimb")  # proofs' roll-ups, one `verity/hillclimb-rollup/v0` file per subcircuit
 SUBCIRCUIT = re.compile(r"[a-z0-9]+/[A-Za-z0-9_]+/K=\d+")
 HILLCLIMB_COLUMNS = ["Step", "Label", "Commit", "Run", "Time (UTC)", "Overhead", "Throughput VU/s", "GPU util", "GPU-held s/VU",
-                     "Byte-identical", "Flags", "VUs", "Session s/VU", "Setup s", "Verify s/statement", "Peak FLOP/s", "GPU",
+                     "Byte-identical", "Flags", "VUs", "Session s/VU", "Setup s", "Verify s/statement", "Scheme", "GPU",
                      "vCPU", "Dot", "Prove-only s/VU"]
 
 
@@ -561,7 +561,7 @@ def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
                              sig(p.get("gpu_util")), sig(p.get("gpu_held_s_per_vu")),
                              {True: "yes", False: "no"}.get(p.get("byte_identical")), text(" ".join(p.get("flags") or [])),
                              p.get("vus") if isinstance(p.get("vus"), int) else None, sig(p.get("t_prove_s_per_vu")),
-                             sig(p.get("setup_s")), sig(p.get("verify_s_per_statement")), sig(p.get("peak_flop_per_s")),
+                             sig(p.get("setup_s")), sig(p.get("verify_s_per_statement")), text(p.get("scheme"), 60),
                              text(hw.get("gpu")), hw.get("vcpu") if isinstance(hw.get("vcpu"), int) else None,
                              text(sub.get("dot")), sig(p.get("t_prove_only_s_per_vu"))])
             name = "hillclimb-" + re.sub(r"[^a-z0-9]+", "-", sid.lower()).strip("-")
