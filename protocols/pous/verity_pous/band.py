@@ -27,7 +27,7 @@ from functools import lru_cache
 
 from . import dense
 from .codec import Codec
-from .primitives import Primitives
+from .primitives import Primitives, pi2_call_ns
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +88,9 @@ class BandParams:
 
     @property
     def call_ns(self) -> int:
-        """The adversary's fastest call, a 64 KiB `Π₂`: at least 483 µs."""
-        return 483_000
+        """The adversary's fastest call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
+        (`primitives.pi2_keccak_f`)."""
+        return pi2_call_ns(SECURE_FIRST.m)
 
     def parents(self, v: int) -> range:
         """`(bandDAG B d).par v`: `{u : u < v ∧ v ≤ u + d}`."""
@@ -107,8 +108,8 @@ class BandParams:
 
 SECURE_FIRST = BandParams(512, 524_288, 12)
 """The secure-first point (POUS `docs/band-vs-dense.md`): `B(512, 12)`, 65,536 B blocks (32 MiB segments), audited at
-`D = 5` calls of at least 483 µs with `k = 111` (`Pous.Pinned.BandChainMeets64D12`, with no hypothesis).  The cliff is at an
-effective `D` of 13: 13 call-times must exceed `Δ + RTT`."""
+`D = 5` calls of at least 241.5 µs with `k = 111` (`Pous.Pinned.BandChainMeets64D12`, with no hypothesis), so
+`Δ + RTT < 1.449` ms.  The cliff is at an effective `D` of 13: 13 call-times, 3.1395 ms, must exceed `Δ + RTT`."""
 
 
 def _checked(d: int, fn):
