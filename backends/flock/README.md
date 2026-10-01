@@ -52,7 +52,9 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
 1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
    `bash backends/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
-   mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
+   mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`. `RESIDENT=1`
+   proves every point on one prover process (`flock-circuit prove-serve`), its statement built once; its start counts as the
+   session's GPU-held seconds, not the first point's.
 3. Once the attempt is in the store, cite its arts. A roll-up other lanes read (`/workspace/usage/hillclimb/*.json`) is
    never edited: its points take labels on the attempt, written where `research` is on the PATH (node 1's
    `/workspace/jobs/store` refuses a lane's writes):
