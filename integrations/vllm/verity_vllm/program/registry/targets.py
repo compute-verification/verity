@@ -29,10 +29,11 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ir.defs import bind
-from verity.ml.prims import HopperBF16WgmmaDot16
+from verity.ml.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa3_check_inf as F3
+from verity_vllm.program.registry import fp8
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
@@ -44,6 +45,8 @@ class UnregisteredTarget(ValueError):
 
 #: the registered k16 step primitives by the name a `GemmTarget.dot` record carries.
 DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16": HopperBF16WgmmaDot16}
+#: the registered e4m3 k32 step primitives by the name a `GemmTarget.fp8_dot` record carries.
+FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
 
 #: attention-chain registration per tensor-core step family (`TargetProfile.tensor_core_family`).
 TARGETS: dict[str, dict[str, Any]] = {
@@ -296,6 +299,17 @@ def gemm_spec(profile, K: int, N: int):
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
+def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
+    """The registered Definition of the per-tensor FP8 linear (`_C.cutlass_scaled_mm` over the quantised row) on the declared
+    target: `ScaledMmFp8NoSwap_v1{K,N,BIAS,DOT}` where the GEMM target records the unswapped epilogue and its e4m3 step
+    (`GemmTarget.fp8_scale_order == "no_swap"`, `fp8_dot`); refused by name elsewhere."""
+    gt = gemm_target(profile)
+    dot = FP8_DOTS.get(gt.fp8_dot) if gt.fp8_dot else None
+    if gt.fp8_scale_order == "no_swap" and dot is not None:
+        return bind(fp8.ScaledMmFp8NoSwap, K=int(K), N=int(N), BIAS=bool(bias), DOT=dot)
+    raise UnregisteredTarget(f"per-tensor FP8 linear on {gt.key} ({profile.capability_str}): no registered binding")
+
+
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
                    cap: float | None = None):
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
@@ -347,7 +361,8 @@ def describe(profile) -> dict[str, Any]:
             "evidence": {"gemm": list(gt.evidence), **t["evidence"]}}
 
 
-__all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
+__all__ = ["TARGETS", "DOTS", "FP8_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
-           "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
+           "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
+           "scaled_mm_fp8_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]

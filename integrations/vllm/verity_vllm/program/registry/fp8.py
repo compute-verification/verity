@@ -33,7 +33,9 @@ Registered functions (all `Name_v1`):
   primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.ml.prims`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
-              + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS}
+              + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
+              DotE4m3_v2{K,DOT}, ScaledMmFp8NoSwapCoordinate{K,BIAS,DOT}, ScaledMmFp8NoSwap{K,N,BIAS,DOT} (the same GEMM
+              dispatched without swap_ab, on the target's e4m3 step: `targets.scaled_mm_fp8_spec`)
 `verity_vllm/program/registry/b1.py` (TA1) and `hopper.py` (HP) are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
 AttentionFA3, SiluMul, Embedding, GemmHopper for lm_head, TokenSelect) are reused as registered.
 """
@@ -179,6 +181,53 @@ def ScaledMmFp8(B, S, xq, sx, w, sw, *bias):
     fused epilogue each) over the quantised row `xq` with its scale `sx`, the e4m3 weight rows and the per-tensor `sw`.
     The N children of this call are exactly the coordinates (coordinate-sampled by the correspondence tool)."""
     coord = bind(ScaledMmFp8Coordinate, K=S.K, BIAS=S.BIAS)
+    if S.BIAS:
+        return B.batch(coord, xq, sx, w, sw, bias[0], axes=(None, None, 0, None, 0))
+    return B.batch(coord, xq, sx, w, sw, axes=(None, None, 0, None))
+
+
+@composite("DotE4m3", 2, ["K", "DOT"], lambda S: ((("xq", Array(S.K, E4M3)), ("wq", Array(S.K, E4M3))), F32),
+           conformance="exact-model-tested")
+def DotE4m3V2(B, S, xq, wq):
+    """f32 accumulator after K/32 `DOT` steps (an e4m3 k32 step primitive) in ascending k from `+0`."""
+    assert S.K % 32 == 0, S.K
+    acc = B.call(b1.ZERO32)
+    for s in range(S.K // 32):
+        acc = B.call(S.DOT, acc, xq[32 * s:32 * s + 32], wq[32 * s:32 * s + 32])
+    return acc
+
+
+@composite("ScaledMmFp8NoSwapCoordinate", 1, ["K", "BIAS", "DOT"],
+           lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32))
+                       + ((("b", BF16),) if S.BIAS else ())), BF16),
+           conformance="exact-model-tested; the RTX PRO 6000's _C.cutlass_scaled_mm (cc 12.0) against this order over the cc 12.0 "
+                       "step's chain at K = 4096, per-row/per-column and scalar scales: without a bias 15,728,640 of 15,728,640 "
+                       "coordinates exact (run r20260930-041842-76a2; the swapped order misses 89 of the 125 discriminating ones); "
+                       "with a bias 786,432 of 786,432 (run r20260930-090150-a42a: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
+                       "miss 8, 9 and 13 of the 17 discriminating ones), and this Definition by the IR reference on 576 sampled "
+                       "coordinates, every discriminating one included, exact")
+def ScaledMmFp8NoSwapCoordinate(B, S, xq, sx, wrow, sw, *bias):
+    """One output word of `_C.cutlass_scaled_mm` dispatched WITHOUT swap_ab, so ScaleA = `s_x` (per token) and ScaleB = `s_w`
+    (per tensor): `bf16(s_x * (s_w * acc))` (ScaledEpilogue) or `bf16(fma(s_x, s_w * acc, f32(b)))` (ScaledEpilogueBias),
+    `acc` the `DotE4m3_v2{K,DOT}` chain.  `ScaledMmFp8Coordinate_v1` is the swapped order, `s_w * (s_x * acc)`: the two
+    round differently, so neither stands in for the other."""
+    acc = B.call(bind(DotE4m3V2, K=S.K, DOT=S.DOT), xq, wrow)
+    t = B.call(P.F32Mul, sw, acc)                     # Compute0: multiplies(ScaleB, Accum)
+    if S.BIAS:
+        y = B.call(P.F32Fma, sx, t, B.call(P.Bf16ToF32, bias[0]))  # Compute1: homogeneous_multiply_add(ScaleA, ., Bias)
+    else:
+        y = B.call(P.F32Mul, sx, t)                   # Compute1: multiplies(ScaleA, .)
+    return B.call(P.F2fpBf16, y)
+
+
+@composite("ScaledMmFp8NoSwap", 1, ["K", "N", "BIAS", "DOT"],
+           lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", F32))
+                       + ((("b", Array(S.N, BF16)),) if S.BIAS else ())),
+                      Array(S.N, BF16)),
+           conformance="exact-model-tested; see ScaledMmFp8NoSwapCoordinate_v1")
+def ScaledMmFp8NoSwap(B, S, xq, sx, w, sw, *bias):
+    """`_C.cutlass_scaled_mm` without swap_ab on one token row: the N output coordinates (`ScaledMmFp8NoSwapCoordinate`)."""
+    coord = bind(ScaledMmFp8NoSwapCoordinate, K=S.K, BIAS=S.BIAS, DOT=S.DOT)
     if S.BIAS:
         return B.batch(coord, xq, sx, w, sw, bias[0], axes=(None, None, 0, None, 0))
     return B.batch(coord, xq, sx, w, sw, axes=(None, None, 0, None))
