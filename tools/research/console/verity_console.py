@@ -538,8 +538,8 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
 HILLCLIMB = Path("/workspace/usage/hillclimb")  # proofs' roll-ups, one `verity/hillclimb-rollup/v0` file per subcircuit
 SUBCIRCUIT = re.compile(r"[a-z0-9]+/[A-Za-z0-9_]+/K=\d+")
 HILLCLIMB_COLUMNS = ["Step", "Label", "Commit", "Run", "Time (UTC)", "Overhead", "Throughput VU/s", "GPU util", "GPU-held s/VU",
-                     "Byte-identical", "Flags", "VUs", "t_prove s/VU", "Setup s", "Verify s/statement", "Peak FLOP/s", "GPU",
-                     "vCPU", "Dot", "Question"]
+                     "Byte-identical", "Flags", "VUs", "Session s/VU", "Setup s", "Verify s/statement", "Peak FLOP/s", "GPU",
+                     "vCPU", "Dot", "Prove-only s/VU"]
 
 
 def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
@@ -563,13 +563,14 @@ def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
                              p.get("vus") if isinstance(p.get("vus"), int) else None, sig(p.get("t_prove_s_per_vu")),
                              sig(p.get("setup_s")), sig(p.get("verify_s_per_statement")), sig(p.get("peak_flop_per_s")),
                              text(hw.get("gpu")), hw.get("vcpu") if isinstance(hw.get("vcpu"), int) else None,
-                             text(sub.get("dot")), text(p.get("question"))])
+                             text(sub.get("dot")), sig(p.get("t_prove_only_s_per_vu"))])
             name = "hillclimb-" + re.sub(r"[^a-z0-9]+", "-", sid.lower()).strip("-")
             when = isoz(doc.get("updated_utc")) or iso(datetime.fromtimestamp(f.stat().st_mtime, timezone.utc))
             out.append(fit(panel(name, sid, "table", HILLCLIMB_COLUMNS, rows, updated_at=when,
                                  source=f"proofs' hill-climb roll-up (vy-nebius-1 {f}), from hillclimb.json records",
-                                 note="overhead = datasheet dense peak ÷ proved FLOP/s (2·K per VU, verifier excluded); GPU util and "
-                                      "GPU-held s/VU cover the job's whole GPU-held time, verifier included. One row per step.")))
+                                 note="overhead = datasheet dense peak ÷ (2·K·VUs ÷ session time), the session being the whole interactive "
+                                      "proof job, verifier round trips included (proofs, 4:47 PM PDT Sep 30). Prove-only s/VU is the "
+                                      "prover buckets alone. One row per step.")))
         except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
             errors.append(f"hillclimb {f.name}: {type(e).__name__}: {e}")
     return out
