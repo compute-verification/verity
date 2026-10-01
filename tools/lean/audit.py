@@ -29,10 +29,11 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
                  that is not a constant of an `assumptions` module, or no longer says what its record says: signature,
-                 named assumptions, type hash, and (under `reads`, per module) the definitions the pinned statements read,
-                 the pins that read them and the digest of those definitions; the hashes are SHA-256 over a canonical form
-                 of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
-                 are until `--update` rewrites them)
+                 assumptions (the constants of `assumptions` modules it takes as hypotheses, read through the definitions
+                 it unfolds: `thm : Pinned.X` assumes what `Pinned.X` does), type hash, and (under `reads`, per module)
+                 the definitions the pinned statements read, the pins that read them and the digest of those
+                 definitions; the hashes are SHA-256 over a canonical form of the term that ignores what `Expr.hash`
+                 ignores (records written with its 32 bits are checked as they are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
                  only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
@@ -57,7 +58,9 @@ axioms replaces it.  `--update` writes the records and `reads` from the build in
 changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
 weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
 handoff; `--update` records them, it does not approve them.  A pin whose statement is the same but prints differently
-(same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer.  `--all` first runs the controls (`controls`): a
+(same type hash and assumptions: a toolchain's printer, notation) gets one line and needs no reviewer, and so does one of
+the same type hash whose assumptions are found again (`assumptions` modules changed, or how the audit reads them: a
+definition the statement unfolds that changed is a `reads` line of its own).  `--all` first runs the controls (`controls`): a
 fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
 check once a violation is added.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
@@ -335,6 +338,7 @@ def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
+                                  "assumptions": policy.get("assumptions", []),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("pins", {})),
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
@@ -480,7 +484,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             else:
                 fails.append(f"pins: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
                              f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
-        now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
+        now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named) | set(f.get("assumes", []))),
+               "type_hash": f["type_sha256"]}
         pins[name] = now
         if update:
             continue
@@ -531,16 +536,20 @@ def module_files(pkg: Path) -> dict[str, Path]:
     return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
 
 
-REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
+REPRINTED = "printed differently: the same statement (type hash and assumptions unchanged)"
 REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
+#: the same type: a changed definition it reads is a `reads` line of its own, so only how they are found changed (the
+#: `assumptions` modules, or the audit's reading of the definitions the statement unfolds)
+RECOMPUTED = "recomputed: the same statement (type hash unchanged), its assumptions found again"
 
 
 def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
     """What a statement reviewer reads for an `--update`: each changed pin's signature before and after, and each changed
     definition a pin reads, with the pins that read it and its source as it is now.  A pin whose statement is the same but
     prints differently (a toolchain's printer, notation) gets one line, and so does one whose 32-bit record is rewritten
-    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line."""
+    with SHA-256 while the 32-bit hash still matches, or whose assumptions are found again for the same type; read groups
+    rewritten that way are counted on one line."""
     out = []
     op, np = old.get("pins", {}), new.get("pins", {})
     for name in sorted(set(op) | set(np)):
@@ -549,14 +558,18 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
             continue
         rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD and \
             a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
-        if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and a.get("assumptions") == b.get("assumptions"):
-            out.append(f"pin {name}: {REHASHED if rehashed else REPRINTED}")
+        if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")):
+            if a.get("assumptions") == b.get("assumptions"):
+                out.append(f"pin {name}: {REHASHED if rehashed else REPRINTED}")
+            else:
+                out.append(f"pin {name}: assumptions {', '.join(a.get('assumptions', [])) or 'none'} -> "
+                           f"{', '.join(b.get('assumptions', [])) or 'none'}: {RECOMPUTED}")
             continue
         out.append(f"pin {name}: {'new' if not a else 'removed' if not b else 'changed'}")
         out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
         out += ["  after:", *(f"    {s}" for s in b.get("signature", []))] if b else []
         if a and b and a.get("assumptions") != b.get("assumptions"):
-            out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
+            out.append(f"  assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
                        f"{', '.join(b.get('assumptions', [])) or 'none'}")
     spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
     before = read_groups(pinned_reads(facts), old=True)
@@ -587,8 +600,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
 
 def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review a named reviewer must read: all but the pins and read groups whose statements and definitions
-    are unchanged (printed differently, or rehashed with SHA-256 while the 32-bit hashes still match)."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED))]
+    are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, or with their
+    assumptions found again)."""
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, RECOMPUTED))]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:

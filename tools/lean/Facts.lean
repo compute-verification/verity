@@ -15,10 +15,11 @@ judgement; `audit.py` holds the policy.
 - `declared_axioms`: the `axiom` declarations among them.
 - `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
-- `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the hash of its type, and the
-  definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines. Signatures print with no notation, since no notation is loaded: nothing a package
-  declares can change how its statements read.
+- `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the constants of the `assumptions`
+  modules it assumes and those it concludes (`footprint`: read through the definitions under `meaning`), the hash of its
+  type, and the definitions its statement reads, followed through every definition, inductive type and constructor
+  declared under `meaning`, with their source lines. Signatures print with no notation, since no notation is loaded:
+  nothing a package declares can change how its statements read.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pinned statements and the definitions they read are also written
@@ -195,7 +196,37 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Arra
       stack := stack ++ meaningDeps ci
   return out
 
-def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
+/-- What a statement assumes and what it concludes, `(assumes, establishes)`: the `assumption` constants at the head of a
+`Prop` hypothesis (read as a statement in turn: what it concludes, the statement assumes) and at the head of the
+conclusion, through `∀`, `→`, `∧`, `∨` and `∃`, and through each `unfoldable` definition at a head, at most `fuel` deep.
+So a pin stated as `thm : Pinned.X` assumes what `Pinned.X` takes as hypotheses. -/
+partial def footprint (assumption unfoldable : Name → Bool) (fuel : Nat) (t : Expr) : MetaM (NameSet × NameSet) :=
+  forallTelescope t fun xs body => do
+    let mut assumes : NameSet := {}
+    for x in xs do
+      let ty ← inferType x
+      if ← isProp ty then
+        assumes := assumes ∪ (← footprint assumption unfoldable fuel ty).2
+    let args := body.getAppArgs
+    let (a, e) ← match body.getAppFn with
+      | .const c _ =>
+        if (c == ``And || c == ``Or) && args.size == 2 then do
+          let (a₁, e₁) ← footprint assumption unfoldable fuel args[0]!
+          let (a₂, e₂) ← footprint assumption unfoldable fuel args[1]!
+          pure (a₁ ∪ a₂, e₁ ∪ e₂)
+        else if c == ``Exists && args.size == 2 then
+          lambdaTelescope args[1]! fun _ b => footprint assumption unfoldable fuel b
+        else if assumption c then
+          pure ({}, NameSet.empty.insert c)
+        else if unfoldable c && fuel > 0 then do
+          match ← unfoldDefinition? body with
+          | some b => footprint assumption unfoldable (fuel - 1) b
+          | none => pure ({}, {})
+        else pure ({}, {})
+      | _ => pure ({}, {})
+    return (assumes ∪ a, e)
+
+def pinInfo (env : Environment) (meaning assumptionMods : Array Name) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (n : Name) : MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
@@ -210,6 +241,11 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
         ("type", toJson (toString (← ppExpr t))), ("closed", toJson (!t.hasFVar && !t.hasMVar)),
         ("named", toJson (named.map toString)), ("module", toJson ((named.bind moduleOf).map toString))]
     return out
+  let inMods (ms : Array Name) (c : Name) : Bool := ((moduleOf c).map (under ms)).getD false
+  let unfoldable (c : Name) : Bool :=
+    (env.find? c matches some (.defnInfo _)) && inMods meaning c && !inMods assumptionMods c
+  let (assumes, establishes) ← footprint (inMods assumptionMods) unfoldable 32 ci.type
+  let sorted (s : NameSet) : Json := toJson (s.toArray.qsort Name.lt |>.map toString)
   let readJson := fun (r : Name × Name × ConstantInfo) =>
     let (c, m, ci) := r
     Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
@@ -217,7 +253,8 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
-    ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
+    ("hypotheses", toJson hypotheses), ("assumes", sorted assumes), ("establishes", sorted establishes),
+    ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson ((reads env meaning ci.type.getUsedConstants).map readJson))]
 
 def names (j : Json) (k : String) : Array Name :=
@@ -234,6 +271,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let meaning := names cfg "meaning"
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
+  let assumptionMods := names cfg "assumptions"
   let out := (cfg.getObjValD "out").getStr?.toOption.getD "facts.json"
   let env ← importModules (roots.map fun r => { module := r }) {} (loadExts := false)
   let mnames := env.header.moduleNames
@@ -278,7 +316,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         escapes := escapes.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString), ("why", toJson why)]
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
-  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
+  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning assumptionMods axioms ranges p))).toIO
     ctx { env }
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write

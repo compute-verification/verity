@@ -6,5 +6,5 @@
  "assumptions": ["Control.Assumptions"],
  "escapes": {"Control.loop": "partial def: the controls' listed escape"},
  "layers": {"Control.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
- "pins": {"Control.main_thm": {}}
+ "pins": {"Control.main_thm": {}, "Control.claim": {}}
 }

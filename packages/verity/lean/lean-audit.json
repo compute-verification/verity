@@ -54,7 +54,7 @@
     "    Verity.TC.Relation.StepHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
     "      (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) a b w"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.StepInputs"],
    "type_hash": "184aa5ca24ba7d2c3e2861ac91137971e1e6acce48487b8a7fbbf6a70253f535"
   },
   "Verity.TC.ampere_step_hw": {
@@ -68,7 +68,7 @@
     "  Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) w.groups)",
     "    (Verity.TC.Relation.decodeState (step acc a b) Verity.TC.AMPERE_BF16_M16N8K16)"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.GemmAmpereStep", "Verity.Assumptions.StepInputs"],
    "type_hash": "dfb9653d189f54fbc035d3e51237f07f05d79b0a84985d5fde47f900ff8281d4"
   },
   "Verity.TC.ampere_step_iff": {
@@ -86,7 +86,7 @@
     "      (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.AMPERE_BF16_M16N8K16 acc a b)",
     "        Verity.TC.AMPERE_BF16_M16N8K16))"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.StepInputs"],
    "type_hash": "85ec80eaaa76646acd7307ea0cc4e9a66603b23692af6eee77f0bb7193887c8e"
   },
   "Verity.TC.ampere_step_sound": {
@@ -100,7 +100,7 @@
     "    (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.AMPERE_BF16_M16N8K16 acc a b)",
     "      Verity.TC.AMPERE_BF16_M16N8K16)"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.StepInputs"],
    "type_hash": "c5e53aa7a02e01bcec6b56bb806b0575eb01c0401d98fac8c1598448f7362eac"
   },
   "Verity.TC.ampere_unit_bf16": {
@@ -188,7 +188,7 @@
     "    Verity.TC.Relation.StepHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
     "      (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) a b w"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.StepInputs"],
    "type_hash": "00b7faf9009a934edbedcbe8d8f137c3dcabea28ab50a9bce3dbf99f6ce96c26"
   },
   "Verity.TC.hopper_step_hw": {
@@ -202,7 +202,7 @@
     "  Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) w.groups)",
     "    (Verity.TC.Relation.decodeState (step acc a b) Verity.TC.HOPPER_BF16_WGMMA_K16)"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.GemmHopperStep", "Verity.Assumptions.StepInputs"],
    "type_hash": "f4de3678d5260fd7064b73c991ba1d6895ac2ecb4b1b4b30d8536c862013a623"
   },
   "Verity.TC.hopper_step_iff": {
@@ -220,7 +220,7 @@
     "      (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b)",
     "        Verity.TC.HOPPER_BF16_WGMMA_K16))"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.StepInputs"],
    "type_hash": "494a04598f85ef53df775ea5c6636648edb675ac031537b1e0c2e65b0ef3d8c4"
   },
   "Verity.TC.hopper_step_sound": {
@@ -234,7 +234,7 @@
     "    (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b)",
     "      Verity.TC.HOPPER_BF16_WGMMA_K16)"
    ],
-   "assumptions": [],
+   "assumptions": ["Verity.Assumptions.StepInputs"],
    "type_hash": "e5edef2e6a0ce986000364a29e5ae3f31816d8b5613092af4fe69ca172a9a92c"
   },
   "Verity.TC.hopper_unit_bf16": {

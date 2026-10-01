@@ -190,6 +190,20 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
     assert A.judge(POLICY, facts(pins={"P.t": pin(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("pins: P.t assumes (h : Q.Hyp)")
 
 
+def test_an_assumption_a_statement_reaches_is_recorded_and_finding_it_again_needs_no_reviewer():
+    reached = facts(pins={"P.t": pin() | {"assumes": ["P.Fits", "P.Hyp"], "establishes": []}})
+    old = recorded()
+    assert A.judge(old, reached, FILES)[0] == ["pins: P.t's assumptions changed:\n['P.Hyp'] -> ['P.Fits', 'P.Hyp']"]
+    fails, new = A.judge(old, reached, FILES, update=True)
+    assert fails == [] and new["pins"]["P.t"]["assumptions"] == ["P.Fits", "P.Hyp"]
+    text = A.review(old, new, reached, {})
+    assert text == [f"pin P.t: assumptions P.Hyp -> P.Fits, P.Hyp: {A.RECOMPUTED}"] and A.statement_changes(text) == []
+    restated = facts(pins={"P.t": pin(h="00000000000000bb") | {"assumes": ["P.Fits", "P.Hyp"]}})
+    text = A.review(old, A.judge(old, restated, FILES, update=True)[1], restated, {})
+    assert text[0] == "pin P.t: changed" and "  assumptions: P.Hyp -> P.Fits, P.Hyp" in text
+    assert A.statement_changes(text) == text
+
+
 def test_a_pin_must_be_a_theorem_with_allowed_axioms():
     assert A.judge(POLICY, facts(pins={"P.t": {"kind": "missing"}}), FILES, update=True)[0] == ["pins: P.t is missing"]
     assert A.judge(POLICY, facts(pins={"P.t": pin(kind="def")}), FILES, update=True)[0] == ["pins: P.t is a def, not a theorem"]

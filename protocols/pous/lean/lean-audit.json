@@ -261,12 +261,12 @@
   },
   "PousProofs.A3Prime": {
    "signature": ["PousProofs.A3Prime : Pous.Pinned.A3Prime"],
-   "assumptions": [],
+   "assumptions": ["Pous.Assumptions.LemmaA"],
    "type_hash": "4bcc6c859f73632b3654fcc13d314a9aea3741f6d2c8c795eb24f78649f72e79"
   },
   "PousProofs.A3PrimeLam": {
    "signature": ["PousProofs.A3PrimeLam : Pous.Pinned.A3PrimeLam"],
-   "assumptions": [],
+   "assumptions": ["Pous.Assumptions.LemmaA"],
    "type_hash": "4de541c1d947bf033203892ea1b08af7090de34b46f2604bbc3e94257282b68e"
   },
   "PousProofs.A6RederiveTimed": {

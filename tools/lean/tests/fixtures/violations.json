@@ -27,6 +27,10 @@
   "replace": {"Control/Thms.lean": ["(h : Control.Hyp)", "(h : ∀ m : Nat, m + 0 = m)"]},
   "fails": "pins: Control.main_thm assumes (h : "
  },
+ "unfolded_assumption": {
+  "replace": {"Control/Thms.lean": ["Fits n → double", "double"]},
+  "fails": "pins: Control.claim's assumptions changed"
+ },
  "statement": {
   "replace": {"Control/Thms.lean": ["double n = n + n", "double n ≥ n + n"]},
   "fails": "pins: Control.main_thm's signature changed"
@@ -37,7 +41,7 @@
  },
  "meaning": {
   "replace": {"Control/Defs.lean": ["2 * n", "n + n"]},
-  "fails": "pins: definitions in Control.Defs that Control.main_thm read changed"
+  "fails": "pins: definitions in Control.Defs that Control.claim, Control.main_thm read changed"
  },
  "kernel_option": {
   "write": {"Control/Bad.lean": "set_option debug.skipKernelTC true in\ntheorem Control.unchecked : True := trivial\n"},

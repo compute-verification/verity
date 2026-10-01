@@ -968,7 +968,7 @@
   },
   "Pouw.Dimension.A2Words.a2ExtraOutputs": {
    "signature": ["Pouw.Dimension.A2Words.a2ExtraOutputs : Pouw.Dimension.A2Words.A2ExtraOutputs"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "ffa435c38a9bf70bcc5fbcc0f01e25bea97e079aad75abeb09ee03df2c578e42"
   },
   "Pouw.Dimension.A2Words.a2Separation": {
@@ -1043,22 +1043,22 @@
   },
   "Pouw.Dimension.Embed.perWordOfA1fp": {
    "signature": ["Pouw.Dimension.Embed.perWordOfA1fp : Pouw.Dimension.Embed.PerWordOfA1fp"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Embed.A1fp"],
    "type_hash": "355f551004120b5a411f39c94cded06602c7f799bbced437c105dbdf7452ed58"
   },
   "Pouw.Dimension.Embed.ttNCPM4090NanGap": {
    "signature": ["Pouw.Dimension.Embed.ttNCPM4090NanGap : Pouw.Dimension.Embed.TTNCPM4090NanGap"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Embed.CanonicalNaN", "Pouw.Dimension.Embed.NaNGap"],
    "type_hash": "8315bd5deecafc5b76af99162514caca771c38edd46baadf70f3f81f7056d095"
   },
   "Pouw.Dimension.Embed.ttNCPM4090OfA1fp": {
    "signature": ["Pouw.Dimension.Embed.ttNCPM4090OfA1fp : Pouw.Dimension.Embed.TTNCPM4090OfA1fp"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Embed.A1fp"],
    "type_hash": "664e1f598e4e0c25c06308e1515be1f2b354461f3bbe82e9ff521c4b105cbd98"
   },
   "Pouw.Dimension.Forest.a1CostOfNonquad": {
    "signature": ["Pouw.Dimension.Forest.a1CostOfNonquad : Pouw.Dimension.Forest.A1CostOfNonquad"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_nonquad"],
    "type_hash": "74359114ce1a2c8f5c96cff457ed1e2f0117b0b665983dd7c556673275d32ffb"
   },
   "Pouw.Dimension.Forest.a1CostQuadHolds": {
@@ -1108,7 +1108,7 @@
   },
   "Pouw.Dimension.Forest.ttNCPQuadOfA2": {
    "signature": ["Pouw.Dimension.Forest.ttNCPQuadOfA2 : Pouw.Dimension.Forest.TTNCPQuadOfA2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "b476012cdd583ef6e9c024e2b55ec1db1e62cb5b1c2260c99b4d4968e2db9036"
   },
   "Pouw.Dimension.Fp8Mma.ceiling4090": {
@@ -1138,7 +1138,7 @@
   },
   "Pouw.Dimension.H100.c2DistinctWords": {
    "signature": ["Pouw.Dimension.H100.c2DistinctWords : Pouw.Dimension.H100.C2DistinctWords"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "3e368dc56b5a19354ab7e6358b309b706d639684641d7203343c69e4a5d6a1d8"
   },
   "Pouw.Dimension.H100.c2FirstRunCopy": {
@@ -1158,22 +1158,22 @@
   },
   "Pouw.Dimension.H100.denseWritesFrag": {
    "signature": ["Pouw.Dimension.H100.denseWritesFrag : Pouw.Dimension.H100.DenseWritesFrag"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.FloorTc"],
    "type_hash": "c9e06203092024a0c7920cac81f63d4c9dc7cb31512bd3a995e85c898caf6810"
   },
   "Pouw.Dimension.H100.denseWritesFragLanes": {
    "signature": ["Pouw.Dimension.H100.denseWritesFragLanes : Pouw.Dimension.H100.DenseWritesFragLanes"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.FloorTc", "Pouw.Dimension.H100.FragLanes"],
    "type_hash": "4071905056ba18a641fb874b0e60bcc7dc6769dc7c1f6eec2181ffb0771807fd"
   },
   "Pouw.Dimension.H100.denseWritesLegacy": {
    "signature": ["Pouw.Dimension.H100.denseWritesLegacy : Pouw.Dimension.H100.DenseWritesLegacy"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.FloorTc"],
    "type_hash": "8c9caee7831489932b8b2925a49e4df483117188d71186428581458318614936"
   },
   "Pouw.Dimension.H100.distinctLiveMH100": {
    "signature": ["Pouw.Dimension.H100.distinctLiveMH100 : Pouw.Dimension.H100.DistinctLiveMH100"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "750e4ce167a34924fe64f80a8f28dd53c7a5e9540eea8428d3da6649442accd4"
   },
   "Pouw.Dimension.H100.distinctWritesAttained": {
@@ -1188,7 +1188,7 @@
   },
   "Pouw.Dimension.H100.distinctWritesLegacy": {
    "signature": ["Pouw.Dimension.H100.distinctWritesLegacy : Pouw.Dimension.H100.DistinctWritesLegacy"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.FloorTc"],
    "type_hash": "68334581452d3014c6e13470aaeda155597cfae38eabd61d46c430f3d90be84a"
   },
   "Pouw.Dimension.H100.distinctWritesLoopFree": {
@@ -1198,17 +1198,17 @@
   },
   "Pouw.Dimension.H100.distinctWritesMH100": {
    "signature": ["Pouw.Dimension.H100.distinctWritesMH100 : Pouw.Dimension.H100.DistinctWritesMH100"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "56caae8cff0cd314a27e810edc10895966c4a7534f1aa847f8fad6305b0a2b6c"
   },
   "Pouw.Dimension.H100.distinctWritesMH100Floor": {
    "signature": ["Pouw.Dimension.H100.distinctWritesMH100Floor : Pouw.Dimension.H100.DistinctWritesMH100Floor"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.Floor"],
    "type_hash": "09027d51934b5dfd91a98c6d23795989612cfbba46370742656db41937178d8e"
   },
   "Pouw.Dimension.H100.distinctWritesMH100On": {
    "signature": ["Pouw.Dimension.H100.distinctWritesMH100On : Pouw.Dimension.H100.DistinctWritesMH100On"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "0c24d1b2f157e5e12ccb049f553b2ac170ae48c45423c96cbc2e8f8e6f75a70c"
   },
   "Pouw.Dimension.H100.distinctWritesMeasured": {
@@ -1218,7 +1218,7 @@
   },
   "Pouw.Dimension.H100.distinctWritesPacked": {
    "signature": ["Pouw.Dimension.H100.distinctWritesPacked : Pouw.Dimension.H100.DistinctWritesPacked"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.Floor"],
    "type_hash": "bbd2b7252044f590f438645e566af5a19b89c8ee77431130b8d21262c8cea8a8"
   },
   "Pouw.Dimension.H100.distinctWritesPeakTc": {
@@ -1228,7 +1228,7 @@
   },
   "Pouw.Dimension.H100.embedMH100": {
    "signature": ["Pouw.Dimension.H100.embedMH100 : Pouw.Dimension.H100.EmbedMH100"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "8502a49fbcf6947b5da5a432520e30c148cb2d8c378cd00ec9b49cdac2b8c0cb"
   },
   "Pouw.Dimension.H100.floorTcPeakTc": {
@@ -1278,7 +1278,7 @@
   },
   "Pouw.Dimension.H100.legacyGamma": {
    "signature": ["Pouw.Dimension.H100.legacyGamma : Pouw.Dimension.H100.LegacyGamma"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.FloorTc"],
    "type_hash": "39a17e756b51fca461a1857ad8d53840f94d9cf1b4ee2f23ddba5d182949d021"
   },
   "Pouw.Dimension.H100.mh100Attains": {
@@ -1293,17 +1293,17 @@
   },
   "Pouw.Dimension.H100.perWordMH100": {
    "signature": ["Pouw.Dimension.H100.perWordMH100 : Pouw.Dimension.H100.PerWordMH100"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "8934b27c517913cab477a58e927ba26394cfa665e4b860455322be34b52659ce"
   },
   "Pouw.Dimension.H100.perWordMH100Floor": {
    "signature": ["Pouw.Dimension.H100.perWordMH100Floor : Pouw.Dimension.H100.PerWordMH100Floor"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.Floor"],
    "type_hash": "1b79e79f7595f9f9058a5a1e3e75b9eb68692068252d5d60f3c40a96550eef55"
   },
   "Pouw.Dimension.H100.perWordMH100Words": {
    "signature": ["Pouw.Dimension.H100.perWordMH100Words : Pouw.Dimension.H100.PerWordMH100Words"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.H100.H32"],
    "type_hash": "acaaf8f4c1778dd99d5f62e3f962e6070b19d0af9fdb81766070b9ddb292b3c1"
   },
   "Pouw.Dimension.Lifting.card_le_pow_of_sub_mem": {
@@ -1361,7 +1361,7 @@
   },
   "Pouw.Dimension.OpenPipe.a2QuadToOpen": {
    "signature": ["Pouw.Dimension.OpenPipe.a2QuadToOpen : Pouw.Dimension.OpenPipe.A2QuadToOpen"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "4770695a2e04a48311338d4c8e8a556b50bca292cf1d029e6ab9ae8819ff45cf"
   },
   "Pouw.Dimension.OpenPipe.a2WordsIff": {
@@ -1401,7 +1401,7 @@
   },
   "Pouw.Dimension.OpenPipe.ttNCPOpenQuadOfA2": {
    "signature": ["Pouw.Dimension.OpenPipe.ttNCPOpenQuadOfA2 : Pouw.Dimension.OpenPipe.TTNCPOpenQuadOfA2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "69065236e98b51dc3fbc2c91de8c225e5808ecebef508632fa0c50f3fbf35be5"
   },
   "Pouw.Dimension.RouteUProofs.a1CostQuadUHolds": {
@@ -1416,7 +1416,7 @@
   },
   "Pouw.Dimension.RouteUProofs.a1U": {
    "signature": ["Pouw.Dimension.RouteUProofs.a1U : Pouw.Dimension.A1U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_multiplicative", "Pouw.Dimension.Assumptions.ProdFree"],
    "type_hash": "d1aa8d7594b086795d8b9fa5f4840bb53d4059bbda61b100d51fddcab14cf9eb"
   },
   "Pouw.Dimension.RouteUProofs.alg4090WitnessU": {
@@ -1426,7 +1426,7 @@
   },
   "Pouw.Dimension.RouteUProofs.algBound4090U": {
    "signature": ["Pouw.Dimension.RouteUProofs.algBound4090U : Pouw.Dimension.AlgBound4090U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_multiplicative", "Pouw.Dimension.Assumptions.ProdFree"],
    "type_hash": "f653d65499ce2e7c9fb843548ef959ad0ab1094e3edc1965cc05a528e7e5490e"
   },
   "Pouw.Dimension.RouteUProofs.algBoundCausalU": {
@@ -1436,7 +1436,7 @@
   },
   "Pouw.Dimension.RouteUProofs.algBoundPipeU": {
    "signature": ["Pouw.Dimension.RouteUProofs.algBoundPipeU : Pouw.Dimension.AlgBoundPipeU"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_U"],
    "type_hash": "e3a8c7e893ee7541c4788c687ed4d03af3ba748d2f24af4ed50db5cd7c8b517a"
   },
   "Pouw.Dimension.RouteUProofs.algBoundQuad8U": {
@@ -1446,7 +1446,7 @@
   },
   "Pouw.Dimension.RouteUProofs.algBoundQuadU": {
    "signature": ["Pouw.Dimension.RouteUProofs.algBoundQuadU : Pouw.Dimension.AlgBoundQuadU"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_quad_U"],
    "type_hash": "f6259d8b75533019d7fe83286749020bd2009089de17b948dc6e41c62f03b391"
   },
   "Pouw.Dimension.RouteUProofs.algBoundU": {
@@ -1496,7 +1496,7 @@
   },
   "Pouw.Dimension.RouteUProofs.mixingLemmaU": {
    "signature": ["Pouw.Dimension.RouteUProofs.mixingLemmaU : Pouw.Dimension.MixingLemmaU"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.ProdFree"],
    "type_hash": "c50689d9004a4bc05099546989544fa4064e062552abe634d1f831a482d0b29a"
   },
   "Pouw.Dimension.RouteUProofs.pipeChainConsistentU": {
@@ -1526,32 +1526,32 @@
   },
   "Pouw.Dimension.RouteUProofs.ttNCPOfA1A2U": {
    "signature": ["Pouw.Dimension.RouteUProofs.ttNCPOfA1A2U : Pouw.Dimension.TTNCPOfA1A2U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_multiplicative", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "fb7148e73426e580b17430e7fdfbb7e968955b1adfb3e1a5b36f9d0a5ec4a2fc"
   },
   "Pouw.Dimension.RouteUProofs.ttNCPOfA1A2W1U": {
    "signature": ["Pouw.Dimension.RouteUProofs.ttNCPOfA1A2W1U : Pouw.Dimension.TTNCPOfA1A2W1U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_W1", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "6ba64e33ccb4aacb617221fdd4b520da9942551ee38df2ce8397ac781d81de32"
   },
   "Pouw.Dimension.RouteUProofs.ttNCPOfA1costA2U": {
    "signature": ["Pouw.Dimension.RouteUProofs.ttNCPOfA1costA2U : Pouw.Dimension.TTNCPOfA1costA2U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_U", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "49bbb5c2c9747ef6f890681c7d10fc81f74f8c4d67c96b47ca8333270529319a"
   },
   "Pouw.Dimension.RouteUProofs.ttNCPOfA2U": {
    "signature": ["Pouw.Dimension.RouteUProofs.ttNCPOfA2U : Pouw.Dimension.TTNCPOfA2U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "1226ba4ee2db21893ba46b1117ae5d322abb8726868519a907b6ccf08fbbf8c6"
   },
   "Pouw.Dimension.RouteUProofs.ttNCPOfQuadA2U": {
    "signature": ["Pouw.Dimension.RouteUProofs.ttNCPOfQuadA2U : Pouw.Dimension.TTNCPOfQuadA2U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_quad_U", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "9adf9d52000416672e48cef15ceb2d23ccb3fdb7d503fb918168f642c00b3587"
   },
   "Pouw.Dimension.RouteUProofs.ttNCPQuadOfA2U": {
    "signature": ["Pouw.Dimension.RouteUProofs.ttNCPQuadOfA2U : Pouw.Dimension.TTNCPQuadOfA2U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "8624a4bf2f3d582f96e824796165b718360b9b0f967a790bf2f8837e9a5d6647"
   },
   "Pouw.Dimension.RouteUProofs.wordCUSubV0": {
@@ -1566,7 +1566,7 @@
   },
   "Pouw.Dimension.a1CostOfSplit": {
    "signature": ["Pouw.Dimension.a1CostOfSplit : Pouw.Dimension.A1CostOfSplit"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_quad", "Pouw.Dimension.A1_nonquad"],
    "type_hash": "4981874fc5b43a4df73dff9fc2aa954ed833ccc17d3eb2ec55c6b5f763f0b866"
   },
   "Pouw.Dimension.a1CostWitness": {
@@ -1576,7 +1576,7 @@
   },
   "Pouw.Dimension.a1MinRank": {
    "signature": ["Pouw.Dimension.a1MinRank : Pouw.Dimension.A1MinRank"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_multiplicative"],
    "type_hash": "9251cae7fd75e90449cce3c452b30b3b10691a86dbb1b39972ff67709ce71ff7"
   },
   "Pouw.Dimension.a1W1Witness": {
@@ -1621,7 +1621,7 @@
   },
   "Pouw.Dimension.algBound4090": {
    "signature": ["Pouw.Dimension.algBound4090 : Pouw.Dimension.AlgBound4090"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_multiplicative", "Pouw.Dimension.Assumptions.ProdFree"],
    "type_hash": "21a40ef84103a75d8332df49f8242ce07e6038460b763a3ac1e02e70dba6e264"
   },
   "Pouw.Dimension.algBoundCausal": {
@@ -1631,12 +1631,12 @@
   },
   "Pouw.Dimension.algBoundPipe": {
    "signature": ["Pouw.Dimension.algBoundPipe : Pouw.Dimension.AlgBoundPipe"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost"],
    "type_hash": "c7480d050ffb99e5f9eac2ffd00c7ea1ae0f0207197eb88136eb21fd51ce8b0e"
   },
   "Pouw.Dimension.algBoundQuad": {
    "signature": ["Pouw.Dimension.algBoundQuad : Pouw.Dimension.AlgBoundQuad"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_quad"],
    "type_hash": "7a0e67fe5349b679b3ab99b658e7d18cbc97fa9c97761a95528b77e992e83a7a"
   },
   "Pouw.Dimension.algBoundWrapped": {
@@ -1701,7 +1701,7 @@
   },
   "Pouw.Dimension.mixingLemma": {
    "signature": ["Pouw.Dimension.mixingLemma : Pouw.Dimension.MixingLemma"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.ProdFree"],
    "type_hash": "f7154fc963f61aefa0a04cc1f805594b7b09a2edadfa237a4843b06fe3805430"
   },
   "Pouw.Dimension.pipeChainConsistent": {
@@ -1774,27 +1774,27 @@
   },
   "Pouw.Dimension.ttNCPOfA1A2": {
    "signature": ["Pouw.Dimension.ttNCPOfA1A2 : Pouw.Dimension.TTNCPOfA1A2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_multiplicative", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "b3f2f03395c9de8c3a637057c02d77a751ad27adfcfce4b51086dacef7de6ec9"
   },
   "Pouw.Dimension.ttNCPOfA1A2W1": {
    "signature": ["Pouw.Dimension.ttNCPOfA1A2W1 : Pouw.Dimension.TTNCPOfA1A2W1"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A1_W1", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "160f6f8d6a936868d7bbdb764b3437945773f18695c6bb1aef373a64ad732492"
   },
   "Pouw.Dimension.ttNCPOfA1costA2": {
    "signature": ["Pouw.Dimension.ttNCPOfA1costA2 : Pouw.Dimension.TTNCPOfA1costA2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "72ccb9e3382a719fa87956cb9d4b4ae4b1d37b491823d6c20329f3203ca07879"
   },
   "Pouw.Dimension.ttNCPOfA2": {
    "signature": ["Pouw.Dimension.ttNCPOfA2 : Pouw.Dimension.TTNCPOfA2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "7ae4ccfc8c6c223ef4e77f8dd1d2c40c774eeb37c7b0aae6f41c7c4fbeb6df7a"
   },
   "Pouw.Dimension.ttNCPOfQuadA2": {
    "signature": ["Pouw.Dimension.ttNCPOfQuadA2 : Pouw.Dimension.TTNCPOfQuadA2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Dimension.A1_cost_quad", "Pouw.Dimension.Assumptions.A2_algebraicSufficiency"],
    "type_hash": "7f94e97bf1ddb70134206b9ae82412e7a42e92489ec38272c8896116d396a1b9"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tAtomValue": {
@@ -1831,14 +1831,14 @@
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
    "signature": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma (hD : Pouw.Fp8Atom.H1T.DistinctLiveH1T) : Pouw.Fp8Atom.H1T.H1TGamma"],
-   "assumptions": ["Pouw.Fp8Atom.H1T.DistinctLiveH1T"],
+   "assumptions": ["Pouw.Dimension.H100.H32", "Pouw.Fp8Atom.H1T.DistinctLiveH1T"],
    "type_hash": "67d30e9ee03f21fcbe376f24347f10ab090f1eb21132714e6cd335da93dc42e5"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGammaRunning": {
    "signature": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGammaRunning (hR : Pouw.Fp8Atom.H1T.H1TRunningWords) : Pouw.Fp8Atom.H1T.H1TGamma"
    ],
-   "assumptions": ["Pouw.Fp8Atom.H1T.H1TRunningWords"],
+   "assumptions": ["Pouw.Dimension.H100.H32", "Pouw.Fp8Atom.H1T.H1TRunningWords"],
    "type_hash": "6d10e7612e6232ff29ce78c55f53a8b6cebd49a9f6b268bfda8477f0f6a69da6"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tNonVacuous": {
@@ -1944,7 +1944,7 @@
    "signature": [
     "Pouw.Fp8Atom.H1T.Proofs.tth1tAllRight (hR : Pouw.Fp8Atom.H1T.H1TRunningWords) : Pouw.Fp8Atom.H1T.TTH1TAllRight"
    ],
-   "assumptions": ["Pouw.Fp8Atom.H1T.H1TRunningWords"],
+   "assumptions": ["Pouw.Dimension.H100.H32", "Pouw.Fp8Atom.H1T.H1TRunningWords"],
    "type_hash": "944ca739cb2163117bd5b5de363b09d82727ff168f2d18f826fa272064de99ed"
   },
   "Pouw.Fp8Atom.H1T.Proofs.tth1tSat": {
@@ -2059,7 +2059,7 @@
   },
   "Pouw.NCP.GameProofs.gammaFromTTNCP": {
    "signature": ["Pouw.NCP.GameProofs.gammaFromTTNCP : Pouw.NCP.GamePinned.GammaFromTTNCP"],
-   "assumptions": [],
+   "assumptions": ["Pouw.NCP.Assumptions.TTNCP"],
    "type_hash": "e8d8ccd856c8cb29719d2714fdfe6713d8855da6e5e15d936521d8bd5fccbae6"
   },
   "Pouw.NCP.GameProofs.lastChecked": {
@@ -2194,17 +2194,17 @@
   },
   "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U": {
    "signature": ["Pouw.NCP.RouteUProofs.gammaFromTTNCP_U : Pouw.NCP.RouteU.GammaFromTTNCP_U"],
-   "assumptions": [],
+   "assumptions": ["Pouw.NCP.Assumptions.TTNCP_U"],
    "type_hash": "a2e61d27cee7eafdf52f5c7fcb5a7cea96afae484e5e976f96cbfd62872ad673"
   },
   "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2": {
    "signature": ["Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2 : Pouw.NCP.RouteU.GammaFromTTNCP_U_C2"],
-   "assumptions": [],
+   "assumptions": ["Pouw.NCP.Assumptions.TTNCP_U"],
    "type_hash": "2648368daa96d552ea4914cb80a5108b76dd75815b70ec2f614105cef0662697"
   },
   "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1": {
    "signature": ["Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1 : Pouw.NCP.RouteU.GammaFromTTNCP_U_v1"],
-   "assumptions": [],
+   "assumptions": ["Pouw.NCP.Assumptions.TTNCP_U"],
    "type_hash": "8764c7c4ed7acff2430fb7cb05dbf772d39729a632619fae557b1b520e87ba83"
   },
   "Pouw.NCP.RouteUProofs.int7Int32U": {
@@ -2513,7 +2513,7 @@
     "  (η : Nat → Nat → Real) (hW : ∀ (L : Pouw.PearlC.Layout) (u : Nat), Real.instLE.le 0 (P.Wref L u))",
     "  (h : Pouw.PearlC.GγU CM P D γ η) : Pouw.PearlC.Gγ CM P D γ η"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.GγU"],
    "type_hash": "80ae29b814d1f30f56c2236156610bb4cbd5d0dbca970024978c62088a980757"
   },
   "Pouw.PearlC.pearlCDomainDev_split": {
@@ -2540,7 +2540,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocol sem Pouw.PearlC.Costs.adopted (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainAt Pouw.PearlC.Params.pi Pouw.PearlC.sh16384) (536953 / 103540000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlC"],
    "type_hash": "fa35f94afc5a8c22766447cdbc1ce1af290e3f06396cfbf725c3e90b9718c804"
   },
   "Pouw.PearlC.pearlCGamma8192": {
@@ -2551,7 +2551,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocol sem Pouw.PearlC.Costs.adopted (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainAt Pouw.PearlC.Params.pi Pouw.PearlC.sh8192) (281273 / 52340000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlC"],
    "type_hash": "271df0d86f2109f96775752b2539b2ca4c26a4fa26b2625b593f0786405a22aa"
   },
   "Pouw.PearlC.pearlCGammaDevChainCapKAt": {
@@ -2567,7 +2567,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevChainCapK d sem ρ c) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast",
     "    Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "855f6cdd9c7fee0cf5f9b9e2e92d9d7b2a77b06f00309413ea3601e92e71af30"
   },
   "Pouw.PearlC.pearlCGammaDevKAt": {
@@ -2582,7 +2582,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevK d sem ρ c) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast",
     "    Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "c2c906f51a958de705249a1f2a5d43233ff0ac54aba89bd9221392afd8a1a739"
   },
   "Pouw.PearlC.pearlCGammaDevKChainOnlyAt": {
@@ -2599,7 +2599,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevK d sem ρ c) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast",
     "    Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "3076cd3c0f7d6c8b72d79d207d243596e230a39c9c66413857ca07b4df5d037a"
   },
   "Pouw.PearlC.pearlCGammaDevRev1At": {
@@ -2615,7 +2615,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem ρ) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast",
     "    Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "1799c4d3304fc72902250b7c363066d066fe9653dfb4c839b0618bef8ff0edb3"
   },
   "Pouw.PearlC.pearlCGammaDevRev1KAt": {
@@ -2631,7 +2631,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1K d sem ρ c) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast",
     "    Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "86f2c0edae89c459eccbebc3e57abb6a7b51801ee52da682651adee13121c0db"
   },
   "Pouw.PearlC.pearlCGammaDevRev1KChainOnlyAt": {
@@ -2648,7 +2648,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1K d sem ρ c) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast",
     "    Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "d08db742928617c2330b2b99e9b084caa26a37884feb0fdcad9673ccae288fc8"
   },
   "Pouw.PearlC.pearlCGammaDevRev1RowSeedAt": {
@@ -2678,7 +2678,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 Pouw.PearlC.sh16384) (89359 / 17230000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1"],
    "type_hash": "3269e5c992020a7fe7426a942a37ecf5cf2617806e27bb3ce4a9107e5ca196b1"
   },
   "Pouw.PearlC.pearlCGammaH100Rev1_8192": {
@@ -2689,7 +2689,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 Pouw.PearlC.devH100 sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 Pouw.PearlC.sh8192) (140237 / 26090000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1"],
    "type_hash": "3267d02afb3d60caebf4ef4d76054c2999e619398282445c85200488bf39e9f6"
   },
   "Pouw.PearlC.pearlCGammaSm120LoopRev1_16384": {
@@ -2701,7 +2701,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384) (1802569231 / 352995040000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "daa456046809fdc610403a147ac9e3c33df691ac0f05c7c3efc5c6dfc425818d"
   },
   "Pouw.PearlC.pearlCGammaSm120LoopRev1_8192": {
@@ -2713,7 +2713,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "c45a9dd8542a39a896e0d306c3b39a75c502695bd1e7fd5b9d10f16a725e3c19"
   },
   "Pouw.PearlC.pearlCGammaSm120Rev1_16384": {
@@ -2724,7 +2724,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384) (2963 / 586700).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "ad6657901642e147a6d835694f2d86e27f09719638b0056e0d56364bf5c28963"
   },
   "Pouw.PearlC.pearlCGammaSm120Rev1_8192": {
@@ -2735,7 +2735,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "b9963939aaa8f0ed85ccc6cb7e6cfd668bfe7bffaa71125524948e81be49dce0"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast16ChainOnlyRev1_16384": {
@@ -2751,7 +2751,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (13679 / 1760900).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "643f4d053f59a361b6ac94c9ce5bcceef1a37d55770974147d7afac1a4206b7d"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast16ChainOnlyRev1_8192": {
@@ -2767,7 +2767,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (131 / 12500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "1d7675233b4a3f0a21727cf7d3bb7b64d0983a0ee229f9b1694c74cf94adf3c7"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast16Rev1_16384": {
@@ -2782,7 +2782,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (9689 / 1760900).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "c9b9ce306c7597d81fa7227186af90c76ee23dc8260d81331ae84d9c94208b96"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast16Rev1_8192": {
@@ -2797,7 +2797,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (133561 / 22262500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "279bc80bf51c8b53ed62a8e8a975feeafe1084caabaeacf12bbf19ac1b64cab1"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast32Rev1_16384": {
@@ -2812,7 +2812,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (3763 / 587500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "704d01644a33a0ddf4738c168991b11103eacea6a1e016c0c294f73074be5b42"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast32Rev1_8192": {
@@ -2827,7 +2827,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (173561 / 22302500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "04c4b519473e78b1a7b9076d6ecb5afdca19e3e88f0c8cf29559152db8c6e9e6"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast32p06ChainOnlyRev1_16384": {
@@ -2843,7 +2843,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (5095 / 587502).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "78290f11d9ef87fe15c928c5fbb48c9797b44c8ebee4805a4013cd12a601c8fc"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast32p06ChainOnlyRev1_8192": {
@@ -2859,7 +2859,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (273461 / 22302650).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "43269613d5c731f9ea39bcf3384952894b7617fd7328803fe06ba91de35a7912"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast32p06Rev1_16384": {
@@ -2874,7 +2874,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (1255 / 195834).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "5d8b5f95da44d070cc92aabf3b5dae2d98fe64d7ec1fb0e93cc89c7dd8ce80ed"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast32p06Rev1_8192": {
@@ -2889,7 +2889,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (173711 / 22302650).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "42a25f174ecff0e6f8369d028834c713a38baa6ec00c921f33302eda2f998660"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast8p72ChainOnlyRev1_16384": {
@@ -2905,7 +2905,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4317 / 586724).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "e2cda69aadfb4fc38cf0990b7843df4dfe2f5df5a3173ae65818a800edea9bd0"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast8p72ChainOnlyRev1_8192": {
@@ -2921,7 +2921,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (16547 / 1711100).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "39a370e9a0ece01bbfc4e8386cdb283c45043ece23edc01f30c650b5f8a07210"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1_16384": {
@@ -2936,7 +2936,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2987 / 586724).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "adfb18200a4d89039d6d7cf3a9ab562f66270ca192936f91b80c9757450eae3f"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1_8192": {
@@ -2951,7 +2951,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (115361 / 22244300).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "2d34a9904d61722685b71ae75bc5be663c3c1112694d52b23eb842d2e10e2058"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast16ChainOnlyRev1_16384": {
@@ -2967,7 +2967,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (2741509231 / 353135980000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "6cee4a2551ee563ced4295cdcd5db1bcefdd1d62b9be4bf57de486ff42cdb6cb"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast16ChainOnlyRev1_8192": {
@@ -2983,7 +2983,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (623264613 / 59524900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "66ff8eceea0accb82f708a255486979ac2223bc51299f0918353b524111be313"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast16Rev1_16384": {
@@ -2998,7 +2998,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1943509231 / 353135980000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "f3c3b19076e576b0f9207bf9f12a68145346637f745653f14261d730ebc2c44b"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast16Rev1_8192": {
@@ -3013,7 +3013,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (3277657 / 546100000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "59fe2dcd510c64ccc563542c3f1c1d4535a45af6b3f6e7c9f0d9f54517ab569c"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast32Rev1_16384": {
@@ -3028,7 +3028,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (754503077 / 117818660000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "00771ee0d228a64b37b15841c02ae9ae034584719a70c5f03d69a1c6dee86cb1"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast32Rev1_8192": {
@@ -3043,7 +3043,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1391793839 / 178894700000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "340f5bd11ad5adfbcec930e350682c01ab7dbe97dd21273fba6cd9589a792b5f"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06ChainOnlyRev1_16384": {
@@ -3059,7 +3059,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1020903077 / 117819060000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "6ecd24da9dfe655430ef485040b66d93081f7e899c5f878e8c21a676bf29cec9"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06ChainOnlyRev1_8192": {
@@ -3075,7 +3075,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (2190993839 / 178895900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "e06766a6a27cd923b1daff2716e46675e7921082d3285413747d64a518747f0a"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06Rev1_16384": {
@@ -3090,7 +3090,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (251634359 / 39273020000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "63bcc56db6960d0d03afd4d6d12a82b25896178737e814f60fa9dca7f6ba3a45"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06Rev1_8192": {
@@ -3105,7 +3105,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1392993839 / 178895900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "cafffb21d3bba7d5fa07a5e776e620737d2c210c8c58f70f8b095a02a86d7d1c"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8Rev1_16384": {
@@ -3120,7 +3120,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (84929011 / 16808380000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "2ed7956bdaee8a676bf184cdea98cdf1cf38f9b896980297010c8e8922d51a83"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8Rev1_8192": {
@@ -3135,7 +3135,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (911793839 / 178414700000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "485d8d7de69ee7a94a5ed9f778efbb6100bdafe37c693e643b94b5a2043d1366"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72ChainOnlyRev1_16384": {
@@ -3151,7 +3151,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (50900181 / 6921380000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "2b980e18a56c0613c74e9b78c56ffb05f8eb3a5bbeccbe448e06c5a9496e6e4b"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72ChainOnlyRev1_8192": {
@@ -3167,7 +3167,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1724193839 / 178429100000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly"],
    "type_hash": "de4b1e1e36c9b0754331bfa9a6126e0f9dfec0419dc2277acf121903372cb2c3"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_16384": {
@@ -3182,7 +3182,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (599303077 / 117663460000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "02bfdfdd135c97308b68b4c4def65ed25c15e21fbd7a0836467575e895ba7aad"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_8192": {
@@ -3197,7 +3197,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (926193839 / 178429100000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "9381fb29337d3f479139728e57ad2cd0758d1cf5dceab00cebc721c63fe5f702"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopRev1_16384": {
@@ -3211,7 +3211,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1802569231 / 352995040000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "d3cdfff3e3691dfd5af60e7a47629c639dbdf4ba32929b0fcd2acb060175a340"
   },
   "Pouw.PearlC.pearlCGammaSm120v1LoopRev1_8192": {
@@ -3225,7 +3225,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "99cb81b93181c8c90b1a6e4df3e565cad22bb8909c4d1c26fa84f1625408d33f"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Rev1_16384": {
@@ -3238,7 +3238,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2963 / 586700).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "5b337ca5ab72109e31a0ab7ee1d8e67f2c8b66fb7168aabb50b7022f2d3f4b35"
   },
   "Pouw.PearlC.pearlCGammaSm120v1Rev1_8192": {
@@ -3251,7 +3251,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "a51140a7bbd1dbab278c36503e535389b95c57fc32c82454b63bc79a24eb5a0f"
   },
   "Pouw.PearlC.pearlCGammaSm120v1RowSeed_16384": {
@@ -3267,7 +3267,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (2963 / 586700).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 16384)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "d94ba74cc3c9559a7fa60bec21883bfb333e9c2579c91ddf14127971ecfb18e8"
   },
   "Pouw.PearlC.pearlCGammaSm120v1RowSeed_8192": {
@@ -3283,7 +3283,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (16223 / 3177500).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "b0d0d3b5e2d4fc226154c8b37dc3d9f0140d361e3068434de7e0621a80e2f587"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cap1000_16384": {
@@ -3295,7 +3295,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2950127 / 829250000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "8be472f374df31736e19aaef7eebcebed8b5678ec307aca4efd1eebbd37f6aa1"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192": {
@@ -3307,7 +3307,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "0f39009bac069989002bb419b837012952fe5834f5a438c3e26ae132509e9e63"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast16Cap1000_16384": {
@@ -3321,7 +3321,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (1116709 / 276550000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "66b8f96bac99b9973dea1dbad584cd141d41efdd1493259e0ab7bd875b02d482"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast16Cap1000_8192": {
@@ -3335,7 +3335,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (1917551 / 420050000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "64adc98b7dbe0ea179b617f045e8daa966a1b8e1f3cedfcc2c582a25ed7a50e5"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast16ChainOnlyCap1000_16384": {
@@ -3351,7 +3351,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (1781709 / 276550000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "6a9f0305219f5ce9ba538326ded9695d9ed9fa3bb6029660e4c1d86350f24f3b"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast16ChainOnlyCap1000_8192": {
@@ -3367,7 +3367,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (3912551 / 420050000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "01afd0417e215b73b8508a80e4564437fbacbe03420e5718db5f7b8fb3db2665"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast32Cap1000_16384": {
@@ -3381,7 +3381,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4150127 / 830450000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "d13cee250aadf94cb084e42996346e0d5604b128b6ffaa38208af8d0cbf9c1cf"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast32Cap1000_8192": {
@@ -3395,7 +3395,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (143029 / 22150000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "35050d830459d5b268e3d6429e98b39265268837eac1c82dd20a003697429e11"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast32p06Cap1000_16384": {
@@ -3409,7 +3409,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4153127 / 830453000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "964a6aa91ae6dabc2a2c08dbc47ab1dba4922371e5424e1b3d501d2183694009"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast32p06Cap1000_8192": {
@@ -3423,7 +3423,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (2720551 / 420853000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "71739ba6720b32d830357b23e0a21c79c1d951d5ec51db850cbdf9d6caf7ea38"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast32p06ChainOnlyCap1000_16384": {
@@ -3439,7 +3439,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (6148127 / 830453000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "24e8d0f64b9f6bfbe808d377d863a7c03e3e67bd46ec8163735160561e91a7be"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast32p06ChainOnlyCap1000_8192": {
@@ -3455,7 +3455,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (4715551 / 420853000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "654e2d0ec9a62b035730e6f461816889d7761ad032401352472ce8991d3e540a"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast8p72Cap1000_16384": {
@@ -3469,7 +3469,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2986127 / 829286000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "c177f10372bae1069b84e24d5ba1777c43ca66588e1707b3ca371d6f1aca0302"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast8p72Cap1000_8192": {
@@ -3483,7 +3483,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (1553551 / 419686000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "3c7a45c81f50320bb50f68ebc442a0630d299e8200338adda74cc6f068056c77"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast8p72ChainOnlyCap1000_16384": {
@@ -3499,7 +3499,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4981127 / 829286000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "8949853c465b3cda0209c551bbe751374e689b1bded3da39f71fe04d9f0fd8ec"
   },
   "Pouw.PearlC.pearlCGammaSm120v2Cast8p72ChainOnlyCap1000_8192": {
@@ -3515,7 +3515,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (3548551 / 419686000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "c3c331efb4bd939cbdb57f57ca3a69dbccbc538d1268cb1edf099da32c3e0857"
   },
   "Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_16384": {
@@ -3530,7 +3530,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (367519 / 103656250).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "21bb6a7ceceb1cc0481a5b9161ab77e06acea1464a9d9cc714e1d6217ab345ce"
   },
   "Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_8192": {
@@ -3545,7 +3545,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (26921 / 7493750).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "58685e7c4db7270a24ab8c9be7adf4d3c195a3fb23ee221e4e0d33009dcf6fe8"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCap1000_16384": {
@@ -3558,7 +3558,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (3000127 / 829300000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "ba75300aab9d594de7cd3c90ce8d28c7f684f2dabc5f1524d7c917147ee29b02"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCap1000_8192": {
@@ -3571,7 +3571,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "6ee5401f0b7462e767302e66b9205e3126ce00d848a6b069f1126d757f1146d2"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast16Cap1000_16384": {
@@ -3586,7 +3586,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (3352477 / 829652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "1965cb859078e3b861e33db808c78e7bc014ec12d6b1cf9d034c2e9bcc4b3fde"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast16Cap1000_8192": {
@@ -3601,7 +3601,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (639967 / 140017450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "7b2e3ec226bf4a5339cf4e0e543ebb8bc1116b3166c4a968cb43cac22d599458"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast16ChainOnlyCap1000_16384": {
@@ -3617,7 +3617,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (5347477 / 829652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "c7079cc8055a7f2b8e67fac1474f784abc09906cc51c7e1136b5b1dff9a58eb9"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast16ChainOnlyCap1000_8192": {
@@ -3633,7 +3633,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1304967 / 140017450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "dca38ae2f31e9d4ef0d2ca1da34538e2799b59d46eee7cedf1811d045e2e4d97"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast32Cap1000_16384": {
@@ -3648,7 +3648,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (197737 / 39545350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "8e92e6be33041b7ec6cbfab26dee282d7d5d97634966c1155f8ff9ca6417b378"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast32Cap1000_8192": {
@@ -3663,7 +3663,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (2719901 / 420852350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "8b04afee2c8123bce2d4dcbe9b03e8cf3aedd68638eda0aeb01d5c7428ab1a95"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast32p06Cap1000_16384": {
@@ -3678,7 +3678,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1385159 / 276818450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "4607b5a382c307be0e4ad7f3ea378b74ab1a74e792467f9c3fc3a0f644fca28e"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast32p06Cap1000_8192": {
@@ -3693,7 +3693,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (2722901 / 420855350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "162034316a701b17782e489dc0a30bfe22c5995b025de8e7c84f79b24de3156c"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast32p06ChainOnlyCap1000_16384": {
@@ -3709,7 +3709,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (2050159 / 276818450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "89c6cb348d5128c223a0d01289ef342fc311001fbb8d7daf8154c7b045f197d2"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast32p06ChainOnlyCap1000_8192": {
@@ -3725,7 +3725,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (4717901 / 420855350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "7a71095e7e50eb31325c9e8d645810c7be0ffac1edcfc281adae9c926e34b344"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8Cap1000_16384": {
@@ -3740,7 +3740,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (109351 / 30713050).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "39d8cca80dfc5c7ac4a28b1f645dfb6c64629844c888ab88c025da456f3fa324"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8Cap1000_8192": {
@@ -3755,7 +3755,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1519901 / 419652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "ec6a1e9478b1e734b59adf601c88681feae305d1625babc83865170bbc41af41"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8ChainCap1000_16384": {
@@ -3771,7 +3771,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (490417 / 138208725).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "38106e43a30a192495bd37f1a8c4d3bfad1209c9bbc313086c4fe13aba45a023"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8ChainCap1000_8192": {
@@ -3787,7 +3787,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (754963 / 209826175).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "0247a8b8ba416481ebe48141c99babceb85dd803b0d78a6b7fae02911c46b1a2"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72Cap1000_16384": {
@@ -3802,7 +3802,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (332053 / 92143150).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "d9c1f782ef4f9b956ecdad5831676f74e6b0a80bbd450030201bee792fb9941f"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72Cap1000_8192": {
@@ -3817,7 +3817,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1555901 / 419688350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "3c0ef54ab5d74c6bf06ab728996fb6275d5fd43ddb76e1e5d7fe828965036eaf"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72ChainOnlyCap1000_16384": {
@@ -3833,7 +3833,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1661159 / 276429450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "f27d3a5e06bdff8047271f854bea147ac8e7da92714834bd4eceaf92a903d9fc"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": {
@@ -3849,7 +3849,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (3550901 / 419688350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly"],
    "type_hash": "98329b63b6d19f55122198a2d5a8a6fced9f67db05b7b055e046d1c66a79fb2c"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopChainCap1000_16384": {
@@ -3864,7 +3864,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (373769 / 103662500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "0866b28db5b2d2e86fd972ce19359427d0ed725418a937035ea41431d6788d2d"
   },
   "Pouw.PearlC.pearlCGammaSm120v2LoopChainCap1000_8192": {
@@ -3879,7 +3879,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (64899 / 17487500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "807b7d853682cae8be17006784b4ba48d6fa53a0bd46bcce5a8a76c4d627bb68"
   },
   "Pouw.PearlC.pearlCGammaSm120v2RowSeedCap1000_16384": {
@@ -3895,7 +3895,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (2950127 / 829250000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 16384)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "466ccf849d6694183fe18a1b238a4f720167ad990b7a190885db22ff00b45fee"
   },
   "Pouw.PearlC.pearlCGammaSm120v2RowSeedCap1000_8192": {
@@ -3911,7 +3911,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (216793 / 59950000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "01669e8d1bec5b382277bedf6e88e783a5c0d241c49ad86e00bebf94843ac8cd"
   },
   "Pouw.PearlC.pearlCGammaUOnlySm120LoopRev1_8192": {
@@ -3923,7 +3923,7 @@
     "  Pouw.PearlC.GγU CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "266f9709c80165aee1fb8ae1c2da0c09f5a074614405fd6d6b1e3e54b144f168"
   },
   "Pouw.PearlC.pearlCGammaUOnlySm120Rev1_8192": {
@@ -3934,7 +3934,7 @@
     "  Pouw.PearlC.GγU CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "946f9f1ae8fbab9e1aff49113b42e1698c9d9e68d3f4cafb0c3e67544397d9cd"
   },
   "Pouw.PearlC.pearlCGammaUOnlySm120v1LoopRev1_8192": {
@@ -3949,7 +3949,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "0ae1a747f410af613c2d1028978b5388304d3029be38d939feade2e54eacad85"
   },
   "Pouw.PearlC.pearlCGammaUOnlySm120v1Rev1_8192": {
@@ -3962,7 +3962,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "eacf52b3a0b1d4f2ac4220a34dcc9298c08a581c6bb67206b7f6863cb7712175"
   },
   "Pouw.PearlC.pearlCGammaUOnlySm120v2Cap1000_8192": {
@@ -3976,7 +3976,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "41573f7dfe1e773e20948021b776fc2e91d038e7c7d983ec2270c300ae2b3aa4"
   },
   "Pouw.PearlC.pearlCGammaUOnlySm120v2LoopCap1000_8192": {
@@ -3991,7 +3991,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "d812cdec0b5452a20f52df484033785cf2298b759b86e48fb54cfe58584c8d0f"
   },
   "Pouw.PearlC.pearlCGammaUOnlyUnpromotedCap1000Loop_8192": {
@@ -4003,7 +4003,7 @@
     "  Pouw.PearlC.GγU CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "9644918418e655eac7d7b000da4f3da90255c9be6b0b2ed3d05bc8d4296e7b88"
   },
   "Pouw.PearlC.pearlCGammaUOnlyUnpromotedCap1000_8192": {
@@ -4014,7 +4014,7 @@
     "  Pouw.PearlC.GγU CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "aa4b67a142549af3db15f6eebfbfc1079f9f8baada7943f02dc2af63d5f233ed"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedCap1000Loop_16384": {
@@ -4025,7 +4025,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDev d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384) (3000127 / 829300000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "97a4d77e352836bdb777fbae66b088d5fcdc79505c8d5f4a2922512cce50379d"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedCap1000Loop_8192": {
@@ -4036,7 +4036,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDev d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "5373f5d2d8ed3e976f3ed7aa747315948a002d29cc2fb86d75099e9e35d3db06"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedCap1000_16384": {
@@ -4047,7 +4047,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDev d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384) (2950127 / 829250000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "fd21ce501e014cd28b124781dd05c78f0f98483b7d1c795529b13f6f3c4c3d02"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedCap1000_8192": {
@@ -4058,7 +4058,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDev d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "f28f2c487dccd8fd002f2186b7f2b8fabe9fe7f0c510e9373ff0d4ba1a3f77e5"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedChainCap1000Loop_16384": {
@@ -4070,7 +4070,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevChainCap d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384) (373769 / 103662500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "55b32b5da7792b35f222a9e5683a57d9e9e979711f7a17c02bf15144a119e8c7"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedChainCap1000Loop_8192": {
@@ -4082,7 +4082,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevChainCap d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (64899 / 17487500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "f73bc528c4e3b8b96bda40c6b2555ef6bcc1e11350fe56cfb31597e1c726b178"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedChainCap1000_16384": {
@@ -4094,7 +4094,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevChainCap d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384) (367519 / 103656250).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "b19fb76831160ac77d26a2bbad57a2a907f9e6396d45cd529ad86c5c33bf6123"
   },
   "Pouw.PearlC.pearlCGammaUnpromotedChainCap1000_8192": {
@@ -4106,7 +4106,7 @@
     "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDevChainCap d sem (1 / 1000))",
     "    (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192) (26921 / 7493750).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap"],
    "type_hash": "32384e6f450e9813eb4e7fc8ff3a4841489655bd71e32e545d00752c2edc196b"
   },
   "Pouw.PearlC.pearlCSampledDevChainCapKAt": {
@@ -4121,7 +4121,7 @@
     "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevChainCapK d sem ρ c)",
     "    (Pouw.PearlC.pearlCTilesDevChainCapK d sem ρ c) (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "5aa8d2301e91f3a2cde98e8219f65d40ef1645ca906f31fc1991f6158a738a99"
   },
   "Pouw.PearlC.pearlCSampledDevKAt": {
@@ -4136,7 +4136,7 @@
     "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevK d sem ρ c) (Pouw.PearlC.pearlCTilesDevK d sem ρ c)",
     "    (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "174268c4d4ee83127f36814c8bf48464623e7a5393e6a96b36a8d8346a403e73"
   },
   "Pouw.PearlC.pearlCSampledDevKChainOnlyAt": {
@@ -4153,7 +4153,7 @@
     "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevK d sem ρ c) (Pouw.PearlC.pearlCTilesDevK d sem ρ c)",
     "    (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "6e06afb8347fda1ad0d34da3ea1fecab53565a98e3f782ae676395e5240601d3"
   },
   "Pouw.PearlC.pearlCSampledDevRev1At": {
@@ -4169,7 +4169,7 @@
     "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1 d sem ρ) (Pouw.PearlC.pearlCTilesDevRev1 d sem ρ)",
     "    (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "675ec1d7b62a725765a6bf2d45b9edfb0c089f9ad4a0d5426aec4c2a1f8184b6"
   },
   "Pouw.PearlC.pearlCSampledDevRev1KAt": {
@@ -4185,7 +4185,7 @@
     "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1K d sem ρ c) (Pouw.PearlC.pearlCTilesDevRev1K d sem ρ c)",
     "    (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "31c149797043a70f3d9ab1c66241c54d7d1852f8591dbf3838898ed08593fb14"
   },
   "Pouw.PearlC.pearlCSampledDevRev1KChainOnlyAt": {
@@ -4202,7 +4202,7 @@
     "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1K d sem ρ c) (Pouw.PearlC.pearlCTilesDevRev1K d sem ρ c)",
     "    (Pouw.PearlC.pearlCDomainDevAt d s) γ.cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "aa5b77d98c8d390d72121aaf1dd71f03750c1b550dcfc45ac72154e1c8b98eba"
   },
   "Pouw.PearlC.pearlCSampledDevRev1RowSeedAt": {
@@ -4234,7 +4234,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 Pouw.PearlC.sh16384) (89359 / 17230000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"],
    "type_hash": "0911463abcc58edef875a845a70ab60bf1c27637d9a4b4eea69cd8b1a4c9a74d"
   },
   "Pouw.PearlC.pearlCSampledH100Rev1_8192": {
@@ -4246,7 +4246,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 Pouw.PearlC.devH100 sem (1 / 400))",
     "    (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 Pouw.PearlC.sh8192) (140237 / 26090000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"],
    "type_hash": "78c2ea32c76a094c94b60cc8bf2d60000124c53cf6adb7cc5ea69a97de5ad993"
   },
   "Pouw.PearlC.pearlCSampledSm120LoopRev1_16384": {
@@ -4259,7 +4259,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 400)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384)",
     "    (1802569231 / 352995040000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "d2d4c2558e29f2220b430d7f9ee5861ad47961f45ee7259986466068ba967bb2"
   },
   "Pouw.PearlC.pearlCSampledSm120LoopRev1_8192": {
@@ -4272,7 +4272,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 400)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "d13b7eec2e92fd12d1fc2b2201259d0c86c264cc682dc534d49ba0029ac5a916"
   },
   "Pouw.PearlC.pearlCSampledSm120Rev1_16384": {
@@ -4285,7 +4285,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 400)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384)",
     "    (2963 / 586700).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "3b6ecd153cec09af6e1b79aff3447afe55f131f067cdcceda31be19ef6777bdf"
   },
   "Pouw.PearlC.pearlCSampledSm120Rev1_8192": {
@@ -4298,7 +4298,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 400)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "8d4962f6152b1c2be25c3871bcea9e27c21641c14cd40c949f1a849010f2e089"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast16ChainOnlyRev1_16384": {
@@ -4316,7 +4316,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (13679 / 1760900).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "78bfee4d934f803f37a7098cf03f4ca32fc6feedef78f941b39c2ba040e260cb"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast16ChainOnlyRev1_8192": {
@@ -4334,7 +4334,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (131 / 12500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "2285fa9ddc7f8c33ed3d0409cdfd519f9483cf5a0191f31fdf7e822137b0f4b6"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast16Rev1_16384": {
@@ -4351,7 +4351,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (9689 / 1760900).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "8df912f6bf7c3f8d729c35bdd74ba81a43c4f095498aeea60ff7d6cdc590692f"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast16Rev1_8192": {
@@ -4368,7 +4368,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (133561 / 22262500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "b9df48a12a7d37b8700e4a10258e0c253052645906d64a843de9450cef05388b"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast32Rev1_16384": {
@@ -4385,7 +4385,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (3763 / 587500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "cc2851a93d3c71cf5b413f8a3d2e6349f477124343319788b19fe7d802d15731"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast32Rev1_8192": {
@@ -4402,7 +4402,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (173561 / 22302500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "6c2ce3812aeb6efa217b9603772ee0c5eb016acdbe97b1e6c40c43624d7adc31"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast32p06ChainOnlyRev1_16384": {
@@ -4420,7 +4420,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (5095 / 587502).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "8abc7c6ce3d96276982a4405c6891ede46a8b49cae5c80e9d26aebefa2f90692"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast32p06ChainOnlyRev1_8192": {
@@ -4438,7 +4438,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (273461 / 22302650).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "9aca4a17c6b3b30a96a2b31f0cc948d63cb01886d0189a0255e9ef07d24e3216"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast32p06Rev1_16384": {
@@ -4455,7 +4455,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (1255 / 195834).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "dd51b057c5ec755f2c3a7a59a46d336a96a841af029a274a848751f773e77aed"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast32p06Rev1_8192": {
@@ -4472,7 +4472,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (173711 / 22302650).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "360ba174ef54de2129b63a583fdb343863f3e65bd83256a1078d2be423d276b9"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast8p72ChainOnlyRev1_16384": {
@@ -4490,7 +4490,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4317 / 586724).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "82d2d7e18f166003bbc488f316897ac888774021b39a35074c5f634a734d8a3b"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast8p72ChainOnlyRev1_8192": {
@@ -4508,7 +4508,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (16547 / 1711100).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "306e4e236f9567d92f06b8944f0afaae6e4c42043a143dbfe43cef4b882b58fa"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1_16384": {
@@ -4525,7 +4525,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2987 / 586724).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "2ea1e0f4a967c3716aa4039a6c61d33d5f930607786b926d9aed58ad744ec031"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1_8192": {
@@ -4542,7 +4542,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (115361 / 22244300).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "4b0cd92e2c0c6466beb9f38914670082146e74e843d69ab6982ad4fa71dd45ad"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast16ChainOnlyRev1_16384": {
@@ -4560,7 +4560,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (2741509231 / 353135980000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "d976e41dd770d20266a136c77ec0aaefd15cc37c9c2713efb3764343193915d0"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast16ChainOnlyRev1_8192": {
@@ -4578,7 +4578,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (623264613 / 59524900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "9f0209b757db7953c32abd787faf42fe10dffb5c36b0a649003103cdd3447c24"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast16Rev1_16384": {
@@ -4596,7 +4596,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1943509231 / 353135980000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "fc5ea698dbb9504d867ac19dfe1aba6fd137118f1f70fcbefbb80d2b5cca6da0"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast16Rev1_8192": {
@@ -4614,7 +4614,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (3277657 / 546100000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "a281771a041bf71fb0bc263b2c351619aa68ce06aca4aa87b7f1a3179d6710c8"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast32Rev1_16384": {
@@ -4632,7 +4632,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (754503077 / 117818660000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "53ad949c66411e40d12be38772eace7d5ad6be47d13d508f13862c7b5d992464"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast32Rev1_8192": {
@@ -4650,7 +4650,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1391793839 / 178894700000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "5aeff47d5263e333ec2279e912b27c648f5d125420218bfe79d65d7321c14fed"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast32p06ChainOnlyRev1_16384": {
@@ -4668,7 +4668,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1020903077 / 117819060000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "35686a4c21bb2a38793f0995439bfcf0ffa94eac2e8fa8f9c3bf7d7268fefc1f"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast32p06ChainOnlyRev1_8192": {
@@ -4686,7 +4686,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (2190993839 / 178895900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "281e94c8d3006a54e741bb6ae123410162b6bd60bccae09448b2bfdc3b3fa0e8"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast32p06Rev1_16384": {
@@ -4704,7 +4704,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (251634359 / 39273020000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "2dc71f272cd6a5244a712914f2ac1519fecc4aae48d3b304727626c30216a93c"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast32p06Rev1_8192": {
@@ -4722,7 +4722,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1392993839 / 178895900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "14f9e84b74dffa007a991d76b0279457d9d966b0538115afc566f5f1d9d5a847"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8Rev1_16384": {
@@ -4740,7 +4740,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (84929011 / 16808380000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "de62426bb62f124fa04d90933fc784522d26cafcb2d5078961550c8ad3997637"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8Rev1_8192": {
@@ -4758,7 +4758,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (911793839 / 178414700000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "3f3cba6bf35dc8a03382085a683cda100f3f48d2ad1211c2802cf0c551621590"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72ChainOnlyRev1_16384": {
@@ -4776,7 +4776,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (50900181 / 6921380000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "66f865ac58f9dd976d2a14857a346dc4559a995fa9b9d3b8a8bce7509a2a97e3"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72ChainOnlyRev1_8192": {
@@ -4794,7 +4794,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1724193839 / 178429100000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly"],
    "type_hash": "c00ff8ec4bde3a0e7e0beb2ab182c92963f09c9aa011719b2297cb95861a6aa5"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_16384": {
@@ -4812,7 +4812,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (599303077 / 117663460000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "e6478f41885282c92f7cdc18fccb5aff85dc0b77ddb37cdceafb67325163876d"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_8192": {
@@ -4830,7 +4830,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (926193839 / 178429100000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "e89c52fdddb8c3e2253d98940691723f0aa94e03abcb1d38b59fddbae0a15431"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopRev1_16384": {
@@ -4846,7 +4846,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1802569231 / 352995040000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "98a7ca3f0ef94a804ca2ec566225863a821884ca89f5ed6fe6ff15a9e53e7264"
   },
   "Pouw.PearlC.pearlCSampledSm120v1LoopRev1_8192": {
@@ -4862,7 +4862,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "78de9bf08dbf10f537ea97a690fcb0e4a0d682db5ce17a39931ba057bc070d8f"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Rev1_16384": {
@@ -4877,7 +4877,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2963 / 586700).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "a6bf35635c2b94c9c941277dbdd9c2693d902d1f2c6c0a5d1947fffc13e6fe2b"
   },
   "Pouw.PearlC.pearlCSampledSm120v1Rev1_8192": {
@@ -4892,7 +4892,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "4c6557fa44387a64d7ec087ca580701f912dda6e60e8c367dacf69798f48af25"
   },
   "Pouw.PearlC.pearlCSampledSm120v1RowSeed_16384": {
@@ -4910,7 +4910,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (2963 / 586700).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 16384)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "7e8fae27bce5927f5952b037cbf4116fea8c4eef5fce54c196c95c30f9caf686"
   },
   "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
@@ -4928,7 +4928,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (16223 / 3177500).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "0ace96bc190a63f345cbb0ffac65aa2dcbdfbd4fc0fd8050c6720068b523fd10"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cap1000_16384": {
@@ -4943,7 +4943,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2950127 / 829250000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "3bb941356ab7694997ed0567899ec1aeba574134476db3fc456d5441697abacd"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cap1000_8192": {
@@ -4958,7 +4958,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "41a0d78acfc70d7265ca02970bc0889bdcc870cb9a79cee26690bbb34b8be858"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast16Cap1000_16384": {
@@ -4974,7 +4974,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (1116709 / 276550000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "0b1534e7c3172ecc4e23fb1ff215cfeac75d94e7e5985fbe7e2d3aec2d104a3b"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast16Cap1000_8192": {
@@ -4990,7 +4990,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (1917551 / 420050000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "3cceb7a60e7514b5ea99b4f33c5f8e3e2ecf96ded5bd22fa6113681a5deb5678"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast16ChainOnlyCap1000_16384": {
@@ -5007,7 +5007,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (1781709 / 276550000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "b1f0862fce70ccef04cc1ee100a23943aa76f114459ed3539532ab1c3c6dba6c"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast16ChainOnlyCap1000_8192": {
@@ -5024,7 +5024,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (3912551 / 420050000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "b200e3309a2bf36654258a27367232760e79ea7c68e664334ad85196f3d4ea20"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast32Cap1000_16384": {
@@ -5040,7 +5040,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4150127 / 830450000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "b36b86a58082635c75bc03e8dad50a5ac8d57ffda4c8c9add3770680d2a40601"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast32Cap1000_8192": {
@@ -5056,7 +5056,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (143029 / 22150000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "c050129e75f26a3b64f60a766c2ea0bd83a415e73ab7b096ca2fe8637f182685"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast32p06Cap1000_16384": {
@@ -5073,7 +5073,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4153127 / 830453000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "ccc924421f8e3fd1747307259264bc930896978119086a348be252aa5ee81c78"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast32p06Cap1000_8192": {
@@ -5090,7 +5090,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (2720551 / 420853000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "3b16711e251b498bb8d6fd8a7cfeb3a65703d4ccb9c9efafe60c9764bae3989f"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast32p06ChainOnlyCap1000_16384": {
@@ -5108,7 +5108,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (6148127 / 830453000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "ef6d28488b50cebc2f2112e1dd4bbb6e6dbd82b8b37e6c8ed32697d00a17e752"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast32p06ChainOnlyCap1000_8192": {
@@ -5126,7 +5126,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (4715551 / 420853000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "655ed68f90489225d1433615a9c9441d51a543b2201aa5929fb3c2407021d964"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast8p72Cap1000_16384": {
@@ -5143,7 +5143,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2986127 / 829286000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "22e42ec09fd8e20e767db6d7ffb1326e22014589deefc9ead82af4071441ae04"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast8p72Cap1000_8192": {
@@ -5160,7 +5160,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (1553551 / 419686000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "43b76b35a839ded62ef57b6c9c7a84128334396ac760e3e229d083e20a28592f"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast8p72ChainOnlyCap1000_16384": {
@@ -5178,7 +5178,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (4981127 / 829286000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "d780c70d72dd502880cd48ea054eb1dc8feeb6e30cf6312d7a50570e1edf905a"
   },
   "Pouw.PearlC.pearlCSampledSm120v2Cast8p72ChainOnlyCap1000_8192": {
@@ -5196,7 +5196,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (3548551 / 419686000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "1ceb040e3277f816f66ae15afd2521b00fa1d5076bb7042cbc18ccce8e2bd202"
   },
   "Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_16384": {
@@ -5212,7 +5212,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh16384)",
     "    (2950127 / 829250000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "e08aff5c746ea3a9dc246e2bb454330ee1f38521e4a398165eb1c876a7ba15e3"
   },
   "Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_8192": {
@@ -5228,7 +5228,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "65cc363fe9df62c7ffa67a8b0259c38a102b53d68c56c6549f4812dfc0ecfb03"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCap1000_16384": {
@@ -5244,7 +5244,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (3000127 / 829300000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "73201ee27cc046d272fe30250a3c731ca960f3a4b0999a0eeb9536f3022723c2"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCap1000_8192": {
@@ -5260,7 +5260,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "8a1c88b6b8905146112209b33b1c583a6a33894eba99ff79f3a012c64f373da3"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast16Cap1000_16384": {
@@ -5278,7 +5278,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (3352477 / 829652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "b8c86ee59cf7f88519c61250eaf6651e7d5239823292cf496f856abaf569e588"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast16Cap1000_8192": {
@@ -5296,7 +5296,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (639967 / 140017450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "282e3eef197c3db6c930630d4920728bb3f6d61392e722b9bcd8354197c66347"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast16ChainOnlyCap1000_16384": {
@@ -5314,7 +5314,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (5347477 / 829652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "ef390b9acf07a46b7f64dd5e2395bfe0ecc331437f7b29846eac77b6e4ce692f"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast16ChainOnlyCap1000_8192": {
@@ -5332,7 +5332,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1304967 / 140017450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "5967b6b0ea7f69c25a7c6628eab14cdb67db768745f25749427a5537b3b0e529"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast32Cap1000_16384": {
@@ -5350,7 +5350,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (197737 / 39545350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "63f3a2ea45ff39333d40e7e2beb568cd8a8d07cad76c47423884b4868c504034"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast32Cap1000_8192": {
@@ -5368,7 +5368,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (2719901 / 420852350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "5271118115b3afdee3eddf499b57e543bf48f57d61e894756cc4e28bd2e803cf"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast32p06Cap1000_16384": {
@@ -5386,7 +5386,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1385159 / 276818450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "7271530fa0522334a2eb17bab598f992b1ce8980cc55f9384d8fd6836cdfd520"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast32p06Cap1000_8192": {
@@ -5404,7 +5404,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (2722901 / 420855350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "b5ca23119afc15223538ac47918d0b19b3618bef0861911f2fcca999269a8c91"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast32p06ChainOnlyCap1000_16384": {
@@ -5422,7 +5422,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (2050159 / 276818450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "da6c457f93e6f406e004cb9311d2348e18770237ffa95d0c62547e22b4ae17ef"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast32p06ChainOnlyCap1000_8192": {
@@ -5440,7 +5440,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (4717901 / 420855350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "e84b5f77369f26da7fe3e612112e8a65840f9f6ac2cadc8808644bd076ffdd94"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8Cap1000_16384": {
@@ -5458,7 +5458,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (109351 / 30713050).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "0e5640a462d12417ab9b82e7ea40bc9b51bd3ce0534cb4dc462359e5a512d536"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8Cap1000_8192": {
@@ -5476,7 +5476,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1519901 / 419652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "c71ac4f7c796ad970dcc56b813b6cb04dad722f75e24870a459cc166d0cf1f4e"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8ChainCap1000_16384": {
@@ -5494,7 +5494,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (109351 / 30713050).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "f2c9377cdd02a64ef744b7790189ed445e59de58351a95891a95c281032dec44"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8ChainCap1000_8192": {
@@ -5512,7 +5512,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1519901 / 419652350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "98421d3e6c234b902efece0c393cd02d40755f9db07b19bbfcd0c397582700fb"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8p72Cap1000_16384": {
@@ -5530,7 +5530,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (332053 / 92143150).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "06f7ed1d63226d7a46216e78b5bbfc447117f5ad62a115505d37ca9f0bd90e1a"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8p72Cap1000_8192": {
@@ -5548,7 +5548,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (1555901 / 419688350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "1ed53d1992d87b91ec66301471edd4460a6d0b1082327d7c146ef4b58553c034"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8p72ChainOnlyCap1000_16384": {
@@ -5566,7 +5566,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (1661159 / 276429450).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "95e4aaad77902edc5d32dbdc17c2c67782c4fe1cb479260cd35108014b936a8c"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopCast8p72ChainOnlyCap1000_8192": {
@@ -5584,7 +5584,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (3550901 / 419688350).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly"],
    "type_hash": "c858c668faf906ee62f23f852ae0d221b788772bec6d08b06709d31b06b32b2b"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopChainCap1000_16384": {
@@ -5600,7 +5600,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh16384)",
     "    (3000127 / 829300000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "367c0bf7f33bc8c10fedd37da3646be94f74145680b109a72d2fa7610762488c"
   },
   "Pouw.PearlC.pearlCSampledSm120v2LoopChainCap1000_8192": {
@@ -5616,7 +5616,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "e3bd575ba4675b3386240afc134d76edb0fbb5ec0cec997e905ab7cde1d36ec6"
   },
   "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_16384": {
@@ -5634,7 +5634,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (2950127 / 829250000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 16384)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "f1bf095ca34aa7369bfdf18a24ca1a3c26a349f342c9bd1bb8c264499c8ec595"
   },
   "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": {
@@ -5652,7 +5652,7 @@
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (216793 / 59950000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "e93bbee92713b5b69adc87eed0a21be26519fb98fd49c63e94869b34619db632"
   },
   "Pouw.PearlC.pearlCSampledUOnlySm120LoopRev1_8192": {
@@ -5665,7 +5665,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 400)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "366cd7861bcfae2581a2ced263c856381e95421a6a69c2c4fae310362a5e0adf"
   },
   "Pouw.PearlC.pearlCSampledUOnlySm120Rev1_8192": {
@@ -5678,7 +5678,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 400)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "c1b1fb34f18ff743f0e260ee48acf28a7a3f869baa23ac30046d24908048ce04"
   },
   "Pouw.PearlC.pearlCSampledUOnlySm120v1LoopRev1_8192": {
@@ -5694,7 +5694,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (310284613 / 59477920000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "36431adce5069ce54337536be13d71cdaa309d0c6ea4394200ff45b48775f86e"
   },
   "Pouw.PearlC.pearlCSampledUOnlySm120v1Rev1_8192": {
@@ -5710,7 +5710,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (16223 / 3177500).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "a5a6e26f3900a689f55fcbd9ef8521807efc84bf401f37fa2959e0c68246ee5a"
   },
   "Pouw.PearlC.pearlCSampledUOnlySm120v2Cap1000_8192": {
@@ -5726,7 +5726,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "10aab438f43141f73ff27bd89ace840b2b457a05418f4db3236f624a7460870c"
   },
   "Pouw.PearlC.pearlCSampledUOnlySm120v2LoopCap1000_8192": {
@@ -5742,7 +5742,7 @@
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "a8460039ce60ce6f0f2f1f76e16f86983af04cef04d07b06a70ae021ef4a3687"
   },
   "Pouw.PearlC.pearlCSampledUOnlyUnpromotedCap1000Loop_8192": {
@@ -5755,7 +5755,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "6c5c4aef2c17a5559a6e58d1e3fa381a5c2448b39fb3c206e14fb7e915e08b8f"
   },
   "Pouw.PearlC.pearlCSampledUOnlyUnpromotedCap1000_8192": {
@@ -5768,7 +5768,7 @@
     "    (Pouw.PearlC.pearlCTilesDevRev1 d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "b260a1ee584a20f2d654367c1d5adef26ac3950cbb4b93a9c601ed6d15957295"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedCap1000Loop_16384": {
@@ -5781,7 +5781,7 @@
     "    (Pouw.PearlC.pearlCTilesDev d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384)",
     "    (3000127 / 829300000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "40e8f24904d3f5bc7387a6410f494fe8ea3a418b7453aadb2aace854678e9219"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedCap1000Loop_8192": {
@@ -5794,7 +5794,7 @@
     "    (Pouw.PearlC.pearlCTilesDev d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "cd37aad72410a1e3c2c8cafb52cfe44f21a6f679364d8ef9e8db8f4e5ebe86c6"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedCap1000_16384": {
@@ -5806,7 +5806,7 @@
     "    (Pouw.PearlC.pearlCTilesDev d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384)",
     "    (2950127 / 829250000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "096809f6ea743899bdf3b0e0331aa569dcfa16310aa14cff1e0d62b652cab738"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedCap1000_8192": {
@@ -5818,7 +5818,7 @@
     "    (Pouw.PearlC.pearlCTilesDev d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "d7be7f75911b76304432c7282d8e634ef1ba0bc34523f063e2cd2099c085393d"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000Loop_16384": {
@@ -5831,7 +5831,7 @@
     "    (Pouw.PearlC.pearlCTilesDevChainCap d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384)",
     "    (3000127 / 829300000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "8f49311b5d132c48ae88f3cc18719d16986784d804919ae7f83ba21dbcdc4f88"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000Loop_8192": {
@@ -5844,7 +5844,7 @@
     "    (Pouw.PearlC.pearlCTilesDevChainCap d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "c7f7b5ca559a81acadedd18208d47261e317555115830ab24fbea5cad994a620"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_16384": {
@@ -5857,7 +5857,7 @@
     "    (Pouw.PearlC.pearlCTilesDevChainCap d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh16384)",
     "    (2950127 / 829250000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "b53061411efce69d4f868f62e0e10173ba146595c60c0b9aec8a99effd16ee01"
   },
   "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192": {
@@ -5870,7 +5870,7 @@
     "    (Pouw.PearlC.pearlCTilesDevChainCap d sem (1 / 1000)) (Pouw.PearlC.pearlCDomainDevAt d Pouw.PearlC.sh8192)",
     "    (216793 / 59950000).cast Pouw.PearlC.εPearlC"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap"],
    "type_hash": "38aead6ba40e2446c24195d098dc8da25d8032c444ccaa2ab4203e421597e125"
   },
   "Pouw.PearlC.pearlCTilesDevRev1_total": {
@@ -5938,7 +5938,7 @@
     "  (hρ1 : Rat.instLE.le ρ 1) (h : Pouw.PearlC.Assumptions.TTOutPearlCDev CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "9c83fc42d5a47520c996636128838df1b34fc335c3b345cc1e3264552b5106b7"
   },
   "Pouw.PearlC.ttOutPearlCDevChainCap_sm120v2_loop": {
@@ -5957,7 +5957,7 @@
     "  (CM : Pouw.PearlC.CostModel Q R S) (d : Pouw.PearlC.PearlCDevice) (sem : Pouw.PearlC.PearlCSem Q R S) (ρ : Rat)",
     "  (h : Pouw.PearlC.Assumptions.TTOutPearlCDev CM d sem ρ) : Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "c00c1e3ed911e5b19a4e269d4f9c0c73331f8c989eabdb8515b63982c8dee97c"
   },
   "Pouw.PearlC.ttOutPearlCDevChainOnly_sm120v2_loop": {
@@ -5977,7 +5977,7 @@
     "  (h : Pouw.PearlC.Assumptions.TTOutPearlCDevRev1 CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "66b29b474a804018110066fb4c7d1333108f1866b3d18a761fb4575e2dc31d4a"
   },
   "Pouw.PearlC.ttOutPearlCDevRev1_of_granted": {
@@ -5988,7 +5988,7 @@
     "  (hρ1 : Rat.instLE.le ρ 1) (h : Pouw.PearlC.Assumptions.TTOutPearlCDev CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutPearlCDevRev1 CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "f54002e2794334625930137b456df67af7a32042a04517a1da869f19922c4bae"
   },
   "Pouw.PearlC.ttOutPearlCDevRev1_of_uOnly": {
@@ -5998,7 +5998,7 @@
     "  (hadd : Rat.instLE.le 0 d.prices.add) (hbf : Rat.instLE.le 0 d.prices.bf16) (hρ1 : Rat.instLE.le ρ 1)",
     "  (h : Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly CM d sem ρ) : Pouw.PearlC.Assumptions.TTOutPearlCDevRev1 CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly"],
    "type_hash": "aa659580d71beae78a04ba04d8227d4e6257813da945e5a1ea4c03eebf55c99b"
   },
   "Pouw.PearlC.ttOutPearlCDevUOnly_sm120v2_loop": {
@@ -6019,7 +6019,7 @@
     "  (hρ1 : Rat.instLE.le ρ 1) (h : Pouw.PearlC.Assumptions.TTOutPearlCDev CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutPearlCDev CM d sem ρ'"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDev"],
    "type_hash": "89efd25e4533b79061385160f593e4be9b7572be13a2f51c61b3331f03887ae8"
   },
   "Pouw.PearlC.ttOutPearlCDev_h100": {
@@ -6107,7 +6107,7 @@
     "  Pouw.PearlC.TTOutRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d semC ρ) (Pouw.PearlC.pearlCDomainDev d)",
     "    (1 / 400)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "5d30ce51b53c627434c2e5a35376afce5f3ba85cd36b9bd2ef94b4698fb2d403"
   },
   "Pouw.PearlC.ttOutRowSeed_code": {
@@ -6132,7 +6132,7 @@
     "  Pouw.PearlC.TTOutRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d sem' ρ) (Pouw.PearlC.pearlCDomainDev d)",
     "    (1 / 400)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1"],
    "type_hash": "b7f3d3764096c969c45112399a2602c8a5228519530c54b25814e8c0f7ba56b2"
   },
   "Pouw.PearlC.ttOutRowSeed_skipClass": {
@@ -6152,7 +6152,7 @@
     "              (instHSub.hSub (CM.cost e.honest H U act σ s) (CM.cost (e.embed (Pouw.QTree.eval H T)) H U act σ s))))",
     "    (instHDiv.hDiv (instHAdd.hAdd q.cast (U.layout.shape u).m.cast) (instHPow.hPow 2 128))"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.FragDraw"],
    "type_hash": "dc125e6a40e50c354dd00d6038162a88e03547af71265eee19cc89b4694b60e3"
   },
   "Pouw.PearlC.ttOutTilePearlCDevChainCap_of_cap": {
@@ -6163,7 +6163,7 @@
     "  (hρ1 : Rat.instLE.le ρ 1) (h : Pouw.PearlC.Assumptions.TTOutTilePearlCDev CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "9618184ee8bfd3733e0f5a23234444447d3848e36341e4b5910b71c86a23e9ab"
   },
   "Pouw.PearlC.ttOutTilePearlCDevChainCap_sm120v2_loop": {
@@ -6183,7 +6183,7 @@
     "  (h : Pouw.PearlC.Assumptions.TTOutTilePearlCDev CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainOnly CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "943fb8ada3fe076b4d11c521db4eaa8e31d5f793e6fe070f4ce92243559b8e0c"
   },
   "Pouw.PearlC.ttOutTilePearlCDevChainOnly_sm120v2_loop": {
@@ -6203,7 +6203,7 @@
     "  (h : Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1ChainOnly CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "43413d1ea69c97db0cbc817cbb4b180e85a9f0bd8b4f57586f46fd5d9c4ce23a"
   },
   "Pouw.PearlC.ttOutTilePearlCDevRev1_of_granted": {
@@ -6214,7 +6214,7 @@
     "  (hρ1 : Rat.instLE.le ρ 1) (h : Pouw.PearlC.Assumptions.TTOutTilePearlCDev CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDev"],
    "type_hash": "1a376b43caf42e5d3a42b5b49b8e6381bcdf0aa4075b444014549dd28e69f879"
   },
   "Pouw.PearlC.ttOutTilePearlCDevRev1_of_uOnly": {
@@ -6225,7 +6225,7 @@
     "  (h : Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly CM d sem ρ) :",
     "  Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM d sem ρ"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevUOnly"],
    "type_hash": "eab4b364c013145fe944dc13d2a6e7fb2fe5c71c1ff13627cbf41d3831bc6a9a"
   },
   "Pouw.PearlC.ttOutTilePearlCDevUOnly_sm120v2_loop": {
@@ -6304,7 +6304,7 @@
     "  Pouw.PearlC.TTOutTileRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d semC ρ)",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCap d semC ρ) (Pouw.PearlC.pearlCDomainDev d) (1 / 400)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "ce697226bfd9620d765f417fd35fec7475d8ab9a43d0816d250325796ebf8cf6"
   },
   "Pouw.PearlC.ttOutTileRowSeed_code": {
@@ -6332,7 +6332,7 @@
     "  Pouw.PearlC.TTOutTileRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d sem' ρ)",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCap d sem' ρ) (Pouw.PearlC.pearlCDomainDev d) (1 / 400)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"],
    "type_hash": "c8b1113627b4f264ac0a9fc3109583c1ee14854d11c1c499d776221ec9e1baf7"
   },
   "Pouw.PearlC.ttOutTile_of_ttOutTileRowSeed": {
@@ -6359,7 +6359,7 @@
     "      capOK := P.capOK, Wref := W }",
     "    { tiling := TR.tiling, rowOK := TR.rowOK, credit := TR.credit, capOK := TR.capOK, Wref := W', Wcred := Wc } D γ₀ ε"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOutTile"],
    "type_hash": "a547f8d873e056f4ce2da2d3376570747a4004f92a5af3b303669b6a46c6cc75"
   },
   "Pouw.PearlC.ttOut_of_ttOutRowSeed": {
@@ -6384,7 +6384,7 @@
     "      capOK := P.capOK, Wref := W }",
     "    D γ₀ ε"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.PearlC.Assumptions.TTOut"],
    "type_hash": "24aa0e8a5c0077a6c0e303b5501fbe1fe58bbfa36ff9aef52cbbc9fec3957575"
   },
   "Pouw.Proofs.copyBound": {
@@ -6404,7 +6404,7 @@
   },
   "Pouw.Proofs.endToEnd": {
    "signature": ["Pouw.Proofs.endToEnd : Pouw.Pinned.EndToEnd"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "0ff726b7d5fb0ea2d53fcabba0ba42a116efd76c8cdacecc5eb6212ae5888afb"
   },
   "Pouw.Proofs.freeModel_queries": {
@@ -6424,7 +6424,7 @@
   },
   "Pouw.Proofs.gammaFromTT": {
    "signature": ["Pouw.Proofs.gammaFromTT : Pouw.Pinned.GammaFromTT"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "36d6ef3fc8d91650cd977b062fbe0d2fcf5f7d571a5851bcefb46b5350fcd8ca"
   },
   "Pouw.Proofs.honestComplete": {
@@ -6459,7 +6459,7 @@
   },
   "Pouw.Proofs.milestoneExhaustion": {
    "signature": ["Pouw.Proofs.milestoneExhaustion : Pouw.Pinned.MilestoneExhaustion"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "0afca347f46fd7ceefd02a84927d6b1746c715cd0425235257f5c5dcfbe826b2"
   },
   "Pouw.Proofs.milestoneInstance": {
@@ -6469,7 +6469,7 @@
   },
   "Pouw.Proofs.milestoneRequirement": {
    "signature": ["Pouw.Proofs.milestoneRequirement : Pouw.Pinned.MilestoneRequirement"],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "1fef1a593f0576d8f2b2de9631aafba2317ed1fb982867b321e6552626345b2b"
   },
   "Pouw.Proofs.milestoneWref": {
@@ -6763,7 +6763,7 @@
     "  Real.instLE.le ((Finset.range U.layout.N).sum fun u => (U.layout.shape u).Wmm.cast)",
     "    (instHDiv.hDiv (Pouw.totalWref P U.layout) (instHSub.hSub 1 γ₀))"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "8063db29234ed00a515cf99e74b89a80d2bd485174ff166a1bf3103729d953ab"
   },
   "Pouw.Sanity.tt_event_empty": {
@@ -6785,7 +6785,7 @@
     "  (hpos : Real.instLT.lt 0 ((Finset.range U.layout.N).sum fun u => (U.layout.shape u).Wmm.cast)) (γ₀ : Real)",
     "  (ε : Nat → Nat → Real) (hTT : Pouw.Assumptions.TT CM P.toProtocol D γ₀ ε) : Real.instLE.le 1 (ε 0 U.layout.N)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "9c0ce28e1c1fbb496656decc7509740a1900abe8ffbfb2079898d59a743bd746"
   },
   "Pouw.Sanity.tt_false_of_gamma0_ge_one": {
@@ -6798,7 +6798,7 @@
     "  (hγ₀ : Real.instLE.le 1 γ₀) (ε : Nat → Nat → Real) (hTT : Pouw.Assumptions.TT CM P D γ₀ ε) :",
     "  Real.instLE.le 1 (ε (qref U) U.layout.N)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "57c6a1a5f9ad3b2e4bdb8fedf134e6a2a33710a6924c75f94eeda0d5e149b6bc"
   },
   "Pouw.Sanity.tt_false_rank_zero": {
@@ -6809,7 +6809,7 @@
     "  (hpos : Real.instLT.lt 0 ((Finset.range U.layout.N).sum fun u => (U.layout.shape u).Wmm.cast)) (γ₀ : Real)",
     "  (ε : Nat → Nat → Real) (hTT : Pouw.Assumptions.TT CM P.toProtocol D γ₀ ε) : Real.instLE.le 1 (ε 0 U.layout.N)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "a7a0eaeb733eb146cbecc2239438c107da740ee7ab43044d27fccc6410d7d25f"
   },
   "Pouw.Sanity.tt_false_zero_noise": {
@@ -6821,7 +6821,7 @@
     "  (hpos : Real.instLT.lt 0 ((Finset.range U.layout.N).sum fun u => (U.layout.shape u).Wmm.cast)) (γ₀ : Real)",
     "  (ε : Nat → Nat → Real) (hTT : Pouw.Assumptions.TT CM P.toProtocol D γ₀ ε) : Real.instLE.le 1 (ε 0 U.layout.N)"
    ],
-   "assumptions": [],
+   "assumptions": ["Pouw.Assumptions.TT"],
    "type_hash": "e2091a2f38aa71a247ac08108813648ad4c119f7ae077e2a30adcc73d2c10abb"
   },
   "Pouw.Sanity.wins_T_zero_iff": {

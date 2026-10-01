@@ -72,7 +72,7 @@
     "          instMinNat.min (Fintype.card (At β))",
     "            ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
    ],
-   "assumptions": [],
+   "assumptions": ["NetTiming.FramesReadNoTimingAdvice", "NetTiming.OccupancyReadsOwnBlock"],
    "type_hash": "99bd58e32d3f57242e6e3a3853cec95cd1c6b5444a0c511b23a909f2b9b2ed6a"
   },
   "NetTiming.encard_accSeqs_le_blocks_counts": {
@@ -90,7 +90,7 @@
     "          instMinNat.min (Fintype.card (At β))",
     "            (instHPow.hPow (instHAdd.hAdd S 1) (Finset.filter (fun c => Eq (blk c) β) Finset.univ).card))).cast"
    ],
-   "assumptions": [],
+   "assumptions": ["NetTiming.FramesReadNoTimingAdvice", "NetTiming.OccupancyReadsOwnBlock"],
    "type_hash": "3d87e4ed1d2613ca9cc6ecc2c61ce65a04c7b92c5654b7f3b117c674602bde24"
   },
   "NetTiming.encard_accSeqs_le_fixedClock": {
@@ -143,7 +143,7 @@
     "  instLEENat.le Zs.encard",
     "    (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
    ],
-   "assumptions": [],
+   "assumptions": ["NetTiming.Regenerates"],
    "type_hash": "2731845b5574d40cf20615deacecd8d0b1112973b85e115e9125811642d846f1"
   },
   "NetTiming.encard_decodable_le_blocks": {
@@ -163,7 +163,12 @@
     "          instMinNat.min (Fintype.card (At β))",
     "            ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
    ],
-   "assumptions": [],
+   "assumptions": [
+    "NetTiming.FramesReadNoTimingAdvice",
+    "NetTiming.JitterBounded",
+    "NetTiming.OccupancyReadsOwnBlock",
+    "NetTiming.Regenerates"
+   ],
    "type_hash": "9b84dcfa6aab977c4a809d51908537627adb254fcafb5ded2130c632c049d80b"
   },
   "NetTiming.encard_fifoGrids": {
@@ -272,7 +277,7 @@
     "  (i : Nat) (hi : instLTNat.lt i (I.actRun z n).length) (hend : instLTNat.lt (winEnd i) n) :",
     "  Not (I.warden.fault (List.instGetElemNatLtLength.getElem (I.actRun z n) i hi))"
    ],
-   "assumptions": [],
+   "assumptions": ["NetTiming.FailClosed"],
    "type_hash": "d83c5b53b1496679647520bfd2d567a0b7707f55dc2b7c2573a06608a6de6a7c"
   },
   "NetTiming.recorded_row_eq_fill": {
@@ -281,7 +286,7 @@
     "  (hW4 : NetTiming.Packed w) (k : Nat) (xs : List In) (as : List Act) (ℓ : Fin L) :",
     "  Exists fun f => Exists fun c => Eq (fun x => (w.obs k xs as).rows ℓ) (NetTiming.fill f c)"
    ],
-   "assumptions": [],
+   "assumptions": ["NetTiming.Packed"],
    "type_hash": "7ddafebdd5177b25338fc88cb35e4491ee4c507fe5e585698bd18f1f603f7d6c"
   },
   "NetTiming.released_self": {

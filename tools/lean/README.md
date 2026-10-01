@@ -110,7 +110,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
+- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem, and which a
+  pin's record lists as what it assumes.
 - `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
@@ -123,11 +124,18 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
 - `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
-  build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
-  definitions the pinned statements read, with a hash each, the pins that read them, and a `digest` of those hashes (which
-  the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
-  it depends on, cannot change without a visible diff of this file. A record holds the statement, not the proof: pin a
-  `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+  build: the signature, the assumptions, a hash of the type, and for each module the definitions the pinned statements
+  read, with a hash each, the pins that read them, and a `digest` of those hashes (which the record therefore
+  determines). Without `--update` the audit fails on any difference, so a statement, or a definition it depends on, cannot
+  change without a visible diff of this file. A record holds the statement, not the proof: pin a `sorry` stub, and the pin
+  passes once a proof with allowed axioms replaces it.
+- **A pin's assumptions are the constants of `assumptions` modules it takes as hypotheses, wherever they sit.**
+  `Facts.lean`'s `footprint` reads the statement through `∀`, `→`, `∧`, `∨` and `∃`, and through each definition under
+  `meaning` at the head of a hypothesis or of the conclusion (32 deep at most): `thm (h : StepInputs p acc a b) : …`
+  assumes `StepInputs`, open as it is, and `thm : Pinned.X` assumes whatever `Pinned.X` takes. A hypothesis is read as
+  a statement in turn, and what it concludes is assumed. The constants a statement concludes are reported too
+  (`establishes` in `facts.json`): a transport lemma, from an assumption about one machine to the same one about
+  another, has its assumption on both sides.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
@@ -141,8 +149,9 @@ a Merkle binding theorem vacuous for unsalted schemes; the pins flagged it and r
 change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
 pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The merge handoff
 names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
-and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
-reviewer.
+and assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
+reviewer. Nor does one of the same type hash whose assumptions are found again ("recomputed": the `assumptions` modules
+changed, or how the audit reads a statement did); a changed definition behind them is a line of its own.
 
 ## Merging records: `merge.py`
 
