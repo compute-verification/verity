@@ -6,8 +6,8 @@ for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank worker
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  The single-rank
 `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities, and
-just before it the served taps (`served_tap`: the logits tap, `logits_tap_source`, with `--logits-tap 1`) whenever they claim some of
-them, whose words the call-boundary source commits;
+just before it the served taps (`served_tap`: the logits tap, `logits_tap_source`, with `--logits-tap 1`; the norm body tap,
+`norm_body_tap_source`, with `--norm-body-tap 1`) whenever they claim some of them, whose words the call-boundary source commits;
 `attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`)."""
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (call_boundary_source, logits_tap_source, norm_scale_source, router_softmax_source, scale_products_source,
-                                         vocab_range_source)
+from verity_vllm.acquire.sources import (call_boundary_source, logits_tap_source, norm_body_tap_source, norm_scale_source, router_softmax_source,
+                                         scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_split import splits_for_v1
@@ -32,7 +32,7 @@ SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, no
            ("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY, router_softmax_source.RouterSoftmaxSource),
            ("vocab_range", "vocab_range_source", vocab_range_source, VR.FAMILY, vocab_range_source.VocabRangeSource))
 #: the served taps (`served_tap`), each (its module, its class), in the order they attach
-SERVED = ((logits_tap_source, logits_tap_source.LogitsTapSource),)
+SERVED = ((logits_tap_source, logits_tap_source.LogitsTapSource), (norm_body_tap_source, norm_body_tap_source.NormBodyTapSource))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -47,14 +47,16 @@ class TapSources:
     vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="commit `<embedding module>/vocab_range` for every "
                                "vocab_range identity of the required manifest (acquire.sources.vocab_range_source)")
     logits_tap: int = logits_tap_source.option_field()
+    norm_body_tap: int = norm_body_tap_source.option_field()
 
     def given(self) -> dict[str, Any]:
         return {f: getattr(self, f) for f, *_ in SOURCES if getattr(self, f)}
 
 
 def claiming(opts: Any) -> None:
-    """The served taps' claims on call boundaries (`call_boundary_source.CLAIMS`) from a command's `--logits-tap`."""
+    """The served taps' claims on call boundaries (`call_boundary_source.CLAIMS`) from a command's `--logits-tap` and `--norm-body-tap`."""
     logits_tap_source.claiming(bool(getattr(opts, "logits_tap", 0)))
+    norm_body_tap_source.claiming(bool(getattr(opts, "norm_body_tap", 0)))
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], taps: TapSources, *,

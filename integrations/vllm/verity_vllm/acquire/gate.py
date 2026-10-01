@@ -141,6 +141,7 @@ class CallBoundariesOptions:
     row_dir: str = option("row_dir", help="the row dir after its Build: manifest.json and the Build dirs (build_request*/) under it")
     out: str | None = option("--out", default=None, help="the record (call_boundaries.json)")
     logits_tap: int = taps.logits_tap_source.option_field()
+    norm_body_tap: int = taps.norm_body_tap_source.option_field()
     cmd: str = field(default="call-boundaries", init=False)
 
 
