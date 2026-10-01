@@ -7,10 +7,12 @@ the weights record (vLLM's parameters in module order, then its buffers), one ca
 (`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `registry.targets`, the flat body wrapped as
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
 
-Vocabulary (v1, dense Llama-family decoders under the bi-eager profile, greedy): Embedding, RMSNormTriton (layer-0 input norm),
-Gemm (target-keyed), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's
-history), RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, TokenSelect.  Anything φ asks for outside it raises
-`Unexpressible` naming the fact (a result, never a silent approximation).
+Vocabulary (v1, dense Llama-family decoders under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input norm), Gemm
+(target-keyed), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
+RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, and the token select: greedy TokenSelect, or the seeded
+temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split count a `splits` Input entry, or the single
+request's constant S).  Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a silent
+approximation).
 
 Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
 `Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
@@ -39,8 +41,12 @@ BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
 BF16 = Value(16)
 
-#: the wrapper kinds of `vllm_meta.make_wrapper` (greedy): DERIVE_SOURCE (the SRC class) and the derive name
-WRAPPERS = {"step": ("verity-vllm/engine-step/v1", "vLLMStep"), "request": ("verity-vllm/greedy-request/v1", "vLLMRequest")}
+#: the wrapper kinds of `vllm_meta.make_wrapper` per sampling kind: DERIVE_SOURCE (the SRC class) and the derive name
+WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
+            ("request", "greedy"): ("verity-vllm/greedy-request/v1", "vLLMRequest"),
+            ("step", "stochastic"): ("verity-vllm/stochastic-engine-step/v1", "vLLMStep"),
+            ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
+I64 = Value(64)
 
 
 class Unexpressible(Exception):
@@ -119,6 +125,14 @@ def _arr(shape: tuple[int, ...], w: int) -> Type:
     return t
 
 
+def _arr_shape(t: Type) -> tuple[int, ...]:
+    shape = []
+    while isinstance(t, Array):
+        shape.append(t.n)
+        t = t.elem
+    return tuple(shape)
+
+
 def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
     """The weights record of `LlamaForCausalLM` on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the one shared rotary `cos_sin_cache` [max_pos, rot]
@@ -162,6 +176,19 @@ class _Specs:
         self.silu = self.kind("silu_mul", I=C.I)
         self.token_select = self.kind("token_select", V=C.V)
         self._attn: dict[tuple, Any] = {}
+        self._const: dict[tuple, Any] = {}
+
+    def stochastic_select(self, S):
+        """`GumbelTopPTokenSelect[vllm]`'s kind: the select over a derived `splits` operand, or at the single request's constant S."""
+        if S == "derived":
+            return self.kind("token_select_stochastic", V=self.C.V, CONSTRUCTION=self.tp.effective_sampler_construction())
+        return self.kind("token_select_stochastic_split", V=self.C.V, S=int(S))
+
+    def const(self, W: int, BITS: int):
+        key = (W, BITS)
+        if key not in self._const:
+            self._const[key] = self.kind("const", W=W, BITS=BITS)
+        return self._const[key]
 
     def kind(self, role: str, **statics):
         fn = self.voc.kind(role, **statics)
@@ -279,17 +306,45 @@ class _Model:
         f = [self.call(S.fused, Coll(pf[0], d[i].refs), Coll(pf[1], res[i]), Coll(pf[2], self.norm.refs)) for i in range(M)]
         return [f[i][0] for i in range(M)]
 
-    def sample(self, hidden_row: Coll) -> Coll:
+    def sample(self, hidden_row: Coll, event: int, pos: int, policy: "_Stochastic | None" = None) -> Coll:
+        """The token of sampling event `event` from the logits of `hidden_row` (at position `pos`): greedy `TokenSelect`, or the seeded
+        temperature + top-p select with its per-row constants in operand order (top_p, pos, temperature[, S])."""
         S = self.S
-        pl, pt = _ptypes(S.logits), _ptypes(S.token_select)
+        pl = _ptypes(S.logits)
         lg = self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))
-        return self.call(S.token_select, Coll(pt[0], lg.refs))
+        if policy is None:
+            return self.call(S.token_select, Coll(_ptypes(S.token_select)[0], lg.refs))
+        fn = S.stochastic_select(policy.S)
+        pt = _ptypes(fn)
+        top_p = self.call(S.const(32, policy.top_p_bits))
+        pos_c = self.call(S.const(64, int(pos) & 0xFFFFFFFFFFFFFFFF))
+        temp = self.call(S.const(32, policy.temperature_bits))
+        splits = policy.splits.refs.slice(event, event + 1) if policy.S == "derived" else self.call(S.const(32, int(policy.S))).refs
+        return self.call(fn, Coll(pt[0], lg.refs), Coll(pt[1], top_p.refs), Coll(pt[2], policy.seed.refs), Coll(pt[3], pos_c.refs),
+                         Coll(pt[4], temp.refs), Coll(pt[5], splits))
+
+
+@dataclass(frozen=True)
+class _Stochastic:
+    """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
+    temperature and top_p, and S: "derived" (an Input entry per event) or the single request's constant split count."""
+    seed: Coll
+    splits: Coll | None
+    S: Any
+    temperature_bits: int
+    top_p_bits: int
 
 
 def _check_phi(phi: Phi) -> None:
     facts = []
-    if (phi.sampling or {}).get("kind", "greedy") != "greedy":
-        facts.append(f"sampling {phi.sampling.get('kind')!r} (greedy only)")
+    s = phi.sampling or {}
+    if s.get("kind", "greedy") == "stochastic":
+        if int(s.get("top_k", 0) or 0) != 0 or not s.get("seeded", False):
+            facts.append(f"stochastic sampling with top_k {s.get('top_k')!r}, seeded {s.get('seeded')!r} (seeded top-p only)")
+        if s.get("splits") != "derived" and not isinstance(s.get("splits"), int):
+            facts.append(f"stochastic sampling without a split count (splits {s.get('splits')!r})")
+    elif s.get("kind", "greedy") != "greedy":
+        facts.append(f"sampling {s.get('kind')!r} (greedy or seeded top-p)")
     if int((phi.tp or {}).get("world", 1)) != 1:
         facts.append(f"tensor parallel world {phi.tp.get('world')} (TP1 only)")
     if phi.profile != "b1-eager-v3":
@@ -308,37 +363,51 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples)."""
     t0 = time.time()
     _check_phi(phi)
-    if wrapper not in WRAPPERS:
-        raise Unexpressible(f"wrapper {wrapper!r} (have {sorted(WRAPPERS)})")
+    kind = (phi.sampling or {}).get("kind", "greedy")
+    if (wrapper, kind) not in WRAPPERS:
+        raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     C = model_shape(phi.hf_config)
     target = phi.target_profile()
     specs = _Specs(C, target)
     leaves = weight_leaves(C)
     wrec = Record(*leaves)
-    user = (M,) if wrapper == "step" else (int(LP),)
-    params = (("input_ids" if wrapper == "step" else "prompt", Array(user[0], I32)), ("weights", wrec))
+    n = M if wrapper == "step" else int(LP)
+    events = 1 if wrapper == "step" else int(T) + 1
+    params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" else "prompt", Array(n, I32))]
+    if kind == "stochastic":
+        params.append(("seed", Array(1, I64)))
+        if phi.sampling["splits"] == "derived":
+            params.append(("splits", Array(events, I32)))
+    params.append(("weights", wrec))
+    params = tuple(params)
     B = Builder(params, Value(1))
-    ids = Coll(params[0][1], Affine("p", 0, 0, user[0]))
-    W = Coll(wrec, Affine("p", 1, 0, wrec.leaves))
+    ids = Coll(params[0][1], Affine("p", 0, 0, n))
+    W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
+    policy = None
+    if kind == "stochastic":
+        from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
+        s = phi.sampling
+        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
+                             S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = _Model(B, specs, W, C)
-    rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(user[0])]
+    rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     if wrapper == "step":
         hid = model.forward(rows, pos0)
-        tok = model.sample(hid[-1])
+        tok = model.sample(hid[-1], 0, pos0 + M - 1, policy)
         out = Coll(Array(1, I32), tok.refs)
     else:
         hid = model.forward(rows, 0)
-        toks = [model.sample(hid[-1])]
+        toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
         for s in range(int(T)):
             hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
-            toks.append(model.sample(hid[-1]))
+            toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
         out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
-    src_class, derive_name = WRAPPERS[wrapper]
+    src_class, derive_name = WRAPPERS[(wrapper, kind)]
     name = f"{derive_name}[{C.model_class}]"
-    src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(user)],
+    src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
     from verity_vllm.program.frontend.derive import _replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), _replayer(body),

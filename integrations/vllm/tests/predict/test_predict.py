@@ -25,6 +25,7 @@ RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
+STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
 
 
 def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
@@ -54,6 +55,27 @@ def test_request_and_workload_programs_equal_the_traced_build():
     assert S.predict_workload(phi)["digest"] == "393e9228260663df610abdd41960ee1c861d2e9cec50d9184494b939a489e4e1"
 
 
+@pytest.mark.parametrize("sampling,M,digest", [
+    ({**STOCH}, 8, "a97e89213fd137f36028291e2c50f2f5f4695fd2799a3777525d8f69a7839e2a"),
+    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "e07dc1b25bbe401a4f1aaadbfc50a60b9515f8d5188abed7dc1e2ca7d77bb45f"),
+])
+def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
+    """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the
+    single request's constant S = 32 on 188 SMs, cov-g253-2)."""
+    r = build_program(_phi(json.loads((FIX / "smollm2-135m.config.json").read_text()), sampling=sampling), "step", M=M, pos0=8)
+    assert r.digest == digest
+
+
+def test_sampling_follows_the_builds_policy():
+    one = {"sweep": {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]},
+           "requests": [{"prompt_len": 8, "max_tokens": 3, "seed": 7}]}
+    assert S.sampling_of(one, _phi(TINY)) == {**STOCH, "splits": 32}
+    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == STOCH
+    assert S.sampling_of({"requests": [{"prompt_len": 8, "max_tokens": 3}]}, _phi(TINY)) == {"kind": "greedy"}
+    with pytest.raises(Unexpressible, match="the Build refuses the policy"):
+        S.sampling_of({**one, "sweep": {**one["sweep"], "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 50}}}, _phi(TINY))
+
+
 def test_weights_record_follows_the_module_order():
     C = model_shape(TINY)
     names = [n for n, _ in weight_leaves(C)]
@@ -70,7 +92,9 @@ def test_weights_record_follows_the_module_order():
     ({**TINY, "model_type": "qwen2"}, {}, "linear biases"),
     ({**TINY, "attention_bias": True}, {}, "linear biases"),
     ({**TINY, "hidden_act": "gelu"}, {}, "hidden_act 'gelu'"),
-    (TINY, {"sampling": {"kind": "stochastic"}}, "sampling 'stochastic'"),
+    (TINY, {"sampling": {**STOCH, "top_k": 50}}, "top_k 50"),
+    (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
+    (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
     (TINY, {"tp": {"world": 2, "rank": 0}}, "tensor parallel world 2"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
@@ -78,10 +102,11 @@ def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
         build_program(_phi(cfg, **phi_kw), "step")
 
 
-def _row(tmp_path: Path, row: str, builds: dict) -> dict:
+def _row(tmp_path: Path, row: str, builds: dict, sweep: dict | None = None) -> dict:
     return {"dir": str(tmp_path / "rows" / "job" / row), "job": "job", "row": row, "summary": {}, "builds": builds, "source_root": None,
-            "workload_path": None, "workload": {"model": "org/tiny", "tokenizer_revision": "rev", "target": {},
-                                                "requests": [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0}]}}
+            "workload_path": None, "workload": {"model": "org/tiny", "tokenizer_revision": "rev", "target": {}, **({"sweep": sweep} if sweep else {}),
+                                                "requests": [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0,
+                                                              **({"seed": 7} if sweep else {})}]}}
 
 
 def test_score_reports_exact_divergence_and_refusals(tmp_path):
@@ -103,6 +128,9 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
         json.dump(bad, f)
     greedy = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__greedy__bi-eager"
     stoch = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__stoch-t0.8-p0.95__bi-eager"
+    topk = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o4__mixed__stoch-t0.8-p0.95__bi-eager"
+    sweep = {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]}
+    sstep = build_program(_phi(TINY, sampling={**STOCH, "splits": 32}), "step", M=1, pos0=8)
     prog = lambda d: {"digest": d, "function": None, "n_root_nodes": None}  # noqa: E731
     inv = {"schema": "verity-predict/inventory/v1", "root": str(tmp_path / "rows"), "rows": [
         _row(tmp_path, greedy, {
@@ -110,7 +138,9 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
             "build_request": {"wrapper": "request", "M": 1, "pos0": 8, "LP": 8, "T": 2, "ok": True, "program": prog("0" * 64), "descriptor": str(dpath)},
             "build_request_LP9_T2": {"wrapper": None, "ok": False, "message": "Device string must not be empty"},
             "build_workload": {"ok": True, "workload_digest": wl["digest"], "lag": 1, "n_requests": 1}}),
-        _row(tmp_path, stoch, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}}),
+        _row(tmp_path, stoch, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(sstep.digest)}}, sweep),
+        _row(tmp_path, topk, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}},
+             {**sweep, "sampling_params": {**sweep["sampling_params"], "top_k": 50}}),
     ]}
     res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64)
     units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
@@ -121,9 +151,10 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     assert u["first_divergence"]["where"] == "root node" and u["first_divergence"]["node"] == k and u["first_divergence"]["arg"] == 1
     assert u["equivalence"]["verdict"] != "equivalent"
     assert units[(greedy, "build_request_LP9_T2")]["status"] == "no_trace"
-    assert units[(stoch, "build_step")]["status"] == "unexpressible" and "sampling 'stochastic'" in units[(stoch, "build_step")]["reason"]
+    assert units[(stoch, "build_step")]["status"] == "exact"
+    assert units[(topk, "build_step")]["status"] == "unexpressible" and "top_k = 50" in units[(topk, "build_step")]["reason"]
     s = res["summary"]
-    assert (s["units_compared"], s["units_exact"]) == (3, 2)
+    assert (s["units_compared"], s["units_exact"]) == (4, 3)
     assert "| first divergence | units |" in S.table_md(res)
 
 

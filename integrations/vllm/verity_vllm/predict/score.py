@@ -65,15 +65,35 @@ def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
     hf = json.load(open(cp))
-    sampling = {"kind": "greedy"} if rid.sampling == "greedy" else {"kind": "stochastic", "label": rid.sampling,
-                                                                      **((w.get("sweep") or {}).get("sampling_params") or {})}
     reqs = [{"request_id": q.get("request_id"), "index": q.get("index", i), "prompt_len": q.get("prompt_len") or q.get("prompt_token_ids"),
              "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}
             for i, q in enumerate(w.get("requests") or [])]
     target = declared_profile(rec["row"], w)
-    return Phi(model={"repo": repo, "revision": rev, "hf_config": hf, "dtype": DTYPES.get(rid.dtype, rid.dtype)}, target=target,
-               tp={"world": rid.world, "rank": 0}, sampling=sampling, engine=dict(w.get("engine_args_required") or {}),
-               workload={"requests": reqs}, execution=rid.execution, profile=target.get("numerics_profile") or "b1-eager-v3")
+    phi = Phi(model={"repo": repo, "revision": rev, "hf_config": hf, "dtype": DTYPES.get(rid.dtype, rid.dtype)}, target=target,
+              tp={"world": rid.world, "rank": 0}, engine=dict(w.get("engine_args_required") or {}),
+              workload={"requests": reqs}, execution=rid.execution, profile=target.get("numerics_profile") or "b1-eager-v3")
+    phi.sampling = sampling_of(w, phi)
+    return phi
+
+
+#: the policy fields a component Program reads (`vllm_meta.make_wrapper`); the rest of the Build's policy record is provenance
+_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits")
+
+
+def sampling_of(w: dict, phi: Phi) -> dict:
+    """The row's sampling policy as the Build declares it (`pipeline.build.sampling_policy` over the workload manifest, then
+    `sampler_geometry` on the declared target: the split count, the single request's constant or "derived")."""
+    import tempfile
+    from verity_vllm.pipeline.build import sampler_geometry, sampling_policy
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "workload.json")
+        with open(path, "w") as f:
+            json.dump(w, f)
+        pol = sampling_policy(None, path)
+        refusal = sampler_geometry(pol, phi.target_profile()) if pol.get("kind") == "stochastic" else None
+    if refusal is not None:
+        raise Unexpressible(f"sampling: the Build refuses the policy ({refusal.get('hint')})")
+    return {k: pol[k] for k in _POLICY_FIELDS if k in pol}
 
 
 def phi_key(phi: Phi) -> str:
@@ -147,7 +167,7 @@ def predict_workload(phi: Phi) -> dict:
     comps = {}
     for LP, T in phi.request_shapes():
         r = build_program(phi, "request", LP=LP, T=T)
-        params = [("prompt", repr(r.program.fn.signature()[0][0][1])), ("weights", repr(r.program.fn.signature()[0][1][1]))]
+        params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
         comps[(LP, T)] = W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
     wreqs = []
     for i, q in enumerate(reqs):
