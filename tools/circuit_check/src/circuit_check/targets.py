@@ -46,6 +46,7 @@ def load_registries() -> None:
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -217,8 +218,9 @@ def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, and `registry.dense`'s rows on
     bits at 8 elements with Gemma-2's constants (`verity_vllm.program.registry.boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
-    (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
-    operations (`verity.ml.boolean.elementwise`) and the rows' static-free elements are static-free."""
+    (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the MUFU operations
+    (`verity.ml.boolean.mufu`), the element-wise operations (`verity.ml.boolean.elementwise`) and the rows' static-free elements
+    are static-free."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity_vllm.program.registry import boolean_dense as BDN
