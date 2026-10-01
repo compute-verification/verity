@@ -9,6 +9,8 @@
     verity.ml.mufu    IR primitives: the MUFU ex2 / rcp / sqrt / rsqrt / tanh approximations over their measured sm_89 tables
                       (package data), FA2's inverse sum, div.full's range scaling; numpy kernels for all but tanh
     verity.ml.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER
+    verity.ml.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`), `trace` (Boolean
+                      Definitions from builders), and `gemm`: the BF16 steps, cast and GemmCoordinate_v3 on bits
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
                       `verity.evaluation` and self-checked against `verity.ml.tc`
 """
