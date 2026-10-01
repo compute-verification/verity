@@ -14,7 +14,8 @@
 # pearl_c4.cubin: dd01ae5e (r20260930-162438-25e9's inputs/pc4-ship.tar). card: gpu-lease 1, untimed, verify --tier 2a.
 # timed: waits for WINDOW_AT (default 10:00Z, bc-c066b30c's slot), then gpu-lease 8 --timed, the harness on the lease's first
 # GPU, verify --tier 2b. Both take 20 reps, bench.py's minimum. The verifies run on the CPU after the lease.
-# env: LINEARS and ITEMS pick the points; TN is the verifier's commit. Every host thread, the verifies included, runs on PIN
+# env: ITEMS (name:m ...) and LINEARS pick the points, LINEARS_<name> an item's own (one bench process per item, so a crash
+# at one item's shapes loses only that item); TN is the verifier's commit. Every host thread, the verifies included, runs on PIN
 # (default 48-91, off slot d's cores 0-47: the top-level's ruling, note:20261001T0918Z-handoff-from-compute-accounting-slot-d-
 # pinning), and percore.py logs every core's busy % each second of the lease to llama8b/percore.jsonl, summed up per core range
 # in llama8b/percore-summary.json.
@@ -34,8 +35,8 @@ if [[ $mode == inner ]]; then
   echo "lease=${GPU_LEASE_UUID:-?} cvd=$CUDA_VISIBLE_DEVICES reps=$reps start=$(date -u +%FT%TZ)"
   rc=0
   for it in $ITEMS; do
-    name=${it%%:*} m=${it##*:} t0=$SECONDS
-    shapes=$(for l in $LINEARS; do printf 'm%s-%s ' "$m" "$l"; done)
+    name=${it%%:*} m=${it##*:} t0=$SECONDS lv=LINEARS_${it%%:*}
+    shapes=$(for l in ${!lv:-$LINEARS}; do printf 'm%s-%s ' "$m" "$l"; done)
     mkdir -p "$O/$name"
     (cd "$N" && . benchmarks/pouw/harness/jobs/env.sh "$IN" &&
       "$PY" benchmarks/pouw/harness/bench.py $G --shapes $shapes $ARM --out "$O/$name/bench.json") > "$O/$name/bench.log" 2>&1
@@ -76,9 +77,12 @@ fi
 b=$?
 s1=$(date -u +%FT%TZ)
 kill $sp; wait $sp 2>/dev/null
-python3 "$ROOT/runtree/percore_summary.py" "$O/percore.jsonl" "$s0" "$s1" > "$O/percore-summary.json"
-echo "bench rc=$b; per-core log $s0 to $s1: $(python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))["ranges"]
+if python3 "$ROOT/runtree/percore_summary.py" "$O/percore.jsonl" "$s0" "$s1" > "$O/percore-summary.json"; then
+  echo "bench rc=$b; per-core log $s0 to $s1: $(python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))["ranges"]
 print(" ".join(k + ":" + str(v["mean_busy_pct"]) + "%" for k, v in r.items()))' "$O/percore-summary.json")"
+else
+  echo "bench rc=$b; no per-core log for $s0 to $s1"
+fi
 v=0
 for it in $ITEMS; do
   name=${it%%:*}
