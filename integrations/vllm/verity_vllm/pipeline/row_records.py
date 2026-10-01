@@ -131,15 +131,16 @@ def _cpus() -> int:
 def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, headroom: int | None = None,
                     cpus: int | None = None, budget_gb: float | None = None) -> int:
     """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)
-    holds at the largest shape's `derive_bytes`, at most one per CPU this process may use and one per shape.  Without the shapes or the
-    model's layers: that memory / 20 GiB, 1..8.  A derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong Program."""
+    holds at the largest shape's `derive_bytes`, at most one per CPU this process may use and one per derive (the step's and each
+    shape's).  Without the shapes or the model's layers: that memory / 20 GiB, 1..8.  A derive that dies of OOM is rc 137, a Build FAIL
+    by rc, never a wrong Program."""
     head = _memory_headroom() if headroom is None else headroom
     if budget_gb is not None:
         head = min(head, int(budget_gb * (1 << 30)))
     if not shapes or not layers:
         return max(1, min(8, head // (20 << 30)))
     per = max(derive_bytes(lp, t, layers) for lp, t in shapes)
-    return max(1, min(_cpus() if cpus is None else cpus, len(shapes), int(0.8 * head) // per))
+    return max(1, min(_cpus() if cpus is None else cpus, len(shapes) + 1, int(0.8 * head) // per))
 
 
 def build_summary(d: str) -> str:
