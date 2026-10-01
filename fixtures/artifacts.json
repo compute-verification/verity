@@ -100,6 +100,7 @@
   "art:c1f3cde4dfa1343f00a135265291fea99d3e858734a05f30876aadcce19e8737": "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16",
   "art:3fd5fe7385f9a734309bd6db7ad6455b3dd845a2314a12be0a5fc817ced83f75": "packages/verity/tests/ml/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
   "art:3c5997ae19ec61df22f07babcde89a9eb0018b7b03f98a29dc3a7b82a04a1667": "packages/verity/tests/ml/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz",
+  "art:cc1f274f1194184395e6b2cf4db97d42859839008742d35d33f1f50adf79c438": "packages/verity/tests/ml/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
   "art:62b100147633ba0c8922fc25fabba0e451779e3f78934f5610b7a2f72925f9a2": "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/cvt_special.json",
   "art:09de03f180d981400493cc75fd1721a35c4920af4969dbcb0582f258fe021668": "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
   "art:69729b5a213b81bc878563a826352524ba96834b092ab4fc21374f4b5a876733": "packages/verity/tests/ml/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
