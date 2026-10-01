@@ -14,7 +14,9 @@ One run, in order:
    captured in a CUDA graph where the path allows it (the plain arm is otherwise ~169 launches, so its bandwidth would be
    launch-bound and POUS's overhead understated); the plain arm's bandwidth is reported against a measured device-copy
    bandwidth, and every `T` where it is launch-bound is flagged. Decode overhead at `T` is POUS time over plain time, minus one.
-   `W` is freed after the plain arm.
+   `W` is freed after the plain arm. After the timed reps one more decode must give back `W`'s digest (a race in the
+   persistent decode would show only under timing; a mismatch publishes nothing), and its peak device memory is recorded.
+   Which decode ran (kernel, rows, calls) is recorded per phase (`implementation.decode_paths`).
 4. **The limit, fixed before any load.** With no load running, the verifier calibrates its loopback round trip and fixes the
    limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are comparable. The allowance
    is a loopback one (a remote verifier's round trip adds to it).
@@ -38,6 +40,7 @@ setup (it encodes all of `W` itself) is `bench.py --impl reference`'s.
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import json
 import mmap
@@ -68,14 +71,17 @@ PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
 """Per scheme: its pinned vector in `vectors.json`, the label its `W` is drawn under, and how many leading blocks it pins
 (None: the whole segment; the rest of the segment is zeros)."""
 FROZEN_KERNELS = {"thread_rows": 500, "word_io": True, "fused": True, "pair": True, "pair_max_rows": 7500, "chunked": True,
-                  "chunked_threads": 64, "split": True, "fused_x": True, "whole_chain": True}
+                  "chunked_threads": 64, "split": True, "fused_x": True, "whole_chain": True, "chain_pairs": False}
 """The kernel settings of the band's run of record (`r20260928-032701-b4a1`, `bench.FROZEN_FLAGS`)."""
+KERNELS = {**FROZEN_KERNELS, "chain_pairs": True}
+"""The kernel settings a run starts from (`--kernels` overrides them): the run of record's, the whole-chain decode on lane
+pairs (`dense.CHAIN_PAIRS`).  `--kernels '{"chain_pairs": false}'` runs the run of record's kernels."""
 SWITCHES: dict[str, tuple[str, str, type]] = {
     "thread_rows": ("codec", "THREAD_ROWS", int), "word_io": ("codec", "WORD_IO", bool), "fused": ("codec", "FUSED", bool),
     "pair": ("codec", "PAIR", bool), "pair_max_rows": ("codec", "PAIR_MAX_ROWS", int), "coalesced": ("codec", "COALESCED", bool),
     "chunked": ("dense", "CHUNKED", bool), "chunked_threads": ("dense", "CHUNKED_THREADS", int),
     "split": ("dense", "CHUNKED_SPLIT", bool), "fused_x": ("dense", "CHUNKED_FUSED_X", bool),
-    "whole_chain": ("dense", "CHUNKED_WHOLE", bool),
+    "whole_chain": ("dense", "CHUNKED_WHOLE", bool), "chain_pairs": ("dense", "CHAIN_PAIRS", bool),
 }
 """Kernel setting -> (module, switch, type). Every setting computes the same bits; the gates run after they are set."""
 STEP_VARIANTS = {
@@ -84,8 +90,11 @@ STEP_VARIANTS = {
     "word_io": {"thread_rows": 1, "word_io": True, "fused": False, "pair": False},
     "fused": {"thread_rows": 1, "word_io": True, "fused": True, "pair": False},
     "pair": {"thread_rows": 1, "word_io": True, "fused": True, "pair": True, "pair_max_rows": 1 << 62},
+    "chain_pairs": {"chain_pairs": True},
 }
-"""The Feistel kernels a single-row `Π₂` call can run on; the step floor is the fastest of them."""
+"""The Feistel kernels a single-row `Π₂` call can run on; the step floor is the fastest of them.  `chain_pairs` is the
+decode's lane-pair kernel on one row's single chain call (`dense.chain_call`): each round's absorb overlaps the previous
+round's squeeze, about half the sequential Keccak-f of the others, with its bit-interleaved Keccak core."""
 LAUNCH_BOUND_FRACTION = 0.5
 """A plain-arm bandwidth below this fraction of the device-copy bandwidth is flagged launch-bound."""
 
@@ -197,6 +206,8 @@ class Backend:
     facts: Callable[[], dict[str, Any]] = dict
     encode_at: Callable[[int], Callable[[Any, Any], Any]] | None = None
     """The band's encoder at another in-degree (the pinned vector's, when the run's `d` is not the registered one)."""
+    memory: Callable[[Callable[[], Any]], dict[str, int]] | None = None
+    """Runs `fn` and returns the device memory allocated before it and the peak while it ran (`max_memory_allocated`)."""
 
 
 def set_kernels(flags: dict[str, Any]) -> dict[str, Any]:
@@ -300,6 +311,10 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
         return 2 * n / s / 1e9
 
     def step(settings: dict[str, Any], reps: int) -> list[float]:
+        if settings.get("chain_pairs"):
+            call = dense.chain_call(width, device)
+            call()
+            return [timer(call) for _ in range(reps)]
         before = set_kernels({})
         state = torch.randint(0, 256, (1, 2 * width + 64), dtype=torch.uint8, device=device)
         try:
@@ -330,10 +345,18 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
         return {**gpu_facts(device.index), "sms": props.multi_processor_count, "torch": torch.__version__,
                 "cuda": torch.version.cuda, "nvcc": _nvcc_version()}
 
+    def memory(fn: Callable[[], Any]) -> dict[str, int]:
+        torch.cuda.synchronize(device)
+        before = torch.cuda.memory_allocated(device)
+        torch.cuda.reset_peak_memory_stats(device)
+        fn()
+        torch.cuda.synchronize(device)
+        return {"allocated_before_bytes": before, "peak_bytes": torch.cuda.max_memory_allocated(device)}
+
     smi_id = device_uuid(device.index)
     return Backend(device, lambda w, t: dense.encode(w, t, window), lambda c, t: dense.decode_segments(c, t, window),
                    codec.segment_tags, tag_bytes, responder, timer, graphed, copy_bw, lambda: _sm_clock_mhz(smi_id), step,
-                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)))
+                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)), memory=memory)
 
 
 def _nvcc_version() -> str | None:
@@ -375,8 +398,8 @@ def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any]
 
 
 MIN_BAND_D = 5
-"""The least in-degree with a certificate: `band_meets_64` and `band_meets_14` hold for every `d ≥ 5` at `D = 5`, `k = 111`,
-483 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
+"""The least in-degree with a certificate: `Pous.Pinned.BandMultiMeetsFamily` holds for every `d ≥ 5` and every segment
+count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
 
 
 def with_in_degree(base: Any, d: int) -> Any:
@@ -386,8 +409,8 @@ def with_in_degree(base: Any, d: int) -> Any:
     if not isinstance(base, BandParams):
         raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
     if d < MIN_BAND_D:
-        raise ValueError(f"band in-degree d = {d} is refused: the band's certificates (band_meets_64, band_meets_14) hold for "
-                         f"d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d")
+        raise ValueError(f"band in-degree d = {d} is refused: the band's certificate (Pous.Pinned.BandMultiMeetsFamily) holds "
+                         f"for d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d")
     return BandParams(base.blocks_per_segment, base.m, d, base.segments)
 
 
@@ -462,6 +485,25 @@ def _timed_arm(backend: Backend, fn: Callable[[], Any], reps: int) -> tuple[list
         except Exception as e:  # noqa: BLE001  a non-capturable path (a host read mid-kernel) falls back to eager
             return _reps(backend, fn, reps), {"graphed": False, "reason": type(e).__name__ + ": " + str(e)[:200]}
     return _reps(backend, fn, reps), {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
+
+
+def take_decode_paths() -> list[dict[str, Any]]:
+    """The decodes `dense.decode_blocks` ran since the last call, as kernel, rows and calls, and forget them."""
+    from . import dense
+
+    seen = collections.Counter(dense.DECODE_PATHS)
+    dense.DECODE_PATHS.clear()
+    return [{"kernel": kernel, "rows": rows, "calls": calls} for (kernel, rows), calls in seen.items()]
+
+
+def decode_after_timing(backend: Backend, c: Any, tags: Any, w_digest: str) -> dict[str, Any]:
+    """One more decode after the timed reps, its `W`'s digest against the encoded `W`'s (a race in the persistent kernel
+    would show only under timing), and the device memory it peaked at."""
+    held: list[Any] = []
+    run = lambda: held.append(backend.decode(c, tags))  # noqa: E731
+    memory = backend.memory(run) if backend.memory is not None else (run(), None)[1]
+    got = hashlib.sha256(held[0].contiguous().cpu().numpy().tobytes()).hexdigest()
+    return {"passed": got == w_digest, "sha256": got, "expected_sha256": w_digest, "memory": memory}
 
 
 # --- the audits -----------------------------------------------------------------------------------------------------------
@@ -694,15 +736,18 @@ def nvme_probe(directory: str, c: bytes, block_bytes: int, samples: int) -> dict
 
 def stopped_reason(gates: dict[str, Any]) -> str:
     bad = [g for g, v in gates.items() if not v.get("passed")]
+    if bad == ["decode_after_timing"]:
+        return "the decode after the timed reps did not give back W, so nothing is published"
     if bad:
         return f"kernel gate(s) failed, so nothing was timed: {', '.join(bad)}"
     return "--gates-only: the kernels built and their gates passed; nothing was timed"
 
 
 def _failed(gates: dict[str, Any], facts: dict[str, Any], scheme: Any, n: int, total: int, used: int,
-            kernels: dict[str, Any], commit: str | None) -> dict[str, Any]:
+            kernels: dict[str, Any], commit: str | None, decode_paths: dict[str, Any]) -> dict[str, Any]:
     return {"implementation": {"name": "band-gpu", "commit": commit, "harness": "benchmarks/pous/band_gpu/harness.py",
-                               "kernels": kernels}, "device": facts, "segments": n, "segments_of_weight_set": total,
+                               "kernels": kernels, "decode_paths": decode_paths}, "device": facts, "segments": n,
+            "segments_of_weight_set": total,
             "blocks": scheme.params.blocks, "weight_bytes": used, "gates": gates, "metrics": None, "scheme_obj": scheme,
             "extra_gaps": (), "tag_rows": [], "measurements": [], "stopped": stopped_reason(gates)}
 
@@ -727,7 +772,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     p = scheme.params
     width = p.block_bytes
     used = min(ws["bytes"], n * seg)
-    kernels = {**FROZEN_KERNELS, **json.loads(a.kernels or "{}")}
+    kernels = {**KERNELS, **json.loads(a.kernels or "{}")}
     backend = backend or gpu(scheme, a.build_dir, kernels)
     facts: dict[str, Any] = {"before": backend.facts()}
 
@@ -738,13 +783,15 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     c_host = c.contiguous().cpu().numpy().tobytes()
     r = min(a.reference_segments, n)
     picks = sorted({round(i * (n - 1) / max(1, r - 1)) for i in range(r)}) if r else []
+    take_decode_paths()
     gates: dict[str, Any] = {"vector": vector_gate(a.scheme, backend, base.with_segments(1), vectors),
                              "reference_encode": reference_gate(scheme, c_host, w_host, picks, a.workers) if picks
                              else {"passed": True, "segments": []},
                              "round_trip": {"passed": bool(torch.equal(backend.decode(c, tags), w))}}
+    decode_paths: dict[str, Any] = {"gates": take_decode_paths()}
     if not all(g["passed"] for g in gates.values()) or getattr(a, "gates_only", False):   # P4: a failed gate times nothing
         facts["after"] = backend.facts()
-        return _failed(gates, facts, scheme, n, total, used, kernels, a.impl_commit)
+        return _failed(gates, facts, scheme, n, total, used, kernels, a.impl_commit, decode_paths)
 
     tokens = [int(t) for t in a.tokens.split(",") if t]
     pl = placements(ws["tensors"], used)
@@ -764,6 +811,13 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     for t in tokens:
         reps, how = _timed_arm(backend, lambda t=t: pous_forward(t), a.reps)
         pous_reps[t], pous_how[t] = reps, how
+    after = decode_after_timing(backend, c, tags, hashlib.sha256(w_host).hexdigest())
+    gates["decode_after_timing"] = {"passed": after["passed"], "sha256": after["sha256"]}
+    decode_paths["loop"] = take_decode_paths()
+    if not after["passed"]:   # P4: a wrong decode publishes nothing
+        facts["after"] = backend.facts()
+        return _failed(gates, facts, scheme, n, total, used, kernels, a.impl_commit, decode_paths)
+    pous_graphed = all(how["graphed"] for how in pous_how.values())
     plain = {t: statistics.median(plain_reps[t]) for t in tokens}
     pous = {t: statistics.median(pous_reps[t]) for t in tokens}
     decode_s = statistics.median(decode_reps)
@@ -771,14 +825,16 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     loop = {"tokens": tokens, "tensors": len(pl), "tensor_bytes": sum(size for *_, size in pl), "plain_s": plain, "pous_s": pous,
             "decode_s": decode_s, "overhead": {t: pous[t] / plain[t] - 1 for t in tokens},
             "slowdown": {t: pous[t] / plain[t] for t in tokens}, "plain_graphed": plain_how, "pous_graphed": pous_how,
-            "plain_reps_s": plain_reps, "pous_reps_s": pous_reps, "device_copy_GBps": copy_bw, "launch_bound": launch_bound}
+            "pous_arm_graphed": pous_graphed, "plain_reps_s": plain_reps, "pous_reps_s": pous_reps, "device_copy_GBps": copy_bw,
+            "launch_bound": launch_bound, "decode_memory": after["memory"]}
     cert = scheme.certificate
 
     def result(metrics: dict[str, Any], rows: list[tuple[str, Any, str]], gaps: tuple[str, ...]) -> dict[str, Any]:
         return {"implementation": {"name": "band-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/band_gpu/harness.py",
-                                   "kernels": kernels, "reference_segments": picks},
+                                   "kernels": kernels, "reference_segments": picks, "decode_paths": decode_paths},
                 "device": facts, "segments": n, "segments_of_weight_set": total, "blocks": p.blocks, "weight_bytes": used,
-                **({} if a.audits else UNTIMED), "gates": gates, "metrics": metrics, "scheme_obj": scheme, "extra_gaps": gaps,
+                "pous_arm_graphed": pous_graphed, **({} if a.audits else UNTIMED), "gates": gates, "metrics": metrics,
+                "scheme_obj": scheme, "extra_gaps": gaps,
                 "tag_rows": backend.tag_bytes(SALT, max(n, tag_segments)),
                 "measurements": [{"name": k, "value": v, "unit": u} for k, v, u in rows if v is not None]}
 
@@ -823,6 +879,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                  "pattern": f"every {window + 1}-th block of a segment (the cliff's)" if window else "each segment's last block",
                  **recompute_ctl, **recompute_margins(recompute_ctl, set(dropped), limit),
                  "recompute_margin_kind": RECOMPUTE_MARGIN_KIND}
+    decode_paths["audits"] = take_decode_paths()
 
     step = step_floor(backend, a.step_reps, cert.call_ns if cert is not None else None, facts)
     nvme = nvme_probe(a.nvme_dir, c_host, width, a.nvme_samples) if a.nvme_dir else None

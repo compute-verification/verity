@@ -157,9 +157,11 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
                                   vectors=_vectors(params))
     gates = body["gates"]
     assert body["segments"] == 3 and body["blocks"] == 48 and body["weight_bytes"] == 2560
-    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control",
-              "segment_tags"):
+    for g in ("vector", "reference_encode", "round_trip", "decode_after_timing", "timed_audit", "value_control", "late_control",
+              "recompute_control", "segment_tags"):
         assert gates[g]["passed"], (g, gates[g])
+    assert set(body["implementation"]["decode_paths"]) == {"gates", "loop", "audits"}   # the CPU stand-in runs no dense decode
+    assert body["pous_arm_graphed"] is False and body["metrics"]["loop"]["decode_memory"] is None
     assert gates["reference_encode"]["segments"] == [0, 2]
     assert not gates["certificate"]["passed"] and "no certificate" in gates["certificate"]["reason"]   # the small point has none
     m = body["metrics"]
@@ -200,6 +202,45 @@ def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
     assert "timed_audit" not in body["gates"] and body["profile"] is None
 
 
+def test_a_decode_wrong_only_after_the_round_trip_publishes_nothing(tmp_path):
+    params = _small()
+    backend = _backend(params)
+    right, seen = backend.decode, []
+
+    def decode(c, t):          # right for the round-trip gate, then wrong, as a race under timing would be
+        seen.append(right(c, t) if not seen else seen[0])
+        out = seen[-1].clone()
+        if len(seen) > 1:
+            out.view(-1)[0] ^= 1
+        return out
+
+    backend.decode = decode
+    body = _bench().BandGpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=backend, base=params, vectors=_vectors(params))
+    assert body["gates"]["round_trip"]["passed"] and not body["gates"]["decode_after_timing"]["passed"]
+    assert body["metrics"] is None and body["measurements"] == [] and "nothing is published" in body["stopped"]
+
+
+def test_the_lane_pair_decode_runs_from_two_segments_and_every_decode_records_its_kernel(monkeypatch):
+    harness = _harness()
+    from band_gpu import dense
+
+    stub = lambda c, seg, blk, *rest: torch.zeros(len(blk), c.shape[1], dtype=torch.uint8)  # noqa: E731
+    monkeypatch.setattr(dense, "_decode_whole", stub)
+    monkeypatch.setattr(dense, "_decode_chunked", stub)
+    width, bps = 65_536, 512
+    c, tags, blocks = torch.zeros(2 * bps, width, dtype=torch.uint8), torch.zeros(2, 32, dtype=torch.uint8), torch.arange(2 * bps)
+    before = harness.set_kernels({})
+    try:
+        harness.take_decode_paths()
+        for settings in (harness.KERNELS, {"chain_pairs": False}):
+            harness.set_kernels(settings)
+            dense.decode_blocks(c, tags, blocks // bps, blocks % bps, bps, 12)
+        assert harness.take_decode_paths() == [{"kernel": "band_chain_pairs", "rows": 1024, "calls": 1},
+                                               {"kernel": "feistel_chunked per step", "rows": 1024, "calls": 1}]
+    finally:
+        harness.set_kernels(before)
+
+
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
     params = _small()
     body = _bench().BandGpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(params), base=params,
@@ -210,8 +251,8 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
 
 def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
     """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
-    format), whose segments round-trip and whose certificate at the frozen point is `band_meets_64` with the cliff at 6;
-    the verifier process rebuilds it from its manifest; d = 4 has no certificate and is refused."""
+    format), whose segments round-trip and whose certificate at the frozen point is `Pous.Pinned.BandMultiMeetsFamily`
+    with the cliff at 6; the verifier process rebuilds it from its manifest; d = 4 has no certificate and is refused."""
     from verity_pous import band, schemes
 
     harness = _harness()
@@ -226,10 +267,11 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     assert blocks != scheme_of(BAND, _small()).encode_segment(harness.SALT, 0, w)            # another d, another encoding
     point = harness.with_in_degree(band.SECURE_FIRST, 6)
     cert = scheme_of("band-chain/d6/v1", point).certificate
-    assert (cert.theorem, cert.cliff, cert.k, cert.rounds, cert.call_ns) == ("band_meets_64", 6, 111, 5, 483_000)
-    assert scheme_of("band-chain/d6/v1", point.with_segments(448)).certificate.theorem == "band_meets_14"
+    assert (cert.theorem, cert.cliff, cert.k, cert.rounds, cert.call_ns) == ("Pous.Pinned.BandMultiMeetsFamily", 6, 111, 5,
+                                                                             241_500)
+    assert scheme_of("band-chain/d6/v1", point.with_segments(448)).certificate.segments == 448
     gate, _ = _bench().certificate_gate(scheme_of("band-chain/d6/v1", point), 111, 700_000)
-    assert gate["passed"] and gate["effective_rounds"] == 1
+    assert gate["passed"] and gate["effective_rounds"] == 2
     assert params_of("band-chain/d6/v1", point.manifest()) == point
     for d in (4, 1):
         with pytest.raises(ValueError, match=f"d = {d} is refused"):
@@ -271,7 +313,8 @@ def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_
     body = _bench().BandGpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=backend, base=params, vectors=_vectors(params))
     assert body["timed"] is False and body["audits"] == "skipped (untimed placement)" and body["profile"] is None
     gates = body["gates"]
-    assert set(gates) == {"vector", "reference_encode", "round_trip", "segment_tags"} and all(g["passed"] for g in gates.values())
+    assert set(gates) == {"vector", "reference_encode", "round_trip", "decode_after_timing", "segment_tags"}
+    assert all(g["passed"] for g in gates.values())
     m = body["metrics"]
     assert m["timed"] is False and m["step_floor"]["min_s"] == 7e-4 and set(m["loop"]["overhead"]) == {1, 8}
     assert not {"audit", "deadline", "calibration", "value_control", "late_control", "recompute_control"} & set(m)
@@ -426,6 +469,7 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
     got = harness.step_floor(fake, 2, 483_000, facts)
     assert got["fastest"] == "pair" and got["min_s"] == 4e-4 and got["below_certificate"]
     assert set(got["variants"]) == set(harness.STEP_VARIANTS) and "upper bound" in got["label"]
+    assert harness.STEP_VARIANTS["chain_pairs"] == {"chain_pairs": True}                    # the decode's lane-pair kernel
     assert got["sampled_sm_mhz"] == 2000.0 and got["at_max_clock_s"] == 4e-4 * 2000 / 2500                  # scaled to max
     assert got["sampled_nvidia_smi_id"] == "GPU-b"
     assert got["at_plus15pct_overclock_s"] == got["at_max_clock_s"] / 1.15
@@ -505,7 +549,7 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
         nvcc.chmod(0o755)
         py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
         py.parent.mkdir(parents=True)
-        py.write_text("#!/bin/sh\nexit 0\n")
+        py.write_text(f"#!/bin/sh\necho \"$@\" >> {d / 'py-args'}\nexit 0\n")
         py.chmod(0o755)
         (d / "run").mkdir()
         base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
@@ -514,14 +558,17 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
                             env={**base, **smi_env, **env})
         return rc, _queries(log), d / "run"
 
-    rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1")
+    rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1",
+                         KERNELS='{"chain_pairs": false}')
     assert rc.returncode == 0, rc.stdout[-2000:]
     assert calls and all(c.startswith("--id=GPU-b ") for c in calls)
+    assert ' --kernels {"chain_pairs": false}' in (tmp_path / "lease" / "py-args").read_text()          # KERNELS reaches bench.py
     for name in ("before", "after"):
         assert (out / f"clocks-{name}.txt").read_text().startswith("nvidia-smi --id=GPU-b: 1, GPU-b, 00000000:02:00.0\n")
     rc, calls, _ = run("visible", "GPU-a GPU-b GPU-c", CUDA_VISIBLE_DEVICES="2")
     assert rc.returncode == 0 and calls[0] == "--id=2 --query-gpu=uuid --format=csv,noheader"
     assert calls[1:] and all(c.startswith("--id=GPU-c ") for c in calls[1:])
+    assert "--kernels" not in (tmp_path / "visible" / "py-args").read_text()                         # no KERNELS: the defaults
     rc, calls, _ = run("only", "GPU-only")
     assert rc.returncode == 0 and calls and all(c.startswith("--id=GPU-only ") for c in calls)
     rc, calls, _ = run("several", "GPU-a GPU-b GPU-c")
@@ -533,7 +580,9 @@ def test_the_kernel_settings_and_the_loop_layout():
     before = harness.set_kernels({})
     try:
         now = harness.set_kernels(harness.FROZEN_KERNELS)
-        assert now["thread_rows"] == 500 and now["whole_chain"] is True
+        assert now["thread_rows"] == 500 and now["whole_chain"] is True and now["chain_pairs"] is False
+        assert harness.set_kernels(harness.KERNELS) == {**now, "chain_pairs": True}       # the record's, the chain on lane pairs
+        assert harness.set_kernels({"chain_pairs": False}) == now                         # selects the record's again
         with pytest.raises(ValueError, match="unknown kernel settings"):
             harness.set_kernels({"turbo": 1})
     finally:

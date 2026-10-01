@@ -92,6 +92,10 @@ def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
 @pytest.mark.parametrize("row, why", [
     (LLAMA_B8, None),
     ("smollm2-135m__bf16__rtxpro6000__tp1__b1__i1024__o128__mixed__greedy__bi-eager", None),
+    ("llama32-3b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", None),
+    ("qwen25-05b-instruct__bf16__rtxpro6000__tp1__b1__i1024__o128__mixed__greedy__bi-eager", None),
+    ("r1-distill-qwen-15b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", None),
+    ("llama31-8b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
     ("llama32-1b__bf16__rtxpro6000__tp1__b16__i256__o32__mixed__greedy__bi-eager", "batch 16"),
     ("llama32-1b__bf16__rtxpro6000__tp2__b8__i256__o32__mixed__greedy__bi-eager", "not TP1"),
     ("gemma2-2b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
@@ -109,6 +113,24 @@ def test_the_build_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay
     assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), "lane/c1", 1)
     assert "leased" in dispatch.packable(_item(tree, lease="wrap"), "lane/c1", 1)
     assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", 1)
+
+
+def test_a_leased_commit_mounts_its_queues_lease_pool_and_requests_no_gpu(dispatch, tmp_path, monkeypatch):
+    tree = _tree(tmp_path / "t")
+    monkeypatch.setattr(dispatch, "LEASE_HOSTDIRS", {"deployments-gpu": "/run/gpu-lease-circuits"})
+    job = dispatch.render(_item(tree, lease="self"), "lane/c1", 1, 0)
+    assert job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "deployments-gpu"
+    pod = job["spec"]["template"]["spec"]
+    c = pod["containers"][0]
+    assert "nvidia.com/gpu" not in c["resources"]["requests"] and pod["hostPID"] and pod["runtimeClassName"] == "nvidia"
+    vol = next(v for v in pod["volumes"] if v["name"] == "gpu-lease")
+    assert vol["hostPath"]["path"] == "/run/gpu-lease-circuits"
+    assert next(m for m in c["volumeMounts"] if m["name"] == "gpu-lease")["mountPath"] == "/run/gpu-lease"
+    env = {e["name"]: e["value"] for e in c["env"]}
+    assert env["GPU_LEASE_DIR"] == "/run/gpu-lease" and env["NVIDIA_VISIBLE_DEVICES"] == "all"
+    monkeypatch.setattr(dispatch, "LEASE_HOSTDIRS", {})
+    pod = dispatch.render(_item(tree, lease="self"), "lane/c1", 1, 0)["spec"]["template"]["spec"]
+    assert next(v for v in pod["volumes"] if v["name"] == "gpu-lease")["hostPath"]["path"] == "/run/gpu-lease"
 
 
 def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp_path):

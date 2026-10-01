@@ -308,9 +308,10 @@ def _kernel_roots() -> list[Any]:
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
     from verity.ir.defs import bind
+    from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
-    from verity_vllm.program.registry import boolean_attention
+    from verity_vllm.program.registry import boolean_attention, boolean_fp8
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -332,6 +333,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # the served FA2 binding at the smallest chain whose unguarded block rescales (T = BN + 1, block 0 below MASKED_FROM)
         ("Attention_v8", lambda: bind(boolean_attention.AttentionV8, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
                                       DOT=boolean_attention.ATTENTION_FA3["DOT"], INV=boolean_attention.ATTENTION_FA2["INV"])),
+        ("Attention_v9", lambda: bind(boolean_attention.AttentionV9, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                      **boolean_attention.ATTENTION_FA3)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
@@ -340,6 +343,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("ScaledMmFp8NoSwap_v1", lambda: bind(fp8.ScaledMmFp8NoSwap, K=64, N=2, BIAS=True, DOT=BlackwellE4m3QmmaDot32)),
         ("QuantLinearNvfp4_v1", lambda: bind(nvfp4.QuantLinearNvfp4, K=64, N=2, DOT=BlackwellNvf4OmmaDot64)),
         ("ScaledMmFp8BlockSharedScale_v1", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=256, G=128)),
+        ("QuantLinearFp8_v2", lambda: bind(boolean_fp8.QuantLinearFp8V2, K=256, N=2, BIAS=True)),
+        ("ScaledMmFp8_v2", lambda: bind(boolean_fp8.ScaledMmFp8V2, K=32, N=2, BIAS=False)),
+        ("Fp8GroupQuant_v2", lambda: bind(boolean_fp8.Fp8GroupQuantV2, K=64, G=32)),
+        ("ScaledMmFp8Block_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockV2, K=32, N=32, G=32)),
+        ("ScaledMmFp8BlockSharedScale_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV2, K=64, N=32, G=32)),
+        ("ScaledMmFp8NoSwap_v2", lambda: bind(boolean_fp8.ScaledMmFp8NoSwapV2, K=64, N=2, BIAS=True,
+                                              DOT=BG.BlackwellE4m3QmmaDot32)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
@@ -412,8 +422,9 @@ _CALLS: set[str] = set()
 
 def call_families() -> set[str]:
     """The Definition families a served Program calls, where the partition invariant applies: the replay's row families
-    (`verity_vllm.program.kernels.rows.ROWS`), every frontend vocabulary kind, and every template's Definition.  Any other
-    Definition's gates are partitioned inside the Call that contains them."""
+    (`verity_vllm.program.kernels.rows.ROWS`), every frontend vocabulary kind, every template's Definition, and the Boolean
+    version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other Definition's
+    gates are partitioned inside the Call that contains them."""
     if not _CALLS:
         load_registries()
         from verity_vllm.program.kernels import rows
@@ -422,7 +433,26 @@ def call_families() -> set[str]:
         _CALLS.update(family(fn) for _label, fn in _vocabulary_bindings() if not isinstance(fn, str))
         for _label, sub, sts in templates():
             _CALLS.update(family(sub.definition(**st)) for st in sts)
+        _CALLS.update(boolean_call_families(set(_CALLS)))
     return _CALLS
+
+
+def boolean_call_families(word_calls: set[str]) -> set[str]:
+    """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
+    switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
+    from verity.evaluation import ScalarReference
+    from verity.ir import boolean as BL
+    from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+
+    out: set[str] = set()
+    for fn in suite().values():
+        if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
+            continue
+        try:
+            out.add(family(boolean_version(fn)))
+        except NoBooleanVersion:
+            continue
+    return out
 
 
 def catalog() -> list[Any]:
@@ -480,14 +510,22 @@ def family(fn: Any) -> str:
 
 
 def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
-    """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise."""
+    """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
+    smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
+    the Program on bits calls)."""
+    from verity.ir import boolean as BL
+
     by: dict[str, list[Any]] = {}
     for fn in found.values():
         by.setdefault(family(fn), []).append(fn)
     out = {}
     for fns in by.values():
-        small = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
-        for f in small or [min(fns, key=lambda f: f.gates)]:
+        keep = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
+        if not keep:
+            keep = [min(fns, key=lambda f: f.gates)]
+            if not BL.is_boolean(keep[0]) and (bits := [f for f in fns if BL.is_boolean(f)]):
+                keep.append(min(bits, key=lambda f: f.gates))
+        for f in keep:
             out[f.id] = f
     return dict(sorted(out.items()))
 
@@ -500,5 +538,5 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "call_families", "catalog", "definition", "family", "instance_statics", "kind_of",
+__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics", "kind_of",
            "load_registries", "reachable", "select", "subcircuit", "suite", "templates"]
