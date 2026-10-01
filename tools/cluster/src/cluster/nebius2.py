@@ -1,9 +1,9 @@
 """vy-nebius-2's `gpu-lease` as the model sees it: the adapter between the node's lock files and the planner.
 
 `gpu-lease` keeps its state in `/run/gpu-lease`: `<i>.lock`, held with flock(1) for as long as a lease runs, beside
-`<i>.owner`, one line naming the holder (`pid=… run=… who=… uuid=… since=… [until=…] [mem=…G] [preempt=1] [timed=1]
+`<i>.owner`, one line naming the holder (`pid=… run=… who=… [goal=…] uuid=… since=… [until=…] [mem=…G] [preempt=1] [timed=1]
 [scope=…] cmd=…`, left behind when the lease ends); and `wait.<ns>.<pid>`, a `--wait` request's line (`pid=… n=… [on=…]
-run=… who=… since=…`), locked while it waits. The node's sampler records the same lines every 10 s
+run=… who=… [goal=…] since=…`), locked while it waits. The node's sampler records the same lines every 10 s
 (`/workspace/pouw/infra/util/*.jsonl`: `gpus[].lease`, `wait_files`), which is what a replay reads.
 
 `read` takes the node's state without touching a lock: which files are locked comes from the holders' `/proc/<pid>/fdinfo`,
@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from .ledger import epoch
-from .model import Allocation, Cluster, Job
+from .model import GOAL_RE, Allocation, Cluster, Job
 
 NODE = "vy-nebius-2"
 LEASE_DIR = Path("/run/gpu-lease")
@@ -186,7 +186,8 @@ def job_of(cluster: Cluster, f: dict[str, str], gpus: int, gpu_ids: tuple[int, .
                memory_gib=int(mem[:-1]) if mem.endswith("G") and mem[:-1].isdigit() and int(mem[:-1]) > 0 else 1,
                max_s=max_s, expected_s=None if max_s is not None else EXPECTED_S,
                preempt="requeue" if pre else "never", quiet=timed, node=node, gpu_ids=gpu_ids, submitted=since,
-               run=f["run"] if f.get("run", "-") != "-" else None)
+               run=f["run"] if f.get("run", "-") != "-" else None,
+               goal=f["goal"] if GOAL_RE.fullmatch(f.get("goal", "")) else None)
 
 
 def allocations(cluster: Cluster, obs: Observation, node: str = NODE) -> list[Allocation]:

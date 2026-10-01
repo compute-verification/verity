@@ -69,10 +69,12 @@ def test_job_problems():
     bad = [job("b-1", priority="urgent"), job("b-2", max_s=None), job("b-3", kind="service", priority="service", max_s=60),
            job("b-4", quiet_safe=True), job("b-5", kind="stage", quiet=True), job("b-6", gpus=2, gpu_ids=(1,)),
            job("b-7", cpus=0), job("b-8", node="elsewhere"), job("b-9", kind="session", max_s=None),
-           job("b-10", expected_s=60), job("b-11", workstream="nobody"), job("b-12", gpus=1, cpus=0, pool="checks")]
+           job("b-10", expected_s=60), job("b-11", workstream="nobody"), job("b-12", gpus=1, cpus=0, pool="checks"),
+           job("b-13", goal="cov g217")]
     wants = ["unknown priority class", "declares max_s", "a service has no max_s", "only a service may be quiet_safe",
              "only a batch job or a session may be quiet", "gpu_ids names 1 GPUs", "at least one CPU", "unknown node",
-             "declares expected_s", "only a session has an expected_s", "unknown workstream", "names no CPU pool"]
+             "declares expected_s", "only a session has an expected_s", "unknown workstream", "names no CPU pool",
+             "goal 'cov g217' must match"]
     assert job("s-1", kind="session", max_s=None, expected_s=1800, gpus=1, cpus=0).problems(c) == []
     for j, want in zip(bad, wants):
         assert any(want in p for p in j.problems(c)), (j.id, j.problems(c))
@@ -83,6 +85,9 @@ def test_jobs_and_allocations_round_trip_through_dicts():
     assert model.job_from_dict(model.job_to_dict(j)) == j
     s = job("s-1", kind="session", max_s=None, expected_s=900, gpus=1, cpus=0, workstream="w")
     assert model.job_from_dict(model.job_to_dict(s)) == s
+    g = job("g-1", goal="cov-g217")
+    assert model.job_to_dict(g)["goal"] == "cov-g217" and model.job_from_dict(model.job_to_dict(g)) == g
+    assert "goal" not in model.job_to_dict(j), "a job with no goal writes the dict (and the ledger record) it always did"
     a = alloc(j, (0, 1), "0-3", state="frozen")
     assert model.allocation_from_dict(model.allocation_to_dict(a)) == a
     with pytest.raises(model.ModelError, match="unknown job fields"):

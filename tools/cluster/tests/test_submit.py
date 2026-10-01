@@ -78,6 +78,28 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     assert json.loads(capsys.readouterr().out)["max_s"] == 1200
 
 
+def test_a_goal_rides_the_job_into_the_ledger_and_reaches_gpu_lease(capsys):
+    base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(T), "--project", "verity", "--submitter", "lane-x", "--max-s", "600",
+            "--gpus", "1", "--mem-gb", "64"]
+    assert cli.main([*base, "--goal", "cov-g217"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["job"]["goal"] == "cov-g217" and "GPU_LEASE_GOAL=cov-g217" in out["wrap"]
+    assert out["wrap"].index("GPU_LEASE_GOAL=cov-g217") < out["wrap"].index("systemd-run")
+    assert cli.main(base) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "goal" not in out["job"] and not any(w.startswith("GPU_LEASE_GOAL=") for w in out["wrap"])
+    assert cli.main([*base, "--goal", "x y"]) == 3
+    assert "goal" in json.loads(capsys.readouterr().out)["refused"]
+
+
+def test_a_kinds_staged_inputs_are_named_in_the_placement(tmp_path):
+    (tmp_path / "o.toml").write_text('[kinds.k]\nphase = "cpu-s"\nmax_wall_min = 5\n'
+                                     'inputs = ["packages/x", "art:' + "a" * 64 + '", "hf:org/m@abc", "model:org/m@abc"]\n')
+    out = submit.submit(model.load(NEBIUS), kinds.load(tmp_path), run_id="r1", now=T, kind="k", project="verity", submitter="w")
+    assert out["inputs"] == ["art:" + "a" * 64, "hf:org/m@abc", "model:org/m@abc"]
+    assert submit.submit(model.load(NEBIUS), {}, run_id="r1", now=T, project="verity", submitter="w", max_s=60)["inputs"] == []
+
+
 KINDS = Path(__file__).parents[1] / "kinds"
 
 

@@ -3,7 +3,8 @@
 A **cluster** is a set of nodes, each owned by one project, plus the priority classes and the **shares** under which a
 project runs on a node it doesn't own. Nothing reaches a node except as a **job**: a batch job (GPU, CPU or Lean work),
 a long-lived service, a time-boxed interactive session, or a data-staging job. A job that runs holds an **allocation**:
-exact GPUs, CPUs and memory on one node from a start time, running or frozen.
+exact GPUs, CPUs and memory on one node from a start time, running or frozen. A job may name the **goal** it is critical to
+(`goal`, a goal Commit's id such as `cov-g217`); `watch.py` alerts its owner when such a job waits half an hour for a grant.
 
 Standing decides displacement before priority does: on its own node a project's job outranks every guest's, and a guest
 runs only on idle capacity, only preemptibly, and never beside a quiet job. Inside an owner, a **workstream** owns some of
@@ -14,6 +15,7 @@ nothing here reads a clock.
 from __future__ import annotations
 
 import datetime as dt
+import re
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -24,6 +26,7 @@ from . import cpuset
 KINDS = ("batch", "service", "session", "stage")
 PREEMPT = ("never", "freeze", "requeue")
 OWNER, GUEST = "owner", "guest"
+GOAL_RE = re.compile(r"[A-Za-z0-9._:-]{1,64}")
 
 
 class ModelError(ValueError):
@@ -158,6 +161,7 @@ class Job:
     workstream: str | None = None
     submitted: int = 0
     run: str | None = None
+    goal: str | None = None
 
     @property
     def length_s(self) -> int | None:
@@ -203,6 +207,8 @@ class Job:
             out.append(f"unknown node {self.node!r}")
         if self.workstream is not None and not any(w.name == self.workstream for w in cluster.workstreams):
             out.append(f"unknown workstream {self.workstream!r}")
+        if self.goal is not None and not GOAL_RE.fullmatch(self.goal):
+            out.append(f"goal {self.goal!r} must match {GOAL_RE.pattern}")
         return out
 
 

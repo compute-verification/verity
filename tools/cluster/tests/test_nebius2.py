@@ -66,6 +66,17 @@ def test_a_waiter_is_a_queued_job_and_a_whole_node_waiter_a_timed_window(c):
     (w, h1), (p, h2) = nebius2.queue(c, obs)
     assert (w.id, w.gpus, w.quiet, w.submitted, h1) == ("gl-147369", 8, True, epoch("2026-09-30T06:44:04Z"), "wait.1.147369")
     assert (p.id, p.gpus, p.gpu_ids, p.quiet, p.priority) == ("gl-99", 2, (4, 5), False, "session")
+    assert w.goal is None
+
+
+def test_a_goal_in_a_wait_or_owner_line_is_the_jobs_goal_and_a_malformed_one_is_dropped(c):
+    obs = nebius2.Observation(0, {2: FILL.replace(" uuid=", " goal=cov-g217 uuid=")},
+                              (("wait.1.7", "pid=7 n=1 run=r-1 who=bc-x goal=cov-g217 since=2026-09-30T06:44:04Z"),
+                               ("wait.2.8", "pid=8 n=1 run=r-2 who=bc-x goal=a;b since=2026-09-30T06:44:04Z")))
+    [(w, _), (bad, _)] = nebius2.queue(c, obs)
+    [a] = nebius2.allocations(c, obs)
+    assert (w.goal, a.job.goal, bad.goal) == ("cov-g217", "cov-g217", None)
+    assert not bad.problems(c), "a malformed goal never makes the planner refuse a waiter"
 
 
 def test_preempted_log_lines_parse_to_the_requester_and_the_stopped_lease():

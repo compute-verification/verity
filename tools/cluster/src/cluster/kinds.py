@@ -5,6 +5,7 @@ submitter ships (never a node-local copy), so a job's kind is resolved at the co
     phase = "cpu-m"                 # the shape menu below
     max_wall_min = 20
     question = "Do core's Lean proofs still check, with only the allowed axioms?"
+    inputs = ["packages/verity/lean"]  # tree paths; an `art:`, `model:` or `hf:` ref must be staged on the node first
     outputs = ["the audit report"]
     restart = "idempotent"          # idempotent | requeue | never
     next = "some-kind"              # optional: the kind its declared outputs go to
@@ -30,6 +31,7 @@ SHAPES: dict[str, dict[str, int | bool]] = {
 }
 RESTART = ("idempotent", "requeue", "never")
 GPU_CHUNK_MIN = 60
+STAGED = ("art:", "model:", "hf:")
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,11 @@ class Kind:
     @property
     def shape(self) -> dict[str, int | bool]:
         return SHAPES[self.phase]
+
+    @property
+    def staged(self) -> tuple[str, ...]:
+        """The inputs a node must hold before the job runs (`cluster preflight` checks them)."""
+        return tuple(x for x in self.inputs if x.startswith(STAGED))
 
 
 def kinds_dir(description: str | Path) -> Path:
@@ -107,4 +114,4 @@ def warnings(kind: Kind | None, name: str, *, question: str, gpus: int, cpus: in
     return out
 
 
-__all__ = ["SHAPES", "RESTART", "Kind", "kinds_dir", "load", "warnings"]
+__all__ = ["SHAPES", "RESTART", "STAGED", "Kind", "kinds_dir", "load", "warnings"]
