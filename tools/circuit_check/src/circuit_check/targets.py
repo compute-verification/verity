@@ -216,12 +216,17 @@ def _core_roots() -> list[Any]:
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64; the steps, the cast,
     attention's softmax operations (`verity.ml.boolean.attention`) and the element-wise operations
-    (`verity.ml.boolean.elementwise`) are static-free."""
+    (`verity.ml.boolean.elementwise`) are static-free. The served norms on bits (`boolean_norms`) at N = 16 with their MUFU
+    statics at the word ids, the fused norm's lanes at two elements per thread, and the word Definitions of its constant steps."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
+    from verity_vllm.program.registry import boolean_norms as BN
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
-            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER)]
+            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
+            bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
+            bind(BN.RMSNormLanesCuda, N=40, BLOCK=32), bind(BN.RMSNormVarEpsCudaWord, N=16, EPS=1e-5),
+            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5)]
 
 
 def _kernel_roots() -> list[Any]:
