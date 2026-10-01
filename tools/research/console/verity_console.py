@@ -535,7 +535,8 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     except Exception as e:  # noqa: BLE001  the other panels still go out
         errors.append(f"node2-hours: {type(e).__name__}: {e}")
     try:
-        readings = idle_readings({"node 1": minutes["n1"], "node 2": minutes["n2"]}, now)
+        readings = idle_readings({"node 1": minutes["n1"], "node 2": minutes["n2"]}, now,
+                                 {"node 1": n1_lease_spans(now.timestamp())})
         if ns.key.exists():
             record_readings(readings)
         out.append(idle_panel(readings, now))
@@ -866,23 +867,92 @@ def lane_of(node: str, holder: str) -> str:
     return N2_LANES.get(m.group(0), holder) if m else holder
 
 
-def idle_readings(minutes: dict, now: datetime) -> list[dict]:
-    """Per UTC hour, node and lane: held GPU-hours and the held-idle share, with the change from the lane's hour before."""
-    acc: dict = defaultdict(lambda: [0.0, 0.0])
+N1_LEASE_POOLS = {"/run/gpu-lease-circuits": "circuits", "/run/gpu-lease": "proofs"}  # n1_lease.py's pools on node 1, by lane
+N1_POOL_IDLE_S = 120  # n1_lease.py's VY_POOL_IDLE_S: a pool GPU free this long, with nobody waiting, leaves the pool
+POOL_HOLDER = re.compile(r"^gpu-pool-")
+LEASE_POOL_IDLE = "lease pool, not leased"
+
+
+def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle_s: int = N1_POOL_IDLE_S) -> list[tuple]:
+    """(GPU, start, end, lane) for each lease a node-1 pool granted, from n1_lease.py's log and state in each pool's directory.
+
+    The log records pool membership, not leases: a GPU joins the pool (`unfenced`) for a waiting lease and leaves it (`shrink`)
+    once it has been free for idle_s with nobody waiting, so its lease ran from the unfence to the shrink less idle_s (to within
+    the pool's 5 s tick). `blocked-shrink` and `fenced` end it where they stand. A GPU still in the pool is leased until now if
+    n1-lease.json shows a lease on it, else until idle_s before the state's time."""
+    spans = []
+    for d, lane in pools.items():
+        log = Path(d) / "n1-lease.log"
+        if not log.exists():
+            continue
+        start: dict[int, float] = {}
+        for ln in log.read_text().splitlines():
+            try:
+                e = json.loads(ln)
+                t, g = datetime.strptime(e["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp(), e.get("gpu")
+            except (ValueError, KeyError, TypeError):
+                continue
+            if g is None:
+                continue
+            if e.get("ev") == "unfenced":
+                start.setdefault(g, t)
+            elif e.get("ev") in ("shrink", "blocked-shrink", "fenced") and g in start:
+                a = start.pop(g)
+                b = t - idle_s if e["ev"] == "shrink" else t
+                if b > a:
+                    spans.append((g, a, b, lane))
+        state = json.loads((Path(d) / "n1-lease.json").read_text()) if start and (Path(d) / "n1-lease.json").exists() else {}
+        st = datetime.strptime(state["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if state else now
+        leased = {g["index"] for g in state.get("gpus") or [] if g.get("lease")}
+        for g, a in start.items():
+            b = now if g in leased else st - idle_s
+            if b > a:
+                spans.append((g, a, b, lane))
+    return spans
+
+
+def idle_readings(minutes: dict, now: datetime, spans: dict | None = None) -> list[dict]:
+    """Per UTC hour, node and lane: held GPU-hours and the held-idle share, with the change from the lane's hour before.
+
+    spans: per node, (GPU, start, end, lane) of its GPU leases (n1_lease_spans). A leased GPU is held for its lease's lane for
+    exactly the lease, and busy in a minute when that GPU's own reading is (whichever pod DCGM names); a lease minute with no
+    reading is unmeasured, never idle. On such a node a lease pool's holder pod outside every lease counts to LEASE_POOL_IDLE."""
+    acc: dict = defaultdict(lambda: [0.0, 0.0, 0.0])
     for node, rows in minutes.items():
-        for r in rows or []:
+        leases = (spans or {}).get(node)
+        rows, covered = rows or [], set()
+        by_key = {(r[0], r[1]): r for r in rows}
+        for g, a, b, lane in leases or []:
+            m = int(a) // 60 * 60
+            while m < b:
+                frac = (min(b, m + 60) - max(a, m)) / 60
+                r = by_key.get((m, g))
+                covered.add((m, g))
+                for x in (acc[(uc_hour(m), node, lane)], acc[(uc_hour(m), node, "(all holders)")]):
+                    if r is None:
+                        x[2] += frac / 60
+                    else:
+                        x[0] += frac / 60
+                        x[1] += 0 if r[2] + r[4] else frac / 60
+                m += 60
+        for r in rows:
             if r[6] and r[2] + r[3]:
-                for lane in (lane_of(node, r[6]), "(all holders)"):
+                pooled = leases is not None and bool(POOL_HOLDER.match(r[6]))
+                if (r[0], r[1]) in covered and (pooled or r[6] == NO_POD):
+                    continue
+                for lane in (LEASE_POOL_IDLE if pooled else lane_of(node, r[6]), "(all holders)"):
                     a = acc[(uc_hour(r[0]), node, lane)]
                     a[0] += (r[2] + r[3]) / 60
                     a[1] += r[3] / 60
     out, cur = [], uc_hour(now.timestamp())
-    for (h, node, lane), (held, idle) in sorted(acc.items()):
+    for (h, node, lane), (held, idle, unmeasured) in sorted(acc.items()):
         prev = next((o for o in reversed(out) if o["node"] == node and o["lane"] == lane), None)
-        pct_idle = round(100 * idle / held, 1)
+        pct_idle = round(100 * idle / held, 1) if held else None
         out.append({"hour": h, "node": node, "lane": lane, "complete": h != cur, "held_gpu_h": round(held, 2),
-                    "held_idle_gpu_h": round(idle, 2), "held_idle_pct": pct_idle, "target_pct": IDLE_TARGETS.get((node, lane)),
-                    "change_pts": round(pct_idle - prev["held_idle_pct"], 1) if prev and prev["hour"] == uc_hour(
+                    "held_idle_gpu_h": round(idle, 2), "held_idle_pct": pct_idle, "unmeasured_gpu_h": round(unmeasured, 2),
+                    "target_pct": IDLE_TARGETS.get((node, lane)),
+                    "change_pts": round(pct_idle - prev["held_idle_pct"], 1) if pct_idle is not None and prev
+                    and prev["held_idle_pct"] is not None and prev["hour"] == uc_hour(
                         datetime.strptime(h, "%Y-%m-%dT%H:00Z").replace(tzinfo=timezone.utc).timestamp() - 3600) else None})
     return out
 
@@ -906,18 +976,21 @@ def record_readings(readings: list[dict], path: Path = IDLE_READINGS) -> int:
 
 def idle_panel(readings: list[dict], now: datetime) -> dict:
     rows = [[r["hour"] + ("" if r["complete"] else " (so far)"), r["node"], r["lane"], sig(r["held_gpu_h"], 3),
-             sig(r["held_idle_gpu_h"], 3), sig(r["held_idle_pct"], 3), r["target_pct"], r["change_pts"]]
+             sig(r["held_idle_gpu_h"], 3), sig(r["held_idle_pct"], 3), sig(r.get("unmeasured_gpu_h"), 3), r["target_pct"],
+             r["change_pts"]]
             for r in sorted(sorted(readings, key=lambda r: (r["lane"] != "(all holders)", -r["held_gpu_h"])),
                             key=lambda r: (r["hour"], r["node"]), reverse=True)
-            if r["held_gpu_h"] >= 0.05 or r["lane"] == "(all holders)"]
+            if r["held_gpu_h"] >= 0.05 or (r.get("unmeasured_gpu_h") or 0) >= 0.05 or r["lane"] == "(all holders)"]
     return fit(panel("held-idle-hourly", "Held but idle, per hour, node and lane", "table",
-                     ["Hour (UTC)", "Node", "Lane", "Held GPU-h", "Held idle GPU-h", "Held idle %", "Target %", "Change (pts)"],
+                     ["Hour (UTC)", "Node", "Lane", "Held GPU-h", "Held idle GPU-h", "Held idle %", "Unmeasured GPU-h", "Target %",
+                      "Change (pts)"],
                      rows[:1000], updated_at=iso(now),
-                     source="vy-nebius-1's DCGM (per minute) and vy-nebius-2's POUS sampler (10 s), as in node1-owner-hours",
-                     note="Held idle %: the share of a lane's held GPU-hours with utilization 0. Node 1's lanes come from job names "
-                          "(gpu-pool-circuits-* is circuits' lease pool, gpu-pool-<n> proofs'); node 2's from the coordinator's id, "
-                          "else the holder's label. Change: points against the lane's hour before. Infra alerts the lane and "
-                          "top-level when a lane above its target improves by less than 5 points in an hour. Newest first."))
+                     source="vy-nebius-1's DCGM (per minute) and n1_lease.py's pool logs, vy-nebius-2's POUS sampler (10 s)",
+                     note="Held idle %: a lane's held GPU-hours with utilization 0. Node 1: lanes by job name; a GPU leased from "
+                          "a lease pool is held for the lease's time, busy by that GPU's DCGM reading, unmeasured (never idle) "
+                          "without one; the pool holder outside a lease is 'lease pool, not leased'. Node 2: by coordinator id. "
+                          "Change: points against the hour before; infra alerts a lane above target that improves by under 5 "
+                          "points. Newest first."))
 
 
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)
