@@ -39,7 +39,7 @@ from .. import fp32 as W
 from .. import scalar as S
 from . import fp
 from .forms import NOT, ZERO, add, and_reduce
-from .trace import Traced, _body, definition, trace
+from .trace import Traced, definition, emit, trace
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32Div", "F32Fma", "F32Mul", "I32Add", "bf16_band",
            "shared_operand", "specialized"]
@@ -141,10 +141,10 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
     name, t = params[shared]
     dt = lambda: Array(len(split()[0].outputs), BL.BIT)  # noqa: E731
     own = CompositeDefinition(names[0], version, (), lambda S: (((name, t),), dt()),
-                              lambda B, S, *c: _body(split()[0], [t], dt(), B, *c), doc=docs[0], conformance="exact-model-tested",
+                              lambda B, S, *c: emit(split()[0], [t], dt(), B, *c), doc=docs[0], conformance="exact-model-tested",
                               register=register)
     rest = CompositeDefinition(names[1], version, (), lambda S: (tuple(params) + ((name + "d", dt()),), ret),
-                               lambda B, S, *c: _body(split()[1], types + [dt()], ret, B, *c), doc=docs[1],
+                               lambda B, S, *c: emit(split()[1], types + [dt()], ret, B, *c), doc=docs[1],
                                conformance="exact-model-tested", register=register)
     own.traced = lambda: split()[0]  # type: ignore[attr-defined]
     rest.traced = lambda: split()[1]  # type: ignore[attr-defined]
@@ -171,7 +171,7 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
         return made[key]
 
     d = CompositeDefinition(name, version, tuple(statics), signature,
-                            lambda B, S, *c: _body(traced(S), *types(S), B, *c), doc=doc, conformance="exact-model-tested",
+                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance="exact-model-tested",
                             register=register)
     d.traced = traced  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
