@@ -233,7 +233,8 @@ class Row:
         if not self.leased:
             return self.run_tl(stage, to, lf, cmd)
         rc, rec = GL.run(self.d, lf, cmd, int(to), self.child_env, lambda t, argv: self.run_tl(stage, t, lf, argv))
-        self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']}, rc={rc}")
+        self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']} after "
+                 f"{rec['released_at']}{' (kept: ' + rec['kept'] + ')' if rec.get('kept') else ''}, rc={rc}")
         return rc
 
     def gpu_exclusive(self, why: str) -> None:

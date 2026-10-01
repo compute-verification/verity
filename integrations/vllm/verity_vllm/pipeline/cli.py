@@ -236,6 +236,9 @@ def main(argv: list[str] | None = None) -> Any:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
         sys.argv[:] = [mod.__file__ or sys.argv[0], *argv[1:]]
     try:
+        if process and os.environ.get("VERITY_LEASE_STARTED"):
+            from verity_vllm.pipeline import gpu_lease
+            return gpu_lease.run_main(mod.main, opts)
         return mod.main(opts)
     except UsageError as e:
         parser.error(str(e))
