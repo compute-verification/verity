@@ -16,7 +16,8 @@
 #      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds
 #      PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
 #      POINTS=1 (N: one GPU session of N points, one preflight check and then the step's statement swept N times, each point
-#      under out/p<i>/ with its own hillclimb-<i>.json citing the check, and result.json the session's; gemm_hill.py)
+#      under out/p<i>/ with its own hillclimb-<i>.json citing the check, and result.json the session's; gemm_hill.py;
+#      0: the preflight check alone, its record the run's one output, and with STAGE_ONLY=1 only its statement staged)
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  QUESTION= (the job's research question, else the
 #      campaign's)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
@@ -50,8 +51,9 @@ export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLO
 export HOME=$FLOCK_WORK/home FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache}
 [ "${STAGE_ONLY:-0}" = 1 ] || [ "${SERVE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
 [ -n "${VERIFIERS:-}" ] && [ "${SERVE_ONLY:-0}" != 1 ] && export FC_VERIFIERS=$VERIFIERS
-POINTS=${POINTS:-1}; [ "${STAGE_ONLY:-0}" = 1 ] && POINTS=1
-case $POINTS in ''|*[!0-9]*|0*) echo "POINTS=$POINTS: a count of points, at least 1"; exit 1 ;; esac
+POINTS=${POINTS:-1}; [ "${STAGE_ONLY:-0}" = 1 ] && [ "$POINTS" != 0 ] && POINTS=1
+case $POINTS in ''|*[!0-9]*|0?*) echo "POINTS=$POINTS: a count of points (0: the preflight check alone)"; exit 1 ;; esac
+[ "$POINTS" = 0 ] && [ "${PREFLIGHT:-${GATE:-1}}" != 1 ] && { echo "POINTS=0 runs the preflight check alone: not with PREFLIGHT=0"; exit 1; }
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
 INST=${N:-}; unset N
 DEFS=$R/out/defs.json; INST=$(python3 backends/flock/pod/gemm_hill.py defs --K $K ${INST:+--n $INST} --out $DEFS) || exit 1
@@ -85,9 +87,13 @@ keep() {
 done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
-# the preflight check's three GPU cases at once, each its own process, only where one case's device memory is measured
-# (K = 2048, B = 16: at most 4.7 GiB of the GPU's, 7-10 GB of host memory; r20261001-044422-bc17); at other K one at a time
-[ -n "$GS" ] && [ "$K" = 2048 ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=6144"
+# the preflight check's three GPU cases at once, each its own process, while 3 x one case's device memory fits the GPU's free
+# memory (class_statement's guard), else one at a time. One case's bound per K (B = 16), measured: at K = 2048 a case run at
+# once held at most 4794 MiB (r20261001-092917-8b05); at K >= 4096, the most any one process held while the check ran its
+# cases one at a time (nvidia-smi dmon), 14425, 18439 and 50469 MiB at K = 4096, 8192 and 16384 (r20261001-090355-df59,
+# -085540-cab4, -090316-6c85), so K = 16384's three (156 GiB) fall back. The pod's host memory then peaked at 16, 28 and 53 GB
+case $K in 2048) CASE_MIB=6144 ;; 4096) CASE_MIB=16384 ;; 8192) CASE_MIB=20480 ;; 16384) CASE_MIB=53248 ;; *) CASE_MIB= ;; esac
+[ -n "$GS" ] && [ -n "$CASE_MIB" ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=$CASE_MIB"
 ok=1
 if [ "${SERVE_ONLY:-0}" = 1 ]; then
   : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR, where the GPU job finds the addresses}"
@@ -135,8 +141,14 @@ for i in $(seq 0 $((POINTS - 1))); do
 done
 kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
 if [ "${STAGE_ONLY:-0}" = 1 ]; then
-  cp $S/preflight/classes/staged.jsonl $R/out/preflight-staged.jsonl; cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
+  cp $S/preflight/classes/staged.jsonl $R/out/preflight-staged.jsonl
+  [ "$POINTS" = 0 ] && { [ $ok = 1 ] && grep -q '"stage"' $R/out/preflight-staged.jsonl; exit; }
+  cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
   [ $ok = 1 ] && grep -q '"stage"' $R/out/staged.jsonl; exit
+fi
+if [ "$POINTS" = 0 ]; then
+  python3 backends/flock/pod/gemm_hill.py session --dir $R --points 0 || ok=0
+  [ $ok = 1 ]; exit
 fi
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3

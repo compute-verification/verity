@@ -601,7 +601,8 @@ def session(a) -> None:
     """A GPU session's declared outputs (outputs.json): its one preflight check's record (`preflight`), then each point's
     hillclimb record, which cites it (refs.preflight). A session of several points also declares each point's contract result
     (`result-<i>`, a bench-point/v1: the tables read bench-result/v1 only) and writes result.json as the session's own
-    (hillclimb-session/v0): passed only when its preflight check and every one of its points passed."""
+    (hillclimb-session/v0): passed only when its preflight check and every one of its points passed. A session of no points
+    (the preflight check alone) declares the check's record and exits 1 unless the check passed."""
     R, n = Path(a.dir), a.points
     pre = "out/preflight/classes/results.jsonl"
     outs = [{"name": "preflight", "kind": "preflight-record/v0", "file": pre,
@@ -622,6 +623,9 @@ def session(a) -> None:
     if n == 1:
         return
     g = GS.preflight(R / pre, shapes_needed=1)
+    if n == 0:
+        print(json.dumps({"points": 0, "preflight": g["status"]}))
+        raise SystemExit(0 if g["status"] == "passed" else 1)
     res = [_load(R / f"out/p{i}/result.json") for i in range(n)]
     pts = [_load(R / f"hillclimb-{i}.json") for i in range(n)]
     status = [((r or {}).get("validation") or {}).get("status") or "did not run" for r in res]

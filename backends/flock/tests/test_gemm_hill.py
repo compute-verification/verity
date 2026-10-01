@@ -152,6 +152,18 @@ def test_every_point_of_a_gpu_session_cites_its_one_preflight_check_and_shares_i
     assert all((tmp_path / f).is_file() for f in sess["measurement_files"] + sess["artifacts"])
 
 
+def test_a_session_of_no_points_is_its_preflight_check_alone(tmp_path):
+    (tmp_path / "out/preflight/classes").mkdir(parents=True)
+    for passes, code in (((True, True, True), 0), ((True, False, True), 1)):
+        _preflight_record(tmp_path / "out/preflight/classes/results.jsonl", passes, DEF2048)
+        with pytest.raises(SystemExit) as e:
+            GH.session(SimpleNamespace(dir=str(tmp_path), points=0))
+        assert e.value.code == code
+        outs = json.loads((tmp_path / "outputs.json").read_text())["outputs"]
+        assert [(o["name"], o["kind"], o["file"]) for o in outs] == [("preflight", "preflight-record/v0", "out/preflight/classes/results.jsonl")]
+        assert not (tmp_path / "result.json").exists()
+
+
 def test_a_point_whose_settings_differ_from_its_preflight_checks_is_refused(tmp_path, monkeypatch):
     pts = _session(tmp_path, monkeypatch, 2, [{"FC_VERIFY_AHEAD": "10"}, {"FC_VERIFY_AHEAD": "4"}])
     assert pts[0]["byte_identical"] and pts[0]["preflight"]["key_matches"] is True
