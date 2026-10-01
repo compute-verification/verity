@@ -14,11 +14,13 @@ PROTOCOL SUMMARY (Commit stage: the execution extent check's account of record w
     the rows-past-the-stop check.
   Outputs: `commit/tokens_p<pair>.json` (`CommitTokens`, `commit_tokens_record`); `link_to_commit_account` {ok, required, problems,
     tokens_committed, served_by_request, executed_by_request, lag_attested, record}, recorded as binding.coverage.commit_account_link;
-    `account_link_error`, the one decision over the Match link and this one.
+    `account_link_error`, the one decision over the Match link and this one; `request_entries`, the one reader of either record's
+    requests.
   Invariants: every point of COMMIT_LINK_RULE holds per request or the link names the failure; the record's tokens are the engine's
     served output, never read back from the store; each token is opened with its Merkle path and verified against the run root;
     `executed_prefix_len` in the record is a cross-check, recomputed and never trusted; with a Match record beside the Commit both links
-    must hold; a link that places no shorter prefix is recorded, not decisive.
+    must hold when the row committed its sampled ids, and a row that committed none writes no token record (its Match link alone
+    decides, the token-record link recorded as not applied); a link that places no shorter prefix is recorded, not decisive.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
@@ -43,8 +45,9 @@ FAMILY = (SAMPLER_OP, SAMPLED_MEMBER)
 
 class CommitTokens:
     """The Commit's token record, `commit/tokens_p<pair>.json`: the tokens the driver served, written beside the commitment, each tied to
-    the committed sampled id it was served from.  The per-request names are the Match record's (capture/tokens.json).  Every field name
-    the writer, the link and the tests use is one of these, so a rename is one edit."""
+    the committed sampled id it was served from.  The per-request names are the Match record's (capture/tokens.json), read through
+    `request_entries`: the Match record's names that differ are `ALIASES`, and its requests carry no `index` (their order is the
+    workload's).  Every field name the writer, the link and the tests use is one of these, so a rename is one edit."""
     SCHEMA = "verity-vllm/commit-tokens/v1"
     FILE = "tokens_p{pair}.json"
     SCHEMA_KEY, PROGRAM_DIGEST, PAIR, RUN_ROOT, TOKENS_SOURCE = "schema", "program_digest", "pair", "run_root", "tokens_source"
@@ -52,6 +55,8 @@ class CommitTokens:
     REQUESTS, REQUEST_ID, INDEX, CAP = "requests", "request_id", "index", "cap"
     GENERATED, SERVED_LEN, FINISH, EXECUTED_LEN, IDENTITIES = ("generated_token_ids", "served_output_len", "finish_reason",
                                                                "executed_prefix_len", "token_identities")
+    #: the Match record's per-request name -> this record's
+    ALIASES = {"max_tokens": CAP}
     IDENTITY = ("step", "op_path", "output_member", "invocation")
     SERVED_OUTPUT = "engine served output (RequestOutput.outputs[0].token_ids)"
     ENGINE_READ_BACK = "engine read-back"
@@ -78,6 +83,22 @@ def commit_tokens_record(epr: dict[str, Any], *, order: dict[str, str], served_t
             C.STOP_RULE: {C.EOS_IDS: None if eos is None else sorted(int(x) for x in eos), C.LAG: stop.get("declared_lag")},
             C.LAG: {C.LAG_VALUE: stop.get("engine_lag"), C.ASYNC: stop.get("async_scheduling"), C.SOURCE: C.ENGINE_READ_BACK},
             C.REQUESTS: reqs}
+
+
+def request_entries(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """The per-request entries of a token record or a Match record (capture/tokens.json) under `CommitTokens`' names: an aliased name
+    (`CommitTokens.ALIASES`) reads as this record's, unless the entry carries this record's name too, and an entry with no `index` takes its
+    position in the record's request order.  A position that is not the request's is refused downstream by its request_id."""
+    C = CommitTokens
+    out = []
+    for i, e in enumerate(record.get(C.REQUESTS) or []):
+        e = dict(e)
+        for alias, name in C.ALIASES.items():
+            if alias in e:
+                e.setdefault(name, e.pop(alias))
+        e.setdefault(C.INDEX, i)
+        out.append(e)
+    return out
 
 
 COMMIT_LINK_RULE = ("the executed prefix rests on the Commit's token record: (1) every served token equals the committed sampled id opened "
@@ -200,7 +221,7 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
         problems.append(f"(5) lag not attested: the Program declares LAG {decl!r}; " + ", ".join(f"{k} {v!r}" for k, v in legs.items())
                         + f"; record async_scheduling {lg.get(C.ASYNC)!r} vs the engine's {stop.get('async_scheduling')!r}, source {lg.get(C.SOURCE)!r}")
     by_rid: dict[str, list[dict[str, Any]]] = {}
-    for e in record.get(C.REQUESTS) or []:
+    for e in request_entries(record):
         by_rid.setdefault(f"r{e.get(C.INDEX)}", []).append(e)
     wid = {v: k for k, v in order.items()}
     committed: dict[str, bool] = {}
@@ -228,13 +249,20 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
 def account_link_error(match_link: dict[str, Any], commit_link: dict[str, Any] | None) -> str | None:
     """The one decision over the executed prefix's two account links.  With a Match record beside the Commit (`match_dir`) the Match link
     must hold, and so must the commit link when it places a prefix; with none, the commit link is the account.  A commit link that places
-    nothing (every request ran its cap) is recorded, not decisive.  With no commit link at all the Match link decides alone."""
+    nothing (every request ran its cap, or it was not applied) is recorded, not decisive.  With no commit link at all the Match link
+    decides alone."""
     errs = []
     if (match_link.get("match_dir") or commit_link is None) and not match_link.get("ok"):
         errs.append("executed prefix not linked to the Match account: " + "; ".join(match_link.get("problems", [])[:3]))
     if commit_link is not None and commit_link.get("required") and not commit_link.get("ok"):
         errs.append("executed prefix not bound to the commitment by the Commit's token record: " + "; ".join(commit_link.get("problems", [])[:3]))
     return " | ".join(errs) or None
+
+
+def sampled_ids_committed(bmap: dict[str, Any] | None) -> bool:
+    """Whether the binding map binds a committed sampled id (`FAMILY`) at all: a row that committed none has no token to open."""
+    return any(((e.get("identity") or {}).get("op_path"), (e.get("identity") or {}).get("output_member")) == FAMILY
+               for e in (bmap or {}).get("entries") or [])
 
 
 def sampled_identities(store: Any, rid: str, arrive: int, n: int) -> list[dict[str, Any] | None]:
@@ -284,18 +312,27 @@ def account_links(com: Any, rc: Any, bmap: dict[str, Any], epr: dict[str, Any], 
                   arrivals: dict[str, int], match_dir: str | None, stop: dict[str, Any], served: dict[str, list[int]] | None,
                   finish: dict[str, Any] | None, past: dict[str, Any], program_digest: str) -> dict[str, Any]:
     """Both account links of the executed prefix at the binding map, and the decision: {"match_account_link", "commit_account_link",
-    "error"} (`error` None = accepted).  A token record that cannot be built is a commit link with that problem, never a silent fallback."""
+    "error"} (`error` None = accepted).  A token record that cannot be built is a commit link with that problem, never a silent fallback.
+    A row with a Match record beside it that committed no sampled id writes no token record: its commit link is `not_applied`, by name,
+    and places nothing, so the Match link alone decides.  With no Match record the token record is built either way: it is the account."""
     match = EP.link_to_match_account(epr, EP.load_match_account(match_dir), order=order, declared_lag=stop.get("declared_lag"), served_tokens=served)
-    try:
-        commit = commit_link(com, rc, bmap, epr, out_dir=out_dir, pair=pair, order=order, arrivals=arrivals, stop=stop, served=served,
-                             finish=finish, past=past, program_digest=program_digest)
-    except Exception as e:  # noqa: BLE001
-        reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
-        commit = {"rule": COMMIT_LINK_RULE, "required": bool(reduced), "reduced_requests": reduced, "record": None, "lag_attested": False,
-                  "problems": [f"token record not built: {e!r}"[:300]], "ok": False, "classification": ACTIVE_REFERENCE_ONLY}
+    reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
+    if match_dir and not sampled_ids_committed(bmap):
+        commit = {"rule": COMMIT_LINK_RULE, "required": False, "reduced_requests": reduced, "record": None, "lag_attested": None, "problems": [],
+                  "ok": None, "not_applied": f"no committed {FAMILY[0]}/{FAMILY[1]} in the binding map: the Match link alone decides",
+                  "classification": ACTIVE_REFERENCE_ONLY}
+    else:
+        try:
+            commit = commit_link(com, rc, bmap, epr, out_dir=out_dir, pair=pair, order=order, arrivals=arrivals, stop=stop, served=served,
+                                 finish=finish, past=past, program_digest=program_digest)
+        except Exception as e:  # noqa: BLE001
+            commit = {"rule": COMMIT_LINK_RULE, "required": bool(reduced), "reduced_requests": reduced, "record": None, "lag_attested": False,
+                      "problems": [f"token record not built: {e!r}"[:300]], "ok": False, "classification": ACTIVE_REFERENCE_ONLY}
     error = account_link_error(match, commit)
     for name, ln in (("Match account", match), ("Commit's token record", commit)):
-        if ln["required"] or ln["problems"]:
+        if ln.get("not_applied"):
+            print(f"[delta] execution_extent: executed prefix <-> {name} (pair {pair}): not applied ({ln['not_applied']})", flush=True)
+        elif ln["required"] or ln["problems"]:
             print(f"[delta] execution_extent: executed prefix <-> {name} (pair {pair}): {'LINKED' if ln['ok'] else 'NOT LINKED'}"
                   + (f"; PROBLEMS {ln['problems'][:3]}" if ln["problems"] else ""), flush=True)
     return {"match_account_link": match, "commit_account_link": commit, "error": error}

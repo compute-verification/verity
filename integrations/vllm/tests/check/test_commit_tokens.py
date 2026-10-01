@@ -11,6 +11,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -107,6 +108,24 @@ def _no_match(w: World) -> dict:
     return EP.link_to_match_account(w.epr, EP.load_match_account(None), order=ORDER, declared_lag=LAG, served_tokens=w.served)
 
 
+def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
+    """This world's Match record on a full row: <row>/match/capture/tokens.json (m1_capture's names) and <row>/global_match.json (GM-01's)."""
+    row = tmp_path / "row"
+    (row / "match" / "capture").mkdir(parents=True)
+    lens = {r: {"served_output_len": len(s), "executed_prefix_len": len(s) + LAG if len(s) < CAP else CAP, "cap": CAP, "cap_exhausted": len(s) == CAP}
+            for r, s in SERVED.items()}
+    tok = {"lag": {"value": LAG, "async_scheduling": True},
+           "requests": [{"request_id": u, "generated_token_ids": SERVED[r], "max_tokens": CAP, **{k: v for k, v in lens[r].items() if k != "cap"}}
+                        for u, r in ORDER.items()]}
+    gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+          "requests": [{"request_id": f"rec-{r}", "workload_request_id": u, "index": int(r[1:])} for u, r in ORDER.items()],
+          "checks": [{"id": "G6", "status": gm_verdict, "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
+                      "lag": {"declared": LAG, "record_attests": LAG, "tokens_json_lag": LAG, "exercised": True, "variable_lag": False}}]}
+    (row / "match" / "capture" / "tokens.json").write_text(json.dumps(tok))
+    (row / "global_match.json").write_text(json.dumps(gm))
+    return str(row / "match")
+
+
 # ------------------------------------------------------------------------------------------------------------ accepted
 
 def test_an_early_eos_is_accepted_on_the_token_record_bound_to_the_commitment(tmp_path):
@@ -147,6 +166,56 @@ def test_account_links_decides_a_config_run_on_the_token_record_and_never_falls_
     bad = CT.account_links(w.com, w.run, None, w.epr, **kw)
     assert bad["commit_account_link"]["problems"][0].startswith("token record not built") and bad["commit_account_link"]["required"]
     assert "not bound to the commitment by the Commit's token record: token record not built" in bad["error"]
+
+
+def test_a_full_row_that_committed_no_sampled_ids_is_decided_by_its_match_link_alone(tmp_path, capsys):
+    w = world()
+    no_ids = dict(w.bmap, entries=[e for e in w.bmap["entries"] if (e["identity"]["op_path"], e["identity"]["output_member"]) != CT.FAMILY])
+    assert CT.sampled_ids_committed(w.bmap) and not CT.sampled_ids_committed(no_ids) and no_ids["entries"]
+    out_dir = tmp_path / "commit"
+    out_dir.mkdir()
+    written = out_dir / C.FILE.format(pair=0)
+    # an unattested engine LAG refuses a token record wherever one is written; the Match record attests its own legs
+    kw = dict(out_dir=str(out_dir), pair=0, order=ORDER, arrivals=ARRIVALS, match_dir=_match_dir(tmp_path), stop=dict(STOP, engine_lag=None),
+              served=SERVED, finish=FINISH, past=w.past, program_digest=PD)
+    both = CT.account_links(w.com, w.run, w.bmap, w.epr, **kw)
+    assert both["match_account_link"]["ok"] and both["commit_account_link"]["required"] and both["commit_account_link"]["ok"] is False
+    assert both["error"].startswith("executed prefix not bound to the commitment by the Commit's token record") and written.exists()
+    written.unlink()
+    alone = CT.account_links(w.com, w.run, no_ids, w.epr, **kw)
+    cl = alone["commit_account_link"]
+    assert alone["error"] is None and alone["match_account_link"]["ok"] and alone["match_account_link"]["required"]
+    assert cl["required"] is False and cl["record"] is None and cl["problems"] == [] and not written.exists()
+    assert cl["not_applied"] == "no committed runner.sampler/sampled_token_ids in the binding map: the Match link alone decides"
+    assert f"Commit's token record (pair 0): not applied ({cl['not_applied']})" in capsys.readouterr().out
+    # the facts of record rest on the Match link alone
+    cov = {"match_account_link": alone["match_account_link"], "commit_account_link": cl, "rows_past_the_stop": w.past}
+    f = EP.executed_prefix_facts(w.epr, {"coverage": cov}, {"result": True}, ARRIVALS, STOP)
+    assert f["r0"]["linked"] is True and f["r0"]["lag_attested"] is True and f["r0"]["a_r_source"].startswith("match record ")
+    # and alone means alone: a Match account that did not pass refuses the prefix, by its name only
+    bad = CT.account_links(w.com, w.run, no_ids, w.epr, **(kw | {"match_dir": _match_dir(tmp_path / "bad", gm_verdict="FAIL")}))
+    assert bad["error"].startswith("executed prefix not linked to the Match account: GM-01 verdict 'FAIL'") and "token record" not in bad["error"]
+    # with no Match record the token record is the account whatever the map binds: built, and refused by name
+    cfg = CT.account_links(w.com, w.run, no_ids, w.epr, **(kw | {"match_dir": None, "stop": STOP}))
+    assert cfg["commit_account_link"]["required"] and named(refused(cfg["commit_account_link"]), "r0: (1) served token 0 has no committed identity")
+    assert "not bound to the commitment by the Commit's token record" in cfg["error"] and written.exists()
+
+
+def test_the_match_records_names_read_as_the_token_records(tmp_path):
+    tok = json.loads((Path(_match_dir(tmp_path)) / "capture" / "tokens.json").read_text())
+    got = CT.request_entries(tok)
+    assert [(e[C.REQUEST_ID], e[C.INDEX], e[C.CAP]) for e in got] == [(u, int(r[1:]), CAP) for u, r in ORDER.items()]
+    assert all("max_tokens" not in e for e in got) and all("max_tokens" in e and C.INDEX not in e for e in tok[C.REQUESTS])
+    # a token record under the Match record's names links exactly as under its own
+    w = world()
+    rec = w.record()
+    for e in rec[C.REQUESTS]:
+        e["max_tokens"] = e.pop(C.CAP)
+        del e[C.INDEX]
+    assert w.relink(rec) == w.relink(w.record()) and w.relink(rec)["ok"]
+    # a request order that is not the workload's places each entry on another request, refused by its request_id
+    rec[C.REQUESTS].reverse()
+    assert named(refused(w.relink(rec)), "r0: record request_id '5c1a9b3d-r1' != the workload's '0f2b6d7e-r0'")
 
 
 def test_a_length_stop_needs_no_reduction():
@@ -387,6 +456,8 @@ def test_the_boundary_linkage_runs_over_the_same_executed_prefix_and_the_facts_l
     binding = {"coverage": {"match_account_link": _no_match(w), "commit_account_link": link, "rows_past_the_stop": w.past}}
     f = EP.executed_prefix_facts(w.epr, binding, lk, ARRIVALS, STOP)
     assert f["r0"]["a_r"] == 3 and f["r0"]["a_r_source"].startswith(f"commit token record {link['record']['path']}")
+    assert f["r0"]["a_r_source"].endswith("no Match record beside the Commit (a config run has no Match stage): the prefix is linked to the Commit's "
+                                          "token record") and "NOT beside" not in f["r0"]["a_r_source"]
     assert f["r0"]["linked"] is True and f["r0"]["lag_attested"] is True and f["r0"]["account_missing"] == [] and f["r1"]["linked"] is True
     rec = POP.executed_prefix_of_record("r0", **EP.facts_accepted_by(POP.executed_prefix_of_record, f)["r0"])
     assert rec["faults"] == [], rec

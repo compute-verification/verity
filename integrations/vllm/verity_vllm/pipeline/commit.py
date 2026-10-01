@@ -688,8 +688,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         past = EP.rows_past_the_stop(bmap, request_steps)
     cov["rows_past_the_stop"] = past
     # [COORD R17-27 (a)+(b)] the prefix is accepted only LINKED to an account of the same attempt: the Match record (--match-dir: capture/tokens.json
-    # + ../global_match.json) and, where a prefix is reduced, the Commit's token record (commit/tokens_p<pair>.json, every served token opened from
-    # the run root); on a config run (no Match) the token record alone.  A prefix reduced on the committer's own count alone is a problem, by name.
+    # + ../global_match.json) and, where a prefix is reduced and the sampled ids are committed, the Commit's token record (commit/tokens_p<pair>.json,
+    # every served token opened from the run root); on a config run (no Match) the token record alone; never the committer's own count alone.
     links = CT.account_links(com, rc, bmap, epr, out_dir=args.out, pair=pair, order=order, arrivals=arrivals, match_dir=getattr(args, "match_dir", None), stop=stop or {},
                              served=served_by_rid, finish=None if finish_reasons is None else {_logical(str(k)): v for k, v in finish_reasons.items()}, past=past, program_digest=pd)
     cov["match_account_link"], cov["commit_account_link"] = links["match_account_link"], links["commit_account_link"]
