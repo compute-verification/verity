@@ -54,6 +54,29 @@ def form_rows(path: str) -> list[dict]:
     return out
 
 
+def breakdown(res: dict, S: int = 4) -> list[dict]:
+    """The bound unit's time split along its arms: plain GEMM at k, the stacked 3k, the chain, the hashing, the forming."""
+    out = []
+    for kind in sorted({r["kind"] for r in res["gemm_mix1"]}):
+        g = {r["arm"]: r["ms"] for r in res["gemm_mix1"] if r["kind"] == kind}
+        plain = sorted((int(a.rsplit(":K", 1)[1]), v) for a, v in g.items() if a.startswith("plain:"))
+        core = next((v for a, v in g.items() if a.startswith("core:")), None)
+        chash = next((v for a, v in g.items() if a.startswith(f"chash:S{S}:")), None)
+        if len(plain) < 2 or core is None or chash is None:
+            continue
+        for xof in sorted({r["xof"] for r in res["unit"] if r["kind"] == kind}):
+            u = {r["arm"]: r["ms"] for r in res["unit"] if r["kind"] == kind and r["xof"] == xof}
+            unit = u.get(f"unit_chash:S{S}")
+            if unit is None:
+                continue
+            parts = {"plain_k": plain[0][1], "stacked_3k": plain[-1][1] - plain[0][1], "chain": core - plain[-1][1],
+                     "hashing": chash - core, "forming": unit - chash}
+            out.append({"kind": kind, "xof": xof, "S": S, "unit_ms": unit, "x_divisor": round(unit / DIVISOR[kind], 2),
+                        "ms": {k: round(v, 4) for k, v in parts.items()},
+                        "share": {k: round(v / unit, 3) for k, v in parts.items()}, "form_alone_ms": u.get("form")})
+    return out
+
+
 def load(path: str) -> dict:
     if not os.path.exists(path):
         return {}
@@ -77,6 +100,7 @@ def main(argv: list[str]) -> int:
     if os.path.exists(rates):
         r = json.load(open(rates))
         res["rates"] = {"floor": {k: v["floor"] for k, v in r["floor"].items()}, "achieved": r["achieved"]}
+    res["breakdown"] = breakdown(res)
     if "--json" in argv:
         print(json.dumps(res, indent=1))
         return 0
@@ -86,6 +110,9 @@ def main(argv: list[str]) -> int:
         mark = "*" if r["kind"] in SCALED else " "
         print(f"{r['kind']:5s} {r.get('xof', '-'):6s} {r['arm']:34s} {r['ms']:9.4f} {r['x_divisor']:6.2f}{mark} "
               f"{r['x_own_plain']:7.2f} {r['spread']:7.3f} {r['base_spread']:7.3f}")
+    for b in res["breakdown"]:
+        print(f"breakdown {b['kind']} {b['xof']:6s} unit chash S={b['S']} {b['unit_ms']:.4f} ms ({b['x_divisor']}x): "
+              + ", ".join(f"{k} {v:.4f} ({b['share'][k]:.0%})" for k, v in b["ms"].items()))
     return 0
 
 
