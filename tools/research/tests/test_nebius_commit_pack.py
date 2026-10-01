@@ -66,8 +66,13 @@ def test_commit_pack_renders_one_gpu_workload_in_deployments_gpu(dispatch):
     assert c["resources"]["limits"] == {"nvidia.com/gpu": "1"} and c["resources"]["requests"]["cpu"] == "4"
     assert pod["runtimeClassName"] == "nvidia"
     env = {e["name"]: e["value"] for e in c["env"]}
-    assert env["SRC"] == str(NEBIUS) and env["PACK_MEM_LIMIT"] == "0=28G" and env["PACK_GPU_UTIL"] == "0.28"
+    assert env["SRC"] == str(NEBIUS) and env["PACK_MEM_LIMIT"] == "0=28G" and env["PACK_GPU_UTIL"] == "0.20"
     assert "sky/commit_pack.py" in c["command"][-1] and (NEBIUS / "sky" / "commit_pack.py").exists()
+    # vLLM's budget is GPU_UTIL of the RTX PRO 6000's 94.97 GiB; the Commit stages ~6 GiB beside it (at 0.28 its 2.3 GiB window
+    # ring found 946 MiB) and the client's CUDA context takes ~0.5 GiB, all inside the MPS limit
+    limit_gib = float(env["PACK_MEM_LIMIT"].split("=")[1].rstrip("G"))
+    assert float(env["PACK_GPU_UTIL"]) * 94.97 + 6 + 0.5 <= limit_gib - 1
+    assert int(env["PACK_SLOTS"]) * limit_gib <= 94.97
 
 
 def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
@@ -207,7 +212,7 @@ def _queue(spool: Path, name: str, script: str, row: str = "") -> None:
 
 def test_the_pilot_runs_commits_as_mps_clients_and_cleans_up(pilot, tmp_path):
     spool = tmp_path / "spool"
-    _queue(spool, "ok", 'test "$CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" = 0=28G && test "$GPU_UTIL" = 0.28 && '
+    _queue(spool, "ok", 'test "$CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" = 0=28G && test "$GPU_UTIL" = 0.20 && '
                         'test "$REPLAY_DEFERRED" = 1 && test "$(umask)" = 0022 && '
                         'test -S "$CUDA_MPS_PIPE_DIRECTORY/control" -o -p "$CUDA_MPS_PIPE_DIRECTORY/control"')
     assert pilot.main() == 0

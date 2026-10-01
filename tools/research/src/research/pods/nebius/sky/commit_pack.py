@@ -15,7 +15,8 @@ scaled by batch and tokens; phi3-mini's was 113 GB, SmolLM2's B16 256-token one 
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
-GPU_UTIL (vLLM's gpu_memory_utilization, 0.28) and REPLAY_DEFERRED=1.
+GPU_UTIL (vLLM's gpu_memory_utilization, 0.20) and REPLAY_DEFERRED=1. vLLM's budget is that fraction of the whole GPU (95 GiB),
+and the Commit stages about 6 GiB beyond it (its window ring alone is 2.3 GiB): both fit in the client's 28 GiB only below 0.22.
 
 **Faults.** A fatal GPU fault in one MPS client can take down every client on the GPU, so a fault is pod-wide: the control daemon or
 its server dying, an error in the MPS logs, or a client ending with a CUDA fault in its log. Every Commit still running is then
@@ -50,7 +51,7 @@ STOP_GRACE_S = int(os.environ.get("PACK_STOP_GRACE_S", "60"))
 CLIENT_ENV = {
     "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT": os.environ.get("PACK_MEM_LIMIT", "0=28G"),
     "CUDA_MPS_ACTIVE_THREAD_PERCENTAGE": os.environ.get("PACK_THREAD_PERCENTAGE", "100"),
-    "GPU_UTIL": os.environ.get("PACK_GPU_UTIL", "0.28"),
+    "GPU_UTIL": os.environ.get("PACK_GPU_UTIL", "0.20"),
     "REPLAY_DEFERRED": "1",
 }
 DISK = os.environ.get("PACK_DISK_PATH", "/workspace")
