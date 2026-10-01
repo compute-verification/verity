@@ -5,9 +5,10 @@ Spec: ``PROTOCOL.md`` beside this file (the leaf layouts and the row-leaf schema
 :mod:`verity.commitments.merkle`).  Vectors: ``vectors.json``, written by ``python -m verity.commitments.frame_v3.vectors``.
 
 A configuration maps each committed port to its :class:`~verity.commitments.merkle.CommitmentDomain` and leaf kind:
-:class:`WordLeaf` (the value is the leaf's own bytes, hashed by the frame-v3 leaf rule itself) or :class:`RowLeaf` (the
+:class:`WordLeaf` (the value is the leaf's own bytes, hashed by the frame-v3 leaf rule itself), :class:`RowLeaf` (the
 value is a row, the proven digest is its SHA-256 or keyed-BLAKE3 row digest, and the frame-v3 leaf over that digest is
-computed natively by the verifier).
+computed natively by the verifier) or :class:`ElementRowLeaf` (the same for a row of an element format's codes and scales,
+under ``frame-v3-sha512``).
 """
 
 from __future__ import annotations
@@ -16,10 +17,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from ..merkle import CommitmentDomain, merkle_depth, tree_levels
-from ..rowleaf import SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, SCHEMA_SHA512_ROW, blake3_row_layout, sha256_row_layout, sha512_row_layout
+from ..rowleaf import (ELEMENT_FORMATS, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, SCHEMA_SHA512_ROW, blake3_row_layout, sha256_row_layout,
+                       sha512_element_row_layout, sha512_row_layout)
 from ..scheme import DIGEST_BYTES, LeafLayout
 
-__all__ = ["NAME", "NAME_SHA512", "FrameV3", "Port", "RowLeaf", "WordLeaf"]
+__all__ = ["NAME", "NAME_SHA512", "ElementRowLeaf", "FrameV3", "Port", "RowLeaf", "WordLeaf"]
 
 NAME = "frame-v3"
 NAME_SHA512 = "frame-v3-sha512"
@@ -61,14 +63,45 @@ class RowLeaf:
 
 
 @dataclass(frozen=True, slots=True)
+class ElementRowLeaf:
+    """A leaf whose value is one row of ``k`` elements of ``format`` (``rowleaf.ELEMENT_FORMATS``: its codes, then its scales),
+    under ``sha512/row-<format>/v1``; a hiding row's leaf binds ``hiding_schema`` (``hm96-sha512/row-<format>/v1``)."""
+
+    format: str
+    role: int
+    k: int
+    hash = "sha512"
+
+    def __post_init__(self) -> None:
+        if self.format not in ELEMENT_FORMATS:
+            raise ValueError(f"element row format must be one of {sorted(ELEMENT_FORMATS)}, not {self.format!r}")
+        self.layout()
+
+    @property
+    def schema(self) -> str:
+        return ELEMENT_FORMATS[self.format].schema
+
+    @property
+    def hiding_schema(self) -> str:
+        return ELEMENT_FORMATS[self.format].hiding_schema
+
+    def layout(self) -> LeafLayout:
+        return sha512_element_row_layout(self.format, self.role, self.k)
+
+
+_ROWS = (RowLeaf, ElementRowLeaf)
+
+
+@dataclass(frozen=True, slots=True)
 class Port:
     domain: CommitmentDomain
-    leaf: WordLeaf | RowLeaf
+    leaf: WordLeaf | RowLeaf | ElementRowLeaf
 
 
 class FrameV3:
     """frame-v3 over a statement's ports; nodes are bound to the port's domain, level and index.  Every port's domain has one
-    hash: ``sha256`` configures ``frame-v3``, ``sha512`` configures ``frame-v3-sha512`` (whose row leaves are ``sha512/row/v1``)."""
+    hash: ``sha256`` configures ``frame-v3``, ``sha512`` configures ``frame-v3-sha512`` (whose row leaves are ``sha512/row/v1``
+    and the element rows ``sha512/row-<format>/v1``)."""
 
     def __init__(self, ports: Mapping[str, Port]) -> None:
         self.ports = dict(ports)
@@ -76,7 +109,7 @@ class FrameV3:
         if len(frames) != 1:
             raise ValueError(f"one configuration has one frame hash, not {sorted(frames)}")
         self.frame_hash = frames.pop()
-        bad = [n for n, p in self.ports.items() if isinstance(p.leaf, RowLeaf) and p.leaf.hash not in _FRAME_ROWS[self.frame_hash]]
+        bad = [n for n, p in self.ports.items() if isinstance(p.leaf, _ROWS) and p.leaf.hash not in _FRAME_ROWS[self.frame_hash]]
         if bad:
             raise ValueError(f"ports {bad}: a {self.frame_hash} frame binds {_FRAME_ROWS[self.frame_hash]} row digests only")
         self.name = NAME if self.frame_hash == "sha256" else NAME_SHA512
@@ -91,7 +124,7 @@ class FrameV3:
 
     def leaf_layout(self, port: str, position: int) -> LeafLayout:
         p = self._port(port)
-        if isinstance(p.leaf, RowLeaf):
+        if isinstance(p.leaf, _ROWS):
             p.domain.positions.rank(position)
             return p.leaf.layout()
         rank = p.domain.positions.rank(position)
@@ -99,10 +132,10 @@ class FrameV3:
 
     def tree_leaf(self, port: str, position: int, digest: bytes) -> bytes:
         p = self._port(port)
-        want = DIGEST_BYTES[p.leaf.hash] if isinstance(p.leaf, RowLeaf) else p.domain.digest_bytes
+        want = DIGEST_BYTES[p.leaf.hash] if isinstance(p.leaf, _ROWS) else p.domain.digest_bytes
         if len(digest) != want:
             raise ValueError(f"this port's leaf digest is {want} bytes")
-        if isinstance(p.leaf, RowLeaf):
+        if isinstance(p.leaf, _ROWS):
             return p.domain.leaf(p.domain.positions.rank(position), position, p.leaf.schema, bytes(digest))
         return bytes(digest)
 
