@@ -7,12 +7,14 @@
    least subnormal, +-448 alternating; the rest gen_any's full finite range) formed under each XOF (SHAKE256 by both its
    kernels, shake and shake2, and BLAKE3), whole, and the first four rows' raw streams.  check_form.py holds them to #295's
    `D3Family.side` and `xof` (SHAKE256), or BLAKE3's XOF.
-2. The unit at each SHAPES entry (p: m = n = k = 8,192; d: m = 32): X_q (m x k) and W (n x k) from gen_any (seeds 3, 4),
+2. The unit at each SHAPES entry (run.py's: p, d, and l, Llama-3.1-8B's down_proj): X_q (m x k) and W (n x k) from gen_any (seeds 3, 4),
    formed by each XOF of XOFS into run.py's X~ and Y~.  Arms, each REPS pairs interleaved with the plain GEMM at K = k (the
    baseline), each a dependent chain of CHAIN_P / CHAIN_D: the stages (SHAKE's a_stream, b_stream and streams, both
    sides' in one launch, its own kernel: form_c_shake, a thread a row, or for shake2 form_c_shake2, two; BLAKE3's streams
    are inside the rows kernel; a_rows, b_rows), form (the streams,
-   then A's rows and B's), and unit (form, then the GEMM arm of each UNIT_ARMS entry arm:S).  After each unit arm, one more call after C and the digests are poisoned, and its
+   then A's rows and B's), and unit (form, then the GEMM arm of each UNIT_ARMS entry arm:S), and unitA (the same with
+   only A's side formed, its stream then its rows: W's side formed once per weight, per epoch, its Y~ reused).  After each
+   unit and unitA arm, one more call after C and the digests are poisoned, and its
    sampled lanes go to OUT/form/arms.json in check.py's format (a shape entry per XOF, its `xof` named), then a
    negative control (poisoned, nothing launched).
 
@@ -362,19 +364,20 @@ def shape(d: Dev, nv, kind: str, xofs: list[str], reps: int) -> list[dict]:
             res["timing"].append(row)
             emit({"part": "form", "kind": kind, "xof": xof, "arm": name, "ms": round(row["ms"], 4),
                   "base_ms": round(row["base_ms"], 4)})
-        for arm, S in unit_arms():
-            body = lambda arm=arm, S=S: (U.run(), x.launch(arm, S, x.K, 0))
+        for (arm, S), (scope, form) in ((a, f) for a in unit_arms() for f in (("unit", U.run), ("unitA", A.run))):
+            body = lambda arm=arm, S=S, form=form: (form(), x.launch(arm, S, x.K, 0))
             before = nv.read()
             got = ncp.interleaved(d, nv, body, base, reps, chain)
-            row = {"arm": f"unit_{arm}", "gemm": arm, "S": S, "ms": statistics.median(got["reps"]),
+            row = {"arm": f"{scope}_{arm}", "gemm": arm, "S": S, "ms": statistics.median(got["reps"]),
                    "base_ms": statistics.median(got["base_reps"]), "chain": chain, "nvml_before": before,
                    "nvml_after": nv.read(), **got}
             res["timing"].append(row)
             x.poison()
             body()
             d.sync()
-            res["arms"].append({"arm": arm, "S": S, "K": x.K, "stagger": 0, **x.dump(tiles, ncp.hashed(arm))})
-            emit({"part": "unit", "kind": kind, "xof": xof, "arm": arm, "S": S, "ms": round(row["ms"], 4),
+            res["arms"].append({"arm": arm, "S": S, "K": x.K, "stagger": 0, "scope": scope,
+                                **x.dump(tiles, ncp.hashed(arm))})
+            emit({"part": scope, "kind": kind, "xof": xof, "arm": arm, "S": S, "ms": round(row["ms"], 4),
                   "base_ms": round(row["base_ms"], 4)})
         x.poison()
         d.sync()

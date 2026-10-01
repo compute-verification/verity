@@ -6,7 +6,8 @@
    (the first stage and the loop body) and no local memory.  ptxas.txt, sass.json, toolchain.txt land in OUT.
 1. The check: at small shapes (one 2 x 2 tile grid at prefill's tile, one 64 x 128 decode tile with 32 rows), every arm's
    C and lane digests are written whole to OUT/check/ for check.py (off the card, against verity's sm_120 atom and BLAKE3).
-2. The arms, at each SHAPES entry (p: m = n = k = 8,192; d: m = 32, n = k = 8,192), each REPS times after a warm-up, the
+2. The arms, at each SHAPES entry (p: m = n = k = 8,192; d: m = 32, n = k = 8,192; l: Llama-3.1-8B's down_proj at prefill,
+   m = 8,192, n = 4,096, k = 14,336, on prefill's kernels), each REPS times after a warm-up, the
    median: plain at K = k (this kernel's plain FP8 GEMM) and at K = 3k (the stacked MMA work alone); core (the D-3s chain,
    C = R_(T-1), nothing bound); store_r / store_ir at S = 1 (every bound word written to a ring: an unfused binding's
    traffic); hash_r at each S of S_R and hash_ir at each S of S_IR (BLAKE3 over the bound words from registers); chash at
@@ -23,7 +24,7 @@ Operands are stand-ins for the formed X~ and Y~ (finite E4M3 codes from gen_code
 here.  Diagnostic timing, untimed-node rules apply: the run says which node and lease it ran under.
 
   python3 run.py OUT   (env: CUDA, SHAPES="p d", REPS=5, S_R="1 2 4 8 16 32 64 768", S_IR="1 4 16", S_C="1 2 4 8 16 32",
-                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", INTERLEAVE, CHAIN_P=1, CHAIN_D=1, NCP_LIBCUDA,
+                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", INTERLEAVE, CHAIN_P=1, CHAIN_D=1, CHAIN_L=1, NCP_LIBCUDA,
                        NCP_DEFINES: extra nvcc flags for ncp_sm120.cu, e.g. -DNCP_B3_MIX=1)
 """
 
@@ -133,7 +134,7 @@ class Ncp:
         self.maps = {}
 
     def kernels(self) -> list[str]:
-        return [f"{self.kind}_{a}" for a in ARMS]
+        return [f"{FAMILY[self.kind]}_{a}" for a in ARMS]
 
     def gen(self, ptr: int, count: int, seed: int) -> None:
         self.d.launch("gen_codes", 4 * self.d.sms, 256, 0, p=(ptr,), i=(count & 0xFFFFFFFF, seed, count >> 32))
@@ -146,7 +147,7 @@ class Ncp:
         return self.maps[K]
 
     def launch(self, arm: str, S: int, K: int, stagger: int = 0) -> None:
-        name = f"{self.kind}_{arm}"
+        name = f"{FAMILY[self.kind]}_{arm}"
         self.d.launch(name, self.grid, self.nt, self.cfg[name][0], p=(self.tmaps(K), self.c, self.dg, self.ring),
                       i=(self.m, self.n, K, RASTER, 0, S, self.rows, stagger))
 
@@ -201,10 +202,11 @@ def tmap(d: pc.Dev, ptr: int, depth: int, rows: int, pitch: int, box_rows: int) 
 
 
 def layout(kind: str) -> dict:
-    return {"p": {"mi": 4, "ni": 4, "wm": 64, "warps_n": 4}, "d": {"mi": 1, "ni": 4, "wm": 16, "warps_n": 2}}[kind]
+    return {"p": {"mi": 4, "ni": 4, "wm": 64, "warps_n": 4}, "d": {"mi": 1, "ni": 4, "wm": 16, "warps_n": 2}}[FAMILY[kind]]
 
 
-SHAPES = {"p": (8192, 8192, 8192), "d": (32, 8192, 8192)}
+SHAPES = {"p": (8192, 8192, 8192), "d": (32, 8192, 8192), "l": (8192, 4096, 14336)}
+FAMILY = {"p": "p", "d": "d", "l": "p"}   # each shape's kernels: prefill's (p_*) or decode's (d_*)
 CHECK = {"p": (256, 256, 256), "d": (32, 128, 256)}
 
 
