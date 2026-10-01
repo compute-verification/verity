@@ -29,7 +29,7 @@
 #      the serving one
 #      ZK=1 (the gate's selftests, the serve and the prove with --zk; then zkaudit, the selftest build's, on the gate's and the
 #      step's statements: out/zkaudit-{gate,m35}.json, and the job fails unless every byte the verifier kept is attributed and
-#      none is in the clear)
+#      none is in the clear)  ZKAUDIT_RUNS="RUN..." (only that zkaudit, on earlier runs' statements: see zkaudit below)
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -85,11 +85,12 @@ keep() {
 done_() { kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
 zok=1 ZKA=; [ "${ZK:-0}" = 1 ] && [ "${GPU:-1}" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${NSYS:-0}" != 1 ] && [ "${NCU:-0}" != 1 ] && ZKA=1
-# zkaudit PHASE: the phase's statement, as FLOCK_STAGE_CACHE keeps it (the phase's own copy is gone once proved), under the
-# phase's selftest build (binary.sha256's second line)
+# zkaudit NAME RESULTS BINARY_SHA: the statement a phase's classes/results.jsonl names, as FLOCK_STAGE_CACHE keeps it (the
+# phase's own copy is gone once proved), under the phase's selftest build (binary.sha256's second line), on CUDA 13.3's
+# libraries as 70-class-sweep.sh runs it: out/zkaudit-NAME.json
 zkaudit() {
-  local f sb
-  f=$(python3 - $S/$1/classes/results.jsonl $FLOCK_STAGE_CACHE <<'EOF'
+  local f sb C13=${CUDA_TK:-/usr/local/cuda-13.3}
+  f=$(python3 - $2 $FLOCK_STAGE_CACHE <<'EOF'
 import json, sys
 from pathlib import Path
 recs = [json.loads(ln) for ln in open(sys.argv[1]) if ln.strip()]
@@ -99,17 +100,27 @@ d = Path(sys.argv[2]) / c if c else None
 print(f"{d}/circuit.txt {d}/inst-{n}.bin" if d and (d / "circuit.txt").exists() and (d / f"inst-{n}.bin").exists() else "")
 EOF
   )
-  sb=$(awk 'NR == 2 {print $2}' $S/$1/binary.sha256 2>/dev/null)
+  sb=$(awk 'NR == 2 {print $2}' $3 2>/dev/null)
   if [ -z "$f" ] || [ ! -x "$sb" ]; then
     echo '{"skipped": "the statement is not in FLOCK_STAGE_CACHE, or there is no selftest build"}' > $R/out/zkaudit-$1.json; zok=0; return
   fi
   ph zkaudit-$1 start
-  $sb zkaudit --zk --gpu --circuit ${f% *} --instances ${f#* } > $R/out/zkaudit-$1.out 2> $R/out/zkaudit-$1.err
+  LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-} $sb zkaudit --zk --gpu --circuit ${f% *} --instances ${f#* } \
+    > $R/out/zkaudit-$1.out 2> $R/out/zkaudit-$1.err
   ph zkaudit-$1 end
   grep '^ZKAUDIT' $R/out/zkaudit-$1.out | cut -f2- > $R/out/zkaudit-$1.json
-  python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(0 if d["checks_pass"] and d["attributed"] else 1)' \
+  [ -s $R/out/zkaudit-$1.json ] || echo "{\"failed\": \"no ZKAUDIT record: zkaudit-$1.err\"}" > $R/out/zkaudit-$1.json
+  python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(0 if d.get("checks_pass") and d.get("attributed") else 1)' \
     $R/out/zkaudit-$1.json || zok=0
 }
+# ZKAUDIT_RUNS="RUN..." (GATE=0): only zkaudit, on each earlier run's gate and step statements (its out/{gate,m35} records name
+# them, and FLOCK_STAGE_CACHE still holds them): out/zkaudit-RUN-{gate,m35}.json; the job fails unless every one passes
+if [ -n "${ZKAUDIT_RUNS:-}" ]; then
+  for r in $ZKAUDIT_RUNS; do
+    for p in gate m35; do zkaudit $r-$p $(dirname $R)/$r/out/$p/classes/results.jsonl $(dirname $R)/$r/out/$p/binary.sha256; done
+  done
+  [ $zok = 1 ]; exit
+fi
 # the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, under 5 GB of the GPU's)
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial SELFTEST_JOBS=3"
 ok=1
@@ -139,7 +150,7 @@ if [ "${GATE:-1}" = 1 ]; then
   ph gate end
   keep gate
   cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
-  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit gate
+  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit gate $S/gate/classes/results.jsonl $S/gate/binary.sha256
 fi
 # NSYS=1: a profile, not a point: the step's prove process under Nsight Systems' CUDA trace (out/nsys/prove-<pid>.nsys-rep, and
 # its kernel, memcpy and API summaries beside it), unpacked into NSYS_ROOT (default FLOCK_WORK/nsys-root) as 71-gemm-slowdown.sh
@@ -202,7 +213,7 @@ if [ $ok = 1 ]; then
   ph sweep end
   keep m35
   cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
-  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit m35
+  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit m35 $S/m35/classes/results.jsonl $S/m35/binary.sha256
 fi
 kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null
 if [ -n "$NCW" ]; then
