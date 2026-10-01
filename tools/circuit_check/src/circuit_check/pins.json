@@ -19,10 +19,10 @@
    "and": 6864
   },
   "DivFullRcp_v2": {
-   "and": 4508
+   "and": 1152
   },
   "DivFullScaleA_v3": {
-   "and": 1427
+   "and": 531
   },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
@@ -88,7 +88,7 @@
    "and": 6799
   },
   "MufuEx2Ftz_v2": {
-   "and": 1354
+   "and": 1073
   },
   "MufuRcpFtz_v2": {
    "and": 902
@@ -96,8 +96,11 @@
   "MufuSqrtFtz_v2": {
    "and": 879
   },
+  "MufuTanh_v2": {
+   "and": 1049
+  },
   "RsqrtApprox_v2": {
-   "and": 1668
+   "and": 1134
   },
   "SiluMulBf16_v3": {
    "and": 1372
