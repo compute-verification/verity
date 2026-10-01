@@ -1,12 +1,14 @@
 """Pearl-C's whole-step replay (`pouw_pearl_c_whole`, `pouw_pearl_c_graphs.GraphCalls`' whole-forward half), CPU only: the
-hooks on a stand-in of Model Runner V2's graph manager (each key's graphs, eager where a key has none, the calls a capture
-recorded handed to the run before each replay, the scratch pass dropped), and the run's bookkeeping at a replay (each call's
-slot and offsets, its records appended as `_after` appends them).  The bytes on the card are the e2e's ``whole`` gate's.
+hooks on a stand-in of Model Runner V2's graph manager (each key's graphs, a retained pass's kind among them, eager where a
+key has none, the calls a capture recorded handed to the run around each replay, the scratch pass dropped), and the run's
+bookkeeping (each call's slot and offsets, its records appended as `_after` appends them, a retained capture's stages and the
+records and files kept from them).  The bytes on the card are the e2e's ``whole`` gate's.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from verity_pouw.protocol import Matmul, Shape
@@ -69,13 +71,17 @@ class Run:
         self.graphs, self.hashing, self.retain, self.passes = True, True, None, 0
         self._whole = None
         self.replays: list = []
+        self.retained: list = []
+        self.begun: list = []
         self.details = {"passes": []}
 
-    def whole_key(self):
-        return None if self.retain or not self.graphs else (self.hashing, frozenset(), "serial")
+    def whole_key(self, retained=None):
+        retained = self.retain is not None if retained is None else retained
+        return (self.hashing, frozenset(), "serial", self.hashing and retained) if self.graphs else None
 
-    def whole_capture_begin(self):
+    def whole_capture_begin(self, key=None):
         self._whole = []
+        self.begun.append(key)
 
     def whole_capture_end(self):
         calls, self._whole = tuple(self._whole or ()), None
@@ -88,6 +94,9 @@ class Run:
 
     def whole_replay(self, calls):
         self.replays.append(calls)
+
+    def whole_retained(self, calls):
+        self.retained.append(calls)
 
 
 class Executor:
@@ -135,6 +144,10 @@ def test_vllms_own_graphs_serve_while_no_pearl_c_arm_executes():
     assert whole.take() == {"replayed": 1, "eager": 1, "captured": 0}
 
 
+CALLS = tuple(PG.WholeCall(w, 32, 4096, 4096, 32, 64) for w in (0, 1, 2))
+HASHED, RETAINED = (True, frozenset(), "serial", False), (True, frozenset(), "serial", True)
+
+
 def test_an_arm_runs_eagerly_until_prepared_then_replays_its_own_graphs_with_the_captured_calls():
     run, stack, whole, mgr = setup()
     stack.activate(Arm("pearlc", "bf16", "pouw:pearl-c", spec=PassSpec(hashing=True)))
@@ -142,12 +155,12 @@ def test_an_arm_runs_eagerly_until_prepared_then_replays_its_own_graphs_with_the
         assert step(mgr) == Desc(NONE, 32, 32) and mgr.replayed == []
     assert whole.prepare() is True
     assert stack.passes == [{"units": 0}] and run.details["passes"] == [{"units": 0}]   # the timed pass's, not the scratch's
+    assert run.begun == [HASHED, HASHED, RETAINED, RETAINED]    # each kind's capture, and again after its descriptor's graph
     assert whole.prepare() is False and len(stack.passes) == 1
     with stack.pass_():
         assert step(mgr).cg_mode == FULL
-    assert mgr.replayed == ["graph 0"]
-    assert run.replays == [tuple(PG.WholeCall(w, 32, 4096, 4096, 32, 64) for w in (0, 1, 2))]
-    assert whole.take()["captured"] == 1
+    assert mgr.replayed == ["graph 0"] and run.replays == [CALLS] and run.retained == [CALLS]
+    assert whole.take()["captured"] == 2
 
 
 def test_each_pass_kind_has_its_own_graphs_and_vllms_stay_its_own():
@@ -155,20 +168,31 @@ def test_each_pass_kind_has_its_own_graphs_and_vllms_stay_its_own():
     for hashing in (True, False):
         stack.activate(Arm("pearlc" if hashing else "pearlc-nohash", "bf16", "pouw:pearl-c", spec=PassSpec(hashing=hashing)))
         assert whole.prepare() is True
-    assert set(whole.sets) == {VLLM, (True, frozenset(), "serial"), (False, frozenset(), "serial")}
+    assert set(whole.sets) == {VLLM, HASHED, RETAINED, (False, frozenset(), "serial", False)}
     stack.activate(None)
     step(mgr)
     assert mgr.replayed == ["vllm's graph"] and run.replays == []
 
 
-def test_retained_passes_graphs_off_and_forwards_outside_a_pass_run_eagerly():
+def test_a_retained_pass_replays_its_kinds_own_capture():
+    run, stack, whole, mgr = setup()
+    stack.activate(Arm("pearlc", "bf16", "pouw:pearl-c", spec=PassSpec(hashing=True)))
+    whole.prepare()
+    with stack.pass_(PassSpec(hashing=True, retain="/tmp/x")):
+        assert whole.key() == RETAINED and step(mgr).cg_mode == FULL
+    assert whole.sets[RETAINED] is not whole.sets[HASHED] and run.replays == run.retained == [CALLS]
+
+
+def test_enabled_off_graphs_off_and_forwards_outside_a_pass_run_eagerly():
     run, stack, whole, mgr = setup()
     stack.activate(Arm("pearlc", "bf16", "pouw:pearl-c", spec=PassSpec(hashing=True)))
     whole.prepare()
     assert whole.key() is None and step(mgr).cg_mode == NONE
-    with stack.pass_(PassSpec(hashing=True, retain="/tmp/x")):
+    whole.enabled = False
+    with stack.pass_():
         assert step(mgr).cg_mode == NONE
-    run.graphs = False
+    assert whole.prepare() is False
+    whole.enabled, run.graphs = True, False
     with stack.pass_():
         assert step(mgr).cg_mode == NONE
     assert mgr.replayed == [] and run.replays == [] and mgr._graphs_captured
@@ -280,13 +304,65 @@ def test_inside_vllms_capture_a_call_is_recorded_and_launched_into_it(monkeypatc
         run.whole_capture_end()
 
 
-def test_a_pass_replays_whole_only_when_graphed_serial_and_not_retained():
+def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whether_it_is_retained():
     torch = pytest.importorskip("torch")
     run = Calls(torch)
-    assert run.whole_key() == (True, frozenset(), run.schedule.name)
+    name = run.schedule.name
+    assert run.whole_key() == (True, frozenset(), name, False) and run.whole_key(True) == (True, frozenset(), name, True)
     run.cur = PPD._Pass(Path("/tmp/retained"))
-    assert run.whole_key() is None
+    assert run.whole_key() == (True, frozenset(), name, True) and run.whole_key(False) == (True, frozenset(), name, False)
+    run.hashing = False
+    assert run.whole_key() == (False, frozenset(), name, False)
     run.cur, run.graphs = PPD._Pass(None), False
     assert run.whole_key() is None
     run.graphs, run.schedule = True, PPD.schedule_of("deferred", PPD.scheme_of(PPD.SCHEMES[2]))
     assert run.whole_key() is None
+
+
+def test_a_retained_kinds_capture_copies_each_calls_a_words_and_tree_to_the_stage_its_warm_up_made(monkeypatch):
+    torch = pytest.importorskip("torch")
+    run, capturing = Calls(torch), [False]
+    monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
+    for name in ("_into", "_replay", "_slot"):
+        monkeypatch.setattr(run, name, lambda *a: ("y", True))
+    sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
+    pipe = SimpleNamespace(size={"tree_a": 64})
+    run.whole_capture_begin(run.whole_key(True))
+    run._graph_call(7, sh, pipe, 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
+    xa, tree = run._stages[7]
+    assert xa.shape == (32, 8) and tree.shape == (64,)
+    sh.xa[:32], sh.b["tree_a"][:64] = 1.5, 7
+    capturing[0] = True
+    assert run._graph_call(7, sh, pipe, 0, 4, 32, 0, None) == ("y", True)
+    assert torch.equal(xa, sh.xa[:32]) and torch.equal(tree, sh.b["tree_a"][:64])
+    assert run.whole_capture_end() == (PG.WholeCall(7, 32, 8, 16, 32, 4),) and not run._whole_retained
+    sh.xa[:32] = 2.0
+    run.whole_capture_begin(run.whole_key(False))
+    run._graph_call(7, sh, pipe, 0, 4, 32, 0, None)
+    run.whole_capture_end()
+    assert float(xa[0, 0]) == 1.5                            # an unretained kind's capture leaves the stages alone
+    run._graphs = {}
+    assert [t.dtype for t in run._graph_buffers()] == [torch.uint8, torch.uint8]
+
+
+def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_made_alone_would(tmp_path):
+    torch = pytest.importorskip("torch")
+    run = Calls(torch)
+    run.weights = {7: SimpleNamespace(excluded=(3,)), 9: SimpleNamespace(excluded=())}
+    run.cur = PPD._Pass(tmp_path)
+    run._stages = {9: (torch.full((32, 4), 2.0), torch.full((16,), 4, dtype=torch.uint8)),
+                   7: (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8))}
+    calls = (PG.WholeCall(9, 32, 4, 16, 32, 2), PG.WholeCall(7, 32, 8, 16, 32, 4))
+    run.flag_buf[32 + 5, 0] = 1                               # weight 7's call: row 5 fails the screen
+    run.whole_replay(calls)
+    run.whole_retained(calls)
+    want = []
+    for mm, (w, ex) in zip(run.cur.matmuls, ((9, ()), (7, (5,))), strict=True):
+        want.append(PPD.PW.UnitRecord(mm, 32, mm.shape.k, ex, run.weights[w].excluded))
+    assert run.cur.records == want
+    assert [f["tree"]["path"] for f in run.cur.files] == ["calls/0.tree", "calls/1.tree"]
+    assert (tmp_path / "calls/1.tree").read_bytes() == bytes([3]) * 64
+    assert (tmp_path / "calls/0.rows.bf16").read_bytes() == torch.full((32, 4), 2.0).to(torch.bfloat16).view(torch.uint8).numpy().tobytes()
+    run.cur = PPD._Pass(None)
+    run.whole_retained(calls)                                 # an unretained pass keeps nothing
+    assert run.cur.records == []

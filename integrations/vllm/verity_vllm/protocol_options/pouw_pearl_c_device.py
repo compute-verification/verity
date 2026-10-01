@@ -628,20 +628,10 @@ class PearlCDeviceRun(GraphCalls):
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
-                cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), sh.xa[:m]),
-                                                 wt.excluded))
-                cur.files.append(self._retain_call(cur, index, sh, size))
+                self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe))
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
         return out.reshape(*lead, wt.n)
-
-    def _retain_call(self, cur: _Pass, index: int, sh: _Shape, tree_bytes: int) -> dict:
-        import torch
-        d = cur.retain / "calls"
-        d.mkdir(parents=True, exist_ok=True)
-        rows = _bytes(sh.xa[:sh.m16].to(torch.bfloat16).view(torch.uint8))
-        tree = _bytes(sh.b["tree_a"][:tree_bytes])
-        return {"rows": _write(d / f"{index}.rows.bf16", rows, digest=False), "tree": _write(d / f"{index}.tree", tree)}
 
     # ---- passes -----------------------------------------------------------------------------------------------------
 
@@ -667,10 +657,8 @@ class PearlCDeviceRun(GraphCalls):
             for sh in self.shapes.values():
                 for t in self._buffers(sh):
                     t.fill_(value)
-            for g in self._graphs.values():
-                for t in (g.y.view(torch.uint8), g.leaves, g.flags):
-                    if t is not None:
-                        t.fill_(value)
+            for t in self._graph_buffers():
+                t.fill_(value)
 
     def end(self) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's

@@ -7,7 +7,9 @@ the eager steps, which the e2e's ``graphs`` gate holds.
 Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
 `whole_capture_end`), a call launches the same steps into vLLM's capture instead, and is recorded; at each replay of that
 forward no call's Python runs, so `whole_replay` does the forward's host work at once: its slots in one upload, and its
-matmuls, tiles and screened rows appended to the pass.
+matmuls, tiles and screened rows appended to the pass.  A retained pass's capture also copies each call's A words and tree,
+as its steps leave them, to its weight's stage, from which `whole_retained` writes the call's record and files after the
+replay, as `_retained` writes them for a call made alone.
 """
 from __future__ import annotations
 
@@ -15,9 +17,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity_pouw.protocol import Matmul, Shape
+from verity_pouw.schemes import pearl_c_work as PW
 
-from .pouw_pearl_c_host import _zeros, torch_uint8
-from .pouw_pearl_c_screen import copy_kernel, screen_into
+from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
+from .pouw_pearl_c_screen import copy_kernel, excluded, screen_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -62,39 +65,89 @@ class GraphCalls:
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
     _whole: list[WholeCall] | None = None
+    #: whether those forwards are a retained pass's, whose capture copies each call's A words and tree to its stage
+    _whole_retained: bool = False
+    #: each weight's stage, (A words, A tree) as its call's steps leave them, made at the first retained capture
+    _stages: dict[int, tuple[Any, Any]] | None = None
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
-        """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture; otherwise its own
-        graph replayed after its slot.  vLLM's warm-up forward before each capture runs outside it, and makes the graphs."""
+        """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
+        pass's, the copies to its stage); otherwise its own graph replayed after its slot.  vLLM's warm-up forward before each
+        capture runs outside it, and makes the graphs and stages."""
         if self._whole is not None and _capturing():
             if self.hashing and m != sh.m16:
                 raise RuntimeError(f"{self.entry}: a call of {m} rows inside vLLM's whole-forward capture, whose screen would "
                                    f"run at offsets fixed at capture: only calls without filler rows are captured whole")
             self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
-            return self._into(w, sh, pipe, raw, tiles, m)
+            out = self._into(w, sh, pipe, raw, tiles, m)
+            if self._whole_retained:
+                for stage, t in zip(self._stages[w], self._kept(sh, pipe), strict=True):
+                    stage.copy_(t)
+            return out
+        if self._whole is not None and self._whole_retained and w not in self._stages:
+            self._stages[w] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
         if self.hashing:
             self._slot(w, index, sh.m16, m, caller)
         return self._replay(w, sh, pipe, raw, tiles, m)
 
-    def whole_key(self) -> tuple | None:
-        """What a forward captured whole depends on (hashing, omitted steps, schedule), or None when the pass can't replay
-        one: graphs off, a schedule the graph path doesn't run, or a retained pass, whose records and files are per call."""
-        if (not self.graphs or self.cur is None or self.cur.retain is not None or self.schedule.side
-                or self.schedule.main_priority == "greatest"):
-            return None
-        return (self.hashing, self.omit, self.schedule.name)
+    @staticmethod
+    def _kept(sh: Any, pipe: Any) -> tuple[Any, Any]:
+        """What a retained call keeps of its shape's buffers once its steps ran: A's words (m₁₆ rows) and A's tree."""
+        return sh.xa[:sh.m16], sh.b["tree_a"][:pipe.size["tree_a"]]
 
-    def whole_capture_begin(self) -> None:
-        self._whole = []
+    def _retained(self, cur: Any, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any) -> None:
+        """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree)."""
+        import torch
+        cur.records.append(PW.UnitRecord(mm, m, mm.shape.k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
+                                         self.weights[mm.weight].excluded))
+        d = cur.retain / "calls"
+        d.mkdir(parents=True, exist_ok=True)
+        rows = _bytes(xa.to(torch.bfloat16).view(torch.uint8))
+        cur.files.append({"rows": _write(d / f"{mm.index}.rows.bf16", rows, digest=False),
+                          "tree": _write(d / f"{mm.index}.tree", _bytes(tree))})
+
+    def whole_key(self, retained: bool | None = None) -> tuple | None:
+        """What a forward captured whole depends on (hashing, omitted steps, schedule, and with hashing whether its pass is
+        retained, which `retained` sets in place of the open pass's), or None when the pass can't replay one: graphs off, or a
+        schedule the graph path doesn't run."""
+        if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
+            return None
+        retained = self.cur.retain is not None if retained is None else retained
+        return (self.hashing, self.omit, self.schedule.name, self.hashing and retained)
+
+    def whole_capture_begin(self, key: tuple | None = None) -> None:
+        """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None)."""
+        self._whole, self._whole_retained = [], bool(key and key[3])
+        if self._whole_retained and self._stages is None:
+            self._stages = {}
 
     def whole_capture_end(self) -> tuple[WholeCall, ...]:
         """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
         in one forward is refused."""
-        calls, self._whole = tuple(self._whole or ()), None
+        calls, self._whole, self._whole_retained = tuple(self._whole or ()), None, False
         seen = [c.w for c in calls]
         if len(set(seen)) != len(seen):
             raise RuntimeError(f"{self.entry}: a weight is called twice in one captured forward, and its slot holds one call")
         return calls
+
+    def whole_retained(self, calls: tuple[WholeCall, ...]) -> None:
+        """After vLLM replays a forward captured whole, in a retained pass with hashing: each call's record and files, from
+        its stage and its flags in the pass's buffer, as a call made alone keeps them."""
+        cur = self.cur
+        if cur.retain is None or not self.hashing or not calls:
+            return
+        flags_at = cur.flag_rows - sum(c.m for c in calls)
+        for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
+            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], *self._stages[c.w])
+            flags_at += c.m
+
+    def _graph_buffers(self):
+        """Every buffer the graphs write, as bytes: each graph's y, leaves and flags, and each stage."""
+        import torch
+        for g in self._graphs.values():
+            yield from (t for t in (g.y.view(torch.uint8), g.leaves, g.flags) if t is not None)
+        for stage in (self._stages or {}).values():
+            yield from (t.view(torch.uint8) for t in stage)
 
     def whole_replay(self, calls: tuple[WholeCall, ...]) -> None:
         """Before vLLM replays a forward captured whole: with hashing, every call's keys and offsets (its index, and the

@@ -32,9 +32,11 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
 size only), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
-(`pouw_pearl_c_whole`): a decode step is one graph replay after one slot upload.  Prefill, and every retained pass, run
-eagerly.  Its gate (`whole_check`) holds a forward's calls replayed whole to the eager calls, bit for bit; the decode
-response counts the steps replayed and run eagerly.
+(`pouw_pearl_c_whole`): a decode step is one graph replay after one slot upload.  Prefill runs eagerly; a retained decode
+replays its own capture, which also keeps each call's A words and tree.  Its gate (`whole_check`) holds a forward's calls
+replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
+counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
+check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.
 
 ``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
 (`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
@@ -251,8 +253,55 @@ def whole_check(run, weights: dict) -> dict:
         got.append(ended(outs))
     same = all(g[2] == want[2] and torch.equal(g[1], want[1]) and all(torch.equal(a, b) for a, b in zip(g[0], want[0], strict=True))
                for g in got)
+    kept = whole_retained_check(run, forward, side) if run.hashing else None
     return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": want[2], "replays": [g[2] for g in got],
-            "replay_equals_eager": same, "ok": same and len(calls) == len(weights)}
+            "replay_equals_eager": same, "retained_equals_eager": kept,
+            "ok": same and len(calls) == len(weights) and kept is not False}
+
+
+def whole_retained_check(run, forward, side) -> bool:
+    """A retained pass of `forward` made eagerly, and one replayed from a whole capture of a retained pass's kind: the same
+    records, call files (each call's rows and A tree) and commitment, byte for byte.  Each pass drops its retain directory
+    before it ends, so neither writes the weights' files, which the two would share."""
+    import shutil
+    import tempfile
+
+    import torch
+    keep, dirs = ("transcript_root", "activation_roots", "units", "tiles"), [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
+
+    def ended() -> tuple:
+        recs, files = list(run.cur.records), list(run.cur.files)
+        run.cur.retain = None
+        return recs, files, {k: v for k, v in run.end().items() if k in keep}
+
+    try:
+        run.graphs = False
+        run.begin(retain=str(dirs[0]))
+        forward()
+        want = ended()
+        run.graphs = True
+        run.begin()
+        graph = torch.cuda.CUDAGraph()
+        run.whole_capture_begin(run.whole_key(True))
+        try:
+            forward()
+            side.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.graph(graph, stream=side):
+                forward()
+        finally:
+            calls = run.whole_capture_end()
+        run.end()
+        run.begin(retain=str(dirs[1]))
+        run.whole_replay(calls)
+        graph.replay()
+        run.whole_retained(calls)
+        got = ended()
+        files = sorted(p.relative_to(dirs[0]) for p in (dirs[0] / "calls").iterdir())
+        return (got == want and files == sorted(p.relative_to(dirs[1]) for p in (dirs[1] / "calls").iterdir())
+                and all((dirs[0] / f).read_bytes() == (dirs[1] / f).read_bytes() for f in files))
+    finally:
+        for d in dirs:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def schedule_check(run, weights: dict) -> dict:
@@ -447,12 +496,19 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
                                  **({"whole_step": whole.take()} if whole is not None else {})}
                     if run.graphs:
-                        run.graphs = False
+                        p, ref = [{"prompt_token_ids": x} for x in prompts], want
+                        if whole is not None:    # vLLM's eager decode isn't its graph's: both sides on vLLM's eager path
+                            whole.enabled = False
                         try:
-                            _, _, eager, _ = timed([{"prompt_token_ids": x} for x in prompts], sp)
+                            if whole is not None:
+                                _, _, ref, _ = timed(p, sp)
+                            run.graphs = False
+                            _, _, eager, _ = timed(p, sp)
                         finally:
                             run.graphs = True
-                        out[name]["same_commitment_eager"] = all(eager.get(k) == want.get(k) for k in
+                            if whole is not None:
+                                whole.enabled = True
+                        out[name]["same_commitment_eager"] = all(eager.get(k) == ref.get(k) for k in
                                                                  ("transcript_root", "activation_roots", "units", "tiles"))
                 for label, omits in CONTROLS.items():
                     _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / label),
