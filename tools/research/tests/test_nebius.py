@@ -976,10 +976,17 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     calls: list[tuple] = []
-    state = {"holders": list(holders), "pods": []}
+    state = {"holders": list(holders), "pods": [], "nominal": 3, "workloads": []}
 
     def kubectl(*args, stdin=None):
         calls.append((args, stdin))
+        if args[:2] == ("get", "clusterqueue"):
+            if state["nominal"] is None:
+                raise subprocess.CalledProcessError(1, "kubectl")
+            return json.dumps({"spec": {"resourceGroups": [{"flavors": [{"resources": [
+                {"name": "cpu", "nominalQuota": "64"}, {"name": "nvidia.com/gpu", "nominalQuota": str(state["nominal"])}]}]}]}})
+        if args[:2] == ("get", "workloads"):
+            return json.dumps({"items": state["workloads"]})
         if args[:2] == ("get", "jobs"):
             return json.dumps({"items": [{"metadata": {"name": j}, "status": {"active": 1}} for j, _, _ in state["holders"]]})
         if args[:2] == ("get", "pods"):
@@ -1071,6 +1078,44 @@ def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(
     assert not [a for a, _ in calls if a[0] == "delete"]
     s = c.tick(t + 3)
     assert [e["ev"] for e in s["events"]] == ["lease-outside-pool"] and ("delete", "pod", "job-pod", "--wait=false") in [a for a, _ in calls]
+    os.close(lock)
+
+
+@needs_flock
+def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path, fences):
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3)
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=3 run=r-x who=adhoc:me since=2026-09-30T22:00:00Z\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    bench = {"metadata": {"ownerReferences": [{"name": "nd-m0-bench"}]},
+             "status": {"admission": {"clusterQueue": "provers"}, "conditions": [{"type": "QuotaReserved", "status": "True"}]},
+             "spec": {"podSets": [{"count": 1, "template": {"spec": {"containers": [{"resources": {"requests": {"nvidia.com/gpu": "2"}}}]}}}]}}
+    state["workloads"] = [bench]
+    t = 1_800_000_000.0
+    c = m.Controller()
+    c.tick(t)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 1          # 3 wanted, 3 nominal less the bench's 2
+    calls.clear()
+    state["nominal"] = None
+    c2 = m.Controller()
+    c2.tick(t)
+    assert not [a for a, _ in calls if a[0] == "create"]                # the quota unread: no growth
+    os.close(fd)
+    w.unlink()
+    state["nominal"], state["workloads"] = 3, []
+    state["holders"] = [("gpu-pool-1", "gpu-pool-1-x", "GPU-a")]
+    c3 = m.Controller()
+    c3.tick(t)
+    proc = subprocess.Popen(["cat"], stdin=subprocess.PIPE)          # blocks until signalled
+    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
+    s = c3.tick(t + 1)
+    assert [e["ev"] for e in s["events"]] == ["expired"] and not [a for a, _ in calls if a[:2] == ("delete", "pod")]
+    assert proc.wait() == -15
     os.close(lock)
 
 
