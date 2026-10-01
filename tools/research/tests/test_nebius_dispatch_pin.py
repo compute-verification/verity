@@ -139,3 +139,12 @@ def test_status_counts_an_item_by_its_last_done_line(dispatch):
     dispatch.append("done.jsonl", {"key": "lane/b", "state": "failed", "rc": 1, "task": 1})
     dispatch.append("done.jsonl", {"key": "lane/a", "state": "succeeded", "rc": 0, "task": 1, "corrects": {"rc": 12}})
     assert {k: r["state"] for k, r in dispatch.outcomes().items()} == {"lane/a": "succeeded", "lane/b": "failed"}
+
+
+def test_a_provers_task_runs_on_the_prover_slices_and_every_other_task_off_them(dispatch, tmp_path):
+    """Daniel 1 Oct 01:35Z: vLLM jobs ran unpinned across the provers' 16-core slices and skewed the timed CPU verifier."""
+    _live(dispatch, TWO)
+    dispatch.submit(_item(tmp_path), "lane/a")
+    dispatch.submit({**_item(tmp_path), "id": "p", "queue": "provers"}, "lane/p")
+    vllm, prover = (j["spec"]["template"]["spec"]["containers"][0]["command"][:3] for j in dispatch.created)
+    assert vllm == ["taskset", "-c", "96-127,176-191"] and prover == ["taskset", "-c", "128-175"]
