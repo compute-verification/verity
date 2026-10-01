@@ -46,6 +46,7 @@ def load_registries() -> None:
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.boolean.mufu  # noqa: F401
+    import verity.ml.boolean.scalar  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401

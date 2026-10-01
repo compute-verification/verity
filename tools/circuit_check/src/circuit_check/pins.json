@@ -3,6 +3,9 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "Bf16ToF32_v2": {
+   "and": 0
+  },
   "BlackwellE4m3QmmaDot32_v2": {
    "and": 9128
   },
@@ -33,11 +36,29 @@
   "F32AddFtz_v3": {
    "and": 888
   },
+  "F32Add_v3": {
+   "and": 812
+  },
+  "F32Div_v3": {
+   "and": 2517
+  },
+  "F32Fabs_v2": {
+   "and": 0
+  },
   "F32FmaFtz_v3": {
    "and": 4584
   },
   "F32FmaSubFtz_v3": {
    "and": 4584
+  },
+  "F32Fma_v3": {
+   "and": 4485
+  },
+  "F32Fmaxf_v2": {
+   "and": 314
+  },
+  "F32Fminf_v2": {
+   "and": 314
   },
   "F32Max_v2": {
    "and": 237
@@ -45,8 +66,14 @@
   "F32MulFtz_v3": {
    "and": 2506
   },
+  "F32Mul_v3": {
+   "and": 2430
+  },
   "F32SubFtz_v3": {
    "and": 952
+  },
+  "F32ToE4m3Sat_v2": {
+   "and": 231
   },
   "Fa2InvSum_v2": {
    "and": 947

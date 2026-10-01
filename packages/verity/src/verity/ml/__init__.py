@@ -13,7 +13,8 @@
     verity.ml.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), `trace`
                       (Boolean Definitions from builders), `gemm`: the BF16 steps, cast, DotBf16_v3, GemmCoordinate_v3 and
                       Gemm_v3 on bits, the E4M3, E5M2, NVFP4 and MXFP4 steps and their coordinates, and `attention`: FA2's FTZ
-                      f32 operations, max, -inf guard and inverse sum on bits
+                      f32 operations, max, -inf guard and inverse sum on bits, and `scalar`: IEEE f32 add, mul, FMA and
+                      divide, fabsf, PTX max / min and the bf16 -> f32 and f32 -> E4M3 casts on bits
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
                       `verity.evaluation` and self-checked against `verity.ml.tc`
 """

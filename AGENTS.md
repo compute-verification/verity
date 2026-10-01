@@ -52,7 +52,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     dot, coordinate and GEMM and the E4M3, E5M2, NVFP4 and MXFP4 steps and
     coordinates on bits (`gemm`: `DotBf16_v3`, `GemmCoordinate_v3`, `Gemm_v3`,
     `GemmCoordinateE4m3_v2`, `GemmCoordinateNvf4_v2`, `GemmCoordinateMxf4_v2`) and
-    attention's softmax operations and inverse sum on bits (`attention`).
+    attention's softmax operations and inverse sum on bits (`attention`), and
+    IEEE f32 arithmetic, PTX max / min and the bf16 and E4M3 casts on bits
+    (`scalar`).
     `verity.ml.tc.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
