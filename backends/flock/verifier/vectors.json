@@ -4210,7 +4210,7 @@
      "circuit_sha512": "7674743d65a93e09c19910d3832b119642622783a532b14f231ca617e7f6de667db9aa4fa0936280a4188f785abc23fbe186ba9d56a3d6c4d996ae7a052ffaa2",
      "detail": "RoPE d64, 4 instances at global unit indices [3, 17, 40, 1001]; partition verity/partition/v1 29f27eb0 (Q_word v1 {X: 16, W: 32} over program 57fab977); class 3927f513"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:62afd0ae/rope-head/records-cpu"
     ],
@@ -4228,7 +4228,7 @@
      "circuit_sha512": "d9f93aee013f00493ae22761f71539f4596c61788e540c44ea5e12850882d19174f3114d2a2eba0f294fa5497894702b0af69a8cd668bd33d8134574d6381212",
      "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001]; partition verity/partition/v1 c920dfc8, query Q_template_instance v1 (not evaluated by the verifier: its verdicts say units as stated)"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:3f2298b6/rope-head/records-cpu"
     ],
@@ -4247,7 +4247,7 @@
      "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
      "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001] of a 2000-unit population; the verdicts' partition finding says units derived"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:e1fb80d2/rope-head/records-cpu"
     ],
@@ -4264,7 +4264,7 @@
      "circuit_sha512": "d504d7390ef20157c669262e85274d9742b4b070fb0f091ad54e07a4f95571358efd6f110123af0c94b2fccaa37317b65232148c8b3e8343a7025db7c29f1f8c",
      "detail": "gemm-coordinate/k1024/sm80-mma-bf16 (synthetic, seed 20260927), 4 instances: 64 tensor-core k-step units per VU (packed), x as 1024 leaf cuts, the tail's stage1 returning the output (out_net); k_log 23, m 26"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:3104c2f9/gemm-k1024/records-cpu"
     ],

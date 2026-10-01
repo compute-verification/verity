@@ -17,7 +17,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-STATEMENT = "verity/flock-circuit/types+seed-injection"
+STATEMENT = "verity/flock-circuit/types@210d32e1+seed-injection"
 #: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at #273, and every CPU selftest case of its
 #: flock-circuit (seed-injection build, #273 at 8505c540: the typed id's own tags), recorded
 FIXTURE = "art:e9c0209d"

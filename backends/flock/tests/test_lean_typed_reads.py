@@ -34,7 +34,7 @@ def attn(tmp_path_factory):
 
 
 def _statement(stage: Path, tables: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit/types", "--circuit",
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit/types@210d32e1", "--circuit",
                            str(stage / "circuit.txt"), "--public", str(stage / "pub-4.bin"), "--tables", str(tables)],
                           capture_output=True, text=True)
 

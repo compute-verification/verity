@@ -103,7 +103,8 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none) : V Stmt :=
-  if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
+  if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program
+  else if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
@@ -361,11 +362,12 @@ def regionWordsCmd (args : List String) : IO UInt32 := do
     | [some q, some col] => some (q, col)
     | _ => none
   let res : V Nat := do
-    let c ← HmRow.parse tags circuitB tables
-    let pub ← HmRow.loadPublic tags c pubB
+    let hidden := tags.hiddenOutputs
+    let c ← if hidden then HmOut.parse tags circuitB tables else HmRow.parse tags circuitB tables
+    let pub ← if hidden then HmOut.loadPublic tags c pubB else HmRow.loadPublic tags c pubB
     let pin ← HmRow.pin c
-    let (da, db) := HmRow.delta c pin
-    let regions ← HmRow.regions c pub
+    let (da, db) := if hidden then HmOut.delta c pin else HmRow.delta c pin
+    let regions ← if hidden then HmOut.regions c pub else HmRow.regions c pub
     HmRow.checkRegionWords c (da ++ extra.toArray) (db ++ extra.toArray) regions
     return (HmRow.sharedColumns regions).size
   let line := match res with
@@ -453,13 +455,13 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
   return (if all then 0 else 1)
 
 /-- `typed-expand FILE [--out F]`: a `verity/flock-circuit/types` file (item 1e) parsed as `verify` parses it, its unit's
-rows derived (`HmRow.parseTyped`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
+rows derived (`HmOut.parse`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
 `--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
 def typedExpandCmd (args : List String) : IO UInt32 := do
   let some path := args.head? | IO.eprintln "typed-expand FILE [--out F]"; return 2
   let bytes ← IO.FS.readBinFile path
   let tags := Tags.circuitTypes
-  let line ← match HmRow.parseTyped tags bytes with
+  let line ← match HmOut.parse tags bytes with
     | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
     | .ok c =>
       if let some out := argOf args "--out" then

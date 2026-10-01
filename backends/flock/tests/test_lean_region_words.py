@@ -19,7 +19,7 @@ from verity.ir.codec import canonical_json
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-STATEMENT = "verity/flock-circuit+seed-injection"
+STATEMENT = "verity/flock-circuit@e51e2b86+seed-injection"
 GEMM = "art:3104c2f9/gemm-k1024/stage"
 #: the tail stage `stage1`'s range starts at slot 1057 of 2^9 columns; its output word is its word 1, the region its 16 bits
 SHARED = 1057 * 512 + 128 + 16
