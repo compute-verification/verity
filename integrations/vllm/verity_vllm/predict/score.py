@@ -279,10 +279,10 @@ def _map_path(p: str | None, path_map: list[tuple[str, str]]) -> str | None:
 
 
 def mem_estimate_mb(C, request_rows: list[int]) -> int:
-    """A unit's peak resident memory, over-estimated: the root's nodes (about 14 per row and layer, plus the q/k/v bias and one
-    RMSNorm per q and k head) at 6 KB each, and the attention reads of the earlier rows' keys (rows²/2 per layer) at 0.4 KB each.
-    Measured: a Qwen3-4B request of LP+T = 79 peaks at 814 MB (estimated 1.2 GB)."""
-    per = 14 + C.qkv_bias + ((C.NH + C.KVH) if C.qk_norm else 0)
+    """A unit's peak resident memory, over-estimated: the root's nodes (about 14 per row and layer, plus the q/k/v bias, the q/k
+    RMSNorms and the MoE block's three per pair) at 6 KB each, and the attention reads of the earlier rows' keys (rows²/2 per layer)
+    at 0.4 KB each.  Measured: a Qwen3-4B request of LP+T = 79 peaks at 814 MB (estimated 1.2 GB)."""
+    per = 14 + C.qkv_bias + {"head": C.NH + C.KVH, "all": 2}.get(C.qk_norm, 0) + (3 * C.TOPK + 2 if C.E else 0)
     rows = sum(request_rows)
     return int(250 + 0.006 * rows * C.NL * per + 0.0002 * C.NL * sum(r * r for r in request_rows))
 
@@ -380,8 +380,10 @@ class Cache:
                 f.write(json.dumps(r, sort_keys=True) + "\n")
 
 
-def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, rows_filter: str | None = None) -> dict:
-    """The rows' φ, their units, and the distinct prediction tasks (one per (φ, shape))."""
+def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, rows_filter: str | None = None,
+         max_mem_mb: int | None = None) -> dict:
+    """The rows' φ, their units, and the distinct prediction tasks (one per (φ, shape)); a unit over `max_rows` or with an
+    estimated peak (`mem_estimate_mb`) over `max_mem_mb` is `over_budget`."""
     import re
     rows, tasks, wtasks = [], {}, {}
     rx = re.compile(rows_filter) if rows_filter else None
@@ -418,6 +420,8 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
                 u.update(status="unexpressible", reason=pre)
             elif u["rows"] > max_rows:
                 u.update(status="over_budget", reason=f"LP+T = {u['rows']} > max_rows {max_rows}")
+            elif max_mem_mb is not None and (mem := mem_estimate_mb(C, [u["rows"]])) > max_mem_mb:
+                u.update(status="over_budget", reason=f"estimated peak {mem} MB > max_mem_mb {max_mem_mb}")
             else:
                 key = f"{pk}:{':'.join(str(x) for x in shape)}"
                 u["key"] = key
@@ -439,6 +443,8 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
                 u.update(status="unexpressible", reason=pre)
             elif total > max_rows:
                 u.update(status="over_budget", reason=f"sum of request LP+T = {total} > max_rows {max_rows}")
+            elif max_mem_mb is not None and (mem := mem_estimate_mb(C, [int(lp) + int(t) for lp, t in phi.request_shapes()])) > max_mem_mb:
+                u.update(status="over_budget", reason=f"estimated peak {mem} MB > max_mem_mb {max_mem_mb}")
             else:
                 key = f"W:{row['context_digest'][:16]}"
                 u["key"] = key
@@ -449,7 +455,8 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
     return {"rows": rows, "tasks": tasks, "wtasks": wtasks}
 
 
-def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 600, workers: int = 2, mem_mb: int | None = 8000,
+def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 600, max_mem_mb: int | None = None, workers: int = 2,
+          mem_mb: int | None = 8000,
           path_map: list[tuple[str, str]] | None = None, diverge: bool = True, max_diverge: int = 40, equivalence_on: bool = True,
           rows_filter: str | None = None, workload: bool = True, cache: str | None = None, cached_only: bool = False, log=None) -> dict:
     """`max_rows`: request units over LP+T = max_rows (and workloads over that many summed rows) are `over_budget`; the units
@@ -458,7 +465,7 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
     t0 = time.time()
     log = log or (lambda r: print(json.dumps({k: v for k, v in r.items() if k != "phi"})[:400], file=sys.stderr, flush=True))
     C = Cache(cache)
-    P = plan(inv, hf_home=hf_home, checkpoints=checkpoints, max_rows=max_rows, rows_filter=rows_filter)
+    P = plan(inv, hf_home=hf_home, checkpoints=checkpoints, max_rows=max_rows, rows_filter=rows_filter, max_mem_mb=max_mem_mb)
     tasks = sorted(P["tasks"].values(), key=lambda t: t["rows"])
     pred = _pool_map(_predict_task, tasks, workers, log, C, mem_mb, run=not cached_only)
     wpred = _pool_map(_workload_task, sorted(P["wtasks"].values(), key=lambda t: t["rows"]), workers, log, C, mem_mb,
@@ -601,6 +608,7 @@ class Options:
     path_map: list[str] | None = option("--path-map", default=None, nargs="*", help="OLD=NEW prefixes for the inventory's descriptor paths")
     max_rows: int = option("--max-rows", type=int, default=600, help="skip request units with LP+T above this (over_budget)")
     mem_mb: int = option("--mem-mb", type=int, default=8000, help="the units running at once have estimated peaks summing to at most this")
+    max_mem_mb: int | None = option("--max-mem-mb", type=int, default=None, help="skip units whose estimated peak is above this (over_budget)")
     workers: int = option("--workers", type=int, default=2)
     cache: str | None = option("--cache", default=None, help="JSONL of task results: reused, and appended to as results arrive")
     max_diverge: int = option("--max-diverge", type=int, default=40, help="locate the first divergence of at most this many differing units")
@@ -621,7 +629,7 @@ def main(a: Options) -> int:
     _refuse_inside(a.cache, [inv.get("root"), a.rows])
     checkpoints = json.load(open(a.checkpoints)) if a.checkpoints else None
     pm = [tuple(x.split("=", 1)) for x in (a.path_map or [])]
-    res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, mem_mb=a.mem_mb, workers=a.workers, path_map=pm,
+    res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, max_mem_mb=a.max_mem_mb, mem_mb=a.mem_mb, workers=a.workers, path_map=pm,
                 max_diverge=a.max_diverge, equivalence_on=not a.no_equivalence, rows_filter=a.rows_filter, workload=not a.no_workload,
                 cache=a.cache, cached_only=a.cached_only)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
