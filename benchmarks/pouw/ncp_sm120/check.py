@@ -1,7 +1,7 @@
 """Off the card: run.py's outputs against NCP-FP8's chain recomputed from verity's sm_120 atom and verity's BLAKE3.
 
-Every check run (OUT/check/, small shapes) is compared whole: C (plain: one accumulator chained over the first K columns;
-every other arm: R_(T-1)) and, for the hash arms, every lane's digest.  Every timed arm's sampled lanes (OUT/arms.json, the
+Every check run (OUT/check/, small shapes) is compared whole: C (plain and chash: one accumulator chained over the first K
+columns; every other arm: R_(T-1)) and, for the hashing arms, every lane's digest.  Every timed arm's sampled lanes (OUT/arms.json, the
 full shapes) are compared: their C cells and digests.  Operands are regenerated from gen_codes's rule (ncp_sm120.cu).
 
   uv run python benchmarks/pouw/ncp_sm120/check.py OUT     exit 0 when every comparison matches, 1 otherwise
@@ -59,13 +59,20 @@ def chain(a: np.ndarray, b: np.ndarray, atoms: int) -> tuple[np.ndarray, np.ndar
     return I, R
 
 
-def plain(a: np.ndarray, b: np.ndarray, atoms: int) -> np.ndarray:
+def chained(a: np.ndarray, b: np.ndarray, atoms: int) -> np.ndarray:
+    """The plain chained accumulator after each atom (outputs x atoms), FP32 bit patterns."""
     acc = np.zeros(a.shape[0], dtype=np.uint32)
+    out = np.empty((a.shape[0], atoms), dtype=np.uint32)
     for t in range(atoms):
         acc, _ = group_sum_total_batch(ATOM, acc, a[:, 32 * t:32 * t + 32].astype(np.int64),
                                        b[:, 32 * t:32 * t + 32].astype(np.int64))
         acc = acc.astype(np.uint32)
-    return acc
+        out[:, t] = acc
+    return out
+
+
+def plain(a: np.ndarray, b: np.ndarray, atoms: int) -> np.ndarray:
+    return chained(a, b, atoms)[:, -1]
 
 
 def lane_cells(meta: dict, tm: int, tn: int, tid: int) -> tuple[np.ndarray, np.ndarray, bool]:
@@ -83,19 +90,29 @@ def lane_cells(meta: dict, tm: int, tn: int, tid: int) -> tuple[np.ndarray, np.n
     return np.array(rows), np.array(cols), live
 
 
-def digest(I: np.ndarray, R: np.ndarray, tile: int, tid: int, S: int, words: int, live: bool) -> bytes:
-    """The lane's leaf: BLAKE3 compressions chained over its bound atoms' R words then I words (16 a block, fragment order),
-    keyed by IV xor (tile, tid, S | words << 16, 0, ...); I and R are (lane outputs x atoms)."""
+WORDS = {"hash_r": 0, "hash_ir": 1, "chash": 2}
+
+
+def digest(I: np.ndarray, R: np.ndarray, Q: np.ndarray, tile: int, tid: int, arm: str, S: int, stagger: int,
+           live: bool) -> bytes:
+    """The lane's leaf: BLAKE3 compressions chained over its bound atoms' words (16 a block, fragment order): R then I
+    (hash_ir; no R at atom 0, the duplicate of I), R (hash_r), or the chained accumulator Q (chash); atom t is bound when
+    (t + 1 + phase) % S == 0, phase = (tid / 32) % S when staggered.  Keyed by IV xor (tile, tid, S | words << 16, stagger,
+    0, ...); I, R and Q are (lane outputs x atoms)."""
+    words = WORDS[arm]
     cv = list(blake3.IV)
     cv[0] ^= tile
     cv[1] ^= tid
     cv[2] ^= (S | words << 16) & 0xFFFFFFFF
+    cv[3] ^= stagger
+    phase = (tid // 32) % S if stagger else 0
     ctr = 0
     if live:
         for t in range(I.shape[1]):
-            if (t + 1) % S:
+            if (t + 1 + phase) % S:
                 continue
-            for w in ([R[:, t], I[:, t]] if words else [R[:, t]]):
+            group = {"hash_r": [R[:, t]], "hash_ir": [I[:, t]] if t == 0 else [R[:, t], I[:, t]], "chash": [Q[:, t]]}[arm]
+            for w in group:
                 for b in range(0, len(w), 16):
                     cv = blake3.compress(tuple(cv), struct.pack("<16I", *(int(v) for v in w[b:b + 16])), ctr, 64,
                                          blake3.KEYED_HASH)[:8]
@@ -111,24 +128,30 @@ def check_small(out: str, kind: str) -> list[str]:
     a, b = operands(meta, np.arange(m), np.arange(n))
     A, B = a[rr.ravel()], b[cc.ravel()]
     I, R = chain(A, B, T)
+    Q = chained(A, B, T)
     want_r = R[:, -1].reshape(m, n)
     fails = []
     tiles_n = n // meta["bn"]
     for run in meta["runs"]:
         got = np.frombuffer(open(os.path.join(out, "check", run["tag"] + ".c.bin"), "rb").read(), dtype=np.uint32).reshape(m, n)
-        want = plain(A, B, run["K"] // 32).reshape(m, n) if run["arm"] == "plain" else want_r
+        if run["arm"] == "chash":
+            want = Q[:, -1].reshape(m, n)
+        elif run["arm"] == "plain":
+            want = plain(A, B, run["K"] // 32).reshape(m, n)
+        else:
+            want = want_r
         bad = int((got != want).sum())
         if bad:
             fails.append(f"{run['tag']}: C {bad} of {m * n} words differ")
-        if run["arm"].startswith("hash"):
+        if run["arm"] in WORDS:
             dg = open(os.path.join(out, "check", run["tag"] + ".dg.bin"), "rb").read()
-            words, wrong = int(run["arm"] == "hash_ir"), 0
+            wrong = 0
             for t in range(meta["tiles"]):
                 tm, tn = t // tiles_n, t % tiles_n
                 for tid in range(meta["nct"]):
                     rows, cols, live = lane_cells(meta, tm, tn, tid)
                     sel = rows * n + cols
-                    d = digest(I[sel], R[sel], t, tid, run["S"], words, live)
+                    d = digest(I[sel], R[sel], Q[sel], t, tid, run["arm"], run["S"], run.get("stagger", 0), live)
                     wrong += d != dg[(t * meta["nct"] + tid) * 32:(t * meta["nct"] + tid + 1) * 32]
             if wrong:
                 fails.append(f"{run['tag']}: {wrong} of {meta['tiles'] * meta['nct']} lane digests differ")
@@ -149,18 +172,26 @@ def check_arms(out: str) -> list[str]:
                     rows, cols, live = lane_cells(shape, *key)
                     a, b = operands(shape, rows, cols)
                     I, R = chain(a, b, T)
-                    cache[key] = (rows, cols, live, a, b, I, R)
-                rows, cols, live, a, b, I, R = cache[key]
+                    cache[key] = (rows, cols, live, a, b, I, R, chained(a, b, T))
+                rows, cols, live, a, b, I, R, Q = cache[key]
                 got = np.array([int(h, 16) for h in ln["cells"]], dtype=np.uint32)
-                want = plain(a, b, arm["K"] // 32) if arm["arm"] == "plain" else R[:, -1]
-                tag = f"{shape['kind']} {arm['arm']} S={arm['S']} K={arm['K']} tile {ln['tile']} lane {ln['tid']}"
+                if arm["arm"] == "chash":
+                    want = Q[:, -1]
+                elif arm["arm"] == "plain":
+                    want = plain(a, b, arm["K"] // 32)
+                else:
+                    want = R[:, -1]
+                stagger = arm.get("stagger", 0)
+                tag = (f"{shape['kind']} {arm['arm']} S={arm['S']} K={arm['K']}{' stagger' if stagger else ''} "
+                       f"tile {ln['tile']} lane {ln['tid']}")
                 if (got != want).any():
                     fails.append(f"{tag}: {int((got != want).sum())} of {len(got)} cells differ")
                 if "digest" in ln:
-                    d = digest(I, R, ln["tile"], ln["tid"], arm["S"], int(arm["arm"] == "hash_ir"), live)
+                    d = digest(I, R, Q, ln["tile"], ln["tid"], arm["arm"], arm["S"], stagger, live)
                     if d.hex() != ln["digest"]:
                         fails.append(f"{tag}: digest differs")
-            print(f"arms {shape['kind']} {arm['arm']} S={arm['S']} K={arm['K']}: {len(arm['lanes'])} lanes checked", flush=True)
+            print(f"arms {shape['kind']} {arm['arm']} S={arm['S']} K={arm['K']} stagger={arm.get('stagger', 0)}: "
+                  f"{len(arm['lanes'])} lanes checked", flush=True)
     return fails
 
 

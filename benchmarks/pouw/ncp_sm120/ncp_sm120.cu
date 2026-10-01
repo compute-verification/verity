@@ -11,20 +11,25 @@
 //   CORE   the D-3s chain; C = R_(T-1)
 //   STORE  CORE, and every bound atom's words stored to a ring in global memory (the traffic an unfused binding pays)
 //   HASH   CORE, and every bound atom's words absorbed into the lane's leaf from registers (the binding fused into the loop)
-// An atom tau is bound when (tau + 1) % S == 0 (S = i[5]; S = 1 binds every atom).  At a bound atom the lane emits its R words
-// (one per output it holds), then, when WORDS = 1, its I words.  R_0 = I_0 is emitted as an R word too.  A lane whose warp's
-// rows are all padding (row >= i[6], decode's m = 32 in a 64-row tile) emits nothing: its digest is its key.
+//   CHASH  PLAIN over K, and the running accumulator after every bound atom absorbed as HASH does (the plain chained GEMM
+//          with checkpoints: the honest schedule when only every S-th word is bound, whose unbound FADDs a prover skips)
+// An atom tau is bound when (tau + 1 + phase) % S == 0 (S = i[5]; S = 1 binds every atom; phase = 0, or the warp index mod S
+// when i[7] staggers the bound atoms across warps).  At a bound atom the lane emits its R words (one per output it holds),
+// then, when WORDS = 1, its I words; with WORDS = 1 the duplicate R_0 = I_0 is not emitted, so S = 1 emits exactly D-3s's
+// checked words.  CHASH emits the accumulator's words.  A lane whose warp's rows are all padding (row >= i[6], decode's
+// m = 32 in a 64-row tile) emits nothing: its digest is its key.
 //
 // The lane's leaf (HASH): BLAKE3 compressions chained over its emitted words in order, 16 words a block (an R or I block is
 // the words of four consecutive fragments (mi, ni) in mi-major order, each fragment's four words e = 0 ... 3), the block
 // counter its index in the lane's stream, length 64, flag KEYED_HASH, and the first chaining value the key
-//   IV xor (tile, tid, S | WORDS << 16, 0, 0, 0, 0, 0),  tile = tm * tiles_n + tn,  tid the consumer thread (0 ... NCT - 1).
+//   IV xor (tile, tid, S | words << 16, i[7], 0, 0, 0, 0),  tile = tm * tiles_n + tn,  tid the consumer thread (0 ... NCT - 1),
+//   words = WORDS (HASH) or 2 (CHASH).
 // The tile's leaf would be a tree over its lanes' digests, one compression per pair (`-h2`-style segments); this kernel
 // writes the lane digests, which is where the work is.
 //
 // Args: p0 the tensor maps (ml::Maps: A, B; P_A, P_B unused), p1 C (float, M x N), p2 the lane digests (u32, tiles x NCT x
 // 8), p3 the ring (float, grid x 2^CTA_RING_LOG words); i0 M (whole tiles), i1 N, i2 K, i3 raster group, i5 S, i6 the rows
-// that exist (<= M).
+// that exist (<= M), i7 stagger (0 or 1).
 #include <cstdint>
 
 #include "../pearl_c_sm120/mainloop_sm120.cuh"
@@ -37,7 +42,7 @@ struct Args {
   int i[16];
 };
 
-enum { M_PLAIN = 0, M_CORE = 1, M_STORE = 2, M_HASH = 3 };
+enum { M_PLAIN = 0, M_CORE = 1, M_STORE = 2, M_HASH = 3, M_CHASH = 4 };
 constexpr int CTA_RING_LOG = 22;   // 16 MiB a CTA's region of the ring (4 GiB covers 256 CTAs)
 
 DEV uint32_t f2u(float x) { return __float_as_uint(x); }
@@ -49,14 +54,17 @@ template <class L> struct Emit {
   uint32_t ctr;
   uint32_t off;   // STORE: the CTA's next word in its region
   bool live;      // the warp holds a row that exists
+  int phase;      // the bound atoms' offset
 
-  DEV void init(int tile, int tid, int S, int words) {
+  DEV bool bound(int tau, int S) const { return live && (tau + phase) % S == 0; }
+  DEV void init(int tile, int tid, int S, int words, int stagger) {
     const uint32_t IV[8] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
 #pragma unroll
     for (int i = 0; i < 8; i++) cv[i] = IV[i];
     cv[0] ^= (uint32_t)tile;
     cv[1] ^= (uint32_t)tid;
     cv[2] ^= (uint32_t)S | (uint32_t)words << 16;
+    cv[3] ^= (uint32_t)stagger;
     ctr = 0;
   }
   // one block of 16 words: fragments 4b ... 4b + 3 of w
@@ -90,12 +98,19 @@ template <class L> struct Emit {
 };
 
 // One atom tau's work, after its fragments are in registers.  CORE family: first R_(tau-1) (a copy at tau = 1), then the
-// emit of atom tau - 1's words if bound, then I_tau from +0 over every fragment.  PLAIN: the chained MMA.
+// emit of atom tau - 1's words if bound, then I_tau from +0 over every fragment.  PLAIN: the chained MMA (CHASH: after the
+// emit of the accumulator if atom tau - 1 is bound).
 template <int MODE, int WORDS, class L, bool T0, bool T1>
 DEV void atom(int tau, int S, float (&acc)[L::MI][L::NI][4], float (&total)[L::MI][L::NI][4], const uint32_t (&fa)[L::MI][4],
               const uint32_t (&fb)[L::NI][2], Emit<L>& em, float* ring) {
   constexpr int MI = L::MI, NI = L::NI;
-  if constexpr (MODE == M_PLAIN) {
+  if constexpr (MODE == M_PLAIN || MODE == M_CHASH) {
+    if constexpr (MODE == M_CHASH) {
+      if (!T0 && em.bound(tau, S)) {
+#pragma unroll
+        for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
+      }
+    }
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
 #pragma unroll
@@ -118,17 +133,19 @@ DEV void atom(int tau, int S, float (&acc)[L::MI][L::NI][4], float (&total)[L::M
       if constexpr (MODE == M_CORE) {
         if (tau == S) __trap();
       }
-      if constexpr (MODE >= M_STORE) {
-        if (tau % S == 0 && em.live) {   // atom tau - 1 is bound
+      if constexpr (MODE == M_STORE || MODE == M_HASH) {
+        if (em.bound(tau, S)) {   // atom tau - 1 is bound
           if constexpr (MODE == M_HASH) {
+            if constexpr (!(T1 && WORDS)) {
 #pragma unroll
-            for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(total, b);
+              for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(total, b);
+            }
             if constexpr (WORDS) {
 #pragma unroll
               for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
             }
           } else {
-            em.template store<L::NCT>(ring, total);
+            if constexpr (!(T1 && WORDS)) em.template store<L::NCT>(ring, total);
             if constexpr (WORDS) em.template store<L::NCT>(ring, acc);
           }
         }
@@ -170,7 +187,7 @@ template <int MODE, int WORDS, class L>
 DEV void body(const Args& a) {
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
-  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], S = a.i[5], rows = a.i[6];
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], S = a.i[5], rows = a.i[6], stagger = a.i[7];
   const int tiles_m = M / L::TM_, tiles_n = N / L::BN_, KT = K / 128, T = K / 32;
   L ml(smem);
   ml.roles(reinterpret_cast<const ml::Maps*>(a.p[0]), M, N, K, group);
@@ -183,15 +200,16 @@ DEV void body(const Args& a) {
     float acc[MI][NI][4], total[MI][NI][4];
     uint32_t tid;
     asm volatile("mov.u32 %0, %%tid.x;" : "=r"(tid));
-    em.init(tm * tiles_n + tn, tid, S, WORDS);
+    em.init(tm * tiles_n + tn, tid, S, MODE == M_CHASH ? 2 : WORDS, stagger);
     em.live = tm * L::TM_ + (int)(tid / 32 / L::WARPS_N) * L::WM < rows;
+    em.phase = stagger ? (int)(tid / 32) % S : 0;
     uint32_t fa[2][MI][4], fb[2][NI][2];
     ml::mbar_wait_warp(ml.full(ml.s), ml.ph);
     ml.load(fa[0], fb[0], ml.stage(ml.s), 0);
     stage<MODE, WORDS, L, true>(ml, 0, KT, S, acc, total, fa, fb, em, ring);
 #pragma unroll 1
     for (int kt = 1; kt < KT; kt++) stage<MODE, WORDS, L, false>(ml, kt, KT, S, acc, total, fa, fb, em, ring);
-    if constexpr (MODE != M_PLAIN) {
+    if constexpr (MODE != M_PLAIN && MODE != M_CHASH) {
       // R_(T-1), and atom T - 1's words
 #pragma unroll
       for (int mi = 0; mi < MI; mi++)
@@ -199,8 +217,8 @@ DEV void body(const Args& a) {
         for (int ni = 0; ni < NI; ni++)
 #pragma unroll
           for (int e = 0; e < 4; e++) total[mi][ni][e] = T == 1 ? acc[mi][ni][e] : __fadd_rn(total[mi][ni][e], acc[mi][ni][e]);
-      if constexpr (MODE >= M_STORE) {
-        if (T % S == 0 && em.live) {
+      if constexpr (MODE == M_STORE || MODE == M_HASH) {
+        if (em.bound(T, S)) {
           if constexpr (MODE == M_HASH) {
 #pragma unroll
             for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(total, b);
@@ -215,6 +233,12 @@ DEV void body(const Args& a) {
         }
       }
     } else {
+      if constexpr (MODE == M_CHASH) {
+        if (em.bound(T, S)) {
+#pragma unroll
+          for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
+        }
+      }
 #pragma unroll
       for (int mi = 0; mi < MI; mi++)
 #pragma unroll
@@ -237,7 +261,7 @@ DEV void body(const Args& a) {
         if (row + 8 < M)
           *reinterpret_cast<float2*>(C + (size_t)(row + 8) * N + col) = make_float2(total[mi][ni][2], total[mi][ni][3]);
       }
-    if constexpr (MODE == M_HASH) {
+    if constexpr (MODE == M_HASH || MODE == M_CHASH) {
       uint4* dg = reinterpret_cast<uint4*>(a.p[2]) + ((size_t)(tm * tiles_n + tn) * L::NCT + tid) * 2;
       dg[0] = make_uint4(em.cv[0], em.cv[1], em.cv[2], em.cv[3]);
       dg[1] = make_uint4(em.cv[4], em.cv[5], em.cv[6], em.cv[7]);
@@ -271,12 +295,14 @@ NCP_KERNEL(p_store_r, M_STORE, 0, LP)
 NCP_KERNEL(p_store_ir, M_STORE, 1, LP)
 NCP_KERNEL(p_hash_r, M_HASH, 0, LP)
 NCP_KERNEL(p_hash_ir, M_HASH, 1, LP)
+NCP_KERNEL(p_chash, M_CHASH, 0, LP)
 NCP_KERNEL(d_plain, M_PLAIN, 0, LD)
 NCP_KERNEL(d_core, M_CORE, 0, LD)
 NCP_KERNEL(d_store_r, M_STORE, 0, LD)
 NCP_KERNEL(d_store_ir, M_STORE, 1, LD)
 NCP_KERNEL(d_hash_r, M_HASH, 0, LD)
 NCP_KERNEL(d_hash_ir, M_HASH, 1, LD)
+NCP_KERNEL(d_chash, M_CHASH, 0, LD)
 
 // The operands: row-major bytes, code(idx) = sign | (4 + (h >> 8 & 7)) << 3 | (h >> 16 & 7), h = mix(idx * 0x9E3779B9 + seed):
 // finite E4M3 codes of magnitude 2^-3 ... 2^4 x (1 + f/8), no NaN.  i0 count, i1 seed; p0 out.

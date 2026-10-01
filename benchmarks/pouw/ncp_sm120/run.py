@@ -9,14 +9,17 @@
 2. The arms, at each SHAPES entry (p: m = n = k = 8,192; d: m = 32, n = k = 8,192), each REPS times after a warm-up, the
    median: plain at K = k (this kernel's plain FP8 GEMM) and at K = 3k (the stacked MMA work alone); core (the D-3s chain,
    C = R_(T-1), nothing bound); store_r / store_ir at S = 1 (every bound word written to a ring: an unfused binding's
-   traffic); hash_r at each S of S_R and hash_ir at each S of S_IR (BLAKE3 over the bound words from registers).  A sample of
+   traffic); hash_r at each S of S_R and hash_ir at each S of S_IR (BLAKE3 over the bound words from registers); chash at
+   each S of S_C (the plain chained GEMM over K, every S-th accumulator bound); and hash_r and chash at each S of S_STAGGER
+   with the bound atoms staggered across warps (`stagger`).  A sample of
    lanes (their C cells and digests) at every arm, and sha256 of the whole C and digest buffers, go to OUT/arms.json for
    check.py.  NVML's clocks before and after every arm.
 
 Operands are stand-ins for the formed X~ and Y~ (finite E4M3 codes from gen_codes, seeds 1 and 2): forming is not timed
 here.  Diagnostic timing, untimed-node rules apply: the run says which node and lease it ran under.
 
-  python3 run.py OUT   (env: CUDA, SHAPES="p d", REPS=5, S_R="1 2 4 8 16 32 64 768", S_IR="1 4 16", NCP_LIBCUDA)
+  python3 run.py OUT   (env: CUDA, SHAPES="p d", REPS=5, S_R="1 2 4 8 16 32 64 768", S_IR="1 4 16", S_C="1 2 4 8 16 32",
+                       S_STAGGER="4 8", NCP_LIBCUDA)
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 KERNEL = os.path.join(HERE, "ncp_sm120.cu")
 FLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-fmad=false", "-Xptxas", "-v", "-cubin"]
-ARMS = ("plain", "core", "store_r", "store_ir", "hash_r", "hash_ir")
+ARMS = ("plain", "core", "store_r", "store_ir", "hash_r", "hash_ir", "chash")
 QMMA = {"p": 128, "d": 32}
 NEVER = 1 << 30            # an S no atom reaches: core's guard and nothing bound
 RASTER = 8
@@ -44,6 +47,10 @@ SAMPLE_LANES = (0, 101, 255)
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", os.path.join(HERE, "..", "pearl_c_sm120", "run.py"))
 pc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pc)
+
+
+def hashed(arm: str) -> bool:
+    return arm in ("hash_r", "hash_ir", "chash")
 
 
 def emit(obj: dict) -> None:
@@ -131,10 +138,10 @@ class Ncp:
             self.maps[K] = self.d.put(raw + raw)
         return self.maps[K]
 
-    def launch(self, arm: str, S: int, K: int) -> None:
+    def launch(self, arm: str, S: int, K: int, stagger: int = 0) -> None:
         name = f"{self.kind}_{arm}"
         self.d.launch(name, self.grid, self.nt, self.cfg[name][0], p=(self.tmaps(K), self.c, self.dg, self.ring),
-                      i=(self.m, self.n, K, RASTER, 0, S, self.rows))
+                      i=(self.m, self.n, K, RASTER, 0, S, self.rows, stagger))
 
     def lanes(self, tiles: list[int], digests: bool) -> list[dict]:
         """The sampled lanes: tile coordinates, their C cells in fragment order (mi, ni, e) as FP32 bit patterns (hex, big
@@ -182,13 +189,15 @@ SHAPES = {"p": (8192, 8192, 8192), "d": (32, 8192, 8192)}
 CHECK = {"p": (256, 256, 256), "d": (32, 128, 256)}
 
 
-def arm_list(kind: str, k: int) -> list[tuple[str, int, int]]:
-    """(arm, S, K) in the order run."""
+def arm_list(kind: str, k: int) -> list[tuple[str, int, int, int]]:
+    """(arm, S, K, stagger) in the order run."""
     K, T = 3 * k, 3 * k // 32
-    s_r = [int(s) for s in os.environ.get("S_R", f"1 2 4 8 16 32 64 {T}").split()]
-    s_ir = [int(s) for s in os.environ.get("S_IR", "1 4 16").split()]
-    arms = [("plain", 0, k), ("plain", 0, K), ("core", NEVER, K), ("store_r", 1, K), ("store_ir", 1, K)]
-    arms += [("hash_r", s, K) for s in s_r] + [("hash_ir", s, K) for s in s_ir]
+    env = lambda key, default: [int(s) for s in os.environ.get(key, default).split()]
+    arms = [("plain", 0, k, 0), ("plain", 0, K, 0), ("core", NEVER, K, 0), ("store_r", 1, K, 0), ("store_ir", 1, K, 0)]
+    arms += [("hash_r", s, K, 0) for s in env("S_R", f"1 2 4 8 16 32 64 {T}")]
+    arms += [("hash_ir", s, K, 0) for s in env("S_IR", "1 4 16")]
+    arms += [("chash", s, K, 0) for s in env("S_C", "1 2 4 8 16 32")]
+    arms += [(a, s, K, 1) for s in env("S_STAGGER", "4 8") for a in ("hash_r", "chash")]
     return arms
 
 
@@ -197,22 +206,25 @@ def check(d: pc.Dev, out: str) -> None:
     for kind, (m, n, k) in CHECK.items():
         x = Ncp(d, kind, m, n, k)
         T = x.K // 32
-        runs = [("plain", 0, k), ("plain", 0, x.K), ("core", NEVER, x.K), ("store_r", 1, x.K), ("store_ir", 1, x.K)]
-        runs += [("hash_r", s, x.K) for s in (1, 3, 4, T)] + [("hash_ir", s, x.K) for s in (1, 3, T)]
+        runs = [("plain", 0, k, 0), ("plain", 0, x.K, 0), ("core", NEVER, x.K, 0), ("store_r", 1, x.K, 0),
+                ("store_ir", 1, x.K, 0)]
+        runs += [("hash_r", s, x.K, 0) for s in (1, 3, 4, T)] + [("hash_ir", s, x.K, 0) for s in (1, 3, T)]
+        runs += [("chash", s, x.K, 0) for s in (1, 3, T)]
+        runs += [("hash_r", 3, x.K, 1), ("hash_ir", 3, x.K, 1), ("chash", 3, x.K, 1)]
         meta = {"kind": kind, "m": x.m, "rows": m, "n": n, "k": k, "K": x.K, "tm": x.tm, "bn": x.bn, "nct": x.nct,
                 "tiles": x.tiles, "grid": x.grid, "seeds": [SEED_X, SEED_Y], "layout": layout(kind), "runs": []}
-        for arm, S, K in runs:
+        for arm, S, K, stagger in runs:
             d.ck("cuMemsetD8_v2", pc.u64(x.c), 0, x.m * n * 4)
             d.ck("cuMemsetD8_v2", pc.u64(x.dg), 0, x.tiles * x.nct * 32)
-            x.launch(arm, S, K)
+            x.launch(arm, S, K, stagger)
             d.sync()
-            tag = f"{kind}_{arm}_S{S}_K{K}"
+            tag = f"{kind}_{arm}_S{S}_K{K}" + ("_stagger" if stagger else "")
             with open(os.path.join(out, "check", tag + ".c.bin"), "wb") as f:
                 f.write(d.read(x.c, x.m * n * 4))
-            if arm.startswith("hash"):
+            if hashed(arm):
                 with open(os.path.join(out, "check", tag + ".dg.bin"), "wb") as f:
                     f.write(d.read(x.dg, x.tiles * x.nct * 32))
-            meta["runs"].append({"arm": arm, "S": S, "K": K, "tag": tag})
+            meta["runs"].append({"arm": arm, "S": S, "K": K, "stagger": stagger, "tag": tag})
         with open(os.path.join(out, "check", f"{kind}.json"), "w") as f:
             json.dump(meta, f, indent=1)
         emit({"part": "check", "kind": kind, "runs": len(runs)})
@@ -224,18 +236,18 @@ def arms(d: pc.Dev, nv, out: str, kind: str, reps: int) -> dict:
     tiles = sorted({0, x.tiles // 2 + 1, x.tiles - 1})
     res = {"kind": kind, "m": x.m, "rows": m, "n": n, "k": k, "K": x.K, "T": x.K // 32, "tm": x.tm, "bn": x.bn, "nct": x.nct,
            "tiles": x.tiles, "grid": x.grid, "seeds": [SEED_X, SEED_Y], "layout": layout(kind), "arms": []}
-    for arm, S, K in arm_list(kind, k):
+    for arm, S, K, stagger in arm_list(kind, k):
         before = nv.read()
-        times = d.timed(lambda: x.launch(arm, S, K), reps)
+        times = d.timed(lambda: x.launch(arm, S, K, stagger), reps)
         after = nv.read()
-        row = {"arm": arm, "S": S, "K": K, "ms": statistics.median(times), "reps": times, "nvml_before": before,
-               "nvml_after": after}
+        row = {"arm": arm, "S": S, "K": K, "stagger": stagger, "ms": statistics.median(times), "reps": times,
+               "nvml_before": before, "nvml_after": after}
         row["c_sha256"] = hashlib.sha256(d.read(x.c, x.m * n * 4)).hexdigest()
-        if arm.startswith("hash"):
+        if hashed(arm):
             row["dg_sha256"] = hashlib.sha256(d.read(x.dg, x.tiles * x.nct * 32)).hexdigest()
-        row["lanes"] = x.lanes(tiles, arm.startswith("hash"))
+        row["lanes"] = x.lanes(tiles, hashed(arm))
         res["arms"].append(row)
-        emit({"part": "arm", "kind": kind, "arm": arm, "S": S, "K": K, "ms": round(row["ms"], 4),
+        emit({"part": "arm", "kind": kind, "arm": arm, "S": S, "K": K, "stagger": stagger, "ms": round(row["ms"], 4),
               "sm_mhz": [before.get("sm_mhz"), after.get("sm_mhz")]})
     return res
 
