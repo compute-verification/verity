@@ -207,10 +207,14 @@ class Gate:
                 time.sleep(20)
 
 
-def run(gate: Gate, argv: list[str], **kw) -> subprocess.CompletedProcess:
+def run(gate: Gate, argv: list[str], timeout: float | None = None, **kw) -> subprocess.CompletedProcess:
     p = gate.popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kw)
     try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
         out, err = p.communicate()
+        err = f"{err}\nkilled after {timeout:.0f} s"
     finally:
         gate.done(p)
     return subprocess.CompletedProcess(argv, p.returncode, out, err)
@@ -341,12 +345,21 @@ class Store:
                         RESEARCH_STORE_CONFIG=str(cred_dir / "store.toml"), PYTHONPATH=str(src), RESEARCH_NOTES_SYNC="0")
         self.expires = cred.get("expires_utc")
 
-    def __call__(self, gate: Gate, store: Path, *args: str) -> subprocess.CompletedProcess:
-        return run(gate, [sys.executable, "-m", "research", "data", *args], env={**self.env, "RESEARCH_STORE": str(store)})
+    def __call__(self, gate: Gate, store: Path, *args: str, timeout: float | None = None) -> subprocess.CompletedProcess:
+        return run(gate, [sys.executable, "-m", "research", "data", *args], timeout=timeout,
+                   env={**self.env, "RESEARCH_STORE": str(store)})
 
-    def preserved(self, gate: Gate, store: Path, art: str) -> tuple[bool, str]:
-        r = self(gate, store, "preserved", art)
-        return r.returncode == 0, (r.stdout + r.stderr).strip()[-600:]
+    def preserved(self, gate: Gate, store: Path, art: str, nbytes: int = 0) -> tuple[bool, str]:
+        """`research data preserved`, retried in a fresh process: a read-back over one connection can trickle at tens of KB/s
+        for hours (the store's GET deadline allows it), while a new connection reads the same object at tens of MB/s."""
+        why = ""
+        for attempt in range(1, 5):
+            r = self(gate, store, "preserved", art, timeout=180 + nbytes / 4e6)
+            why = (r.stdout + r.stderr).strip()[-600:]
+            if r.returncode == 0:
+                return True, why
+            log(f"preserved {art}: attempt {attempt} failed ({why[-200:]!r})")
+        return False, why
 
 
 def writable(p: Path) -> int:
@@ -442,7 +455,7 @@ def main() -> int:
                     summary["done"].append(rel)
                     continue
                 if st.get("status") == "preserved" and ud.exists() and not a.dry_run:
-                    ok, why = store.preserved(gate, scratch / "store", st["art"])
+                    ok, why = store.preserved(gate, scratch / "store", st["art"], int(st.get("tree_bytes", 2 << 30)))
                     if not ok:
                         raise RuntimeError(f"{rel}: its manifest art {st['art']} is not preserved now: {why}")
                     rec = delete_unit(gate, root, ud)
@@ -503,7 +516,7 @@ def main() -> int:
                 if r.returncode or not arts:
                     raise RuntimeError(f"{rel}: research data put exit {r.returncode}: {(r.stdout + r.stderr).strip()[-600:]}")
                 art = arts[-1]
-                ok, why = store.preserved(gate, scratch / "store", art)
+                ok, why = store.preserved(gate, scratch / "store", art, tree_bytes)
                 if not ok:
                     raise RuntimeError(f"{rel}: {art} not preserved: {why}")
                 man.add({**rec, "status": "preserved", "art": art})
