@@ -71,9 +71,8 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import opened as OV  # noqa: E402
-from verity_vllm.commit import challenge as CH  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -1028,6 +1027,7 @@ class Options:
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every RoPE head in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
+    call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -1284,7 +1284,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
     # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
     oracle_producers: tuple[dict | None, dict] | None = None
-    plan_rec: dict | None = None
+    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
     if required_manifest is not None and kinds:
         from verity_vllm.check import oracle_compare as _OCP
         oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling, tl=TL)
@@ -1332,7 +1332,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -1735,15 +1735,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # [R17 fp8] bounded staging: the warm-up is also the LEARN-ONLY pass -- every shape class of the workload (same lengths, same schedule
         # as the record runs: throwaway_requests) gets its plan here; a learning step over the transient budget records its plan and
         # discards its windows (placeholder root: this run is never a record).  The record runs then hit every plan and stage bounded.
+        # Its call boundaries are placeholder words of their shapes (TAPS.warmup): the record pass evaluates its own.
         TL.start("prep.warmup_instrumented", kind=kind)
-        if getattr(com, "bounded", False):
-            com.learn_only = True
+        TAPS.warmup(com, True)
         com.install()
         r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
         rc = com.finalize()
         com.uninstall()
+        TAPS.warmup(com, False)
         if getattr(com, "bounded", False):
-            com.learn_only = False
             _bs = rc.extra.get("bounded_staging") or {}
             print(f"[delta] bounded staging warm-up ({kind}): learned-only steps {_bs.get('learned_only_steps')} ({(_bs.get('learned_only_bytes') or 0) >> 20} MiB "
                   f"discarded), transient peak {(_bs.get('transient_peak_bytes') or 0) >> 20} MiB (budget {(_bs.get('learn_budget_bytes') or 0) >> 20} MiB), "
@@ -2413,7 +2413,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "moe_source": {"mode": args.moe_source, "attached": moe_attached},
                "negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None),        # NEGATIVE TEST flags armed on this run, by name
                "run_roots": [r["commit"]["run_root"] for r in rows if r["arm"] != "control" and r.get("commit")]}
-    verdict.update(CP.verdict_entry(args, plan_rec))
+    verdict.update({**CP.verdict_entry(args, plan_rec), **BP.verdict_entry(args, cb_rec)})
     # [R16 sys / coord M-0090 (5)] replay cache of record: the ORIGINAL pair's artifact lists the pairs that share its replay (root equality
     # explicit); the verdict carries the evaluated-vs-reused count so a reader sees at once that C2 ran once per distinct root
     if getattr(args, "replay_cache", False):
