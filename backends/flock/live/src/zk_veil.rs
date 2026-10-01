@@ -38,6 +38,7 @@ use flock_field::{F128, F256};
 use flock_transcript::challenger::Challenger;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
+use std::sync::OnceLock;
 
 pub const LABEL_ZC: &[u8] = b"flock-zerocheck-v0";
 pub const LABEL_PCS: &[u8] = b"flock-pcs-open-batch-v0";
@@ -695,24 +696,26 @@ pub struct Replayed {
 /// `verifier::verify_core_inner`; Fast100: grinding disabled) on the masked proof, absorbing exactly what they absorb and
 /// drawing exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
 /// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
-/// and folds its own (a proof's field is never read).
+/// and folds its own (a proof's field is never read). `c0_identity` keeps `r1cs.c0_is_identity()` once computed, for the
+/// statement's later replays (`session_verify::verify_extra`'s cell).
 #[allow(clippy::too_many_arguments)]
-pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &LincheckProof, circuit: &dyn LincheckCircuit, lay: &Layout,
-                              root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch) -> Result<Replayed, String> {
-    replay_with(r1cs, zc, lc, circuit, None, lay, root, own_comb, ch)
+pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
+                              circuit: &dyn LincheckCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch)
+                              -> Result<Replayed, String> {
+    replay_with(r1cs, c0_identity, zc, lc, circuit, None, lay, root, own_comb, ch)
 }
 
 /// [`replay`], with the verifier's `comb_partial` computed from `structured`'s block structure after the rounds (as
 /// `session_verify`'s `partial`) where it covers it: `(block, both)`, and with `both` the flat fold too, rejecting when the
 /// two differ.
 #[allow(clippy::too_many_arguments)]
-pub fn replay_with<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &LincheckProof, circuit: &dyn LincheckCircuit,
-                                   structured: Option<(&crate::circuit::BlockCircuit, bool)>, lay: &Layout, root: &[u8; 64],
-                                   own_comb: Option<&[F128]>, ch: &mut Ch) -> Result<Replayed, String> {
+pub fn replay_with<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
+                                   circuit: &dyn LincheckCircuit, structured: Option<(&crate::circuit::BlockCircuit, bool)>, lay: &Layout,
+                                   root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch) -> Result<Replayed, String> {
     let t_zc = std::time::Instant::now();
     let s = lay.len();
     let m = r1cs.m;
-    if !r1cs.c0_is_identity() || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
+    if !*c0_identity.get_or_init(|| r1cs.c0_is_identity()) || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
         return Err("zk: the statement is not a C = I, k_skip = 6 block R1CS".into());
     }
     if zc.round1_ab.len() != SKIP || zc.round1_c.len() != SKIP || zc.multilinear_rounds.len() != lay.n_mlv || !zc.grinding_nonces.is_empty()
