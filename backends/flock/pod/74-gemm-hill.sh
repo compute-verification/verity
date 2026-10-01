@@ -9,7 +9,7 @@
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
 # env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
 #      pin to, e.g. 96-111: node 1's dispatched jobs all share 96-159, so jobs run side by side each take their own slice)
-#      CPUS=48 (without CPUSET: the first CPUS of the job's cores)  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-bse/bf16
+#      CPUS=48 (without CPUSET: the first CPUS of the job's cores)  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
@@ -84,7 +84,7 @@ PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
   $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
   --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --gpu-csv $R/out/gpu.csv \
-  --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-bse/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
+  --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
 [ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json
