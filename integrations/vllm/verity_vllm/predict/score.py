@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from verity_vllm.config import UsageError, option
 
 from . import inventory as INV
-from .build import Unexpressible, build_program, model_shape
+from .build import Unexpressible, _check_phi, build_program, model_shape
 from .phi import Phi
 
 SCHEMA = "verity-predict/score/v1"
@@ -87,7 +87,9 @@ def phi_key(phi: Phi) -> str:
 
 
 def unit_shape(b: dict) -> tuple:
-    return (b.get("wrapper"), b.get("M"), b.get("pos0"), b.get("LP"), b.get("T"))
+    if b.get("wrapper") == "step":
+        return ("step", b.get("M"), b.get("pos0"), None, None)
+    return (b.get("wrapper"), None, None, b.get("LP"), b.get("T"))
 
 
 def unit_rows(shape: tuple) -> int:
@@ -256,22 +258,94 @@ def _map_path(p: str | None, path_map: list[tuple[str, str]]) -> str | None:
     return p
 
 
-def _pool_map(fn, tasks: list[dict], workers: int, log) -> dict:
+def _child(fn, task: dict, conn) -> None:
+    conn.send(fn(task))
+    conn.close()
+
+
+def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = None, big_rows: int | None = None) -> dict:
+    """fn over tasks, each in its own spawned process (`workers` at a time; tasks over `big_rows` one at a time, after the rest).
+    A process that dies without a result (the OOM killer) is recorded as `killed`, never waited on; results already in `cache`
+    are reused and every new one is appended to it as it arrives."""
+    from multiprocessing.connection import wait
     out: dict = {}
-    if not tasks:
-        return out
-    if workers <= 1:
-        for t in tasks:
+    todo = []
+    for t in tasks:
+        hit = cache.get(t["key"]) if cache is not None else None
+        if hit is not None:
+            out[t["key"]] = hit
+        else:
+            todo.append(t)
+    if workers <= 0:  # in this process (tests, debugging): no isolation from a unit that exhausts memory
+        for t in todo:
             r = fn(t)
             out[r["key"]] = r
+            if cache is not None:
+                cache.put(r)
             log(r)
         return out
     ctx = mp.get_context("spawn")
-    with ctx.Pool(workers, maxtasksperchild=1) as pool:
-        for r in pool.imap_unordered(fn, tasks):
-            out[r["key"]] = r
-            log(r)
+    running: dict = {}
+
+    def limit() -> int:
+        if big_rows is not None and any(t.get("rows", 0) > big_rows for _, _, t in running.values()):
+            return 1
+        return workers
+
+    def finish(r: dict) -> None:
+        out[r["key"]] = r
+        if cache is not None:
+            cache.put(r)
+        log(r)
+
+    while todo or running:
+        while todo and len(running) < limit():
+            if big_rows is not None and todo[0].get("rows", 0) > big_rows and running:
+                break
+            t = todo.pop(0)
+            rd, wr = ctx.Pipe(duplex=False)
+            p = ctx.Process(target=_child, args=(fn, t, wr))
+            p.start()
+            wr.close()
+            running[p.sentinel] = (p, rd, t)
+        ready = wait([s for s in running])
+        for s in ready:
+            p, rd, t = running.pop(s)
+            r = None
+            if rd.poll():
+                try:
+                    r = rd.recv()
+                except EOFError:
+                    r = None
+            p.join()
+            rd.close()
+            if r is None:
+                r = {"key": t["key"], "status": "killed", "reason": f"worker died without a result (exit code {p.exitcode}; "
+                                                                    f"SIGKILL is the OOM killer) at rows {t.get('rows')}"}
+            finish(r)
     return out
+
+
+class Cache:
+    """Task results by key, persisted as JSONL (a scoring run resumes where a suspended one stopped)."""
+
+    def __init__(self, path: str | None) -> None:
+        self.path, self.d = path, {}
+        if path and os.path.exists(path):
+            for line in open(path):
+                if line.strip():
+                    r = json.loads(line)
+                    if r.get("status") != "killed":
+                        self.d[r["key"]] = r
+
+    def get(self, key: str) -> dict | None:
+        return self.d.get(key)
+
+    def put(self, r: dict) -> None:
+        self.d[r["key"]] = r
+        if self.path:
+            with open(self.path, "a") as f:
+                f.write(json.dumps(r, sort_keys=True) + "\n")
 
 
 def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, rows_filter: str | None = None) -> dict:
@@ -285,16 +359,17 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
         row = {"row": rec["row"], "job": rec["job"], "dir": rec["dir"], "units": []}
         try:
             phi = phi_of(rec, hf_home=hf_home, checkpoints=checkpoints)
-            row["phi_digest"] = phi.digest()
+            row["context_digest"] = phi.digest()
             pk = phi_key(phi)
             try:
+                _check_phi(phi)
                 model_shape(phi.hf_config)
                 pre = None
             except Unexpressible as e:
                 pre = str(e)
         except Unexpressible as e:
             phi, pk, pre = None, None, str(e)
-        row["phi_error"] = pre if phi is None else None
+        row["context_error"] = pre if phi is None else None
         traced_req = set()
         for name, b in sorted(rec["builds"].items()):
             if name == "build_workload":
@@ -329,10 +404,10 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
                 u.update(status="no_trace", reason=str(wb.get("message") or wb.get("reason") or "no workload Program")[:300])
             elif pre is not None:
                 u.update(status="unexpressible", reason=pre)
-            elif total > max_rows * 2:
-                u.update(status="over_budget", reason=f"sum of request LP+T = {total} > 2 * max_rows {max_rows}")
+            elif total > max_rows:
+                u.update(status="over_budget", reason=f"sum of request LP+T = {total} > max_rows {max_rows}")
             else:
-                key = f"W:{row['phi_digest'][:16]}"
+                key = f"W:{row['context_digest'][:16]}"
                 u["key"] = key
                 wtasks.setdefault(key, {"key": key, "phi": phi.to_json(), "rows": total})
             row["units"].append(u)
@@ -340,16 +415,19 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
     return {"rows": rows, "tasks": tasks, "wtasks": wtasks}
 
 
-def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 1200, workers: int = 2,
+def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 600, workers: int = 2, big_rows: int = 300,
           path_map: list[tuple[str, str]] | None = None, diverge: bool = True, max_diverge: int = 40, equivalence_on: bool = True,
-          rows_filter: str | None = None, workload: bool = True, log=None) -> dict:
+          rows_filter: str | None = None, workload: bool = True, cache: str | None = None, log=None) -> dict:
+    """`max_rows`: request units over LP+T = max_rows (and workloads over that many summed rows) are `over_budget`; units over
+    `big_rows` run one at a time (a request Program of LP+T = 512 peaks near 3 GB)."""
     t0 = time.time()
     log = log or (lambda r: print(json.dumps({k: v for k, v in r.items() if k != "phi"})[:400], file=sys.stderr, flush=True))
+    C = Cache(cache)
     P = plan(inv, hf_home=hf_home, checkpoints=checkpoints, max_rows=max_rows, rows_filter=rows_filter)
     tasks = sorted(P["tasks"].values(), key=lambda t: t["rows"])
-    pred = _pool_map(_predict_task, tasks, workers, log)
-    wpred = _pool_map(_workload_task, sorted(P["wtasks"].values(), key=lambda t: t["rows"]), workers, log) if workload else {}
-    # divergence: the smallest differing unit per (model, cause candidates): one task per distinct key, smallest first
+    pred = _pool_map(_predict_task, tasks, workers, log, C, big_rows)
+    wpred = _pool_map(_workload_task, sorted(P["wtasks"].values(), key=lambda t: t["rows"]), workers, log, C, big_rows) if workload else {}
+    # divergence: one task per (prediction, traced digest), smallest first
     dtasks = {}
     for row in P["rows"]:
         for u in row["units"]:
@@ -371,14 +449,15 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
                 u["equivalence"] = {"verdict": "equivalent", "by": "equal digest"}
             elif u["unit"] != "build_workload":
                 desc = _map_path(u.get("descriptor"), path_map or [])
+                u["divergence_key"] = f"D:{u['key']}:{u['traced_digest'][:16]}"
                 if diverge and desc and os.path.exists(desc):
-                    dtasks.setdefault(u["key"], {"key": u["key"], "phi": P["tasks"][u["key"]]["phi"], "shape": u["shape"], "descriptor": desc,
-                                                 "rows": u["rows"], "equivalence": equivalence_on})
+                    dtasks.setdefault(u["divergence_key"], {"key": u["divergence_key"], "phi": P["tasks"][u["key"]]["phi"], "shape": u["shape"],
+                                                            "descriptor": desc, "rows": u["rows"], "equivalence": equivalence_on})
     dt = sorted(dtasks.values(), key=lambda t: t["rows"])[:max_diverge] if diverge else []
-    div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log)
+    div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log, C, big_rows)
     for row in P["rows"]:
         for u in row["units"]:
-            d = div.get(u.get("key")) if u.get("status") == "differs" else None
+            d = div.get(u.get("divergence_key")) if u.get("status") == "differs" else None
             if d is not None:
                 u["first_divergence"] = d.get("divergence")
                 u["equivalence"] = d.get("equivalence")
@@ -475,8 +554,10 @@ class Options:
     hf_home: str = option("--hf-home", help="HF hub dir holding models--<org>--<name>/snapshots/<rev>/config.json")
     checkpoints: str | None = option("--checkpoints", default=None, help="manifests/checkpoints.json (the pinned revisions)")
     path_map: list[str] | None = option("--path-map", default=None, nargs="*", help="OLD=NEW prefixes for the inventory's descriptor paths")
-    max_rows: int = option("--max-rows", type=int, default=1200, help="skip request units with LP+T above this (over_budget)")
+    max_rows: int = option("--max-rows", type=int, default=600, help="skip request units with LP+T above this (over_budget)")
+    big_rows: int = option("--big-rows", type=int, default=300, help="units with LP+T above this run one at a time")
     workers: int = option("--workers", type=int, default=2)
+    cache: str | None = option("--cache", default=None, help="JSONL of task results: reused, and appended to as results arrive")
     max_diverge: int = option("--max-diverge", type=int, default=40, help="locate the first divergence of at most this many differing units")
     no_equivalence: bool = option("--no-equivalence", action="store_true", default=False)
     no_workload: bool = option("--no-workload", action="store_true", default=False)
@@ -491,10 +572,12 @@ def main(a: Options) -> int:
     inv = INV.load(a.inventory) if a.inventory else INV.inventory(a.rows)
     _refuse_inside(a.out, [inv.get("root"), a.rows])
     _refuse_inside(a.md, [inv.get("root"), a.rows])
+    _refuse_inside(a.cache, [inv.get("root"), a.rows])
     checkpoints = json.load(open(a.checkpoints)) if a.checkpoints else None
     pm = [tuple(x.split("=", 1)) for x in (a.path_map or [])]
-    res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, workers=a.workers, path_map=pm,
-                max_diverge=a.max_diverge, equivalence_on=not a.no_equivalence, rows_filter=a.rows_filter, workload=not a.no_workload)
+    res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, big_rows=a.big_rows, workers=a.workers, path_map=pm,
+                max_diverge=a.max_diverge, equivalence_on=not a.no_equivalence, rows_filter=a.rows_filter, workload=not a.no_workload,
+                cache=a.cache)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1, sort_keys=True)

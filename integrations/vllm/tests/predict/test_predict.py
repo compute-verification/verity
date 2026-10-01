@@ -1,0 +1,146 @@
+"""verity_vllm.predict: predicted Programs equal the traced Builds of record, and the scorer says where they do not.
+
+The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
+(`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7.  A library change that
+moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper step --M 1 --pos0 8`, CPU only)
+and pin the new digest with the predictor's.
+"""
+
+from __future__ import annotations
+
+import gzip
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+from verity_vllm.config import UsageError
+from verity_vllm.predict import score as S
+from verity_vllm.predict.build import Unexpressible, build_program, weight_leaves, model_shape
+from verity_vllm.predict.phi import Phi
+
+FIX = Path(__file__).parent / "fixtures"
+RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
+TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
+        "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
+        "max_position_embeddings": 64, "hidden_act": "silu"}
+
+
+def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
+    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), workload={"requests": requests or []}, **kw)
+
+
+@pytest.mark.parametrize("model,digest", [
+    ("smollm2-135m", "53aa6ed20e8dd0c1e74a0a332f359bda5dc36c40da38383d3a2e0a54a9c2a9c4"),
+    ("llama32-1b", "e0b060772e8179fcab09da11adc3998c7fcca7d124111d50a02be73bbf123408"),
+    ("tinyllama-11b", "c0a2fef1966af8284024e60603d3f63929903fd9ddcbd4349e184e7842b27a48"),
+])
+def test_step_program_equals_the_traced_build(model, digest):
+    r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
+    assert r.function == "Derived[vLLMStep[LlamaForCausalLM]]_v1{SRC={f8a263a011b5}}"
+    assert r.digest == digest
+
+
+@pytest.mark.slow
+def test_request_and_workload_programs_equal_the_traced_build():
+    """SmolLM2-135M B1 256/32 greedy (cov-k01-10): the request Program (LP 256, T 31) and GP-01's workload Program over it.
+    About 20 s: the only test that composes a workload, which the step pins cannot reach."""
+    phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
+               [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
+    r = build_program(phi, "request", LP=256, T=31)
+    assert r.digest == "6ea7c413566473925be36c355ee9c3d84fa3db87d7d7e13e52c87bb6f50ac786"
+    assert r.n_root_nodes == 86738
+    assert S.predict_workload(phi)["digest"] == "393e9228260663df610abdd41960ee1c861d2e9cec50d9184494b939a489e4e1"
+
+
+def test_weights_record_follows_the_module_order():
+    C = model_shape(TINY)
+    names = [n for n, _ in weight_leaves(C)]
+    assert names[:3] == ["model.model.embed_tokens.weight", "model.model.layers.0.self_attn.qkv_proj.weight",
+                         "model.model.layers.0.self_attn.o_proj.weight"]
+    assert "model.lm_head.weight" not in names  # tied: the embedding's leaf
+    assert len(names) == 1 + 6 * 2 + 1 + 1 + 4 * 2
+    untied = [n for n, _ in weight_leaves(model_shape({**TINY, "tie_word_embeddings": False}))]
+    assert untied.index("model.lm_head.weight") == untied.index("model.model.norm.weight") + 1
+
+
+@pytest.mark.parametrize("cfg,phi_kw,fact", [
+    ({**TINY, "model_type": "gpt2"}, {}, "model_type 'gpt2': not in the family facts table"),
+    ({**TINY, "model_type": "qwen2"}, {}, "linear biases"),
+    ({**TINY, "attention_bias": True}, {}, "linear biases"),
+    ({**TINY, "hidden_act": "gelu"}, {}, "hidden_act 'gelu'"),
+    (TINY, {"sampling": {"kind": "stochastic"}}, "sampling 'stochastic'"),
+    (TINY, {"tp": {"world": 2, "rank": 0}}, "tensor parallel world 2"),
+])
+def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
+    with pytest.raises(Unexpressible, match=re.escape(fact)):
+        build_program(_phi(cfg, **phi_kw), "step")
+
+
+def _row(tmp_path: Path, row: str, builds: dict) -> dict:
+    return {"dir": str(tmp_path / "rows" / "job" / row), "job": "job", "row": row, "summary": {}, "builds": builds, "source_root": None,
+            "workload_path": None, "workload": {"model": "org/tiny", "tokenizer_revision": "rev", "target": {},
+                                                "requests": [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0}]}}
+
+
+def test_score_reports_exact_divergence_and_refusals(tmp_path):
+    cfgp = tmp_path / "hf" / "models--org--tiny" / "snapshots" / "rev" / "config.json"
+    cfgp.parent.mkdir(parents=True)
+    cfgp.write_text(json.dumps(TINY))
+    phi = _phi(TINY, [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0}])
+    step = build_program(phi, "step", M=1, pos0=8)
+    req = build_program(phi, "request", LP=8, T=2)
+    wl = S.predict_workload(phi)
+    # the traced request descriptor: the prediction with one root reference moved (the attention's key history of row 3)
+    bad = json.loads(json.dumps(req.desc))
+    nodes = bad["definitions"][bad["root"]]["body"]["nodes"]
+    k = next(i for i, n in enumerate(nodes) if bad["callees"][n["fn"]].startswith("Attention") and len(n["args"]) == 3
+             and "concat" in n["args"][1]["refs"])
+    nodes[k]["args"][1]["refs"] = nodes[k]["args"][2]["refs"]
+    dpath = tmp_path / "traced_request.json.gz"
+    with gzip.open(dpath, "wt") as f:
+        json.dump(bad, f)
+    greedy = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__greedy__bi-eager"
+    stoch = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__stoch-t0.8-p0.95__bi-eager"
+    prog = lambda d: {"digest": d, "function": None, "n_root_nodes": None}  # noqa: E731
+    inv = {"schema": "verity-predict/inventory/v1", "root": str(tmp_path / "rows"), "rows": [
+        _row(tmp_path, greedy, {
+            "build_step": {"wrapper": "step", "M": 1, "pos0": 8, "LP": 8, "T": 4, "ok": True, "program": prog(step.digest)},
+            "build_request": {"wrapper": "request", "M": 1, "pos0": 8, "LP": 8, "T": 2, "ok": True, "program": prog("0" * 64), "descriptor": str(dpath)},
+            "build_request_LP9_T2": {"wrapper": None, "ok": False, "message": "Device string must not be empty"},
+            "build_workload": {"ok": True, "workload_digest": wl["digest"], "lag": 1, "n_requests": 1}}),
+        _row(tmp_path, stoch, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}}),
+    ]}
+    res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64)
+    units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
+    assert units[(greedy, "build_step")]["status"] == "exact"
+    assert units[(greedy, "build_workload")]["status"] == "exact"
+    u = units[(greedy, "build_request")]
+    assert u["status"] == "differs" and u["predicted_digest"] == req.digest
+    assert u["first_divergence"]["where"] == "root node" and u["first_divergence"]["node"] == k and u["first_divergence"]["arg"] == 1
+    assert u["equivalence"]["verdict"] != "equivalent"
+    assert units[(greedy, "build_request_LP9_T2")]["status"] == "no_trace"
+    assert units[(stoch, "build_step")]["status"] == "unexpressible" and "sampling 'stochastic'" in units[(stoch, "build_step")]["reason"]
+    s = res["summary"]
+    assert (s["units_compared"], s["units_exact"]) == (3, 2)
+    assert "| first divergence | units |" in S.table_md(res)
+
+
+def test_score_never_writes_into_a_rows_root(tmp_path):
+    rows = tmp_path / "rows"
+    (rows / "job" / "row").mkdir(parents=True)
+    with pytest.raises(UsageError, match="never written into a Build row"):
+        S._refuse_inside(str(rows / "job" / "row" / "score.json"), [str(rows)])
+    S._refuse_inside(str(tmp_path / "out" / "score.json"), [str(rows)])
+
+
+def test_no_record_path_module_reads_the_predictor():
+    """The Build, Match and Commit never import `verity_vllm.predict`; the CLI's command table names it as a string only, and the
+    Build's input trace lists the package as a forbidden input."""
+    from verity_vllm.program.frontend import inputs_trace
+    pkg = Path(S.__file__).resolve().parents[1]
+    pat = re.compile(r"^\s*(from|import)\s+(verity_vllm\.predict|\.+predict)\b|import_module\([^)]*predict", re.M)
+    hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
+    assert hits == []
+    assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)

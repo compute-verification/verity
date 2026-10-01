@@ -1,6 +1,6 @@
 """The traced facts of every Build row under a rows root, compact: what `score` compares predictions against.
 
-    python3 inventory.py ROWS_ROOT > inventory.json.gz        # stdlib only: runs with any interpreter beside the rows, read-only
+    verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz      # read-only; the module itself is stdlib only
 
 A row is `<ROWS_ROOT>/<job>/<row id>/` holding `build_summary.json`.  Per row: the Build summary's verdicts, per `build_*` dir the
 shape it derived (`result.json`: wrapper, M, pos0, LP, T, sampling, declared target) and its Program (digest, function, node count,
@@ -15,7 +15,6 @@ import gzip
 import hashlib
 import json
 import os
-import sys
 
 SCHEMA = "verity-predict/inventory/v1"
 
@@ -92,7 +91,3 @@ def load(path: str) -> dict:
     if isinstance(d, list):  # the first inventory, before the schema header
         d = {"schema": SCHEMA, "root": None, "rows": d}
     return d
-
-
-if __name__ == "__main__":
-    sys.stdout.buffer.write(gzip.compress(json.dumps(inventory(sys.argv[1])).encode()))

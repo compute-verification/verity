@@ -22,6 +22,7 @@ not read by the Build, Match or Commit (`program.frontend.inputs_trace` lists `v
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -37,10 +38,6 @@ from .phi import Phi
 BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
 BF16 = Value(16)
-
-#: HF `architectures[0]` -> the vLLM class the registry resolves it to at the pinned revision (d9105ea80), for the families the
-#: vocabulary expresses.  The class name enters the Program's function id (`Derived[vLLMRequest[<class>]]`).
-MODEL_CLASSES = {"LlamaForCausalLM": "LlamaForCausalLM", "MistralForCausalLM": "MistralForCausalLM"}
 
 #: the wrapper kinds of `vllm_meta.make_wrapper` (greedy): DERIVE_SOURCE (the SRC class) and the derive name
 WRAPPERS = {"step": ("verity-vllm/engine-step/v1", "vLLMStep"), "request": ("verity-vllm/greedy-request/v1", "vLLMRequest")}
@@ -72,30 +69,47 @@ class ModelShape:
 
 
 def model_shape(hf: dict) -> ModelShape:
-    """The shape facts of an HF `config.json` the vocabulary reads; a family switch outside it raises `Unexpressible`."""
-    archs = hf.get("architectures") or []
-    arch = archs[0] if archs else None
-    if arch not in MODEL_CLASSES:
-        raise Unexpressible(f"architecture {arch!r}: no vLLM model class in the vocabulary (have {sorted(MODEL_CLASSES)})")
+    """The shape facts of an HF `config.json` the vocabulary reads, through the two declared homes of model facts: the family facts
+    table (`engine.profiles.family_facts`: vLLM's class and constructor kind per `model_type`) and `program.model.config_of` (the
+    static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense block with
+    no per-family facts: a family with any (a norm variant, a soft-cap, per-head q/k norm, MoE, LayerNorm), a linear bias, an
+    activation other than SiLU, a partial rotary width or a rotary scaling without an analytic table raises `Unexpressible`."""
+    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    from verity_vllm.program import model as analytic
+    family = str(hf.get("model_type", "")).lower()
+    ff = FAMILY_FACTS.get(family)
+    if ff is None:
+        raise Unexpressible(f"model_type {family!r}: not in the family facts table")
+    rules = dict(ff.get("rules") or {})
     facts = []
-    if hf.get("attention_bias") or hf.get("mlp_bias"):
-        facts.append("attention_bias / mlp_bias (Llama with linear biases)")
-    act = hf.get("hidden_act", "silu")
+    if ff.get("arch") != "dense":
+        facts.append(f"family {family!r} constructor {ff.get('arch')!r} (the dense block only)")
+    if ff.get("facts") or ff.get("patterns") or rules.get("qk_norm"):
+        facts.append(f"family {family!r} per-family facts {sorted(ff.get('facts') or {})}, patterns {ff.get('patterns')}, "
+                     f"q/k norm {rules.get('qk_norm')}")
+    try:
+        C, _ = analytic.config_of(hf, family_rules={family: rules})
+    except (KeyError, ValueError) as e:
+        raise Unexpressible(f"config.json: {e}") from None
+    if C.get("BIAS") or hf.get("mlp_bias"):
+        facts.append("linear biases (q/k/v or MLP)")
+    act = hf.get("hidden_act", hf.get("hidden_activation", "silu"))
     if act != "silu":
         facts.append(f"hidden_act {act!r} (SiluMul only)")
-    if hf.get("partial_rotary_factor") not in (None, 1, 1.0):
-        facts.append(f"partial_rotary_factor {hf['partial_rotary_factor']}")
-    rs = hf.get("rope_scaling") or {}
-    rtype = rs.get("rope_type") or rs.get("type")
-    if rtype not in (None, "default", "llama3", "linear"):
-        facts.append(f"rope_scaling type {rtype!r} (its cos/sin cache length is not modelled)")
+    if C.get("FP8_BLOCK"):
+        facts.append(f"block-scaled FP8 checkpoint (G={C['FP8_BLOCK']})")
+    if analytic.rotary_dim(C) != C["D"]:
+        facts.append(f"partial rotary width {analytic.rotary_dim(C)} of head_dim {C['D']}")
+    try:
+        analytic._inv_freq(C)
+    except NotImplementedError as e:
+        facts.append(str(e))
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    H, NH = int(hf["hidden_size"]), int(hf["num_attention_heads"])
-    D = int(hf.get("head_dim") or H // NH)
-    return ModelShape(arch=arch, model_class=MODEL_CLASSES[arch], H=H, V=int(hf["vocab_size"]), NL=int(hf["num_hidden_layers"]), NH=NH,
-                      KVH=int(hf.get("num_key_value_heads") or NH), D=D, I=int(hf["intermediate_size"]), EPS=float(hf.get("rms_norm_eps", 1e-6)),
-                      tie=bool(hf.get("tie_word_embeddings", False)), max_pos=int(hf.get("max_position_embeddings", 2048)), rot=D)
+    cls = re.match(r"\w+", ff["vllm_class"]).group(0)
+    return ModelShape(arch=family, model_class=cls, H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
+                      D=int(C["D"]), I=int(C["I"]), EPS=float(C["EPS"]), tie=bool(C["tie_word_embeddings"]), max_pos=int(C["MAX_POS"]),
+                      rot=int(C["D"]))
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:

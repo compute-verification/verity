@@ -8,7 +8,7 @@
     Phi.workload  the workload manifest's requests (request_id, prompt length, max_tokens, arrive_step, seed, n)
     Phi.execution the row's execution label (`bi-eager`)
 
-`phi_from_row(row)` reads φ from a Build row's DECLARED inputs only: the row name / manifest / workload manifest and the pinned
+`score.phi_of(row)` reads φ from a Build row's DECLARED inputs only: the row id, its workload manifest and the pinned
 checkpoint's `config.json`.  It never reads a Build output (descriptor, result, derive report): what the Build derived is the
 ground truth the prediction is scored against, not an input to it.
 """
@@ -59,21 +59,6 @@ class Phi:
     def requests(self) -> list[dict]:
         return list(self.workload.get("requests") or [])
 
-    def logical_requests(self) -> list[dict]:
-        """The requests the engine schedules: a request with n > 1 forked into n children (vLLM's parallel_sampling: child id
-        f"{i}_{request_id}", seed + i), each carrying `_parent` / `_child`.  The restored scheduler (`schedule.py`) reads this."""
-        out: list[dict] = []
-        for pi, r in enumerate(self.requests):
-            n = int(r.get("n") or 1)
-            if n <= 1:
-                out.append({**r, "_parent": pi, "_child": 0})
-                continue
-            for i in range(n):
-                seed = r.get("seed")
-                out.append({**r, "request_id": f"{i}_{r['request_id']}", "n": 1, "seed": (None if seed is None else int(seed) + i),
-                            "_parent": pi, "_child": i})
-        return out
-
     def target_profile(self):
         from verity_vllm.program.frontend.target_profile import TargetProfile
         tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()
@@ -98,16 +83,6 @@ def _prompt_len(r: dict) -> int:
 
 def _cap(r: dict) -> int:
     return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
-
-
-def parse_row_name(name: str) -> dict:
-    """`<model>__<dtype>__<gpu>__tp<N>__b<B>__i<I>__o<O>__<mix>__<sampling>__<execution>` -> its fields."""
-    parts = name.split("__")
-    if len(parts) != 10:
-        raise ValueError(f"row name {name!r} does not have the 10 coverage fields")
-    model, dtype, gpu, tp, b, i, o, mix, sampling, execution = parts
-    return {"model": model, "dtype": dtype, "gpu": gpu, "tp": int(tp[2:]), "batch": int(b[1:]), "input_len": int(i[1:]),
-            "output_len": int(o[1:]), "mix": mix, "sampling": sampling, "execution": execution}
 
 
 def load_phi(path: str | Path) -> Phi:

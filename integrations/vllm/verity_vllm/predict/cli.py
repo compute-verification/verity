@@ -69,6 +69,6 @@ def main(a) -> int:
     with gzip.open(os.path.join(a.out, "predicted_descriptor.json.gz"), "wb") as f:
         f.write(canonical_json(r.desc))
     with open(os.path.join(a.out, "predicted.json"), "w") as f:
-        json.dump({"schema": "verity-predict/build/v1", "phi_digest": phi.digest(), **r.summary()}, f, indent=1, sort_keys=True)
+        json.dump({"schema": "verity-predict/build/v1", "context_digest": phi.digest(), **r.summary()}, f, indent=1, sort_keys=True)
     print(json.dumps(r.summary()), file=sys.stderr)
     return 0
