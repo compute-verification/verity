@@ -35,11 +35,13 @@ returns beside its sum (`RMSNormSquare_v1`, `RMSNormSquareFma_v1`, `RMSNormThrea
 own, shared through `forms`' CSE); the rest are the output piece, which reads both decodes. So the row's members share no gate,
 and Triton's output pass recomputes nothing of the thread pass that reads the same x.
 
-MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics, Definitions on bits whose word Definitions are `RsqrtApprox_v1`,
-`MufuSqrtFtz_v1`, `DivFullScaleA_v1` (or `_v2`, equal on the numerator 1.0) and `DivFullRcp_v1`. Until proofs' Boolean MUFU
-Definitions exist they are bound to the word ids through `WordOnBits_v1{WORD}` (`MUFU_WORD`), which packs the bits into a word, calls WORD
-and unpacks it: those Calls are the only word gates left in a norm. `rcp(N)` is a constant of the specialization, folded when it
-is built (`DivFullRcp_v1` of the word N), as is every other constant.
+MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics: Definitions on bits whose word Definitions are `RsqrtApprox_v1`,
+`MufuSqrtFtz_v1`, `DivFullScaleA_v1` (or `_v2`, equal on the numerator 1.0) and `DivFullRcp_v1`, or, until proofs' Boolean MUFU
+Definitions exist, those word ids themselves (`MUFU_WORD`). A word id is called on words: the norm packs a value into its word
+(`PackF32_v1`) and unpacks a word into bits (`UnpackF32_v1`) once each, when a Call first needs that form (`_F32`), so Triton's
+rms goes from `MufuSqrtFtz_v1` to both division pieces as one word. Those Calls and the word ids are the only word gates left
+in a norm. `rcp(N)` is a constant of the specialization, folded when it is built (`DivFullRcp_v1` of the word N), as is every
+other constant.
 
 Triton's idle lanes and warps (columns past N) hold +0, and the word body adds them. A lane's partial is never -0 and never a
 signalling NaN (a square's sign is clear, an FFMA's NaN is 0x7FC00000, an FADD quiets its NaN), so adding such a +0 returns the
@@ -68,8 +70,8 @@ from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.sampling import bit_at
 
-__all__ = ["CUDA_WORD", "MUFU_WORD", "RMSNormFusedCuda", "RMSNormTriton", "TRITON_WORD", "WordOnBits", "rmsnorm_cuda_calls",
-           "rmsnorm_triton_calls"]
+__all__ = ["CUDA_WORD", "MUFU_WORD", "PackF32", "RMSNormFusedCuda", "RMSNormTriton", "TRITON_WORD", "UnpackF32",
+           "rmsnorm_cuda_calls", "rmsnorm_triton_calls"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -177,40 +179,26 @@ def _traced(name: str, version: int, statics: tuple[str, ...], sig: Callable, ma
     return d
 
 
-def _builder(build: Callable, params, ret) -> Callable:
-    """The traced circuit of the builder ``build`` over the parameter types ``params``."""
-    return lambda S=None: TR.trace(build, [t for _, t in params], ret)
-
-
 # --- the MUFU seam ------------------------------------------------------------------------------------------------------------
 
-def _word_on_bits_sig(S):
-    params, ret = S.WORD.signature()
-    if ret != F32W or any(t != F32W for _, t in params):
-        raise TypeError(f"WordOnBits: {S.WORD.id} must take and return 32-bit words")
-    return tuple((name, F32) for name, _ in params), F32
+@composite("PackF32", 1, [], lambda S: ((("a", F32),), F32W), conformance="exact-model-tested")
+def PackF32(B, S, a):
+    """The word of the 32 bits ``a`` (bit 0 first): `SelectI32_v1` of each bit's place value, summed (`I32Add_v1`)."""
+    zero, acc = B.call(const(32, 0)), None
+    for j in range(32):
+        v = B.call(P.SelectI32, a[j], B.call(const(32, 1 << j)), zero)
+        acc = v if acc is None else B.call(P.I32Add, acc, v)
+    return acc
 
 
-@composite("WordOnBits", 1, ["WORD"], _word_on_bits_sig, conformance="exact-model-tested")
-def WordOnBits(B, S, *args):
-    """The 32-bit word Definition ``WORD`` on bits: each argument packed into a word (`SelectI32_v1` of each bit, `I32Add_v1`), one
-    Call of ``WORD``, its result unpacked (`BitAtx32_v1`). A bridge for a word id that has no Boolean Definition yet."""
-    words = []
-    for a in args:
-        acc = None
-        for j in range(32):
-            v = B.call(P.SelectI32, a[j], B.call(const(32, 1 << j)), B.call(const(32, 0)))
-            acc = v if acc is None else B.call(P.I32Add, acc, v)
-        words.append(acc)
-    out = B.call(S.WORD, *words)
-    return array_of([B.call(bit_at(32), out, B.call(const(32, j))) for j in range(32)])
+@composite("UnpackF32", 1, [], lambda S: ((("v", F32W),), F32), conformance="exact-model-tested")
+def UnpackF32(B, S, v):
+    """The 32 bits of the word ``v``, bit 0 first (`BitAtx32_v1`)."""
+    return array_of([B.call(bit_at(32), v, B.call(const(32, j))) for j in range(32)])
 
 
-WordOnBits.word = lambda b: b["WORD"]  # type: ignore[attr-defined]
-
-#: the norms' MUFU statics bound to the word ids, until proofs' Boolean MUFU Definitions replace them
-MUFU_WORD: dict = {"RSQRT": bind(WordOnBits, WORD=P.RsqrtApprox), "SQRT": bind(WordOnBits, WORD=P.MufuSqrtFtz),
-                   "SCALEA": bind(WordOnBits, WORD=P.DivFullScaleA), "RCP": bind(WordOnBits, WORD=P.DivFullRcp)}
+#: the norms' MUFU statics at their word ids, until proofs' Boolean MUFU Definitions replace them
+MUFU_WORD: dict = {"RSQRT": P.RsqrtApprox, "SQRT": P.MufuSqrtFtz, "SCALEA": P.DivFullScaleA, "RCP": P.DivFullRcp}
 CUDA_WORD: dict = {"RSQRT": MUFU_WORD["RSQRT"]}
 TRITON_WORD: dict = {k: MUFU_WORD[k] for k in ("SQRT", "SCALEA", "RCP")}
 
@@ -219,11 +207,45 @@ _MUFU_WORDS = {"RSQRT": {P.RsqrtApprox.id}, "SQRT": {P.MufuSqrtFtz.id}, "RCP": {
                "SCALEA": {P.DivFullScaleA.id, P.DivFullScaleAV2.id}}
 
 
+def _on_word(d) -> bool:
+    """Whether the MUFU static ``d`` is still a word id (it returns a 32-bit word, not 32 bits)."""
+    return d.signature()[1] == F32W
+
+
+def _mufu_word(d):
+    return d if _on_word(d) else word_of(d)
+
+
 def _check_mufu(b: dict, keys) -> None:
     for k in keys:
-        got = word_of(b[k]).id
+        got = _mufu_word(b[k]).id
         if got not in _MUFU_WORDS[k]:
             raise ValueError(f"{k} computes {got}, not {' or '.join(sorted(_MUFU_WORDS[k]))}")
+
+
+class _F32:
+    """An f32 of a norm's body as bits, as a word, or both; each form made at most once (`UnpackF32_v1`, `PackF32_v1`, or a
+    constant's own Calls), so a value two MUFU word Calls read is packed once."""
+
+    def __init__(self, B, bits: Coll | None = None, word: Coll | None = None, value: int | None = None) -> None:
+        self.B, self._bits, self._word, self.value = B, bits, word, value
+
+    def bits(self) -> Coll:
+        if self._bits is None:
+            self._bits = _Consts(self.B)(self.value) if self.value is not None else self.B.call(UnpackF32, self._word)
+        return self._bits
+
+    def word(self) -> Coll:
+        if self._word is None:
+            self._word = self.B.call(const(32, self.value)) if self.value is not None else self.B.call(PackF32, self._bits)
+        return self._word
+
+
+def _mufu(B, d, *args: _F32) -> _F32:
+    """One Call of the MUFU static ``d`` on ``args``: on their words while ``d`` is a word id, on their bits once it is Boolean."""
+    if _on_word(d):
+        return _F32(B, word=B.call(d, *(a.word() for a in args)))
+    return _F32(B, bits=B.call(d, *(a.bits() for a in args)))
 
 
 # --- the output word, split: the scale's own gates, the element's own gates (its decode), the rest --------------------------------
@@ -321,8 +343,7 @@ RMSNormThreadTriton = _traced("RMSNormThreadTriton", 1, (), _thread_sig,
 # --- the constant steps: variance / N + EPS, fma(rcp(N), sum, EPS), the constants folded --------------------------------------
 
 def _var_eps_cuda_word(B, S, var):
-    c = _Consts(B)
-    return B.call(P.F32Add, B.call(P.F32Div, var, c(_f32(float(S.N)))), c(_f32(S.EPS)))
+    return B.call(P.F32Add, B.call(P.F32Div, var, B.call(const(32, _f32(float(S.N))))), B.call(const(32, _f32(S.EPS))))
 
 
 def _rcp_n(N: int) -> int:
@@ -331,8 +352,7 @@ def _rcp_n(N: int) -> int:
 
 
 def _var_eps_triton_word(B, S, total):
-    c = _Consts(B)
-    return B.call(P.F32Fma, c(_rcp_n(S.N)), total, c(_f32(S.EPS)))
+    return B.call(P.F32Fma, B.call(const(32, _rcp_n(S.N))), total, B.call(const(32, _f32(S.EPS))))
 
 
 RMSNormVarEpsCudaWord = CompositeDefinition("RMSNormVarEpsCuda", 1, ("N", "EPS"), lambda S: ((("var", F32W),), F32W),
@@ -474,7 +494,7 @@ def rmsnorm_cuda_calls(B, N: int, EPS: float, RSQRT, x: Coll, res: Coll, w: Coll
     lanes = B.call(bind(RMSNormLanesCuda, N=N, BLOCK=b1.FUSED_RMS_BLOCK), x, res)
     sums = B.call(bind(RMSNormWarpsCuda, T=T), lanes[2])
     arg = B.call(bind(RMSNormArgCuda, N=N, EPS=EPS, NW=-(-T // WARP)), sums)
-    s = B.call(RSQRT, arg)
+    s = _mufu(B, RSQRT, _F32(B, bits=arg)).bits()
     out = B.call(bind(RMSNormOutRowCuda, N=N), lanes[0], lanes[1], s, B.call(RMSNormScaleCuda, s), w)
     return tuple_of(out, lanes[0])
 
@@ -574,8 +594,8 @@ def rmsnorm_triton_calls(B, N: int, EPS: float, SQRT, SCALEA, RCP, x: Coll, w: C
     """`RMSNormTriton_v2`'s Calls, written into the body ``B`` (a composite's, or a Program root's)."""
     th = B.call(bind(RMSNormThreadsTriton, N=N), x)
     s = B.call(bind(RMSNormWarpsTriton, N=N), th[0])
-    rms = B.call(SQRT, B.call(bind(RMSNormMeanEpsTriton, N=N, EPS=EPS), s))
-    inv = B.call(EW.F32Mul, B.call(SCALEA, _Consts(B)(_f32(1.0)), rms), B.call(RCP, rms))
+    rms = _mufu(B, SQRT, _F32(B, bits=B.call(bind(RMSNormMeanEpsTriton, N=N, EPS=EPS), s)))
+    inv = B.call(EW.F32Mul, _mufu(B, SCALEA, _F32(B, value=_f32(1.0)), rms).bits(), _mufu(B, RCP, rms).bits())
     return B.call(bind(RMSNormOutRowTriton, N=N), inv, B.call(RMSNormInvTriton, inv), x, th[1], w)
 
 
