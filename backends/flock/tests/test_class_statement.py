@@ -6,10 +6,12 @@ loopback session accepts each."""
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -64,22 +66,41 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
 
 
 def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
-    def hit(s):
-        d = tmp_path / "cache" / s[:16]
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "rec.json").write_text(json.dumps({"shape": s}))
-        return d
+    pkg, src = Path(CS.__file__).parent, tmp_path / "src"          # verity_flock's sources, as the stage key's code digest reads them
+    for f in pkg.rglob("*.py"):
+        (src / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
+        (src / f.relative_to(pkg)).write_bytes(f.read_bytes())
+    find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src)])
+                        if name == "verity_flock" else find_spec(name, *a))
+
+    def fresh(s):
+        (CS._CTX["out"] / s[:16]).mkdir(parents=True, exist_ok=True)
+        (CS._CTX["out"] / s[:16] / "circuit.txt").write_text(s)
+        return {"shape": s, "stage": {"n": 16}}
 
     built = []
+    monkeypatch.setenv("FLOCK_STAGE_CACHE", str(tmp_path / "cache"))
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setitem(CS._CTX, "source_digest", None)
     monkeypatch.setattr(CS, "cache_slot_circuits", lambda: built.append(1))
-    monkeypatch.setattr(CS, "_stage_job_fresh", lambda s: {"shape": s, "broke": {"at": "test"}})
-    args = ["--model", "tiny", "--partition", "q-word", "--stage-only", "--sample", "2"]
-    monkeypatch.setattr(CS, "_stage_cache", hit)
-    assert CS.main([*args, "--out", str(tmp_path / "hit")]) == 0 and built == []
-    assert all(json.loads(ln)["stage_cached"] for ln in (tmp_path / "hit" / "staged.jsonl").read_text().splitlines())
-    monkeypatch.setattr(CS, "_stage_cache", lambda s: None)
-    assert CS.main([*args, "--out", str(tmp_path / "miss")]) == 0 and built == [1]
+    monkeypatch.setattr(CS, "_stage_job_fresh", fresh)
+
+    def cached(name):
+        CS._CTX.pop("source_digest")                                   # main() reads the code's digest once per process
+        assert CS.main(["--model", "tiny", "--partition", "q-word", "--stage-only", "--sample", "2", "--out", str(tmp_path / name)]) == 0
+        recs = [json.loads(ln) for ln in (tmp_path / name / "staged.jsonl").read_text().splitlines()]
+        assert len(recs) == 2 and len({"stage_cached" in r for r in recs}) == 1
+        return "stage_cached" in recs[0]
+
+    assert not cached("first") and built == [1]
+    assert cached("again") and built == [1]                            # a cache hit composes nothing
+    sha = src / "sha512_circuit.py"
+    assert "CARRY_EVERY = 5" in sha.read_text()
+    sha.write_text(sha.read_text().replace("CARRY_EVERY = 5", "CARRY_EVERY = 4"))
+    assert not cached("sha512-parameter") and built == [1, 1]          # a SHA-512 parameter is in the key
+    (src / "class_statement.py").write_text((src / "class_statement.py").read_text() + "\n# another version\n")
+    assert not cached("code") and built == [1, 1, 1]                   # and so is the code's version
 
 
 def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_in_case_order(monkeypatch, tmp_path: Path):
