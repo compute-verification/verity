@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,7 +17,8 @@ from research.jobs import model
 from research.jobs.cli import main as jobs_main
 from research.jobs.client import ModelClient
 
-GOOD = {"avx512": True, "mem_gb": 240, "cpus": 64, "disk_gb": 70, "busy": 0, "tools": ["uv", "lake", "cargo"], "lease_s": 6 * 3600}
+GOOD = {"avx512": True, "mem_gb": 240, "cpus": 64, "disk_gb": 70, "busy": 0, "tools": ["uv", "lake", "cargo"], "lease_s": 6 * 3600,
+        "setup_done": True, "setup_at": "2026-09-29T00:00:00Z"}
 C1, C2, BASE = "1" * 40, "2" * 40, "b" * 40
 RUN = "r20260929-000005-aaaa"
 
@@ -135,9 +137,23 @@ def test_a_pod_that_fails_checks_preflight_is_benched_and_another_pod_takes_the_
     assert w.runner.started[-1] == (k, 1, "t1")
 
 
-def test_the_probe_only_measures_and_occupancy_is_the_one_rule():
-    assert D.occupied({**GOOD, "busy": 1}) == "1 live research run(s) on it"
-    assert D.occupied({**GOOD, "tools": [], "disk_gb": 1, "avx512": False}) is None
+def test_the_probe_judges_only_whether_a_pod_is_free():
+    assert D.unavailable({**GOOD, "busy": 1}) == "1 live research run(s) on it"
+    assert D.unavailable({**GOOD, "setup_done": False}).startswith("pod_setup.sh hasn't reported done")
+    assert D.unavailable({**GOOD, "tools": [], "disk_gb": 1, "avx512": False}) is None
+
+
+def test_no_job_starts_on_a_pod_until_its_setup_reports_done():
+    """A launch chain that started a check while pod_setup.sh still ran cost train TVC an hour: the dispatcher can't do that."""
+    w = World()
+    j = w.add()
+    w.runner.caps["t1"] = {**GOOD, "setup_done": False, "setup_at": None}
+    w.at(0)
+    assert w.runner.started == [] and w.job(j).state == "queued"
+    assert any("t1: skipped: pod_setup.sh hasn't reported done" in line for line in w.lines)
+    w.runner.caps["t1"] = GOOD
+    w.at(D.PREFLIGHT_S + D.CLAIM_S)
+    assert w.runner.started == [(j, 1, "t1")]
 
 
 def test_a_pod_that_cant_be_measured_asks_for_nothing_and_the_dispatcher_goes_on():
@@ -486,17 +502,23 @@ def test_the_probe_reads_the_lease_the_tools_and_live_runs(tmp_path):
         (root / "runs" / name / "status.json").write_text(json.dumps(status))
     lease = tmp_path / "lease"
     lease.write_text("4102444800 2100-01-01T00:00:00Z pods-create\n")
+    (tmp_path / ".research").mkdir()
+    (tmp_path / ".research" / "pod-setup.json").write_text(json.dumps({"done_utc": "2026-09-29T22:00:00Z", "uv": "0.12.20"}))
     env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
-    caps = json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(root), str(lease)], capture_output=True, text=True,
-                                     check=True, env=env).stdout)
+
+    def probe(r, e=env):
+        return json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(r), str(lease), D.SETUP_MARKER], capture_output=True,
+                                         text=True, check=True, env=e).stdout)
+
+    caps = probe(root)
     assert caps["busy"] == 1 and caps["lease_s"] > 2 * 10 ** 9
-    assert set(caps) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s"}
+    assert (caps["setup_done"], caps["setup_at"]) == (True, "2026-09-29T22:00:00Z")
+    assert set(caps) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s", "setup_done", "setup_at"}
     lease.unlink()
-    caps = json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(root / "missing"), str(lease)], capture_output=True,
-                                     text=True, check=True, env=env).stdout)
-    assert "lease_s" not in caps and caps["busy"] == 0
-    caps = json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(root), str(lease)], capture_output=True, text=True,
-                                     check=True, env={**env, "RESEARCH_LEASE_EXPIRES": "4102444800"}).stdout)
+    (tmp_path / ".research" / "pod-setup.json").unlink()
+    caps = probe(root / "missing")
+    assert "lease_s" not in caps and caps["busy"] == 0 and caps["setup_done"] is False
+    caps = probe(root, {**env, "RESEARCH_LEASE_EXPIRES": "4102444800"})
     assert caps["lease_s"] > 2 * 10 ** 9
 
 
@@ -617,3 +639,63 @@ def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_pat
     w.runner.runs[RUN] = D.Observation("failed", "check failed: failed rc=1")
     w.at(65)
     assert w.job(1).state == "failed"
+
+
+def test_the_worker_claims_with_its_own_token_even_beside_the_coordinators(tmp_path, monkeypatch):
+    """Daniel's layout on the RC's VM: ~/.research/jobs/token is the coordinator's, ~/.research/jobs/dispatch-rc.token the
+    dispatcher's. Each command takes its own, whatever else is set."""
+    from research import remote
+    from research.jobs import cli as J
+    from research.jobs.client import WORKER_TOKEN_ENV, load_token, worker_token_file
+
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    for name, value in (("token", "coordinator-secret"), ("dispatch-rc.token", "dispatch-rc-secret")):
+        (jobs / name).write_text(value + "\n")
+        (jobs / name).chmod(0o600)
+    monkeypatch.setattr("research.jobs.client.TOKEN_FILE", jobs / "token")
+    assert worker_token_file("rc") == jobs / "dispatch-rc.token"
+    assert load_token({}) == "coordinator-secret"
+    seen = []
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"name": name})
+    monkeypatch.setattr(J, "HTTPClient", lambda token=None: seen.append(token) or SimpleNamespace(url="u", token=token))
+    monkeypatch.setattr(D.Dispatcher, "run", lambda self, once=False: None)
+    monkeypatch.setenv("JOBS_TOKEN", "coordinator-secret")
+    monkeypatch.delenv(WORKER_TOKEN_ENV, raising=False)
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs)]) == 0
+    monkeypatch.setenv(WORKER_TOKEN_ENV, "from-the-environment")
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs)]) == 0
+    (jobs / "other.token").write_text("given-file\n")
+    (jobs / "other.token").chmod(0o600)
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs), "--token-file", str(jobs / "other.token")]) == 0
+    assert seen == ["dispatch-rc-secret", "from-the-environment", "given-file"]      # an explicit file wins over the variable
+    monkeypatch.delenv(WORKER_TOKEN_ENV)
+    (jobs / "dispatch-rc.token").unlink()
+    with pytest.raises(SystemExit, match="dispatch-rc.token"):
+        J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs)])
+    assert "JOBS_WORKER_TOKEN" not in D.ResearchRunner(environ={"JOBS_WORKER_TOKEN": "x", "JOBS_TOKEN": "y"}).env()
+
+
+class Recording:
+    def __init__(self, inner):
+        self.inner, self.calls = inner, []
+
+    def call(self, method, path, body=None):
+        self.calls.append((method, path, body))
+        return self.inner.call(method, path, body)
+
+
+def test_a_complete_and_a_renewal_send_no_nulls():
+    """The site takes run_id and summary only as strings: a launch that failed completes without a run_id."""
+    w = World()
+    rec = Recording(w.worker)
+    w.d.client = rec
+    j = w.add()
+    w.at(0)
+    w.at(D.RENEW_S)
+    w.runner.launches["L1-1"] = (3, None, "research run --on t1: refused: pod is EXITED")
+    w.at(D.RENEW_S + 5)
+    renew = next(b for m, p, b in rec.calls if p.endswith("/renew"))
+    complete = next(b for m, p, b in rec.calls if p.endswith("/complete"))
+    assert renew["progress"] == {"pod": "t1", "step": "launching"} and "run_id" not in complete
+    assert isinstance(complete["summary"], str) and w.svc.attempts[0].outcome == "error" and w.job(j).attempts == 2

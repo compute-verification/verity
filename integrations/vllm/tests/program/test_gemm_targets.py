@@ -9,11 +9,12 @@ from verity_vllm.program.registry import gemm_targets as GT
 
 AMPERE_TP = TargetProfile(compute_capability=(8, 0), num_sms=108)
 HOPPER_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
+PRO6000_TP = TargetProfile(compute_capability=(12, 0), num_sms=188)
 
 
-def test_registered_targets_are_ada_ampere_and_hopper():
+def test_registered_targets_are_ada_ampere_hopper_and_blackwell_consumer():
     """ada + ampere share the Ampere-family k16 step (Gemm_v1); hopper [R13 hopper, HOP-01] is the wgmma step (Gemm_v2{K,N,DOT})."""
-    assert set(GT.REGISTERED) == {"ada", "ampere", "hopper"}
+    assert set(GT.REGISTERED) == {"ada", "ampere", "hopper", "blackwell_consumer"}
     assert GT.REGISTERED["ada"].compute_capabilities == ((8, 9),) and GT.REGISTERED["ada"].vllm_arch_family == "ada"
     assert GT.REGISTERED["ampere"].compute_capabilities == ((8, 0),) and GT.REGISTERED["ampere"].vllm_arch_family is None
     assert {GT.REGISTERED[k].dot for k in ("ada", "ampere")} == {"AmpereBF16TcDot16"} and {GT.REGISTERED[k].kind for k in ("ada", "ampere")} == {"Gemm_v1{K,N}"}
@@ -33,10 +34,10 @@ def test_arch_family_rule_is_the_pinned_vllm_rule():
     assert GT.vllm_tuned_gemm_arch_family((8, 9)) == "ada"
     assert GT.vllm_tuned_gemm_arch_family((8, 0)) is None and GT.vllm_tuned_gemm_arch_family((8, 6)) is None
     assert GT.vllm_tuned_gemm_arch_family((9, 0)) == "hopper" and GT.vllm_tuned_gemm_arch_family((10, 0)) == "blackwell"
-    assert GT.vllm_tuned_gemm_arch_family((7, 5)) is None
+    assert GT.vllm_tuned_gemm_arch_family((7, 5)) is None and GT.vllm_tuned_gemm_arch_family((12, 0)) is None
     vllm = pytest.importorskip("vllm.model_executor.determinism.batch_invariant_configs")
     from vllm.platforms.interface import DeviceCapability
-    for cc in ((8, 0), (8, 6), (8, 9), (9, 0), (10, 0), (7, 5)):
+    for cc in ((8, 0), (8, 6), (8, 9), (9, 0), (10, 0), (7, 5), (12, 0)):
         assert vllm._get_tuned_matmul_arch_family(DeviceCapability(*cc)) == GT.vllm_tuned_gemm_arch_family(cc)
 
 
@@ -47,7 +48,61 @@ def test_selection_per_target_profile():
     assert TargetProfile.from_gpu_document({"multi_processor_count": 142, "compute_capability": [8, 9]}).gemm_target().key == "ada"
 
 
-@pytest.mark.parametrize("cc, fam", [((10, 0), "blackwell"), ((8, 6), None), ((7, 5), None), ((12, 0), None)])
+def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
+    """cc 12.0 (the RTX PRO 6000): vLLM has no tuned family for it, so a Triton launch takes the default tiling (the pinned vLLM keeps
+    the bf16 linear on cuBLASLt there), and the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the
+    Definition is Hopper's `Gemm_v2`."""
+    from verity.ml.tc.instructions import INSTRUCTIONS
+    from verity.ml.tc.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
+
+    bw = GT.REGISTERED["blackwell_consumer"]
+    assert bw.compute_capabilities == ((12, 0),) and bw.vllm_arch_family is None and GT.vllm_tuned_gemm_arch_family((12, 0)) is None
+    assert bw.dot == GT.REGISTERED["hopper"].dot and bw.kind == GT.REGISTERED["hopper"].kind
+    assert bw.tuned_table == {} and bw.table_sha256() is None and bw.evidence
+    assert INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].model is HOPPER_BF16_M16N8K16 and INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].status == "pinned"
+    assert [getattr(HOPPER_BF16_M16N8K16, f) for f in ("operand_bits", "groups", "width", "zero_exponent")] == \
+           [getattr(HOPPER_BF16_WGMMA_K16, f) for f in ("operand_bits", "groups", "width", "zero_exponent")]
+    for M, N, K in ((1, 2048, 2048), (32, 151936, 2048), (2049, 2048, 6144), (7, 3072, 2048)):     # tabled on ada/hopper, default here
+        consts, warps, stages, src = bw.launch_config(M, N, K)
+        assert (consts["BLOCK_SIZE_M"], consts["BLOCK_SIZE_N"], consts["BLOCK_SIZE_K"], warps, stages) == (128, 128, 64, 8, 3)
+        assert src == "default[blackwell_consumer]"
+    assert PRO6000_TP.gemm_target().key == "blackwell_consumer" and PRO6000_TP.tuned_gemm_arch_family() is None
+    assert TargetProfile.from_gpu_document({"multi_processor_count": 188, "compute_capability": "12.0"}).gemm_target() is bw
+    with pytest.raises(GT.UnregisteredGemmTarget, match="tuned_gemm_arch_family='blackwell'.*requires None"):
+        GT.gemm_target_for((12, 0), "blackwell")
+
+
+def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
+    """The sm_120 step family binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}` and FA2 only: vLLM's FA2 on cc 12.0 is the driver's JIT
+    of the compute_80 PTX on the Hopper step, so its attention is the H100 forced-FA2 chain (`BN=fa2_kblock_n(D)`,
+    `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
+    `Attention_v3`; a declared FA3 is refused by name."""
+    from verity_vllm.program.registry import b1
+    from verity_vllm.program.registry import targets as TG
+
+    assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2
+    assert TargetProfile(compute_capability=(12, 1)).tensor_core_family == "unregistered:12.1"
+    assert TG.tensor_core_dot(PRO6000_TP) is TG.tensor_core_dot(HOPPER_TP) and not TG.uses_accepted_kinds(PRO6000_TP)
+    assert TG.gemm_spec(PRO6000_TP, 2048, 3072).id == TG.gemm_spec(HOPPER_TP, 2048, 3072).id
+    hopper_fa2 = HOPPER_TP.with_overrides(flash_attn_version=2)
+    for D in (64, 96, 128, 256):
+        BN = b1.fa2_kblock_n(D)
+        spec = TG.attention_spec(PRO6000_TP, 33, 32, 8, D, 1, row=0, own_rows=1)          # a decode row: only its first block guarded
+        assert spec.id == (f"Attention_v5{{T=33,NH=32,KVH=8,D={D},BN={BN},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,"
+                           f"MASKED_FROM={-(-33 // BN) - 1}}}")
+        assert TG.attention_spec(hopper_fa2, 33, 32, 8, D, 1).id == \
+               f"Attention_v2{{T=33,NH=32,KVH=8,D={D},BN={BN},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1}}"
+    assert TG.check_flash_attn_registered(PRO6000_TP) == 2
+    with pytest.raises(TG.UnregisteredTarget, match="flash_attn_version 3 on blackwell_consumer"):
+        TG.attention_spec(PRO6000_TP.with_overrides(flash_attn_version=3), 33, 32, 8, 64, 1)
+    d = TG.describe(PRO6000_TP)
+    assert d["gemm_target"] == "blackwell_consumer" and d["dot"] == "HopperBF16WgmmaDot16_v1" and d["tuned_gemm_arch_family"] is None
+    assert d["gemm_kind"] == "Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}" and d["flash_attn_registered"] is True
+    assert d["attention_kind"] == "Attention_v5{T,NH,KVH,D,BN=fa2_kblock_n(D),DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM}"
+    assert d["evidence"]["gemm"] == list(GT.REGISTERED["blackwell_consumer"].evidence) and d["evidence"]["attention_fa2"]
+
+
+@pytest.mark.parametrize("cc, fam", [((10, 0), "blackwell"), ((8, 6), None), ((7, 5), None), ((12, 1), None)])
 def test_unregistered_targets_are_refused_fail_closed(cc, fam):
     with pytest.raises(GT.UnregisteredGemmTarget, match="numerics_unregistered") as e:
         GT.gemm_target_for(cc)
@@ -229,3 +284,19 @@ def test_bet_a_pins_the_hopper_tile_on_a_hopper_target(observed):
     pins, src = VB.gemm_pins_for(1, 2048, 2048)
     assert (pins["constexprs"]["BLOCK_SIZE_M"], pins["constexprs"]["BLOCK_SIZE_K"], pins["NUM_SMS"]) == (16, 128, 132) and "tuned_hopper" in src
     assert VB.tuned_gemm_table_sha256() == GT.REGISTERED["hopper"].table_sha256()
+
+
+def test_bet_a_pins_the_default_tile_and_188_sms_on_the_pro6000(observed):
+    """cc 12.0 is registered: a persistent-matmul launch there must show the default tiling for every shape (Hopper's tuned rows
+    included) and the target's 188 SMs."""
+    VB.observe_target_profile(PRO6000_TP)
+    for M, N, K in ((1, 2048, 2048), (32, 2048, 2048), (2, 151936, 2048)):
+        pins, src = VB.gemm_pins_for(M, N, K)
+        c = pins["constexprs"]
+        assert (c["BLOCK_SIZE_M"], c["BLOCK_SIZE_N"], c["BLOCK_SIZE_K"], pins["num_warps"], pins["num_stages"]) == (128, 128, 64, 8, 3)
+        assert pins["NUM_SMS"] == 188 and src == "default[blackwell_consumer]"
+    assert VB.tuned_gemm_table_sha256() is None
+    hopper_tile = _gemm_meta(M=1, N=2048, K=2048, BLOCK_SIZE_M=16, BLOCK_SIZE_N=64, stride_am=2048, stride_bn=2048, stride_cm=2048, NUM_SMS=188)
+    assert "BLOCK_SIZE_M=16" in (VB._pins_ok(hopper_tile, VB.gemm_pins_for(1, 2048, 2048)[0]) or "")
+    on_132 = _gemm_meta(M=32, N=2048, K=2048, BLOCK_SIZE_M=128, BLOCK_SIZE_N=128, stride_am=2048, stride_bn=2048, stride_cm=2048, NUM_SMS=132)
+    assert "NUM_SMS" in (VB._pins_ok(on_132, VB.gemm_pins_for(32, 2048, 2048)[0]) or "")

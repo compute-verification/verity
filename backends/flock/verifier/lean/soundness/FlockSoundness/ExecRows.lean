@@ -195,11 +195,14 @@ theorem parse_tail {α : Type} {x y : Except String Sparse} {mk : Sparse → Spa
   cases h
   exact ⟨a, b, ha, hb, rfl⟩
 
+/-- **A net `Net.ofRows` built**: the parser's (`parse_built`), or a typed class's from `derive`'s rows
+(`Typed.netOfD`). -/
+def Built (net : Net) : Prop :=
+  ∃ name useful constPos ig og ra rb, Net.ofRows name useful constPos ig og ra rb = .ok net
+
 set_option maxHeartbeats 1000000 in
-/-- **What `Net.parse` accepted**: its order check passed on the very rows it stored as `A` and `B`. -/
-theorem parse_checkOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
-    ∃ ra rb, Net.checkOrder "flock-ir-unit/v2" (net.inWords * WORD) net.constPos ra rb = .ok () ∧
-      Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
+/-- **`Net.parse` builds its net with `Net.ofRows`**, after reading its rows and trailing lines. -/
+theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) : Built net := by
   unfold Net.parse at h
   simp only at h
   replace h := ite_throw_ok h
@@ -209,29 +212,37 @@ theorem parse_checkOrder {lines : Array String} {net : Net} (h : Net.parse lines
   obtain ⟨og, -, h⟩ := except_bind_ok h
   replace h := ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok h))))
   obtain ⟨s, -, h⟩ := except_bind_ok h
-  -- the rows' checks and the construction are `Net.ofRows`', after the trailing lines
-  have fin : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net →
-      ∃ ra rb, Net.checkOrder "flock-ir-unit/v2" (net.inWords * WORD) net.constPos ra rb = .ok () ∧
-        Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
-    intro ho
-    obtain ⟨-, ha, hb, -, hc, -, -, -, -, -, hco, -, -, -⟩ := Net.ofRows_ok ho
-    exact ⟨s.1, s.2, by rw [hc]; exact hco, ha, hb⟩
+  refine ⟨(tokens (lines.getD 0 "")).getD 1 "", useful, constPos, ig.1, og.1, s.1, s.2, ?_⟩
   by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
   · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
     rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
     · rw [hj] at h; exact absurd h throw_bind_ne
     · rw [hj] at h
-      exact fin (ite_throw_ok (ite_throw_ok h))
+      exact ite_throw_ok (ite_throw_ok h)
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hL)] at h
-    exact fin (ite_throw_ok (ite_throw_ok h))
+    exact ite_throw_ok (ite_throw_ok h)
+
+/-- **What `Net.ofRows` built**: its order check passed on the very rows it stored as `A` and `B`. -/
+theorem built_checkOrder {net : Net} (h : Built net) :
+    ∃ ra rb, Net.checkOrder "flock-ir-unit/v2" (net.inWords * WORD) net.constPos ra rb = .ok () ∧
+      Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
+  obtain ⟨_, _, _, _, _, ra, rb, ho⟩ := h
+  obtain ⟨-, ha, hb, -, hc, -, -, -, -, -, hco, -, -, -⟩ := Net.ofRows_ok ho
+  exact ⟨ra, rb, by rw [hc]; exact hco, ha, hb⟩
+
+/-- **Every net `Net.ofRows` builds is ordered**: the rows it stored as `A` and `B` have `RowOrder`. -/
+theorem built_rowOrder {net : Net} (h : Built net) :
+    ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
+      Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
+  let ⟨ra, rb, hco, ha, hb⟩ := built_checkOrder h
+  ⟨ra, rb, checkOrder_ok hco, ha, hb⟩
 
 /-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
 so #144's `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
-  let ⟨ra, rb, hco, ha, hb⟩ := parse_checkOrder h
-  ⟨ra, rb, checkOrder_ok hco, ha, hb⟩
+  built_rowOrder (parse_built h)
 
 /-! ## `Sparse`: the bytes `ofRows` writes, and `row` reads them back -/
 
@@ -451,19 +462,19 @@ theorem ofRows_row {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sp
     rw [hri] at hlen ⊢
     simp [Sparse.row, hlen]
 
-/-! ## The audit's `Rows` for a parsed net -/
+/-! ## The audit's `Rows` for a built net -/
 
-/-- **The rows of a net the parser accepted**, as the audit's `Rows`: its computed rows are
-`net.a.row r`, `net.b.row r` (`Rows.ofNet_a`, `Rows.ofNet_b`), and `topo` holds because the parser
-checked it (`parse_rowOrder`). -/
-noncomputable def Rows.ofNet {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) : Rows :=
-  Rows.ofOrdered (net.inWords * WORD) net.constPos (Classical.choose (parse_rowOrder h))
-    (Classical.choose (Classical.choose_spec (parse_rowOrder h)))
-    (Classical.choose_spec (Classical.choose_spec (parse_rowOrder h))).1
+/-- **The rows of a net `Net.ofRows` built** (the parser's, or a typed class's), as the audit's `Rows`: its computed rows
+are `net.a.row r`, `net.b.row r` (`Rows.ofNet_a`, `Rows.ofNet_b`), and `topo` holds because `Net.ofRows` checked it
+(`built_rowOrder`). -/
+noncomputable def Rows.ofNet {net : Net} (h : Built net) : Rows :=
+  Rows.ofOrdered (net.inWords * WORD) net.constPos (Classical.choose (built_rowOrder h))
+    (Classical.choose (Classical.choose_spec (built_rowOrder h)))
+    (Classical.choose_spec (Classical.choose_spec (built_rowOrder h))).1
 
 section ofNet
 
-variable {lines : Array String} {net : Net} (h : Net.parse lines = .ok net)
+variable {net : Net} (h : Built net)
 
 theorem Rows.ofNet_nIn : (Rows.ofNet h).nIn = min (net.inWords * WORD) net.constPos := rfl
 
@@ -475,7 +486,7 @@ theorem Rows.ofNet_comp (i : Fin (Rows.ofNet h).nComp) :
 /-- Computed row `i` reads, in `A`, exactly the columns of the net's row `nIn + i`. -/
 theorem Rows.ofNet_a (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
     ((Rows.ofNet h).a i).map Fin.val = (net.a.row ((Rows.ofNet h).nIn + i.val)).toList := by
-  have hs := Classical.choose_spec (Classical.choose_spec (parse_rowOrder h))
+  have hs := Classical.choose_spec (Classical.choose_spec (built_rowOrder h))
   refine (Rows.ofOrdered_a i).trans ?_
   rw [ofRows_row hs.2.1 (Nat.pow_le_pow_right (by norm_num) hu)]
   rfl
@@ -483,7 +494,7 @@ theorem Rows.ofNet_a (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
 /-- Computed row `i` reads, in `B`, exactly the columns of the net's row `nIn + i`. -/
 theorem Rows.ofNet_b (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
     ((Rows.ofNet h).b i).map Fin.val = (net.b.row ((Rows.ofNet h).nIn + i.val)).toList := by
-  have hs := Classical.choose_spec (Classical.choose_spec (parse_rowOrder h))
+  have hs := Classical.choose_spec (Classical.choose_spec (built_rowOrder h))
   refine (Rows.ofOrdered_b i).trans ?_
   rw [ofRows_row hs.2.2 (Nat.pow_le_pow_right (by norm_num) hu)]
   rfl

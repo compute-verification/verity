@@ -66,6 +66,7 @@ def run_case(case: dict, s: model.JobService | None = None, vectors: dict = VECT
         elif "store" in step:
             s.store.attempts.update(json.loads(json.dumps(step["store"].get("attempts", {}))))
             s.store.manifests.update(json.loads(json.dumps(step["store"].get("manifests", {}))))
+            s.store.objects.update(step["store"].get("objects", {}))
         elif "github_push" in step:
             g = step["github_push"]
             s.github.push(g["ref"], g["sha"], g["parents"], g["files"])
@@ -79,6 +80,8 @@ def run_case(case: dict, s: model.JobService | None = None, vectors: dict = VECT
                 assert not (bad := mismatches(pr, s.github.prs[int(n)], f"pr {n}")), f"{where}: {bad}"
             if "comments" in want:
                 assert s.github.comments == want["comments"], f"{where}: {s.github.comments}"
+            for sha, files in want.get("trees", {}).items():
+                assert not (bad := mismatches(files, s.github.tree(sha), f"tree {sha}")), f"{where}: {bad}"
         else:
             method, path = step["req"]
             status, body = s.request(method, path, step.get("token"), substitute(step.get("body"), saved), step["at"])
@@ -120,6 +123,8 @@ def test_the_train_cases_reach_every_train_state_and_route():
         for req, body in run_case(c, s, TRAINS):
             method, path = req.split(" ", 1)
             routes.add(f"{method} " + "/".join("{id}" if p.isdigit() else p for p in path.split("?")[0].split("/")))
+            if path.startswith("/api/trains"):
+                states |= {body.get("state")} | {t.get("state") for t in body.get("trains", [])}
         states |= {t.state for t in s.trains.values()}
     assert set(trains.TRAIN_STATES) <= states
     assert {"POST /api/trains", "GET /api/trains", "GET /api/trains/{id}", "POST /api/trains/{id}/cancel"} <= routes

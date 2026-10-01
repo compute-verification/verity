@@ -9,8 +9,11 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
     research jobs show ID [--json]
     research jobs cancel ID
     research jobs events [--after ID] [--kind K] [--subject S] [--limit N] [--json]
-    research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--repo OWNER/NAME]
+    research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--token-file F]
+                    [--repo OWNER/NAME]
 
+The tokens: `research jobs` uses `$JOBS_TOKEN`, else ~/.research/jobs/token (the coordinator's); `research worker` uses
+--token-file, else `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token (the dispatcher's), never the coordinator's.
 `add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
 with `git ls-remote` rather than a local ref that may be stale.  --timeout-s defaults to the dispatcher's DEFAULT_TIMEOUT_S, and
 the job asks for a pod whose lease has that long left plus the lease margin (`min_lease_s`), so no check starts on a pod that
@@ -22,7 +25,7 @@ The dedupe key makes adding idempotent, and a deliberate re-run names a new one 
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package and the packages it requires by path, less the Lake packages nested in them, and
 `tools/lean/`; `tools/check/lean_audit.py`'s inputs without check's own files).  So trains whose Lean inputs are the same share
-one regeneration, and the second add answers with the first job and its run.  The token is `$JOBS_TOKEN` or ~/.research/jobs/token; the site is `$JOBS_URL`.  Exit 1 when the
+one regeneration, and the second add answers with the first job and its run.  The site is `$JOBS_URL`.  Exit 1 when the
 Job queue refuses, 4 when it can't be reached.
 """
 from __future__ import annotations
@@ -38,7 +41,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .client import HTTPClient, Unreachable
+from .client import WORKER_TOKEN_ENV, HTTPClient, Unreachable, load_token, worker_token_file
 from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
 from .dispatch import KINDS as DISPATCH_KINDS
 
@@ -284,6 +287,7 @@ def worker_main(argv: list[str]) -> int:
     ap.add_argument("--once", action="store_true", help="one pass, then exit")
     ap.add_argument("--workdir", default=str(WORKDIR))
     ap.add_argument("--repo", default=REPO)
+    ap.add_argument("--token-file", type=Path, help="the dispatcher's token (default: $JOBS_WORKER_TOKEN, else WORKDIR/dispatch-NAME.token)")
     ns = ap.parse_args(argv)
     if not ns.dispatch:
         print("research worker: only --dispatch exists until pull workers (stage 2)", file=sys.stderr)
@@ -309,7 +313,9 @@ def worker_main(argv: list[str]) -> int:
     except BlockingIOError:
         print(f"research worker: dispatch:{ns.name} already runs from {workdir}", file=sys.stderr)
         return 2
-    client = HTTPClient()
+    token = (load_token({}, ns.token_file) if ns.token_file else
+             load_token(path=worker_token_file(ns.name, workdir), var=WORKER_TOKEN_ENV))
+    client = HTTPClient(token=token)
     d = Dispatcher(client, ResearchRunner(repo=ns.repo, workdir=workdir), pods, name=ns.name, kinds=kinds,
                    state_path=workdir / f"dispatch-{ns.name}.json", out=lambda m: print(m, flush=True))
     d.log(f"{d.worker} on {client.url}: {', '.join(pods)}; {', '.join(kinds)}")
