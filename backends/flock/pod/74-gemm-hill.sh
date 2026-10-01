@@ -91,6 +91,7 @@ if [ "${SERVE_ONLY:-0}" = 1 ]; then
   wait $GP || ok=0
   wait $SP || ok=0
   ph serve end
+  keep gate; keep m35
   cp $S/gate/classes/served.jsonl $R/out/gate-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
   [ $ok = 1 ] && python3 -c 'import json, sys; r = [json.loads(l)["serve"] for f in sys.argv[1:] for l in open(f) if l.strip()]
 sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] and not x["timed_out"] for x in r) else 1)' \
