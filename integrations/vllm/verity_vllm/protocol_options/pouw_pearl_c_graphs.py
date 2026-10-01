@@ -149,10 +149,14 @@ class GraphCalls:
         return self.whole_defer and self.hashing
 
     def whole_capture_begin(self, key: tuple | None = None) -> None:
-        """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None)."""
+        """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None).
+        A deferring run's side stream is made here, before vLLM's capture begins."""
         self._whole, self._whole_retained, self._deferred = [], bool(key and key[3]), None
         if self._whole_retained and self._stages is None:
             self._stages = {}
+        if self._defers() and self._side_stream is None:
+            import torch
+            self._side_stream = torch.cuda.Stream(device=self.device)
 
     def whole_capture_end(self) -> tuple[WholeCall, ...]:
         """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
@@ -353,11 +357,8 @@ class GraphCalls:
         """`steps` on the side stream, after everything the capturing stream has launched so far, with torch's current stream
         the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them."""
         import torch
-        main = torch.cuda.current_stream(self.device)
-        if self._side_stream is None:
-            self._side_stream = torch.cuda.Stream(device=self.device)
         side = self._side_stream
-        side.wait_stream(main)
+        side.wait_stream(torch.cuda.current_stream(self.device))
         self.kernel.dev.stream = side.cuda_stream
         try:
             with torch.cuda.stream(side):
