@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from verity_vllm.commit import scheme
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = 64
@@ -20,7 +21,8 @@ def _stream(steps: int = 3) -> list[list[tuple[str, bytes]]]:
 
 
 def _committer(threads: int) -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=threads, program_digest=PROGRAM)
+    return NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=threads, program_digest=PROGRAM,
+                               leaf_scheme=scheme.NAME)          # equal roots of two commitments: unsalted leaves
 
 
 @pytest.mark.parametrize("threads", [2, 12])

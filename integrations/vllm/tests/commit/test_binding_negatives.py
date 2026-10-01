@@ -18,7 +18,7 @@ import random
 
 import pytest
 
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, scheme
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = 64
@@ -60,7 +60,8 @@ def produce(seed: int = 7, steps: int = STEPS) -> list[list[tuple[str, bytes]]]:
 
 
 def committer(program: bytes = b"program") -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(program).digest())
+    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(program).digest(),
+                               leaf_scheme=scheme.NAME)          # the pinned fixture roots are unsalted
 
 
 def commit(stream, program: bytes = b"program", **map_kw):

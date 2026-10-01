@@ -49,12 +49,16 @@ def _metas(step: int, seed: int) -> tuple[list[TensorMeta], bytes]:
     return metas, bytes(buf)
 
 
-def _committer(retain: str, run_id: str = "p0-test") -> NativeHostCommitter:
+def _committer(retain: str, run_id: str = "p0-test", salts_of: NativeHostCommitter | None = None) -> NativeHostCommitter:
+    """`salts_of`: the run this committer replays (a replay regenerates its leaves under that run's salts, `adopt_salts`)."""
     os.environ["VERITY_RETAIN"] = retain
     try:
-        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
+        com = NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
     finally:
         del os.environ["VERITY_RETAIN"]
+    if salts_of is not None:
+        com.adopt_salts(salts_of)
+    return com
 
 
 def _run(com: NativeHostCommitter, seed: int = 1, steps: int = 3):
@@ -92,9 +96,10 @@ def test_no_retention_needs_a_replay_and_the_replay_opens_against_the_original_r
     sample, k = _sample(rc)
     with pytest.raises(RuntimeError, match="raw bytes released"):
         orig.open(sample[:1])
-    replay = _committer("host")                       # the replay keeps its values on host for the duration of the opening
+    replay = _committer("host", salts_of=orig)        # the replay keeps its values on host for the duration of the opening
     rc2 = _run(replay)                                # same committed inputs -> same bytes (BI determinism stands in for re-execution here)
     assert rc2.run_root == rc.run_root
+    assert _run(_committer("host")).run_root != rc.run_root      # the same bytes under other salts: the root is not reproduced
     ops = orig.open(sample, values_from=replay)
     assert len(ops) == k and all(orig.verify(rc, o) for o in ops)
 
@@ -102,7 +107,7 @@ def test_no_retention_needs_a_replay_and_the_replay_opens_against_the_original_r
 def test_a_replay_that_differs_in_one_byte_fails_exactly_that_opening():
     orig = _committer("none")
     rc = _run(orig)
-    replay = _committer("host")
+    replay = _committer("host", salts_of=orig)
     _run(replay)
     fa2 = next(m for m in orig._layouts[1] if "fa2.m1/" in m.name)
     victim_byte = fa2.stream_off + 777                # inside the FA2 hidden row of step 1
@@ -140,7 +145,7 @@ def test_device_release_then_frozen_view_survives_reset():
         assert all(b is None for b, _u in frozen._gpu_blocks.values())
     com.reset()
     assert frozen._layouts and not com._layouts
-    replay = _committer("host")
+    replay = _committer("host", salts_of=frozen)
     _run(replay)
     ops = frozen.open([(0, 0), (2, 1)], values_from=replay)
     assert all(frozen.verify(rc, o) for o in ops)
@@ -246,7 +251,7 @@ def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_rep
     with pytest.raises(RuntimeError, match="raw bytes released / not retained"):
         orig.open([(0, inside)])
     # a byte-identical replay: regenerated VALUES + regenerated AUTHENTICATION PATHS verify against the ORIGINAL roots (R17-5)
-    replay = _committer("host")
+    replay = _committer("host", salts_of=orig)
     rc2 = _run(replay)
     assert rc2.run_root == rc.run_root
     ops_r = orig.open(not_held, values_from=replay, paths_from_replay=True)

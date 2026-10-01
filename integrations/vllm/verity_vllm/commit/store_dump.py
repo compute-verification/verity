@@ -4,16 +4,23 @@
 retained bytes (the byte ranges the host copy holds) and its tree levels, plus the run commitment (step roots, leaf counts, run root).
 `load(d)` returns `(store, run)`: `store` is a `NativeRangeOpenings` over the dumped state with the committer's own leaf, layout and
 context rules, so an `OpenedReader(store, run)` recomputes every leaf it returns and folds it to the step root and the run root of record,
-exactly as the committer does.  A dumped byte that differs from the committed one does not verify.  Only packed GPU-tree steps with
-vllm-v1 leaves and no padding steps are dumped; any other store is refused by name.
+exactly as the committer does.  A dumped byte that differs from the committed one does not verify.  Only packed GPU-tree steps with no
+padding steps are dumped; any other store is refused by name.
 
-    store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, gpu_tree_src, run_root, steps: [...]}
+    store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, gpu_tree_src, run_root, leaf_scheme,
+                                 salt_rule, steps: [...]}
     raw/s<step>.bin             the retained bytes of the step, the ranges `steps[i].ranges` ([lo, hi) of the step stream) back to back
     levels/s<step>.bin          the step tree's levels, leaves first, 32 bytes per node (`steps[i].levels` = the widths)
+    salts/s<step>.bin           hm96 leaves: the salts of the leaves `steps[i].salts` ([lo, hi) of the step's leaves) back to back
+    salts/stream.bin            hm96 leaves, a dump of every committed byte: the committer's salt key (`hiding.StreamSalts`, epoch
+                                `salt_epoch`) instead of the per-step salts
 
 A SLIM dump (`dump(..., touched=t)`, `t` recorded by `touched(com)` while a replay's reads were made) writes only the byte ranges and tree
 nodes those reads opened: `steps[i].ranges` the touched ranges, and `steps[i].nodes` ([level, index] in file order) the Merkle siblings
-their openings carried.  A read outside them fails by name, as a byte the committer no longer retains does.
+their openings carried.  A read outside them fails by name, as a byte the committer no longer retains does.  Under hm96-sha256/v1 leaves
+a dump carries the salts of exactly the leaves it holds bytes of, so no other leaf's value can be tested against its root; a full dump
+of a store that retains every committed byte carries the salt key instead (a salt per leaf is half the bytes again at 256-byte leaves).
+A `store.json` without `leaf_scheme` is a vllm-v1 store.
 """
 from __future__ import annotations
 
@@ -145,8 +152,6 @@ def _as_bytes(t: Any) -> memoryview:
 
 
 def _refusal(com: Any) -> str | None:
-    if getattr(com, "hiding", None) is not None:
-        return f"{com.leaf_scheme} leaves (salted): not dumped"
     if getattr(com, "_padding", None):
         return "padding steps: not dumped"
     if getattr(com, "_streams", None):
@@ -180,7 +185,19 @@ def write_file(p: Path, chunks: Iterable[memoryview]) -> str:
     return h.hexdigest()
 
 
-def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str, Any], dict[str, str]]:
+def _salt_leaves(rs: list[tuple[int, int, Any]], chunk: int) -> list[tuple[int, int]]:
+    """The leaves [lo, hi) holding the byte ranges `rs`, merged where they touch, so one opening's leaves lie in one of them."""
+    out: list[list[int]] = []
+    for lo, hi, _ in rs:
+        a, b = int(lo) // chunk, -(-int(hi) // chunk)
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out]
+
+
+def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None, per_leaf_salts: bool) -> tuple[dict[str, Any], dict[str, str]]:
     s = int(sc.step)
     blk, used = com._gpu_blocks[s]
     rs = _ranges(blk) if t is None else _slim_ranges(blk, t.merged(s))
@@ -189,9 +206,13 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     lv_bytes = (_as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
     digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
                f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", lv_bytes)}
+    salted = _salt_leaves(rs, int(com.chunk)) if per_leaf_salts else None
+    if salted is not None:
+        digests[f"salts/s{s}.bin"] = write_file(d / "salts" / f"s{s}.bin", (memoryview(com._salts_of(s, a, b)) for a, b in salted))
     return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
              "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [_width(lv) for lv in lvs],
              **({} if nodes is None else {"nodes": [[d_, i] for d_, i in nodes]}),
+             **({} if salted is None else {"salts": [[a, b] for a, b in salted]}),
              "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
                        for m in com._layouts[s]]}, digests)
 
@@ -217,15 +238,29 @@ def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: 
     d = Path(d)
     (d / "raw").mkdir(parents=True, exist_ok=True)
     (d / "levels").mkdir(parents=True, exist_ok=True)
+    hidden = getattr(com, "hiding", None) is not None
+    whole = touched is None and all(_salt_leaves(_ranges(com._gpu_blocks[int(sc.step)][0]), int(com.chunk))
+                                    == ([(0, int(sc.n_leaves))] if sc.n_leaves else []) for sc in rc.steps)
+    stream = getattr(com, "stream", None) if hidden and whole else None
+    per_leaf = hidden and stream is None
+    salts: dict[str, Any] = {}
+    if hidden:
+        (d / "salts").mkdir(parents=True, exist_ok=True)
+        salts = {"leaf_scheme": com.leaf_scheme, "salt_rule": com.salt_rule}
+    if stream is not None:
+        got = write_file(d / "salts" / "stream.bin", [memoryview(stream.salt_key())])
+        if digests is not None:
+            digests["salts/stream.bin"] = got
+        salts["salt_epoch"] = int(stream.epoch)
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        done = list(pool.map(lambda sc: _dump_step(com, sc, d, touched), rc.steps))
+        done = list(pool.map(lambda sc: _dump_step(com, sc, d, touched, per_leaf), rc.steps))
     steps = [e for e, _ in done]
     if digests is not None:
         for _, dg in done:
             digests.update(dg)
     doc = {"schema": SCHEMA, "chunk": int(com.chunk), "program_digest": com.program_digest.hex(), "geo_digest": com._geo_digest.hex(),
            "run_id": com.run_id, "layout_v2": bool(getattr(com, "layout_v2", False)), "gpu_tree_src": int(com.GPU_TREE_SRC),
-           "run_root": rc.run_root.hex(), "steps": steps}
+           "run_root": rc.run_root.hex(), **salts, "steps": steps}
     (d / "store.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
 
@@ -351,7 +386,23 @@ class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.run_id = str(doc["run_id"])
         self.layout_v2 = bool(doc["layout_v2"])
         self.GPU_TREE_SRC = int(doc["gpu_tree_src"])
-        self._salts: dict[int, bytes] = {}
+        self._init_leaf_scheme(hiding.leaf_scheme_of(doc), False)
+        if self.hiding is not None:
+            self.salt_rule = str(doc["salt_rule"])
+            if (d / "salts" / "stream.bin").exists():
+                self.stream = hiding.StreamSalts(salt_key=(d / "salts" / "stream.bin").read_bytes(), epoch=int(doc["salt_epoch"]))
+                self.hiding = self.stream.leaves
+                self._salted_steps = {int(st["step"]) for st in doc["steps"]}
+            else:
+                y = self._salt_bytes()
+                for st in doc["steps"]:
+                    s, buf, off = int(st["step"]), (d / "salts" / f"s{int(st['step'])}.bin").read_bytes(), 0
+                    self._salt_ranges[s] = []
+                    for a, b in st["salts"]:
+                        self._salt_ranges[s].append((int(a), int(b), buf[off:off + (int(b) - int(a)) * y]))
+                        off += (int(b) - int(a)) * y
+                    if off != len(buf):
+                        raise ValueError(f"{d / 'salts' / f's{s}.bin'}: {len(buf)} B, not the {off} B of the leaves it names")
         self._padding: dict[int, Any] = {}
         self._streams: dict[int, Any] = {}
         self._levels: dict[int, Any] = {}

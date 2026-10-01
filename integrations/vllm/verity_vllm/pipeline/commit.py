@@ -71,7 +71,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
+from verity_vllm.commit import binding as B, challenge as CH, hiding, opened as OV, partition as PT, scheme  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
@@ -409,7 +409,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads,
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
                                    batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)),
-                                   regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
+                                   regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)), leaf_scheme=getattr(args, "leaf_scheme", hiding.DEFAULT_LEAF_SCHEME))
     if kind in ("native_collect", "native_collect_hook", "native_collect_gather", "native_collect_v2", "native_collect_v2_memcpy", "native_collect_v2_auto",
                 "native_collect_v2b"):
         # R10 acq-native candidate (arm 3): CMT-3's complete path (fast copy + GPU tree + FA2 M1 source) with native acquisition at the
@@ -426,7 +426,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                                       gather=(kind in ("native_collect_gather", "native_collect_v2", "native_collect_v2_auto", "native_collect_v2b")),
                                       native_hooks=v2, auto_blocks=(kind in ("native_collect_v2_auto", "native_collect_v2b")),
                                       native_worker=(kind == "native_collect_v2b"), layout=layout,
-                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2)
+                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, leaf_scheme=getattr(args, "leaf_scheme", hiding.DEFAULT_LEAF_SCHEME))
     if kind == "hooks_only":
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
@@ -447,7 +447,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                 self._done[job.step] = StepCommitment(job.step, b"\0" * 32, b"\0" * 32, 0, 0, len(job.metas), b"\0" * 32, job.t_step_end,
                                                       time.perf_counter(), job.backlog)
 
-        return HooksOnly(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, staging="direct")   # no arena: nothing is copied
+        return HooksOnly(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, staging="direct", leaf_scheme=scheme.NAME)  # no arena: nothing is copied
     if kind.startswith("plugin:"):
         # `plugin:<module>:<factory>` — a sibling lane's committer exposing the api.Committer interface: factory(engine, run_id=..., **kw)
         _, mod, fn = kind.split(":", 2)
@@ -544,7 +544,6 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B, partition as PT
     from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
@@ -822,7 +821,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         com.pool = type(com.pool)()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
         t_r = time.perf_counter()
         try:
-            com.reset()
+            com.reset(salts_of=frozen)          # the replay regenerates the frozen run's leaves: under hm96, under its salts
             com.install()
             r2 = run_workload(eng, reqs, sampling)
             rc2 = com.finalize()
@@ -984,6 +983,7 @@ class Options:
     warmup: int = option("--warmup", type=int, default=2)
     label: str = option("--label", default="")
     gpu_tree: bool = option("--gpu-tree", default=False, action="store_true", help="native_host: GPU-resident SHA-256 chunk tree (CMT-2 hidden_gpu_tree.cu) over the arena; no D2H, no hashlib")
+    leaf_scheme: str = option("--leaf-scheme", default="hm96-sha256/v1", choices=("hm96-sha256/v1", "vllm-v1"), help="the step trees' leaf rule: hm96-sha256/v1 hiding leaves over the vllm-v1 leaves (the default, commitment scheme vllm-v1/hm96-sha256/v1), or the bare vllm-v1 leaves of the roots recorded before it")
     regen_row4: bool = option("--regen-row4", default=False, action="store_true", help="native_host: row-4 BASELINE candidate — regenerate residual.float() and bind it (+4 B/elem)")
     fast_copy: bool = option("--fast-copy", default=False, action="store_true", help="native_host: snapshot via cudaMemcpyAsync through ctypes (no torch ops on the serving thread)")
     batch_copy: bool = option("--batch-copy", default=False, action="store_true", help="native_host: batch the D2D snapshots of not-overwritten tensors into one _foreach_copy_ per step")

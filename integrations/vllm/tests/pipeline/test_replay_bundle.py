@@ -94,14 +94,21 @@ def test_a_changed_missing_or_extra_file_is_refused(tmp_path, tamper, why):
         RB.open_bundle(b)
 
 
-def _deferred(out, **kw):
-    """`defer` of a small committed store, its write started beside the checks (`start`) unless `replay_bundle_overlap=0`."""
-    torch = pytest.importorskip("torch")
+def _committed():
+    pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
+
+    return commit_steps(STEPS)
+
+
+def _deferred(out, committed=None, **kw):
+    """`defer` of a small committed store (`committed`, default a fresh commit), its write started beside the checks (`start`) unless
+    `replay_bundle_overlap=0`."""
+    torch = pytest.importorskip("torch")
     from verity_vllm.pipeline.timeline import Timeline
 
-    com, rc = commit_steps(STEPS)
+    com, rc = committed or _committed()
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", "required_manifest": None, "openings": 64, **kw})
     started, row, deferred = RB.start(out, 1, com, rc, args, None), {"commit": {}}, {}
@@ -111,8 +118,9 @@ def _deferred(out, **kw):
 
 
 def test_a_store_written_beside_the_checks_is_the_store_defer_writes(tmp_path):
-    started, ctx, files = _deferred(tmp_path / "beside")
-    inline, ctx0, files0 = _deferred(tmp_path / "inline", replay_bundle_overlap=0)
+    committed = _committed()                                         # one commit: its salts are in both stores
+    started, ctx, files = _deferred(tmp_path / "beside", committed)
+    inline, ctx0, files0 = _deferred(tmp_path / "inline", committed, replay_bundle_overlap=0)
     assert started is not None and started.future.done() and inline is None
     assert files == files0 and ctx[RB.HASHED] == ctx0[RB.HASHED] and set(ctx[RB.HASHED]) == {f for f in files if f.endswith(".bin") and f.startswith("store/")}
     assert {k: v for k, v in ctx.items() if k != "engine_of_record"} == {k: v for k, v in ctx0.items() if k != "engine_of_record"}
