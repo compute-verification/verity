@@ -1,14 +1,20 @@
-"""A leased Commit (`pipeline.gpu_lease`): only the Commit process holds the GPU, from right before its engine to its exit, under the
-lease tool; the row and every other child see no CUDA device; an unleased row is unchanged."""
+"""A leased Commit (`pipeline.gpu_lease`): only the Commit process holds the GPU, from right before its engine to the end of its last
+run (or its exit, when it still needs the device), under the lease tool; the row and every other child see no CUDA device; an unleased
+row is unchanged."""
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_driver as RD
@@ -141,3 +147,166 @@ def test_the_cuda_jit_cache_persists_beside_the_trees_triton_cache(tmp_path):
     none: dict[str, str] = {}
     RD.jit_cache(none)
     assert none == {}
+
+
+def _args(**kw):
+    return SimpleNamespace(**{"replay_deferred": True, "replay_bundle_overlap": 1, "open_after_release": True, "replay_openings": "auto",
+                              "tensor_digests": False, **kw})
+
+
+def _com(**kw):
+    return SimpleNamespace(**{"retain": "host", "retain_exclude": None, "pool": SimpleNamespace(mode="exact-registered-shared"),
+                              "_retained_device_bytes": lambda: 0, **kw})
+
+
+ENG = SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(engine_core=SimpleNamespace(engine_core=object()))))
+ONE = {"CUDA_VISIBLE_DEVICES": "5", "GPU_LEASE_UUID": "GPU-5"}
+
+
+@pytest.mark.parametrize("args,com,eng,env,why", [
+    (_args(replay_deferred=False), _com(), ENG, ONE, "no --replay-deferred"),
+    (_args(replay_bundle_overlap=0), _com(), ENG, ONE, "--replay-bundle-overlap 0"),
+    (_args(tensor_digests=True), _com(), ENG, ONE, "--tensor-digests"),
+    (_args(), _com(retain="none"), ENG, ONE, "replay the run on the engine"),
+    (_args(), _com(retain_exclude={"fa3_hidden_m1"}), ENG, ONE, "replay the run on the engine"),
+    (_args(replay_openings="always"), _com(), ENG, ONE, "replay the run on the engine"),
+    (_args(), _com(pool=SimpleNamespace(mode="torch-pinned-pow2")), ENG, ONE, "torch's pinned host memory"),
+    (_args(), _com(_retained_device_bytes=lambda: 3 << 20), ENG, ONE, "3 MiB of committed bytes"),
+    (_args(), _com(), SimpleNamespace(llm=None), ONE, "engine core is not in this process"),
+    (_args(), _com(), ENG, {"CUDA_VISIBLE_DEVICES": "4,5"}, "a lease of 2 GPUs"),
+])
+def test_a_commit_that_still_needs_the_device_after_its_last_run_keeps_its_lease_and_says_why(args, com, eng, env, why):
+    assert why in GL.kept_reason(args, [_com(), com], eng, env)
+
+
+def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_release():
+    assert GL.kept_reason(_args(), [_com()], ENG, ONE) is None
+    assert GL.kept_reason(_args(open_after_release=False), [_com(retain="none")], ENG, ONE) is None    # no openings after release
+    assert GL.kept_reason(_args(), [_com(pool=SimpleNamespace(mode=None))], ENG, ONE) is None          # a pool that never allocated
+
+
+def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
+    """In `commit.main`: the release follows the last run's records that read the device (the run, its openings, the replay bundle's
+    device-resident tensors in `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
+    src = Path(GL.__file__).with_name("commit.py").read_text()
+    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
+             'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
+             "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']
+    at = [main.index(m) for m in marks]
+    assert at == sorted(at) and main.count("GL.release(") == 1, dict(zip(marks, at))
+    call = main[at[5]:main.index("\n", at[5])]
+    assert "last=pair == args.pairs - 1 and k == len(order) - 1 and _HOT is None" in call and "after=_wstage" in call
+    after = main[main.index("\n", at[5]):]
+    assert not re.search(r"torch\.cuda|\.cuda\(|nvidia_smi|synchronize\(|empty_cache", after)
+
+
+def test_the_lease_record_dates_the_release_and_names_its_stage_or_why_it_was_kept(tmp_path):
+    def run_tl(marker):
+        def go(to, argv):
+            (tmp_path / "gpu_lease.requested").write_text("2026-10-01T20:00:00Z\n")
+            (tmp_path / "gpu_lease.started").write_text("2026-10-01T20:01:00Z\n")
+            if marker is not None:
+                (tmp_path / "gpu_lease.released").write_text(json.dumps(marker))
+            return 0
+        return go
+
+    t = 1790884800.0                                   # 2026-10-01T20:00:00Z
+    env = {"GPU_LEASE": "/l/gpu-lease"}
+    ticks = lambda: iter([t - 30, t + 600]).__next__
+    _, rec = GL.run(str(tmp_path), str(tmp_path / "log"), ["x"], 600, env,
+                    run_tl({"released": "2026-10-01T20:02:30Z", "t": t + 150.0, "released_at": "work.pair0.instrumented"}), clock=ticks())
+    assert rec["released"] == "2026-10-01T20:02:30Z" and rec["released_at"] == "work.pair0.instrumented" and rec["kept"] is None
+    assert rec["held_min"] == 1.5 and rec["waited_min"] == 1.0 and rec["process_ended"] == "2026-10-01T20:10:00Z"
+    _, rec = GL.run(str(tmp_path), str(tmp_path / "log"), ["x"], 600, env, run_tl({"kept": "a lease of 2 GPUs"}), clock=ticks())
+    assert rec["released"] == rec["process_ended"] and rec["released_at"] == "process.end" and rec["kept"] == "a lease of 2 GPUs"
+    assert rec["held_min"] == 9.0
+    _, rec = GL.run(str(tmp_path), str(tmp_path / "log"), ["x"], 600, env, run_tl(None), clock=ticks())
+    assert rec["released_at"] == "process.end" and "ended before its release" in rec["kept"] and rec["held_min"] == 9.0
+
+
+def _release_kept(tmp_path, monkeypatch, active, on):
+    monkeypatch.setattr(GL, "_HELD", [(None, None, [], str(tmp_path / "gpu_lease.started"), dict(ONE))])
+    monkeypatch.setattr(GL, "DRIVER", lambda: SimpleNamespace(reset=lambda: None, active=lambda: active))
+    monkeypatch.setattr(GL, "on_gpus", lambda uuids: on)
+    monkeypatch.setattr(GL, "_shut_down", lambda eng: None)
+    waits: list[float] = []
+    tl = SimpleNamespace(start=lambda *a, **k: None, end=lambda *a, **k: None)
+    assert GL.release(tl, ENG, [_com()], _args(), last=True, after="work.pair0.instrumented", wait=waits.append) is False
+    assert not GL._RELEASED.is_set() and len(GL._HELD) == 1 and waits == [0.5] * 9
+    return json.loads((tmp_path / "gpu_lease.released").read_text())
+
+
+def test_a_context_that_does_not_go_keeps_the_lease(tmp_path, monkeypatch):
+    assert "still active on device(s) [0]" in _release_kept(tmp_path, monkeypatch, [0], [])["kept"]
+    assert "still lists a compute process on ['GPU-5']" in _release_kept(tmp_path, monkeypatch, [], ["GPU-5"])["kept"]
+    assert "can't list the compute processes" in _release_kept(tmp_path, monkeypatch, [], None)["kept"]
+
+
+def test_the_commit_gives_its_gpu_back_after_its_last_run_and_ends_with_its_command(tmp_path):
+    env = {"PATH": os.environ["PATH"], "GPU_LEASE": fake_lease(tmp_path)}
+    GL.hide_devices(env)
+    seen, exited, lock = tmp_path / "seen", tmp_path / "atexit", tmp_path / "5.lock"
+    cmd = commit("import atexit, subprocess, types\ncalls = []\n"
+                 "GL.DRIVER = lambda: types.SimpleNamespace(reset=lambda: calls.append('reset'), active=lambda: [])\n"
+                 "GL.on_gpus = lambda uuids: calls.append(uuids) or []\n"
+                 "GL._shut_down = lambda eng: calls.append('shutdown')\nGL._no_device = lambda: calls.append('no device')\n"
+                 f"atexit.register(lambda: open({str(exited)!r}, 'w').write('ran'))\n"
+                 "tl = types.SimpleNamespace(start=lambda n, **k: calls.append(n), end=lambda n, **k: calls.append(k.get('released')))\n"
+                 "from tests.pipeline.test_gpu_lease import ENG, _args, _com\n"
+                 "first = GL.release(tl, ENG, [_com()], _args(), last=False, after='work.pair0.control')\n"
+                 "ok = GL.release(tl, ENG, [_com()], _args(), last=True, after='work.pair0.instrumented', wait=lambda s: None)\n"
+                 f"free = subprocess.run(['flock', '-n', {str(lock)!r}, 'true']).returncode == 0\n"
+                 f"json.dump(dict(first=first, ok=ok, free=free, calls=calls, held=len(GL._HELD)), open({str(seen)!r}, 'w'))\n"
+                 "GL.run_main(lambda: sys.exit(3))\n")
+    log = tmp_path / "commit.log"
+
+    def run_tl(to: int, argv: list[str]) -> int:
+        with open(log, "a") as f:
+            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT, cwd=Path(__file__).parents[2]).returncode
+
+    rc, rec = GL.run(str(tmp_path), str(log), cmd, 600, env, run_tl)
+    assert rc == 3, log.read_text()                    # the holder's end after the release did not kill the Commit
+    assert json.loads(seen.read_text()) == {"first": False, "ok": True, "free": True, "held": 0,
+                                            "calls": ["gpu_lease.release", "shutdown", "reset", ["GPU-5"], "no device", True]}
+    assert not exited.exists(), "the released Commit ran its interpreter's teardown"
+    assert "GPU LEASE released after work.pair0.instrumented" in log.read_text()
+    assert rec["released_at"] == "work.pair0.instrumented" and rec["kept"] is None and rec["rc"] == 3 and rec["held_min"] is not None
+
+
+def test_a_context_that_reappears_after_the_release_ends_the_commit(tmp_path, monkeypatch):
+    started = str(tmp_path / "gpu_lease.started")
+    looks = iter([[], [], [0]])
+    killed: list[tuple[int, int]] = []
+    monkeypatch.setattr(GL.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    GL._watch(SimpleNamespace(active=lambda: next(looks)), started, wait=lambda s: None)
+    assert killed == [(os.getpid(), signal.SIGKILL)]
+    assert "context_reappeared" in json.loads((tmp_path / "gpu_lease.released").read_text())
+
+
+def test_the_holder_ending_after_the_release_leaves_the_commit_running(monkeypatch):
+    killed: list[int] = []
+    monkeypatch.setattr(GL.os, "kill", lambda pid, sig: killed.append(sig))
+    GL._RELEASED.set()
+    try:
+        GL._end_with(subprocess.Popen(["true"]))
+    finally:
+        GL._RELEASED.clear()
+    assert killed == []
+
+
+def test_a_commit_that_has_not_released_returns_and_raises_as_its_command_does():
+    assert GL.run_main(lambda: 5) == 5
+    with pytest.raises(SystemExit):
+        GL.run_main(lambda: sys.exit(4))
+
+
+def test_after_the_release_torch_sees_no_device():
+    torch = pytest.importorskip("torch")
+    was = torch.cuda.is_available
+    p = GL._no_device()
+    try:
+        assert torch.cuda.is_available() is False
+    finally:
+        p.uninstall()
+    assert torch.cuda.is_available is was

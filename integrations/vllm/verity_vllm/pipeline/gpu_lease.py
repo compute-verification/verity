@@ -5,13 +5,20 @@ The row's processes see no CUDA device (``CUDA_VISIBLE_DEVICES`` empty), so noth
 of the node. The Commit process starts without a GPU too: its imports, the manifest, the producer facts and the boundary plan run on
 the CPU, and only right before the engine (its target reads the device, then the build) does it take the lease (``acquire``):
 ``"$GPU_LEASE" N --wait --max-min M --mem-gb 0 -- holder``, a child of the Commit that hands it the lease's lock descriptors and the
-leased ``CUDA_VISIBLE_DEVICES``. The GPUs stay
-locked until the Commit process exits, the only point vLLM's in-process engine lets go of its CUDA context. The lease tool ending the
-holder (M minutes, the Commit's timeout) ends the Commit. Prechecks, manifest and weights of record come before the Commit process;
-the verdict, the row's records and the research run's publish after it. Without ``GPU_LEASE`` nothing changes.
+leased ``CUDA_VISIBLE_DEVICES``. The lease tool ending the holder (M minutes, the Commit's timeout) ends the Commit.
 
-``gpu_lease.json`` beside the row records the lease: requested and started (written by the Commit and the holder) and released (when
-the Commit process exits), and the minutes waited and held."""
+After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every
+allocation in it (as at the process's exit), nvidia-smi showing nothing left on the leased GPU (the node's stray probe reads the
+same list), then the lease's locks and holder let go. What follows (binding and manifest coverage, the replay bundle, the weights
+pin, the openings after release, the closure) reads host memory only. From there nothing in the process may touch CUDA:
+``torch.cuda.is_available()`` is False, a context that reappears ends the process at once, and the process ends with its command
+(``run_main``), before the interpreter's teardown could open one. A Commit that still needs the device after its last run, or whose
+context did not go, keeps the lease to its exit and says why (``kept_reason``). Prechecks, manifest and weights of record come before
+the Commit process; the verdict, the row's records and the research run's publish after it. Without ``GPU_LEASE`` nothing changes.
+
+``gpu_lease.json`` beside the row records the lease: requested and started (written by the Commit and the holder), released and the
+stage it was released after (``released_at``: the Commit's last run, or ``process.end`` with ``kept``, the reason), and the minutes
+waited and held."""
 from __future__ import annotations
 
 import atexit
@@ -26,10 +33,12 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from typing import Any, Callable, MutableMapping
 
 RECORD = "gpu_lease.json"
 HEARTBEAT_S = 60
+WATCH_S = 0.2                      # after the release, how often the Commit checks that no CUDA context reappeared
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
 MAX_MIN = "VERITY_LEASE_MAX_MIN"
 TOOL_START = "GPU_LEASE_STARTED"   # the lease tool's own start-time override (its tests): never passed to it
@@ -52,6 +61,7 @@ sys.stdin.buffer.read()
 """
 _HELD: list[Any] = []
 _EXITING = threading.Event()
+_RELEASED = threading.Event()
 _ENVIRON: list[MutableMapping[str, str]] = []
 
 
@@ -81,6 +91,10 @@ def _requested(started: str) -> str:
     return started[: -len("started")] + "requested"
 
 
+def _released(started: str) -> str:
+    return started[: -len("started")] + "released"
+
+
 def holder_argv(environ: MutableMapping[str, str], sock: int) -> list[str]:
     """The lease request: the task's GPU count (``GPU_LEASE_N``, which dispatch sets; else one) for at most the Commit's timeout."""
     return [environ["GPU_LEASE"], environ.get("GPU_LEASE_N") or "1", "--wait", "--max-min", environ.get(MAX_MIN) or "60", "--mem-gb", "0",
@@ -105,7 +119,7 @@ def tool_env(environ: MutableMapping[str, str]) -> dict[str, str]:
 
 def _end_with(holder: subprocess.Popen) -> None:
     holder.wait()
-    if not _EXITING.is_set():
+    if not (_EXITING.is_set() or _RELEASED.is_set()):
         print(f"{_utc(time.time())} GPU lease ended under the Commit (holder rc {holder.returncode}): the Commit ends now", file=sys.stderr,
               flush=True)
         os.kill(os.getpid(), signal.SIGKILL)
@@ -114,7 +128,8 @@ def _end_with(holder: subprocess.Popen) -> None:
 def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> None:
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease, then see only its devices. Nothing before this call may initialise CUDA (the process sees no device until it returns). The
-    lease's locks are this process's from here to its exit; the holder ending first (the lease tool's --max-min) kills this process."""
+    lease's locks are this process's from here to its ``release`` or its exit; the holder ending first (the lease tool's --max-min)
+    kills this process."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
         return
@@ -138,11 +153,224 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> 
         holder.kill()
         raise SystemExit(f"GPU lease: the holder passed {len(fds)} lock descriptor(s) for {want} GPU(s); the Commit would not hold its lease")
     environ.update(json.loads(line))
-    _HELD.append((holder, ours, fds))
+    _HELD.append((holder, ours, fds, environ[STARTED], environ))
     atexit.register(_EXITING.set)        # registered after torch's and vLLM's, so it runs before their teardown
     threading.Thread(target=_end_with, args=(holder,), daemon=True).start()
     if tl is not None:
         tl.end("gpu_lease.wait", devices=environ.get("CUDA_VISIBLE_DEVICES"), locks=len(fds))
+
+
+def _kept_by(args: Any, com: Any) -> str | None:
+    retain, exclude = getattr(com, "retain", None), getattr(com, "retain_exclude", None)
+    replays = getattr(args, "replay_openings", "auto") == "always" or retain != "host" or bool(exclude)
+    mode = getattr(getattr(com, "pool", None), "mode", None)
+    on_device = com._retained_device_bytes() if hasattr(com, "_retained_device_bytes") else 0
+    return (f"the openings after release replay the run on the engine (retain {retain}, excluded {sorted(exclude or [])}, replay openings "
+            f"{getattr(args, 'replay_openings', 'auto')})" if getattr(args, "open_after_release", False) and replays else
+            f"the retained bytes are in torch's pinned host memory ({mode}), which the CUDA context's end frees"
+            if mode is not None and not str(mode).startswith("exact-registered") else
+            f"{on_device >> 20} MiB of committed bytes or tree levels are on the device" if on_device else None)
+
+
+def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[str, str]) -> str | None:
+    """Why the Commit keeps its GPU to its exit after its last run, or None when nothing after that run reads the device: the C2
+    replay deferred to its bundle (whose device-resident tensors ``replay_bundle.start`` has read), and for every committer the
+    openings after release opened from host and the committed bytes and tree levels in host memory that outlives the CUDA context
+    (the pool's registered shared mappings; torch's pinned blocks die with it); one GPU, and vLLM's engine core in this process (its
+    shutdown frees it)."""
+    core = getattr(getattr(getattr(eng, "llm", None), "llm_engine", None), "engine_core", None)
+    gpus = [d for d in environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d]
+    return ("the C2 replay runs in this process, on the engine's weights (no --replay-deferred)" if not getattr(args, "replay_deferred", False) else
+            "the replay bundle reads the model's buffers at the C2 site (--replay-bundle-overlap 0)" if not getattr(args, "replay_bundle_overlap", 1) else
+            "--tensor-digests reads the retained bytes after the run" if getattr(args, "tensor_digests", False) else
+            next((why for why in (_kept_by(args, c) for c in coms) if why), None) or
+            ("vLLM's engine core is not in this process" if getattr(core, "engine_core", None) is None else
+             f"a lease of {len(gpus)} GPUs" if len(gpus) != 1 else None))
+
+
+class _Driver:
+    """The CUDA driver (libcuda) on this process's devices: which primary contexts are active, and their reset (the context and every
+    allocation in it destroyed, as at the process's exit). Neither creates a context."""
+
+    def __init__(self) -> None:
+        self.lib = ctypes.CDLL("libcuda.so.1")
+        n = ctypes.c_int()
+        self._ok(self.lib.cuDeviceGetCount(ctypes.byref(n)), "cuDeviceGetCount")
+        self.devs = []
+        for i in range(n.value):
+            d = ctypes.c_int()
+            self._ok(self.lib.cuDeviceGet(ctypes.byref(d), i), "cuDeviceGet")
+            self.devs.append(d)
+
+    @staticmethod
+    def _ok(rc: int, what: str) -> None:
+        if rc != 0:
+            raise RuntimeError(f"{what}: CUDA driver error {rc}")
+
+    def active(self) -> list[int]:
+        out = []
+        for i, d in enumerate(self.devs):
+            flags, on = ctypes.c_uint(), ctypes.c_int()
+            if self.lib.cuDevicePrimaryCtxGetState(d, ctypes.byref(flags), ctypes.byref(on)) != 0 or on.value:
+                out.append(i)
+        return out
+
+    def reset(self) -> None:
+        for d in self.devs:
+            self._ok(self.lib.cuDevicePrimaryCtxReset_v2(d), "cuDevicePrimaryCtxReset")
+
+
+DRIVER: Callable[[], Any] = _Driver
+
+
+def on_gpus(uuids: list[str]) -> list[str] | None:
+    """The leased GPUs (UUIDs) any compute process is on, from nvidia-smi's compute apps as the node's stray probe reads them; None
+    when nvidia-smi can't say. Nothing but this process may be on a leased GPU, so after its reset the answer must be none."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-compute-apps=gpu_uuid", "--format=csv,noheader"], capture_output=True, text=True,
+                             timeout=60, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    on = {ln.strip() for ln in out.splitlines()}
+    return [u for u in uuids if u in on]
+
+
+def _gone(drv: Any, uuids: list[str], wait: Callable[[float], Any], tries: int = 10) -> str | None:
+    """None once the device has no context and nvidia-smi lists nothing on the leased GPUs, else why not (after ``tries`` looks)."""
+    for k in range(tries):
+        left, on = drv.active(), on_gpus(uuids)
+        if not left and on == []:
+            return None
+        if k + 1 < tries:
+            wait(0.5)
+    return (f"a CUDA context is still active on device(s) {left} after its reset" if left else
+            "nvidia-smi can't list the compute processes, so the release can't be checked" if on is None else
+            f"nvidia-smi still lists a compute process on {on} after the reset")
+
+
+def _shut_down(eng: Any) -> str | None:
+    """vLLM's in-process engine teardown (model runner, scheduler, distributed groups, cached device memory), before the context's
+    reset frees the rest; returns its error, if any."""
+    import gc
+
+    import torch
+
+    try:
+        torch.cuda.synchronize()
+        eng.llm.llm_engine.engine_core.shutdown()
+        gc.collect()
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+    except Exception as e:  # noqa: BLE001 -- the reset frees the device either way; the error goes on the record
+        return repr(e)[:300]
+    return None
+
+
+def _read(p: str) -> dict[str, Any]:
+    if not os.path.exists(p):
+        return {}
+    with open(p) as f:
+        return json.load(f)
+
+
+def _note(started: str, **fields: Any) -> None:
+    p = _released(started)
+    doc = _read(p)
+    with open(p + ".tmp", "w") as f:
+        json.dump(doc | fields, f)
+    os.replace(p + ".tmp", p)
+
+
+def _no_device() -> Any:
+    import torch
+
+    from verity_vllm.engine import hooks
+
+    return hooks.patch(torch.cuda, "is_available", lambda: False)
+
+
+def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after: str, wait: Callable[[float], Any] = time.sleep) -> bool:
+    """Give a leased Commit's GPU back once ``last`` (the run of stage ``after`` was its last device work): the engine shut down,
+    the device's context reset, nothing left on the leased GPU, then the lease's locks closed, the holder told (EOF) and waited for,
+    and ``gpu_lease.released`` written with the time and ``after``. Kept to the exit (``kept_reason``, or a context that did not go)
+    the file names why instead. Returns whether the GPU was released."""
+    if not _HELD or not last:
+        return False
+    holder, ours, fds, started, environ = _HELD[0]
+    tl.start("gpu_lease.release", after=after)
+    why, err, drv = kept_reason(args, coms, eng, environ), None, None
+    if why is None:
+        err = _shut_down(eng)
+        try:
+            drv = DRIVER()
+            drv.reset()
+            why = _gone(drv, [u for u in environ.get("GPU_LEASE_UUID", "").split(",") if u], wait)
+        except (OSError, RuntimeError) as e:
+            why = f"the CUDA context could not be reset: {e!r}"[:300]
+    if why is not None:
+        _note(started, kept=why, after=after, shutdown_error=err)
+        tl.end("gpu_lease.release", released=False, why=why)
+        print(f"[delta] GPU LEASE kept to the Commit's exit: {why}", flush=True)
+        return False
+    _RELEASED.set()
+    _no_device()
+    for fd in fds:
+        os.close(fd)
+    ours.close()
+    if holder.stdin:
+        holder.stdin.close()
+    try:
+        holder.wait(timeout=60)
+    except subprocess.TimeoutExpired:
+        holder.kill()
+        holder.wait()
+    _HELD.clear()
+    t = time.time()
+    _note(started, released=_utc(t), t=round(t, 3), released_at=after, shutdown_error=err)
+    threading.Thread(target=_watch, args=(drv, started), daemon=True).start()
+    tl.end("gpu_lease.release", released=True, after=after, shutdown_error=err)
+    print(f"[delta] GPU LEASE released after {after}: engine shut down{' (' + err + ')' if err else ''}, CUDA context reset, nothing on "
+          f"{environ.get('GPU_LEASE_UUID')}; the checks that follow read host memory", flush=True)
+    return True
+
+
+def _watch(drv: Any, started: str, wait: Callable[[float], Any] = time.sleep, every_s: float = WATCH_S) -> None:
+    """After the release, a CUDA context that reappears (a CUDA call in this process) is on a GPU the pool may have granted to
+    another holder: the Commit ends at once, named in its log and in ``gpu_lease.released``."""
+    while True:
+        wait(every_s)
+        on = drv.active()
+        if on:
+            msg = f"{_utc(time.time())} GPU lease: a CUDA context reappeared on device(s) {on} after the lease was released: the Commit ends now"
+            print(msg, file=sys.stderr, flush=True)
+            _note(started, context_reappeared=_utc(time.time()))
+            os.kill(os.getpid(), signal.SIGKILL)
+            return
+
+
+def run_main(main: Callable[..., Any], *a: Any) -> Any:
+    """``main(*a)``, the process's command. Once the process has released its lease it ends here, with ``main``'s exit status
+    (``os._exit``), so nothing in the interpreter's or the libraries' teardown (torch's allocator and handles, vLLM's atexit,
+    CUDA's static destructors) opens a context on the GPU it gave back."""
+    try:
+        code = main(*a)
+    except SystemExit as e:
+        if not _RELEASED.is_set():
+            raise
+        code = e.code
+    except BaseException:
+        if not _RELEASED.is_set():
+            raise
+        traceback.print_exc()
+        code = 1
+    if not _RELEASED.is_set():
+        return code
+    if code is not None and not isinstance(code, int):
+        print(code, file=sys.stderr)
+        code = 1
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code or 0)
 
 
 def _heartbeat(log: str, started: str, stop: threading.Event, every_s: float) -> None:
@@ -167,7 +395,7 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
     """Run the leased Commit ``cmd`` -> (its rc, the lease record). ``run_tl(timeout, argv)`` runs argv as the row runs a stage; it may
     wait for the GPU as long as the Commit may run, and the lease tool ends the Commit at its timeout."""
     started = os.path.join(row_dir, "gpu_lease.started")
-    for p in (started, _requested(started)):
+    for p in (started, _requested(started), _released(started)):
         if os.path.exists(p):
             os.remove(p)
     t0 = clock()
@@ -183,15 +411,21 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
         stop.set()
         beat.join()
     t1 = clock()
+    rel = _read(_released(started))
+    t_rel = float(rel["t"]) if rel.get("released") else t1
     rec: dict[str, Any] = {"schema": "verity-vllm/gpu-lease/v1", "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
-                           "process_started": _utc(t0), "requested": None, "released": _utc(t1), "rc": rc, "started": None,
-                           "waited_min": None, "held_min": None}
+                           "process_started": _utc(t0), "requested": None, "released": _utc(t_rel),
+                           "released_at": rel.get("released_at") or "process.end", "process_ended": _utc(t1),
+                           "kept": rel.get("kept") or (None if rel.get("released") else "the Commit ended before its release (its last run was "
+                                                       "not an instrumented one, or it ended before that run's records)"),
+                           "rc": rc, "started": None, "waited_min": None, "held_min": None}
+    rec.update({k: rel[k] for k in ("shutdown_error", "context_reappeared") if rel.get(k)})
     tr, ts = _stamp(_requested(started)), _stamp(started)
     if tr is not None:
         rec["requested"] = _utc(tr)
     if ts is not None:
         rec.update(started=_utc(ts), waited_min=round(max(0.0, ts - (tr if tr is not None else t0)) / 60, 2),
-                   held_min=round(max(0.0, t1 - ts) / 60, 2))
+                   held_min=round(max(0.0, t_rel - ts) / 60, 2))
     with open(os.path.join(row_dir, RECORD), "w") as f:
         json.dump(rec, f, indent=1)
     return rc, rec
