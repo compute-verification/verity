@@ -456,7 +456,7 @@ def share(rows: dict) -> tuple[dict, dict]:
 
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
-          refs: dict | None = None, salts: dict | None = None) -> dict:
+          refs: dict | None = None, salts: dict | None = None, registered: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
     sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
     every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
@@ -470,7 +470,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
     ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``): the shared-row tables and refs as given, in their
     order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt). ``salts``
-    (``{port: [192-byte salt, ...]}``, one per table row, or per instance without tables): the committer's own salts."""
+    (``{port: [192-byte salt, ...]}``, one per table row, or per instance without tables): the committer's own salts.
+
+    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ports whose table rows are rows of a
+    registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3 path to
+    the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
@@ -480,6 +484,14 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
+    if registered is not None:
+        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
+            raise ValueError("registered: some input ports' tables, given with their tables, refs and registered salts")
+        words = {p.name: p.words for p in ports}
+        for name, e in registered.items():
+            rows_p = len(np.asarray(tables[name]).reshape(-1, words[name]))
+            if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
+                raise ValueError(f"registered port {name}: a value, and one position and path per table row")
     if tables is not None:
         if set(tables) != {p.name for p in ports} or set(refs) != {p.name for p in ports}:
             raise ValueError("tables and refs: one per input port")
@@ -509,6 +521,9 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha512": digest(text),
             "units": units, "frame_v3": fv, "rows": True}
+    if registered is not None:
+        head["registered"] = {name: {"value": e["value"], "positions": [int(x) for x in e["positions"]], "paths": list(e["paths"])}
+                              for name, e in registered.items()}
     if refs is not None:
         head["shared_rows"] = {p.name: len(rows[p.name]) for p in ports}
         public = b"".join(bc for p in ports for bc in bcs[p.name])
