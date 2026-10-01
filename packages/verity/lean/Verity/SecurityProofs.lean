@@ -1,5 +1,6 @@
 import Verity.SecurityProofs.Circuit
 import Verity.SecurityProofs.Boolean
+import Verity.SecurityProofs.Game
 import Verity.SecurityProofs.Game.Basic
 import Verity.SecurityProofs.Game.Interleave
 import Verity.SecurityProofs.Game.Union

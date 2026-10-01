@@ -1,5 +1,4 @@
-import Verity.Protocol.Partition
-import Verity.Protocol.Declaration
+import Verity.Guarantees.Circuit
 
 /-!
 # Lemmas about circuits and partitions
@@ -306,3 +305,22 @@ theorem Contains.implements {C D : Circuit} (h : Contains C D) : Implements C D 
   h.elim fun M => ⟨M.implementation⟩
 
 end Verity
+
+namespace Verity.SecurityProofs
+
+theorem Compose : Guarantees.Compose :=
+  fun _ _ P X a hin h => P.compose X a hin h
+
+theorem ComposeCone : Guarantees.ComposeCone :=
+  fun _ _ P X a T hin h => P.compose_cone X a T hin h
+
+theorem CorrectOfOpening : Guarantees.CorrectOfOpening :=
+  fun _ _ P _ _ _ hXY => ⟨P.correct_congr fun g hg => (hXY g hg).symm, P.correct_congr hXY⟩
+
+theorem RefineWrong : Guarantees.RefineWrong :=
+  fun _ _ _ _ _ r _ _ hY => r.card_wrong_le hY
+
+theorem ContainsImplements : Guarantees.ContainsImplements :=
+  fun _ _ ⟨M, hM⟩ => ⟨M.implementation, hM⟩
+
+end Verity.SecurityProofs
