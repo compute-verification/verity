@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The cost of instances.json.gz's compression level: one kept instances file (FILE) decompressed once, then recompressed at each
 # LEVEL in its own process, as build.py's writer compresses it (gzip, text written in chunks); then each output read back through
-# the manifest's reader (`program_view.iter_instance_rows`). Measurement only.
+# the manifest's reader (`program_view.iter_instance_rows`); GZ_SERIAL=1 runs one at a time. Measurement only.
 set -euo pipefail
 FILE=$1
 shift
@@ -59,7 +59,7 @@ def recompress(level):
             "text_bytes": n, "inflate_secs": round(inflate, 1), "rows": rows, "read_rows_secs": round(read, 1)}
 
 
-with ProcessPoolExecutor(len(levels) + 1) as ex:
+with ProcessPoolExecutor(1 if os.environ.get("GZ_SERIAL") else len(levels) + 1) as ex:
     base = ex.submit(decompress_only)
     res = list(ex.map(recompress, levels))
 doc = {"file": src, "source_gz_bytes": os.path.getsize(src), "text": base.result(), "levels": res,
