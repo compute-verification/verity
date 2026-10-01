@@ -572,9 +572,7 @@ class PearlCDeviceRun(GraphCalls):
         caller = self.torch_stream(raw) if cuda else None
         main = self.main if self.schedule.main_priority == "greatest" else None
         if self._graphed(m16):
-            if self.hashing:
-                self._slot(w, index, m16, m, caller)
-            y, screened = self._replay(w, sh, pipe, raw, tiles, m)
+            y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles

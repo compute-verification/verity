@@ -3,11 +3,18 @@ captured once a pipeline and replayed on the caller's stream.  A graph reads its
 weight's device slot, which a forward's first call fills for the whole forward in one upload (a call the prediction missed
 uploads its own), and scatters its leaves, flags and A root into the pass itself.  The same kernels write the same bytes as
 the eager steps, which the e2e's ``graphs`` gate holds.
+
+Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
+`whole_capture_end`), a call launches the same steps into vLLM's capture instead, and is recorded; at each replay of that
+forward no call's Python runs, so `whole_replay` does the forward's host work at once: its slots in one upload, and its
+matmuls, tiles and screened rows appended to the pass.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
+
+from verity_pouw.protocol import Matmul, Shape
 
 from .pouw_pearl_c_host import _zeros, torch_uint8
 from .pouw_pearl_c_screen import copy_kernel, screen_into
@@ -20,6 +27,11 @@ GRAPH_ROWS = 256
 SLOT_BYTES = 144
 
 
+def _capturing() -> bool:
+    import torch
+    return torch.cuda.is_current_stream_capturing()
+
+
 @dataclass
 class _Graph:
     """One pipeline's call steps captured as a CUDA graph, over buffers of its own where a call's differ: y, and the call's
@@ -29,11 +41,94 @@ class _Graph:
     leaves: Any
     flags: Any = None
     graph: Any = None
+    steps: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class WholeCall:
+    """One call of a forward vLLM captured whole: what its replay appends to the pass."""
+    w: int
+    m: int
+    k: int
+    n: int
+    m16: int
+    tiles: int
 
 
 class GraphCalls:
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``key_slots``, ``offs``,
-    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps`, and its pass."""
+    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps`, and its pass and the
+    pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
+
+    #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
+    _whole: list[WholeCall] | None = None
+
+    def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
+        """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture; otherwise its own
+        graph replayed after its slot.  vLLM's warm-up forward before each capture runs outside it, and makes the graphs."""
+        if self._whole is not None and _capturing():
+            if self.hashing and m != sh.m16:
+                raise RuntimeError(f"{self.entry}: a call of {m} rows inside vLLM's whole-forward capture, whose screen would "
+                                   f"run at offsets fixed at capture: only calls without filler rows are captured whole")
+            self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
+            return self._into(w, sh, pipe, raw, tiles, m)
+        if self.hashing:
+            self._slot(w, index, sh.m16, m, caller)
+        return self._replay(w, sh, pipe, raw, tiles, m)
+
+    def whole_key(self) -> tuple | None:
+        """What a forward captured whole depends on (hashing, omitted steps, schedule), or None when the pass can't replay
+        one: graphs off, a schedule the graph path doesn't run, or a retained pass, whose records and files are per call."""
+        if (not self.graphs or self.cur is None or self.cur.retain is not None or self.schedule.side
+                or self.schedule.main_priority == "greatest"):
+            return None
+        return (self.hashing, self.omit, self.schedule.name)
+
+    def whole_capture_begin(self) -> None:
+        self._whole = []
+
+    def whole_capture_end(self) -> tuple[WholeCall, ...]:
+        """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
+        in one forward is refused."""
+        calls, self._whole = tuple(self._whole or ()), None
+        seen = [c.w for c in calls]
+        if len(set(seen)) != len(seen):
+            raise RuntimeError(f"{self.entry}: a weight is called twice in one captured forward, and its slot holds one call")
+        return calls
+
+    def whole_replay(self, calls: tuple[WholeCall, ...]) -> None:
+        """Before vLLM replays a forward captured whole: with hashing, every call's keys and offsets (its index, and the
+        pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream; then each call's
+        matmul, and with hashing its tiles and rows, appended to the pass, as `_after` appends them for a call made alone."""
+        import numpy as np
+        cur = self.cur
+        index, tiles_at, flags_at = len(cur.matmuls), cur.tiles, cur.flag_rows
+        if self.hashing and calls:
+            if (tiles_at + sum(c.tiles for c in calls) > self.capacity or 32 * (index + len(calls)) > len(self.roots_buf)
+                    or flags_at + sum(c.m for c in calls) > len(self.flag_buf)):
+                raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
+            if self._slots_copied is not None:
+                self._slots_copied.synchronize()
+            keys, offs = self._host_keys.numpy(), self._host_offs.numpy()
+            for i, c in enumerate(calls):
+                pos = self.order[c.w]
+                keys[pos, :136] = np.frombuffer(self.keys(self.roots[c.w], index + i, c.m16), np.uint8)
+                offs[pos] = self._offsets(index + i, tiles_at, flags_at)
+                self._predicted[c.w] = (index + i, c.m16, tiles_at, flags_at)
+                tiles_at += c.tiles
+                flags_at += c.m
+            called = {c.w for c in calls}
+            for w in [v for v in self._predicted if v not in called]:    # the upload rewrote their slots from the host copy
+                del self._predicted[w]
+            import torch
+            self.key_slots.copy_(self._host_keys, non_blocking=True)
+            self.offs.copy_(self._host_offs, non_blocking=True)
+            self._slots_copied = self._slots_copied or torch.cuda.Event()
+            self._slots_copied.record()
+        for i, c in enumerate(calls):
+            cur.matmuls.append(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w))
+        if self.hashing:
+            cur.tiles, cur.flag_rows = tiles_at, flags_at
 
     def _graphed(self, m16: int) -> bool:
         """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from
@@ -81,8 +176,7 @@ class GraphCalls:
         own for y and the leaves.  Returns y, and whether the graph screened the call (with hashing, when it has no filler
         rows); the leaves, and the flags when it did, go to the pass's buffers at the call's offsets."""
         import torch
-        screen = self.hashing and m == sh.m16
-        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, screen)
+        key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None:
             g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
@@ -98,6 +192,7 @@ class GraphCalls:
                 steps = [*steps, lambda: screen_into(g.flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)]
             if self.hashing:
                 steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
+            g.steps = steps
             self.kernel.dev.stream = raw
             try:
                 for f in steps:
@@ -119,6 +214,27 @@ class GraphCalls:
             self._graphs[key] = g
         else:
             g.graph.replay()
+        return g.y.clone(), screen
+
+    def _graph_key(self, w: int, sh: Any, m: int) -> tuple[tuple, bool]:
+        screen = self.hashing and m == sh.m16
+        return (w, sh.m16, self.omit, self.hashing, self.schedule.name, screen), screen
+
+    def _into(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
+        """The call's graph steps launched on `raw`, the stream vLLM is capturing, over the graph's own buffers.  The graph
+        must exist: made outside any capture (its eager run syncs), by vLLM's warm-up forward."""
+        key, screen = self._graph_key(w, sh, m)
+        g = self._graphs.get(key)
+        if g is None or g.graph is None:
+            raise RuntimeError(f"{self.entry}: weight {w}'s call of {sh.m16} rows has no graph yet, and vLLM's capture can't make "
+                               f"one: run the forward once outside the capture first")
+        pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
+        self.kernel.dev.stream = raw
+        try:
+            for f in g.steps:
+                f()
+        finally:
+            self.kernel.dev.stream = None
         return g.y.clone(), screen
 
     def _scatter(self, w: int, sh: Any, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
