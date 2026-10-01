@@ -2,7 +2,8 @@
 
 The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
 (`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7, Qwen2.5-0.5B from
-cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5, Llama-3.2-1B's TP2 ranks from cov-p000.
+cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5, Llama-3.2-1B's TP2 ranks from cov-p000,
+Gemma-2-2B's from cov-p058-2.
 A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 """
@@ -64,13 +65,18 @@ def test_request_and_workload_programs_equal_the_traced_build():
     assert S.predict_workload(phi)["digest"] == "393e9228260663df610abdd41960ee1c861d2e9cec50d9184494b939a489e4e1"
 
 
-@pytest.mark.parametrize("rank,digest", [(0, "d29ee587b4f288e8bed1f24c92b7c0d1247054662de61d0e0f50a70ae09730c8"),
-                                         (1, "c3765e958ca00e3838c30f4b744670d28833fcab785450ef2f88fac7ae177b62")])
-def test_tensor_parallel_rank_step_equals_the_traced_build(rank, digest):
-    """Llama-3.2-1B at TP2 (cov-p000): each rank's step over its shards, with a peer Input per collective in call order (the
-    embedding's and each layer's o / down all-reduces, the logits all-gather) and the two partials in rank order."""
-    r = build_program(_phi(json.loads((FIX / "llama32-1b.config.json").read_text()), tp={"world": 2, "rank": rank}), "step", M=1, pos0=8)
-    assert r.function == "Derived[vLLMStep[LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}"
+@pytest.mark.parametrize("model,function,rank,digest", [
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 0, "d29ee587b4f288e8bed1f24c92b7c0d1247054662de61d0e0f50a70ae09730c8"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 1, "c3765e958ca00e3838c30f4b744670d28833fcab785450ef2f88fac7ae177b62"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 0, "7ca0319a25893edc2bccf7866f25cd29cc28f58b6eef3158b0c2b04feda0c753"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 1, "7da1ceee0fc64bbd16aa0267c5c283708eb75740ac532659a6e7c64c2bac05db"),
+])
+def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
+    """Llama-3.2-1B (cov-p000) and Gemma-2-2B (cov-p058-2) at TP2: each rank's step over its shards, with a peer Input per
+    collective in call order (the embedding's and each layer's o / down all-reduces, the logits all-gather) and the two partials in
+    rank order; Gemma-2's normalizer scales the reduced embedding and its soft-cap the gathered logits."""
+    r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text()), tp={"world": 2, "rank": rank}), "step", M=1, pos0=8)
+    assert r.function == "Derived[vLLMStep[" + function
     assert r.digest == digest
 
 

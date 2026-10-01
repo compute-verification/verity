@@ -208,8 +208,6 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
         facts.append("the fused-MoE block under tensor parallelism")
     if C.qk_norm == "all":
         facts.append("a q/k norm over all heads under tensor parallelism (its all-gather)")
-    if C.norm_chain or C.embed_scale or C.attn_cap is not None or C.final_cap is not None:
-        facts.append("the embedding normalizer, the unfused norm chain or a logit soft-cap under tensor parallelism")
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
     return replace(C, NH=C.NH // world, KVH=C.KVH // world, I=C.I // world)
