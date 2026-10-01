@@ -4,6 +4,9 @@ their own, which would inherit them."""
 from __future__ import annotations
 
 import os
+import re
+import signal
+from pathlib import Path
 
 import pytest
 
@@ -32,3 +35,24 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
+
+
+@pytest.fixture
+def reap(tmp_path):
+    """However the test ends, SIGTERM the process group of every process whose argv names its tmp_path: the detached processes
+    it starts (n1_lease's fences, a lease loop, a pod guard) lead their own sessions, with their `sleep` children in the group.
+    A process that exits meanwhile is skipped (a check runs other suites' processes beside these), and pytest's own group is
+    never signalled. On vy-nebius-1 the old per-lock scan raised on such a race and left fences holding /workspace for hours."""
+    yield
+    own = os.getpgrp()
+    named = re.compile(re.escape(os.fsencode(tmp_path)) + rb"(/|\0|$)")    # not a sibling test's .../test_x10 for .../test_x1
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            if named.search((proc / "cmdline").read_bytes()):
+                pgid = os.getpgid(int(proc.name))
+                if pgid != own:
+                    os.killpg(pgid, signal.SIGTERM)
+        except OSError:
+            continue

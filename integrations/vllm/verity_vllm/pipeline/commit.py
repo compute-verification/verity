@@ -200,6 +200,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
     eng = engine.llm.llm_engine
     pending = sorted(range(len(requests)), key=lambda i: (int(requests[i].get("arrive_step") or 0), i))
     tokens: dict[str, list[int]] = {}
+    finish: dict[str, str | None] = {}
     finished: set[str] = set()
     step_t: list[float] = []
     step_tokens: list[int] = []
@@ -221,7 +222,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
         n = 0
         for o in outs:
             for c in o.outputs:
-                tokens[o.request_id] = [int(t) for t in c.token_ids]
+                tokens[o.request_id], finish[o.request_id] = [int(t) for t in c.token_ids], c.finish_reason
                 n += 1
             if o.finished:
                 finished.add(o.request_id)
@@ -234,7 +235,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
     walls = [step_t[0] - t0] + [b - a for a, b in zip(step_t, step_t[1:])]
     gen = sum(len(v) for v in tokens.values())
     return {"wall_s": t1 - t0, "iterations": it, "step_wall_s": walls, "step_tokens_out": step_tokens, "generated_tokens": gen,
-            "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "t_last_step": step_t[-1]}
+            "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "finish_reasons": finish, "t_last_step": step_t[-1]}
 
 
 # [coord ruling 41 / rev F-r16-23] the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
@@ -256,7 +257,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an
     unattested engine leaves it None (every EOS stop then fails by name) -- never the engine value as the rule, never inferred from the
     trace.  `notes` names what was refused."""
-    out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "notes": [], "srule": None}
+    out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "async_scheduling": None, "notes": [], "srule": None}
     try:
         from verity_vllm.pipeline import global_program as _GP
         _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
@@ -266,7 +267,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
         _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
-        out["declared_lag"], out["engine_lag"] = _decl_lag, _eng_lag
+        out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"R17-1: the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")
         elif _eng_lag != _decl_lag:
@@ -536,15 +537,16 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
     return len(zero_rows)
 
 
-def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None) -> dict[str, Any]:
-    """`served_tokens`: {workload request_id: [served token ids]} of THIS run (run_workload's `tokens`); `stop`: stop_rule_of_record's
-    {eos, lag} -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
+def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None,
+                   finish_reasons: dict | None = None) -> dict[str, Any]:
+    """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
+    -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
     """R14 BIND-01: the binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
     from verity_vllm.commit import binding as B, partition as PT
-    from verity_vllm.check import executed_prefix as EP
+    from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
     # gprog's workload digest or the labelled components fold).  The committer's own digest seeds the step roots and is recorded beside
@@ -672,15 +674,12 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     else:
         past = EP.rows_past_the_stop(bmap, request_steps)
     cov["rows_past_the_stop"] = past
-    # [COORD R17-27 (a)+(b)] the prefix is accepted only LINKED to the serving transcript + the Match account of the same attempt
-    # (--match-dir: capture/tokens.json + ../global_match.json): Commit served == Match served, the same two lengths, GM-01 PASS, lag
-    # attested on every leg.  A prefix reduced on the committer's own count alone is a problem, by name.
-    link = EP.link_to_match_account(epr, EP.load_match_account(getattr(args, "match_dir", None)), order=order, declared_lag=(stop or {}).get("declared_lag"),
-                                    served_tokens=served_by_rid)                   # rev S-r17-23 (c): the FULL served list per request
-    cov["match_account_link"] = link
-    if link["required"] or link["problems"]:
-        print(f"[delta] execution_extent: executed prefix <-> Match account (pair {pair}): {'LINKED' if link['ok'] else 'NOT LINKED'} tokens_equal {link.get('tokens_equal')} "
-              f"gm {((link.get('global_match') or {}).get('verdict'))}" + (f"; PROBLEMS {link['problems'][:3]}" if link["problems"] else ""), flush=True)
+    # [COORD R17-27 (a)+(b)] the prefix is accepted only LINKED to an account of the same attempt: the Match record (--match-dir: capture/tokens.json
+    # + ../global_match.json) and, where a prefix is reduced and the sampled ids are committed, the Commit's token record (commit/tokens_p<pair>.json,
+    # every served token opened from the run root); on a config run (no Match) the token record alone; never the committer's own count alone.
+    links = CT.account_links(com, rc, bmap, epr, out_dir=args.out, pair=pair, order=order, arrivals=arrivals, match_dir=getattr(args, "match_dir", None), stop=stop or {},
+                             served=served_by_rid, finish=None if finish_reasons is None else {_logical(str(k)): v for k, v in finish_reasons.items()}, past=past, program_digest=pd)
+    cov["match_account_link"], cov["commit_account_link"] = links["match_account_link"], links["commit_account_link"]
     if comp is not None:
         cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
     if wrong_program:                                                              # [COORD 5] a manifest of another Program is never a population
@@ -692,8 +691,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error="executed prefix of record: " + "; ".join(epr["problems"][:3]))
     elif not past["ok"]:                                                           # [R17-1] committed rows of a stopped request past its prefix
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=past["error"])
-    elif not link["ok"]:                                                           # [R17-27 (a)/(b)] a reduced prefix not linked to the Match account
-        cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error="executed prefix not linked to the Match account: " + "; ".join(link["problems"][:3]))
+    elif links["error"]:                                                           # [R17-27 (a)/(b)] a reduced prefix linked to no account of record
+        cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=links["error"])
     elif comp is not None and not comp.get("ok"):                                  # [R15 B8] an omitted / relabelled / duplicated request, named
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=comp.get("error") or "composition check failed")
     ctx_ok, ctx_why = B.map_context_check(bmap, rc)
@@ -1923,7 +1922,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
-                    row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record)
+                    row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))
                     row["commit"]["rules_version"] = row["commit"]["binding"]["rules_version"]
                     b = row["commit"]["binding"]
                     print(f"[delta] BINDING (pair {pair}): map {b['map_entries_n']} entries digest {b['map_digest'][:16]}; population {b['population']['n']} "

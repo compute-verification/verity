@@ -2,7 +2,7 @@
 16-deep checkpoint: route U's `Pouw.NCP.mmWU 128` (the checked values) and the unbiased `Pouw.mmW` over `stackX` /
 `stackY` (retired, kept for comparison).  The pinned result is ``tests/vectors/ncp_lean.json``.
 
-    python protocols/pouw/tests/ncp_lean.py write DIR        # DIR: a checkout of the PoUW Lean package (Mathlib built)
+    python protocols/pouw/tests/ncp_lean.py write DIR        # DIR: a copy of protocols/pouw/lean (Mathlib built)
     (cd DIR && lake build Pouw.NCP.RouteU && lake env lean NcpCheck.lean > ncp_lean.out)
     python protocols/pouw/tests/ncp_lean.py pin DIR/ncp_lean.out DIR
 

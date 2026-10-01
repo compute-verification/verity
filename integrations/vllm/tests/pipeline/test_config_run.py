@@ -145,12 +145,21 @@ def test_a_failed_commit_and_a_decided_replay_delete_the_bundle_and_a_crashed_re
     (Path(r.d) / "commit" / "replay_bundle_p2.partial").mkdir()
     assert RC.commit_verdict(r, 0, 60) is True and (Path(r.d) / "commit" / "replay_bundle_p1").is_dir(), "a pending Commit keeps its bundle"
     r.ck = str(tmp_path)
-    for rc, kept in ((2, True), (3, False)):
-        monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, rc=rc: rc)
+    slim = Path(r.d) / "commit" / "replay_slim_p1"
+
+    def replay(st, to, lf, cmd, rc, keeps):
+        if keeps:                                                    # the replay writes its slim keep before it exits
+            slim.mkdir(exist_ok=True)
+            (slim / "slim.json").write_text("{}")
+        return rc
+
+    for rc, keeps, kept in ((2, False, True), (3, False, True), (3, True, False)):
+        monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, rc=rc, keeps=keeps: replay(st, to, lf, cmd, rc, keeps))
         with pytest.raises(Stop):
             RC.replay(r)
-        assert (Path(r.d) / "commit" / "replay_bundle_p1").is_dir() is kept
-    assert not list((Path(r.d) / "commit").glob("replay_bundle_p*"))
+        assert (Path(r.d) / "commit" / "replay_bundle_p1").is_dir() is kept, (rc, keeps)
+    assert "left no slim keep" in (Path(r.d) / "row.log").read_text(), "a decided replay without its slim keep keeps the bundle, by name"
+    assert not list((Path(r.d) / "commit").glob("replay_bundle_p*")) and (slim / "slim.json").is_file()
     f = _row(tmp_path / "fail", "--config-run", "1", "--replay-deferred", "1")
     _pending_commit(f, bundles=1)
     (Path(f.d) / "commit" / "replay_bundle_p1.partial").mkdir()

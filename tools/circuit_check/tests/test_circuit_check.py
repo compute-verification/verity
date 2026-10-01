@@ -64,6 +64,26 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
 
 
+def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
+    """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
+    `boolean_gather.gather_bf16(n)` builds), and an id neither knows still raises."""
+    from verity_vllm.query import word as W
+
+    real = W.specialization
+
+    def unregistered(fam, statics):
+        if fam.startswith("GatherBf16x"):
+            raise KeyError(f"primitive {fam} is not in the registry")
+        return real(fam, statics)
+
+    monkeypatch.setattr(W, "specialization", unregistered)
+    monkeypatch.setattr(TG, "suite", lambda: SUITE)
+    for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
+        assert TG.definition(fid) is SUITE[fid]
+    with pytest.raises(KeyError):
+        TG.definition("NoSuchDefinition_v9")
+
+
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.circuit_suite
@@ -175,6 +195,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
     e = CK.check_definition(fn, OPTS, as_call=True)
     assert "partition/gate-recomputed CircuitCheckRecompute_v1 (1 gate(s))" in [f["name"] for f in e["failures"]]
+    assert e["partition"]["whole"]["q_word_v2"] == {"codes": [], "recomputed_across": 1}   # v2 reports it, refuses nothing
     inner = CK.check_definition(fn, OPTS, as_call=False)                 # not a Call: its copies are redundant gates, not a failure
     assert not [f for f in inner["failures"] if f["check"] == "partition"] and inner["partition"]["isolated"]
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]

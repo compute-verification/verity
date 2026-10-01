@@ -35,7 +35,7 @@ Every POLL_S seconds the runner:
     job's scope once the job ends, since `research run` starts its workload in a session of its own that outlives both;
   - stops a job past its max_min (not counting time paused) and requeues it;
   - starts GPU jobs on every free GPU beyond RESERVE when nobody waits, except the GPUs listed in FILL_DIR/keep-free
-    (e.g. `1`, or `0,1`, with an optional `# reason`), and none whose max_min would reach into a window booked in
+    (e.g. `1`, or `0,1`, with an optional `# reason`; a waiter pinned inside them doesn't count), and none whose max_min would reach into a window booked in
     FILL_DIR/windows (`2026-10-01T10:00Z 30 # who`, one per line: start in UTC, minutes); Commit guests first, then pous,
     then the rest of Verity's (only with 2+ GPUs free), and a Commit that finds no free GPU stops the newest proofs or pous
     GPU job outside a window; and CPU jobs up to CPU_SLOTS, pinned
@@ -184,8 +184,10 @@ def agent_up() -> bool:
 def waiters() -> list[int]:
     """How many GPUs each waiting `gpu-lease N --wait` wants, read from gpu-lease's own queue.  A request that can't start at once
     queues as LEASE_DIR/wait.<ns>.<pid>, holds that file locked while it waits, and removes it once it has its GPUs, so a lease
-    that holds its GPUs (its argv still says --wait) is never a waiter.  A file nobody holds locked is a dead waiter's."""
+    that holds its GPUs (its argv still says --wait) is never a waiter.  A file nobody holds locked is a dead waiter's.  A waiter
+    pinned (`on=`) inside FILL_DIR/keep-free waits for GPUs fill never takes, so it holds back no fill."""
     out = []
+    keep = keep_free(1 << 16)
     for f in sorted(LEASE_DIR.glob("wait.*")):
         try:
             fd = os.open(f, os.O_RDONLY)
@@ -197,7 +199,12 @@ def waiters() -> list[int]:
                 continue
             except BlockingIOError:
                 pass
-            m = re.search(r"\bn=(\d+)", os.read(fd, 4096).decode(errors="replace"))
+            text = os.read(fd, 4096).decode(errors="replace")
+            m = re.search(r"\bn=(\d+)", text)
+            on = re.search(r"\bon=(\S+)", text)
+            pinned = gpu_set(on.group(1), 1 << 16) if on else None
+            if pinned and pinned <= keep:
+                continue
             if m:
                 out.append(int(m.group(1)))
         finally:

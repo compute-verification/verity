@@ -9,8 +9,9 @@ every `N` from 1 to `2^64`, which is every segment count `BandParams` allows. It
 challenges uniform over all its blocks, the state bound of the whole store, one permutation. At one segment it is also
 `BandChainMeets64`, and at 448 (14 GB) `BandMultiMeets14`.
 
-It needs the segment tags injective across segments (`segDom_inj`); with a shared domain, identical segments get
-identical labels and the audit accepts with probability 1 (`shared_domain_breaks`).
+It needs the segment tags injective across segments (`segDom_inj`; `2^64` is where `u64 s` stops being injective); with
+a shared domain, identical segments get identical labels and the audit accepts with probability 1
+(`shared_domain_breaks`).
 """
 
 from __future__ import annotations
@@ -31,6 +32,10 @@ live, designated verifier."""
 
 POINT = (512, 524_288)
 """`B` and `ℓ` (bits) of the certified point: 32 MiB segments of 64 KiB blocks."""
+
+
+FAMILY_SEGMENTS = 1 << 64
+"""The largest segment count of `BandMultiMeetsFamily` (`N ≤ 2^64`), which is also the most `BandParams` allows."""
 
 
 def chain_certificate(theorem: str, cliff: int | None, segments: int | None) -> Certificate:
@@ -59,7 +64,7 @@ class Band(Scheme):
         p = self.params
         if (p.blocks_per_segment, p.m) != POINT or p.d < 5:
             return None
-        return chain_certificate("Pous.Pinned.BandMultiMeetsFamily", p.d, None)
+        return chain_certificate("Pous.Pinned.BandMultiMeetsFamily", p.d, p.segments)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return dense_codec.encode_segment(self.params, self.prims, salt, s, w_seg)
@@ -68,4 +73,4 @@ class Band(Scheme):
         return dense_codec.decode_segment(self.params, self.prims, salt, s, blocks)
 
 
-__all__ = ["CHAIN_CLAIMS", "POINT", "Band", "chain_certificate"]
+__all__ = ["CHAIN_CLAIMS", "FAMILY_SEGMENTS", "POINT", "Band", "chain_certificate"]

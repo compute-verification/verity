@@ -237,13 +237,19 @@ def test_a_shared_domain_breaks_the_audit(name):
 
 def test_the_band_certificate_covers_every_segment_count():
     """`Pous.Pinned.BandMultiMeetsFamily`: one `Meets` for the whole store at k = 111, for every segment count from 1 to
-    2^64 (all that `BandParams` allows), with no hypothesis.  The certificate used to be `band_meets_64` at one segment
-    and `band_meets_14` at 448, each given `ChainExPostFactoG`, with every other count a gap; `chainExPostFactoG_v6`
-    proves that hypothesis, and the family pin covers the counts between."""
-    for n in (1, 30, 448, 1 << 64):
+    2^64 (`FAMILY_SEGMENTS`, all that `BandParams` allows), with no hypothesis.  The certificate used to be
+    `band_meets_64` at one segment, `band_meets_14` at 448 and `band_meets_family` between, each given
+    `ChainExPostFactoG`; `chainExPostFactoG_v6` proves that hypothesis, and the family pin covers every count."""
+    for n in (1, 30, 448, 2240, 1 << 64):
         cert = schemes.Band(band.SECURE_FIRST.with_segments(n)).certificate
         assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == (
-            "Pous.Pinned.BandMultiMeetsFamily", None, 111, 5, ())
+            "Pous.Pinned.BandMultiMeetsFamily", n, 111, 5, ())
+    from verity_pous.schemes import band as band_scheme
+    assert band_scheme.FAMILY_SEGMENTS == 1 << 64
+
+
+def test_the_14_gb_certificate():
+    """448 segments (14 GB, where the family is also `BandMultiMeets14`) and 30 segments are certified, with no gap."""
     sch = schemes.get(segments=448)
     vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(32)] * sch.params.blocks)
     v = protocol.Verifier(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
@@ -255,9 +261,18 @@ def test_the_band_certificate_covers_every_segment_count():
     assert protocol.Verifier(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
 
 
+def test_the_family_certificate_covers_a_70_gb_store():
+    """A 70 GiB FP8 store (2,240 segments of 32 MiB) is certified whole by `BandMultiMeetsFamily`, as one `Meets` over
+    its 1,146,880 blocks."""
+    sch = schemes.get(segments=2240)
+    cert = sch.certificate
+    assert (cert.theorem, cert.segments, cert.k) == ("Pous.Pinned.BandMultiMeetsFamily", 2240, 111)
+    assert sch.params.blocks == 2240 * 512
+
+
 def test_certificates_at_their_points():
     b = schemes.get().certificate
-    assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 483_000, 12, None)
+    assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 483_000, 12, 1)
     assert (b.theorem, b.hypotheses) == ("Pous.Pinned.BandMultiMeetsFamily", ())
     d = schemes.get("dense-chain/v1").certificate
     assert (d.theorem, d.hypotheses, d.cliff, d.k, d.rounds, d.segments) == ("Pous.Pinned.ChainDenseMeets64", (), None,
@@ -359,8 +374,11 @@ def test_certified_profile_of_one_band12_segment():
 
 
 def test_many_segments_are_a_gap_not_a_refusal():
-    """`ChainDenseMeets64` is about one segment, and no pinned statement covers the dense chain scheme at more, so a
-    two-segment dense store is a gap; the band's family pin covers every count."""
+    """A segment count its certificate doesn't state is a gap, not a refusal: `ChainDenseMeets64` is about one segment,
+    and no pinned statement covers the dense chain scheme at more.  The band's family pin covers every count, so two
+    band segments have none."""
+    band2 = schemes.get(segments=2)
+    assert protocol.Verifier(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
     sch = schemes.get("dense-chain/v1", segments=2)
     v = protocol.Verifier(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
     assert v.gaps == ("W has 2 segments; Pous.Pinned.ChainDenseMeets64 is about 1",)

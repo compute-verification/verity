@@ -18,7 +18,7 @@
   "k": 111,
   "rho": "18/19",
   "rounds": 5,
-  "segments": null,
+  "segments": 1,
   "theorem": "Pous.Pinned.BandMultiMeetsFamily",
   "work": 1048576
  },

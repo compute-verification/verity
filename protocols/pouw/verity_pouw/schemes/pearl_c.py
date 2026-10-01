@@ -79,6 +79,7 @@ from verity.commitments.turboshake import turboshake128
 from verity.ml.tc import fp32
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..serving import HASH_FORMATS
 from . import pearl_kw as P
 from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
 
@@ -92,20 +93,25 @@ TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
-#: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2
-#: (h1's messages and leaf; every tree `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment)
+#: The hashing formats this scheme implements, of the one table (`verity_pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
+#: messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2 (h1's messages and leaf; every tree
+#: `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment)
 HASHINGS = ("h0", "h1", "h2")
-#: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`)
-TREE_HASH = {"h0": "sha256", "h1": "blake3", "h2": "blake3-s256"}
-H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
+#: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`), from the one table
+TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
+#: each hashing format's BLAKE3 keys of the message digests and the tile leaf, from the one table, built once (h2 shares h1's
+#: labels, so their keys are equal)
+_DIGEST_KEYS = {h: None if HASH_FORMATS[h].message_key() is None else
+                {"message": HASH_FORMATS[h].message_key(), "leaf": HASH_FORMATS[h].leaf_key()} for h in HASHINGS}
+H1_KEYS = _DIGEST_KEYS["h1"]
 
 
 def digest_keys(hashing: str) -> dict[str, bytes] | None:
-    """A hashing format's BLAKE3 keys of the message digests and the tile leaf (``message``, ``leaf``): h1's labels under h1
-    and h2, none under h0 (TurboSHAKE128)."""
+    """A hashing format's BLAKE3 keys of the message digests and the tile leaf (``message``, ``leaf``), from the one table:
+    h1's labels under h1 and h2, none under h0 (TurboSHAKE128)."""
     if hashing not in HASHINGS:
         raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
-    return None if hashing == "h0" else H1_KEYS
+    return _DIGEST_KEYS[hashing]
 
 
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end

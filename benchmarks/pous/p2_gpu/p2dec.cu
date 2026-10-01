@@ -13,6 +13,7 @@
 //   P2_PARTS=1 (default) squares with CGBN's cgbn_sqr_wide; 2 or 4 is the tuned Karatsuba path below.
 // Run:   p2dec params.bin specials.bin sample.bin payload_bytes reps [c.bin [seeds.bin]]   (seeds.bin with -DP2_DERIVE:
 //        u32 segments, u32 blocks per segment, then 32 bytes per segment)
+// -DP2_LIBRARY leaves out this file's kernels and main, so another file (../p2_v1/p2v1.cu) can build on its squaring.
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
@@ -281,6 +282,7 @@ __device__ __forceinline__ void psqr_fix(penv_t &e, pbn_t *r, const pbn_t *a, ui
 }
 #endif
 
+#ifndef P2_LIBRARY
 __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__restrict__ cin, mem_t *__restrict__ mout,
                               uint32_t n KEY_ARGS) {
 #ifdef __CUDA_ARCH__
@@ -359,7 +361,9 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
   }
 #endif
 }
+#endif
 #else
+#ifndef P2_LIBRARY
 __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__restrict__ cin, mem_t *__restrict__ mout,
                               uint32_t n KEY_ARGS) {
 #ifdef __CUDA_ARCH__
@@ -390,7 +394,9 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
 #endif
 }
 #endif
+#endif
 
+#ifndef P2_LIBRARY
 __device__ __forceinline__ uint64_t splitmix(uint64_t z) {
   z += 0x9e3779b97f4a7c15ull;
   z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
@@ -535,3 +541,4 @@ int main(int argc, char **argv) {
          ms[0], med, stored / ms[0] / 1e6, stored / med / 1e6, paybytes / ms[0] / 1e6, bytes / h2d / 1e6, prop.name);
   return 0;
 }
+#endif

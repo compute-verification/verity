@@ -432,7 +432,8 @@ def netCheckCmd (paths : List String) : IO UInt32 := do
     IO.println s!"NETCHECK {(Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool ok), ("error", Lean.Json.str err)]).compress}"
   return (if all then 0 else 1)
 
-/-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file. -/
+/-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file; a cut with
+`"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
@@ -444,8 +445,9 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
             ("error", Lean.Json.str e)])
         | .ok c =>
           let cs := Partition.validate c
-          pure (Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
-            ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str))])
+          pure (Lean.Json.mkObj ([("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+            ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str))] ++
+            if c.reportRecompute then [("recomputed_across", Lean.toJson c.recomputedAcross.size)] else []))
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
@@ -629,20 +631,21 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
   return 0
 
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
-`CUTCHECK` line per file. -/
+`CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
     let res := match Lean.Json.parse (← IO.FS.readFile path) with
       | .error e => Except.error s!"not JSON: {e}"
-      | .ok j => Partition.checkCutOfJson j
+      | .ok j => do return (← Partition.checkCutOfJson j, ← Partition.reportOfJson j)
     let line := match res with
       | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
-      | .ok (g, owner, committed, limits) =>
-        let (cs, wide) := Partition.checkCut g owner committed limits
-        Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+      | .ok ((g, owner, committed, limits), report) =>
+        let (cs, wide) := Partition.checkCut g owner committed limits report
+        Lean.Json.mkObj ([("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
           ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str)),
-          ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))]
+          ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))] ++
+          if report && owner.size == g.n then [("recomputed_across", Lean.toJson (g.cut owner committed true).recomputedAcross.size)] else [])
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUTCHECK {line.compress}"
   return (if all then 0 else 1)
@@ -703,10 +706,11 @@ def graphJson (gr : Extract.Graph) : Lean.Json :=
 
 private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
-/-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts]`: `Q_word` v1 on the program (`Flock.Program`, `Flock.Extract`, `Flock.Qword`):
-the program's SHA-512, the population and per Call its units. In full: per Call its owners, derived committed set and graph,
-and every unit's `locate`. With `--digests`: per Definition a Call names, its units and the SHA-512 of its owners, and of
-its graph for a flat cut. One `QWORDPROGRAM` line. -/
+/-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts] [--query-version N]`: `Q_word` v1 (or vN, 1 or 2) on the program
+(`Flock.Program`, `Flock.Extract`, `Flock.Qword`): the program's SHA-512, the population and per Call its units. In full: per
+Call its owners, derived committed set and graph, and every unit's `locate`. With `--digests`: per Definition a Call names, its
+units and the SHA-512 of its owners, and of its graph for a flat cut. v2's units are v1's; with `--cuts` it checks each cut by
+v2's rule and gives each Definition's `recomputed_across`. One `QWORDPROGRAM` line. -/
 def qwordProgramCmd (args : List String) : IO UInt32 := do
   let path := args.headD ""
   let nums := ((args.drop 1).takeWhile (·.all Char.isDigit)).filterMap String.toNat?
@@ -714,8 +718,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
   let W := (nums.drop 1).headD 32
   let digests := args.contains "--digests"
   let cuts := args.contains "--cuts"
+  let version := ((argOf args "--query-version").bind String.toNat?).getD 1
   let bytes ← try IO.FS.readBinFile path catch _ => pure ByteArray.empty
   let res : V Lean.Json := do
+    if !HmRow.EVALUABLE.contains ("Q_word", version) then throw s!"query-unknown: Q_word v{version}"
     let P ← Program.decode bytes
     if let some v := P.orderViolation then
       return Lean.Json.mkObj [("inapplicable", v), ("error", Lean.Json.str (match Extract.evaluate P X with
@@ -734,8 +740,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
         Lean.toJson c.units]))]
     -- `--cuts`: every Definition's cut checked on its Call's whole graph (`partition_object.verify`'s `cut`)
     let cutJson : List (String × Lean.Json) ← if !cuts then pure [] else do
-      let checked ← Extract.checkCalls P calls X W
-      pure [("cuts", Lean.Json.mkObj (checked.toList.map fun (d, r) => ((P.defs[d]!).key, r.toJson))),
+      let checked ← Extract.checkCalls P calls X W (report := version == 2)
+      let entry := fun (r : Extract.CutCheck) =>
+        if version == 2 then r.toJson.setObjVal! "recomputed_across" (Lean.toJson r.across) else r.toJson
+      pure [("cuts", Lean.Json.mkObj (checked.toList.map fun (d, r) => ((P.defs[d]!).key, entry r))),
         ("cut", Lean.Json.arr ((Extract.cutFailures calls checked).map fun (k, r) =>
           Lean.Json.arr #[Lean.toJson k, Lean.toJson r.codes.toArray]))]
     let base := base ++ cutJson

@@ -7,7 +7,9 @@ point it at its own packages.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
-the same way. The only package code that runs is the build's, in a sandbox where the machine allows one.
+the same way. The only package code that runs is the build's and, after the facts and the replay, the tests' under `runs`
+(each deciding only its own pass), in a sandbox where the machine allows one; a test's data generator is the repository's
+code and runs outside it.
 
 ~~~text
 bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
@@ -53,6 +55,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
   No `#print axioms` output is parsed anywhere. A replay killed by a signal (out of memory) is reported as a kill, not
   as a verdict;
+- each test under `runs` passes on the data whose SHA-256 the record holds (below);
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
   sealed and checked after each package.
@@ -84,7 +87,9 @@ installs it first, so a machine without elan works), must pass clean and fail on
 ~~~json
 {
  "roots": ["Pkg"],
- "exempt": {"Pkg.Scratch": "why nothing needs to build it"},
+ "exempt": {"Pkg.Scratch": "why nothing needs to build it", "PkgBulk": "a test, not a proof"},
+ "runs": {"PkgBulk": {"why": "what it tests", "args": ["{bulk.txt}", "1000"], "data": {"bulk.txt": "…"},
+                      "generate": ["python3", "scripts/bulk.py", "{repo}", "--out", "{out}"]}},
  "axioms": ["Classical.choice", "Quot.sound", "propext"],
  "assumptions": ["Pkg.Assumptions"],
  "meaning": ["Pkg"],
@@ -97,6 +102,14 @@ installs it first, so a machine without elan works), must pass clean and fail on
 ~~~
 
 - `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
+- `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors than
+  the kernel pins). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
+  passes when it exits 0. An argument `{NAME}` is the path of data file NAME, which is what `generate` writes (run first,
+  outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
+  own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
+  test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
+  a test of the package's own (PoUW's `tests/test_lean_package.py`) checks that the generator still writes the recorded
+  data. `--no-runs` skips them.
 - `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
 - `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.

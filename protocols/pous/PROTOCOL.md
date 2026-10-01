@@ -197,9 +197,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   Each `theorem` is the `Pous.Pinned` statement it rests on. At the frozen point, the band's certificate is
   `Pous.Pinned.BandMultiMeetsFamily`, with no hypothesis: k 111, D 5, Q 2^20, 483 µs, cliff at `d`, for every segment
-  count from 1 to `2^64` (all that `BandParams` allows). It is one `Meets` for the whole store: challenges are uniform
-  over all its blocks, the state bound is the whole store's, and one permutation serves every segment. At one segment
-  it is also `BandChainMeets64`, and at 448 (14 GB) `BandMultiMeets14`.
+  count N from 1 to `2^64` (all that `BandParams` allows), so no segment count is a gap. It is one `Meets` for the whole
+  store: challenges are uniform over all its blocks, the state bound is the whole store's, and one permutation serves
+  every segment. A 70 GiB store, 2,240 segments, is certified whole. At one segment it is also `BandChainMeets64`, and
+  at 448 (14 GB) `BandMultiMeets14`.
 
   Dense is `Pous.Pinned.ChainDenseMeets64`, with no hypothesis and no cliff, for one segment; other segment counts are
   gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
@@ -234,7 +235,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
-  other than the theorem's. The band's certificate covers every segment count, and dense's one segment.
+  other than the theorem's. The band's certificate covers every segment count from 1 to 2^64, and dense's one segment.
   `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`

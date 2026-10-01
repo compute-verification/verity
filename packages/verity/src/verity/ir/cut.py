@@ -1,4 +1,5 @@
-"""`Q_word` v1, the partition query, and the references a cut is checked on: each Call's computing graph, the cut, the width rule.
+"""`Q_word` v1 (and v2, a delta on it, below), the partition query, and the references a cut is checked on: each Call's computing
+graph, the cut, the width rule.
 
 The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any change to its behaviour bumps the query's version):
 
@@ -52,6 +53,14 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
 **Constants of the version.**  `WIRING` and `WIDE_FAN_IN` are part of Q_word v1, like the algorithm: changing either is a new version.
 `tests/ir/qword_vectors.json` pins both as data, beside vectors for every step above and a seeded random corpus.
 
+**Q_word v2** is v1 with one change, in step 6: a recomputed pair `(j, f)` whose gates lie in two units is not a failure.  Steps 0-5,
+`WIRING`, `WIDE_FAN_IN` and the width rule are v1's, so v2's Calls, units, owners, committed sets and widths are v1's on every program
+(on one v1 refuses only for `gate-recomputed`, the cut v1 computed before refusing).  `check_cut` still computes the pairs: under v2
+(`RECOMPUTE[2]`, "report") the pairs across units are `detail["recomputed_across"]` (count and first pairs) instead of the code
+`gate-recomputed`; `redundant_gates` counts the pairs within one unit, as in v1; every other code is unchanged.  Each copy is its own
+gate, certified by one unit from that unit's gates and committed values, so v2's units may compute a common value: a count of them
+bounds wrong work but is not distinct work.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
+
 **Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
 case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
 included, to check the cut on it.
@@ -75,6 +84,9 @@ WIDE_FAN_IN = 4096
 
 #: `Q_word_v1`'s width parameters (X, W, EXTRAS): at most X bits out of a unit, or exactly one value of at most W bits
 WIDTH_RULE = (16, 32, 0)
+
+#: per `Q_word` version, `check_cut`'s rule for a value computed in two units (`partition.RECOMPUTE_RULES`): v2 reports what v1 refuses
+RECOMPUTE = {1: "refuse", 2: "report"}
 
 
 class QueryInapplicable(ValueError):
@@ -296,12 +308,13 @@ def derived_committed(graph: CallGraph, owner: Sequence[int]) -> list[int]:
 
 
 def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int] | None = None,
-              limits: tuple[int, int, int] | None = WIDTH_RULE) -> CutVerdict:
+              limits: tuple[int, int, int] | None = WIDTH_RULE, recompute: str = RECOMPUTE[1]) -> CutVerdict:
     """One Call's cut against its graph: `validate_unit_cut` (every computing gate in one unit, reads across units only of committed
     values, returned values committed, no value computed in two units), the Call's parameters standing for the input unit, and, unless
     `limits` is None, the width rule (`unit-too-wide`: (unit, ob, og) per failing unit).  `owner`: a unit per computing gate;
     `committed`: what serving commits, held to the derived set (`committed-unread`: served but not derived; `read-uncommitted` /
-    `output-uncommitted`: derived but not served); None: the derived set (`derived_committed`)."""
+    `output-uncommitted`: derived but not served); None: the derived set (`derived_committed`).  `recompute`: v1's "refuse" unless
+    the query is `Q_word` v2 (`RECOMPUTE`)."""
     owner = [int(u) for u in owner]
     if len(owner) != graph.n:
         return CutVerdict(False, ("owner-length",), {"owner-length": {"n": 1, "gates": [len(owner), graph.n]}})
@@ -312,7 +325,7 @@ def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int] |
     cut = validate_unit_cut(graph.total + k, graph.free, owner + [INPUT_UNIT] * k, reads,
                             list(graph.outputs) + [graph.n + i for i in graph.returned_inputs],
                             sorted({int(g) for g in committed}) + list(range(graph.n, graph.n + k)), range(graph.n, graph.n + k),
-                            graph.recomputed)
+                            graph.recomputed, recompute)
     if limits is None:
         return cut
     ob, og = boundary_widths(graph, owner)
@@ -496,5 +509,5 @@ def evaluate_definition(fn: Any, X: int, memo: dict | None = None, wiring: froze
     return r
 
 
-__all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "QueryInapplicable", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
+__all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "RECOMPUTE", "QueryInapplicable", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
            "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition"]
