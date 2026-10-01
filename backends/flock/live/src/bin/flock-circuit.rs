@@ -2384,6 +2384,27 @@ struct Proved {
     tp0: Instant,
 }
 
+/// A table's witnesses after its last rep: their pooled buffers (device copies, mapped host memory) go back to the pools here, so
+/// the next session's upload finds them, and the rest is freed on a thread of its own, off the next session's critical path
+/// (unmapping a K = 16384 witness takes 8 to 54 ms). FC_DROP_INLINE=1 frees everything here.
+fn retire_witness(w: (Wit, Option<WitData>, Option<WitData>)) {
+    #[cfg_attr(not(feature = "gpu"), allow(unused_mut))]
+    let (w0, mut a, mut b) = w;
+    #[cfg(feature = "gpu")]
+    for d in [&mut a, &mut b].into_iter().flatten() {
+        if let WitData::Dev(_, s, _) | WitData::DevCut(_, s, _, _) = d {
+            drop((s.dev_zab.take(), s.dev_rows.take(), s.pinned_rows.take()));
+            if matches!(s.zab, flock_live::gpu_circuit::HostBuf::Mapped { .. }) {
+                drop(std::mem::take(&mut s.zab));
+            }
+        }
+    }
+    if std::env::var("FC_DROP_INLINE").as_deref() == Ok("1") {
+        return;
+    }
+    std::thread::spawn(move || drop((w0, a, b)));
+}
+
 /// [`session`] up to its proofs; `Err` is a session the prover stopped before proving (its record).
 fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> Result<Proved, (Value, Vec<Vec<u8>>)> {
     let log = Arc::new(Mutex::new(Vec::new()));
@@ -2698,6 +2719,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 prove_s.push(tp.elapsed().as_secs_f64() + t_zk_commit);
                 buckets.push(bk);
                 proofs.push(p);
+                // FC_DROP_BREAK=1 (change 9's negative control): the table's witnesses retired before rep 1, their last use
+                if rep == 0 && std::env::var("FC_DROP_BREAK").as_deref() == Ok("1") {
+                    drop((wt0.take(), wt1.take()));
+                }
             }
             if plan.early_proofs && j + 1 < tabs.list.len() {
                 for (rep, p) in proofs[early..].iter().enumerate() {
@@ -2705,6 +2730,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 }
                 early = proofs.len();
             }
+            retire_witness((w0, wt0, wt1));
         }
         Ok(())
     })();
