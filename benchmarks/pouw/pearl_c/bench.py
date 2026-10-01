@@ -84,7 +84,7 @@ def shape_run(dev: R.Dev, nv: R.Nvml, spec: dict, reps: int, check: dict, ungate
     xa, xb = dev.alloc(m * 4 * k), dev.alloc(n * 4 * k)
     for x, rows, seed in ((xa, m_real, spec["gen"]["a"]), (xb, n, spec["gen"]["b"])):
         dev.launch("gen_f32", R.cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
-    pipe = R.Pipeline(dev, m, n, k, "v1", keys, xa, xb)
+    pipe = R.Pipeline(dev, m, n, k, "v1", keys, xa, xb, unit=None)      # E_A by bench.json's line key: the twin samples tiles
     pipe.run_all()
     read = lambda name, off, size: dev.read(pipe.b[name] + off, size)  # noqa: E731
     tiles = [{"tile": s["tile"], "failed": compare_tile(tile_bytes(read, n, k, *s["tile"]), s)} for s in spec["samples"]]
@@ -99,10 +99,10 @@ def shape_run(dev: R.Dev, nv: R.Nvml, spec: dict, reps: int, check: dict, ungate
     if "ratio_vs_adopted" in out:
         adopted = out["adopted_unit_ms"]
         row["summary"] = {"adopted_ms": adopted, "prover_ms": out["unit_e2e_no_hash_ms"], "with_hashing_ms": out["unit_e2e_ms"],
-                          "hashing_ms": out["split_ms"]["hashing"], "job_ms": out["job_ms"],
+                          "hashing_ms": round(out["split_ms"]["commit"] + out["split_ms"]["hashing"], 4), "job_ms": out["job_ms"],
                           "prover_x": out["ratio_vs_adopted"]["no_hash_e2e"],
                           "with_hashing_x": out["ratio_vs_adopted"]["unit_e2e"],
-                          "hashing_x": round(out["split_ms"]["hashing"] / adopted, 4),
+                          "hashing_x": round((out["split_ms"]["commit"] + out["split_ms"]["hashing"]) / adopted, 4),
                           "per_call_b_x": out["ratio_vs_adopted"]["with_job"],
                           "chain_only_x": out["ratio_vs_adopted"]["chain_only"],
                           "adopted_tflops_real": round(2 * m_real * n * k / adopted / 1e9, 1)}

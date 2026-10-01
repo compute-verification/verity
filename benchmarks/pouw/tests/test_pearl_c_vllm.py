@@ -110,7 +110,7 @@ def test_call_keys_are_the_fixtures_keys_of(scheme):
     s = PPD.scheme_of(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
-    epoch = Epoch.start(work, roots, BEACON)
+    epoch = Epoch.unverified(work, roots, BEACON)
     for index, w, m16 in ((0, 0, 32), (5, 1, 8192), (127, 0, 16)):
         mm = Matmul(index, Shape(m16, 1024, 256 if w == 0 else 128), w)
         kk = F.keys_of(s, epoch, mm, C._labelled(epoch.salt + roots[w], "seed-B"))
@@ -161,7 +161,7 @@ def device_run():
     kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME)
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
-    salt = Epoch.start(declared, roots, BEACON).salt
+    salt = Epoch.unverified(declared, roots, BEACON).salt
 
     def make(hashing=True, schedule="serial"):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, BEACON, hashing=hashing,
@@ -329,7 +329,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_
     roots = PPD.weight_roots(kernel, weights, scheme)
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h).commitment.root for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
-    salt = Epoch.start(declared, roots, BEACON).salt
+    salt = Epoch.unverified(declared, roots, BEACON).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12,
                               rows_form=rows_form)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
@@ -391,7 +391,7 @@ def honest_pass(tmp_path, request):
     rows = lambda x: [r.tobytes() for r in x]
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()})
-    epoch = Epoch.start(work, prover.weight_roots, BEACON)
+    epoch = Epoch.unverified(work, prover.weight_roots, BEACON)
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = PW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
@@ -434,7 +434,7 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source)
-    want = PW.audit(s, epoch, prover, tr, splits, records, 0, PW.Beacon(1, source), 3)
+    want = PW.audit_replay(s, epoch, prover, tr, splits, records, 0, PW.Beacon(1, source), 3)
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
     assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")

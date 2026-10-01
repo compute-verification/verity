@@ -689,3 +689,28 @@ extern "C" __global__ void diff_words(const Args a) {
   const unsigned n = __syncthreads_count(d);
   if (threadIdx.x == 0 && n) atomicAdd(reinterpret_cast<unsigned long long*>(a.p[2]), (unsigned long long)n);
 }
+
+// The correctly rounded divide, reciprocal and square root in the forms the kernels use: the only sequences whose .FTZ FP32 ops
+// build.sh admits (ftz_gate.py pins them), and run.py's check holds every word to the correctly rounded value on subnormal
+// inputs and outputs.  p0 x, p1 y, p2 out (6 words per element: x / y, 448 / x, x / 448, 1 / x, sqrt x, bf16(x) / bf16(y));
+// i0 elements
+extern "C" __global__ void __launch_bounds__(128) ieee_ops(const Args a) {
+  const int t = blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= a.i[0]) return;
+  const float x = reinterpret_cast<const float*>(a.p[0])[t], y = reinterpret_cast<const float*>(a.p[1])[t];
+  uint32_t* o = reinterpret_cast<uint32_t*>(a.p[2]) + 6 * (size_t)t;
+  o[0] = __float_as_uint(__fdiv_rn(x, y));
+  o[1] = __float_as_uint(__fdiv_rn(448.0f, x));
+  o[2] = __float_as_uint(__fdiv_rn(x, 448.0f));
+  o[3] = __float_as_uint(__frcp_rn(x));
+  o[4] = __float_as_uint(__fsqrt_rn(x));
+  o[5] = bdiv(f2bf(x), f2bf(y));
+}
+
+// 448 / x alone, the form norms' bdiv(BF_QMAX, ·) takes, for which ptxas specialises the divide's slow path to the constant
+// dividend: its own pinned sequence.  p0 x, p1 out; i0 elements
+extern "C" __global__ void __launch_bounds__(128) ieee_q(const Args a) {
+  const int t = blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= a.i[0]) return;
+  reinterpret_cast<uint32_t*>(a.p[1])[t] = __float_as_uint(__fdiv_rn(448.0f, reinterpret_cast<const float*>(a.p[0])[t]));
+}

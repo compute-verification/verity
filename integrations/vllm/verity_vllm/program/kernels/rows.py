@@ -276,7 +276,11 @@ def gemm_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np
         dot = D.dot_bf16_for(dot_id)
     except KeyError:
         raise Declined(f"no registered evaluator for Gemm_v2 with DOT={dot_id} (k16 step twins: {sorted(D.TC_DOT16_BY_PRIM)})") from None
-    out, nonfin = _gemm(dot, statics, ops)
+    K, N = int(statics["K"]), int(statics["N"])
+    if K * N >= dense_rows.FAST_GEMM_WORDS and dot_id in dense_rows.STEPS:
+        out, nonfin = dense_rows.gemm_row(np.asarray(ops[0], dtype=np.uint16).reshape(K), np.asarray(ops[1], dtype=np.uint16).reshape(N, K), dot_id)
+    else:
+        out, nonfin = _gemm(dot, statics, ops)
     if nonfin.any():
         # the vectorised twins flag a non-finite operand / accumulator lane instead of modelling the total semantics (tc_dot16 docstring):
         # such a coordinate is outside the twin's domain -> unresolved by name (the ScaledMmFp8Block convention), never a silent word
@@ -758,8 +762,9 @@ from verity_vllm.program.kernels import softcap_rows  # noqa: E402  -- Attention
 
 
 def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    from verity_vllm.program.kernels.ir_rows import f64_statics
     f = softcap_rows.FAMILY
-    return softcap_rows.attention_softcap(statics, ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
+    return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
 
 
 EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR

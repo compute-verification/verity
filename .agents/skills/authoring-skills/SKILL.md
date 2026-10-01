@@ -3,7 +3,8 @@ name: authoring-skills
 description: >
   Conventions for creating or modifying agent skills in .agents/skills/:
   SKILL.md structure, frontmatter, writing descriptions that activate
-  reliably, naming, supplementary files, and routing from AGENTS.md. Use
+  reliably, naming, where detail beyond SKILL.md goes, and routing from
+  AGENTS.md. Use
   when adding a skill, editing an existing SKILL.md, or deciding whether
   guidance belongs in a skill, in AGENTS.md, or in code.
 ---
@@ -53,13 +54,13 @@ preserves substantial computational work) is repo-level. `proof-benchmark`
 ~~~text
 .agents/skills/
 └── my-skill/
-    ├── SKILL.md        # Required: frontmatter + workflow
-    ├── workflow.md     # Optional: detailed procedure
-    └── examples.md     # Optional: examples referenced by SKILL.md
+    └── SKILL.md        # Required: frontmatter + workflow
 ~~~
 
-Add supplementary files only when they make the main skill materially easier
-to use.
+A skill is one `SKILL.md`, at most 48 KB. `tests/test_repository.py` admits
+tracked markdown only under the maintained basenames (`AGENTS.md`, "Where
+writing goes"), so a `workflow.md` or `examples.md` beside it fails the suite.
+A script or a `*.template.md` the skill uses may sit beside it.
 
 ## Frontmatter
 
@@ -134,8 +135,8 @@ Prefer:
 - important edge cases and gotchas;
 - explicit validation at the end.
 
-If the skill becomes large, keep `SKILL.md` as the working entry point and
-move optional detail into linked supplementary files.
+If the skill becomes large, keep the workflow in `SKILL.md` and point at the
+detail where it is maintained anyway (see Detail Beyond SKILL.md).
 
 ### Relationship to AGENTS.md
 
@@ -172,19 +173,17 @@ vllm-capture
 
 Do not add a `verity-` prefix; the repository already provides that scope.
 
-## Supplementary Files
+## Detail Beyond SKILL.md
 
-For more complex skills, use a hub-and-detail structure:
+Link to detail at the point where it becomes useful, in the place that owns
+it, rather than copying it:
 
-~~~text
-proof-benchmark/
-├── SKILL.md
-├── authentication.md
-└── profiling.md
-~~~
+- a tool's `README.md` or `--help` for its commands and flags;
+- a check whose failure message says how to fix the failure;
+- a `kb/` doc in the notes (`~/.research/notes/kb/`) for facts that change
+  often and that anyone corrects in place, such as a toolchain's gotchas.
 
-`SKILL.md` should explain the main workflow and link directly to
-supplementary files at the point where they become useful.
+A skill whose parts serve different kinds of work is two skills.
 
 Do not create supporting documents merely to record how the skill was
 designed.
