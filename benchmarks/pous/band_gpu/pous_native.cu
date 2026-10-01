@@ -1029,8 +1029,8 @@ __device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
 // absorber's) goes through `sponge`.  Same inputs and output as band_chain.
 // Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
 // nothing on the squeezer.  U unrolls the Keccak round loop.  IL: the state, the slots and the sponges in the bit-interleaved
-// form (il_const): X is converted as it is read and W as it is written; the slots' initial contents are the caller's to
-// convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads each chunk back from its slot one chunk late,
+// form (il_const): X is converted a Keccak-f after it is loaded (so its load latency stays hidden) and W as it is written;
+// the slots' initial contents are the caller's to convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads each chunk back from its slot one chunk late,
 // so round 9 of a call that another follows writes every chunk of half 0.
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
@@ -1109,10 +1109,9 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       }
       uint64_t carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i == 10 ? 1 : i + 1) << 8)) << 48;
       if (IL) carry = il64(carry);
-      auto xword = [&](int64_t jj) -> uint64_t {  // the pad's two words are their own interleaved forms
-        if (!xrow) return jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull);
-        const uint64_t w = __ldg(xrow + jj);
-        return IL ? il64(w) : w;
+      // X as read: produce converts it (IL), a Keccak-f after the load.  The pad's words are their own interleaved forms.
+      auto xword = [&](int64_t jj) -> uint64_t {
+        return xrow ? __ldg(xrow + jj) : jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull);
       };
       auto src = [&](int64_t cc, const uint64_t* p, ulonglong2 d[SLOT_VECS]) {
         if (x_in && cc < xch) {
@@ -1135,6 +1134,11 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       uint64_t* p = CHUNK_AT(h, 0);  // chunk cc's slot, then (once stored) cc + 1's
       if (sq && act) src(0, p, v);
       auto produce = [&](int64_t cc) {  // the squeezer's chunk cc, written
+        if (IL && x_in && cc <= xch) {
+#pragma unroll
+          for (int w = 0; w < RATE_WORDS; ++w)
+            if (cc * RATE_WORDS + w < xwords) chunk_word(v, w) = il64(chunk_word(v, w));
+        }
 #pragma unroll
         for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
         if (sq && act) {
