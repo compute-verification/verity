@@ -10,16 +10,19 @@ On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow 
 through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
 mode it holds `/run/gpu-lease/agent.lock` and carries the plan out: it evicts by signal and grants by writing
 `grant.<pid>`, which `gpu-lease`'s agent mode (on `infra/nebius`, 49238797 in fixtures/) takes; a free `agent.lock` puts
-`gpu-lease` back on its own rules. `cluster shadow replay` runs the shadow over a day's copied logs, and `cluster shadow
+`gpu-lease` back on its own rules. The live agent runs as `vy-cluster-agent.service` (the unit file here, pinned to one
+shipped tree) with `--roll`: a new ledger segment under `live/` for each start and each UTC day, the segments one hash
+chain, which `cluster ledger ... live/` reads whole. `cluster shadow replay` runs the shadow over a day's copied logs, and `cluster shadow
 evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Workloads and DCGM's GPU-to-pod labels as
 allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]` prints what the planner would
 do beside Kueue. Node 1's executor under the one queue is kueue-fold's.
 
 A lane submits with `research run --queue` (tools/research): it declares the job's class and resources, `cluster submit`
-places it and names the wrapper its node's executor runs it under (`submit.py`: `gpu-lease --wait` for node 2's GPUs, a
-capped and pinned systemd scope for CPU jobs), and the machine-side runner runs inside that wrapper, so the run's custody
-finishes before the allocation is released. Node 1's GPUs wait for kueue-fold's executor; such a job goes to node 2 or is
-refused.
+places it and names the wrappers its node's executor runs it under (`submit.py`): the machine-side runner runs in a capped
+and pinned systemd scope, the job's CPU allocation, so the run's custody finishes before it is released, and a GPU job's
+workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked only while it runs. Node 1's GPUs wait for kueue-fold's executor; such a job goes to node 2 or is
+refused. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
+`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now.
 
 ## Layout
 
@@ -36,9 +39,12 @@ src/cluster/
 ├── nebius2.py  node 2's gpu-lease as the model sees it: owner lines, wait files, preempted.log; read(), live and read-only
 ├── shadow.py   the planner beside gpu-lease: mirror into the ledger, plan, divergences; replay(); evaluate(), the pass bar
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
-├── submit.py   the submit path: a declared job's placement and its node executor's wrapper (research run --queue)
+├── submit.py   the submit path: a declared job's placement and its node executor's wrappers (research run --queue)
+├── kinds.py    the job-kind registry (kinds/<owner>.toml): a kind's shape, time and question; the held rules as warnings
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
+kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
+vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
                 and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
                 the agent-mode gpu-lease 49238797 held for deploy)
