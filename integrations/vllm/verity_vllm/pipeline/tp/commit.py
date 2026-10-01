@@ -601,8 +601,8 @@ def main(args: Options) -> int:
               + (f"; tp partials {m.get('tp_partial_source')}" if (m.get("tp_partial_source") or {}).get("relabel_rank") is not None else ""), flush=True)
         if rm and rm.get("program_digest_matches") is False:
             raise SystemExit(f"fail-closed: rank {m['rank']}: manifest Program digest != this rank's Program digest")
-    # warm-up instrumented
-    llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
+    # warm-up instrumented: under bounded staging also the learn-only pass (every step's plan learned before the record runs)
+    llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout, kwargs={"learn_only": True})
     r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
     fin = llm.collective_rpc("tp2_commit_finalize", timeout=args.rpc_timeout)
     (out / "finalize_warmup.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")

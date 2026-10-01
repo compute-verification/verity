@@ -39,6 +39,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.swap_negative import parse_swap_spec, swap_label
 from verity_vllm.engine import hooks
 
 
@@ -142,30 +143,18 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
     return out
 
 
-def parse_swap_spec(spec: list | None) -> dict | None:
-    """`[ra, rb]` = swap at EVERY step (rev-cb M-0359 T6-3); `[ra, rb, lo, hi]` = swap ONLY on engine steps lo..hi inclusive (rev M-0460: the
-    decode-only swap -- prefill rows untouched, every swapped row one token, coverage/composition blind; attribution alone must catch it)."""
-    if not spec or len(spec) < 2:
-        return None
-    ra, rb = str(spec[0]), str(spec[1])
-    if len(spec) >= 4 and spec[2] is not None and spec[3] is not None:
-        return {"a": ra, "b": rb, "lo": int(spec[2]), "hi": int(spec[3]), "mode": "steps"}
-    return {"a": ra, "b": rb, "lo": None, "hi": None, "mode": "all"}
+def learning(com: Any, on: bool) -> bool:
+    """Makes the committer's next run the bounded-staging LEARN-ONLY pass (the TP warm-up instrumented run, as the single-GPU Commit's: a
+    learning step over the transient budget records its plan and discards its windows), or a record run; whether it is one."""
+    com.learn_only = bool(on) and bool(getattr(com, "bounded", False))
+    return com.learn_only
 
 
-def swap_label(label: str, sw: dict | None, step: int | None) -> str:
-    """The label a request's rows carry under the swap negative at `step` (None = no step context: the ALL-steps swap applies, a ranged one
-    does not -- a ranged swap never touches a step-less consumer)."""
-    if not sw:
-        return label
-    if sw.get("mode") == "steps":
-        if step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"])):
-            return label
-    if label == sw["a"]:
-        return sw["b"]
-    if label == sw["b"]:
-        return sw["a"]
-    return label
+def learned_only(com: Any, rank: int, rc: Any) -> dict[str, Any]:
+    """The record of a learn-only run, which is never a record (its plans are what it is for); the committer's next run is a record run."""
+    com.learn_only = False
+    return {"rank": rank, "learn_only": True, "leaves": sum(s.n_leaves for s in rc.steps), "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])),
+            "errors": (rc.extra.get("errors") or [])[:10], "bounded_staging": rc.extra.get("bounded_staging")}
 
 
 def _tp2_request_program_dirs(root: str, reqs: list[dict], rank: int) -> dict[str, str]:
@@ -863,12 +852,13 @@ class TP2CaptureWorkerExtension:
                 res["required_manifest"] = {"path": required_manifest, "error": repr(e)[:300]}
         return _jsonable(res)
 
-    def tp2_commit_install(self) -> dict[str, Any]:
+    def tp2_commit_install(self, learn_only: bool = False) -> dict[str, Any]:
         st = self._tp2_commit
         st["com"].reset()
+        on = learning(st["com"], learn_only)
         st["com"].install()
         st["rc"] = None
-        return {"rank": st["rank"], "installed": True}
+        return {"rank": st["rank"], "installed": True, "learn_only": on}
 
     def tp2_commit_finalize(self) -> dict[str, Any]:
         """After the run: the rank's run root (fixed BEFORE any challenge), per-step leaf counts, coverage declaration."""
@@ -880,6 +870,8 @@ class TP2CaptureWorkerExtension:
         com.uninstall()
         assert_pristine(st["eng"], st["base"])
         st["rc"] = rc
+        if getattr(com, "learn_only", False):
+            return _jsonable(learned_only(com, st["rank"], rc))
         d = com.coverage_declaration(rc)
         st["decl"] = d
         binding = self._tp2_binding(rc)

@@ -683,7 +683,6 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension._tp2_attribution", "detail": "M-nnnn"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension._tp2_sampled_replay", "detail": "M-nnnn", "count": 3},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension.tp2_commit_xrank_dump", "detail": "F-rN"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-board-id", "symbol": "parse_swap_spec", "detail": "M-nnnn", "count": 2},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-board-id", "symbol": "repo_modules_loaded", "detail": "F-rN"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension._tp2_attribution", "detail": "R1N"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension._tp2_binding", "detail": "R1N"},
