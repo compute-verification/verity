@@ -25,6 +25,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
+from verity_vllm.program.kernels.fp8_dot_rows import SM120_TWIN_PROVENANCE, TC_DOT32_E4M3_BY_PRIM
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 
@@ -161,18 +162,9 @@ _FP8_TWIN_PROVENANCE = {
     "definitions": "verity_vllm/program/registry/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
-_FP8_SM120_TWIN_PROVENANCE = {
-    "fixture": "tests/program/data/fp8_block_cc12_operands.npz",
-    "fixture_sha256": "67306cfecd9de152f91abaf5a3f69410f72d503ce21d9bb05e6415d4561eb1d6",
-    "captured_from": ["_C.per_token_group_fp8_quant", "_C.cutlass_scaled_mm blockwise, cc 12.0 (CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0)"],
-    "device": "vy-nebius-1, NVIDIA RTX PRO 6000 Blackwell Server Edition (cc 12.0), vLLM 0.28.1rc1.dev472+gd9105ea80",
-    "captured_utc": "2026-09-30", "runs": ["r20260930-164401-c04d", "r20260930-164854-5f2c"],
-    "tests": ["tests/program/test_fp8_block_cc12.py"],
-    "definitions": "verity_vllm/program/registry/fp8.py: ScaledMmFp8Block_v2{K,N,G,DOT}, ScaledMmFp8BlockSharedScale_v2{K,N,G,DOT}",
-}
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
                                           "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE,
-                                          "ScaledMmFp8Block_v2": _FP8_SM120_TWIN_PROVENANCE, "ScaledMmFp8BlockSharedScale_v2": _FP8_SM120_TWIN_PROVENANCE}
+                                          "ScaledMmFp8Block_v2": SM120_TWIN_PROVENANCE, "ScaledMmFp8BlockSharedScale_v2": SM120_TWIN_PROVENANCE}
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
@@ -464,7 +456,6 @@ def scaled_mm_fp8_block(statics: dict[str, Any], ops: Sequence[np.ndarray], dot=
 
 def scaled_mm_fp8_block_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """`ScaledMmFp8Block_v2{K,N,G,DOT}` (and its shared-scale restatement): the v1 row with the k32 twin the DOT static names."""
-    from verity_vllm.program.kernels.fp8_dot_rows import TC_DOT32_E4M3_BY_PRIM
     dot_id = prim_static(statics, "DOT", "ScaledMmFp8Block_v2")
     if dot_id not in TC_DOT32_E4M3_BY_PRIM:
         raise Declined(f"no registered evaluator for ScaledMmFp8Block_v2 with DOT={dot_id} (e4m3 k32 twins: {sorted(TC_DOT32_E4M3_BY_PRIM)})")
