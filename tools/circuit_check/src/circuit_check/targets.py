@@ -92,7 +92,8 @@ def _value(s: str) -> Any:
 
 
 def definition(spec: str) -> Any:
-    """The registered Definition ``spec`` names, bound to the statics its id writes."""
+    """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -101,7 +102,13 @@ def definition(spec: str) -> Any:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
     statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
-    fn = W.specialization(fam, statics)
+    try:
+        fn = W.specialization(fam, statics)
+    except KeyError:
+        fn = suite().get(spec.strip())
+        if fn is None:
+            raise
+        return fn
     return fn.bind() if hasattr(fn, "bind") and not statics and getattr(fn, "statics", None) == () else fn
 
 
