@@ -1,6 +1,9 @@
 """`cluster status`: each node's running, queued and held work by owner and key, its GPU-hours ready, its holds, its disk,
-and node 1's unreplayed Commit bundles. Read-only: every command it sends a node (`COMMANDS`) only reads, through
-`kubectl get`, `df`, `find` and `du`, or `ls` and `cat`.
+its model cache, and node 1's unreplayed Commit bundles. Read-only: every command it sends a node (`COMMANDS`) only reads,
+through `kubectl get`, `df`, `find` and `du`, or `ls` and `cat`.
+
+**The model cache** (`models.py`) is each node's `/workspace/models/*/.entry.json`: its entries, their GB by owner against
+the owner's quota (`models.toml`), and the next expiry.
 
 `read` takes a node's snapshot over SSH (`HOSTS`, as `machines.d/<node>.toml` registers them); `node1` and `node2` are the
 pure half, snapshot and `now` in, report out, and `render` prints reports as text.
@@ -38,13 +41,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ledger, model, nebius1, nebius2
+from . import ledger, model, models, nebius1, nebius2
 
 NODES = {"nebius-1": nebius1.NODE, "nebius-2": nebius2.NODE}
 HOSTS = {nebius1.NODE: "research@81.85.2.165", nebius2.NODE: "research@81.85.2.121"}
 SSH_KEY = Path.home() / ".ssh" / "research_key"
 LIVE = "/workspace/pouw/infra/cluster/live"
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
+MODELS = models.DEFAULTS["root"]
 STALE_S = 60
 
 COMMANDS = {
@@ -56,8 +60,10 @@ COMMANDS = {
     # the agent's state: <live>/state.json with --roll, else its run's <live>/<stamp>/state.json; the newest
     "state": f'cd {LIVE} && f=$(ls -t state.json */state.json 2>/dev/null | head -1) && test -n "$f" && echo "{LIVE}/$f"'
              ' && cat "$f"',
+    # the model cache's complete entries (models.py), nothing when it doesn't exist yet
+    "models": f'for f in {MODELS}/*/.entry.json; do test -f "$f" && cat "$f"; done; true',
 }
-READS = {nebius1.NODE: ("kueue", "df", "bundles"), nebius2.NODE: ("state", "df")}
+READS = {nebius1.NODE: ("kueue", "df", "bundles", "models"), nebius2.NODE: ("state", "df", "models")}
 
 
 class ReadError(RuntimeError):
@@ -82,6 +88,8 @@ def read(node: str, run: Callable[[str], str], t: int) -> dict[str, Any]:
         out = {k: ex.submit(run, COMMANDS[k]) for k in READS[node]}
         raw = {k: f.result() for k, f in out.items()}
     snap: dict[str, Any] = {"node": node, "t": t, "df": raw["df"]}
+    if "models" in raw:
+        snap["models"] = raw["models"]
     if "kueue" in raw:
         snap["k8s"] = json.loads(raw["kueue"])["items"]
         snap["bundles"] = raw["bundles"]
@@ -241,7 +249,10 @@ def _report(snap, now, owner, rows, held, queues, bund) -> dict[str, Any]:
                       "gpu_h": round(sum(r["gpus"] * r["length_s"] for r in known) / 3600, 2)},
             "holds": {"queues": queues, "workloads": held},
             "disk": {"path": "/workspace", "use_pct": disk_pct(snap["df"])},
-            **({"bundles": bund} if bund is not None else {})}
+            **({"bundles": bund} if bund is not None else {}),
+            **({"models": models.summary(models.parse_entries(snap["models"]),
+                                         models.node_config(models.load_config(), node=snap["node"]), now, MODELS)}
+               if "models" in snap else {})}
 
 
 def report(snap: dict[str, Any], now: int, owner: str | None = None) -> dict[str, Any]:
@@ -279,6 +290,8 @@ def render(reports: list[dict[str, Any]]) -> str:
             b = rep["bundles"]
             out.append(f"  unreplayed Commit bundles: {b['gb']:.1f} GB in {b['count']} (release.py's rule: "
                        f"{', '.join(p.removeprefix('/workspace/') for p in b['roots'])})")
+        if "models" in rep:
+            out.append(f"  {models.line(rep['models'])}")
         if "ledger" in rep:
             lg = rep["ledger"]
             note = (" (STALE: is the agent running?)" if lg["stale"]

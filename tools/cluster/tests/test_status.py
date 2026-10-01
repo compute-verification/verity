@@ -7,7 +7,7 @@ import re
 
 from _build import job
 
-from cluster import cli, ledger, model, nebius1, nebius2, status
+from cluster import cli, ledger, model, models, nebius1, nebius2, status
 from cluster.ledger import epoch
 
 T = epoch("2026-10-01T00:30:00Z")
@@ -242,10 +242,35 @@ def test_render_prints_each_nodes_header_then_its_jobs_and_held_workloads_by_own
     assert "vy-nebius-3: could not read: ReadError: no route" in text
 
 
+def model_entry(repo: str, owner: str, gb: float, expires: str) -> str:
+    """A `.entry.json` as `cluster models fetch` writes it (models.py), and as `cat` prints it."""
+    return json.dumps({"schema": models.SCHEMA, "repo": repo, "revision": "9" * 40, "owner": owner, "phase": "A",
+                       "files": {}, "total_bytes": int(gb * 1e9), "declared_gb": gb, "expires_h": 72, "include": None,
+                       "created": "2026-10-01T00:00:00Z", "last_used": "2026-10-01T00:00:00Z", "expires": expires,
+                       "fetched_by": None}, indent=1, sort_keys=True) + "\n"
+
+
+MODELS = (model_entry("Qwen/Qwen3-8B", "circuits", 100.1, "2026-10-04T00:00:00Z")
+          + model_entry("meta-llama/Llama-3.1-8B-Instruct", "circuits", 20.2, "2026-10-03T19:00:00Z")
+          + model_entry("HuggingFaceTB/SmolLM2-135M", "infra", 21.7, "2026-10-04T01:00:00Z"))
+
+
+def test_each_nodes_model_cache_is_a_line_of_its_entries_by_owner_against_quota_and_the_next_expiry():
+    rep = status.node2({**node2_snapshot(), "models": MODELS}, T)
+    m = rep["models"]
+    assert (m["entries"], m["gb"], m["next_expiry"], m["expired"]) == (3, 142.0, "2026-10-03T19:00:00Z", 0)
+    assert m["owners"]["circuits"] == {"entries": 2, "bytes": int(100.1e9) + int(20.2e9), "gb": 120.3, "quota_gb": 500}
+    text = status.render([rep, status.node1({**node1_snapshot(), "models": ""}, T)])
+    assert ("  models: 3 entries, 142.0 GB (circuits 120.3/500 GB, infra 21.7/200 GB), next expiry 2026-10-03T19:00Z\n"
+            in text)
+    assert "  models: no entries in /workspace/models\n" in text
+    assert "models" not in status.node2(node2_snapshot(), T)
+
+
 def test_cli_status_reads_every_node_with_read_only_commands_and_prints_json(capsys, monkeypatch):
     sent: list[tuple[str, str]] = []
-    out = {nebius1.NODE: {"kueue": json.dumps({"items": node1_snapshot()["k8s"]}), "df": DF, "bundles": DU},
-           nebius2.NODE: {"state": "/live/state.json\n" + json.dumps(node2_snapshot()["state"]), "df": DF}}
+    out = {nebius1.NODE: {"kueue": json.dumps({"items": node1_snapshot()["k8s"]}), "df": DF, "bundles": DU, "models": ""},
+           nebius2.NODE: {"state": "/live/state.json\n" + json.dumps(node2_snapshot()["state"]), "df": DF, "models": MODELS}}
 
     def runner(node):
         def run(cmd):
@@ -261,8 +286,9 @@ def test_cli_status_reads_every_node_with_read_only_commands_and_prints_json(cap
     assert doc["schema"] == "cluster/status/v1" and doc["t"] == T
     assert [n["node"] for n in doc["nodes"]] == [nebius1.NODE, nebius2.NODE]
     assert doc["nodes"][0]["bundles"]["count"] == 2 and doc["nodes"][1]["ledger"]["path"] == "/live/state.json"
-    assert sorted(sent) == sorted([(nebius1.NODE, status.COMMANDS[k]) for k in ("kueue", "df", "bundles")]
-                                  + [(nebius2.NODE, status.COMMANDS[k]) for k in ("state", "df")])
+    assert doc["nodes"][0]["models"]["entries"] == 0 and doc["nodes"][1]["models"]["entries"] == 3
+    assert sorted(sent) == sorted([(nebius1.NODE, status.COMMANDS[k]) for k in ("kueue", "df", "bundles", "models")]
+                                  + [(nebius2.NODE, status.COMMANDS[k]) for k in ("state", "df", "models")])
     writes = re.compile(r"\b(patch|delete|apply|create|edit|label|annotate|scale|cordon|drain|rm|mv|kill|tee|chmod|chown)\b|>(?!/dev/null)")
     for _, cmd in sent:
         assert not writes.search(cmd), cmd

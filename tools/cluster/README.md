@@ -39,11 +39,13 @@ src/cluster/
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
 ├── submit.py   the submit path: a declared job's placement and its node executor's wrappers (research run --queue)
 ├── kinds.py    the job-kind registry (kinds/<owner>.toml): a kind's shape, time and question; the held rules as warnings
-├── status.py   each node's running, queued and held jobs by owner and key, GPU-h ready, holds, disk and node 1's
-│               unreplayed bundles (release.py's rule), read over SSH; read-only
-└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status
+├── status.py   each node's running, queued and held jobs by owner and key, GPU-h ready, holds, disk, model cache and
+│               node 1's unreplayed bundles (release.py's rule), read over SSH; read-only
+├── models.py   the node's model-checkpoint cache: fetch (verified, resumable), ls, use, release, evict
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | models …
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
+models.toml                the model cache's root, expiry, max disk use, and each owner's quota per node
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
                 and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
                 the agent-mode gpu-lease 49238797 held for deploy)
@@ -82,3 +84,54 @@ uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UT
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
 ~~~
+
+## The model cache
+
+Each node has one cache of Hugging Face checkpoints, `/workspace/models` (`models.toml`). An entry is
+`<org>--<name>@<40-hex revision>/`: the repo's files at that commit as plain files (no Hugging Face blob store, symlinks or
+`.cache/`), and `.entry.json` (`verity/model-entry/v1`) with each file's sha256 and bytes, the total, owner, phase,
+`declared_gb`, created, last used, expiry, and the run that fetched it. `.entry.json` is written last, atomically, so a
+directory without one is incomplete and nothing reads it. The entries are the registry; there is no other database.
+
+~~~text
+cluster models fetch REPO@REV --owner O --phase P --declared-gb N [--expires-h 72] [--include GLOB ...] [--out DIR]
+cluster models ls [--json] [--owner O]        # entries by owner, GB, last use, expiry; incomplete downloads
+cluster models use REPO@REV                   # a job's first step: bumps last use and expiry, prints the entry's directory
+cluster models release REPO@REV --owner O     # the owner deletes its entry now
+cluster models evict [--dry-run]              # as root (sudo -n): expired entries and day-old incomplete downloads
+~~~
+
+Every command also takes `--root`, `--config` and `--now ISO`. Refusals exit 2 for a malformed request and 3 for a rule,
+with one line; a failed download or checksum exits 1.
+
+**Fetch** takes a pinned revision or nothing: a branch or tag exits 2. It reads the file list and checksums from
+`/api/models/<repo>/revision/<rev>?blobs=true` and refuses (exit 3) when a file has no checksum, when the listed total is
+over `--declared-gb`, when the owner's entries on the node would pass its quota with this one (circuits 500 GB, anyone
+else 200 GB), or when the filesystem would pass `max_use_pct` (75%) afterwards. Other fetches still running count
+against both. The 75% stays under `research disk-hold`'s 80%, so a fetch never holds other lanes' runs. Files stream into
+`.tmp/<entry>-<pid>/` and are hashed as they are written: an LFS file's sha256 against `lfs.sha256`, any other file's git
+blob sha1 against its blob id. A mismatch deletes the download; an interrupted fetch leaves it for the next one to resume
+with HTTP Range. A per-entry `flock` makes a second fetch of the same model wait and then find the entry. Fetching an entry
+that is already cached only bumps it, and only its owner may do that. Fetch is stdlib Python. It sends the token at
+`HF_TOKEN_PATH` (default `/etc/verity/hf-token`) to huggingface.co alone, never to the CDN, and never prints it. Without
+the token, a gated repo exits 3 naming that path.
+
+**Lifecycle.** A job calls `use` when it starts, so the entry expires `expires_h` (72 h) after its last use. The owner
+`release`s it when its phase ends; otherwise `evict` deletes it once it has expired. Neither deletes an entry that any
+process holds open or mapped, as `/proc/*/fd` and `/proc/*/maps` show it by device and inode. Only root sees every
+process, so `evict` without root deletes nothing (`--dry-run` says what it would delete). Nothing schedules `evict` yet.
+`cluster status` prints each node's cache in one line, for example `models: 3 entries, 142.0 GB (circuits 120.3/500 GB,
+infra 21.7/200 GB), next expiry 2026-10-03T19:00Z`.
+
+**Asking for a model.** The `model.fetch` kind (`kinds/infra.toml`: 4 CPUs, 8 GiB, 240 min) runs on the node that will
+read the model, so pin it with `--on`, and pass the same size to `--disk-gb` and `--declared-gb`:
+
+~~~bash
+research run --queue --kind model.fetch --source . --project verity --on vy-nebius-2 --disk-gb 17 \
+  --question "Is Qwen/Qwen3-8B@<rev> on vy-nebius-2, verified?" --cwd source --declared-output 'out/*' -- \
+  bash -c 'PYTHONPATH=tools/cluster/src python3 -m cluster models fetch Qwen/Qwen3-8B@<rev> --owner circuits \
+    --phase B --declared-gb 17 --out "$RESEARCH_RUN_DIR/out"'
+~~~
+
+The job that reads the model then runs `MODEL=$(PYTHONPATH=tools/cluster/src python3 -m cluster models use REPO@REV)` and
+loads from `$MODEL` with `HF_HUB_OFFLINE=1`.
