@@ -125,6 +125,9 @@
   },
   "RsqrtApprox_v2": {
    "and": 1668
+  },
+  "ScaledMmFp8_v2{K=32,N=2,BIAS=False}": {
+   "and": 23028
   }
  },
  "pieces": {
