@@ -18,8 +18,12 @@ family and S:
   and `exact_cell_share` over cells and salts).  `credited` repeats the shares over the other cells only (the exact-chain
   debit), with `live_gap`: the share of their bound words that are frozen or salt-independent.
 
+`fresh_by_S` repeats every share for the other binding: each S-atom segment chained from zero, its partial bound (S = 1 is
+D-3s's fresh atom words), so a bound word carries its own segment's MACs and none of the accumulator before it.
+
   uv run python benchmarks/pouw/ncp_sm120/liveness.py OUT [PR295]
-      (env: CENSUS=/tmp/pearlc_census.py, K=8192, ROWS=6, COLS=6, SALTS=12, STRIDES="1 4 8", FAMILIES: all 26)
+      (env: CENSUS=/tmp/pearlc_census.py, K=8192, ROWS=6, COLS=6, SALTS=12, STRIDES="1 4 8", FAMILIES: all 26,
+       REUSE_FROM: an earlier OUT whose formed rows (form/liveness-*.ref.pkl) are reused where its request is identical)
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import pickle
 import sys
 
 import numpy as np
@@ -90,7 +95,13 @@ def family_census(name: str, census, ck, cf, out: str, pr295: str, k: int, rows:
     qa, qb = quantize(census, XA), quantize(census, XB)
     jobs = [("shake", True, k, i, qa[i].tobytes(), s) for s in salts for i in range(rows)]
     jobs += [("shake", False, k, j, qb[j].tobytes(), s) for s in salts for j in range(cols)]
-    got = cf.run_reference(out, pr295, context, jobs, f"liveness-{name}")
+    got, reuse = None, os.environ.get("REUSE_FROM")
+    if reuse:
+        req, ref = (os.path.join(reuse, "form", f"liveness-{name}.{x}.pkl") for x in ("req", "ref"))
+        if os.path.exists(ref) and pickle.load(open(req, "rb")) == {"context": context, "jobs": jobs}:
+            got = pickle.load(open(ref, "rb"))
+    if got is None:
+        got = cf.run_reference(out, pr295, context, jobs, f"liveness-{name}")
     formed = np.frombuffer(b"".join(g[0] for g in got), np.uint8).reshape(len(jobs), 3 * k)
     fa = formed[:len(salts) * rows].reshape(len(salts), rows, 3 * k)
     fb = formed[len(salts) * rows:].reshape(len(salts), cols, 3 * k)
@@ -105,14 +116,21 @@ def family_census(name: str, census, ck, cf, out: str, pr295: str, k: int, rows:
     Q, exact = Q.reshape(len(salts), n, T), exact.reshape(len(salts), n, T)
     res = {"family": name, "k": k, "cells": n, "salts": len(salts), "atoms": T,
            "zero_rows": [int((qa == 0).all(1).sum()), int((qb == 0).all(1).sum())],
-           "frozen_atoms": round(float((Q[:, :, 1:] == Q[:, :, :-1]).mean()), 6), "by_S": {}}
+           "frozen_atoms": round(float((Q[:, :, 1:] == Q[:, :, :-1]).mean()), 6), "by_S": {}, "fresh_by_S": {}}
     for S in strides:
-        W, E = Q[:, :, S - 1::S], exact[:, :, S - 1::S]
-        exact_cell = E.all(axis=2)
-        res["by_S"][str(S)] = {"all": shares(W, E, np.arange(n)), "exact_cells": int(exact_cell.any(axis=0).sum()),
-                               "exact_cell_share": round(float(exact_cell.mean()), 6),
-                               "credited": shares(W, E, np.flatnonzero(~exact_cell.any(axis=0)))}
+        res["by_S"][str(S)] = by_S(Q[:, :, S - 1::S], exact[:, :, S - 1::S])
+        As, Bs = A.reshape(-1, 32 * S), B.reshape(-1, 32 * S)
+        F = ck.chained(As, Bs, S)[:, -1]
+        FE = F.view(np.float32).astype(np.float64) * 2.0 ** 18 == exact_prefix(As, Bs, S)[:, -1].astype(np.float64)
+        res["fresh_by_S"][str(S)] = by_S(F.reshape(len(salts), n, T // S), FE.reshape(len(salts), n, T // S))
     return res
+
+
+def by_S(W: np.ndarray, E: np.ndarray) -> dict:
+    exact_cell = E.all(axis=2)
+    return {"all": shares(W, E, np.arange(W.shape[1])), "exact_cells": int(exact_cell.any(axis=0).sum()),
+            "exact_cell_share": round(float(exact_cell.mean()), 6),
+            "credited": shares(W, E, np.flatnonzero(~exact_cell.any(axis=0)))}
 
 
 def main(argv: list[str]) -> int:
@@ -136,9 +154,11 @@ def main(argv: list[str]) -> int:
     for name in fams:
         r = family_census(name, census, ck, cf, out, pr295, k, rows, cols, salts, strides, context)
         result["families"].append(r)
-        for S in strides:
-            a, c = r["by_S"][str(S)]["all"], r["by_S"][str(S)]["credited"]
-            print(f"{name:24s} S={S}: exact cells {r['by_S'][str(S)]['exact_cells']:2d}/{r['cells']}, exact words "
+        for kind, S in ((kind, S) for kind in ("by_S", "fresh_by_S") for S in strides):
+            s = r[kind][str(S)]
+            a, c = s["all"], s["credited"]
+            print(f"{name:24s} {'fresh' if kind == 'fresh_by_S' else 'chain'} S={S}: exact cells {s['exact_cells']:2d}/"
+                  f"{r['cells']}, exact words "
                   f"{a['exact_words']:.4f}, frozen seg {a['frozen_segments']:.4f}, salt-indep words "
                   f"{a['salt_independent_words']:.4f}, low16 {a['salt_independent_low16']:.4f}, const bits "
                   f"{a['constant_bits_mean']:5.2f}, repeated {a['repeated_word_cells']:.3f}; credited: "
