@@ -1305,6 +1305,40 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
 
 
 @needs_flock
+def test_n1_lease_named_pool_labels_its_own_holders_and_a_blocked_pool_grants_nothing_new(monkeypatch, tmp_path, reap):
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-circuits-1", "gpu-pool-circuits-1-x", "GPU-b")],
+                                VY_POOL_NAME="circuits", VY_POOL_QUEUE="deployments-gpu")
+    c = m.Controller()
+    t = 1_800_000_000.0
+    s = c.tick(t)
+    assert [a for a, _ in calls if a[:2] == ("get", "jobs")][0][3] == "verity.dev/gpu-pool=circuits"
+    assert s["pool"] == 1 and not s["gpus"][1]["fence_pids"] and s["blocked"] is None
+    (tmp_path / "gl" / "blocked").write_text("pid 77 on GPU 3 without a lease (pod nd-x)\n")
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=2 run=r-x who=vllm-epoch-run since=2026-09-30T22:00:00Z\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    s = c.tick(t + 10)
+    assert s["blocked"].startswith("pid 77") and all(g["fence_pids"] for g in s["gpus"])
+    assert [a[2] for a, _ in calls if a[:2] == ("delete", "job")] == ["gpu-pool-circuits-1"]
+    assert not [a for a, _ in calls if a[0] == "create"]
+    os.close(fd)
+    w.unlink()
+    (tmp_path / "gl" / "blocked").unlink()
+    state["holders"] = []
+    fd = os.open(w, os.O_CREAT | os.O_RDONLY)
+    w.write_text("pid=4242 n=1 run=r-x who=vllm-epoch-run since=2026-09-30T22:00:00Z\n")
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    c.tick(t + 20)
+    created = [json.loads(st) for a, st in calls if a[0] == "create"]
+    assert len(created) == 1 and created[0]["metadata"]["name"].startswith("gpu-pool-circuits-")
+    assert created[0]["metadata"]["labels"]["verity.dev/gpu-pool"] == "circuits"
+    assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "deployments-gpu"
+    os.close(fd)
+
+
+@needs_flock
 def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
