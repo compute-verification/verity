@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind, composite
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import Coll, concat, strided_view
 from verity.ir.types import Array
 from verity.ml.boolean.gather import gather
@@ -101,13 +101,14 @@ def gather_bf16(vocab: int) -> CompositeDefinition:
     return d
 
 
-@composite("Embedding", 2, ["V", "H"], lambda S: ((("tok", TOKEN), ("table", Array(S.V, Array(S.H, WORD)))), Array(S.H, WORD)),
-           conformance="exact-model-tested")
-def Embedding(B, S, tok, table):
+def _embedding(B, S, tok, table):
     """`Embedding_v1` on bits: ``h[j] = table[tok][j]``, one `GatherBf16x{V}_v2` per hidden coordinate (column j of the table)."""
     L = WORD.leaves
     cols = Coll(Array(S.H, Array(S.V, WORD)), concat([strided_view(table, L * j, L, L * S.H, 1, L * S.V) for j in range(S.H)]))
     return B.batch(gather_bf16(S.V), tok, cols, axes=(None, 0))
 
 
+Embedding = CompositeDefinition(
+    "Embedding", 2, ("V", "H"), lambda S: ((("tok", TOKEN), ("table", Array(S.V, Array(S.H, WORD)))), Array(S.H, WORD)), _embedding,
+    doc=_embedding.__doc__ or "", conformance="exact-model-tested")
 Embedding.word = lambda b: bind(b1.Embedding, V=b["V"], H=b["H"])  # type: ignore[attr-defined]
