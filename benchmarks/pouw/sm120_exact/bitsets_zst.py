@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -424,6 +425,14 @@ def main() -> int:
     if a.only:
         todo = [u for u in a.only.split(",") if u in todo]
     mpath = Path(a.manifest or root / "bitsets-zst" / "manifest.jsonl")
+    if not a.dry_run:
+        mpath.parent.mkdir(parents=True, exist_ok=True)
+        lock = open(mpath.parent / ".lock", "w")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            log(f"another bitsets_zst job holds {mpath.parent / '.lock'}: exiting without touching anything")
+            return 2
     man = Manifest([mpath, out / "manifest.jsonl"] if not a.dry_run else [out / "manifest.dry-run.jsonl"])
     gate = Gate(Path(a.windows))
     src = Path(__file__).resolve().parents[3] / "tools" / "research" / "src"
