@@ -89,6 +89,8 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (12:37 PM PDT): lanes work around the clock, so timelines are planned in hours: a pilot, trial or rollout gets
+  hours (about eight for a process pilot), not the days or weeks a human team would give it.
 - 2026-10-01 (10:56 AM PDT): only leads get handles (a name in `research msg`), never individual workers; a worker is
   reached through its lead. A new lead is a line in `.agents/skills/using-slack/registry.json`, and `names open`
   refuses any other name.
