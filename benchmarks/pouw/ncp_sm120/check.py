@@ -90,33 +90,37 @@ def lane_cells(meta: dict, tm: int, tn: int, tid: int) -> tuple[np.ndarray, np.n
     return np.array(rows), np.array(cols), live
 
 
-WORDS = {"hash_r": 0, "hash_ir": 1, "chash": 2}
+WORDS = {"hash_r": 0, "hash_ir": 1, "chash": 2, "hash_ir_lb": 1, "chash_lb": 2}
 
 
 def digest(I: np.ndarray, R: np.ndarray, Q: np.ndarray, tile: int, tid: int, arm: str, S: int, stagger: int,
            live: bool) -> bytes:
     """The lane's leaf: BLAKE3 compressions chained over its bound atoms' words (16 a block, fragment order): R then I
     (hash_ir; no R at atom 0, the duplicate of I), R (hash_r), or the chained accumulator Q (chash); atom t is bound when
-    (t + 1 + phase) % S == 0, phase = (tid / 32) % S when staggered.  Keyed by IV xor (tile, tid, S | words << 16, stagger,
+    (t + 1 + phase) % S == 0, phase = (tid / 32) % S when staggered.  `_lb`: each fragment's four words as one word of their
+    low bytes, 16 a block, the last block zero-filled.  Keyed by IV xor (tile, tid, S | words << 16 | lb << 24, stagger,
     0, ...); I, R and Q are (lane outputs x atoms)."""
-    words = WORDS[arm]
+    lb = arm.endswith("_lb")
+    base = arm.removesuffix("_lb")
     cv = list(blake3.IV)
     cv[0] ^= tile
     cv[1] ^= tid
-    cv[2] ^= (S | words << 16) & 0xFFFFFFFF
+    cv[2] ^= (S | WORDS[arm] << 16 | lb << 24) & 0xFFFFFFFF
     cv[3] ^= stagger
     phase = (tid // 32) % S if stagger else 0
-    ctr = 0
+    stream = []
     if live:
         for t in range(I.shape[1]):
             if (t + 1 + phase) % S:
                 continue
-            group = {"hash_r": [R[:, t]], "hash_ir": [I[:, t]] if t == 0 else [R[:, t], I[:, t]], "chash": [Q[:, t]]}[arm]
+            group = {"hash_r": [R[:, t]], "hash_ir": [I[:, t]] if t == 0 else [R[:, t], I[:, t]], "chash": [Q[:, t]]}[base]
             for w in group:
-                for b in range(0, len(w), 16):
-                    cv = blake3.compress(tuple(cv), struct.pack("<16I", *(int(v) for v in w[b:b + 16])), ctr, 64,
-                                         blake3.KEYED_HASH)[:8]
-                    ctr += 1
+                w = [int(v) for v in w]
+                stream += [sum((w[f + e] & 0xFF) << 8 * e for e in range(4)) for f in range(0, len(w), 4)] if lb else w
+    if len(stream) % 16:
+        stream += [0] * (16 - len(stream) % 16)
+    for ctr, b in enumerate(range(0, len(stream), 16)):
+        cv = blake3.compress(tuple(cv), struct.pack("<16I", *stream[b:b + 16]), ctr, 64, blake3.KEYED_HASH)[:8]
     return struct.pack("<8I", *cv)
 
 
@@ -134,7 +138,7 @@ def check_small(out: str, kind: str) -> list[str]:
     tiles_n = n // meta["bn"]
     for run in meta["runs"]:
         got = np.frombuffer(open(os.path.join(out, "check", run["tag"] + ".c.bin"), "rb").read(), dtype=np.uint32).reshape(m, n)
-        if run["arm"] == "chash":
+        if run["arm"].startswith("chash"):
             want = Q[:, -1].reshape(m, n)
         elif run["arm"] == "plain":
             want = plain(A, B, run["K"] // 32).reshape(m, n)
@@ -175,7 +179,7 @@ def check_arms(out: str) -> list[str]:
                     cache[key] = (rows, cols, live, a, b, I, R, chained(a, b, T))
                 rows, cols, live, a, b, I, R, Q = cache[key]
                 got = np.array([int(h, 16) for h in ln["cells"]], dtype=np.uint32)
-                if arm["arm"] == "chash":
+                if arm["arm"].startswith("chash"):
                     want = Q[:, -1]
                 elif arm["arm"] == "plain":
                     want = plain(a, b, arm["K"] // 32)

@@ -10,8 +10,9 @@
    median: plain at K = k (this kernel's plain FP8 GEMM) and at K = 3k (the stacked MMA work alone); core (the D-3s chain,
    C = R_(T-1), nothing bound); store_r / store_ir at S = 1 (every bound word written to a ring: an unfused binding's
    traffic); hash_r at each S of S_R and hash_ir at each S of S_IR (BLAKE3 over the bound words from registers); chash at
-   each S of S_C (the plain chained GEMM over K, every S-th accumulator bound); and hash_r and chash at each S of S_STAGGER
-   with the bound atoms staggered across warps (`stagger`).  A sample of
+   each S of S_C (the plain chained GEMM over K, every S-th accumulator bound); hash_ir_lb at each S of S_IR_LB and chash_lb
+   at each S of S_C_LB (the same words, only their low bytes bound); and hash_r and chash at each S of S_STAGGER (none by
+   default; run 2 measured 4 and 8 slower than unstaggered) with the bound atoms staggered across warps.  A sample of
    lanes (their C cells and digests) at every arm, and sha256 of the whole C and digest buffers, go to OUT/arms.json for
    check.py.  NVML's clocks before and after every arm.
 
@@ -19,7 +20,7 @@ Operands are stand-ins for the formed X~ and Y~ (finite E4M3 codes from gen_code
 here.  Diagnostic timing, untimed-node rules apply: the run says which node and lease it ran under.
 
   python3 run.py OUT   (env: CUDA, SHAPES="p d", REPS=5, S_R="1 2 4 8 16 32 64 768", S_IR="1 4 16", S_C="1 2 4 8 16 32",
-                       S_STAGGER="4 8", NCP_LIBCUDA)
+                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", NCP_LIBCUDA)
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 KERNEL = os.path.join(HERE, "ncp_sm120.cu")
 FLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-fmad=false", "-Xptxas", "-v", "-cubin"]
-ARMS = ("plain", "core", "store_r", "store_ir", "hash_r", "hash_ir", "chash")
+ARMS = ("plain", "core", "store_r", "store_ir", "hash_r", "hash_ir", "chash", "hash_ir_lb", "chash_lb")
 QMMA = {"p": 128, "d": 32}
 NEVER = 1 << 30            # an S no atom reaches: core's guard and nothing bound
 RASTER = 8
@@ -50,7 +51,7 @@ _spec.loader.exec_module(pc)
 
 
 def hashed(arm: str) -> bool:
-    return arm in ("hash_r", "hash_ir", "chash")
+    return arm.startswith(("hash_", "chash"))
 
 
 def emit(obj: dict) -> None:
@@ -197,7 +198,9 @@ def arm_list(kind: str, k: int) -> list[tuple[str, int, int, int]]:
     arms += [("hash_r", s, K, 0) for s in env("S_R", f"1 2 4 8 16 32 64 {T}")]
     arms += [("hash_ir", s, K, 0) for s in env("S_IR", "1 4 16")]
     arms += [("chash", s, K, 0) for s in env("S_C", "1 2 4 8 16 32")]
-    arms += [(a, s, K, 1) for s in env("S_STAGGER", "4 8") for a in ("hash_r", "chash")]
+    arms += [("hash_ir_lb", s, K, 0) for s in env("S_IR_LB", "1 2 4")]
+    arms += [("chash_lb", s, K, 0) for s in env("S_C_LB", "1 2 4 8")]
+    arms += [(a, s, K, 1) for s in env("S_STAGGER", "") for a in ("hash_r", "chash")]
     return arms
 
 
@@ -210,6 +213,7 @@ def check(d: pc.Dev, out: str) -> None:
                 ("store_ir", 1, x.K, 0)]
         runs += [("hash_r", s, x.K, 0) for s in (1, 3, 4, T)] + [("hash_ir", s, x.K, 0) for s in (1, 3, T)]
         runs += [("chash", s, x.K, 0) for s in (1, 3, T)]
+        runs += [("hash_ir_lb", s, x.K, 0) for s in (1, 3, T)] + [("chash_lb", s, x.K, 0) for s in (1, 3, T)]
         runs += [("hash_r", 3, x.K, 1), ("hash_ir", 3, x.K, 1), ("chash", 3, x.K, 1)]
         meta = {"kind": kind, "m": x.m, "rows": m, "n": n, "k": k, "K": x.K, "tm": x.tm, "bn": x.bn, "nct": x.nct,
                 "tiles": x.tiles, "grid": x.grid, "seeds": [SEED_X, SEED_Y], "layout": layout(kind), "runs": []}

@@ -22,8 +22,10 @@
 // The lane's leaf (HASH): BLAKE3 compressions chained over its emitted words in order, 16 words a block (an R or I block is
 // the words of four consecutive fragments (mi, ni) in mi-major order, each fragment's four words e = 0 ... 3), the block
 // counter its index in the lane's stream, length 64, flag KEYED_HASH, and the first chaining value the key
-//   IV xor (tile, tid, S | words << 16, i[7], 0, 0, 0, 0),  tile = tm * tiles_n + tn,  tid the consumer thread (0 ... NCT - 1),
-//   words = WORDS (HASH) or 2 (CHASH).
+//   IV xor (tile, tid, S | words << 16 | LB << 24, i[7], 0, 0, 0, 0),  tile = tm * tiles_n + tn,  tid the consumer thread
+//   (0 ... NCT - 1), words = WORDS (HASH) or 2 (CHASH).
+// With LB (the low-byte binding, `_lb` kernels) a fragment's four words enter as one word, byte e word e's low byte; the
+// packed words run 16 a block in emission order and the last block's unfilled words are zero.
 // The tile's leaf would be a tree over its lanes' digests, one compression per pair (`-h2`-style segments); this kernel
 // writes the lane digests, which is where the work is.
 //
@@ -47,14 +49,17 @@ constexpr int CTA_RING_LOG = 22;   // 16 MiB a CTA's region of the ring (4 GiB c
 
 DEV uint32_t f2u(float x) { return __float_as_uint(x); }
 
-template <class L> struct Emit {
+template <class L, bool LB> struct Emit {
   static constexpr int MI = L::MI, NI = L::NI, P = MI * NI, BLOCKS = P / 4;
   static_assert(P % 4 == 0, "whole 16-word blocks");
+  static_assert(!LB || P % 16 == 0 || 16 % P == 0, "packed words fill whole blocks");
   uint32_t cv[8];
   uint32_t ctr;
   uint32_t off;   // STORE: the CTA's next word in its region
   bool live;      // the warp holds a row that exists
   int phase;      // the bound atoms' offset
+  uint32_t buf[16];   // LB with P < 16: the block being filled, `fill` words so far
+  int fill;
 
   DEV bool bound(int tau, int S) const { return live && (tau + phase) % S == 0; }
   DEV void init(int tile, int tid, int S, int words, int stagger) {
@@ -63,9 +68,17 @@ template <class L> struct Emit {
     for (int i = 0; i < 8; i++) cv[i] = IV[i];
     cv[0] ^= (uint32_t)tile;
     cv[1] ^= (uint32_t)tid;
-    cv[2] ^= (uint32_t)S | (uint32_t)words << 16;
+    cv[2] ^= (uint32_t)S | (uint32_t)words << 16 | (uint32_t)LB << 24;
     cv[3] ^= (uint32_t)stagger;
     ctr = 0;
+    fill = 0;
+  }
+  DEV void compress(const uint32_t* m) {
+    uint32_t out[8];
+    ph::blake3_compress(cv, m, ctr, 64, ph::B3_KEYED_HASH, out);
+#pragma unroll
+    for (int i = 0; i < 8; i++) cv[i] = out[i];
+    ctr++;
   }
   // one block of 16 words: fragments 4b ... 4b + 3 of w
   DEV void absorb(const float (&w)[MI][NI][4], int b) {
@@ -76,11 +89,45 @@ template <class L> struct Emit {
 #pragma unroll
       for (int e = 0; e < 4; e++) m[4 * j + e] = f2u(w[mi][ni][e]);
     }
-    uint32_t out[8];
-    ph::blake3_compress(cv, m, ctr, 64, ph::B3_KEYED_HASH, out);
+    compress(m);
+  }
+  // every word of w: whole (16 a block), or with LB each fragment's four low bytes packed into one word (byte e = word e's
+  // low byte), the packed words 16 a block in emission order
+  DEV void absorb_all(const float (&w)[MI][NI][4]) {
+    if constexpr (!LB) {
 #pragma unroll
-    for (int i = 0; i < 8; i++) cv[i] = out[i];
-    ctr++;
+      for (int b = 0; b < BLOCKS; b++) absorb(w, b);
+    } else {
+      uint32_t pk[P];
+#pragma unroll
+      for (int p = 0; p < P; p++) {
+        const float(&f)[4] = w[p / NI][p % NI];
+        pk[p] = __byte_perm(__byte_perm(f2u(f[0]), f2u(f[1]), 0x0040), __byte_perm(f2u(f[2]), f2u(f[3]), 0x0040), 0x5410);
+      }
+      if constexpr (P % 16 == 0) {
+#pragma unroll
+        for (int b = 0; b < P / 16; b++) compress(pk + 16 * b);
+      } else {
+#pragma unroll
+        for (int j = 0; j < 16; j++) buf[j] = fill == j - j % P ? pk[j % P] : buf[j];
+        fill += P;
+        if (fill == 16) {
+          compress(buf);
+          fill = 0;
+        }
+      }
+    }
+  }
+  // LB: the last block, its unfilled words zero
+  DEV void flush() {
+    if constexpr (LB && P % 16 != 0) {
+      if (fill) {
+#pragma unroll
+        for (int j = 0; j < 16; j++) buf[j] = j < fill ? buf[j] : 0u;
+        compress(buf);
+        fill = 0;
+      }
+    }
   }
   // the ring's address afresh at each emit (hoisted out of the K loop, the 4P addresses spill)
   template <int NCT> DEV void store(float* ring, const float (&w)[MI][NI][4]) {
@@ -100,16 +147,13 @@ template <class L> struct Emit {
 // One atom tau's work, after its fragments are in registers.  CORE family: first R_(tau-1) (a copy at tau = 1), then the
 // emit of atom tau - 1's words if bound, then I_tau from +0 over every fragment.  PLAIN: the chained MMA (CHASH: after the
 // emit of the accumulator if atom tau - 1 is bound).
-template <int MODE, int WORDS, class L, bool T0, bool T1>
+template <int MODE, int WORDS, class L, bool T0, bool T1, class E>
 DEV void atom(int tau, int S, float (&acc)[L::MI][L::NI][4], float (&total)[L::MI][L::NI][4], const uint32_t (&fa)[L::MI][4],
-              const uint32_t (&fb)[L::NI][2], Emit<L>& em, float* ring) {
+              const uint32_t (&fb)[L::NI][2], E& em, float* ring) {
   constexpr int MI = L::MI, NI = L::NI;
   if constexpr (MODE == M_PLAIN || MODE == M_CHASH) {
     if constexpr (MODE == M_CHASH) {
-      if (!T0 && em.bound(tau, S)) {
-#pragma unroll
-        for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
-      }
+      if (!T0 && em.bound(tau, S)) em.absorb_all(acc);
     }
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
@@ -136,14 +180,8 @@ DEV void atom(int tau, int S, float (&acc)[L::MI][L::NI][4], float (&total)[L::M
       if constexpr (MODE == M_STORE || MODE == M_HASH) {
         if (em.bound(tau, S)) {   // atom tau - 1 is bound
           if constexpr (MODE == M_HASH) {
-            if constexpr (!(T1 && WORDS)) {
-#pragma unroll
-              for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(total, b);
-            }
-            if constexpr (WORDS) {
-#pragma unroll
-              for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
-            }
+            if constexpr (!(T1 && WORDS)) em.absorb_all(total);
+            if constexpr (WORDS) em.absorb_all(acc);
           } else {
             if constexpr (!(T1 && WORDS)) em.template store<L::NCT>(ring, total);
             if constexpr (WORDS) em.template store<L::NCT>(ring, acc);
@@ -160,9 +198,9 @@ DEV void atom(int tau, int S, float (&acc)[L::MI][L::NI][4], float (&total)[L::M
 
 // One stage (128 bytes of depth, 4 atoms), fragments double-buffered by atom, the next stage's first atom loaded after this
 // stage's last ldmatrix (the stage released there: its fragments are in registers).  FIRST: the tile's first stage.
-template <int MODE, int WORDS, class L, bool FIRST>
+template <int MODE, int WORDS, class L, bool FIRST, class E>
 DEV void stage(L& ml, int kt, int KT, int S, float (&acc)[L::MI][L::NI][4], float (&total)[L::MI][L::NI][4],
-               uint32_t (&fa)[2][L::MI][4], uint32_t (&fb)[2][L::NI][2], Emit<L>& em, float* ring) {
+               uint32_t (&fa)[2][L::MI][4], uint32_t (&fb)[2][L::NI][2], E& em, float* ring) {
   const uint32_t sb = ml.stage(ml.s), done = ml.empty(ml.s);
 #pragma unroll
   for (int kk = 0; kk < 4; kk++) {
@@ -183,7 +221,7 @@ DEV void stage(L& ml, int kt, int KT, int S, float (&acc)[L::MI][L::NI][4], floa
   }
 }
 
-template <int MODE, int WORDS, class L>
+template <int MODE, int WORDS, bool LB, class L>
 DEV void body(const Args& a) {
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -192,7 +230,7 @@ DEV void body(const Args& a) {
   L ml(smem);
   ml.roles(reinterpret_cast<const ml::Maps*>(a.p[0]), M, N, K, group);
   float* ring = reinterpret_cast<float*>(a.p[3]);
-  Emit<L> em;
+  Emit<L, LB> em;
   em.off = 0;
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
@@ -220,12 +258,8 @@ DEV void body(const Args& a) {
       if constexpr (MODE == M_STORE || MODE == M_HASH) {
         if (em.bound(T, S)) {
           if constexpr (MODE == M_HASH) {
-#pragma unroll
-            for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(total, b);
-            if constexpr (WORDS) {
-#pragma unroll
-              for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
-            }
+            em.absorb_all(total);
+            if constexpr (WORDS) em.absorb_all(acc);
           } else {
             em.template store<L::NCT>(ring, total);
             if constexpr (WORDS) em.template store<L::NCT>(ring, acc);
@@ -234,10 +268,7 @@ DEV void body(const Args& a) {
       }
     } else {
       if constexpr (MODE == M_CHASH) {
-        if (em.bound(T, S)) {
-#pragma unroll
-          for (int b = 0; b < Emit<L>::BLOCKS; b++) em.absorb(acc, b);
-        }
+        if (em.bound(T, S)) em.absorb_all(acc);
       }
 #pragma unroll
       for (int mi = 0; mi < MI; mi++)
@@ -246,6 +277,7 @@ DEV void body(const Args& a) {
 #pragma unroll
           for (int e = 0; e < 4; e++) total[mi][ni][e] = acc[mi][ni][e];
     }
+    if constexpr (MODE == M_HASH || MODE == M_CHASH) em.flush();
     if (K < 0) __trap();   // a block boundary (never taken) between the chain and the epilogue, as in pearl_c_sm120.cu
     asm volatile("mov.u32 %0, %%tid.x;" : "=r"(tid));   // afresh (held through the chain, the indices spill)
     const int warp = tid / 32, lane = tid % 32, wm = warp / L::WARPS_N, wn = warp % L::WARPS_N;
@@ -279,8 +311,8 @@ struct Shape : ml::Mainloop<TM, BN, 0, STAGES, false, 1, RP, WMR> {
 using LP = Shape<128, 128, 3, 64, 24>;
 using LD = Shape<64, 64, 6, 16, 24>;
 
-#define NCP_KERNEL(NAME, MODE, WORDS, L)                                                                         \
-  extern "C" __global__ void __launch_bounds__(L::NT, 1) NAME(const Args a) { body<MODE, WORDS, L>(a); } \
+#define NCP_KERNEL(NAME, MODE, WORDS, L, LB)                                                                         \
+  extern "C" __global__ void __launch_bounds__(L::NT, 1) NAME(const Args a) { body<MODE, WORDS, LB, L>(a); } \
   extern "C" __global__ void NAME##_cfg(int* out) {                                                        \
     out[0] = L::SMEM;                                                                                       \
     out[1] = L::NT;                                                                                         \
@@ -289,20 +321,24 @@ using LD = Shape<64, 64, 6, 16, 24>;
     out[4] = L::BN_;                                                                                        \
   }
 
-NCP_KERNEL(p_plain, M_PLAIN, 0, LP)
-NCP_KERNEL(p_core, M_CORE, 0, LP)
-NCP_KERNEL(p_store_r, M_STORE, 0, LP)
-NCP_KERNEL(p_store_ir, M_STORE, 1, LP)
-NCP_KERNEL(p_hash_r, M_HASH, 0, LP)
-NCP_KERNEL(p_hash_ir, M_HASH, 1, LP)
-NCP_KERNEL(p_chash, M_CHASH, 0, LP)
-NCP_KERNEL(d_plain, M_PLAIN, 0, LD)
-NCP_KERNEL(d_core, M_CORE, 0, LD)
-NCP_KERNEL(d_store_r, M_STORE, 0, LD)
-NCP_KERNEL(d_store_ir, M_STORE, 1, LD)
-NCP_KERNEL(d_hash_r, M_HASH, 0, LD)
-NCP_KERNEL(d_hash_ir, M_HASH, 1, LD)
-NCP_KERNEL(d_chash, M_CHASH, 0, LD)
+NCP_KERNEL(p_plain, M_PLAIN, 0, LP, false)
+NCP_KERNEL(p_core, M_CORE, 0, LP, false)
+NCP_KERNEL(p_store_r, M_STORE, 0, LP, false)
+NCP_KERNEL(p_store_ir, M_STORE, 1, LP, false)
+NCP_KERNEL(p_hash_r, M_HASH, 0, LP, false)
+NCP_KERNEL(p_hash_ir, M_HASH, 1, LP, false)
+NCP_KERNEL(p_chash, M_CHASH, 0, LP, false)
+NCP_KERNEL(p_hash_ir_lb, M_HASH, 1, LP, true)
+NCP_KERNEL(p_chash_lb, M_CHASH, 0, LP, true)
+NCP_KERNEL(d_plain, M_PLAIN, 0, LD, false)
+NCP_KERNEL(d_core, M_CORE, 0, LD, false)
+NCP_KERNEL(d_store_r, M_STORE, 0, LD, false)
+NCP_KERNEL(d_store_ir, M_STORE, 1, LD, false)
+NCP_KERNEL(d_hash_r, M_HASH, 0, LD, false)
+NCP_KERNEL(d_hash_ir, M_HASH, 1, LD, false)
+NCP_KERNEL(d_chash, M_CHASH, 0, LD, false)
+NCP_KERNEL(d_hash_ir_lb, M_HASH, 1, LD, true)
+NCP_KERNEL(d_chash_lb, M_CHASH, 0, LD, true)
 
 // The operands: row-major bytes, code(idx) = sign | (4 + (h >> 8 & 7)) << 3 | (h >> 16 & 7), h = mix(idx * 0x9E3779B9 + seed):
 // finite E4M3 codes of magnitude 2^-3 ... 2^4 x (1 + f/8), no NaN.  i0 count, i1 seed; p0 out.
