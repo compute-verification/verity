@@ -14,10 +14,10 @@ A package's verdict is reused while everything its audit reads is unchanged. Its
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, the controls first. Each pass is
-stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
-in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
-it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
-generator still writes that data.
+stored under its key, and a failure is never stored. A stop, check's SIGINT or a cancel's SIGTERM, still removes the scratch
+tree. One read is outside the scratch tree: a package test's `generate` (`runs` in `lean-audit.json`) reads this checkout
+(`audit.py --repo`). Its output is used only with the SHA-256 the record holds for it, and the key covers the record, so it
+cannot pass a test on other data. The package's own Python tests check that the generator still writes that data.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
@@ -43,6 +43,7 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -501,6 +502,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
+    # a cancel (`research cancel`, the dispatcher's killpg) is SIGTERM, whose default skips `_audit`'s finally and so
+    # leaves its scratch tree behind
+    signal.signal(signal.SIGTERM, lambda sig, _: sys.exit(128 + sig))
     return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export)
 
 

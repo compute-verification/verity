@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 import tarfile
 import types
@@ -230,6 +231,34 @@ def test_the_real_packages_and_their_inputs():
     got = LA.inputs("backends/flock/verifier/lean/soundness", files)
     assert "backends/flock/verifier/lean/level3/lean-audit.json" in got and "backends/flock/verifier/lean/Main.lean" in got
     assert "tools/lean/audit.py" in got and not [f for f in got if f.startswith("backends/flock/verifier/lean/soundness/.lake")]
+
+
+#: `lean_audit.py`'s own main, as check.py launches it, with a tree from `_tree` as its ROOT
+LAUNCHED = r'''
+import importlib.util, json, sys
+from pathlib import Path
+la, root, out, cache, files = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("check_lean_audit", la)
+LA = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(LA)
+LA.ROOT, LA.COMMON.tracked_files = Path(root), lambda r=None: json.loads(files)
+sys.exit(LA.main(["--out", out, "--cache", f"{cache}/lean-audit", "--deps", f"{cache}/lean-deps"]))
+'''
+
+
+def test_a_cancel_mid_audit_still_removes_the_scratch_tree(tmp_path, monkeypatch):
+    """A cancel (`research cancel`, the dispatcher's killpg) sends the run's process group SIGTERM while `audit.py` runs. The
+    step exits 143 and leaves no `lean-audit-scratch-*` beside the dependencies: SIGTERM's default would skip the `finally`
+    that removes it."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "tools/lean/audit.py").write_text("import os, signal, sys\na = sys.argv\n"
+                                              "open(os.path.join(a[a.index('--out') + 1], 'started'), 'w').close()\n"
+                                              "os.killpg(0, signal.SIGTERM)\n")
+    out, cache = tmp_path / "out", tmp_path / "cache"
+    p = subprocess.Popen([sys.executable, "-c", LAUNCHED, str(ROOT / "tools/check/lean_audit.py"), str(root), str(out), str(cache),
+                          json.dumps(LA.COMMON.tracked_files())], start_new_session=True)
+    assert p.wait() == 143 and (out / "started").exists()
+    assert (cache / "lean-deps").is_dir() and not list(cache.glob("lean-audit-scratch-*"))
 
 
 def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():
