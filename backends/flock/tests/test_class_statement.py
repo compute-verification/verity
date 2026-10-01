@@ -126,6 +126,216 @@ def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(
     assert len(checked) >= 24 and all(int(word[j]) == ref[j][0] for j in checked)
 
 
+FORMAT = {"e4m3": "e4m3", "nvf4": "nvfp4", "mxf4": "mxfp4"}
+
+
+def _lanes(units, cl, n: int = 4):
+    return CS.class_lanes(units, cl, PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0}), n, CS.broadcast_params(units))
+
+
+def _decode(uc, rows: np.ndarray, groups, port_words, packed: bool) -> list:
+    """Every input's value from u16 rows in a layout (`_slots`; every FP input is narrower than a leaf)."""
+    vals, base = [None] * len(uc.inputs), 0
+    for g, wp in zip(groups, port_words):
+        at, _used = CS._slots([uc.in_widths[t] for t in g], packed)
+        for t, (leaf, bit) in zip(g, at):
+            vals[t] = (rows[:, base + leaf].astype(np.uint64) >> np.uint64(bit)) & np.uint64((1 << uc.in_widths[t]) - 1)
+        base += wp
+    return vals
+
+
+@pytest.mark.parametrize("dtype", ["e4m3", "nvf4", "mxf4"])
+def test_core_rows_are_core_element_rows_and_decode_as_the_default_layout(dtype):
+    """FLOCK_CORE_ROWS's layout on an sm_120 FP coordinate at K=128: x with its scales one row of role 1 and the W column with its
+    scales one of role 2, each row's bytes core's element row of the lane's codes and scales (here zero-padded, which the stager
+    refuses). The unit has the default layout's gates; on rows of every bit random it computes the default lowering's outputs and
+    ok flags on the same values re-laid, from either layout to the other; on circuit-check's vectors it equals the IR evaluator."""
+    from circuit_check import checks as CK
+    from circuit_check import vectors as V
+    from verity.commitments.rowleaf import ELEMENT_FORMATS, element_row_bytes
+    from verity.evaluation.reference import signature_of
+
+    units, _s, cl, act, uc, groups = _fp_class(dtype, 128)
+    merged, joins, kinds = CS.element_rows(act, uc, groups)
+    fmt = FORMAT[dtype]
+    f = ELEMENT_FORMATS[fmt]
+    assert kinds == [(fmt, 1, 128), (fmt, 2, 128)]
+    assert joins == ([(0,), (1,)] if dtype == "e4m3" else [(0, 2), (1, 3)])
+    assert merged == [[t for i in j for t in groups[i]] for j in joins]
+    plain = CS.class_lowering(act, uc, "unit-class/plain", groups)
+    low = CS.class_lowering(act, uc, "unit-class/core", merged, packed=True)
+    same = ("ands", "xors", "nots", "outputs", "lookups")
+    assert {k: low.layout.counts.get(k) for k in same} == {k: plain.layout.counts.get(k) for k in same}
+
+    ins, want, _ids = _lanes(units, cl)
+    _rows, _outs, per_port = CS.pack(uc, ins, want, low.definition.w_in, low.definition.w_out, merged, low.definition.port_words, True)
+    for i, (g, (_fmt, _role, k)) in enumerate(zip(merged, kinds)):
+        for lane in range(4):
+            v = [ins[t][lane] for t in g]
+            row = per_port[f"p{i}"][lane].astype("<u2").tobytes()
+            assert row[:f.row_len(k)] == element_row_bytes(fmt, v[:k], v[k:]) and not any(row[f.row_len(k):])
+
+    layouts = {"plain": (plain, groups, False), "core": (low, merged, True)}
+    rng = np.random.default_rng(20261001)
+    zero_out = [[0] * 64 for _ in uc.outputs]
+    for src, dst in (("core", "plain"), ("plain", "core")):
+        lw, grp, pk = layouts[src]
+        rows = rng.integers(0, 1 << 16, (64, lw.definition.w_in), dtype=np.uint64)
+        out_a, _cut, ok_a = lw.evaluate(rows)
+        vals = _decode(uc, rows, grp, lw.definition.port_words, pk)
+        lw, grp, pk = layouts[dst]
+        re_laid, _o, _p = CS.pack(uc, vals, zero_out, lw.definition.w_in, lw.definition.w_out, grp, lw.definition.port_words, pk)
+        out_b, _cut, ok_b = lw.evaluate(re_laid.astype(np.uint64))
+        assert np.array_equal(out_a.astype(np.uint64), out_b.astype(np.uint64)) and int(ok_a) == int(ok_b)
+
+    fn = cl.definition
+    params, _ret = signature_of(fn)
+    arrays = V.vectors(params, 48, 20261001)
+    ref, _raised = CK.reference_outputs(fn, params, arrays)
+    leaves = V.flat(arrays)
+    lanes = [leaves[:, -1 - k] for k in uc.inputs]
+    rows, _o, _p = CS.pack(uc, lanes, [[0] * len(arrays[0])], low.definition.w_in, low.definition.w_out, merged, low.definition.port_words, True)
+    out, _cut, ok = low.evaluate(rows.astype(np.uint64))
+    out, ok = out.astype(np.uint64), int(ok)
+    (w_out,) = uc.out_widths
+    word = sum(out[:, h] << np.uint64(16 * h) for h in range(CS._words(w_out)))
+    checked = [j for j, r in enumerate(ref) if r is not None and ok >> j & 1]
+    assert len(checked) >= 24 and all(int(word[j]) == ref[j][0] for j in checked)
+
+
+def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
+    """E4M3 K=128, the smallest whole-block element row, staged under FLOCK_CORE_ROWS: META names each port's row schema, role
+    and k and no single ``row_schema``, its row constants are core's prefixes, and its circuit is neither other frame's. From the
+    prover's file, every committed row's codes give core's element-row digest, ``b || c`` with its salt, the frame leaf under the
+    hiding schema, and the header's root under the domain its binding names, using ``verity.commitments`` only."""
+    from verity.commitments import hm96
+    from verity.commitments.frame_v3 import ElementRowLeaf, FrameV3, Port
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import row_leaf, sha512_element_row_digest, sha512_element_row_prefix
+
+    units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
+    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
+    st = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "core", key, core_rows=True)
+    schemas = [["hm96-sha512/row-e4m3/v1", 1, 128], ["hm96-sha512/row-e4m3/v1", 2, 128]]
+    assert st["packed"] is True and st["row_schemas"] == schemas and st["ports"] == [64, 64]
+    meta = json.loads((tmp_path / "core" / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert "row_schema" not in meta and meta["row_schemas"] == schemas
+    assert [r["prefix"] for r in meta["rows"]] == [sha512_element_row_prefix("e4m3", role, 128).hex() for role in (1, 2)]
+    others = {CS.stage(units, "q-word", s, cl, lanes, tmp_path / fr, key, packed=fr == "packed")["circuit_sha512"] for fr in ("plain", "packed")}
+    assert len(others) == 2 and st["circuit_sha512"] not in others
+
+    inst = hm96.SHA512
+    head_line, body = (tmp_path / "core" / f"inst-{st['n']}.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head_line)
+    fv, counts = head["frame_v3"], head["shared_rows"]
+    names = [p for p, _w, _c in meta["ports"]]
+    at, tables, salts = 0, {}, {}
+    for p, w, _c in meta["ports"]:
+        tables[p] = [body[at + 2 * w * r:at + 2 * w * (r + 1)] for r in range(counts[p])]
+        at += 2 * w * counts[p]
+    for p in names:
+        salts[p] = [body[at + 192 * r:at + 192 * (r + 1)] for r in range(counts[p])]
+        at += 192 * counts[p]
+    for (schema, role, k), p in zip(schemas, names):
+        assert fv["schemas"][p] == schema
+        dom = CommitmentDomain(bytes.fromhex(fv["bindings"][p]), fv["owner"], RangeIndexedDomain(0, counts[p]), hash="sha512")
+        assert dom.domain_id.hex() == fv["domain_ids"][p]
+        leaves = []
+        for r, row in enumerate(tables[p]):
+            bc = inst.commit_string(inst.default_key, sha512_element_row_digest("e4m3", list(row), [], role), salts[p][r])
+            assert body[at + 128 * r:at + 128 * (r + 1)] == bc
+            leaves.append(row_leaf(dom, r, inst.tree_leaf(inst.default_key, bc), schema))
+        at += 128 * counts[p]
+        frame = FrameV3({p: Port(dom, ElementRowLeaf("e4m3", role, k))})
+        root = frame.root(p, leaves)
+        assert root.hex() == fv["roots"][p]
+        assert all(frame.verify_path(p, root, len(leaves), r, leaves[r], frame.path(p, leaves, r)) for r in range(len(leaves)))
+
+
+def test_core_rows_refuse_partial_blocks_tiles_and_sources_that_are_not_whole_parameters(monkeypatch, tmp_path: Path):
+    units, s, cl, act, uc, groups = _fp_class("nvf4", 128)
+    with pytest.raises(ValueError, match="72 bytes, not whole SHA-512 blocks"):
+        CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path, b"k" * 32, core_rows=True)
+    merged, _joins, kinds = CS.element_rows(act, uc, groups)
+    CS.whole_blocks("cells", [("nvfp4", 1, 2048), ("mxfp4", 2, 4096), ("e4m3", 1, 128), ("nvfp4", 2, 16384)])
+    for kind, size in ((("mxfp4", 1, 2048), 1088), (("nvfp4", 1, 1024), 576), (("e4m3", 2, 64), 64)):
+        with pytest.raises(ValueError, match=f"{size} bytes, not whole"):
+            CS.whole_blocks("cells", [kind])
+    for bad in ([groups[0][:64], groups[0][64:], *groups[1:]], [groups[0][::-1], *groups[1:]], [groups[0] + groups[1], *groups[2:]]):
+        with pytest.raises(ValueError, match="not one whole parameter"):
+            CS.element_rows(act, uc, bad)
+    low = CS.class_lowering(act, uc, "unit-class/padded", merged, packed=True)
+    sub, _iset = CS._shims("padded", b"padded", 2)
+    with pytest.raises(ValueError, match="72 bytes, not 128"):
+        FC.compose(low, sub, port_rows=kinds)
+    monkeypatch.setattr(CS, "CORE_ROWS", True)
+    with pytest.raises(ValueError, match="FLOCK_CORE_ROWS"):
+        CS.stage_tiled(units, "q-word", s, cl, (), tmp_path, b"", 4, 4, 1)
+
+
+def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list | None]:
+    """At (dtype, K), from the coordinate Definition's parameters through the stager's own layout and core's prefixes: the default
+    and packed frames' port prefixes (one ``sha512/row/v1`` row per parameter, its words as `class_lowering` pads them) and the
+    new frame's, ``(prefix, (format, role, k))`` per row, or None where `whole_blocks` refuses the shape."""
+    gemm_fp = _gemm_fp()
+    fn = gemm_fp.coordinate(dtype, K)
+    params = [[t.elem.w] * t.n for _n, t in fn.signature()[0]]
+    old = {fr: [FC.Port(f"p{i}", CS._pad(CS._slots(w, fr == "packed")[1], CS.BLOCK_WORDS)).layout().prefix for i, w in enumerate(params)]
+           for fr in ("default", "packed")}
+    fmt, rows = CS.ELEMENT_ROWS[fn.id.split("{")[0]]
+    kinds = [(fmt, role, K) for role, _p in rows]
+    try:
+        CS.whole_blocks(fn.id, kinds)
+    except ValueError:
+        return old, None
+    from verity.commitments.rowleaf import ELEMENT_FORMATS
+
+    return old, [(FC.Port(f"p{i}", ELEMENT_FORMATS[fmt].row_len(K) // 2, kd).layout().prefix, kd) for i, kd in enumerate(kinds)]
+
+
+def _gemm_fp():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_no_core_row_prefix_coincides_with_another_frames_or_another_rows():
+    """Every port's prefix in the new, default and packed frames, at the test shapes, K = 64 ... 1024 and the 12 cells: no new
+    prefix equals one of another (format, role, k) or any old-frame prefix, where the old frames give x and W one prefix at every
+    shape; the refused shapes are exactly the partial-block ones (of the cells, MXF4 K=2048). The derivation agrees with the
+    stager's own lowering and `element_rows` at K=128."""
+    shapes = [(d, k) for d in FORMAT for k in (64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384)]
+    new: dict[bytes, tuple] = {}
+    old: set[bytes] = set()
+    refused = []
+    for dtype, K in shapes:
+        frames, rows = _frame_prefixes(dtype, K)
+        for fr, prefixes in frames.items():
+            assert prefixes[0] == prefixes[1], (dtype, K, fr, "the old frames' x and W rows share a prefix")
+            old.update(prefixes)
+        if rows is None:
+            refused.append((dtype, K))
+            continue
+        assert rows[0][0] != rows[1][0]
+        for prefix, kind in rows:
+            assert new.setdefault(prefix, kind) == kind, (dtype, K, kind, new[prefix])
+    assert not set(new) & old
+    assert refused == [("e4m3", 64)] + [("nvf4", k) for k in (64, 128, 256, 512, 1024)] + [("mxf4", k) for k in (64, 128, 256, 512, 1024, 2048)]
+    assert len(new) == 2 * (len(shapes) - len(refused))
+
+    for dtype in FORMAT:
+        _units, _s, _cl, act, uc, groups = _fp_class(dtype, 128)
+        frames, _rows = _frame_prefixes(dtype, 128)
+        for fr in ("default", "packed"):
+            low = CS.class_lowering(act, uc, f"unit-class/{fr}", groups, fr == "packed")
+            assert frames[fr] == [FC.Port(f"p{i}", w).layout().prefix for i, w in enumerate(low.definition.port_words)]
+        assert CS.element_rows(act, uc, groups)[2] == [(FORMAT[dtype], role, 128) for role in (1, 2)]
+
+
 def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
     def hit(s):
         d = tmp_path / "cache" / s[:16]

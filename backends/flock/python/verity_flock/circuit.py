@@ -4,7 +4,9 @@ rows committed in the circuit and nothing else public (``live/src/circuit.rs`` i
 Rows are ``frame-v3-sha512`` leaves under ``hm96-sha512/row/v1`` (``verity.commitments.rowleaf``): a row's inner digest is
 ``x = SHA-512(sha512_row_prefix || row)`` (``sha512/row/v1``), its hiding commit string ``b || c`` with ``b = x XOR M(key) y`` and
 ``c = SHA-512(salt_prefix || y)`` for a 192-byte salt ``y`` (``hm96.SHA512``, key its ``default_key``), and the frame leaf binds
-``hm96.SHA512.tree_leaf(key, b || c)``. Both hashes are proved here: the rows and their salts are private.
+``hm96.SHA512.tree_leaf(key, b || c)``. Both hashes are proved here: the rows and their salts are private. A port may instead
+hold core's element row (``Port.row``: ``sha512/row-<format>/v1``, its leaf ``hm96-sha512/row-<format>/v1``; META names each
+port's in ``row_schemas``), with the same compressions over the same bytes and another first block.
 
 Private by default. The public data are the frame-v3-sha512 roots, each row's ``b || c`` (the serving tree's leaves are
 functions of it), the declared outputs, and the layout below. Every other word (every compression's chaining value, every
@@ -138,8 +140,12 @@ def _log2(x: int) -> int:
 
 @dataclass
 class Port:
+    """An input port's rows: ``words`` u16 leaves, framed as ``sha512/row/v1`` x rows of u16 words, or (``row``: format, role,
+    k) as core's element row ``sha512/row-<format>/v1`` over the same bytes (``verity.commitments.rowleaf``)."""
+
     name: str
     words: int
+    row: tuple[str, int, int] | None = None
 
     @property
     def bytes(self) -> int:
@@ -150,18 +156,48 @@ class Port:
         """Compressions after the constant first block (the padding block is the hm96 slot's)."""
         return self.bytes // 128
 
+    @property
+    def schema(self) -> str:
+        """The frame leaf's schema: ``hm96-sha512/row/v1``, or the element row's ``hm96-sha512/row-<format>/v1``."""
+        from verity.commitments.rowleaf import ELEMENT_FORMATS
 
-def _port(name: str, words: int) -> Port:
+        return ROW_SCHEMA if self.row is None else ELEMENT_FORMATS[self.row[0]].hiding_schema
+
+    def leaf(self):
+        from verity.commitments.frame_v3 import ElementRowLeaf, RowLeaf
+        from verity.commitments.rowleaf import ROLE_X
+
+        return RowLeaf("sha512", ROLE_X, 16, self.words) if self.row is None else ElementRowLeaf(*self.row)
+
+    def layout(self):
+        """The row's inner digest layout (core's: its prefix, and its length, which is the row's own)."""
+        return self.leaf().layout()
+
+
+def _port(name: str, words: int, row: tuple[str, int, int] | None = None) -> Port:
     if (2 * words) % 128:
         raise ValueError(f"port {name}: {2 * words}-byte rows are not whole SHA-512 blocks")
-    return Port(name, words)
+    p = Port(name, words, row)
+    if p.layout().value_len != p.bytes:
+        raise ValueError(f"port {name}: a {row[0]} row of k = {row[2]} is {p.layout().value_len} bytes, not {p.bytes}")
+    return p
+
+
+def _meta_ports(meta: dict) -> list[Port]:
+    """META's input ports, each with the element row its ``row_schemas`` entry names (absent: ``sha512/row/v1`` rows)."""
+    from verity.commitments.rowleaf import ELEMENT_FORMATS
+
+    if "row_schemas" not in meta:
+        return [Port(nm, w) for nm, w, _ in meta["ports"]]
+    fmt = {f.hiding_schema: name for name, f in ELEMENT_FORMATS.items()}
+    return [_port(nm, w, (fmt[s], role, k)) for (nm, w, _), (s, role, k) in zip(meta["ports"], meta["row_schemas"], strict=True)]
 
 
 def _row_consts(p: Port) -> dict:
-    """A row's constants: ``sha512/row/v1``'s first block, the chaining value after it, the padding block."""
+    """A row's constants: its schema's first block (core's prefix), the chaining value after it, the padding block."""
     from . import sha512_circuit as S
 
-    prefix = S.sha512_row_prefix(p.words)
+    prefix = p.layout().prefix
     return {"prefix": prefix.hex(), "midstate": [f"{w:016x}" for w in S.midstate(prefix)], "pad": S.pad_tail(128 + p.bytes).hex()}
 
 
@@ -264,11 +300,12 @@ def _row_wires(ports: list[Port]) -> list:
 
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
-            program: str | None = None, statics: dict | None = None) -> str:
+            program: str | None = None, statics: dict | None = None, port_rows: list | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
-    partition names, else :func:`program_sha512` of the subcircuit."""
+    partition names, else :func:`program_sha512` of the subcircuit. ``port_rows``: each input port's element row (format,
+    role, k), which META names per port (``row_schemas``) in place of the one ``row_schema``."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -286,7 +323,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     for table, _ in (tail.lookups if tail else []):
         lookups[table] = lookups.get(table, 0) + 1
     lv = low.leaves
-    ports = [_port(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])]
+    if port_rows is not None and None in port_rows:
+        raise ValueError(f"{low.name}: element rows on every input port or on none")
+    rows_of = port_rows or [None] * len(sub.inputs)
+    ports = [_port(p.name, w, r) for p, (w, _), r in zip(sub.inputs, lv["in_ports"], rows_of, strict=True)]
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
@@ -329,7 +369,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
                         "stages": [digest(_expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)], "lookups": lk}}
-    meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "row_schema": ROW_SCHEMA, "template": sub.template.id,
+    row_schema = {"row_schemas": [[p.schema, p.row[1], p.row[2]] for p in ports]} if port_rows else {"row_schema": ROW_SCHEMA}
+    meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, **row_schema, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "out_ports": outs, "ranges": ranges, "rows": [_row_consts(p) for p in ports],
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
@@ -355,14 +396,13 @@ def _expanded(lay: IL.Layout, name: str) -> str:
 
 
 def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
-    """Each row's ``b || c`` (``hm96.SHA512`` over its ``sha512/row/v1`` digest and its salt)."""
+    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1`` or its element row's, and its salt)."""
     from verity.commitments import hm96
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
 
     inst = hm96.SHA512
     out = {}
     for p in ports:
-        lay = sha512_row_layout(ROLE_X, 16, p.words)
+        lay = p.layout()
         r = np.ascontiguousarray(rows[p.name], dtype="<u2")
         out[p.name] = [inst.commit_string(inst.default_key, lay.digest(r[i].tobytes()), salts[p.name][i]) for i in range(len(r))]
     return out
@@ -390,34 +430,34 @@ def digest(text: str) -> str:
 # --- instance files -----------------------------------------------------------------------------------------------------------
 
 def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo: int, hi: int, rows: dict, outs: dict, salts: dict):
-    """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per input port (over ``rows[port]``:
-    the instances' rows, or a shared-row file's table), a ``u16`` word tree per output port (instance-major words), each under a
-    domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and every row's
-    ``b || c``."""
+    """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per input port (``hm96-sha512/row-<format>/v1``
+    for an element row; over ``rows[port]``: the instances' rows, or a shared-row file's table), a ``u16`` word tree per output port
+    (instance-major words), each under a domain bound to the set, the range, the port and its schema. Returns the header's
+    ``frame_v3`` entry and every row's ``b || c``."""
     from verity.commitments import hm96
-    from verity.commitments.frame_v3 import FrameV3, RowLeaf, WordLeaf
+    from verity.commitments.frame_v3 import FrameV3, WordLeaf
     from verity.commitments.frame_v3 import Port as FPort
     from verity.commitments.identity import identity_digest
     from verity.commitments.indexed import RangeIndexedDomain
     from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.rowleaf import ROLE_X, row_leaf
+    from verity.commitments.rowleaf import row_leaf
 
     from . import ir_frame
 
     inst, n = hm96.SHA512, hi - lo
-    schemas = {**{p.name: ROW_SCHEMA for p in ports}, **{nm: "u16" for nm, _ in out_ports}}
+    schemas = {**{p.name: p.schema for p in ports}, **{nm: "u16" for nm, _ in out_ports}}
     counts = {**{p.name: len(rows[p.name]) for p in ports}, **{nm: n * w for nm, w in out_ports}}
     bind, doms = {}, {}
     for name in schemas:
         bind[name] = bytes.fromhex(identity_digest(ir_frame.BINDING_TAG, {"set": input_set.name, "content_digest": input_set.content_digest,
                                                                           "lo": int(lo), "hi": int(hi), "port": name, "schema": schemas[name]}))
         doms[name] = CommitmentDomain(bind[name], ir_frame.OWNER, RangeIndexedDomain(0, counts[name]), hash="sha512")
-    fv = FrameV3({**{p.name: FPort(doms[p.name], RowLeaf("sha512", ROLE_X, 16, p.words)) for p in ports},
+    fv = FrameV3({**{p.name: FPort(doms[p.name], p.leaf()) for p in ports},
                   **{nm: FPort(doms[nm], WordLeaf("u16", 2)) for nm, _ in out_ports}})
     bcs = _commit_strings(ports, rows, salts)
     roots = {}
     for p in ports:
-        leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bc), ROW_SCHEMA) for i, bc in enumerate(bcs[p.name])]
+        leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bc), p.schema) for i, bc in enumerate(bcs[p.name])]
         roots[p.name] = fv.root(p.name, leaves).hex()
     for name, _ in out_ports:
         flat = np.asarray(outs[name], dtype=np.uint64).reshape(-1)
@@ -474,7 +514,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
-    ports = [Port(nm, w) for nm, w, _ in meta["ports"]]
+    ports = _meta_ports(meta)
     out_ports = [tuple(x) for x in meta["out_ports"]]
     if outs is None:
         outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}

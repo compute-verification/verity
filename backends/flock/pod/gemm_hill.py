@@ -457,6 +457,9 @@ def metrics(a) -> None:
     # four FP4 or two FP8 elements a u16 leaf (FLOCK_PACK_WORDS=1): another statement and input commitment, not reviewed yet
     if st.get("packed"):
         flags.append("packed-statement-unreviewed")
+    # core's element rows (FLOCK_CORE_ROWS=1): new core protocol, and the verifiers of record don't derive their prefixes yet
+    if st.get("row_schemas"):
+        flags.append("core-rows-statement-unreviewed")
     flags.extend(verifier_flags(Path(a.root), os.environ.get("FC_LINCHECK")))
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
