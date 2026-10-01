@@ -186,7 +186,7 @@ def test_the_bf16_add_agrees_with_bf16_add_f2fp_v1_on_every_b_for_some_a() -> No
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_ML_BOOLEAN_EXHAUSTIVE"),
-                    reason="every pair of bf16 words (2^32 instances, about 20 minutes); set VERITY_ML_BOOLEAN_EXHAUSTIVE=1")
+                    reason="every pair of bf16 words (2^32 instances, about 7 minutes); set VERITY_ML_BOOLEAN_EXHAUSTIVE=1")
 def test_the_bf16_add_agrees_with_bf16_add_f2fp_v1_on_every_pair() -> None:
     """All 2^32 operand pairs, 2^20 per chunk: b and a's low 4 bits are the instance counter, a's high 12 bits the chunk."""
     _every_pair_chunks(range(1 << 12))
