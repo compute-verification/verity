@@ -252,13 +252,16 @@ def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: li
                   refused: list[str] | None = None, pick: LtPick = LtPick()) -> tuple[list[Candidate], dict]:
     """Every configuration of every algorithm `lt` has for the family's types that cublasLtMatmulAlgoCheck accepts at the
     shape (lt.cu's ph_lt_enumerate) and `pick` takes, less those in `seen` (the heuristic's, by `lt_key`). Returns them
-    and what was tried: configurations checked, accepted, whether the limit cut the list short, and the sha256 of the
-    taken configurations' names in order."""
+    and what was tried: configurations checked, accepted, whether the limit cut the list short, the sha256 of the
+    taken configurations' names in order and, if `pick` names configurations, the names it took (`named`), a heuristic's
+    duplicate included."""
     from native import LtCandidate, NativeError
 
     want = pick.want
     info = {"checked": 0, "accepted": 0, "new": 0, "truncated": False, "splitks": splitks, "pick": pick.record(),
             "taken": 0}
+    if pick.names is not None:
+        info["named"] = []
     taken = hashlib.sha256()
     if fam.lt_kind is None or not lt.can_enumerate:
         return [], info | {"skipped": "no cuBLASLt path" if fam.lt_kind is None else "library predates ph_lt_enumerate"}
@@ -290,6 +293,8 @@ def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: li
                 continue
             info["taken"] += 1
             taken.update(cand.name.encode() + b"\n")
+            if pick.names is not None:
+                info["named"].append(cand.name)
             if lt_key(cand) not in seen:
                 seen.add(lt_key(cand))
                 mine.append(cand)

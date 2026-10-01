@@ -11,7 +11,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | File | What |
 |---|---|
 | `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks; the contract is published in the project store, `internal/pouw/rtx-pro/workers/6-harness.md` |
-| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
+| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune (its fastest `--finalists` per family and each library's fastest go on to the timing, and at decode each gets a chain), a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (#543, #570; source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
@@ -105,6 +105,10 @@ Decode rows count on the panel only as a dependent chain, which needs a library 
 after (tile_hash, screen, the movable groups, which the side-stream variant runs off the main lane as the `deferred`
 schedule does), and the report's `split_groups` names the groups each time covers. v0.4's `before`, `gemm` and `after` still
 work, each as its part, and are deprecated; `arm.py` has the contract.
+
+A search's best, timed later with `--lt-enumerate-names FILE`, needs an `--lt-enumerate-max` that reaches every configuration
+FILE names: the enumeration keeps only its first `--lt-enumerate-max` (8,192) per library and swap, and cuBLASLt 13's FP8
+space at `m32-n8192-k8192` is 134,216. A run that doesn't take every named configuration at every shape stops with exit 2.
 
 An arm's `build` names every cubin, fatbin or library its kernels come from in `binaries` (arm interface v0.3; a cubin loaded
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
