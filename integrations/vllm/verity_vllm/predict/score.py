@@ -498,7 +498,8 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
                     dtasks.setdefault(u["divergence_key"], {"key": u["divergence_key"], "phi": P["tasks"][u["key"]]["phi"], "shape": u["shape"],
                                                             "descriptor": desc, "rows": u["rows"], "equivalence": equivalence_on,
                                                             "mem_mb": 3 * P["tasks"][u["key"]]["mem_mb"]})
-    dt = sorted(dtasks.values(), key=lambda t: t["rows"])[:max_diverge] if diverge else []
+    dt = sorted(dtasks.values(), key=lambda t: (C.get(t["key"]) is None, t["rows"]))[:len([k for k in dtasks if C.get(k)]) + max_diverge] \
+        if diverge else []
     div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log, C, mem_mb)
     for row in P["rows"]:
         for u in row["units"]:
@@ -611,7 +612,7 @@ class Options:
     max_mem_mb: int | None = option("--max-mem-mb", type=int, default=None, help="skip units whose estimated peak is above this (over_budget)")
     workers: int = option("--workers", type=int, default=2)
     cache: str | None = option("--cache", default=None, help="JSONL of task results: reused, and appended to as results arrive")
-    max_diverge: int = option("--max-diverge", type=int, default=40, help="locate the first divergence of at most this many differing units")
+    max_diverge: int = option("--max-diverge", type=int, default=40, help="locate the first divergence of at most this many differing units not in --cache")
     no_equivalence: bool = option("--no-equivalence", action="store_true", default=False)
     no_workload: bool = option("--no-workload", action="store_true", default=False)
     cached_only: bool = option("--cached-only", action="store_true", default=False, help="predict nothing: score the predictions already in --cache")

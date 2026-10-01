@@ -167,6 +167,8 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     cache = str(tmp_path / "cache.jsonl")
     res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache)
     assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True)["summary"] == res["summary"]
+    assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True, max_diverge=0)["summary"] == \
+        res["summary"], "a divergence in the cache is reported whatever the budget for new ones"
     cold = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=str(tmp_path / "empty.jsonl"), cached_only=True)
     assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 4
     tight = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, max_mem_mb=1, cache=cache, cached_only=True)
