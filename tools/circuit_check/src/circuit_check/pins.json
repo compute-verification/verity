@@ -111,6 +111,57 @@
   "F32Add_v3": {
    "and": 812
   },
+  "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+   "and": 35
+  },
+  "F32ArgmaxLeaf_v1{G=5,FIRST=1,FINAL=1}": {
+   "and": 441
+  },
+  "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+   "and": 6455
+  },
+  "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+   "and": 6487
+  },
+  "F32ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+   "and": 746
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+   "and": 45
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+   "and": 72
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=1}": {
+   "and": 39
+  },
+  "F32ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+   "and": 184
+  },
+  "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+   "and": 4593
+  },
+  "F32ArgmaxStage_v1{V=200,L=0}": {
+   "and": 20143
+  },
+  "F32ArgmaxStage_v1{V=200,L=1}": {
+   "and": 184
+  },
+  "F32ArgmaxStage_v1{V=4161,L=1}": {
+   "and": 4665
+  },
+  "F32ArgmaxStage_v1{V=4161,L=2}": {
+   "and": 45
+  },
+  "F32ArgmaxStage_v1{V=5,L=0}": {
+   "and": 441
+  },
+  "F32ArgmaxStage_v1{V=65,L=0}": {
+   "and": 6522
+  },
+  "F32ArgmaxStage_v1{V=65,L=1}": {
+   "and": 39
+  },
   "F32Div_v3": {
    "and": 2517
   },
@@ -201,6 +252,27 @@
   "GuardNegInfZero_v2": {
    "and": 63
   },
+  "GumbelLaneHead_v1": {
+   "and": 1556
+  },
+  "GumbelLaneRounds_v1": {
+   "and": 5035
+  },
+  "GumbelSetup_v1{N=5}": {
+   "and": 1138
+  },
+  "GumbelSetup_v1{N=64}": {
+   "and": 3859
+  },
+  "GumbelStreamKeyHead_v1": {
+   "and": 4960
+  },
+  "GumbelStreamKeyTail_v1": {
+   "and": 4285
+  },
+  "GumbelStreamKey_v2": {
+   "and": 9245
+  },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
   },
@@ -224,6 +296,9 @@
   },
   "MulVecF32_v2{N=8}": {
    "and": 19440
+  },
+  "NvLogf_v3": {
+   "and": 43280
   },
   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
    "and": 1673

@@ -22,32 +22,36 @@ candidates merge to the right one iff its key is strictly greater (the left wins
 positions, the missing ones constant-zero keys that never win), so a group's index is its inner index with the 6-bit position
 above. ``FINAL`` (the root group) returns the index as the i32 word. `stages(V)` names the stages; a served Program calls them
 in order at its root (`token_select_calls`), each a Call of its own, and `TokenSelect_v2{V}` is that chain as one Definition.
+
+The same tree over f32 words (`F32GtStrict_v1`'s order, `scalar.f32_key`: 33-bit keys) is `F32ArgmaxStage_v1{V,L}`, of
+`F32ArgmaxLeaf_v1` and `F32ArgmaxMerge_v1`; `gumbel_boolean`'s select ends in it (`argmax_calls`).
 """
 from __future__ import annotations
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition, bind, composite
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import Coll, concat
 from verity.ir.types import Array, Tuple
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import ONE, OR, ZERO, NOT, add
-from verity.ml.boolean.scalar import bf16_gt_strict, bf16_key, gt_u, select
+from verity.ml.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
 from verity_vllm.program.registry import b1
 
-__all__ = ["ArgmaxLeaf", "ArgmaxMerge", "ArgmaxStep", "G", "GB", "TokenSelect", "TokenSelectStage", "candidate", "levels", "stages",
-           "token_select_calls"]
+__all__ = ["ArgmaxLeaf", "ArgmaxMerge", "ArgmaxStep", "F32ArgmaxLeaf", "F32ArgmaxMerge", "F32ArgmaxStage", "G", "GB", "TokenSelect",
+           "TokenSelectStage", "argmax_calls", "candidate", "levels", "stages", "token_select_calls", "traced_family"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
+F32 = Array(32, BIT)
 I32 = Array(32, BIT)
 #: the group size of every level, and its index bits
 GB = 6
 G = 1 << GB
 
 
-def candidate(iw: int) -> Tuple:
-    """A candidate with an ``iw``-bit index: (valid, key, index)."""
-    return Tuple(BIT, BF16, Array(iw, BIT))
+def candidate(iw: int, kw: int = 16) -> Tuple:
+    """A candidate with a ``kw``-bit key and an ``iw``-bit index: (valid, key, index)."""
+    return Tuple(BIT, Array(kw, BIT), Array(iw, BIT))
 
 
 # --- ArgmaxStep_v2: TokenSelect_v1's scan step on bits -----------------------------------------------------------------------
@@ -85,21 +89,27 @@ def _out(key, idx, final: bool):
         if len(idx) > 32:
             raise ValueError(f"an index of {len(idx)} bits is not an i32")
         return idx + [ZERO] * (32 - len(idx))
-    return [[key[16]], key[:16], idx]
+    kw = len(key) - 1
+    return [[key[kw]], key[:kw], idx]
 
 
-def argmax_leaf(C, S, *xs):
-    """A group of bf16 words -> its candidate (or, FINAL, its index as an i32)."""
-    cands = []
-    for j, x in enumerate(xs):
-        nan, key = bf16_key(C, x)
-        if S.FIRST and j == 0:
-            key, valid = [OR(C, k, nan) for k in key], ONE
-        else:
-            valid = NOT(nan)
-        cands.append((key + [valid], []))
-    key, idx = _best(C, cands)
-    return _out(key, idx, S.FINAL)
+def _leaf(key_of):
+    def argmax_leaf(C, S, *xs):
+        """A group of words -> its candidate (or, FINAL, its index as an i32)."""
+        cands = []
+        for j, x in enumerate(xs):
+            nan, key = key_of(C, x)
+            if S.FIRST and j == 0:
+                key, valid = [OR(C, k, nan) for k in key], ONE
+            else:
+                valid = NOT(nan)
+            cands.append((key + [valid], []))
+        key, idx = _best(C, cands)
+        return _out(key, idx, S.FINAL)
+    return argmax_leaf
+
+
+argmax_leaf = _leaf(bf16_key)
 
 
 def argmax_merge(C, S, *elements):
@@ -114,21 +124,25 @@ def _check_group(S) -> None:
         raise ValueError(f"a group has 1..{G} members and FINAL in (0, 1), not G={S.G}, FINAL={S.FINAL}")
 
 
-def _leaf_sig(S):
-    _check_group(S)
-    if S.FIRST not in (0, 1):
-        raise ValueError(f"FIRST is 0 or 1, not {S.FIRST}")
-    return (("x", Array(S.G, BF16)),), (I32 if S.FINAL else candidate(GB))
+def _leaf_sig(word, kw: int):
+    def sig(S):
+        _check_group(S)
+        if S.FIRST not in (0, 1):
+            raise ValueError(f"FIRST is 0 or 1, not {S.FIRST}")
+        return (("x", Array(S.G, word)),), (I32 if S.FINAL else candidate(GB, kw))
+    return sig
 
 
-def _merge_sig(S):
-    _check_group(S)
-    if S.IW < GB or S.IW % GB:
-        raise ValueError(f"a merged candidate's index has a multiple of {GB} bits, not {S.IW}")
-    return (("c", Array(S.G, candidate(S.IW))),), (I32 if S.FINAL else candidate(S.IW + GB))
+def _merge_sig(kw: int):
+    def sig(S):
+        _check_group(S)
+        if S.IW < GB or S.IW % GB:
+            raise ValueError(f"a merged candidate's index has a multiple of {GB} bits, not {S.IW}")
+        return (("c", Array(S.G, candidate(S.IW, kw))),), (I32 if S.FINAL else candidate(S.IW + GB, kw))
+    return sig
 
 
-def _traced(name: str, version: int, statics: tuple[str, ...], signature, build, doc: str) -> CompositeDefinition:
+def traced_family(name: str, version: int, statics: tuple[str, ...], signature, build, doc: str) -> CompositeDefinition:
     """A Boolean Definition with statics: each specialization's body is ``build(C, S, *elements)`` traced (`trace.trace`), so its
     And gates are the builder's live ANDs; ``d.traced(spec)`` traces it again."""
 
@@ -150,12 +164,16 @@ def _traced(name: str, version: int, statics: tuple[str, ...], signature, build,
     return d
 
 
-ArgmaxLeaf = _traced("ArgmaxLeaf", 1, ("G", "FIRST", "FINAL"), _leaf_sig, argmax_leaf,
-                     "The best of G bf16 logits as a candidate (the first maximum, NaN below every number; FIRST: logits[0] a NaN "
-                     "is the top key), or FINAL its index as an i32")
-ArgmaxMerge = _traced("ArgmaxMerge", 1, ("G", "IW", "FINAL"), _merge_sig, argmax_merge,
-                      "The best of G candidates (the right one iff its key is strictly greater), its index the inner index with "
-                      "the 6-bit position above, or FINAL that index as an i32")
+ArgmaxLeaf = traced_family("ArgmaxLeaf", 1, ("G", "FIRST", "FINAL"), _leaf_sig(BF16, 16), argmax_leaf,
+                           "The best of G bf16 logits as a candidate (the first maximum, NaN below every number; FIRST: logits[0] "
+                           "a NaN is the top key), or FINAL its index as an i32")
+ArgmaxMerge = traced_family("ArgmaxMerge", 1, ("G", "IW", "FINAL"), _merge_sig(16), argmax_merge,
+                            "The best of G candidates (the right one iff its key is strictly greater), its index the inner index "
+                            "with the 6-bit position above, or FINAL that index as an i32")
+F32ArgmaxLeaf = traced_family("F32ArgmaxLeaf", 1, ("G", "FIRST", "FINAL"), _leaf_sig(F32, 32), _leaf(f32_key),
+                              "ArgmaxLeaf_v1 over f32 words (F32GtStrict_v1's order, `scalar.f32_key`)")
+F32ArgmaxMerge = traced_family("F32ArgmaxMerge", 1, ("G", "IW", "FINAL"), _merge_sig(32), argmax_merge,
+                               "ArgmaxMerge_v1 over candidates with 32-bit keys")
 
 
 def levels(V: int) -> list[int]:
@@ -168,54 +186,66 @@ def levels(V: int) -> list[int]:
     return n
 
 
-def _stage_sig(S):
-    n = levels(S.V)
-    if not 0 <= S.L < len(n) - 1:
-        raise ValueError(f"the tree over V={S.V} has stages 0..{len(n) - 2}, not L={S.L}")
-    final = S.L == len(n) - 2
-    ins = BF16 if S.L == 0 else candidate(GB * S.L)
-    return (("c", Array(n[S.L], ins)),), (I32 if final else Array(n[S.L + 1], candidate(GB * (S.L + 1))))
+def _stage_sig(word, kw: int):
+    def sig(S):
+        n = levels(S.V)
+        if not 0 <= S.L < len(n) - 1:
+            raise ValueError(f"the tree over V={S.V} has stages 0..{len(n) - 2}, not L={S.L}")
+        final = S.L == len(n) - 2
+        ins = word if S.L == 0 else candidate(GB * S.L, kw)
+        return (("c", Array(n[S.L], ins)),), (I32 if final else Array(n[S.L + 1], candidate(GB * (S.L + 1), kw)))
+    return sig
 
 
-@composite("TokenSelectStage", 1, ["V", "L"], _stage_sig, conformance="exact-model-tested")
-def TokenSelectStage(B, S, c):
-    """Level L of the argmax tree over V logits: its candidates in groups of G, each group one Call (`ArgmaxLeaf_v1` at level 0,
-    `ArgmaxMerge_v1` above; the root group FINAL), the full groups after the first as one batch."""
-    n = levels(S.V)
-    N, final = n[S.L], int(S.L == len(n) - 2)
-    T = c.type.elem
+def _stage(name: str, leaf: CompositeDefinition, merge: CompositeDefinition, word, kw: int, doc: str) -> CompositeDefinition:
+    sig = _stage_sig(word, kw)
 
-    def member(g: int, first: int):
-        return bind(ArgmaxLeaf, G=g, FIRST=first, FINAL=final) if S.L == 0 else bind(ArgmaxMerge, G=g, IW=GB * S.L, FINAL=final)
+    def body(B, S, c):
+        n = levels(S.V)
+        N, final = n[S.L], int(S.L == len(n) - 2)
+        T = c.type.elem
 
-    def group(lo: int, hi: int) -> Coll:
-        return c[lo:hi]
+        def member(g: int, first: int):
+            return bind(leaf, G=g, FIRST=first, FINAL=final) if S.L == 0 else bind(merge, G=g, IW=GB * S.L, FINAL=final)
 
-    full, rem = divmod(N, G)
-    outs = []
-    if full:
-        outs.append(B.call(member(G, 1), group(0, G)))
-        if full > 1:
-            rest = c[G:full * G]
-            outs.append(B.batch(member(G, 0), Coll(Array(full - 1, Array(G, T)), rest.refs), axes=(0,)))
-    if rem:
-        outs.append(B.call(member(rem, int(not full)), group(full * G, N)))
-    ret = _stage_sig(S)[1]
-    return Coll(ret, concat([o.refs for o in outs]))
+        full, rem = divmod(N, G)
+        outs = []
+        if full:
+            outs.append(B.call(member(G, 1), c[0:G]))
+            if full > 1:
+                rest = c[G:full * G]
+                outs.append(B.batch(member(G, 0), Coll(Array(full - 1, Array(G, T)), rest.refs), axes=(0,)))
+        if rem:
+            outs.append(B.call(member(rem, int(not full)), c[full * G:N]))
+        return Coll(sig(S)[1], concat([o.refs for o in outs]))
+
+    return CompositeDefinition(name, 1, ("V", "L"), sig, body, doc=doc, conformance="exact-model-tested")
 
 
-def stages(V: int) -> list:
-    """The stage Definitions of the tree over V logits, in calling order."""
-    return [bind(TokenSelectStage, V=V, L=L) for L in range(len(levels(V)) - 1)]
+TokenSelectStage = _stage(
+    "TokenSelectStage", ArgmaxLeaf, ArgmaxMerge, BF16, 16,
+    "Level L of the argmax tree over V logits: its candidates in groups of G, each group one Call (`ArgmaxLeaf_v1` at level 0, "
+    "`ArgmaxMerge_v1` above; the root group FINAL), the full groups after the first as one batch.")
+F32ArgmaxStage = _stage("F32ArgmaxStage", F32ArgmaxLeaf, F32ArgmaxMerge, F32, 32,
+                        "TokenSelectStage_v1 over f32 words: level L of the argmax tree (`F32ArgmaxLeaf_v1`, `F32ArgmaxMerge_v1`).")
+
+
+def stages(V: int, stage: CompositeDefinition = TokenSelectStage) -> list:
+    """The stage Definitions of the tree over V words, in calling order."""
+    return [bind(stage, V=V, L=L) for L in range(len(levels(V)) - 1)]
+
+
+def argmax_calls(call, x: Coll, V: int, stage: CompositeDefinition) -> Coll:
+    """The first maximum of the V words ``x`` as Calls of ``stage``'s levels (``call(fn, arg)``, as `token_select_calls`)."""
+    for st in stages(V, stage):
+        x = call(st, x)
+    return x
 
 
 def token_select_calls(call, logits: Coll, V: int) -> Coll:
     """``TokenSelect_v2{V}`` as Calls of its stages: ``call(fn, arg)`` emits one (``Builder.call``, or a frontend's ``ctx.call``
     at a Program's root, where each stage is a Call the partition query cuts on its own); returns the i32 token's bits."""
-    x = logits
-    for st in stages(V):
-        x = call(st, x)
-    return x
+    return argmax_calls(call, logits, V, TokenSelectStage)
 
 
 def _token_select(B, S, logits):

@@ -230,7 +230,9 @@ def _boolean_roots() -> list[Any]:
     tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served
     norms on bits (`boolean_norms`) at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the switch's
     binding, `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word Definitions of its
-    constant steps."""
+    constant steps. The Gumbel select (`gumbel_boolean.GumbelSelectF32_v2`) at one group and at a full group plus a remainder;
+    the stream key, setup, lane and their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its
+    other shapes."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.boolean import mufu as BM
@@ -240,6 +242,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_norms as BN
     from verity_vllm.program.registry import boolean_rope
     from verity_vllm.program.registry import boolean_silu as BSL
+    from verity_vllm.program.registry import gumbel_boolean as GB
     from verity_vllm.program.registry import sampling_boolean as SB
 
     rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
@@ -259,7 +262,9 @@ def _boolean_roots() -> list[Any]:
             bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)),
             bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz), SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)),
-            bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8)] + rows
+            bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8),
+            bind(GB.GumbelSelectF32, V=5), bind(GB.GumbelSelectF32, V=65),
+            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
