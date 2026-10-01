@@ -46,7 +46,9 @@ def rss_kb() -> tuple[int | None, int | None]:
 class Site:
     """Everything the C2 replay of one instrumented run reads.  `weights_of(prefix)`: the weights provider for the Programs' field
     prefix; `weights_check()`: the proof that the slices it serves are the committed weights ({"equal": bool, ...});
-    `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is."""
+    `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's draw is made
+    again after it, read only, in this process (`plan`), and its record lands here: a forked evaluator's reads of `com` never reach this
+    process, so this is what makes `commit.store_dump.touched` see every pick's."""
     args: Any
     out: Path
     pair: int
@@ -67,6 +69,7 @@ class Site:
     tl: Any
     after_replay: Callable | None = None
     protocols: Any = None
+    reads: dict[str, Any] | None = None
 
 
 def live_weights(model: Any, prefix: str) -> Callable:
@@ -343,17 +346,19 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
     lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=_pi0.embed_op_path(), splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
-    sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
-                           seed_challenge=_seed_chal,
-                           max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
-                           workers=getattr(args, "replay_workers", None), retention=_retention,
-                           ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
-                           # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
-                           manifest=(s.manifest if isinstance(s.manifest, dict) else None),
-                           program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
-                           plan=plan, **_sr_kw))
+    _kw = dict(arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
+               seed_challenge=_seed_chal,
+               max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
+               workers=getattr(args, "replay_workers", None), retention=_retention,
+               ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
+               # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
+               manifest=(s.manifest if isinstance(s.manifest, dict) else None),
+               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, **_sr_kw)
+    sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, plan=plan, **_kw))
     if plan:
         return sr, lk
+    if s.reads is not None:
+        s.reads.update(SR.sampled_replay(_progs, _bm, _rd, _wp, plan=True, **_kw))
     sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
     sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
     sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
