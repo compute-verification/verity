@@ -93,6 +93,19 @@ fn is_zk(st: &Stmt) -> bool {
     st.identity["hooks"]["zk"] == true
 }
 
+/// A non-ZK session's coins: M0's step-0 seed by default (`coin_seed`: the verifier's OS-random seed under a SHA-512
+/// commitment sent at Hello and opened in the verdict, every round's coins its SHA-256 counter-mode PRF), or under
+/// `FC_COINS=os` every round's coins drawn from the OS, so soundness rests on SHA-512 collision resistance alone. The Hello and
+/// the identity carry the mode, so a prover and a server that disagree refuse the session. A selftest build always seeds: its
+/// harness fixes the coins through the seed.
+fn seed_coins() -> bool {
+    match std::env::var("FC_COINS").as_deref() {
+        Err(_) | Ok("" | "seed") => true,
+        Ok("os") => cfg!(feature = "seed-injection"),
+        Ok(v) => refuse(format!("FC_COINS={v}: \"seed\" (the default) or \"os\"")),
+    }
+}
+
 /// M1's pad layout for the statement: the algebraic phase's, then Ligerito level 0's (its OOD samples and lane rounds).
 fn zk_layout(st: &Stmt) -> Layout {
     let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
@@ -183,7 +196,7 @@ fn zk_identity(c: &Composite) -> Value {
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
-    json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
+    let mut id = json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
@@ -193,7 +206,14 @@ fn identity(c: &Composite) -> Value {
                       "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
-           "hooks": hooks})
+           "hooks": hooks});
+    // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move
+    if !zk_mode() && !seed_coins() {
+        id["coins"] = json!("live-os (every round's coins the verifier's OS draws: no seed, no PRF)");
+        id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
+        id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
+    }
+    id
 }
 
 /// Σ = SHA-512(the statement's Σ tag ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
@@ -463,11 +483,11 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
     let mut cfg = SessionConfig::flock_128_r2(specs);
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
-    // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed
+    // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed, or OS coins (seed_coins)
     if is_zk(st) {
         cfg.coin_tree = Some(coin_spec_of(&tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>()));
     } else {
-        cfg.coin_seed = true;
+        cfg.coin_seed = seed_coins();
     }
     cfg.retain_rounds = true;
     cfg.sha512_digests = true;
@@ -2446,8 +2466,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
             // M0's seed commitment (4 words), or the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them)
-            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } => commit = c,
-            r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
+            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
+            // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws
+            Resp::Ok if !is_zk(st) && !seed_coins() => {}
+            r => return Err(format!("hello: step 0 expects the verifier's {}, got {r:?}",
+                                    if is_zk(st) || seed_coins() { "seed commitment" } else { "Ok (FC_COINS=os)" })),
         }
         // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
         // opens, so the session's one Commit, in table 0's first rep, carries every table's root
@@ -2690,8 +2713,9 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     };
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
-    // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used
-    let step0 = if v["accepted"] == true && !is_zk(st) { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
+    // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used, and OS coins
+    // commit to nothing
+    let step0 = if v["accepted"] == true && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
@@ -2707,7 +2731,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && v["accepted"] == true}),
+               "step0_checked": step0.is_ok() && v["accepted"] == true && (is_zk(st) || seed_coins())}),
         proofs,
     )
 }
