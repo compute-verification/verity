@@ -15,14 +15,17 @@ start. A fence outlives this controller, so a crash fails closed. `pool.gpus` (t
 Each tick, with the brain absent (local rules):
   - grow: when the waiters want more than the free pool GPUs and pending holders cover, submit holders (at most `$VY_POOL_MAX`,
     and never past the queue's nominal GPU quota less what its other admitted Workloads reserve: a holder on borrowed quota is
-    Kueue's to reclaim mid-lease; with the quota unread, no growth); a holder's GPU is unfenced once its pod runs and names its UUID;
+    Kueue's to reclaim mid-lease; with the quota unread, no growth). While every waiter is `--preemptible`, holders may borrow
+    `$VY_POOL_BORROW` GPUs more (default 0), until `$VY_POOL_BORROW_UNTIL` (UTC) if set: a Commit that reclaims one evicts its
+    holder, and the lease on it is then outside the pool and stopped. A holder's GPU is unfenced once its pod runs and names its UUID;
   - shrink: fence a pool GPU that has been free for `$VY_POOL_IDLE_S` with nobody waiting for it, then delete its holder;
     delete pending holders nobody waits for.
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
-hand) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease held by a host process (a
-`research run --queue` job, in no pod) gets SIGTERM to its owner pid instead.
+hand, or Kueue reclaimed it) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease
+held by a host process (a `research run --queue` job, in no pod) is signalled instead, its gpu-lease scope else its owner pid:
+SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemption does.
 **The brain.** With `$VY_LEASE_BRAIN` set (a command, e.g. `ssh vy-cluster cluster grant --node vy-nebius-1`), each tick sends
 it the state as JSON on stdin and reads `{"grants": {"<pid>": [index, ...]}, "pool_target": N}`. While it answers, this controller
 holds `agent.lock`, so every request queues for a grant (gpu-lease agent mode); after `BRAIN_MISSES` failures in a row it drops the
@@ -47,6 +50,9 @@ PRIORITY = os.environ.get("VY_POOL_PRIORITY", "dev")
 POOL_MAX = int(os.environ.get("VY_POOL_MAX", "3"))
 IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
 GRACE_S = int(os.environ.get("VY_LEASE_EXPIRY_GRACE_S", "120"))
+BORROW = int(os.environ.get("VY_POOL_BORROW", "0"))
+BORROW_UNTIL = os.environ.get("VY_POOL_BORROW_UNTIL", "")
+KILL_AFTER_S = 30
 BRAIN = os.environ.get("VY_LEASE_BRAIN", "")
 BRAIN_MISSES = 2
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
@@ -229,6 +235,7 @@ class Controller:
         self.uuid_of_pod: dict[str, str] = {}
         self.free_since: dict[int, float] = {}
         self.outside: dict[int, int] = {}
+        self.stopping: dict[int, float] = {}           # host pid -> when it was first signalled
         self.brain_misses = BRAIN_MISSES
         self.agent_fd: int | None = None
         self.events: list[dict] = []
@@ -251,15 +258,22 @@ class Controller:
         return {"jobs": jobs, "pods": pods, "cq": cq, "workloads": workloads}
 
     def stop(self, t: float, lease: dict, why: str) -> None:
-        """End a lease: delete its pod, or SIGTERM a host process's owner pid."""
-        self.log(t, why, lease=lease)
-        if lease.get("pod"):
-            kubectl("delete", "pod", lease["pod"], "--wait=false")
-        elif lease.get("pid") and lease.get("owner_alive"):
-            try:
-                os.kill(lease["pid"], signal.SIGTERM)
-            except (ProcessLookupError, PermissionError) as e:
-                self.log(t, "signal-failed", pid=lease["pid"], error=str(e))
+        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`."""
+        if lease.get("pod") or not (lease.get("pid") and lease.get("owner_alive")):
+            self.log(t, why, lease=lease)
+            if lease.get("pod"):
+                kubectl("delete", "pod", lease["pod"], "--wait=false")
+            return
+        pid = lease["pid"]
+        sig = signal.SIGKILL if t - self.stopping.setdefault(pid, t) >= KILL_AFTER_S else signal.SIGTERM
+        self.log(t, why, lease=lease, signal=sig.name)
+        if lease.get("scope") and subprocess.run(["systemctl", "--user", "kill", f"--signal={sig.name}", f"{lease['scope']}.scope"],
+                                                 capture_output=True).returncode == 0:
+            return
+        try:
+            os.kill(pid, sig)
+        except (ProcessLookupError, PermissionError) as e:
+            self.log(t, "signal-failed", pid=pid, error=str(e))
 
     def tick(self, t: float, obs: dict | None = None, dry: bool = False) -> dict:
         self.events = []
@@ -313,7 +327,7 @@ class Controller:
                 uid = pod_uid_of(pid) if pid else None
                 pod = pods_by_uid.get(uid) if uid else None
                 g["lease"] = {"who": f.get("who"), "run": f.get("run"), "since": f.get("since"), "until": f.get("until"),
-                              "pid": pid, "pod": pod["metadata"]["name"] if pod else None,
+                              "pid": pid, "scope": f.get("scope"), "pod": pod["metadata"]["name"] if pod else None,
                               "owner_alive": bool(pid) and Path(f"/proc/{pid}").exists(), "seen": iso(t)}
             gpus.append(g)
         want = waiters()
@@ -346,8 +360,10 @@ class Controller:
         target = brain.get("pool_target") if brain else None
         if target is None:
             target = len(pool) - len(free) + wanted
+        self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
         cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
-        limit = min(POOL_MAX, cap) if cap is not None else len(pool) + len(pending)
+        borrow = BORROW if want and all(w.get("preempt") == "1" for w in want) and t < (epoch(BORROW_UNTIL) or float("inf")) else 0
+        limit = min(POOL_MAX, cap + borrow) if cap is not None else len(pool) + len(pending)
         target = max(0, min(limit, int(target)))
         grow = target - len(pool) - len(pending)
         if grow > 0 and not dry:

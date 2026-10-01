@@ -1209,6 +1209,45 @@ def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_h
 
 
 @needs_flock
+def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_sigkills_a_lease_that_outlives_sigterm(
+        monkeypatch, tmp_path, fences):
+    import fcntl
+    t = 1_800_000_000.0
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3, VY_POOL_BORROW=1,
+                                VY_POOL_BORROW_UNTIL=datetime.datetime.fromtimestamp(t + 60, datetime.timezone.utc)
+                                .strftime("%Y-%m-%dT%H:%M:%SZ"))
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
+    bench = {"metadata": {"ownerReferences": [{"name": "nd-m0-bench"}]},
+             "status": {"admission": {"clusterQueue": "provers"}, "conditions": [{"type": "QuotaReserved", "status": "True"}]},
+             "spec": {"podSets": [{"count": 1, "template": {"spec": {"containers": [{"resources": {"requests": {"nvidia.com/gpu": "2"}}}]}}}]}}
+    state["workloads"] = [bench]
+    w = tmp_path / "gl" / "wait.1.4242"
+    fd = os.open(w, os.O_RDONLY | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    grown = lambda: len([a for a, _ in calls if a[0] == "create"])
+    for line, at, want in [("pid=4242 n=3 who=adhoc:me since=x\n", t, 1),             # not preemptible: 3 nominal less 2
+                           ("pid=4242 n=3 who=adhoc:me preempt=1 since=x\n", t, 2),   # preemptible: and 1 borrowed
+                           ("pid=4242 n=3 who=adhoc:me preempt=1 since=x\n", t + 61, 1)]:  # past the deadline
+        w.write_text(line)
+        calls.clear()
+        m.Controller().tick(at)
+        assert grown() == want, line
+    os.close(fd)
+    w.unlink()
+    state["workloads"], state["holders"] = [], [("gpu-pool-1", "gpu-pool-1-x", "GPU-a")]
+    c = m.Controller()
+    c.tick(t)
+    proc = subprocess.Popen(["sh", "-c", "trap '' TERM; exec cat"], stdin=subprocess.PIPE)
+    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
+    assert [e.get("signal") for e in c.tick(t + 1)["events"]] == ["SIGTERM"]
+    assert [e.get("signal") for e in c.tick(t + 1 + m.KILL_AFTER_S)["events"]] == ["SIGKILL"]
+    assert proc.wait() == -9
+    os.close(lock)
+
+
+@needs_flock
 def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, fences):
     import fcntl
     brain = tmp_path / "brain.sh"
