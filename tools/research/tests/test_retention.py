@@ -120,6 +120,35 @@ def test_a_file_records_beside_itself(tmp_path):
     assert R.load(f)["path"] == "hf/model.safetensors"
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into every directory")
+def test_a_read_only_directory_records_beside_itself_and_gc_leaves_it_whole(tmp_path):
+    """compute-accounting's dr-xr-xr-x cancel-pair units (1 Oct): keep failed on `.retention.json.tmp` inside them."""
+    d = data(tmp_path, "pouw/gpu3-fp8/cancel-pair@flat@1")
+    d.chmod(0o555)
+    try:
+        R.keep(d, root=tmp_path, owner="@compute-accounting", expires=PAST, priority="low", regenerate="make it", now=clock, node=NODE)
+        sc = tmp_path / "pouw/gpu3-fp8/cancel-pair@flat@1.retention.json"
+        assert R.sidecar(d) == sc and sc.is_file() and not (d / R.SIDECAR).exists()
+        assert R.find(d / "blob.bin", tmp_path).record["priority"] == "low"
+        rows = {r["path"]: r for r in R.report(tmp_path, now=clock, usage=lambda _p: (10, 5, 5), node=NODE)["rows"]}
+        assert rows["pouw/gpu3-fp8/cancel-pair@flat@1"]["state"] == "expired"
+        plan = run_gc(tmp_path, Disk(100 * UNIT, 99 * UNIT, [d]), apply=True, force=True, low_pct=0)
+        assert "is read-only" in by_path(plan)["pouw/gpu3-fp8/cancel-pair@flat@1"]["error"] and (d / "blob.bin").exists() and sc.exists()
+    finally:
+        d.chmod(0o755)
+    plan = run_gc(tmp_path, Disk(100 * UNIT, 99 * UNIT, [d]), apply=True, force=True, low_pct=0)
+    assert by_path(plan)["pouw/gpu3-fp8/cancel-pair@flat@1"]["error"] is None and not d.exists() and not sc.exists()
+
+
+def test_a_directory_with_a_record_inside_and_beside_it_is_invalid(tmp_path):
+    d = kept(tmp_path, "pouw/twice")
+    R.beside(d).write_text((d / R.SIDECAR).read_text())
+    with pytest.raises(R.RecordError, match="both record"):
+        R.load(d)
+    plan = run_gc(tmp_path, Disk(100 * UNIT, 99 * UNIT, [d]), apply=True, force=True, low_pct=0)
+    assert by_path(plan)["pouw/twice"]["action"] == "skip" and d.exists()
+
+
 @pytest.mark.parametrize("change, fix", [
     ({"owner": "compute-accounting"}, "lane handle such as @compute-accounting"),
     ({"priority": "urgent"}, "one of low, normal, high, keep"),

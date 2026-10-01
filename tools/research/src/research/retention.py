@@ -8,7 +8,7 @@
                           [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
-and `cat` reads it. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
+and `cat` reads it. A directory its owner made read-only has its record beside it, `<dir>.retention.json`; one with both is invalid. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
 `path` (relative to the root), `node`, `owner` (a lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority`
 (PRIORITIES), `preserved` (an `art:` id once the data is on the remote, or null), `regenerate` (how to rebuild it, or null), `why`.
 
@@ -147,23 +147,44 @@ def check(doc: Any) -> dict:
     return doc
 
 
-def sidecar(path: Path) -> Path:
-    """Where `path`'s record lives: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside anything else."""
+def beside(path: Path) -> Path:
     p = Path(path)
-    return p / SIDECAR if p.is_dir() and not p.is_symlink() else p.with_name(p.name + SIDECAR)
+    return p.with_name(p.name + SIDECAR)
+
+
+def _places(path: Path) -> list[Path]:
+    p = Path(path)
+    return [p / SIDECAR, beside(p)] if p.is_dir() and not p.is_symlink() else [beside(p)]
+
+
+def sidecar(path: Path) -> Path:
+    """Where `path`'s record lives or would be written: an existing sidecar, else `<dir>/.retention.json` for a directory it can
+    write into, else `<path>.retention.json` beside it."""
+    places = _places(path)
+    for sc in places:
+        if os.path.lexists(sc):
+            return sc
+    return places[0] if len(places) == 1 or os.access(path, os.W_OK | os.X_OK) else places[1]
 
 
 def load(path: Path) -> dict | None:
-    """`path`'s explicit record, or None when it has no sidecar; RecordError when the sidecar is unreadable or invalid."""
-    sc = sidecar(path)
-    try:
-        doc = json.loads(sc.read_text())
-    except FileNotFoundError:
+    """`path`'s explicit record, or None when it has no sidecar; RecordError when the sidecar is unreadable or invalid, or when a
+    directory has one inside and one beside it."""
+    docs = []
+    for sc in _places(path):
+        try:
+            docs.append((sc, json.loads(sc.read_text())))
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError) as e:
+            if isinstance(e, PermissionError) and not os.access(sc.parent, os.R_OK | os.X_OK):
+                raise RecordError(f"{sc.parent} can't be read, so whether it has a record is unknown") from None
+            raise RecordError(f"{sc}: unreadable ({e}): rewrite it with `research keep`") from None
+    if not docs:
         return None
-    except (OSError, ValueError) as e:
-        if isinstance(e, PermissionError) and not os.access(sc.parent, os.R_OK | os.X_OK):
-            raise RecordError(f"{sc.parent} can't be read, so whether it has a record is unknown") from None
-        raise RecordError(f"{sc}: unreadable ({e}): rewrite it with `research keep`") from None
+    if len(docs) > 1:
+        raise RecordError(f"{docs[0][0]} and {docs[1][0]} both record {path}: remove one")
+    sc, doc = docs[0]
     try:
         return check(doc)
     except RecordError as e:
@@ -580,18 +601,28 @@ def _why_deletable(rec: dict, verified: bool) -> str:
     return f"{rec['priority']}, expired {rec['expires']}, {how}"
 
 
+def _read_only_dir(path: Path) -> str | None:
+    for base, _dirs, _files in os.walk(path, onerror=_raise):
+        if not os.access(base, os.W_OK | os.X_OK):
+            return base
+    return None
+
+
 def _delete(root: Path, path: Path) -> str | None:
-    """Remove a recorded path (a file with its sidecar); the error, or None."""
+    """Remove a recorded path with its sidecar; the error, or None. A tree holding a directory this process can't write into is
+    left whole, since rmtree would stop partway."""
     try:
         if root not in Path(os.path.abspath(path)).parents:
             return f"{path} is not under {root}"
         if os.path.ismount(path):
             return f"{path} is a mount point"
         if os.path.isdir(path) and not os.path.islink(path):
+            if ro := _read_only_dir(path):
+                return f"{ro} is read-only: its owner makes it writable, or keeps it"
             shutil.rmtree(path)
         else:
             os.unlink(path)
-            Path(sidecar(path)).unlink(missing_ok=True)
+        beside(path).unlink(missing_ok=True)
     except OSError as e:
         return f"{type(e).__name__}: {e}"
     return None
@@ -864,5 +895,5 @@ def main(argv: list[str]) -> int:
 
 
 __all__ = ["DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "RecordError",
-           "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "scan",
+           "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "scan",
            "sidecar", "store_check", "target", "write"]

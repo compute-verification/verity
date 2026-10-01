@@ -385,7 +385,8 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 (`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data: `path`
 (relative to the root), `node`, `owner` (a lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority`
 (`low|normal|high|keep`), `preserved` (an art id or null), `regenerate` (a command or null), `why`. It covers everything beneath its
-path. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
+path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
+gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
 campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
 is written for it, and a sidecar wins.
 
