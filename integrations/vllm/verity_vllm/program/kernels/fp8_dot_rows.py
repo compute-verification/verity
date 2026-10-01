@@ -27,7 +27,7 @@ def tc_dot32_e4m3_blackwell(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tu
 TC_DOT32_E4M3_BY_PRIM = {"HopperE4m3QgmmaDot32_v1": D.tc_dot32_e4m3, "BlackwellE4m3QmmaDot32_v1": tc_dot32_e4m3_blackwell}
 
 #: provenance of the v2 rows' evaluator (`rows.EVALUATOR_PROVENANCE`): the sm_120 twin against the cc 12.0 capture
-SM120_TWIN_PROVENANCE = {
+CC12_TWIN_PROVENANCE = {
     "fixture": "tests/program/data/fp8_block_cc12_operands.npz",
     "fixture_sha256": "67306cfecd9de152f91abaf5a3f69410f72d503ce21d9bb05e6415d4561eb1d6",
     "captured_from": ["_C.per_token_group_fp8_quant", "_C.cutlass_scaled_mm blockwise, cc 12.0 (CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0)"],
@@ -37,4 +37,4 @@ SM120_TWIN_PROVENANCE = {
     "definitions": "verity_vllm/program/registry/fp8.py: ScaledMmFp8Block_v2{K,N,G,DOT}, ScaledMmFp8BlockSharedScale_v2{K,N,G,DOT}",
 }
 
-__all__ = ["SM120_TWIN_PROVENANCE", "TC_DOT32_E4M3_BY_PRIM", "tc_dot32_e4m3_blackwell"]
+__all__ = ["CC12_TWIN_PROVENANCE", "TC_DOT32_E4M3_BY_PRIM", "tc_dot32_e4m3_blackwell"]

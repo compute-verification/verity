@@ -25,7 +25,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
-from verity_vllm.program.kernels.fp8_dot_rows import SM120_TWIN_PROVENANCE, TC_DOT32_E4M3_BY_PRIM
+from verity_vllm.program.kernels.fp8_dot_rows import CC12_TWIN_PROVENANCE, TC_DOT32_E4M3_BY_PRIM
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 
@@ -164,7 +164,7 @@ _FP8_TWIN_PROVENANCE = {
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
                                           "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE,
-                                          "ScaledMmFp8Block_v2": SM120_TWIN_PROVENANCE, "ScaledMmFp8BlockSharedScale_v2": SM120_TWIN_PROVENANCE}
+                                          "ScaledMmFp8Block_v2": CC12_TWIN_PROVENANCE, "ScaledMmFp8BlockSharedScale_v2": CC12_TWIN_PROVENANCE}
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
