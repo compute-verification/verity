@@ -81,6 +81,9 @@
    "assumptions": [],
    "type_hash": "ee014b79708a48d123ada1fabd7045af3e7f99eceb015b486b49506b378311ab"
   },
+  "FlockLevel3.RowV2.enc_inj": {},
+  "FlockLevel3.RowV2.packBits_length": {},
+  "FlockLevel3.RowV2.prefix_size": {},
   "FlockLevel3.T_xK": {
    "signature": ["FlockLevel3.T_xK : Eq (FlockLevel3.T FlockLevel3.xK) 1"],
    "assumptions": [],
