@@ -152,6 +152,12 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   binds the port's domain, the rank, the position and the schema (§1), so rows of different ports or positions keep different tree
   leaves. The tag differs from `sha512/row/v1`'s before its zero byte, so no P(ℓ) is a `sha512/row/v1` prefix.
 - **Constant midstate.** P(ℓ) is one SHA-512 block, so a gadget starts from a midstate fixed by ℓ.
+- **Position outside the statement.** A v2 digest fixes bits and length only, so a root's role and format live only in its domain
+  binding: the input set, its content digest, the range, the port and the leaf schema. In a class statement the public file is the
+  verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
+  them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
+  id from its own derivation of the binding, and refuses a root whose recorded domain differs (`verity_one_stage.registration`'s
+  R3-domain does).
 - **Reference and conformance.** `verity.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
