@@ -1,8 +1,9 @@
 """Pearl-C's whole-step replay (`pouw_pearl_c_whole`, `pouw_pearl_c_graphs.GraphCalls`' whole-forward half), CPU only: the
 hooks on a stand-in of Model Runner V2's graph manager (each key's graphs, a retained pass's kind among them, eager where a
 key has none, the calls a capture recorded handed to the run around each replay, the scratch pass dropped), and the run's
-bookkeeping (each call's slot and offsets, its records appended as `_after` appends them, a retained capture's stages and the
-records and files kept from them).  The bytes on the card are the e2e's ``whole`` gate's.
+bookkeeping (each call's slot and offsets, the next forward's staged after a replay and uploaded by the next only from where
+they were staged for, its records appended as `_after` appends them, a retained capture's stages and the records and files
+kept from them).  The bytes on the card are the e2e's ``whole`` gate's.
 """
 from __future__ import annotations
 
@@ -71,7 +72,7 @@ class Run:
         self.graphs, self.hashing, self.retain, self.passes = True, True, None, 0
         self._whole = None
         self.replays: list = []
-        self.retained: list = []
+        self.replayed: list = []
         self.begun: list = []
         self.details = {"passes": []}
 
@@ -94,9 +95,10 @@ class Run:
 
     def whole_replay(self, calls):
         self.replays.append(calls)
+        return len(self.replays) > 1
 
-    def whole_retained(self, calls):
-        self.retained.append(calls)
+    def whole_replayed(self, calls):
+        self.replayed.append(calls)
 
 
 class Executor:
@@ -141,7 +143,7 @@ def test_vllms_own_graphs_serve_while_no_pearl_c_arm_executes():
     assert whole.key() == VLLM
     assert step(mgr).cg_mode == FULL and mgr.replayed == ["vllm's graph"] and run.replays == []
     assert step(mgr, 8192, None).cg_mode == NONE
-    assert whole.take() == {"replayed": 1, "eager": 1, "captured": 0}
+    assert whole.take() == {"replayed": 1, "staged": 0, "eager": 1, "captured": 0}
 
 
 CALLS = tuple(PG.WholeCall(w, 32, 4096, 4096, 32, 64) for w in (0, 1, 2))
@@ -158,9 +160,9 @@ def test_an_arm_runs_eagerly_until_prepared_then_replays_its_own_graphs_with_the
     assert run.begun == [HASHED, HASHED, RETAINED, RETAINED]    # each kind's capture, and again after its descriptor's graph
     assert whole.prepare() is False and len(stack.passes) == 1
     with stack.pass_():
-        assert step(mgr).cg_mode == FULL
-    assert mgr.replayed == ["graph 0"] and run.replays == [CALLS] and run.retained == [CALLS]
-    assert whole.take()["captured"] == 2
+        assert step(mgr).cg_mode == FULL and step(mgr).cg_mode == FULL
+    assert mgr.replayed == ["graph 0"] * 2 and run.replays == run.replayed == [CALLS] * 2
+    assert whole.take() == {"replayed": 2, "staged": 1, "eager": 1, "captured": 2}
 
 
 def test_each_pass_kind_has_its_own_graphs_and_vllms_stay_its_own():
@@ -180,7 +182,7 @@ def test_a_retained_pass_replays_its_kinds_own_capture():
     whole.prepare()
     with stack.pass_(PassSpec(hashing=True, retain="/tmp/x")):
         assert whole.key() == RETAINED and step(mgr).cg_mode == FULL
-    assert whole.sets[RETAINED] is not whole.sets[HASHED] and run.replays == run.retained == [CALLS]
+    assert whole.sets[RETAINED] is not whole.sets[HASHED] and run.replays == run.replayed == [CALLS]
 
 
 def test_enabled_off_graphs_off_and_forwards_outside_a_pass_run_eagerly():
@@ -255,7 +257,8 @@ def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
     run.cur.tiles, run.cur.flag_rows = 5, 16
     run._predicted = {8: ("stale",), 9: ("stale",)}
     calls = (PG.WholeCall(9, 32, 4096, 1024, 32, 8), PG.WholeCall(7, 32, 1024, 4096, 32, 32))
-    run.whole_replay(calls)
+    assert run.whole_replay(calls) is False and run.cur.matmuls[1:] == []
+    run.whole_replayed(calls)
     assert run.cur.matmuls[1:] == [Matmul(1, Shape(32, 4096, 1024), 9), Matmul(2, Shape(32, 1024, 4096), 7)]
     assert (run.cur.tiles, run.cur.flag_rows) == (5 + 8 + 32, 16 + 64)
     keys, offs = run.key_slots.numpy(), run.offs.numpy()
@@ -265,13 +268,39 @@ def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
     assert (run._slots_copied.synced, run._slots_copied.recorded) == (1, 1)
 
 
+def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_were_staged_for():
+    torch = pytest.importorskip("torch")
+    run, made = Calls(torch), []
+    make = run.keys
+    run.keys = lambda *a: made.append(a[1:]) or make(*a)
+    calls = (PG.WholeCall(9, 32, 4096, 1024, 32, 8), PG.WholeCall(7, 32, 1024, 4096, 32, 32))
+    run.whole_replay(calls)
+    assert made == [(0, 32), (1, 32)]
+    run.whole_replayed(calls)
+    assert made[2:] == [(2, 32), (3, 32)]                    # the next forward's, while the GPU runs this one
+    assert run.whole_replay(calls) is True and made[4:] == []
+    run.whole_replayed(calls)
+    assert run.cur.matmuls[2:] == [Matmul(2, Shape(32, 4096, 1024), 9), Matmul(3, Shape(32, 1024, 4096), 7)]
+    keys, offs = run.key_slots.numpy(), run.offs.numpy()
+    assert keys[2, :136].tobytes() == run.keys(run.roots[9], 2, 32) and keys[0, :136].tobytes() == run.keys(run.roots[7], 3, 32)
+    assert offs[2].tolist() == [32 * 40, 2 * 64, 32 * 2] and offs[0].tolist() == [32 * 48, 2 * 96, 32 * 3]
+    assert run._predicted == {9: (2, 32, 40, 64), 7: (3, 32, 48, 96)} and run._slots_copied.recorded == 2
+    run.cur = PPD._Pass(None)                                 # a new pass is elsewhere: it makes its own
+    assert run.whole_replay(calls) is False and offs[2].tolist() == [0, 0, 0]
+    run.whole_replayed(calls)
+    assert run.whole_replay(calls[:1]) is False               # and so do other calls
+    assert keys[2, :136].tobytes() == run.keys(run.roots[9], 2, 32)
+
+
 def test_a_replay_without_hashing_appends_the_matmuls_only():
     torch = pytest.importorskip("torch")
     run = Calls(torch)
     run.hashing = False
-    run.whole_replay((PG.WholeCall(7, 32, 1024, 4096, 32, 32),))
+    calls = (PG.WholeCall(7, 32, 1024, 4096, 32, 32),)
+    assert run.whole_replay(calls) is False
+    run.whole_replayed(calls)
     assert run.cur.matmuls == [Matmul(0, Shape(32, 1024, 4096), 7)] and (run.cur.tiles, run.cur.flag_rows) == (0, 0)
-    assert not run.key_slots.any() and run._slots_copied.recorded == 0
+    assert not run.key_slots.any() and run._slots_copied.recorded == 0 and run._next is None
 
 
 def test_a_replay_over_the_passs_capacity_is_refused():
@@ -355,7 +384,7 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     calls = (PG.WholeCall(9, 32, 4, 16, 32, 2), PG.WholeCall(7, 32, 8, 16, 32, 4))
     run.flag_buf[32 + 5, 0] = 1                               # weight 7's call: row 5 fails the screen
     run.whole_replay(calls)
-    run.whole_retained(calls)
+    run.whole_replayed(calls)
     want = []
     for mm, (w, ex) in zip(run.cur.matmuls, ((9, ()), (7, (5,))), strict=True):
         want.append(PPD.PW.UnitRecord(mm, 32, mm.shape.k, ex, run.weights[w].excluded))
@@ -364,5 +393,6 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     assert (tmp_path / "calls/1.tree").read_bytes() == bytes([3]) * 64
     assert (tmp_path / "calls/0.rows.bf16").read_bytes() == torch.full((32, 4), 2.0).to(torch.bfloat16).view(torch.uint8).numpy().tobytes()
     run.cur = PPD._Pass(None)
-    run.whole_retained(calls)                                 # an unretained pass keeps nothing
-    assert run.cur.records == []
+    run.whole_replay(calls)
+    run.whole_replayed(calls)                                 # an unretained pass keeps nothing
+    assert run.cur.records == [] and run.cur.files == []

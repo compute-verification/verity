@@ -12,9 +12,9 @@ instance:
 * ``dispatch``: the key's set as the manager's ``graphs``.  A step runs eagerly, with the descriptor vLLM gives a batch
   without graphs, when the key has no set (no pass open, `enabled` off, graphs off, a schedule the graph path doesn't run)
   or its set lacks the batch;
-* ``run_fullgraph``: before vLLM's replay, `GraphCalls.whole_replay` with the calls the capture recorded, which does the
-  forward's host work: every call's slot in one upload, and the pass's records; after it, `GraphCalls.whole_retained`, a
-  retained pass's files.
+* ``run_fullgraph``: before vLLM's launch of the replay, `GraphCalls.whole_replay` with the calls the capture recorded,
+  every call's slot in one upload; after it, while the GPU runs the forward, `GraphCalls.whole_replayed`, the rest of the
+  forward's host work: the pass's records, a retained pass's files, and the next forward's slots staged.
 
 The calls inside a capture are those made while vLLM's stream captures; vLLM's warm-up forward just before, outside the
 capture, makes their per-call graphs.  A captured forward ends where vLLM stores its graph (``graphs[desc] = graph``), which
@@ -46,8 +46,8 @@ class _Set(dict):
 
 class WholeStep:
     """`run`'s decode forwards as vLLM's graphs, on `runner` (Model Runner V2's), through `hooks`.  ``counts``: steps replayed,
-    steps run eagerly, and graphs captured, since the last `take`.  With ``enabled`` off the arm's forwards run eagerly in
-    vLLM, each call as its own graph."""
+    those of them whose slots were staged after the step before, steps run eagerly, and graphs captured, since the last
+    `take`.  With ``enabled`` off the arm's forwards run eagerly in vLLM, each call as its own graph."""
 
     enabled = True
 
@@ -63,7 +63,7 @@ class WholeStep:
         self.run, self.stack, self.runner, self.mgr = run, stack, runner, mgr
         self.sets: dict[tuple, dict] = {VLLM: mgr.graphs}
         self.calls: dict[tuple, tuple] = {}
-        self.counts = {"replayed": 0, "eager": 0, "captured": 0}
+        self.counts = {"replayed": 0, "staged": 0, "eager": 0, "captured": 0}
         hooks.wrap(mgr, "dispatch", self._dispatch)
         hooks.wrap(mgr, "run_fullgraph", self._run_fullgraph)
 
@@ -104,9 +104,9 @@ class WholeStep:
             if key == VLLM:
                 return original(desc)
             calls = self.calls[(key, desc)]
-            self.run.whole_replay(calls)
+            self.counts["staged"] += self.run.whole_replay(calls)
             out = original(desc)
-            self.run.whole_retained(calls)
+            self.run.whole_replayed(calls)
             return out
         return run_fullgraph
 

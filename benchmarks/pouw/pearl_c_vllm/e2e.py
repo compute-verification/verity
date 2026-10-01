@@ -211,15 +211,16 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
 
 
 def whole_check(run, weights: dict) -> dict:
-    """With ``--whole-step``, a forward's calls (every weight once, m = 32, in weight order) made eagerly, then captured whole
-    in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice after `whole_replay`,
-    each from a fresh pass on poisoned outputs: every replay must give the eager pass's A roots, tile root, screen flags and
-    outputs, bit for bit."""
+    """With ``--whole-step``, a forward's calls (every weight once, m = 32, in weight order) made eagerly twice in one pass,
+    then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice
+    in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's decode steps
+    replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit, and each
+    pass's second replay must upload the slots the first one staged (with hashing)."""
     import torch
     dev = next(iter(weights.values())).device
     gen = torch.Generator(device=dev).manual_seed(20261002)
     xs = {w: torch.randn(BATCH, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
-    rows = BATCH * len(weights) if run.hashing else 0
+    rows = 2 * BATCH * len(weights) if run.hashing else 0
     forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
     keep = ("transcript_root", "activation_roots", "units", "tiles")
 
@@ -229,6 +230,7 @@ def whole_check(run, weights: dict) -> dict:
     run.graphs = False
     run.begin()
     run.poison()
+    forward()
     want = ended(forward())
     run.graphs = True
     run.begin()
@@ -244,19 +246,22 @@ def whole_check(run, weights: dict) -> dict:
     finally:
         calls = run.whole_capture_end()
     run.end()
-    got = []
+    got, staged = [], []
     for _ in range(2):
         run.begin()
         run.poison()
-        run.whole_replay(calls)
-        graph.replay()
+        for _ in range(2):
+            staged.append(run.whole_replay(calls))
+            graph.replay()
+            run.whole_replayed(calls)
         got.append(ended(outs))
     same = all(g[2] == want[2] and torch.equal(g[1], want[1]) and all(torch.equal(a, b) for a, b in zip(g[0], want[0], strict=True))
                for g in got)
     kept = whole_retained_check(run, forward, side) if run.hashing else None
     return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": want[2], "replays": [g[2] for g in got],
-            "replay_equals_eager": same, "retained_equals_eager": kept,
-            "ok": same and len(calls) == len(weights) and kept is not False}
+            "replay_equals_eager": same, "staged": staged, "retained_equals_eager": kept,
+            "ok": (same and len(calls) == len(weights) and kept is not False
+                   and staged == ([False, True] * 2 if run.hashing else [False] * 4))}
 
 
 def whole_retained_check(run, forward, side) -> bool:
@@ -294,7 +299,7 @@ def whole_retained_check(run, forward, side) -> bool:
         run.begin(retain=str(dirs[1]))
         run.whole_replay(calls)
         graph.replay()
-        run.whole_retained(calls)
+        run.whole_replayed(calls)
         got = ended()
         files = sorted(p.relative_to(dirs[0]) for p in (dirs[0] / "calls").iterdir())
         return (got == want and files == sorted(p.relative_to(dirs[1]) for p in (dirs[1] / "calls").iterdir())

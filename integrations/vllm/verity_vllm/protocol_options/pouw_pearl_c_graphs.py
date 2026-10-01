@@ -6,10 +6,12 @@ the eager steps, which the e2e's ``graphs`` gate holds.
 
 Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
 `whole_capture_end`), a call launches the same steps into vLLM's capture instead, and is recorded; at each replay of that
-forward no call's Python runs, so `whole_replay` does the forward's host work at once: its slots in one upload, and its
-matmuls, tiles and screened rows appended to the pass.  A retained pass's capture also copies each call's A words and tree,
-as its steps leave them, to its weight's stage, from which `whole_retained` writes the call's record and files after the
-replay, as `_retained` writes them for a call made alone.
+forward no call's Python runs, so the forward's host work is done at once, around vLLM's launch of the replay: before it,
+`whole_replay` uploads its slots; after it, while the GPU runs the forward, `whole_replayed` appends its matmuls, tiles and
+screened rows to the pass and stages the next forward's slots, which the next `whole_replay` uploads when the pass is where
+they were staged for (else it makes them itself: the same bytes either way).  A retained pass's capture also copies each
+call's A words and tree, as its steps leave them, to its weight's stage, from which `whole_replayed` writes the call's record
+and files, as `_retained` writes them for a call made alone.
 """
 from __future__ import annotations
 
@@ -58,6 +60,19 @@ class WholeCall:
     tiles: int
 
 
+@dataclass(frozen=True)
+class _Slots:
+    """A forward's slots, for `calls` from the pass's counters `at` (matmuls, tiles, screened rows): each call's keys and
+    offsets by its weight's slot position (``pos``), each weight's prediction as `_slot` reads it, and the counters after."""
+    calls: tuple[WholeCall, ...]
+    at: tuple[int, int, int]
+    pos: Any
+    keys: Any
+    offs: Any
+    predicted: dict
+    after: tuple[int, int, int]
+
+
 class GraphCalls:
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``key_slots``, ``offs``,
     ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps`, and its pass and the
@@ -69,6 +84,9 @@ class GraphCalls:
     _whole_retained: bool = False
     #: each weight's stage, (A words, A tree) as its call's steps leave them, made at the first retained capture
     _stages: dict[int, tuple[Any, Any]] | None = None
+    #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
+    _uploaded: _Slots | None = None
+    _next: _Slots | None = None
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
         """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
@@ -130,13 +148,10 @@ class GraphCalls:
             raise RuntimeError(f"{self.entry}: a weight is called twice in one captured forward, and its slot holds one call")
         return calls
 
-    def whole_retained(self, calls: tuple[WholeCall, ...]) -> None:
-        """After vLLM replays a forward captured whole, in a retained pass with hashing: each call's record and files, from
-        its stage and its flags in the pass's buffer, as a call made alone keeps them."""
+    def _whole_retained(self, calls: tuple[WholeCall, ...], flags_at: int) -> None:
+        """A retained pass's records and files of a forward replayed whole, its first call's flags at row `flags_at` of the
+        pass's buffer: each call's from its stage and its flags, as a call made alone keeps them."""
         cur = self.cur
-        if cur.retain is None or not self.hashing or not calls:
-            return
-        flags_at = cur.flag_rows - sum(c.m for c in calls)
         for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
             self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], *self._stages[c.w])
             flags_at += c.m
@@ -149,39 +164,58 @@ class GraphCalls:
         for stage in (self._stages or {}).values():
             yield from (t.view(torch.uint8) for t in stage)
 
-    def whole_replay(self, calls: tuple[WholeCall, ...]) -> None:
-        """Before vLLM replays a forward captured whole: with hashing, every call's keys and offsets (its index, and the
-        pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream; then each call's
-        matmul, and with hashing its tiles and rows, appended to the pass, as `_after` appends them for a call made alone."""
+    def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
-        cur = self.cur
-        index, tiles_at, flags_at = len(cur.matmuls), cur.tiles, cur.flag_rows
-        if self.hashing and calls:
-            if (tiles_at + sum(c.tiles for c in calls) > self.capacity or 32 * (index + len(calls)) > len(self.roots_buf)
-                    or flags_at + sum(c.m for c in calls) > len(self.flag_buf)):
-                raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
-            if self._slots_copied is not None:
-                self._slots_copied.synchronize()
-            keys, offs = self._host_keys.numpy(), self._host_offs.numpy()
-            for i, c in enumerate(calls):
-                pos = self.order[c.w]
-                keys[pos, :136] = np.frombuffer(self.keys(self.roots[c.w], index + i, c.m16), np.uint8)
-                offs[pos] = self._offsets(index + i, tiles_at, flags_at)
-                self._predicted[c.w] = (index + i, c.m16, tiles_at, flags_at)
-                tiles_at += c.tiles
-                flags_at += c.m
-            called = {c.w for c in calls}
-            for w in [v for v in self._predicted if v not in called]:    # the upload rewrote their slots from the host copy
-                del self._predicted[w]
-            import torch
-            self.key_slots.copy_(self._host_keys, non_blocking=True)
-            self.offs.copy_(self._host_offs, non_blocking=True)
-            self._slots_copied = self._slots_copied or torch.cuda.Event()
-            self._slots_copied.record()
+        index, tiles_at, flags_at = at
+        offs, predicted = np.empty((len(calls), 3), np.int64), {}
         for i, c in enumerate(calls):
-            cur.matmuls.append(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w))
-        if self.hashing:
-            cur.tiles, cur.flag_rows = tiles_at, flags_at
+            offs[i] = self._offsets(index + i, tiles_at, flags_at)
+            predicted[c.w] = (index + i, c.m16, tiles_at, flags_at)
+            tiles_at += c.tiles
+            flags_at += c.m
+        keys = np.frombuffer(b"".join(self.keys(self.roots[c.w], index + i, c.m16) for i, c in enumerate(calls)), np.uint8)
+        pos = np.fromiter((self.order[c.w] for c in calls), np.intp, len(calls))
+        return _Slots(calls, at, pos, keys.reshape(len(calls), -1), offs, predicted, (index + len(calls), tiles_at, flags_at))
+
+    def whole_replay(self, calls: tuple[WholeCall, ...]) -> bool:
+        """Before vLLM replays a forward captured whole, with hashing: every call's keys and offsets (its index, and the
+        pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream.  Returns
+        whether `whole_replayed` had staged them, for these calls from where the pass is."""
+        cur = self.cur
+        if not self.hashing or not calls:
+            return False
+        at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
+        staged = s is not None and s.calls is calls and s.at == at
+        if not staged:
+            s = self._slots(calls, at)
+        if s.after[1] > self.capacity or 32 * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
+            raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
+        if self._slots_copied is not None:
+            self._slots_copied.synchronize()
+        self._host_keys.numpy()[s.pos, :s.keys.shape[1]] = s.keys
+        self._host_offs.numpy()[s.pos] = s.offs
+        import torch
+        self.key_slots.copy_(self._host_keys, non_blocking=True)
+        self.offs.copy_(self._host_offs, non_blocking=True)
+        self._slots_copied = self._slots_copied or torch.cuda.Event()
+        self._slots_copied.record()
+        self._uploaded = s
+        return staged
+
+    def whole_replayed(self, calls: tuple[WholeCall, ...]) -> None:
+        """After vLLM launches its replay of a forward captured whole: each call's matmul, and with hashing its tiles and
+        rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
+        files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
+        cur, index = self.cur, len(self.cur.matmuls)
+        cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
+        if not self.hashing or not calls:
+            return
+        s, self._uploaded = self._uploaded, None
+        self._predicted = dict(s.predicted)    # the upload rewrote the uncalled weights' slots from the host copy
+        cur.tiles, cur.flag_rows = s.after[1], s.after[2]
+        if cur.retain is not None:
+            self._whole_retained(calls, s.at[2])
+        self._next = self._slots(calls, s.after)
 
     def _graphed(self, m16: int) -> bool:
         """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from
