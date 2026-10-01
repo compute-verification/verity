@@ -91,6 +91,11 @@ TARGETS: dict[str, tuple[int, int]] = {
     "rtxpro6000": (12, 0),
 }
 
+#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
+#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
+#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
+
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
 _TOKEN = re.compile(r"__(tp|b|i|o)(\d+)(?=__)")
@@ -259,7 +264,10 @@ class BuildConfig:
     """How the Build stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
-                                    help="concurrent derives: N, or auto (cgroup headroom / 20 GiB, 1..8); default 1 (TP: ranks x shapes)")
+                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
                                        help="seconds per derive; default scales with the envelope (TP: 7200)")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
@@ -309,6 +317,9 @@ class CommitConfig:
                                   "Commit (no control arm, no pairs) under bounded staging, a k-unit replay stratified by family, then "
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
+    replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
+                                  help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
+                                       "stays pending until `row stage replay` (CPU) replays the bundle; slim = a slim bundle")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")
@@ -384,8 +395,8 @@ class RunEnv:
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
-    veritor_repo: str | None = option("--veritor-repo", env="VERITOR_REPO", default=None,
-                                      help="must name the tree that runs when given (the mixed-tree refusal)")
+    verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
+                                     help="must name the tree that runs when given (the mixed-tree refusal)")
     research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
     research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")
