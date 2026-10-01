@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1 project=verity` fill guests: node 2's fill runner
-# starts one only when no PoUW GPU job is ready and at least 2 GPUs are free, preempts it first, and stops it in every timed window
-# (it is requeued and reruns from the top). The Build stays where it ran; the CPU replay runs on node 2's
-# Verity CPUs (48-95) as a `gpus=0` guest.
+# Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1` (a TP2 row: `gpus=2`) `project=verity` fill
+# guests with max_min VY_N2_COMMIT_MAX_MIN (40: node 2's gaps between booked windows run 5-60 min and its Commits took at most 20, so
+# a 90 never fit one; 90 for a longer row): node 2's fill runner starts them ahead of its other GPU fill, never into a booked
+# window, and stops them for a waiter or a timed window (requeued, rerun from the top). The Build stays where it ran; the CPU
+# replay runs on node 2's Verity CPUs (48-95) as a `gpus=0` guest.
 #
 #   on node 1:  n2_commit.sh submit KEY ITEM.json|- [NODE1_JOB]   (ITEM: the config-run item, as in a Job's verity.dev/item-json;
 #                                                                 NODE1_JOB: its queued Commit Job, deleted once node 2 has it)
 #   on node 1:  n2_commit.sh item NODE1_JOB                       (prints that Job's item)
-#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has)
+#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has;
+#                                                                 VY_N2_FIRST=0: only while deployments-gpu has no free GPU)
+#   on node 1:  n2_commit.sh n1-free                              (the GPUs deployments-gpu could still admit)
+#   on node 1:  n2_commit.sh place KIND KEY GPUS MAX_MIN QUESTION (the queue's placement on node 2, as submit records it; a dry run)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
+#   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
 #
-# submit (as research on node 1) refuses a row that isn't TP1, whose Build hasn't passed on node 1 (no manifest.json or Build run),
+# submit (as research on node 1) refuses a row that isn't TP1 or TP2, whose Build hasn't passed on node 1 (no manifest.json or Build run),
 # or whose checkpoint REPO@REVISION isn't staged on node 2 as plain files (/workspace/jobs/hf, or PoUW's /workspace/hf, which is only
 # read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row (Programs, manifest), the bootstrap
 # stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has a timed window running or waiting,
-# resolves the Build's artifact in node 1's store, and writes the fill job.
+# resolves the Build's artifact in node 1's store, copies that artifact's store manifest into node 2's store (which has no remote,
+# and the Commit's precheck reads it), and writes the fill job. Before any of that it asks the queue (`cluster submit`, from
+# VY_QUEUE_SRC's tools/cluster) to place the Commit on node 2 with its research question: a refusal keeps the row on node 1, and
+# once the fill job is written the placement is appended to node 1's $GUEST/placed.jsonl. Node 2's fill queue stays the executor,
+# so these count apart from `research run --queue` (top-level 5:14 AM PDT). A queue that gives no answer doesn't hold the row back.
 # run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, records the GPU's
 # driver, clocks and vLLM version in the row (n2_gpu_env.json), then sends the row (without the replay bundle) and the run dir back
 # to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
@@ -26,6 +35,9 @@
 set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
+# the fill prio of node 2's vLLM guests: above every other guest's (proofs' are 5 and 10), since circuits' vLLM work goes first
+# on both nodes (Daniel 1 Oct 01:35Z)
+PRIO=${VY_N2_PRIO:-20}
 DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 OWNER=${VY_N2_COMMIT_OWNER:-bc-698052e1-8e2b-5736-997e-8fa229b85b3c}
 KUBE_DISPATCH="KUBECONFIG=\$HOME/.kube/config"
@@ -67,10 +79,63 @@ check_item() {  # check_item KEY ITEM.json: exit 2 unless KEY is a key and ITEM 
   { read -r template; read -r row; read -r role; read -r repo; read -r rev; } < <(item_get "$item" template ROW ROLE REPO REVISION)
   [ "$template" = config-run ] || { echo "ITEM: a config-run item" >&2; exit 2; }
   [ -n "$row" ] && [ -n "$role" ] && [ -n "$repo" ] && [ -n "$rev" ] || { echo "ITEM: needs ROW, ROLE, REPO and REVISION" >&2; exit 2; }
-  [[ $row == *__tp1__* ]] || { echo "ITEM: $row isn't TP1; a node-2 guest has one GPU" >&2; exit 2; }
+  [[ $row =~ __tp[12]__ ]] || { echo "ITEM: $row isn't TP1 or TP2; a node-2 guest has one or two GPUs" >&2; exit 2; }
 }
 
+tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
+
 item() { ssh "$N1" "$KUBE get job $1 -o jsonpath='{.metadata.annotations.verity\.dev/item-json}'"; echo; }
+
+# node 2's store has no remote, so a stage's precheck reads the manifests it cites (the Build's; the replay's Commit) from node 2's
+# own store: submit copies them there, and run and replay fetch any still missing from node 1's. A manifest's sha256 is its id
+STORE=${VY_STORE:-/workspace/jobs/store}
+art_hex() {  # art_hex ART: its 64 hex digits, or exit 2
+  [[ $1 =~ ^art:([0-9a-f]{64})$ ]] || { echo "not an art: id: $1" >&2; exit 2; }
+  echo "${BASH_REMATCH[1]}"
+}
+
+fetch_manifests() {  # fetch_manifests ART...: (on node 2) every manifest node 2's store lacks, from node 1's, checked against its id
+  local art hex f tmp
+  for art in "$@"; do
+    [ -n "$art" ] || continue
+    hex=$(art_hex "$art") f=$STORE/manifests/$hex.json
+    [ -s "$f" ] && continue
+    tmp=$STORE/manifests/.n2-$hex-$$
+    if rsync -a "$N1:$STORE/manifests/$hex.json" "$tmp" && [ "$(sha256sum < "$tmp" | cut -d' ' -f1)" = "$hex" ]; then
+      mv "$tmp" "$f" && echo "fetched the manifest of $art from node 1's store"
+    else
+      rm -f "$tmp"
+      echo "the manifest of $art isn't in node 1's store (or doesn't hash to its id); the precheck will refuse it" >&2
+    fi
+  done
+}
+
+n2_question() {  # n2_question ROW: node 2's question for a Commit of ROW (the Attempt's second `question` label, load_item's)
+  printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit, as node 1's Commits of its Build do?" "$1"
+}
+
+place() {  # place KIND KEY GPUS MAX_MIN QUESTION [CPUS [MEM_GB [SUBMITTER]]]: the queue's placement on node 2 as one placed.jsonl
+  # line (none when it gives no answer); exit 3 when it refuses the job. n2_build.sh's submit calls it too.
+  local src=${VY_QUEUE_SRC:-$GUEST/cluster-src} out mem=()
+  [ -z "${7:-}" ] || mem=(--mem-gb "$7")
+  out=$(PYTHONPATH=$src/src python3 -m cluster submit "$src/descriptions/nebius.toml" --run-id "n2-$1-$2" --now "$(date +%s)" \
+    --project verity --submitter "${8:-$OWNER}" --question "$5" --gpus "$3" --cpus "${6:-8}" "${mem[@]}" --max-s $(($4 * 60)) \
+    --preempt requeue --node vy-nebius-2 2> /dev/null | tail -1) || true
+  python3 - "$1" "$2" "$5" "$out" << 'EOF'
+import json, sys, time
+kind, key, question, out = sys.argv[1:]
+try:
+    placed = json.loads(out)
+except ValueError:
+    print(f"the queue gave no placement for {kind} {key}", file=sys.stderr)
+    sys.exit(0)
+if "refused" in placed:
+    print(f"the queue refuses {kind} {key}: {placed['refused']}", file=sys.stderr)
+    sys.exit(3)
+print(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": kind, "key": key, "node": placed.get("node"),
+                  "why": placed.get("why"), "question": placed.get("question") or question, "executor": "fill-queue"}))
+EOF
+}
 
 submit() {
   local key=$1 item=$2 job=${3:-}
@@ -91,6 +156,10 @@ submit() {
     fi
     [ -f \$d/config.json ] && [ -z \"\$(find \$d -type l -print -quit)\" ]" \
     || { echo "checkpoint $repo@$rev isn't staged on node 2 (n2_build.sh stage REPO REV); not queued" >&2; exit 3; }
+  local question placed
+  question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("question") or "")' "$item")
+  placed=$(place commit "$key" "$(tp_of "$row")" "${VY_N2_COMMIT_MAX_MIN:-40}" "${question:-$(n2_question "$row")}") \
+    || { echo "not queued" >&2; exit 3; }
   local src build_run build_art
   # the Commit keeps node 1's dispatcher key, so its replay and records chain on under it
   [ -z "$job" ] || [ -n "${VY_COMMIT_KEY:-}" ] || VY_COMMIT_KEY=$(ssh -n "$N1" "$KUBE get job $job -o jsonpath='{.metadata.annotations.verity\\.dev/item}'")
@@ -102,6 +171,12 @@ submit() {
     /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$build_run" --json 2> /dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
     2> /dev/null || true)
+  if [ -n "$build_art" ]; then
+    local m
+    m=$STORE/manifests/$(art_hex "$build_art").json
+    [ -s "$m" ] || { echo "Build $build_run cites $build_art, which node 1's store has no manifest for; not queued" >&2; exit 3; }
+    push "$m" "$m" --ignore-existing || { echo "the manifest of $build_art didn't go over to node 2; not queued" >&2; exit 3; }
+  fi
   push "$src/" "$src/"
   push "$row_dir/" "$row_dir/" --exclude=/commit/ --exclude=/pipeline-commit-run --exclude=/.n2-commit
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
@@ -118,7 +193,7 @@ d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art"
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=1 max_min=30 cpus=8 project=verity prio=${VY_N2_PRIO:-0}
+# fill: owner=$OWNER gpus=$(tp_of "$row") max_min=${VY_N2_COMMIT_MAX_MIN:-40} cpus=8 project=verity prio=$PRIO
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF
@@ -133,6 +208,7 @@ EOF
       exit 4
     fi
   fi
+  [ -z "$placed" ] || echo "$placed" >> "$GUEST/placed.jsonl"
   echo "queued verity-commit-$key on node 2 ($row, Build $build_run ${build_art:-without an artifact})"
 }
 
@@ -183,7 +259,10 @@ d = json.load(open(sys.argv[1]))
 env = {k: str(v) for k, v in (d.get("env") or {}).items() if k != "HF_HOME"}
 n2 = d["n2"]
 env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_key"], BUILD_ART=n2.get("build_art") or "",
-           COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="0" if n2.get("proof") else "1", PROOF="1" if n2.get("proof") else "")
+           COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="0" if n2.get("proof") else "1", PROOF="1" if n2.get("proof") else "",
+           QUESTION=d.get("question") or "",
+           N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit,"
+                       " as node 1's Commits of its Build do?")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 print("ITEM_ARGS=(" + " ".join(shlex.quote(a) for a in
       [x for k, v in {**(d.get("env") or {}), "REPLAY_DEFERRED": "1"}.items() for x in ("--env", f"{k}={v}")]
@@ -208,9 +287,10 @@ gpu_env() {  # gpu_env OUT.json
 import json, os, socket, sys, time
 f = ["index", "uuid", "name", "driver_version", "clocks_gr_mhz", "clocks_sm_mhz", "clocks_mem_mhz", "clocks_app_gr_mhz", "clocks_max_gr_mhz",
      "power_limit", "clocks_event_reasons_active"]
-row = dict(zip(f, [x.strip() for x in os.environ["NV_Q"].split(",")]))
+rows = [dict(zip(f, [x.strip() for x in line.split(",")])) for line in os.environ["NV_Q"].splitlines() if line.strip()]
 json.dump({"schema": "n2-gpu-env/v0", "host": socket.gethostname(), "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "gpu": row, "vllm_version": os.environ["VLLM"],
+           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "gpu": rows[0] if rows else {}, "gpus": rows,
+           "vllm_version": os.environ["VLLM"],
            "nvidia_smi_clock": os.environ["NV_CLOCK"]}, open(sys.argv[1], "w"), indent=1)
 EOF
 }
@@ -223,6 +303,14 @@ home() {  # home RUN_ID [RSYNC-ARG...]
   rsync -a "${sudo_rsync[@]}" "$@" "$SWEEP_DIR/$ROW/" "$N1:$SWEEP_DIR/$ROW/"
   rsync -a "${sudo_rsync[@]}" "/workspace/jobs/runs/$run_id/" "$N1:/workspace/jobs/runs/$run_id/"
   ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
+  # the Attempt's `question` labels: the research owner's (the item's "question"), then node 2's; --off-vocab for job trees older
+  # than that key
+  local q
+  for q in "$QUESTION" "$N2_QUESTION"; do
+    [ -n "$q" ] || continue
+    ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data label \
+      $run_id question $(printf %q "$q") --by n2-commits --ref $run_id --off-vocab" > /dev/null || echo "$run_id: no question label" >&2
+  done
   if [ -n "${R2_ENDPOINT:-}" ] && [ "$(du -sm "/workspace/jobs/runs/$run_id" | cut -f1)" -lt 64 ]; then
     PYTHONPATH=$SRC/tools/research/src "${research[@]}" data push "$run_id" && echo "$run_id: pushed to R2 from node 2"
   else
@@ -246,7 +334,7 @@ run() {
   if [ -s "$marker" ]; then
     read -r run_id rc < "$marker"
   else
-    # a Commit stopped twice (the 30-min GPU cap, windows, waiters) goes back to node 1 rather than loop here
+    # a Commit stopped twice (its max_min, windows, waiters) goes back to node 1 rather than loop here
     local tries
     tries=$(( $(cat "$row_dir/.n2-tries" 2> /dev/null || echo 0) + 1 ))
     echo "$tries" > "$row_dir/.n2-tries"
@@ -257,6 +345,7 @@ run() {
       echo "n2-commit $KEY: stopped $((tries - 1)) times on node 2; node 1 runs it"
       return 0
     fi
+    fetch_manifests "$BUILD_ART"
     (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" \
       --out "/workspace/jobs/bootstrap/$ROLE")
     export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
@@ -280,12 +369,13 @@ run() {
     echo "$run_id $rc" > "$marker"
   fi
   # a proof (VY_N2_PROOF=1 at submit) runs the Commit as node 1's gpu task did, its replay on the GPU, and only comes home: it is
-  # compared with node 1's record of the same row, and nothing is queued after it
+  # compared with node 1's record of the same row, and nothing is queued after it. It exits with the Commit's rc, so its lease's
+  # holder sees a failed proof as one
   if [ -n "${PROOF:-}" ]; then
     home "$run_id"
     rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
     echo "n2-commit $KEY: proof Commit $run_id on node 2 rc $rc; its row and Attempt are on node 1"
-    return 0
+    return "$rc"
   fi
   if [ "$rc" != 0 ] || [ "${VY_N2_REPLAY:-n2}" = n1 ]; then
     # node 1 takes it from here: the Commit again (task 1) after a failure here, else the replay (task 2), with the whole row
@@ -295,7 +385,8 @@ run() {
     echo "n2-commit $KEY: Commit $run_id on node 2 rc $rc; node 1 has it now"
     return 0
   fi
-  # the replay runs here, on the Verity CPUs, from the sealed bundle, which stays on node 2 unless that replay fails
+  # the replay runs here, on the Verity CPUs, from the sealed bundle, which goes to node 1 only when that replay fails or leaves
+  # no complete slim keep of it
   home "$run_id" --exclude='/commit/replay_bundle_p*'
   local commit_art
   commit_art=$(ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show $run_id --json" 2> /dev/null \
@@ -315,6 +406,53 @@ EOF
   echo "n2-commit $KEY: Commit $run_id on node 2 rc 0 (verdict ${commit_art:-none}); its replay is queued here"
 }
 
+# a passed replay's bundle goes only with its complete slim keep, as config-run.yaml's replay task checks it (the same lines); a
+# bundle kept goes home to node 1 with the row, where release.py counts it against the bundle cap
+discard_kept_bundles() {  # discard_kept_bundles ROW_DIR
+  python3 - "$1" << 'EOF' || echo "$(date -u +%FT%TZ) replay bundles kept: the keep check failed" | tee -a "$1/row.log" || true
+import glob, hashlib, json, os, re, shutil, sys, time
+row = sys.argv[1]
+
+
+def sha256(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 24), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def unkept(b, k, pair):  # why k is not bundle b's complete slim keep, or None
+    if not os.path.isfile(f"{k}/slim.json"):
+        return f"no slim keep {k}/slim.json (a tree before keep-leaves, or its replay wrote none)"
+    try:
+        doc = json.load(open(f"{k}/slim.json"))
+        files = doc["files"]
+        if doc.get("schema") != "verity-vllm/replay-slim/v1" or doc.get("pair") != pair or not files:
+            return f"{k}/slim.json is not a replay-slim/v1 keep of pair {pair} that lists files"
+        if doc.get("dump_sha256") != hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest():
+            return f"{k}/slim.json's dump_sha256 is not the digest of its files"
+        if doc.get("bundle_manifest_sha256") != sha256(f"{b}/MANIFEST.json"):
+            return f"{k} was made from another bundle (its bundle_manifest_sha256 is not this MANIFEST.json's)"
+        bad = [r for r, f in sorted(files.items()) if os.path.getsize(f"{k}/{r}") != f["bytes"] or sha256(f"{k}/{r}") != f["sha256"]]
+    except Exception as e:
+        return f"{k} is incomplete ({type(e).__name__}: {e})"
+    return f"{len(bad)} of {k}'s {len(files)} files differ from its slim.json (first {bad[0]})" if bad else None
+
+
+with open(f"{row}/row.log", "a") as log:
+    for b in sorted(glob.glob(f"{row}/commit/replay_bundle_p*")):
+        m = re.fullmatch(r"replay_bundle_p(\d+)", os.path.basename(b))
+        k = f"{row}/commit/replay_slim_p{m[1]}" if m else ""
+        why = unkept(b, k, int(m[1])) if m else "not a sealed bundle"
+        if why is None:
+            os.unlink(b) if os.path.islink(b) else shutil.rmtree(b)
+        line = f"replay bundle {b} " + (f"kept: {why}" if why else f"deleted: {k} is its complete slim keep")
+        print(line, flush=True)
+        log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {line}\n")
+EOF
+}
+
 replay() {
   in_ns replay "$1"
   local key=$1 item=$GUEST/items/commit-$1.json run_id rc=0 research
@@ -323,6 +461,7 @@ replay() {
   if [ -s "$marker" ]; then
     read -r run_id rc < "$marker"
   else
+    fetch_manifests "$BUILD_ART" "$COMMIT_ART"
     (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu \
       --out "/workspace/jobs/bootstrap/$ROLE-cpu")
     export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
@@ -333,7 +472,7 @@ replay() {
       ${BUILD_ART:+--input "build=$BUILD_ART"} ${COMMIT_ART:+--input "commit=$COMMIT_ART"} \
       -- "$PY" -m verity_vllm.pipeline.cli row stage replay "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 || rc=$?
     case "$rc" in 137 | 143) exit 143 ;; esac
-    if [ "$rc" = 0 ] && [ -s "$row_dir/config_record.json" ]; then rm -rf "$row_dir"/commit/replay_bundle_p*; fi
+    if [ "$rc" = 0 ] && [ -s "$row_dir/config_record.json" ]; then discard_kept_bundles "$row_dir"; fi
     echo "$run_id $rc" > "$marker"
   fi
   home "$run_id"
@@ -342,7 +481,8 @@ replay() {
   echo "n2-commit $KEY: replay $run_id on node 2 rc $rc"
 }
 
-# node 1's Commits that Kueue has held at least VY_OFFLOAD_WAIT_S, on a checkpoint staged on node 2, one per line: JOB KEY N2KEY,
+# node 1's Commits that Kueue has held at least VY_OFFLOAD_WAIT_S, on a checkpoint staged on node 2, except rows the pacer keeps
+# held (it deactivates every arrival, so a kept row looks like any held Commit here), one per line: JOB KEY N2KEY,
 # their items in $1/N2KEY.json
 held_commits() {
   KUBECONFIG=$HOME/.kube/config kubectl get jobs -l verity.dev/dispatch=node1 -o json > "$1/k8s.json"
@@ -352,6 +492,11 @@ held_commits() {
 import calendar, json, os, re, sys, time
 d, wait, streams = sys.argv[1], int(sys.argv[2]), sys.argv[3].split()
 staged = set(open(f"{d}/staged.txt").read().split())
+BIG = ("mistral-7b", "qwen25-7b", "qwen3-30b", "olmoe", "llama31-8b", "gemma2-9b")
+def kept(row):  # rows the steward's pacer (release.py) never reactivates; Gemma-2 at batch 16+ and 1024 input tokens: top-level, 1:30 AM PDT
+    m = re.search(r"__b(\d+)__", row)
+    b = int(m.group(1)) if m else 0
+    return b >= 64 or b >= 16 and (row.startswith(BIG) or row.startswith("gemma2-") and "__i1024__" in row)
 for j in json.load(open(f"{d}/k8s.json"))["items"]:
     a, lab, st = j["metadata"]["annotations"], j["metadata"]["labels"], j.get("status") or {}
     if lab.get("verity.dev/task") != "1" or not j["spec"].get("suspend") or st.get("succeeded") or st.get("failed"):
@@ -362,7 +507,7 @@ for j in json.load(open(f"{d}/k8s.json"))["items"]:
         continue
     item = json.loads(a["verity.dev/item-json"])
     e = item.get("env") or {}
-    if item.get("template") != "config-run" or "__tp1__" not in e.get("ROW", ""):
+    if item.get("template") != "config-run" or not re.search(r"__tp[12]__", e.get("ROW", "")) or kept(e.get("ROW", "")):
         continue
     if f"models--{e.get('REPO', '').replace('/', '--')}/snapshots/{e.get('REVISION')}" not in staged:
         continue
@@ -376,10 +521,11 @@ EOF
 }
 
 # a guest Commit that has waited VY_N2_RECLAIM_MIN (60) on node 2 (PoUW's own GPU queue refilled) goes back to node 1's queue, and
-# offload leaves its key alone after that. Taking it out of node 2's queue is a mv, which fails once the runner has started it
+# offload leaves its key alone after that. Taking it out of node 2's queue is a mv, which fails once the runner has started it.
+# The wait counts from the file's ctime, which a mv into the queue resets: a Commit released from a held dir keeps its old mtime
 reclaim() {
   local f key item
-  for f in $(ssh -n "$N2" "find /workspace/pouw/fill/queue -maxdepth 1 -name 'verity-commit-*.sh' -mmin +${VY_N2_RECLAIM_MIN:-60} -printf '%f\n'"); do
+  for f in $(ssh -n "$N2" "find /workspace/pouw/fill/queue -maxdepth 1 -name 'verity-commit-*.sh' -cmin +${VY_N2_RECLAIM_MIN:-60} -printf '%f\n'"); do
     key=${f#verity-commit-}; key=${key%.sh}
     ssh -n "$N2" "mkdir -p $GUEST/reclaimed && mv /workspace/pouw/fill/queue/$f $GUEST/reclaimed/$f" || continue
     item=$(mktemp)
@@ -399,8 +545,29 @@ EOF
   done
 }
 
-# move each held Commit on a staged checkpoint to node 2 while node 2 has fewer than VY_N2_MAX_COMMITS Verity Commits queued;
-# `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1, as research)
+# the GPUs node 1's deployments-gpu could still admit: its unused nominal quota (a lent GPU comes back by reclaim) or the cohort's
+# idle GPUs within its borrowing limit. Prints nothing and fails when Kueue can't be read.
+n1_free() {
+  KUBECONFIG=$HOME/.kube/config kubectl get clusterqueue -o json | python3 -c '
+import json, sys
+cqs, G = json.load(sys.stdin)["items"], "nvidia.com/gpu"
+def gpu(cq):
+    q = [r for rg in cq["spec"]["resourceGroups"] for f in rg["flavors"] for r in f["resources"] if r["name"] == G]
+    used = [r for f in (cq.get("status") or {}).get("flavorsUsage") or [] for r in f["resources"] if r["name"] == G]
+    bl = [float(r["borrowingLimit"]) for r in q if "borrowingLimit" in r]
+    return sum(float(r.get("nominalQuota", 0)) for r in q), sum(bl) if len(bl) == len(q) else float("inf"), sum(float(r.get("total", 0)) for r in used)
+me = next(c for c in cqs if c["metadata"]["name"] == sys.argv[1])
+cohort = [gpu(c) for c in cqs if (c["spec"].get("cohort") or c["spec"].get("cohortName")) == (me["spec"].get("cohort") or me["spec"].get("cohortName"))]
+nom, bl, use = gpu(me)
+idle = sum(c[0] for c in cohort) - sum(c[2] for c in cohort)
+print(int(max(0, min(nom + bl - use, max(nom - use, idle)))))
+' "${VY_N1_GPU_QUEUE:-deployments-gpu}"
+}
+
+# move each held Commit on a staged checkpoint to node 2 (node 2 first: top-level, 1 Oct 12:14 AM PDT, with node 2's GPUs idle and
+# its disk at 38%; VY_N2_FIRST=0 restores circuits' 30 Sep 7:24 PM rule, only while n1_free prints 0) while node 2 has fewer than
+# VY_N2_MAX_COMMITS Verity Commits queued; `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1,
+# as research)
 offload() {
   case "${1:-}" in
     --loop) while :; do offload || true; sleep "${VY_OFFLOAD_EVERY_S:-120}"; done ;;
@@ -412,6 +579,10 @@ offload() {
     reclaim
     while read -r job key n2key; do
       grep -qxF "$key" "$GUEST/reclaimed.txt" 2> /dev/null && continue
+      if [ "${VY_N2_FIRST:-1}" = 0 ]; then
+        free=$(n1_free) || free=
+        [ "$free" = 0 ] || { echo "node 1 has ${free:-unknown (Kueue unreadable)} free GPUs in deployments-gpu; $job stays"; break; }
+      fi
       queued=$(ssh -n "$N2" 'ls /workspace/pouw/fill/queue/ | grep -c "^verity-commit-"' || true)
       [ "${queued:-0}" -lt "${VY_N2_MAX_COMMITS:-16}" ] || { echo "node 2 has $queued Verity Commits waiting; $job stays"; break; }
       VY_COMMIT_KEY=$key bash "$0" submit "$n2key" "$tmp/$n2key.json" "$job" < /dev/null 2> >(grep -v '^rsync' >&2) \
@@ -427,6 +598,9 @@ case "$cmd" in
   run) run "$@" ;;
   replay) replay "$@" ;;
   offload) offload "$@" ;;
+  n1-free) n1_free ;;
   check) check_item "$@" ;;
-  *) sed -n '5,10p' "$0" >&2; exit 2 ;;
+  place) place "$@" ;;
+  fetch-manifests) fetch_manifests "$@" ;;
+  *) sed -n '7,15p' "$0" >&2; exit 2 ;;
 esac

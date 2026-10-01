@@ -6,10 +6,12 @@
 # replay; never TP2, Gemma-2, Pythia or 7B+) under /workspace/jobs/dispatch/pack/queue/, and keeps at most PACK_PODS of these
 # pods. The pod is a pilot lease (sky/commit_pack.py): it takes the next spooled Commit as each one ends and exits when the spool
 # stays empty, or at its 120-min wall. Each Commit runs exactly config-run's gpu task script, with the MPS client environment:
-#   CUDA_MPS_PINNED_DEVICE_MEM_LIMIT=0=28G   CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=100   GPU_UTIL=0.28   REPLAY_DEFERRED=1
+#   CUDA_MPS_PINNED_DEVICE_MEM_LIMIT=0=28G   CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=100   GPU_UTIL=0.20   REPLAY_DEFERRED=1
 # After an MPS fault every Commit still running in the pod is stopped, and the dispatcher requeues each once as a normal 1-GPU
 # Commit; its replay task follows as usual. Rollback: PACK_COMMITS=0 in the dispatcher, then let these pods finish or delete them
-# (their claimed Commits requeue unpacked). The pod admits nothing new in the quiet hour (12:30-13:30Z).
+# (their claimed Commits requeue unpacked). The pod admits nothing new from 12:10Z (node 1's quota cutover) to the quiet hour's end
+# (13:30Z), and at 12:28Z stops what still runs (the dispatcher requeues it unpacked) and exits. Each packed Commit's Attempt is
+# labelled ov.mps_packed, and its replay must be 460/460 PASS or the dispatcher stops packing that model.
 name: commit-pack
 
 resources:
@@ -29,7 +31,7 @@ envs:
   PACK_SLOTS: "3"
   PACK_MAX_WALL_S: "7200"
   PACK_MEM_LIMIT: "0=28G"
-  PACK_GPU_UTIL: "0.28"
+  PACK_GPU_UTIL: "0.20"   # of the whole GPU's 95 GiB, with the Commit's ~6 GiB of staging beside it inside PACK_MEM_LIMIT
   PACK_THREAD_PERCENTAGE: "100"
   OV_NOISY: "true"
 

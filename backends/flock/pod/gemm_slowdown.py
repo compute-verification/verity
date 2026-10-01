@@ -10,7 +10,7 @@ fused as vLLM runs them, and the LM head (128256 x 2048). Prefill is #101's 256 
 at M = 1 (vLLM computes only the last token's logits); decode is every GEMM at M = 1, 2, 4 and 8, summed over the four.
 
     python gemm_slowdown.py native --out native.json [--iters 100] [--trials 5]
-    python gemm_slowdown.py compute --sweep m34/results.jsonl [--gate gate/results.jsonl] --native native.json --result result.json
+    python gemm_slowdown.py compute --sweep m34/results.jsonl [--preflight preflight/results.jsonl] --native native.json --result result.json
     python gemm_slowdown.py sample --pgid PGID --out others.txt [--every 30]   # cores busy outside process group PGID (overlapping Builds)
     python gemm_slowdown.py point --slowdown slowdown.json --config C --result result.json   # one (phase, config) row of an attempt
 
@@ -34,7 +34,8 @@ LAYER = [("qkv", 3072, 2048), ("o", 2048, 2048), ("gate_up", 16384, 2048), ("dow
 LM_HEAD = ("lm_head", 128256, 2048)
 PREFILL_M = 256
 DECODE_M = (1, 2, 4, 8)
-GATE_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial")
+#: the preflight check's GPU selftest cases (each a byte equality), which every GEMM coordinate it proves must pass
+PREFLIGHT_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial")
 
 
 CONFIGS = {"llama32-1b.prefill.M256": ("prefill", None), "256x16384x2048": ("prefill", (256, 16384, 2048)),
@@ -113,8 +114,9 @@ def per_coordinate(sweep: Path) -> dict[int, dict]:
     return out
 
 
-def gate(path: Path | None, shapes_needed: int = 2) -> dict:
-    """Byte identity: every GEMM coordinate's GPU cases pass (equal proofs and transcripts), for at least ``shapes_needed`` of them."""
+def preflight(path: Path | None, shapes_needed: int = 2) -> dict:
+    """The preflight check's byte identity: every GEMM coordinate's GPU cases pass (equal proofs and transcripts), for at least
+    ``shapes_needed`` of them."""
     if path is None or not path.exists():
         return {"status": "not_run"}
     shapes, ok = {}, True
@@ -124,9 +126,11 @@ def gate(path: Path | None, shapes_needed: int = 2) -> dict:
         r = json.loads(ln)
         st = r.get("selftest") or {}
         cases = {c.get("case"): c for c in st.get("gpu_cases", [])}
-        good = all((cases.get(c) or {}).get("pass") is True for c in GATE_CASES)
+        good = all((cases.get(c) or {}).get("pass") is True for c in PREFLIGHT_CASES)
+        # a case whose process ended without its verdict (timed out, killed, out of memory) fails the check but is no verdict
         shapes[r.get("definition")] = {"pass": good, "digest": ((r.get("live") or {}).get("statement_digest")),
-                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in GATE_CASES}}
+                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in PREFLIGHT_CASES}} | \
+            ({"did_not_finish": st["did_not_finish"]} if st.get("did_not_finish") else {})
         ok &= good
     ok &= len(shapes) >= shapes_needed
     return {"status": "passed" if ok else "failed", "shapes": shapes}
@@ -135,7 +139,7 @@ def gate(path: Path | None, shapes_needed: int = 2) -> dict:
 def compute(a) -> None:
     pc = per_coordinate(Path(a.sweep))
     nat = json.loads(Path(a.native).read_text())
-    g = gate(Path(a.gate) if a.gate else None)
+    g = preflight(Path(a.preflight) if a.preflight else None)
     res = {}
     for ph, gemms in phases().items():
         prover = prove_only = nat_s = 0.0
@@ -161,15 +165,15 @@ def compute(a) -> None:
     out = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"gpu": nat.get("gpu"), "sm": nat.get("sm"), "torch": nat.get("torch"),
                                     "digests": {k: v["statement_digest"] for k, v in pc.items()}},
-           "validation": {"status": g["status"], "checker": "byte identity: " + ", ".join(GATE_CASES),
-                          "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/gate/classes/results.jsonl"]},
+           "validation": {"status": g["status"], "checker": "byte identity: " + ", ".join(PREFLIGHT_CASES),
+                          "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/preflight/classes/results.jsonl"]},
            "measurements": [{"name": f"{ph}_slowdown", "value": v["slowdown"], "unit": "x"} for ph, v in res.items() if "slowdown" in v]
                            + [{"name": f"{ph}_slowdown_prove_only", "value": v["slowdown_prove_only"], "unit": "x"} for ph, v in res.items() if "slowdown" in v]
                            + [{"name": f"s_per_coord_K{k}", "value": v["s_per_coord"], "unit": "s"} for k, v in pc.items()],
            "measurement_files": ["out/slowdown.json", "out/native.json", "out/m34/classes/results.jsonl"]}
     Path(a.result).parent.mkdir(parents=True, exist_ok=True)
     (Path(a.result).parent / "out" / "slowdown.json").write_text(json.dumps({"phases": res, "configs": configs, "per_coordinate": pc, "native": nat,
-                                                                          "gate": g}, indent=1))
+                                                                          "preflight": g}, indent=1))
     tmp = Path(a.result).with_suffix(".tmp")
     tmp.write_text(json.dumps(out, indent=1))
     os.replace(tmp, a.result)
@@ -177,19 +181,20 @@ def compute(a) -> None:
 
 
 def point(a) -> None:
-    """One (phase, config) row of an attempt, as its own result: the overhead, the gate, and where it came from."""
+    """One (phase, config) row of an attempt, as its own result: the overhead, the preflight check, and where it came from."""
     d = json.loads(Path(a.slowdown).read_text())
+    pf = d.get("preflight") or d["gate"]                  # older slowdown.json files keep it under "gate"
     c = d["configs"][a.config]
     out = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"config": a.config, "phase": c["phase"], "from_run": a.from_run, "gpu": d["native"].get("gpu")},
-           "validation": {"status": d["gate"]["status"], "checker": "the measuring run's byte identity", "detail": a.from_run or ""},
+           "validation": {"status": pf["status"], "checker": "the measuring run's byte identity", "detail": a.from_run or ""},
            "measurements": [{"name": "overhead", "value": c["slowdown"], "unit": "x-native"},
                             {"name": "overhead_prove_only", "value": c["slowdown_prove_only"], "unit": "x-native"},
                             {"name": "prover_s", "value": c["prover_s"], "unit": "s"}, {"name": "native_s", "value": c["native_s"], "unit": "s"}]}
     tmp = Path(a.result).with_suffix(".tmp")
     tmp.write_text(json.dumps(out, indent=1))
     os.replace(tmp, a.result)
-    print(a.config, c["phase"], f"{c['slowdown']:.4g}", d["gate"]["status"])
+    print(a.config, c["phase"], f"{c['slowdown']:.4g}", pf["status"])
 
 
 def sample(a) -> None:
@@ -233,7 +238,7 @@ def main() -> None:
     n.add_argument("--trials", type=int, default=5)
     c = sub.add_parser("compute")
     c.add_argument("--sweep", required=True)
-    c.add_argument("--gate")
+    c.add_argument("--preflight", "--gate", dest="preflight")    # --gate: its old name
     c.add_argument("--native", required=True)
     c.add_argument("--result", required=True)
     pt = sub.add_parser("point")

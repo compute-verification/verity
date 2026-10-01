@@ -6,7 +6,7 @@ import FlockSoundness.LinkFinder
 
 The batched audit's link term (`analysisBE`) is discharged here for the plurality value layer,
 under expected-time collision resistance of SHA-512 for an explicit finder
-(`Assumptions.SHA512ExpectedTimeCR`) and the binding of wires to commit strings (`ValueBinding`,
+(`Assumptions.SHA512CRExpected`) and the binding of wires to commit strings (`ValueBinding`,
 named).
 
 * **The binding** (`ValueBinding`): each wire is held by a commit string (a leaf under the serving
@@ -484,7 +484,7 @@ theorem readsAt_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsDraw plan tab v
 `2t'(1 + k)/2^256 + 1/(eM)`. -/
 theorem trial_mass_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (P.Ωc plan tab vb L c)]
-    (hCR : Assumptions.SHA512ExpectedTimeCR Hc (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
+    (hCR : Assumptions.SHA512CRExpected Hc (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
       (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
       (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))) :
     expect (trialVal plan R (P.psi H E plan tab vb R τ k Rw c))
@@ -519,7 +519,7 @@ plurality, jointly with acceptance and averaged over the draw, is at most `π c`
 bound plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_mass_le (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t')
     (c : vb.Pos)
-    (hCR : ∀ _ : Nonempty (P.Ωc plan tab vb L c), Assumptions.SHA512ExpectedTimeCR Hc
+    (hCR : ∀ _ : Nonempty (P.Ωc plan tab vb L c), Assumptions.SHA512CRExpected Hc
       (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
       (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
       (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))) :
@@ -648,12 +648,12 @@ theorem avg_ofReal {Cc : Type} [Fintype Cc] [Nonempty Cc] (f : Cc → ℝ) (hf :
   refine Finset.sum_congr rfl fun c _ => ?_
   rw [ENNReal.ofReal_mul (hf c), ENNReal.ofReal_inv_of_pos hc, ENNReal.ofReal_natCast, mul_comm]
 
-/-- **A2 for one prover's link finders** (`Assumptions.SHA512ExpectedTimeCR`): at the registration `R` and the
+/-- **A2 for one prover's link finders** (`Assumptions.SHA512CRExpected`): at the registration `R` and the
 prover's continuation `τ`, for the finder built for each commit string a draw can read. A2 is a hypothesis about one
 finder, since some finder outputs a collision after no evaluations: a prover that hard-codes two openings of one commit
 string has link finders that find one. So the link theorem asks A2 only of the finders of the prover it bounds. -/
 def LinkCR (k Rw M : ℕ) (t' : ℝ) : Prop :=
-  ∀ (c : vb.Pos) (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
+  ∀ (c : vb.Pos) (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512CRExpected Hc
     (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
     (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
     (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))

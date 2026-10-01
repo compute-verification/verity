@@ -174,7 +174,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
-  `verity_one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+  `verity_sampled_proofs.one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different transcripts that both have a wrong unit, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
@@ -241,8 +241,9 @@ The hypotheses are the lowerings.
 
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
-computed row. "Each template's rows compute its gates" in the program's Boolean circuit is L1 (`../../ASSUMPTIONS.md`), named and
-tested. The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
+computed row. No hypothesis relates those rows to another circuit (Daniel, Sep 30: the circuit is chosen on the untrusted side,
+and the lowering does no optimizing); what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
+`../Certificate.lean`; `../../ASSUMPTIONS.md`). The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
 The compiled layer's named hypotheses are stated there too.

@@ -4,6 +4,7 @@
     dispatch.py tick [--dry-run]      one pass: advance chains, requeue exit 99, top every queue up from the ready files
     dispatch.py loop [--every 60]     tick forever (tmux `node1-dispatch` on the server, as research)
     dispatch.py status                queues, this dispatcher's jobs, GPU-busy and CPU-busy (DCGM / node-exporter, 10 and 60 min)
+    dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
 Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/python`) and research's kubeconfig.
 
@@ -12,8 +13,13 @@ it by quota and requeues it itself when it is preempted). The Job runs the task'
 image's uid 1000, with /workspace mounted, and the R2 store credentials from the Secret `research-r2` (the templates' `secrets`).
 Tasks of a multi-task template (config-run: build, then gpu) chain: the next task is submitted when the previous one succeeds.
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
-Every task starts under `taskset -c $VY_DISPATCH_CPUS` (96-159): 0-7 are k3s's, 8-95 the RC's three train-check slots, 160-191
-pinned benches (Build and M0 benches, which run one at a time; infra 21:36Z).
+An item is pinned to its template's content at its first submit: the item carries `template_sha` (the `name@sha` its submit event
+logs) and a copy is kept at `$VY_DISPATCH_ROOT/templates.by-sha/<sha>/<template>.yaml`. Every later task, resubmission and spooled
+Commit of its chain renders from that copy, never from the live `sky/jobs/`, so a template refreshed mid-chain applies only to items
+submitted after it. A Job whose pinned copy is gone is held (left unseen, printed each tick), never chained on another template.
+Every task starts under `taskset -c`: a `provers` task on $VY_PROVER_CPUS (128-175, three 16-core slices: the floor of 2 GPUs plus 1
+borrowed), every other task on $VY_DISPATCH_CPUS (96-127,176-191), so vLLM jobs never run on a prover's slice (Daniel 1 Oct 01:35Z;
+note:20261001T0137Z-handoff-from-proofs-flock-fp-vllm-jobs-on-prover-slices). 0-7 are k3s's, 8-95 the RC's three train-check slots.
 
 **Ready files.** One JSON file per item, `$VY_READY/<workstream>/<id>.json` (default /workspace/jobs/ready, which the steward's
 exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the workstream's owner (write a temp name, then rename):
@@ -38,6 +44,8 @@ the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can releas
 At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
 
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
+Both are append-only: a wrong outcome is corrected by a later `done.jsonl` line for the key (and an `ev: correct` log line) that
+names the line it corrects in `corrects` and cites its evidence; an item's outcome is its last `done.jsonl` line (`status`).
 Inside the Job, the template's own `research run` writes the Attempt.
 
 **Packing (PACK_COMMITS=1; default 0).** config-run's gpu task of an eligible item (`packable`: TP1, a model of <= 4B on
@@ -50,11 +58,49 @@ out as a normal Job), and the pilot claims nothing. Their `results/` come back i
 chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
 resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
 Entries claimed by a pod that is gone count as a fault. Rollback: PACK_COMMITS=0, then let the pods finish or delete them.
+A packed Commit's replay task is judged (circuits' yes, 10:55 PM PDT Sep 30): it passes only when it exits 0 and the row's
+`config_record.json`, written by that replay, is outcome PASS with replay k = evaluated = equal = 460 and nothing mismatched or
+unevaluated (`packed_replay`: `commit-replay` exits 0 on a PASS that carries a named gap, so the exit alone is not enough).
+Anything short ends the item failed and stops packing for its model (`stop_model`): an entry in `$PACK_SPOOL/stopped-models.json`
+(append-only, the last entry per model decides), an `ev: pack-stop` line and an alert note for node1-dispatcher in PACK_ALERT_DIR
+(the steward's alert_pull.sh delivers it), after which `packable` refuses the model. Only circuits lifts a stop
+(`dispatch.py pack-lift MODEL --by circuits ...`). Each packed Commit's Attempt is labelled `ov.mps_packed` by its pilot.
+From 12:10Z to the quiet hour's end (13:30Z; Kueue holds node 1's queues at 12:10Z) nothing is spooled, adopted or started: queued
+entries go back out as normal Jobs, pack Jobs not yet started are deleted, and from 12:33Z any pack Job still active is deleted, so
+its Commits requeue unpacked (the pilot itself drains at 12:28Z).
+
+**Spilling to node 2 (while `$VY_DISPATCH_ROOT/n2-spill.on` exists).** A GPU Job of this dispatcher that Kueue has held
+VY_N2_SPILL_WAIT_S (120 s) without ever starting it, whose item carries an `n2` block, goes to vy-nebius-2's fill queue when
+node 2's fill runner would start it now: a GPU whose gpu-lease lock is free, not in its keep-free, no Commit, pous or
+higher-prio Verity GPU job queued for it, 2+ GPUs free (the runner's rule for Verity GPU jobs), no timed window running or
+waiting, and no booked window within the block's max_min. At most one per tick, never in node 1's hold (12:10-13:30Z):
+
+    "n2": {"cmd": "...", "owner": "bc-...", "max_min": 25, "gpus": 1, "cpus": 16, "mem_gb": 96, "prio": 5, "pool": "provers",
+           "cpuset": "160-175", "on": "0-3", "cwd": "/..."}      (cmd, owner and max_min (<= 30) required; gpus 1)
+
+The fill job (`n2spill-<Job>.sh`) runs `bash -c cmd` (`pool: provers`: under /usr/local/bin/vy-provers, with VY_PROVERS_CPUS
+= `cpuset` when given) with N2_SPILL_ITEM (the item's JSON on node 2), N2_SPILL_KEY, N2_SPILL_JOB and N2_SPILL_TASK set. The
+Kueue workload is deactivated (spec.active=false, only at the resourceVersion that showed it unadmitted), and the spill is
+recorded in `<root>/n2-spill/<Job>.json` and an `ev: n2-spill` log line. Each tick reads node 2's `result.json` for every
+outstanding spill: exit 0 ends the task as the Job would have (the Job is deleted, the chain continues); any other exit, a third
+start (it was stopped twice), or a fill job gone from node 2 without a result reactivates the workload, so node 1 runs it
+(`ev: n2-spill-back`). Rollback: remove the flag; outstanding spills still resolve.
+
+**The queue's placement (while `$VY_DISPATCH_ROOT/place.on` exists).** After `submit` creates a Job of a workstream in
+VY_PLACE_WORKSTREAMS (circuits' `vllm-epoch-run`; circuits' yes, 1 Oct 5:15 AM PDT), it asks the queue
+(`cluster submit` from $VY_QUEUE_SRC, default /workspace/verity-guest/cluster-src) where that Job would go, with the Job's
+requests and its research question, and appends the answer to $VY_PLACED (/workspace/verity-guest/placed.jsonl,
+`executor: kueue`). The question is the item's `question`, else its key family's kind in the queue's `kinds/circuits.toml`
+(the first kind one of whose `keys` globs matches the item id). It only records: the Job is rendered and created before
+the queue is asked, so its spec, env and tree never depend on the answer, and a queue that refuses or doesn't answer is
+recorded as such. Rollback: remove the flag.
 """
 from __future__ import annotations
 
 import argparse
 import ast
+import calendar
+import fnmatch
 import hashlib
 import json
 import os
@@ -64,16 +110,20 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 import urllib.parse
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
+PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
-CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-159")
+CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-127,176-191")
+PROVER_CPUS = os.environ.get("VY_PROVER_CPUS", "128-175")
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 SECRET = "research-r2"
 REQUEUE_RC = 99
@@ -90,10 +140,32 @@ PACK = Path(os.environ.get("PACK_SPOOL", str(ROOT / "pack")))
 PACK_PODS = int(os.environ.get("PACK_PODS", "1"))
 PACK_SLOTS = 3
 PACK_TEMPLATE = "commit-pack"
-PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b")
+PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b",
+               # a model joins only once a packed twin's run root equals its unpacked row's
+               "qwen3-06b", "qwen25-05b-instruct", "falcon3-1b", "qwen25-coder-15b", "r1-distill-qwen-15b", "qwen3-17b", "smollm2-17b",
+               "qwen25-3b", "llama32-3b")
 PACK_MAX_BATCH = 8
 PACK_DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
+PACK_REPLAY_K = 460
+PACK_ALERTS = Path(os.environ.get("PACK_ALERT_DIR", "/workspace/monitoring/alerts/outbox"))
 QUIET = ((12, 30), (13, 30))
+PACK_HOLD = ((12, 10), QUIET[1])     # node 1's daily quota cutover and quiet hour: Kueue holds every queue at 12:10Z
+PACK_DRAIN = (12, 33)                # pack pods must be gone by 12:35Z
+N2 = os.environ.get("VY_N2", "vy-n2")
+SPILL = ROOT / "n2-spill"
+SPILL_FLAG = Path(os.environ.get("VY_N2_SPILL_FLAG", str(ROOT / "n2-spill.on")))
+SPILL_WAIT_S = int(os.environ.get("VY_N2_SPILL_WAIT_S", "120"))
+SPILL_TRIES = 2
+SPILL_SLACK_MIN = 2                  # node 2's runner starts a queued job at its own poll, a little after this tick
+N2_FILL = os.environ.get("VY_N2_FILL", "/workspace/pouw/fill")
+N2_LEASES = "/run/gpu-lease"
+N2_SPILL = os.environ.get("VY_N2_SPILL_DIR", "/workspace/verity-guest/spill")
+VY_PROVERS = "/usr/local/bin/vy-provers"
+PLACE_FLAG = Path(os.environ.get("VY_DISPATCH_PLACE_FLAG", str(ROOT / "place.on")))
+QUEUE_SRC = Path(os.environ.get("VY_QUEUE_SRC", "/workspace/verity-guest/cluster-src"))
+PLACED = Path(os.environ.get("VY_PLACED", "/workspace/verity-guest/placed.jsonl"))
+PLACE_TIMEOUT_S = 30
+PLACE_WORKSTREAMS = {w for w in os.environ.get("VY_PLACE_WORKSTREAMS", "vllm-epoch-run").split(",") if w}
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -113,14 +185,52 @@ def append(name: str, rec: dict) -> None:
         f.write(json.dumps({"t": now_utc(), **rec}, sort_keys=True) + "\n")
 
 
-def load_template(name: str) -> tuple[list[dict], str]:
+def template_sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+
+def load_template(name: str, sha: str | None = None) -> tuple[list[dict], str]:
+    """The template's tasks and sha: sky/jobs/<name>.yaml as it is now, or with `sha` exactly that content (its pinned copy, else
+    the live file while it still hashes to `sha`)."""
     import yaml
 
-    path = TEMPLATES / f"{name}.yaml"
-    text = path.read_text()
+    live = TEMPLATES / f"{name}.yaml"
+    if sha is None:
+        text = live.read_text()
+    else:
+        text = next((t for t in (p.read_text() for p in (PINNED / sha / f"{name}.yaml", live) if p.is_file())
+                     if template_sha(t) == sha), None)
+        if text is None:
+            raise ValueError(f"template {name}@{sha}: no copy in {PINNED / sha}, and sky/jobs/{name}.yaml has other content")
     docs = [d for d in yaml.safe_load_all(text) if d]
     tasks = [d for d in docs if "run" in d] if len(docs) > 1 else docs
-    return tasks, hashlib.sha256(text.encode()).hexdigest()[:12]
+    return tasks, template_sha(text)
+
+
+def pin(item: dict, dry: bool = False) -> dict:
+    """The item pinned to its template as it is now, keeping a copy under PINNED (an item's first submit); a pinned item as is."""
+    if item.get("template_sha") is not None:
+        return item
+    text = (TEMPLATES / f"{item['template']}.yaml").read_text()
+    sha = template_sha(text)
+    dst = PINNED / sha / f"{item['template']}.yaml"
+    if not dry and not dst.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+        tmp.write_text(text)
+        tmp.rename(dst)
+    return {**item, "template_sha": sha}
+
+
+def pinned_item(item: dict, template: str) -> dict:
+    """`item` pinned to `template` (a Job's or spool entry's `name@sha`): Jobs rendered before pinning carry it only there."""
+    return item if item.get("template_sha") is not None else {**item, "template_sha": template.rpartition("@")[2]}
+
+
+def job_item(job: dict) -> dict:
+    """The item a Job was rendered from, pinned to that Job's template."""
+    a = job["metadata"]["annotations"]
+    return pinned_item(json.loads(a["verity.dev/item-json"]), a.get("verity.dev/template", ""))
 
 
 def dns(s: str, n: int) -> str:
@@ -156,8 +266,8 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
 
 
 def render(item: dict, key: str, idx: int, tries: int) -> dict:
-    """The batch/v1 Job for task `idx` of the item's template."""
-    tasks, tsha = load_template(item["template"])
+    """The batch/v1 Job for task `idx` of the item's template (its pinned content, when the item is pinned)."""
+    tasks, tsha = load_template(item["template"], item.get("template_sha"))
     task = tasks[idx]
     cpus, mem, gpus = task_resources(item, task, idx, len(tasks))
     envs = {k: v for k, v in (task.get("envs") or {}).items()}
@@ -213,7 +323,7 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
                                               .get("spec") or {}).get("terminationGracePeriodSeconds", 300)),
         "containers": [{
             "name": "main", "image": IMAGE, "imagePullPolicy": "IfNotPresent",
-            "command": ["taskset", "-c", CPUS, "bash", "-c", script],
+            "command": ["taskset", "-c", PROVER_CPUS if queue == "provers" else CPUS, "bash", "-c", script],
             "env": [{"name": k, "value": str(v)} for k, v in sorted(envs.items())],
             "envFrom": [{"secretRef": {"name": SECRET}}],
             "resources": {"requests": requests, **({"limits": limits} if limits else {})},
@@ -233,8 +343,10 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
         "metadata": {"name": name, "labels": labels,
                      "annotations": {"verity.dev/item": key, "verity.dev/template": f"{item['template']}@{tsha}",
                                      "verity.dev/item-json": json.dumps(item, sort_keys=True)}},
-        # the pods carry no kueue.x-k8s.io labels: Kueue manages the Job, and its plain-pod integration must not take them too
-        "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 6 * 3600,
+        # the pods carry no kueue.x-k8s.io labels: Kueue manages the Job, and its plain-pod integration must not take them too.
+        # podReplacementPolicy Failed: a Job Kueue preempts and resumes starts its next pod only once the old one has ended, never
+        # beside it in the same row (note:20261001T0026Z-finding-from-mps-pack-preempted-commit-runs-twice)
+        "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 6 * 3600, "podReplacementPolicy": "Failed",
                  "template": {"metadata": {"labels": {k: v for k, v in labels.items() if not k.startswith("kueue.x-k8s.io/")}},
                               "spec": pod_spec}},
     }
@@ -250,7 +362,66 @@ def lease_mode(item: dict, key: str) -> str | None:
     return "wrap" if f"{key.split('/')[0]}/{item['template']}" in classes else None
 
 
+def kind_of(key: str) -> dict:
+    """The kind in the queue's kinds/circuits.toml whose `keys` globs first match the item id, with its name; {} for none."""
+    try:
+        kinds = tomllib.loads((QUEUE_SRC / "kinds" / "circuits.toml").read_text()).get("kinds", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    stem = key.split("/")[-1]
+    for name, d in kinds.items():
+        if any(fnmatch.fnmatchcase(stem, g) for g in d.get("keys", ())):
+            return {"name": name, **d}
+    return {}
+
+
+def quantity(v, unit: float) -> float:
+    """A Kubernetes quantity ("500m", "8", "64Gi", "96G") in `unit` (1 for CPUs, 1e9 for GB)."""
+    s = str(v)
+    for suffix, mult in (("m", 1e-3), ("Ki", 2**10), ("Mi", 2**20), ("Gi", 2**30), ("Ti", 2**40), ("k", 1e3), ("M", 1e6),
+                         ("G", 1e9), ("T", 1e12)):
+        if s.endswith(suffix):
+            return float(s[:-len(suffix)]) * mult / unit
+    return float(s) / unit
+
+
+def place(item: dict, key: str, job: dict) -> dict:
+    """The queue's placement of a created Job, appended to PLACED; never raises (a failure is the row's `refused` or `error`)."""
+    req = job["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
+    kind = kind_of(key)
+    question = str(item.get("question") or kind.get("question") or "")
+    row = {"t": now_utc(), "kind": "dispatch", "key": key, "job": job["metadata"]["name"], "family": kind.get("name"),
+           "queue": job["metadata"]["labels"].get("kueue.x-k8s.io/queue-name"), "question": question, "executor": "kueue"}
+    cmd = [sys.executable, "-m", "cluster", "submit", str(QUEUE_SRC / "descriptions" / "nebius.toml"),
+           "--run-id", row["job"], "--now", str(int(time.time())), "--project", "verity", "--submitter", "circuits",
+           "--question", question, "--gpus", str(int(quantity(req.get("nvidia.com/gpu", 0), 1))),
+           "--cpus", str(max(1, round(quantity(req.get("cpu", 1), 1)))),
+           "--mem-gb", str(max(1, round(quantity(req.get("memory", "1G"), 1e9)))), "--preempt", "requeue", "--node", SERVER]
+    if kind:
+        cmd += ["--kind", kind["name"]]
+    if job["spec"].get("activeDeadlineSeconds"):
+        cmd += ["--max-s", str(job["spec"]["activeDeadlineSeconds"])]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=PLACE_TIMEOUT_S,
+                           env={**os.environ, "PYTHONPATH": str(QUEUE_SRC / "src")})
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+        if "refused" in out:
+            row["refused"] = out["refused"]
+        else:
+            row.update(node=out.get("node"), why=out.get("why"), question=out.get("question") or question)
+    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError) as e:
+        row["error"] = f"the queue gave no placement: {type(e).__name__}"
+    try:
+        PLACED.parent.mkdir(parents=True, exist_ok=True)
+        with open(PLACED, "a") as f:
+            f.write(json.dumps(row) + "\n")
+    except OSError as e:
+        print(f"placed.jsonl: {e}", file=sys.stderr)
+    return row
+
+
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
+    item = pin(item, dry)
     job = render(item, key, idx, tries)
     name = job["metadata"]["name"]
     if dry:
@@ -264,6 +435,8 @@ def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False
                          "template": job["metadata"]["annotations"]["verity.dev/template"], "tree": item["tree"],
                          "requests": c["resources"]["requests"]})
     print(f"submitted {name} ({key} task {idx} try {tries})")
+    if PLACE_FLAG.exists() and key.split("/")[0] in PLACE_WORKSTREAMS:
+        place(item, key, job)
     return name
 
 
@@ -272,13 +445,104 @@ def quiet(t: float | None = None) -> bool:
     return QUIET[0] <= (g.tm_hour, g.tm_min) < QUIET[1]
 
 
+def held(t: float | None = None) -> bool:
+    g = time.gmtime(time.time() if t is None else t)
+    return PACK_HOLD[0] <= (g.tm_hour, g.tm_min) < PACK_HOLD[1]
+
+
+def draining(t: float | None = None) -> bool:
+    g = time.gmtime(time.time() if t is None else t)
+    return PACK_DRAIN <= (g.tm_hour, g.tm_min) < PACK_HOLD[1]
+
+
+def model_of(item: dict) -> str:
+    return str((item.get("env") or {}).get("ROW", "")).split("__")[0]
+
+
+def stops_file() -> Path:
+    return PACK / "stopped-models.json"
+
+
+def stop_entries() -> list[dict]:
+    """The stop list's entries, oldest first ([] when there is none); raises when the file can't be read as a list."""
+    p = stops_file()
+    if not p.exists():
+        return []
+    entries = json.loads(p.read_text())
+    if not isinstance(entries, list):
+        raise ValueError(f"{p} is not a JSON list")
+    return entries
+
+
+def stopped_models() -> dict[str, dict] | None:
+    """{model: its stop entry} for every model whose last entry is a stop, or None when the list can't be read."""
+    try:
+        entries = stop_entries()
+    except (OSError, ValueError):
+        return None
+    out: dict[str, dict] = {}
+    for e in entries:
+        if e.get("lift"):
+            out.pop(e.get("model"), None)
+        else:
+            out[e.get("model")] = e
+    return out
+
+
+def append_stop(entry: dict) -> None:
+    pack_tree()
+    entries = stop_entries()
+    p = stops_file()
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps([*entries, {"t": now_utc(), **entry}], indent=1, sort_keys=True) + "\n")
+    tmp.rename(p)
+
+
+def stop_model(model: str, key: str, run: str | None, reason: str, **extra) -> None:
+    """Stop packing `model`: a stop entry, an `ev: pack-stop` line and an alert note for node1-dispatcher."""
+    try:
+        append_stop({"model": model, "key": key, "run": run, "reason": reason, **extra})
+    except (OSError, ValueError) as e:     # an unreadable list already stops every model (packable)
+        extra = {**extra, "unrecorded": str(e)}
+    append("log.jsonl", {"ev": "pack-stop", "model": model, "key": key, "run": run, "reason": reason, **extra})
+    print(f"pack-stop {model}: {reason} ({key})", file=sys.stderr)
+    stamp = time.strftime("%Y%m%dT%H%MZ", time.gmtime())
+    stem = f"{stamp}-alert-pack-stop-{dns(model, 40)}-{hashlib.sha256(key.encode()).hexdigest()[:8]}"
+    facts = "\n".join(f"- **{k}:** {v}" for k, v in (("Item", f"`{key}`"), ("Runs", f"replay `{run}`, Commit `{extra.get('commit_run')}`"),
+                                                       ("Pack pod", f"`{extra.get('pod')}`"), ("Replay Job", f"`{extra.get('job')}`")))
+    note = (f"---\nid: {stem}\ncampaign: one-pool\nlane: node1-dispatcher\nkind: finding\nstatus: open\nrepo: danielreuter/verity\n"
+            f"origin: node 1's dispatcher (dispatch.py stop_model; MPS Commit packing, circuits' rule of 10:55 PM PDT Sep 30)\n---\n\n"
+            f"# MPS packing stopped for {model}: a packed Commit's replay failed\n\n{facts}\n- **Why:** {reason}\n"
+            f"- **Effect:** the item ended failed, and `packable` refuses {model} from now on (`{stops_file()}`). Other models still pack.\n"
+            f"- **Lift (circuits only):** on node 1, `cd /workspace/jobs/dispatch/infra/nebius && /workspace/jobs/venv312/bin/python "
+            f"dispatch.py pack-lift {model} --by circuits --why '...'`\n")
+    try:
+        PACK_ALERTS.mkdir(parents=True, exist_ok=True)
+        tmp = PACK_ALERTS / f".{stem}.md.tmp"
+        tmp.write_text(note)
+        tmp.rename(PACK_ALERTS / f"{stem}.md")
+    except OSError as e:
+        append("log.jsonl", {"ev": "pack-stop-alert-failed", "model": model, "key": key, "why": str(e)})
+        print(f"pack-stop {model}: no alert note in {PACK_ALERTS}: {e}", file=sys.stderr)
+
+
+def lift_model(model: str, by: str, why: str) -> None:
+    if not by.startswith("circuits"):
+        raise SystemExit(f"only circuits lifts a packing stop (--by {by!r})")
+    if model not in (stopped_models() or {}):
+        raise SystemExit(f"{model!r} is not stopped")
+    append_stop({"model": model, "lift": True, "by": by, "why": why})
+    append("log.jsonl", {"ev": "pack-lift", "model": model, "by": by, "why": why})
+    print(f"lifted the packing stop on {model}")
+
+
 def packable(item: dict, key: str, idx: int) -> str | None:
     """Why task `idx` of the item isn't packed, or None when it is (the cutover plan's eligibility)."""
     if item.get("template") != "config-run":
         return "not a config-run"
     if lease_mode(item, key):
         return "leased (its GPU comes from gpu-lease)"
-    tasks, _ = load_template(item["template"])
+    tasks, _ = load_template(item["template"], item.get("template_sha"))
     if (tasks[idx].get("name") or "") != "gpu":
         return "not the gpu task"
     if item.get("unpacked"):
@@ -289,6 +553,11 @@ def packable(item: dict, key: str, idx: int) -> str | None:
     parts = str(env.get("ROW", "")).split("__")
     if parts[0] not in PACK_MODELS:
         return f"model {parts[0]!r} is not on the packing list"
+    stops = stopped_models()
+    if stops is None:
+        return f"the packing stop list {stops_file()} can't be read"
+    if parts[0] in stops:
+        return f"model {parts[0]!r} stopped packing: {stops[parts[0]].get('reason')} (only circuits lifts it: dispatch.py pack-lift)"
     if "tp1" not in parts:
         return "not TP1"
     batch = next((int(p[1:]) for p in parts if re.fullmatch(r"b\d+", p)), None)
@@ -307,6 +576,7 @@ def packable(item: dict, key: str, idx: int) -> str | None:
 
 def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
     """Queue task `idx` for a commit-pack pod: the Job it would be, as its env and script."""
+    item = pin(item, dry)
     job = render(item, key, idx, tries)
     name = job["metadata"]["name"]
     c = job["spec"]["template"]["spec"]["containers"][0]
@@ -342,9 +612,58 @@ def disk_full() -> bool:
 
 
 def route(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
-    if PACK_COMMITS and packable(item, key, idx) is None and not disk_full():
+    if PACK_COMMITS and not held() and packable(item, key, idx) is None and not disk_full():
         return spool(item, key, idx, tries, dry)
     return submit(item, key, idx, tries, dry)
+
+
+def row_dir(job: dict) -> Path:
+    env = {e["name"]: e["value"] for e in job["spec"]["template"]["spec"]["containers"][0].get("env") or []}
+    return Path(env.get("SWEEP_DIR", "")) / env.get("ROW", "")
+
+
+def packed_replay(job: dict, state: str, rc: int | None) -> tuple[str | None, dict]:
+    """(why a packed Commit's ended replay task falls short of 460/460, else None; the record's replay counts). It passes only when it
+    exited 0 and the row's config_record.json, written since the Job started, is PASS with k = evaluated = equal = PACK_REPLAY_K and
+    nothing mismatched or unevaluated."""
+    rec_path = row_dir(job) / "config_record.json"
+    try:
+        started = (job.get("status") or {}).get("startTime")
+        if started and rec_path.stat().st_mtime < calendar.timegm(time.strptime(started, "%Y-%m-%dT%H:%M:%SZ")):
+            raise ValueError(f"it predates the replay Job (started {started}): this replay wrote no record")
+        rec = json.loads(rec_path.read_text())
+    except (OSError, ValueError) as e:
+        rec, err = {}, f"no config_record.json of this replay ({e})"
+    else:
+        err = None
+    rp = rec.get("replay") or {}
+    counts = {"outcome": rec.get("outcome"), **{k: rp.get(k) for k in ("k", "evaluated", "equal", "mismatch_n", "not_evaluated_n")}}
+    k = PACK_REPLAY_K
+    if state != "succeeded":
+        return f"the replay task failed (rc {rc})", counts
+    if err:
+        return err, counts
+    if (rec.get("outcome"), rp.get("k"), rp.get("evaluated"), rp.get("equal")) == ("PASS", k, k, k) \
+            and not rp.get("mismatch_n") and not rp.get("not_evaluated_n"):
+        return None, counts
+    return (f"replay {rp.get('equal')}/{rp.get('evaluated')} equal of k={rp.get('k')} (mismatch {rp.get('mismatch_n')}, not evaluated "
+            f"{rp.get('not_evaluated_n')}, grade {rp.get('grade')}), outcome {rec.get('outcome')}: packing needs {k}/{k} and PASS"), counts
+
+
+def run_ids(job: dict, pod_list: list[dict]) -> tuple[str | None, str | None]:
+    """(the replay's research run id, from its pod's log; the Commit's, from <row>/pipeline-commit-run), None where unknown."""
+    try:
+        commit = (row_dir(job) / "pipeline-commit-run").read_text().strip() or None
+    except OSError:
+        commit = None
+    replay = None
+    for p in pod_list:
+        try:
+            m = re.search(r"research: run (\S+) ->", kubectl("logs", p["metadata"]["name"], "--limit-bytes=1000000"))
+        except RuntimeError:
+            continue
+        replay = m.group(1) if m else replay
+    return replay, commit
 
 
 def pack_keys() -> set[str]:
@@ -382,15 +701,21 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
         res = json.loads(r.read_text())
         entry = res["entry"]
         item, key, idx, tries, rc = entry["item"], entry["key"], entry["idx"], entry["tries"], res.get("rc")
+        item = pinned_item(item, entry.get("template", ""))
+        try:
+            ntasks = len(load_template(item["template"], item["template_sha"])[0])
+        except (OSError, ValueError) as e:
+            print(f"held {r.name} ({key}): {e}", file=sys.stderr)
+            continue
         if dry:
-            print(f"would read back {r.name}: rc {rc} fault {res.get('fault')}")
+            print(f"would read back {r.name}: rc {rc} fault {res.get('fault')}, on {item['template']}@{item['template_sha']}")
             continue
         append("log.jsonl", {"ev": "end", "job": entry["job"], "key": key, "task": idx, "try": tries,
                              "state": "succeeded" if rc == 0 else "failed", "rc": rc, "wall_s": res.get("wall_s"),
-                             "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason")})
-        ntasks = len(load_template(item["template"])[0])
+                             "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason"),
+                             "label": res.get("label")})
         if rc == 0 and idx + 1 < ntasks:
-            route(item, key, idx + 1, 0)
+            route({**item, "packed": res.get("pod")}, key, idx + 1, 0)     # its replay is judged by circuits' 460/460 rule (tick)
         elif rc == REQUEUE_RC and not res.get("fault") and tries + 1 < MAX_TRIES:
             route(item, key, idx, tries + 1)
         elif rc != 0 and not item.get("unpacked"):
@@ -407,7 +732,7 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
 
 def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
     """Move still-suspended gpu Jobs of eligible items into the spool, keeping it at most two pods' slots deep."""
-    if disk_full():
+    if disk_full() or held():
         return
     room = 2 * PACK_PODS * PACK_SLOTS - len(list(PACK.glob("queue/*.json")))
     for j in sorted(jobs, key=lambda j: j["metadata"].get("creationTimestamp", "")):
@@ -415,10 +740,13 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
             return
         if not j["spec"].get("suspend") or (j.get("status") or {}).get("startTime"):
             continue
-        item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
+        item = job_item(j)
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
         name, key = j["metadata"]["name"], j["metadata"]["annotations"]["verity.dev/item"]
-        if packable(item, key, idx) is not None:
+        try:
+            if packable(item, key, idx) is not None:
+                continue
+        except (OSError, ValueError):
             continue
         if dry:
             print(f"would adopt {name} ({key})")
@@ -433,12 +761,51 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
         room -= 1
 
 
+def active_pack_jobs(jobs: list[dict]) -> list[dict]:
+    return [j for j in jobs if j["metadata"]["annotations"].get("verity.dev/template", "").startswith(PACK_TEMPLATE + "@")
+            and not (j.get("status") or {}).get("succeeded") and not (j.get("status") or {}).get("failed")]
+
+
+def pack_hold(jobs: list[dict], dry: bool = False) -> None:
+    """In the hold (PACK_HOLD): queued spool entries go out as normal Jobs, pack Jobs not yet started are deleted, and from
+    PACK_DRAIN every pack Job still active is deleted (pack_results requeues its claimed Commits unpacked)."""
+    if not held():
+        return
+    for f in sorted(PACK.glob("queue/*.json")):
+        if dry:
+            print(f"would unspool {f.name}: the pack hold")
+            continue
+        mine = PACK / "unspooled" / f.name
+        mine.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            f.rename(mine)
+        except OSError:
+            continue
+        entry = json.loads(mine.read_text())
+        item = pinned_item(entry["item"], entry.get("template", ""))
+        append("log.jsonl", {"ev": "unspool", "job": entry["job"], "key": entry["key"], "task": entry["idx"], "why": "pack hold"})
+        submit(item, entry["key"], entry["idx"], entry["tries"])
+        mine.unlink(missing_ok=True)
+    for j in active_pack_jobs(jobs):
+        name, started = j["metadata"]["name"], bool((j.get("status") or {}).get("startTime"))
+        if (started and not draining()) or j["metadata"].get("deletionTimestamp"):
+            continue
+        if dry:
+            print(f"would delete {name}: the pack hold")
+            continue
+        try:
+            kubectl("delete", "job", name, "--wait=false")
+        except RuntimeError as e:
+            print(f"pack hold: {e}", file=sys.stderr)
+            continue
+        append("log.jsonl", {"ev": "pack-hold-delete", "job": name, "started": started})
+
+
 def pack_pods(jobs: list[dict], dry: bool = False) -> None:
     """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots."""
-    if quiet() or disk_full():
+    if quiet() or held() or disk_full():
         return
-    active = [j for j in jobs if j["metadata"]["annotations"].get("verity.dev/template", "").startswith(PACK_TEMPLATE + "@")
-              and not (j.get("status") or {}).get("succeeded") and not (j.get("status") or {}).get("failed")]
+    active = active_pack_jobs(jobs)
     claimed = len(list(PACK.glob("claimed/*/*.json")))
     queued = len(list(PACK.glob("queue/*.json")))
     if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
@@ -453,6 +820,372 @@ def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
     if not dry:
         pack_tree()
     return submit(item, key, dry=dry)
+
+
+N2_PROBE = r'''
+import fcntl, glob, json, os, re, sys
+fill, leases, spill, names = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
+def read(p):
+    try:
+        with open(p, errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+def held(p):
+    try:
+        fd = os.open(p, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+gpus = sorted(int(m.group(1)) for m in (re.fullmatch(r"(\d+)\.lock", os.path.basename(p)) for p in glob.glob(leases + "/*.lock")) if m)
+queued = []
+for p in sorted(glob.glob(fill + "/queue/*")):
+    m = re.search(r"^#\s*fill:\s*(.*)$", (read(p) or "")[:4000], re.M) if not os.path.basename(p).startswith(".") else None
+    if m:
+        queued.append([os.path.basename(p), m.group(1)])
+dirs = sorted(d for d in os.listdir(fill) if os.path.isdir(os.path.join(fill, d)))
+spills = {}
+for n in names:
+    where = next((d for d in dirs if os.path.isfile(os.path.join(fill, d, n + ".sh"))), None)
+    spills[n] = {"where": where, "result": read(os.path.join(spill, n, "result.json"))}
+print(json.dumps({"gpus": gpus, "busy": [i for i in gpus if held(f"{leases}/{i}.lock")], "keep_free": read(fill + "/keep-free"),
+                  "windows": read(fill + "/windows"), "status": (read(fill + "/status.txt") or "").split("\n")[0],
+                  "queued": queued, "spills": spills}))
+'''
+
+N2_WRITE = r'''
+import json, os, sys
+fill, spill = sys.argv[1], sys.argv[2]
+d = json.load(sys.stdin)
+n = d["name"]
+if os.path.exists(os.path.join(spill, n, "result.json")) or any(
+        os.path.isfile(os.path.join(fill, q, n + ".sh")) for q in os.listdir(fill) if os.path.isdir(os.path.join(fill, q))):
+    sys.exit(n + " is on node 2 already")
+os.makedirs(os.path.join(spill, n), exist_ok=True)
+with open(os.path.join(spill, n, "item.json"), "w") as f:
+    json.dump(d["item"], f, sort_keys=True)
+tmp = os.path.join(fill, "queue", "." + n + ".sh.tmp")
+with open(tmp, "w") as f:
+    f.write(d["script"])
+os.chmod(tmp, 0o755)
+os.rename(tmp, os.path.join(fill, "queue", n + ".sh"))
+print("queued", n)
+'''
+
+
+def n2_python(code: str, *args: str, stdin: str | None = None) -> str:
+    """`python3 -c code args...` on node 2 over ssh, its stdout; raises RuntimeError when it fails."""
+    try:
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", N2, shlex.join(["python3", "-c", code, *args])],
+                           input=stdin, capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"ssh {N2}: {e}") from None
+    if r.returncode:
+        raise RuntimeError(f"ssh {N2}: rc {r.returncode}: {r.stderr.strip()[-300:]}")
+    return r.stdout
+
+
+def n2_block(item: dict) -> dict:
+    """The item's `n2` block with its defaults; raises ValueError when it can't become a node-2 fill job."""
+    b = item.get("n2")
+    if not isinstance(b, dict) or not b.get("cmd") or not b.get("owner"):
+        raise ValueError("no n2 block with a cmd and an owner")
+    b = {"gpus": 1, "cpus": 8, "prio": 0, **b}
+    for k in ("gpus", "cpus", "prio", "max_min", "mem_gb"):
+        if k in b:
+            b[k] = int(b[k])
+    if b["gpus"] != 1:
+        raise ValueError(f"n2.gpus {b['gpus']}: a node-2 fill job other than a Commit holds 1 GPU")
+    if not 1 <= b.get("max_min", 0) <= 30:
+        raise ValueError(f"n2.max_min {b.get('max_min')}: 1-30, the fill runner's cap")
+    if b.get("pool") not in (None, "provers"):
+        raise ValueError(f"n2.pool {b['pool']!r}: provers or none")
+    for k in ("owner", "on", "cpuset"):
+        if k in b and not re.fullmatch(r"[\w.,-]+", str(b[k])):
+            raise ValueError(f"n2.{k} {b[k]!r}")
+    return b
+
+
+def spill_script(name: str, job: str, key: str, idx: int, queue: str, b: dict) -> str:
+    """Node 2's fill job for a spilled task. It keeps its state in N2_SPILL/<name>/: tries (each start), result.json and exit
+    (written once it ended for good). A rerun after that only repeats the exit; the third start ends it as stopped (rc null)."""
+    d = f"{N2_SPILL}/{name}"
+    run = f"bash -c {shlex.quote(b['cmd'])}"
+    if b.get("pool") == "provers":
+        run = f"{VY_PROVERS} {run}"
+    env = {"N2_SPILL_ITEM": f"{d}/item.json", "N2_SPILL_KEY": key, "N2_SPILL_JOB": job, "N2_SPILL_TASK": str(idx),
+           **({"VY_PROVERS_CPUS": str(b["cpuset"])} if b.get("cpuset") else {})}
+    hdr = (f"# fill: owner={b['owner']} gpus={b['gpus']} max_min={b['max_min']} cpus={b['cpus']} project=verity prio={b['prio']}"
+           + (f" mem_gb={b['mem_gb']}" if b.get("mem_gb") else "") + (f" on={b['on']}" if b.get("on") else ""))
+    return f"""#!/usr/bin/env bash
+{hdr}
+# node 1's {key} (task {idx}, Job {job}), held by Kueue in {queue}: spilled by dispatch.py (infra/nebius). Exit 0 ends the task
+# on node 1; any other exit, or a third start (stopped twice), sends it back to node 1's queue (node 1's tick reads result.json).
+set -uo pipefail
+d={shlex.quote(d)}
+[ ! -s "$d/result.json" ] || exit "$(cat "$d/exit" 2> /dev/null || echo 1)"
+n=$(( $(cat "$d/tries" 2> /dev/null || echo 0) + 1 ))
+echo "$n" > "$d/tries"
+result() {{
+  echo "$2" > "$d/exit"
+  printf '{{"rc": %s, "tries": %s, "fill_job": "%s", "t": "%s"}}\\n' "$1" "$n" "${{FILL_JOB:-}}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$d/.result.json"
+  mv "$d/.result.json" "$d/result.json"
+}}
+[ "$n" -le {SPILL_TRIES} ] || {{ result null 1; exit 1; }}
+export {' '.join(f'{k}={shlex.quote(v)}' for k, v in env.items())}
+cd {shlex.quote(b.get('cwd') or d)} || {{ result 2 2; exit 2; }}
+rc=0
+{run} || rc=$?
+case $rc in
+  99) echo $((n - 1)) > "$d/tries"; exit 99 ;;
+  124 | 137 | 143) exit 143 ;;
+esac
+result "$rc" "$rc"
+exit "$rc"
+"""
+
+
+def gpu_list(s: str | None) -> set[int]:
+    """GPU indices as the fill runner reads them (`7`, `0,1`, `2-7`), before any `# comment`."""
+    out: set[int] = set()
+    for part in re.split(r"[,\s]+", (s or "").split("#")[0].strip()):
+        lo, _, hi = part.partition("-")
+        if lo.isdigit() and (not hi or hi.isdigit()):
+            out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def booked(text: str | None) -> list[tuple[float, float]]:
+    """The fill runner's booked windows (`2026-10-01T10:00Z 30 # who`), as (start, end) epoch seconds."""
+    out = []
+    for line in (text or "").splitlines():
+        f = line.split("#")[0].split()
+        try:
+            s = datetime.fromisoformat(f[0])
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
+            out.append((s, s + 60 * float(f[1] if len(f) > 1 else 30)))
+        except (IndexError, ValueError):
+            continue
+    return out
+
+
+def n2_room(probe: dict, b: dict, t: float) -> tuple[list[int], str | None]:
+    """(node 2's idle GPUs the block's fill job could take, None), or ([], why node 2's runner wouldn't start it now): keep-free,
+    the runner's order (Commit guests, then pous, then Verity by prio), its 2+ free GPUs for a Verity GPU job, and the windows."""
+    status = probe.get("status") or ""
+    if "timed False, window waiting False" not in status:
+        return [], f"node 2's runner: {status[:160] or 'no status'}"
+    gpus, busy, keep = probe["gpus"], set(probe["busy"]), gpu_list(probe.get("keep_free"))
+    on = gpu_list(str(b["on"])) if b.get("on") else None
+    idle = [i for i in gpus if i not in busy and i not in keep and (on is None or i in on)]
+    if len(gpus) - len(busy) < 2:
+        return [], f"{len(gpus) - len(busy)} GPU free on node 2: its runner starts a Verity GPU job only with 2+"
+    ahead = 0
+    for name, h in probe.get("queued") or []:
+        f = dict(re.findall(r"(\w+)=(\S+)", h))
+        g = int(f["gpus"]) if f.get("gpus", "").isdigit() else 1
+        prio = int(f["prio"]) if f.get("prio", "").isdigit() else 0
+        if g and (name.startswith("verity-commit-") or f.get("project", "pous") != "verity" or prio >= b["prio"]):
+            ahead += g
+    if len(idle) - ahead < b["gpus"]:
+        return [], f"node 2's idle GPUs {idle or '-'} (keep-free {sorted(keep) or '-'}) go to {ahead} queued GPU job(s) ahead"
+    end = t + 60 * (b["max_min"] + SPILL_SLACK_MIN)
+    for s, e in booked(probe.get("windows")):
+        if not (end <= s or t >= e):
+            return [], f"node 2's window at {time.strftime('%H:%MZ', time.gmtime(s))} is within max_min {b['max_min']}"
+    return idle, None
+
+
+def spill_records() -> list[dict]:
+    out = []
+    for f in sorted(SPILL.glob("*.json")):
+        try:
+            out.append(json.loads(f.read_text()))
+        except (OSError, ValueError) as e:
+            print(f"n2-spill: {f} unreadable: {e}", file=sys.stderr)
+    return out
+
+
+def write_json(p: Path, d: dict) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(d, sort_keys=True))
+    tmp.rename(p)
+
+
+def settle(rec: dict, **kw) -> None:
+    write_json(SPILL / "done" / f"{rec['job']}.json", {**rec, **kw, "settled": now_utc()})
+    (SPILL / f"{rec['job']}.json").unlink(missing_ok=True)
+
+
+def ts(s: str) -> float:
+    return calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))
+
+
+def spill_candidates(jobs: list[dict], wls: list[dict], t: float) -> list[tuple[dict, dict, dict, dict]]:
+    """(Job, workload, item, n2 block) for each GPU Job of this dispatcher that Kueue has held SPILL_WAIT_S and never started,
+    whose item has an n2 block, and that was never spilled before; oldest workload first."""
+    by_name = {j["metadata"]["name"]: j for j in jobs}
+    out = []
+    for w in sorted(wls, key=lambda w: w["metadata"].get("creationTimestamp", "")):
+        st = w.get("status") or {}
+        if (w.get("spec") or {}).get("active") is False or st.get("admission") or any(
+                c.get("type") == "Finished" and c.get("status") == "True" for c in st.get("conditions") or []):
+            continue
+        name = next((r.get("name") for r in w["metadata"].get("ownerReferences") or [] if r.get("kind") == "Job"), None)
+        j = by_name.get(name)
+        if j is None or not j["spec"].get("suspend") or (j.get("status") or {}).get("startTime") or j["metadata"].get("deletionTimestamp"):
+            continue
+        if t - ts(w["metadata"]["creationTimestamp"]) < SPILL_WAIT_S:
+            continue
+        req = ((j["spec"]["template"]["spec"]["containers"][0].get("resources") or {}).get("requests") or {})
+        if not int(req.get("nvidia.com/gpu", 0) or 0):
+            continue
+        if (SPILL / f"{name}.json").exists() or (SPILL / "done" / f"{name}.json").exists():
+            continue
+        item = job_item(j)
+        try:
+            b = n2_block(item)
+        except (ValueError, TypeError):
+            continue
+        out.append((j, w, item, b))
+    return out
+
+
+def spill(j: dict, w: dict, item: dict, b: dict, idle: list[int], t: float, dry: bool = False) -> bool:
+    """Deactivate the held workload (only while it is still unadmitted at the resourceVersion just read), then queue its fill job
+    on node 2; a node-2 write that fails reactivates it at once."""
+    name, wl = j["metadata"]["name"], w["metadata"]["name"]
+    key, labels = j["metadata"]["annotations"]["verity.dev/item"], j["metadata"]["labels"]
+    idx, tries, queue = int(labels["verity.dev/task"]), int(labels["verity.dev/try"]), (w.get("spec") or {}).get("queueName", "")
+    n2 = f"n2spill-{name}"
+    held_s = int(t - ts(w["metadata"]["creationTimestamp"]))
+    if dry:
+        print(f"would spill {name} ({key}, held {held_s} s in {queue}) to node 2 as {n2} (idle GPUs {idle})")
+        return True
+    rec = {"job": name, "workload": wl, "key": key, "task": idx, "try": tries, "queue": queue, "n2": n2, "spilled": now_utc(),
+           "held_s": held_s, "idle": idle, "item": item}
+    fresh = json.loads(kubectl("get", "workload", wl, "-o", "json"))
+    if (fresh.get("spec") or {}).get("active") is False or (fresh.get("status") or {}).get("admission"):
+        return False
+    write_json(SPILL / f"{name}.json", rec)
+    try:
+        kubectl("patch", "workload", wl, "--type", "merge", "-p",
+                json.dumps({"metadata": {"resourceVersion": fresh["metadata"]["resourceVersion"]}, "spec": {"active": False}}))
+    except RuntimeError as e:
+        (SPILL / f"{name}.json").unlink(missing_ok=True)
+        print(f"n2-spill {name}: not deactivated, it stays on node 1: {e}", file=sys.stderr)
+        return False
+    try:
+        n2_python(N2_WRITE, N2_FILL, N2_SPILL, stdin=json.dumps({"name": n2, "item": item, "script": spill_script(n2, name, key, idx, queue, b)}))
+    except RuntimeError as e:
+        spill_back(rec, f"node 2 took no fill job: {e}")
+        return False
+    append("log.jsonl", {"ev": "n2-spill", "job": name, "key": key, "task": idx, "try": tries, "queue": queue, "workload": wl,
+                         "n2": n2, "held_s": held_s, "idle": idle, "max_min": b["max_min"], "owner": b["owner"], "pool": b.get("pool")})
+    print(f"n2-spill {name} ({key}, held {held_s} s in {queue}) -> node 2 {n2}")
+    return True
+
+
+def spill_back(rec: dict, why: str) -> bool:
+    """Back to node 1's queue: the workload active again. False when Kueue couldn't be told (retried next tick)."""
+    try:
+        kubectl("patch", "workload", rec["workload"], "--type", "merge", "-p", json.dumps({"spec": {"active": True}}))
+        outcome = "back"
+    except RuntimeError as e:
+        if "not found" not in str(e).lower():
+            print(f"n2-spill {rec['job']}: not reactivated yet: {e}", file=sys.stderr)
+            return False
+        outcome = "gone"
+        append("done.jsonl", {"key": rec["key"], "state": "failed", "task": rec["task"], "job": rec["job"], "n2": rec["n2"],
+                              "why": f"{why}; its node-1 Job is gone"})
+    append("log.jsonl", {"ev": "n2-spill-back", "job": rec["job"], "key": rec["key"], "n2": rec["n2"], "why": why, "outcome": outcome})
+    print(f"n2-spill {rec['job']}: back to node 1 ({why})")
+    settle(rec, outcome=outcome, why=why)
+    return True
+
+
+def spill_done(rec: dict, res: dict) -> None:
+    """A spilled task that exited 0 on node 2: its node-1 Job goes, and the chain continues as it would from that Job."""
+    item, key, idx = rec["item"], rec["key"], rec["task"]
+    try:
+        ntasks = len(load_template(item["template"], item["template_sha"])[0])
+        kubectl("delete", "job", rec["job"], "--ignore-not-found", "--wait=false")
+    except (OSError, ValueError, RuntimeError) as e:
+        print(f"n2-spill {rec['job']}: held ({e}); retried next tick", file=sys.stderr)
+        return
+    append("log.jsonl", {"ev": "end", "job": rec["job"], "key": key, "task": idx, "try": rec["try"], "state": "succeeded", "rc": 0,
+                         "n2": rec["n2"], "fill_job": res.get("fill_job"), "tries": res.get("tries")})
+    if idx + 1 < ntasks:
+        route(item, key, idx + 1, 0)
+    else:
+        append("done.jsonl", {"key": key, "state": "succeeded", "rc": 0, "task": idx, "job": rec["job"], "n2": rec["n2"]})
+    settle(rec, outcome="done", rc=0, fill_job=res.get("fill_job"))
+
+
+def spill_results(probe: dict, recs: list[dict], dry: bool = False) -> None:
+    for rec in recs:
+        s = (probe.get("spills") or {}).get(rec["n2"]) or {}
+        if not s.get("result"):
+            where = s.get("where") or ""
+            if where in ("queue", "running") or where.startswith("held"):
+                if rec.get("missing"):
+                    write_json(SPILL / f"{rec['job']}.json", {**rec, "missing": 0})
+                continue
+            if rec.get("missing", 0) + 1 < 2:
+                if not dry:
+                    write_json(SPILL / f"{rec['job']}.json", {**rec, "missing": rec.get("missing", 0) + 1})
+                continue
+            why = f"node 2 has no result, and its fill job is {'in ' + where if where else 'gone'}"
+            print(f"would send {rec['job']} back: {why}") if dry else spill_back(rec, why)
+            continue
+        try:
+            res = json.loads(s["result"])
+        except ValueError:
+            res = {"rc": None, "unreadable": s["result"][:200]}
+        if dry:
+            print(f"would read back {rec['n2']}: {res}")
+        elif res.get("rc") == 0:
+            spill_done(rec, res)
+        else:
+            stopped = " (stopped twice)" if res.get("rc") is None and "unreadable" not in res else ""
+            spill_back(rec, f"node 2 rc {res.get('rc')} after {res.get('tries')} start(s){stopped}")
+
+
+SPILL_WHY: dict[str, str] = {}
+
+
+def n2_spill(jobs: list[dict], wls: list[dict], dry: bool = False, t: float | None = None) -> set[str]:
+    """Read back every outstanding spill, then spill at most one held GPU Job to node 2 (while SPILL_FLAG exists, outside node 1's
+    hold). The workloads it deactivated."""
+    t = time.time() if t is None else t
+    recs = spill_records()
+    cands = spill_candidates(jobs, wls, t) if SPILL_FLAG.exists() and not held(t) else []
+    if not recs and not cands:
+        return set()
+    try:
+        probe = json.loads(n2_python(N2_PROBE, N2_FILL, N2_LEASES, N2_SPILL, *[r["n2"] for r in recs]))
+    except (RuntimeError, ValueError) as e:
+        print(f"n2-spill: node 2 unreadable, nothing spilled or read back: {e}", file=sys.stderr)
+        return set()
+    if recs:
+        spill_results(probe, recs, dry)
+    for j, w, item, b in cands:
+        name = j["metadata"]["name"]
+        idle, why = n2_room(probe, b, t)
+        if why:
+            if dry or SPILL_WHY.get(name) != why:
+                print(f"n2-spill {name}: stays on node 1: {why}")
+            SPILL_WHY[name] = why
+            continue
+        return {w["metadata"]["name"]} if spill(j, w, item, b, idle, t, dry) and not dry else set()
+    return set()
 
 
 def done_keys() -> set[str]:
@@ -531,33 +1264,57 @@ def tick(dry: bool = False) -> None:
             inflight.add(key)
         if state not in ("succeeded", "failed") or j["metadata"]["labels"].get("verity.dev/seen") == "1":
             continue
-        item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
+        item = job_item(j)
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
+        try:
+            tasks = load_template(item["template"], item["template_sha"])[0]
+        except (OSError, ValueError) as e:
+            print(f"held {j['metadata']['name']} ({key}): {e}", file=sys.stderr)
+            continue
+        ntasks, name = len(tasks), j["metadata"]["name"]
         st = j.get("status") or {}
         wall = None
         if st.get("startTime") and st.get("completionTime"):
             ts = [time.mktime(time.strptime(st[k], "%Y-%m-%dT%H:%M:%SZ")) for k in ("startTime", "completionTime")]
             wall = int(ts[1] - ts[0])
-        append("log.jsonl", {"ev": "end", "job": j["metadata"]["name"], "key": key, "task": idx, "try": tries, "state": state,
-                             "rc": rc, "wall_s": wall})
-        ntasks = len(load_template(item["template"])[0])
         nxt = None
         if state == "succeeded" and idx + 1 < ntasks:
             nxt = (idx + 1, 0)
         elif state == "failed" and rc == REQUEUE_RC and tries + 1 < MAX_TRIES:
             nxt = (idx, tries + 1)
-        if not dry:
+        judged = not nxt and bool(item.get("packed")) and (tasks[idx].get("name") or "") == "replay"
+        why, counts = packed_replay(j, state, rc) if judged else (None, {})
+        if dry:
+            then = "the item ends" if not nxt else \
+                f"then {render(item, key, *nxt)['metadata']['name']} (task {nxt[0]} of {ntasks})"
+            verdict = "" if not judged else f"; packed replay {'PASS' if why is None else 'FAIL, would stop ' + model_of(item)}: {counts}"
+            print(f"would end {name} ({key}, {state} rc {rc}) on {item['template']}@{item['template_sha']}: {then}{verdict}")
+        else:
+            append("log.jsonl", {"ev": "end", "job": name, "key": key, "task": idx, "try": tries, "state": state,
+                                 "rc": rc, "wall_s": wall})
+            if judged:
+                append("log.jsonl", {"ev": "packed-replay", "job": name, "key": key, "pod": item["packed"],
+                                     "verdict": "pass" if why is None else "fail", "why": why, **counts})
             if nxt:
                 route(item, key, *nxt)
             else:
-                append("done.jsonl", {"key": key, "state": state, "rc": rc, "task": idx, "job": j["metadata"]["name"]})
+                end = {"key": key, "state": state, "rc": rc, "task": idx, "job": name, **({"packed": item["packed"]} if judged else {})}
+                if why:
+                    end.update(state="failed", why=f"packed replay: {why}")
+                    replay_run, commit_run = run_ids(j, pods.get(name, []))
+                    stop_model(model_of(item), key, replay_run, why, commit_run=commit_run, pod=item["packed"], job=name)
+                append("done.jsonl", end)
                 inflight.discard(key)
-            kubectl("label", "job", j["metadata"]["name"], "verity.dev/seen=1", "--overwrite")
+            kubectl("label", "job", name, "verity.dev/seen=1", "--overwrite")
     if PACK_COMMITS and PACK_ADOPT:
         pack_adopt(jobs, dry)
+    pack_hold(jobs, dry)
     wls = json.loads(kubectl("get", "workloads", "-o", "json"))["items"]
+    spilled = n2_spill(jobs, wls, dry)
     pending: dict[str, int] = {}
     for w in wls:
+        if w["metadata"]["name"] in spilled or (w.get("spec") or {}).get("active") is False:
+            continue
         if not (w.get("status") or {}).get("admission") and not any(
                 c.get("type") == "Finished" and c.get("status") == "True" for c in (w.get("status") or {}).get("conditions") or []):
             q = (w.get("spec") or {}).get("queueName", "")
@@ -623,9 +1380,19 @@ def busy() -> dict:
     return {k: (round(v, 1) if v is not None else None) for k, v in out.items()}
 
 
+def outcomes() -> dict[str, dict]:
+    """Each ended item's outcome: its last done.jsonl line (a correction supersedes the line it names)."""
+    p = ROOT / "done.jsonl"
+    return {r["key"]: r for r in (json.loads(line) for line in p.read_text().splitlines() if line.strip())} if p.exists() else {}
+
+
 def status() -> None:
     print(kubectl("get", "clusterqueue"), end="")
     print(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-L", "kueue.x-k8s.io/queue-name"), end="")
+    states: dict[str, int] = {}
+    for r in outcomes().values():
+        states[r.get("state", "?")] = states.get(r.get("state", "?"), 0) + 1
+    print(json.dumps({"items": states}, sort_keys=True))
     print(json.dumps(busy()))
 
 
@@ -643,6 +1410,7 @@ def main(argv: list[str]) -> int:
     s.add_argument("--resources", type=json.loads, help='JSON: {"<task>": {"cpus": N, "memory": GB, "gpus": N}}')
     s.add_argument("--task", type=int, default=0, help="start the chain at this task (resume after an earlier task succeeded)")
     s.add_argument("--try", dest="tries", type=int, default=0, help="the try number in the Job name (a resubmission)")
+    s.add_argument("--template-sha", help="render from this pinned template (resume a chain on the template it started on)")
     s.add_argument("--dry-run", action="store_true")
     sp = sub.add_parser("spool", help="queue one item's task for a commit-pack pod now, whatever PACK_COMMITS says")
     sp.add_argument("template")
@@ -655,6 +1423,11 @@ def main(argv: list[str]) -> int:
     pp = sub.add_parser("pack-pod", help="submit one commit-pack Job now")
     pp.add_argument("--priority")
     pp.add_argument("--dry-run", action="store_true")
+    pl = sub.add_parser("pack-lift", help="let a model stopped by a failed packed replay pack again (circuits only)")
+    pl.add_argument("model")
+    pl.add_argument("--by", required=True)
+    pl.add_argument("--why", required=True)
+    sub.add_parser("pack-stops", help="the models stopped from packing, with their stop entries")
     t = sub.add_parser("tick")
     t.add_argument("--dry-run", action="store_true")
     lp = sub.add_parser("loop")
@@ -664,7 +1437,8 @@ def main(argv: list[str]) -> int:
     if ns.cmd == "submit":
         item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
                 "env": dict(e.split("=", 1) for e in ns.env)}
-        for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources)):
+        for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources),
+                     ("template_sha", ns.template_sha)):
             if v:
                 item[k] = v
         submit(item, ns.key, ns.task, ns.tries, dry=ns.dry_run)
@@ -677,6 +1451,10 @@ def main(argv: list[str]) -> int:
         spool(item, ns.key, ns.task, dry=ns.dry_run)
     elif ns.cmd == "pack-pod":
         submit_pack_pod(ns.priority, dry=ns.dry_run)
+    elif ns.cmd == "pack-lift":
+        lift_model(ns.model, ns.by, ns.why)
+    elif ns.cmd == "pack-stops":
+        print(json.dumps(stopped_models(), indent=1, sort_keys=True))
     elif ns.cmd == "tick":
         tick(ns.dry_run)
     elif ns.cmd == "loop":

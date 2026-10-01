@@ -140,10 +140,10 @@ def fit(p: dict) -> dict:
         if len(json.dumps(p).encode()) <= MAX_BODY:
             return p
         p["rows"] = [[c[:cap - 1] + "…" if isinstance(c, str) and len(c) > cap else c for c in r] for r in p["rows"]]
-    n = len(p["rows"])
+    n, note = len(p["rows"]), p.get("note", "")
     while len(json.dumps(p).encode()) > MAX_BODY and p["rows"]:
         p["rows"] = p["rows"][:int(len(p["rows"]) * 0.9)]
-        p["note"] = (f"The first {len(p['rows'])} of {n} rows (the site's 64 KiB limit). " + p.get("note", ""))[:500]
+        p["note"] = (f"The first {len(p['rows'])} of {n} rows (the site's 64 KiB limit). " + note)[:500]
     return p
 
 
@@ -543,8 +543,13 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
         out += hillclimb_panels(now, errors)
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
         errors.append(f"hillclimb: {type(e).__name__}: {e}")
+    try:
+        out += overnight_panels(errors)
+    except Exception as e:  # noqa: BLE001  the node-1 panels still go out
+        errors.append(f"overnight: {type(e).__name__}: {e}")
     return out, {"queue_samples": len(qlines), "pool_file": POOL.exists(),
-                 "hillclimb_files": len(list(HILLCLIMB.glob("*.json"))) if HILLCLIMB.is_dir() else 0}
+                 "hillclimb_files": len(list(HILLCLIMB.glob("*.json"))) if HILLCLIMB.is_dir() else 0,
+                 "overnight_files": len(list(OVERNIGHT.glob("*.json"))) if OVERNIGHT.is_dir() else 0}
 
 
 # ---------------------------------------------------------------------------------------------------------------- proofs hill climb
@@ -587,6 +592,86 @@ def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
                                       "prover buckets alone. One row per step.")))
         except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
             errors.append(f"hillclimb {f.name}: {type(e).__name__}: {e}")
+    return out
+
+
+# ------------------------------------------------------------------------------------------------------- overnight goal numbers
+
+OVERNIGHT = Path("/workspace/usage/overnight")  # one `verity/overnight-numbers/v0` file per owner, for the console's Overnight view
+OWNER = re.compile(r"[a-z0-9-]{1,40}")
+GOAL_KEY = re.compile(r"[a-z0-9-]{1,40}")
+
+
+GOAL_NOTES = OVERNIGHT / "notes" / "goals.json"  # docs/goals.md's status note and checked state per goal (verity/overnight-goal-notes/v0)
+NOTES_SOURCE = "docs/goals.md status note"
+
+
+def goal_note_rows(n: dict) -> list[list]:
+    """A goal's status note, split into cells of at most 200 characters at spaces, then its checked state."""
+    words, chunks = (n.get("note") or "").split(), [""]
+    for w in words:
+        if chunks[-1] and len(chunks[-1]) + 1 + len(w) > 200:
+            chunks.append("")
+        chunks[-1] = (chunks[-1] + " " + w).strip()[:200]
+    t = isoz(n.get("as_of"))
+    rows = [[n["key"], "status" if i == 0 else "status, continued", c, None, t, NOTES_SOURCE] for i, c in enumerate(chunks) if c]
+    return rows + [[n["key"], "done", "yes" if n.get("done") else "no", None, t, NOTES_SOURCE]]
+
+
+def goal_notes(errors: list) -> tuple[list[dict], str | None]:
+    if not GOAL_NOTES.is_file():
+        return [], None
+    try:
+        doc = json.loads(GOAL_NOTES.read_text())
+        if doc.get("schema") != "verity/overnight-goal-notes/v0":
+            raise ValueError(f"schema {doc.get('schema')!r}")
+        notes = [n for n in doc.get("goals") or [] if isinstance(n.get("owner"), str) and OWNER.fullmatch(n["owner"])
+                 and isinstance(n.get("key"), str) and GOAL_KEY.fullmatch(n["key"])]
+        return notes, isoz(doc.get("updated_utc"))
+    except Exception as e:  # noqa: BLE001  owners' files still publish without the notes
+        errors.append(f"overnight notes: {type(e).__name__}: {e}")
+        return [], None
+
+
+def overnight_panels(errors: list) -> list[dict]:
+    """One table per owner: a row per number, filed under the goal's key, which the site's Overnight view reads. A goal's status
+    note from docs/goals.md stands in for the owner's rows under that key unless the owner's file is at least as new as the note."""
+    owners: dict[str, dict] = {}
+    for f in sorted(OVERNIGHT.glob("*.json")) if OVERNIGHT.is_dir() else []:
+        try:
+            doc = json.loads(f.read_text())
+            owner = doc.get("owner")
+            if doc.get("schema") != "verity/overnight-numbers/v0" or not isinstance(owner, str) or not OWNER.fullmatch(owner):
+                raise ValueError(f"schema {doc.get('schema')!r}, owner {owner!r}")
+            rows = []
+            for n in doc.get("numbers") or []:
+                v = n.get("value")
+                if not (isinstance(n.get("goal"), str) and GOAL_KEY.fullmatch(n["goal"]) and isinstance(n.get("metric"), str)):
+                    raise ValueError(f"number {json.dumps(n)[:120]}: goal must be a lowercase key and metric a string")
+                if isinstance(v, bool) or not (v is None or isinstance(v, (int, float, str))):
+                    raise ValueError(f"number {n['metric'][:60]!r}: value must be a number, a string or null")
+                rows.append([n["goal"], n["metric"][:200], (v if isinstance(v, int) else sig(v, 6)) if isinstance(v, (int, float)) else (v[:200] if v else None),
+                             (str(n["unit"])[:20] if n.get("unit") else None), isoz(n.get("as_of")), (str(n["source"])[:200] if n.get("source") else None)])
+            when = isoz(doc.get("updated_utc")) or iso(datetime.fromtimestamp(f.stat().st_mtime, timezone.utc))
+            owners[owner] = {"rows": rows, "when": when, "source": f"{owner}'s {f} on vy-nebius-1"}
+        except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
+            errors.append(f"overnight {f.name}: {type(e).__name__}: {e}")
+    notes, notes_when = goal_notes(errors)
+    for n in notes:
+        o = owners.setdefault(n["owner"], {"rows": [], "when": None, "source": None})
+        t = isoz(n.get("as_of"))
+        if any(r[0] == n["key"] for r in o["rows"]) and (t is None or (o["when"] and o["when"] >= t)):
+            continue
+        o["rows"] = [r for r in o["rows"] if r[0] != n["key"]] + goal_note_rows(n)
+        o["notes"] = True
+    out = []
+    for owner, o in sorted(owners.items()):
+        when = max((w for w in (o["when"], notes_when if o.get("notes") else None) if w), default=iso(datetime.now(timezone.utc)))
+        source = " and ".join(s for s in (o["source"], f"{NOTES_SOURCE}s ({GOAL_NOTES} on vy-nebius-1)" if o.get("notes") else None) if s)
+        out.append(fit(panel(f"overnight-{owner}", f"{owner}: overnight goal numbers", "table",
+                             ["Goal", "Metric", "Value", "Unit", "As of (UTC)", "Source"], o["rows"], updated_at=when, source=source,
+                             note="Numbers for the overnight set (Project store docs/goals.md), one row per number, filed under the goal's "
+                                  "key: the owner's file, or the goal's docs/goals.md status note and checked state where that is newer.")))
     return out
 
 

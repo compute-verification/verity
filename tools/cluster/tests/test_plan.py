@@ -235,3 +235,12 @@ def test_a_session_with_only_an_expected_length_plans_backfill_but_is_never_expi
 def test_a_cpu_unmanaged_lease_gets_gpus_and_memory_but_no_cpus():
     (s,) = plan(one(), "n1", [], [job("g-1", gpus=2, cpus=0, memory_gib=190)], T0)
     assert s.alloc.gpus == (0, 1) and s.alloc.cpus == frozenset() and s.alloc.memory_gib == 190
+
+
+def test_a_gpu_pool_bounds_which_gpus_a_job_gets_and_what_it_evicts():
+    fill = [alloc(job(f"f-{i}", gpus=1, priority="fill", max_s=3000), (i,), str(i)) for i in range(8)]
+    j = job("w-1", gpus=1, priority="work", gpu_pool=(6, 7), max_s=600)
+    acts = plan(one(), "n1", fill, [j], T0)
+    [s] = [a for a in acts if isinstance(a, Start)]
+    assert s.alloc.gpus in ((6,), (7,)) and [a.alloc for a in acts if isinstance(a, Evict)] == [f"f-{s.alloc.gpus[0]}@{T0}"]
+    assert "gpu_pool offers 2 GPUs" in plan(one(), "n1", [], [job("w-2", gpus=3, gpu_pool=(6, 7))], T0)[0].reason

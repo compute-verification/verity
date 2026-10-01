@@ -19,6 +19,11 @@ time counts as leased only). A job's kind is its header's `kind=`, else `unlabel
 
 Node 1's own file (`/workspace/usage/infra-pool-n1.json`, kueue-fold's) is merged in as `nodes.n1` while it is under 15 min old.
 
+`delivered_by_hour` (kueue-fold's names, node 1's shape): the last 4 UTC hours, oldest first, each lease's GPU-seconds split across
+the hours it spans. Leases still held count as leased up to now. A lease delivered when it ended with rc 0, or 99 (a fill chunk done,
+more to come), and isn't filler; a preempted or stopped lease (143, 137, 124) didn't. `guest_gpu_s` is the leased part held by Verity
+guests (`project=verity` fill jobs and `verity:` holders). `provisional` stays true until an hour after the hour ends.
+
     publish_pool.py [--out FILE] [--no-push]
 """
 from __future__ import annotations
@@ -231,6 +236,51 @@ def kinds(now: datetime, known: dict[str, dict]) -> list[dict]:
     return sorted(rows, key=lambda x: -x["idle_gpu_h"])
 
 
+def delivered_by_hour(now: datetime, known: dict[str, dict], last: dict) -> list[dict]:
+    h0 = now.replace(minute=0, second=0) - timedelta(hours=3)
+    hours = [h0 + timedelta(hours=i) for i in range(4)]
+    rows = {h: {"leased_gpu_s": 0.0, "delivered_gpu_s": 0.0, "guest_gpu_s": 0.0} for h in hours}
+
+    def add(start: datetime, end: datetime, gpus: int, delivered: bool, guest: bool) -> None:
+        for h in hours:
+            s = (min(end, h + timedelta(hours=1)) - max(start, h)).total_seconds()
+            if s > 0:
+                rows[h]["leased_gpu_s"] += s * gpus
+                rows[h]["delivered_gpu_s"] += s * gpus if delivered else 0
+                rows[h]["guest_gpu_s"] += s * gpus if guest else 0
+
+    try:
+        lines = USAGE.read_text(errors="replace").splitlines()[-20000:]
+    except OSError:
+        lines = []
+    for line in lines:
+        try:
+            r = json.loads(line)
+            start, end = ts(r["since"]), ts(r["end"])
+        except (ValueError, KeyError, TypeError):
+            continue
+        if end < h0:
+            continue
+        lease = f"who={r.get('who')} cmd={r.get('cmd') or ''}"
+        job = fill_job(lease, known) or {}
+        guest = job.get("project") == "verity" or str(r.get("who") or "").startswith("verity:")
+        add(start, end, len(r.get("gpus") or []), r.get("rc") in (0, 99) and not job.get("filler"), guest)
+    for g in last.get("gpus", []):
+        lease = g.get("lease") or ""
+        start = ts_or_none(field(lease, "since"))
+        if start:
+            job = fill_job(lease, known) or {}
+            add(start, now, 1, False, job.get("project") == "verity" or (field(lease, "who") or "").startswith("verity:"))
+    out = []
+    for h in hours:
+        r = rows[h]
+        out.append({"hour": h.strftime("%Y-%m-%dT%H:%M:%SZ"), "leased_gpu_s": round(r["leased_gpu_s"]),
+                    "delivered_gpu_s": round(r["delivered_gpu_s"]),
+                    "delivered_share": round(r["delivered_gpu_s"] / r["leased_gpu_s"], 4) if r["leased_gpu_s"] else None,
+                    "guest_gpu_s": round(r["guest_gpu_s"]), "provisional": now < h + timedelta(hours=2)})
+    return out
+
+
 def busy(g: dict) -> bool:
     return (g.get("util") or 0) >= 1 or (g.get("smact") or 0) >= 0.01
 
@@ -283,6 +333,7 @@ def build(now: datetime) -> dict:
                 "unlabeled_waiting": sum(1 for h in queued.values() if "kind" not in h),
                 "monitors": found,
                 "kinds": kinds(now, known),
+                "delivered_by_hour": delivered_by_hour(now, known, last),
                 "timed_window": False}}}
 
 

@@ -163,9 +163,9 @@ def device_run():
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, BEACON).salt
 
-    def make(hashing=True):
+    def make(hashing=True, schedule="serial"):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, BEACON, hashing=hashing,
-                                   capacity=1 << 12)
+                                   capacity=1 << 12, schedule=schedule)
     return make, kernel, weights, roots, salt
 
 
@@ -207,7 +207,7 @@ def test_a_call_over_whole_128_row_tiles_runs_gpu_1s_fused_path(device_run):
     kernel.dev.log.clear()
     y = run.gemm(0, torch.randn(128, 1024).to(torch.bfloat16), weights[0], None)
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-    assert run.pipes[(0, 128, frozenset(), True)][0].fused and "hash_msg_v" not in names
+    assert run.pipes[(0, 128, frozenset(), True, "serial", False)][0].fused and "hash_msg_v" not in names
     assert names[-2:] == ["gemm_pearlc_b", "hash_leaf_p"] and {n: p for n, _, p, _ in kernel.dev.log}["gemm_pearlc_b"][4] == y.data_ptr()
 
 
@@ -218,7 +218,7 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
     assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
                                                                           "gemm_pearlc_d"]
-    assert run.end() == {"units": 1, "tiles": 0, "hashing": False}
+    assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
 
 
 def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
@@ -316,11 +316,11 @@ def test_the_pipelines_h2_templates_bind_the_audits_schemas():
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
-def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
+@pytest.mark.parametrize("scheme,rows_form", [(s, "w") for s in sorted(PPD.SCHEMES)] + [("pearl-c-sm120-v1-h2", "s")])
+def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_form):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s)."""
-    hashing = PPD.SCHEMES[scheme][2]
+    hashing = PPD.scheme_of(scheme).hashing
     h = PPD.scheme_of(scheme).commitment_hash
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
@@ -330,15 +330,23 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h).commitment.root for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, BEACON).salt
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12,
+                              rows_form=rows_form)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
     for w, x in calls:
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        want_rows = ["hash_rows_b3s"] if hashing == "h2" else ["hash_rows_w"]
+        want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "")] if hashing == "h2" else ["hash_rows_w"]
         assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
+        assert ("stats_s5" in names) == (rows_form == "w")
+        if rows_form == "s":
+            a = torch.zeros((32, 1024), dtype=torch.float32)
+            a[:x.shape[0]] = x.float()
+            alpha, aux = stats(a.numpy().view(np.uint32))
+            sh = run.shapes[(32, weights[w].shape[0], 1024)]
+            assert torch.equal(sh.b["alpha_a"][:4 * 32], alpha) and torch.equal(sh.b["aux_a"][:8 * 32], aux.reshape(-1))
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
@@ -366,7 +374,8 @@ def bf16_file(rows: list[bytes]) -> bytes:
     return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows)
 
 
-@pytest.fixture(params=sorted(n for n, (_, device, _) in PPD.SCHEMES.items() if device == "sm120"))
+#: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
+@pytest.fixture(params=sorted(s for s in PPD.SCHEMES if "unpromoted" not in s))
 def honest_pass(tmp_path, request):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (-h1 and -h2 trees;
@@ -456,7 +465,8 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 # ---- the panel rows -----------------------------------------------------------------------------------------------
 
-def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure: str | None = None) -> tuple[dict, dict]:
+def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure: str | None = None,
+               graphed: bool = False) -> tuple[dict, dict]:
     reps = lambda mhz: {"prefill_8192": [{"clock": {"sm_mhz": mhz}}] * 3, "decode_b32": [{"clock": {"sm_mhz": mhz - 3}}] * 3}
     split = {key: {"shape": shape, "fp8_s": 1.0, "nohash_s": 1.5, "slowdown_vs_fp8": 2.5, "gemm_x_fp8": 1.2, "hashing_x_fp8": 1.0,
                    "else_x_fp8": 0.3, "slowdown_vs_bf16": 1.6} for key, shape in (("prefill_8192", "e2e-llama31-8b-vllm-m8192"),
@@ -464,6 +474,10 @@ def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure:
     e2e = {"scheme": SCHEME, "run": RUN, "results": {"pearlc": {"reps": reps(2085)}, "fp8": {"reps": reps(2090)}},
            "summary": {"gates": {"arm": True}, "split": split, "interleave": interleave, "resident_failure": failure,
                        "verify_pass": {"prefill": {"same_commitment_as_timed": True}, "decode": {"same_commitment_as_timed": True}}}}
+    if graphed:
+        e2e["results"]["fp8-graphs"] = {"reps": reps(2080)}
+        for x in split.values():
+            x.update(fp8_graphs_s=0.5, slowdown_vs_fp8_graphs=5.0)
     t = lambda p: f"{RUN}:/workspace/pouw/mvp-e2e/passes/{RUN}/{p}/manifest.json sha256:{'ab' * 32}"
     verdicts = {p: {"accepted": p != "control" or control_accepted, "verifier_commit": "c7033d67", "transcript": t(p),
                     "line": f"{'ACCEPT' if p != 'control' or control_accepted else 'REJECT'} {SCHEME} pouw:{SCHEME}: ...; transcript {t(p)}"}
@@ -486,6 +500,22 @@ def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
     assert "ABAB blocks" in blocks[0][blocks[0].index("--description") + 1] and "OutOfMemoryError" in blocks[1][blocks[1].index("--description") + 1]
     with pytest.raises(SystemExit, match="negative control was not rejected"):
         PR.rows(*e2e_result(control_accepted=True), "panel.py")
+
+
+def test_with_graphed_fp8_decode_heads_over_it_and_the_eager_row_is_beside_it():
+    """The root's 21:33Z ruling: decode's headline row is over stock FP8 under CUDA graphs, the eager row beside it at the
+    shape's -eager name, in the same attempt; both behind the same gate, and prefill keeps its one row."""
+    PR = load("pearl_c_vllm_panel_rows", KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
+    rows = PR.rows(*e2e_result(graphed=True), "panel.py")
+    args = [dict(zip(r[3::2], r[4::2])) for r in (x[:-2] if "--decode-method" in x else x for x in rows)]
+    assert [(a["--phase"], a["--shape"]) for a in args] == [
+        ("prefill", "e2e-llama31-8b-vllm-m8192"), ("decode", "e2e-llama31-8b-vllm-m32"), ("decode", "e2e-llama31-8b-vllm-m32-eager")]
+    head, eager = args[1], args[2]
+    assert (head["--slowdown"], head["--hash-free"], eager["--slowdown"], eager["--hash-free"]) == ("5.0000", "3.0000", "2.5000", "1.5000")
+    assert set(head["--sm-clock-base"].split(",")) == {"2077"} and set(eager["--sm-clock-base"].split(",")) == {"2087"}
+    assert head["--description"].startswith("Headline, over stock FP8 as vLLM serves it") and rows[1][-2:] == rows[2][-2:]
+    with pytest.raises(SystemExit, match="negative control was not rejected"):
+        PR.rows(*e2e_result(control_accepted=True, graphed=True), "panel.py")
 
 
 # ---- the e2e's schedule and its assembly --------------------------------------------------------------------------
@@ -677,6 +707,111 @@ def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(mon
     assert torch.equal(fused, ref)
 
 
+# ---- step 2 of the decode plan: the deferred schedule -------------------------------------------------------------
+
+@pytest.mark.parametrize("schedule, main", [("deferred", 2), ("deferred-caller", 0)])
+def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_sets(device_run, schedule, main):
+    """Under ``deferred`` the call's other steps run on the run's own main lane (the recording stand-in's handle 2), as measured;
+    under ``deferred-caller`` on the caller's stream (0).  The tile hashing is on the side lane (1) either way."""
+    make, kernel, weights, *_ = device_run
+    run = make(schedule=schedule)
+    kernel.dev.log.clear()
+    for _ in range(3):
+        run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
+    assert {st for n, st, _ in log if n in ("hash_msg_v", "hash_leaf_p")} == {run.side.raw} == {1}
+    assert {st for n, st, _ in log if n not in ("hash_msg_v", "hash_leaf_p")} == {main}
+    sets = run.shapes[(32, 256, 1024)].sets
+    ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
+    gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
+    msgs = [p[:2] for n, _, p in log if n == "hash_msg_v"]
+    assert gemms == msgs == [ptr(0), ptr(1), ptr(0)] and ptr(0) != ptr(1)
+    run.begin()
+    run.poison()
+    assert all(bool((t == 0xA5).all()) for st in sets for t in st.values())
+
+
+@pytest.mark.parametrize("deferred", ["deferred", "deferred-caller"])
+def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, tmp_path, deferred):
+    make, kernel, weights, *_ = device_run
+    xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(40 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 32), (0, 128), (1, 32), (0, 128)))]
+    got = {}
+    for name, schedule in (("serial", "serial"), ("deferred", deferred)):
+        run = make(schedule=schedule)
+        kernel.dev.log.clear()
+        run.begin(retain=str(tmp_path / name), run=RUN)
+        keys = []
+        for w, x in xs:
+            run.gemm(w, x, weights[w], None)
+            keys.append(PPD._bytes(run.shapes[(-(-x.shape[0] // 16) * 16, weights[w].shape[0], 1024)].keys[:136]))
+        out = run.end()
+        man = json.loads(Path(out["manifest"]).read_text())
+        launches = sorted((n, i) for n, _, _, i in kernel.dev.log if not n.endswith("_smem"))
+        got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
+                     [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
+    assert got["deferred"] == got["serial"]
+
+
+# ---- the hashing format, from the one table --------------------------------------------------------------------------
+
+def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
+    """The message and leaf keys the kernels read and every tree's hash are the scheme's format's
+    (`verity_pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
+    from verity.commitments.blake3 import blake3
+    from verity_pouw.serving import HASH_FORMATS, SchemeId, hash_format
+
+    make, *_ = device_run
+    run = make()
+    fmt = hash_format(run.scheme)
+    assert fmt is HASH_FORMATS["h1"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == "blake3"
+    assert PPD._bytes(run.const[:64]) == fmt.message_key() + fmt.leaf_key()
+    assert C.H1_KEYS == {"message": blake3(b"pearl-c/h1/message"), "leaf": blake3(b"pearl-c/h1/leaf")}
+    assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
+    assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
+    assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
+    with pytest.raises(KeyError, match="this device path runs"):
+        PPD.scheme_of("pearl-c-sm120-v1-h3")
+
+
+# ---- the schedule as data ---------------------------------------------------------------------------------------------
+
+def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
+    """-h1's forming reads seed_A from A's root, so A's tree stays on the main lane; and this path moves only the tile hashing."""
+    from verity_pouw.serving import Schedule
+    s = PPD.scheme_of(SCHEME)
+    with pytest.raises(ValueError, match="a_tree can't leave the main lane under h1"):
+        PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)
+    with pytest.raises(ValueError, match="this path runs only tile_hash on a side lane, not screen"):
+        PPD.schedule_of(Schedule("screen-aside", frozenset({"tile_hash", "screen"}), ring=2), s)
+    assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "digests", "u") and PPD.rotated(PPD.SERIAL) == ()
+
+
+def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_run):
+    make, kernel, weights, *_ = device_run
+    run = make()
+    run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    sh = run.shapes[(32, 256, 1024)]
+    assert len(sh.sets) == 1 and run.side is None and run.details["schedule"]["name"] == "serial"
+    run.end()
+    run.begin(retain=None, schedule="deferred")
+    run.poison()
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    assert len(sh.sets) == 2 and all(bool((t == 0xA5).all()) for t in sh.sets[1].values())
+    assert run.details["schedule"] == {"name": "deferred", "side": ["tile_hash"], "ring": 2, "main": -(1 << 10), "side_lane": 0}
+    assert {st for n, st, _, _ in kernel.dev.log if n == "hash_leaf_p"} == {1} and run.end()["schedule"] == "deferred"
+
+
+def test_the_gates_schedule_check_compares_with_serial_and_keeps_the_runs_schedule(device_run):
+    make, _, weights, *_ = device_run
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    run = make(schedule="deferred")
+    got = E2E.schedule_check(run, weights)
+    assert got["ok"] and got["schedule"] == "deferred" and set(got) >= {"serial", "deferred", "priorities"}
+    assert run.schedule.name == "deferred" and got["priorities"]["main"] == -(1 << 10)
+
+
 # ---- the quality run ----------------------------------------------------------------------------------------------
 
 def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
@@ -752,3 +887,68 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
     monkeypatch.setattr(E2E, "Worker", Ungated)
     with pytest.raises(SystemExit, match="gate failed"):
         E2E.perplexity(args)
+
+
+# ---- one install path: the run behind the Stack ------------------------------------------------------------------------
+
+def _stack_sites(weights):
+    from verity_vllm.linear.api import LinearSite
+    return [LinearSite(w, w, f"model.layers.{w}", t.shape[0], t.shape[1], "bf16") for w, t in weights.items()]
+
+
+class _Layer:
+    def __init__(self, weight):
+        self.weight = weight
+
+
+def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path):
+    """e2e's install path (`Stack` + `PearlCExecutor`, the arm from `arm_of`) retains the same manifest and files as the run
+    driven directly, byte for byte."""
+    import dataclasses
+
+    from verity_vllm.linear.api import Stack
+    make, _, weights, *_ = device_run
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(60 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 128), (1, 20)))]
+    direct = make()
+    direct.begin(retain=str(tmp_path / "direct"), run=RUN)
+    for w, x in xs:
+        direct.gemm(w, x, weights[w], None)
+    want = direct.end()
+    run = make()
+    sites = _stack_sites(weights)
+    stack = Stack(sites, PPD.PearlCExecutor(run))
+    assert stack.refusals() == [] and stack.executor.schedules == {"serial", "deferred", "deferred-caller"}
+    stack.activate(E2E.arm_of("pearlc", run, types.SimpleNamespace(schedule="serial")))
+    with stack.pass_(dataclasses.replace(stack.active.spec, retain=str(tmp_path / "stack"), run_id=RUN)):
+        for w, x in xs:
+            stack.apply(sites[w], _Layer(weights[w]), x, None, lambda *a: pytest.fail("the stack called vLLM's own apply"))
+    got = stack.passes[-1]
+    assert {k: v for k, v in got.items() if k != "manifest"} == {k: v for k, v in want.items() if k != "manifest"}
+    a, b = Path(want["manifest"]).parent, Path(got["manifest"]).parent
+    assert (a / "manifest.json").read_text() == (b / "manifest.json").read_text()
+    assert all((a / f).read_bytes() == (b / f).read_bytes() for f in ("leaves", "tree_t", "calls/0.rows.bf16", "weights/0.tree"))
+
+
+def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_run):
+    from verity_vllm.linear.api import Control, Stack
+    make, kernel, weights, *_ = device_run
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    run, args = make(), types.SimpleNamespace(schedule="deferred")
+    arms = {m: E2E.arm_of(m, run, args) for m in ("bf16", "pearlc-nohash", "pearlc")}
+    assert arms["bf16"].executor is None and arms["pearlc"].executor == arms["pearlc-nohash"].executor == run.entry
+    assert (arms["pearlc"].spec.hashing, arms["pearlc-nohash"].spec.hashing) == (True, False)
+    assert {a.spec.schedule for m, a in arms.items() if m != "bf16"} == {"deferred"}
+    sites = _stack_sites(weights)
+    stack = Stack(sites, PPD.PearlCExecutor(run))
+    stack.activate(arms["bf16"])
+    assert stack.apply(sites[0], _Layer(weights[0]), "x", None, lambda layer, x, bias: ("stock", x)) == ("stock", "x")
+    stack.activate(arms["pearlc"])
+    kernel.dev.log.clear()
+    spec = arms["pearlc"].spec.__class__(controls=(Control("omit", E2E.CONTROL_OMITS),), schedule="deferred")
+    with stack.pass_(spec):
+        assert run.omit == E2E.CONTROL_OMITS
+        stack.apply(sites[0], _Layer(weights[0]), torch.randn(32, 1024).to(torch.bfloat16), None, None)
+    names = {n for n, *_ in kernel.dev.log}
+    assert "hash_leaf_p" not in names and "hash_rows_w" not in names and run.omit == frozenset()

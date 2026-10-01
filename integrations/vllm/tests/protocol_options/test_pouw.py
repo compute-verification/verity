@@ -139,6 +139,35 @@ def test_a_quantized_layer_is_refused_at_install_not_misread(quantized):
         PO.install(model, _serve("pouw:ncp-v1"))
     assert hooks.live("pouw:ncp-v1") == () and [layer.quant_method.apply for layer in model.layers] == before
 
+
+class _Packed(Linear):
+    """A stand-in for compressed-tensors' packed linear: ``weight_packed`` and ``weight_scale``, and no ``weight``."""
+
+    def __init__(self, packed, scale):
+        self.weight_packed, self.weight_scale, self.quant_method = packed, scale, Apply()
+
+
+def _scaled(r):
+    layer = Linear(r.standard_normal((N, K), np.float32))
+    layer.weight_scale = np.ones(N, np.float32)
+    return layer
+
+
+@pytest.mark.parametrize("layer", [_scaled, lambda r: _Packed(r.integers(0, 1 << 31, (N, K // 8)).astype(np.int32),
+                                                              np.ones(N, np.float32))],
+                         ids=["float-weight-with-scale", "packed-without-weight"])
+def test_a_layer_carrying_quantization_parameters_is_refused_whatever_its_weight(layer):
+    """A scale beside a float weight, or a packed layer with no ``weight`` to read, is refused by its parameters, at the
+    commitment and at install, and the model is left as it was."""
+    model = Model(_rng().standard_normal((N, K), np.float32))
+    model.layers.append(layer(_rng(3)))
+    before = [m.quant_method.apply for m in model.layers]
+    with pytest.raises(ValueError, match=r"linear 1: it carries weight_\w+.*refused, not misread"):
+        pouw.commit_weights("ncp-v1", types.SimpleNamespace(model=model))
+    with pytest.raises(ValueError, match="refused at install"):
+        PO.install(model, _serve("pouw:ncp-v1"))
+    assert hooks.live("pouw:ncp-v1") == () and [m.quant_method.apply for m in model.layers] == before
+
 # --- install, serve, close ---------------------------------------------------------------------------------------------------
 
 def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exactly(tmp_path):
@@ -223,10 +252,56 @@ def _fake_pous(monkeypatch):
     monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
 
 
-def test_pouw_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):
+def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):
     _fake_pous(monkeypatch)
-    assert not hasattr(pouw, "keeps_weight_copy")
+    assert not pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1"))
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
+
+
+@pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h1", "ncp-v2"])
+def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, scheme):
+    """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
+    from the plaintext, not what POUS decodes (the composition's decision 3)."""
+    _fake_pous(monkeypatch)
+    settings = {"pouw": {"beacon": BEACON, **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
+    assert pouw.keeps_weight_copy(scheme, _serve(f"pouw:{scheme}", settings=settings))
+    assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
+    got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
+    assert [r for r in got if "weight-derived copy" in r] == [
+        f"pouw:{scheme}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read what "
+        "POUS stores (prepare its weight operands per forward from the weight it is handed)"]
+
+
+def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):
+    """Two kernel directories in one process (an -h2 tree beside -h1, a tuned variant beside the gated one) get their own
+    run.py and fixture.py; the same bytes anywhere are one kernel.  Before this, the second got the first's run.py."""
+    import hashlib
+
+    def kernel_dir(name, mark):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "run.py").write_text(f"MARK = {mark!r}\n\nclass Dev:\n    def __init__(self, raw):\n        self.raw = raw\n\n"
+                                  "    def open(self):\n        self.opened = True\n")
+        (d / "fixture.py").write_text("FIX = 1\n")
+        (d / "pearl_c_sm120.cubin").write_bytes(b"cubin " + mark.encode())
+        return d
+
+    def sha(p):
+        return hashlib.sha256(p.read_bytes()).hexdigest()
+
+    monkeypatch.setattr(PPD, "_KERNELS", {})
+    before = set(sys.modules)
+    try:
+        a, b, a2 = kernel_dir("a", "h1"), kernel_dir("b", "h2"), kernel_dir("a2", "h1")
+        ka, kb, ka2 = (PPD.Kernel.load(str(d)) for d in (a, b, a2))
+        assert (ka.run.MARK, kb.run.MARK) == ("h1", "h2") and ka.run is not kb.run and ka.dev.opened
+        assert ka2 is ka and ka.fixture is kb.fixture
+        assert ka.source_sha256 == PPD.source_digest(sha(a / "run.py"), sha(a / "fixture.py")) != kb.source_sha256
+        assert ka.cubin_sha256 == sha(a / "pearl_c_sm120.cubin")
+        assert PPD.Kernel.load(str(a), str(b / "pearl_c_sm120.cubin")).cubin_sha256 == kb.cubin_sha256
+    finally:
+        for name in set(sys.modules) - before:
+            del sys.modules[name]
 
 
 def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
@@ -242,3 +317,12 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
         x = rng.standard_normal((16, K), np.float32)
         assert np.array_equal(layer.quant_method.apply(layer, x), _int7_linear(x, (w + 100) - 100))
     assert hooks.live("pouw:ncp-v1") == () and hooks.live("pous:band-chain/d12/v1") == ()
+
+
+def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
+    scheme, on = "pearl-c-sm120-v1-h1", {"beacon": BEACON, "device": "cuda", "kernel": "k"}
+    for name in ("serial", "deferred", "deferred-caller"):
+        assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
+    assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
+    assert any("Pearl-C's; this executor runs serially" in r
+               for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"beacon": BEACON, "schedule": "deferred"}})))

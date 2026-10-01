@@ -29,14 +29,14 @@ wrong drawn unit, pointwise in the reruns) follows from **the lowering** (`Lower
 a message packing a witness that satisfies the table's statement decodes, for each drawn unit, to
 values on which that unit is correct. `loweringSoundC_of_place` discharges it from each drawn
 unit's place in the table (`UnitPlace`, `Lowering.lean`), where the audit's circuit `C` is the rows
-the verifier parses and "each template's rows compute its gates" is ASSUMPTIONS.md's L1.
+the verifier parses; what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).
 
 **The discharge** (`flock_compiled_knowledgeSound`): the audit's knowledge term is the table
 theorem's bound for the prover's strategy after each draw, averaged over the draw,
 $$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK)\big],$$
 from `table_knowledge_sound_joint_tight`, with no named assumption. The link term
 stays a named hypothesis (`LinkSound`) until the link theorem, under expected-time collision
-resistance (`Assumptions.SHA512ExpectedTimeCR`, DESIGN.md §3).
+resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
 `flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/

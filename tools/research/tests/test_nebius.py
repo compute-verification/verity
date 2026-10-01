@@ -7,11 +7,13 @@ import base64
 import datetime
 import fcntl
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -162,7 +164,7 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
     lease.symlink_to(GPU_LEASE)
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
     holder = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", *pause], env=env,
-                              stdout=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, text=True, start_new_session=True)
     waiter = None
     try:
         assert holder.stdout.readline().strip() == "ready"
@@ -174,20 +176,59 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
         (tmp_path / "gl" / "wait.1.99999").write_text("pid=99999 n=4 run=- who=gone since=2026-09-30T00:00:00Z\n")
         assert fr.waiters() == []
         waiter = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", "true"],
-                                  env={**env, "GPU_LEASE_POLL_S": "3600"}, stderr=subprocess.PIPE, text=True)
+                                  env={**env, "GPU_LEASE_POLL_S": "3600"}, stderr=subprocess.PIPE, text=True, start_new_session=True)
         line = waiter.stderr.readline()
         assert line.startswith("gpu-lease: waiting for 1 GPU(s), queued as wait."), line
         assert fr.waiters() == [1]
     finally:
         for p in (waiter, holder):
             if p is not None:
-                p.terminate()
-                p.wait()
+                stop_group(p)
+
+
+def stop_group(p: subprocess.Popen) -> None:
+    """SIGTERM a process started with start_new_session and everything in its group. Terminating only the bash leaves the
+    `sleep` it waits on (GPU_LEASE_POLL_S=3600) or the leased command orphaned for the length of that sleep."""
+    try:
+        os.killpg(p.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    p.wait()
+
+
+def test_fill_runner_does_not_count_a_waiter_pinned_inside_keep_free(tmp_path, monkeypatch):
+    """Memory accounting's `gpu-lease 1 --on 7 --wait` requests, on node 2's kept-free GPU 7, stopped fill from starting on the
+    six free GPUs (pouw-node2, 1 Oct 13:05Z): fill never takes a kept-free GPU, so a waiter pinned inside keep-free holds none back.
+    A waiter pinned partly outside it, unpinned, or pinned by UUID still counts."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    gl.mkdir()
+    fill.mkdir()
+    (fill / "keep-free").write_text("6,7  # pous\n")
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_keep_free", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    locks = []
+    try:
+        for i, on in enumerate(["7", "6,7", "6-7", "5,7", None, "GPU-af0bf9e0"]):
+            f = gl / f"wait.{i}.{100 + i}"
+            f.write_text(f"pid={100 + i} n={i + 1}{f' on={on}' if on else ''} run=- who=w since=2026-10-01T13:00:00Z\n")
+            fd = os.open(f, os.O_RDONLY)
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            locks.append(fd)
+        assert fr.waiters() == [4, 5, 6]
+        (fill / "keep-free").unlink()
+        assert fr.waiters() == [1, 2, 3, 4, 5, 6]
+    finally:
+        for fd in locks:
+            os.close(fd)
 
 
 def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_path, monkeypatch):
-    """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter or a waiting window, since the
-    agent evicts; a running window still stops it, and once agent.lock is free the next tick is today's rules."""
+    """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter, since the agent evicts; a waiting
+    or running window still stops it (infra, 1 Oct 06:50Z: the agent's eviction signals gpu-lease's pid only, which leaves a
+    `research run` workload on the GPU), and once agent.lock is free the next tick is today's rules."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
     (fill / "queue").mkdir(parents=True)
     gl.mkdir()
@@ -221,11 +262,100 @@ def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_p
     agent = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
     fcntl.flock(agent, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
-        assert fr.agent_up() and stops([2]) == [] and stops([1, 1]) == []
+        assert fr.agent_up() and stops([2]) == ["timed window"] and stops([1, 1]) == []
         assert stops([], timed=True) == ["timed window"]
     finally:
         os.close(agent)
     assert not fr.agent_up() and stops([2]) == ["timed window"]
+
+
+def test_fill_runner_ranks_commits_first_reclaims_for_them_and_keeps_out_of_booked_windows(tmp_path, monkeypatch):
+    """Node 2's order (Daniel, 1 Oct): circuits' Commits, then pous, then proofs. A queued Commit with no free GPU stops the
+    newest proofs fill (one per Commit), never while a window waits; no GPU job starts whose max_min reaches a booked window;
+    and a GPU job's lease scope is killed when it stops and swept once it exits."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    for d in ("queue", "running", "logs"):
+        (fill / d).mkdir(parents=True)
+    gl.mkdir()
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_rank", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    held: dict[int, str] = {}
+    want: list[int] = []
+    started, stopped = [], []
+    monkeypatch.setattr(fr, "reap", lambda: None)
+    monkeypatch.setattr(fr, "verity_pool", lambda queued: None)
+    monkeypatch.setattr(fr, "lease", lambda i: held.get(i))
+    monkeypatch.setattr(fr, "waiters", lambda: list(want))
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append(p.name) or p.unlink())
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: stopped.append(k) or fr.running[k].update(stopping=True, why=why))
+
+    def queue(*names):
+        for name in names:
+            head = "gpus=1 project=verity prio=20" if name.startswith("verity-commit-") else (
+                "gpus=1 project=verity" if name.startswith("pn2g") else "gpus=1")
+            (fill / "queue" / name).write_text(f"# fill: owner=o max_min=30 {head}\n")
+
+    def run(name, t0, gpu):
+        held[gpu] = f"pid={10 + gpu} run=- who=fill:o since=2026-10-01T00:00:00Z preempt=1 cmd=x"
+        fr.running[name] = {"t0": t0, "paused": False, "started": "-",
+                            "h": {"gpus": 1, "project": "verity" if name.startswith("pn2g") else "pous", "owner": "o",
+                                  "max_min": 10**9}}
+
+    run("pous-a.sh", 1, 0)
+    run("pn2g-old.sh", 2, 1)
+    run("pn2g-new.sh", 3, 2)
+    queue("verity-commit-c1.sh")
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh"] and started == []
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh"]                          # one GPU already freeing for the one Commit
+    queue("verity-commit-c2.sh")
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh", "pn2g-old.sh"]
+    for k, gpu in (("pn2g-new.sh", 2), ("pn2g-old.sh", 1)):
+        fr.running.pop(k), held.pop(gpu)
+    want[:] = [3]
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh", "pn2g-old.sh", "pous-a.sh"] and started == []   # a waiting window drains; no Commit starts
+    want.clear()
+    fr.running.clear()
+    held.clear()
+    queue("pn2g-x.sh", "pous-b.sh")
+    fr.tick(3)
+    assert started == ["verity-commit-c1.sh", "verity-commit-c2.sh", "pous-b.sh"]
+    started.clear()
+    stopped.clear()
+    queue("verity-commit-c3.sh")
+    t = 1_790_848_800.0                                        # 2026-10-01T10:00Z
+    (fill / "windows").write_text("2026-10-01T10:00Z 30 # a booked window\n\nnot a line\n")
+    assert fr.windows() == [(t, t + 1800)]
+    monkeypatch.setattr(fr, "wall", lambda: t - 600)
+    fr.tick(3)
+    assert started == [] and stopped == []                     # 30 min from 09:50Z reach the window
+    monkeypatch.setattr(fr, "wall", lambda: t - 1800)
+    fr.tick(3)
+    assert started == ["verity-commit-c3.sh", "pn2g-x.sh"]
+    assert not fr.clears({"max_min": 30}, [(t, t + 1800)], t + 60) and fr.clears({"max_min": 30}, [(t, t + 1800)], t + 1800)
+
+    calls = []
+    queue("pous-c.sh")
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: type("P", (), {"pid": 4242, "poll": lambda self: 143})())
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: calls.append(a[:2]))
+    fr.start(fill / "queue" / "pous-c.sh", fr.header(fill / "queue" / "pous-c.sh"))
+    assert fr.running["pous-c.sh"]["unit"] == "gpu-lease-4242"
+    assert (fill / "running" / ".pous-c.sh.unit").read_text() == "gpu-lease-4242\n"
+    monkeypatch.setattr(fr.os, "killpg", lambda pid, sig: None)
+    fr.stop("pous-c.sh", "test")
+    assert ["systemctl", "--user", "kill", "--signal=SIGTERM", "gpu-lease-4242.scope"] in calls
+    fr.reap()
+    assert ["systemctl", "--user", "kill", "--signal=SIGKILL", "gpu-lease-4242.scope"] in calls
+    assert ("scope-residue", "pous-c.sh") in calls and "pous-c.sh" not in fr.running
+    assert (fill / "queue" / "pous-c.sh").exists()
 
 
 @needs_flock
@@ -617,6 +747,53 @@ def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhe
     assert remote.direct_cpus() == set()
 
 
+def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_cap(tmp_path, monkeypatch):
+    """Top-level's node-2-first order (1 Oct 12:14 AM PDT): a Commit guest may take 2 GPUs (a TP2 row), from one NUMA node when it
+    can, through `gpu-lease 2 --on a,b`; it runs up to FILL_COMMIT_MAX_MIN (a Gemma-2 Commit's CPU phases outlast 30 min) while
+    other GPU fill stays at 30 and gpus 1; and a TP2 Commit short of GPUs reclaims as many as it lacks."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    for d in ("queue", "running", "logs"):
+        (fill / d).mkdir(parents=True)
+    gl.mkdir()
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_tp2", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    for name, head, want in (("verity-commit-a.sh", "gpus=2 max_min=90", (2, 90)), ("verity-commit-b.sh", "gpus=4 max_min=500", (2, 120)),
+                             ("pn2g-x.sh", "gpus=2 max_min=90 project=verity", (1, 30))):
+        (tmp_path / name).write_text(f"# fill: owner=t {head}\n")
+        h = fr.header(tmp_path / name)
+        assert (h["gpus"], h["max_min"]) == want, name
+    assert fr.pick_gpus([0, 3, 5], None, 2, 8) == [0, 3] and fr.pick_gpus([3, 4, 6, 7], None, 2, 8) == [6, 7]
+    assert fr.pick_gpus([3, 5], None, 2, 8) == [3, 5] and fr.pick_gpus([5], None, 2, 8) is None
+    held: dict[int, str] = {}
+    started, stopped = [], []
+    monkeypatch.setattr(fr, "reap", lambda: None)
+    monkeypatch.setattr(fr, "verity_pool", lambda queued: None)
+    monkeypatch.setattr(fr, "lease", lambda i: held.get(i))
+    monkeypatch.setattr(fr, "waiters", lambda: [])
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append((p.name, h["on"])) or p.unlink())
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: stopped.append(k) or fr.running[k].update(stopping=True, why=why))
+    for gpu in (0, 1, 2, 5):
+        held[gpu] = "pid=1 run=- who=x since=2026-10-01T00:00:00Z cmd=x"
+    (fill / "queue" / "verity-commit-tp2.sh").write_text("# fill: owner=o gpus=2 max_min=90 project=verity prio=20\n")
+    (fill / "queue" / "verity-commit-tp1.sh").write_text("# fill: owner=o gpus=1 max_min=90 project=verity prio=20\n")
+    os.utime(fill / "queue" / "verity-commit-tp2.sh", (1, 1))
+    fr.tick(8)
+    assert started == [("verity-commit-tp2.sh", "6,7"), ("verity-commit-tp1.sh", "4")]
+    started.clear()
+    held.update({i: "pid=2 run=- who=x since=2026-10-01T00:00:00Z cmd=x" for i in (3, 4, 6, 7)})
+    held.pop(5)
+    for k, gpu in (("pn2g-a.sh", 0), ("pn2g-b.sh", 1)):
+        fr.running[k] = {"t0": gpu, "paused": False, "started": "-", "h": {"gpus": 1, "project": "verity", "owner": "o", "max_min": 10**9}}
+    (fill / "queue" / "verity-commit-tp2b.sh").write_text("# fill: owner=o gpus=2 max_min=90 project=verity prio=20\n")
+    fr.tick(8)
+    assert started == [] and stopped == ["pn2g-b.sh"]          # one GPU free, one more reclaimed: the newest proofs fill's
+    fr.tick(8)
+    assert stopped == ["pn2g-b.sh"]
+
+
 def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_scope(tmp_path, monkeypatch):
     """A Verity CPU guest (a vLLM Build, 2-50 min and some 1-4 h) may set max_min up to 360; every other job stays capped at 30.
     Its pause and stop go through its systemd scope, since `research run` starts the workload as its own process group."""
@@ -629,6 +806,10 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
                        ("gpus=1 max_min=300 project=verity", 30), ("gpus=0 max_min=300 project=pous", 30)):
         job.write_text(f"#!/usr/bin/env bash\n# fill: owner=t {head}\n")
         assert fr.header(job)["max_min"] == want, head
+    monkeypatch.setattr(fr, "MAX_MIN_EXCEPTIONS", {"gate.sh": 60})
+    gate = tmp_path / "gate.sh"
+    gate.write_text("# fill: owner=t gpus=1 max_min=90 project=verity\n")
+    assert fr.header(gate)["max_min"] == 60
     calls = []
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
     assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
@@ -664,6 +845,59 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     fr.running.pop("p1.sh")
     fr.verity_pool([job("v2.sh", "gpus=0 project=verity")])
     assert [n for n, _ in started] == ["v2.sh"]
+
+
+def test_fill_runner_files_a_job_by_its_own_exit_status_across_a_restart_and_never_requeues_an_unknown_exit(tmp_path, monkeypatch):
+    """A job that finishes while a restarted runner has adopted it goes to done/, not back to the queue, where its rerun deleted
+    its result (pous-climb-a3, 1 Oct 08:50Z); exit 0 is done even when a stop raced it; and a job whose exit the runner can't learn
+    is held, never rerun, while one that asks for more chunks (99) is still requeued."""
+    fill = tmp_path / "fill"
+    for d in ("queue", "running", "done", "failed", "logs", "held-unknown-exit"):
+        (fill / d).mkdir(parents=True)
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("FILL_CPU_SET", str(sorted(os.sched_getaffinity(0))[0]))
+    spec = importlib.util.spec_from_file_location("fill_runner_exit", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr.shutil, "which", lambda name: None)
+    out = tmp_path / "out"
+
+    def run(name: str, body: str) -> dict:
+        p = fill / "queue" / name
+        p.write_text(f"#!/usr/bin/env bash\n# fill: owner=o gpus=0\n{body}\n")
+        fr.start(p, fr.header(p))
+        j = fr.running[name]
+        j["proc"].wait()
+        return j
+
+    def restart() -> None:
+        fr.running.clear()
+        fr.adopt()
+        fr.reap()
+
+    run("a.sh", f"rm -rf {out}; mkdir -p {out}; echo result > {out}/r; exit 0")
+    restart()
+    assert (fill / "done" / "a.sh").exists() and not (fill / "queue" / "a.sh").exists()
+    assert (out / "r").read_text() == "result\n" and not list((fill / "running").iterdir())
+
+    run("more.sh", "exit 99")
+    restart()
+    assert (fill / "queue" / "more.sh").exists()
+
+    run("raced.sh", "exit 0")["stopping"] = fr.running["raced.sh"]["requeue"] = True
+    fr.reap()
+    assert (fill / "done" / "raced.sh").exists()
+
+    gone = subprocess.Popen(["true"], start_new_session=True)
+    gone.wait()
+    (fill / "running" / "legacy.sh").write_text("# fill: owner=o gpus=0\n")
+    (fill / "running" / ".legacy.sh.pgid").write_text(f"{gone.pid}\n")
+    (fill / "running" / "orphan.sh").write_text("# fill: owner=o gpus=0\n")
+    restart()
+    assert sorted(p.name for p in (fill / "held-unknown-exit").iterdir()) == ["legacy.sh", "orphan.sh"]
+    assert not list((fill / "queue").glob("legacy.sh")) and not list((fill / "queue").glob("orphan.sh"))
+    kinds = [json.loads(l)["event"] for l in (fill / "events.jsonl").read_text().splitlines()]
+    assert kinds.count("unknown-exit") == 2 and "adopted-exit" not in kinds
 
 
 def _pool_n1(monkeypatch, **env):
@@ -834,7 +1068,8 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
     usage = tmp_path / "lease-usage.jsonl"
     rec = {"schema": "gpu-lease/usage/v1", "end": "2026-09-30T20:30:00Z"}
     usage.write_text("".join(json.dumps(r) + "\n" for r in [
-        {**rec, "who": "fill:bc-a", "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh", "gpus": [{"held_s": 3600, "busy_s": 1800}]},
+        {**rec, "who": "fill:bc-a", "since": "2026-09-30T20:00:00Z", "rc": 0, "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh",
+         "gpus": [{"held_s": 3600, "busy_s": 1800}]},
         {**rec, "who": "fill:bc-b", "cmd": "bash /workspace/pouw/fill/running/pad-x.sh", "gpus": [{"held_s": 360, "busy_s": 360}]},
         {**rec, "who": "session:bc-c", "cmd": "python3 bench.py", "gpus": [{"held_s": 720, "busy_s": 720}]},
         {**rec, "who": "bc-d", "timed": True, "cmd": "python3 audit.py", "gpus": [{"held_s": 360, "busy_s": 360}]},
@@ -853,6 +1088,10 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
     assert [(k["kind"], k["leased_gpu_h"], k["useful_gpu_h"], k["idle_gpu_h"], k["efficiency"]) for k in n2["kinds"]] == [
         ("pouw-kt-gpu1", 1.0, 0.5, 0.5, 0.5), ("unlabeled:pad-x", 0.1, 0.0, 0.1, 0.0), ("direct:session:bc-c", 0.2, 0.2, 0.0, 1.0),
         ("timed:bc-d", 0.1, 0.1, 0.0, 1.0)]
+    d = n2["delivered_by_hour"]
+    assert [r["hour"] for r in d] == ["2026-09-30T18:00:00Z", "2026-09-30T19:00:00Z", "2026-09-30T20:00:00Z", "2026-09-30T21:00:00Z"]
+    assert (d[2]["leased_gpu_s"], d[2]["delivered_gpu_s"], d[2]["delivered_share"], d[2]["provisional"]) == (2400, 1800, 0.75, True)
+    assert d[3]["leased_gpu_s"] == 0 and d[3]["delivered_share"] is None and d[0]["delivered_share"] is None
     pp.alert(n2["monitors"], now)
     pp.alert(n2["monitors"], now + datetime.timedelta(minutes=5))
     assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 2
@@ -862,8 +1101,8 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_refuses_before_touching_a_node(tmp_path):
-    """n2_commit.sh's item checks run before any ssh: a bad key, a non-config-run item, a missing field or a TP2 row (a node-2
-    guest has one GPU) exits 2; a TP1 config-run item passes."""
+    """n2_commit.sh's item checks run before any ssh: a bad key, a non-config-run item, a missing field or a row wider than TP2 (a
+    node-2 guest has one or two GPUs) exits 2; a TP1 or TP2 config-run item passes."""
     script = NEBIUS / "n2_commit.sh"
     env = {"ENV": {"ROW": "llama32-1b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "ROLE": "LLAMA32_1B",
                    "REPO": "unsloth/Llama-3.2-1B", "REVISION": "9535bd9b"}}
@@ -879,7 +1118,97 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
     assert check("Cov_G153") == 2
     assert check("cov-g153", template="config-run-row") == 2
     assert check("cov-g153", env={**env["ENV"], "REVISION": ""}) == 2
-    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 2
+    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 0
+    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp4__")}) == 2
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
+    """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
+    fetch-manifests copies it from node 1's store, keeps only bytes whose sha256 is the id, and leaves present ones alone."""
+    n1, n2, bin_ = tmp_path / "n1", tmp_path / "n2", tmp_path / "bin"
+    for d in (n1 / "manifests", n2 / "manifests", bin_):
+        d.mkdir(parents=True)
+    # node 1 is a directory here: the fake rsync maps HOST:/PATH to n1/PATH's last two parts
+    (bin_ / "rsync").write_text('#!/bin/sh\nfor a; do :; done\nsrc=$(eval echo \\${$(($#-1))})\n'
+                                f'cp "{n1}/manifests/${{src##*/}}" "$a"\n')
+    (bin_ / "rsync").chmod(0o755)
+    good, other = b'{"kind":"vllm-build/v1"}', b'{"kind":"other"}'
+    art = lambda b: "art:" + hashlib.sha256(b).hexdigest()
+    (n1 / "manifests" / f"{art(good)[4:]}.json").write_bytes(good)
+    forged = "art:" + "0" * 64
+    (n1 / "manifests" / f"{forged[4:]}.json").write_bytes(other)
+
+    def fetch(*arts: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "fetch-manifests", *arts], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid", "VY_N2": "n2.invalid",
+                                   "VY_STORE": str(n2)})
+
+    assert fetch(art(good), forged, "").returncode == 0
+    assert (n2 / "manifests" / f"{art(good)[4:]}.json").read_bytes() == good
+    assert sorted(p.name for p in (n2 / "manifests").iterdir()) == [f"{art(good)[4:]}.json"]
+    (n1 / "manifests" / f"{art(good)[4:]}.json").unlink()
+    assert fetch(art(good)).returncode == 0 and "fetched" not in fetch(art(good)).stdout
+    assert fetch("art:abc").returncode == 2
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
+    """With VY_N2_FIRST=0, offload moves a held Commit only when n1-free prints 0: deployments-gpu's own unused quota counts even
+    while provers borrows it (Kueue reclaims it), the cohort's idle GPUs count up to the borrowing limit, and an unreadable Kueue
+    prints nothing, so the Commit stays."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+
+    def free(dep: tuple[int, int, int], prov: tuple[int, int, int], fail: bool = False) -> str:
+        def cq(name, nom, bl, use):
+            return {"metadata": {"name": name}, "spec": {"cohort": "nebius", "resourceGroups": [{"flavors": [{"resources": [
+                {"name": "cpu", "nominalQuota": "24"}, {"name": "nvidia.com/gpu", "nominalQuota": str(nom), "borrowingLimit": str(bl)}]}]}]},
+                "status": {"flavorsUsage": [{"resources": [{"name": "nvidia.com/gpu", "total": str(use)}]}]}}
+        (tmp_path / "cq.json").write_text(json.dumps({"items": [cq("deployments-gpu", *dep), cq("provers", *prov),
+                                                                 cq("backfill", 0, 0, 0)]}))
+        (bin_ / "kubectl").write_text("#!/bin/sh\nexit 1\n" if fail else f'#!/bin/sh\ncat "{tmp_path}/cq.json"\n')
+        (bin_ / "kubectl").chmod(0o755)
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "n1-free"], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}).stdout.strip()
+
+    assert free((6, 2, 5), (2, 1, 3)) == "1"      # 1 Oct 02:27Z: its sixth GPU is lent to provers
+    assert free((6, 2, 6), (2, 1, 2)) == "0"
+    assert free((6, 2, 6), (2, 1, 0)) == "2"      # provers idle: borrow up to the limit
+    assert free((6, 2, 7), (2, 1, 0)) == "1"
+    assert free((6, 2, 2), (2, 1, 0)) == "6"
+    assert free((6, 2, 6), (2, 1, 2), fail=True) == ""
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_1(tmp_path):
+    """submit's `place` asks `cluster submit` for node 2 with the row's research question and prints the placed.jsonl line; a
+    refusal exits 3, and a queue that gives no answer prints nothing and exits 0, so it never holds a row back. The queue is a
+    stand-in `cluster` package that echoes its arguments (tools/cluster's own tests cover the placement)."""
+    src = tmp_path / "cluster-src"
+    (src / "src" / "cluster").mkdir(parents=True)
+    (src / "descriptions").mkdir()
+    (src / "src" / "cluster" / "__init__.py").write_text("")
+    (src / "src" / "cluster" / "__main__.py").write_text(
+        "import json, sys\na = sys.argv[1:]\nv = lambda k: a[a.index(k) + 1]\n"
+        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--node') == 'vy-nebius-2'\n"
+        "if int(v('--gpus')) > 8:\n    print(json.dumps({'refused': 'vy-nebius-2 has 8 GPUs'}))\n    sys.exit(3)\n"
+        "print(json.dumps({'node': 'vy-nebius-2', 'why': 'starts now', 'question': v('--question'), 'max_s': int(v('--max-s'))}))\n")
+
+    def place(queue: Path, gpus: str = "1") -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "place", "commit", "vllm-epoch-run-cov-gm149", gpus, "40",
+                               "Does cov-gm149's Commit validate on vy-nebius-2?"], capture_output=True, text=True,
+                              env={**os.environ, "VY_QUEUE_SRC": str(queue)})
+
+    r = place(src)
+    assert r.returncode == 0, r.stderr
+    rec = json.loads(r.stdout)
+    assert (rec["kind"], rec["key"], rec["node"], rec["executor"]) == ("commit", "vllm-epoch-run-cov-gm149", "vy-nebius-2", "fill-queue")
+    assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
+    r = place(src, gpus="9")
+    assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
+    r = place(tmp_path / "no-cluster")
+    assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
 
 
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
@@ -908,10 +1237,17 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     calls: list[tuple] = []
-    state = {"holders": list(holders), "pods": []}
+    state = {"holders": list(holders), "pods": [], "nominal": 3, "workloads": []}
 
     def kubectl(*args, stdin=None):
         calls.append((args, stdin))
+        if args[:2] == ("get", "clusterqueue"):
+            if state["nominal"] is None:
+                raise subprocess.CalledProcessError(1, "kubectl")
+            return json.dumps({"spec": {"resourceGroups": [{"flavors": [{"resources": [
+                {"name": "cpu", "nominalQuota": "64"}, {"name": "nvidia.com/gpu", "nominalQuota": str(state["nominal"])}]}]}]}})
+        if args[:2] == ("get", "workloads"):
+            return json.dumps({"items": state["workloads"]})
         if args[:2] == ("get", "jobs"):
             return json.dumps({"items": [{"metadata": {"name": j}, "status": {"active": 1}} for j, _, _ in state["holders"]]})
         if args[:2] == ("get", "pods"):
@@ -926,19 +1262,8 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
-@pytest.fixture
-def fences(tmp_path):
-    yield
-    for line in Path("/proc/locks").read_text().splitlines():
-        pid = int(line.split()[4])
-        if "n1-lease-fence" in " ".join(Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")) \
-                if Path(f"/proc/{pid}").exists() else False:
-            if str(tmp_path) in Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace"):
-                os.killpg(pid, 15)
-
-
 @needs_flock
-def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, fences):
+def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, reap):
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
     s = m.Controller().tick(1_800_000_000.0)
     assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
@@ -952,7 +1277,7 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
 
 
 @needs_flock
-def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, fences):
+def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
     c = m.Controller()
@@ -980,7 +1305,7 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
 
 
 @needs_flock
-def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, fences):
+def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: "uid-job-pod")
@@ -1007,7 +1332,85 @@ def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(
 
 
 @needs_flock
-def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, fences):
+def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path, reap):
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3)
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=3 run=r-x who=adhoc:me since=2026-09-30T22:00:00Z\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    bench = {"metadata": {"ownerReferences": [{"name": "nd-m0-bench"}]},
+             "status": {"admission": {"clusterQueue": "provers"}, "conditions": [{"type": "QuotaReserved", "status": "True"}]},
+             "spec": {"podSets": [{"count": 1, "template": {"spec": {"containers": [{"resources": {"requests": {"nvidia.com/gpu": "2"}}}]}}}]}}
+    state["workloads"] = [bench]
+    t = 1_800_000_000.0
+    c = m.Controller()
+    c.tick(t)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 1          # 3 wanted, 3 nominal less the bench's 2
+    calls.clear()
+    state["nominal"] = None
+    c2 = m.Controller()
+    c2.tick(t)
+    assert not [a for a, _ in calls if a[0] == "create"]                # the quota unread: no growth
+    os.close(fd)
+    w.unlink()
+    state["nominal"], state["workloads"] = 3, []
+    state["holders"] = [("gpu-pool-1", "gpu-pool-1-x", "GPU-a")]
+    c3 = m.Controller()
+    c3.tick(t)
+    proc = subprocess.Popen(["cat"], stdin=subprocess.PIPE)          # blocks until signalled
+    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
+    s = c3.tick(t + 1)
+    assert [e["ev"] for e in s["events"]] == ["expired"] and not [a for a, _ in calls if a[:2] == ("delete", "pod")]
+    assert proc.wait() == -15
+    os.close(lock)
+
+
+@needs_flock
+def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_sigkills_a_lease_that_outlives_sigterm(
+        monkeypatch, tmp_path, reap):
+    import fcntl
+    t = 1_800_000_000.0
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3, VY_POOL_BORROW=1,
+                                VY_POOL_BORROW_UNTIL=datetime.datetime.fromtimestamp(t + 60, datetime.timezone.utc)
+                                .strftime("%Y-%m-%dT%H:%M:%SZ"))
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
+    bench = {"metadata": {"ownerReferences": [{"name": "nd-m0-bench"}]},
+             "status": {"admission": {"clusterQueue": "provers"}, "conditions": [{"type": "QuotaReserved", "status": "True"}]},
+             "spec": {"podSets": [{"count": 1, "template": {"spec": {"containers": [{"resources": {"requests": {"nvidia.com/gpu": "2"}}}]}}}]}}
+    state["workloads"] = [bench]
+    w = tmp_path / "gl" / "wait.1.4242"
+    fd = os.open(w, os.O_RDONLY | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    grown = lambda: len([a for a, _ in calls if a[0] == "create"])
+    for line, at, want in [("pid=4242 n=3 who=adhoc:me since=x\n", t, 1),             # not preemptible: 3 nominal less 2
+                           ("pid=4242 n=3 who=adhoc:me preempt=1 since=x\n", t, 2),   # preemptible: and 1 borrowed
+                           ("pid=4242 n=3 who=adhoc:me preempt=1 since=x\n", t + 61, 1)]:  # past the deadline
+        w.write_text(line)
+        calls.clear()
+        m.Controller().tick(at)
+        assert grown() == want, line
+    os.close(fd)
+    w.unlink()
+    state["workloads"], state["holders"] = [], [("gpu-pool-1", "gpu-pool-1-x", "GPU-a")]
+    c = m.Controller()
+    c.tick(t)
+    proc = subprocess.Popen(["sh", "-c", "trap '' TERM; echo ready; exec cat"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    assert proc.stdout.readline() == b"ready\n"   # the trap is set before the lease is signalled
+    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
+    assert [e.get("signal") for e in c.tick(t + 1)["events"]] == ["SIGTERM"]
+    assert [e.get("signal") for e in c.tick(t + 1 + m.KILL_AFTER_S)["events"]] == ["SIGKILL"]
+    assert proc.wait() == -9
+    os.close(lock)
+
+
+@needs_flock
+def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, reap):
     import fcntl
     brain = tmp_path / "brain.sh"
     brain.write_text('#!/bin/sh\n[ -e "$(dirname "$0")/down" ] && exit 1\ncat > /dev/null\n'
@@ -1068,3 +1471,92 @@ def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_b
     assert started(fr, cmds, "b.sh", "gpus=0")[:2] == ["numactl", "--membind=1"]
     assert started(fr, cmds, "c.sh", "gpus=0 project=verity")[0] == "nice"
     assert started(fr, cmds, "d.sh", "gpus=1")[0] == fr.GPU_LEASE
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("Node 0 MemFree:        2097152 kB\nNode 0 Inactive(file): 6291456 kB\nNode 0 AnonPages:      1048576 kB\n")
+    monkeypatch.setattr(fr, "NODE_MEMINFO", str(meminfo))
+    assert fr.numa0_gb() == {"numa0_reclaimable_gb": 8.0, "numa0_anon_gb": 1.0}
+
+
+def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared_slots(tmp_path, monkeypatch):
+    """verity-top (1 Oct 12:00 AM PDT): compute accounting's verifies run on 0-47, 4 at a time, at ionice idle, capped from a
+    measured peak, without taking CPU_SET's slots; everyone else's CPU jobs stay on CPU_SET."""
+    fill = tmp_path / "fill"
+    for d in ("queue", "running", "logs", "done", "failed"):
+        (fill / d).mkdir(parents=True)
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("GPU_LEASE_DIR", str(tmp_path / "leases"))
+    monkeypatch.setenv("FILL_CPU_SLOTS", "1")
+
+    def load():
+        spec = importlib.util.spec_from_file_location("fill_runner_cpusets", FILL_RUNNER)
+        fr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fr)
+        return fr
+
+    fr = load()
+    monkeypatch.setattr(fr, "disk_pct", lambda path: 0.0)
+    started = []
+
+    def fake_start(p, h, backfill=False):
+        started.append((p.name, h.get("cpuset"), h.get("mem_gb")))
+        p.unlink()
+        fr.running[p.name] = {"h": h, "t0": 0.0, "pid": 0, "proc": type("P", (), {"poll": lambda self: None})(),
+                              "started": "t", "paused": False, "unit": None}
+
+    def queue_jobs():
+        fr.running.clear()
+        started.clear()
+        for k in range(6):
+            (fill / "queue" / f"ver-{k}.sh").write_text("# fill: owner=bc-e gpus=0 cpus=4 mem_gb=48\n")
+        (fill / "queue" / "census.sh").write_text("# fill: owner=bc-d gpus=0 cpus=6\n")
+
+    monkeypatch.setattr(fr, "start", fake_start)
+    # the fake jobs' pid 0 would make a real stop signal this test's own process group: none is due, so none may happen
+    monkeypatch.setattr(fr, "active_s", lambda j: 0.0)
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: pytest.fail(f"stopped {k}: {why}"))
+    queue_jobs()
+    fr.tick(0)
+    assert started and all(c is None for _, c, _ in started)       # no cpu-sets: the shared slot and the Verity pool's lent ones
+    queue_jobs()
+    (fill / "cpu-sets").write_text("# owner cpus slots [mem_gb]\nbc-e 0-47 4 20  # verity-top 12:00 AM PDT\nbad line\n")
+    fr.tick(0)
+    assert sorted(started) == [("census.sh", None, None), *((f"ver-{k}.sh", "0-47", 20) for k in range(4))]
+    started.clear()
+    fr.tick(0)
+    assert started == []                    # 4 of theirs run; the census holds the shared slot; theirs are never lent
+
+    fr = load()
+    cmds = []
+    monkeypatch.setattr(fr.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: cmds.append(cmd) or type("P", (), {"pid": 1})())
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: None)
+    p = fill / "queue" / "ver-9.sh"
+    p.write_text("# fill: owner=bc-e gpus=0 cpus=4 mem_gb=48\n")
+    fr.start(p, {**fr.header(p), "cpuset": "0-47", "mem_gb": 20})
+    cmd = cmds[-1]
+    assert "MemoryMax=20G" in cmd and cmd[cmd.index("--unit") + 1].startswith("fill-cpuset-")
+    assert cmd[cmd.index("--") + 1:][:8] == ["ionice", "-c3", "nice", "-n", "19", "taskset", "-c", "0-47"]
+
+    cg = Path(f"/proc/{os.getpid()}/cgroup").read_text().strip().split("::", 1)[1]
+    (tmp_path / "cg" / cg.lstrip("/")).mkdir(parents=True)
+    (tmp_path / "cg" / cg.lstrip("/") / "memory.peak").write_text(f"{12_340_000_000}\n")
+    monkeypatch.setattr(fr, "CGROUP_ROOT", str(tmp_path / "cg"))
+    assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
+
+
+@pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")
+def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
+    src, status = tmp_path / "pouw", tmp_path / "status.txt"
+    (src / "jobs" / "a").mkdir(parents=True)
+    (src / "jobs" / "a" / "x.txt").write_text("x")
+    env = {**os.environ, "BACKUP_SRC": str(src), "BACKUP_LAST": str(tmp_path / "last"), "BACKUP_STATUS": str(status),
+           "BACKUP_QUIET_MAX_S": "0"}
+    for k, (line, rc) in enumerate((("t free GPUs 8/8, kept free -, waiters -, timed True, window waiting False", 75),
+                     ("t free GPUs 0/8, kept free -, waiters -, timed False, window waiting True", 75),
+                     ("t free GPUs 8/8, kept free -, waiters -, timed False, window waiting False", 0))):
+        status.write_text(line + "\n")
+        run = tmp_path / f"run{k}"
+        run.mkdir()
+        r = subprocess.run(["bash", str(NEBIUS / "backup.sh")], env={**env, "RESEARCH_RUN_DIR": str(run)}, capture_output=True, text=True)
+        assert r.returncode == rc, (line, r.stderr)
+        assert (run / "backup" / "tars").is_dir() and bool(list((run / "backup" / "tars").iterdir())) == (rc == 0)

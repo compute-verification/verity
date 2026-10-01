@@ -37,6 +37,7 @@ import os
 import re
 import resource
 import subprocess
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -611,37 +612,42 @@ def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
 
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
           warm: int = 0, runs: int = 1) -> dict:
-    """A loopback session (``serve`` on 127.0.0.1 and ``prove``), or ``selftest``: the LIVE or SELFTEST record."""
+    """A live session (``serve`` on 127.0.0.1, or a verifier pod's at FC_VERIFIERS, and ``prove``), or ``selftest``: the LIVE or
+    SELFTEST record."""
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
         cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)] + (["--gpu"] if gpu else [])
-        r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True, timeout=timeout)
+        t0 = time.monotonic()
+        try:
+            r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True,
+                               timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return {"all_pass": False, "cases": 0, "failed": [], "finished": False, "timed_out": True, "exit_code": None,
+                    "wall_s": round(time.monotonic() - t0, 3)}
         lines = [ln for ln in r.stdout.splitlines() if ln.startswith(("SELFTEST", "NEG"))]
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("NEG")]
         head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), None)
         failed = [c.get("case") for c in neg if c.get("pass") is not True]
         all_pass = head.get("all_pass") if head is not None else (bool(neg) and not failed)     # --only prints its one case, no summary
-        return {"all_pass": all_pass, "cases": len(neg), "failed": failed} | \
+        # a process that ends without its verdict (killed, out of memory) is no verdict: its exit code and stderr say why
+        finished = r.returncode == 0 and bool(lines)
+        return {"all_pass": all_pass, "cases": len(neg), "failed": failed, "finished": finished, "timed_out": False,
+                "exit_code": r.returncode, "wall_s": round(time.monotonic() - t0, 3)} | \
+            ({} if finished else {"stderr_tail": r.stderr[-600:]}) | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
     pin = FC.digest(circ.read_text())
-    # the prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by
-    # FC_VERIFY_SERVERS (default 1) verifier processes taking turns (session k the (k mod n)th's): the first on `port`, the
-    # rest on ports the system picks
-    servers = max(1, int(os.environ.get("FC_VERIFY_SERVERS") or 1))
-    concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
-    logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
-    srvs = [subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port if i == 0 else 0}", "--out", str(d / "sessions"),
-                              "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress",
-                              "--concurrency", str(concurrency)], stdout=open(log, "w"), stderr=subprocess.STDOUT)
-            for i, log in enumerate(logs)]
+    # FC_VERIFIERS=DIR: the verifier runs in another pod (`--serve-only DIR`), serving this statement's sessions at the addresses
+    # it published; otherwise this pod serves its own on 127.0.0.1
+    remote = None
+    if os.environ.get("FC_VERIFIERS"):
+        f = Path(os.environ["FC_VERIFIERS"]) / _served_name(pin, n, warm + runs)
+        if not f.exists():
+            return {"accepted": False, "why": f"FC_VERIFIERS: no verifier serving these {warm + runs} sessions ({f} is missing)"}
+        remote = json.loads(f.read_text())
+        srvs, addrs = [], remote["addrs"]
+    else:
+        srvs, addrs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
     try:
-        addrs = []
-        for log in logs:
-            for _ in range(600):
-                if (ln := next((x for x in log.read_text().splitlines() if x.startswith("SERVING ")), None)):
-                    addrs.append(ln.split()[1])
-                    break
-                time.sleep(0.2)
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
             timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
             pr = subprocess.Popen(timer + [binary, "prove", "--verifier", ",".join(addrs) or f"127.0.0.1:{port}", "--instances", str(inst),
@@ -650,7 +656,7 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
             pr.wait()
         prover_gb = int((d / "prove.maxrss").read_text().split()[-1]) / 2**20 if timer else None   # the prover's own peak, KB
         hwm = [_vm_hwm(s.pid) for s in srvs]
-        verifier_gb = round(sum(hwm), 2) if None not in hwm else None    # the verifier processes' peaks, summed
+        verifier_gb = round(sum(hwm), 2) if srvs and None not in hwm else None    # the verifier processes' peaks, summed
     finally:
         for s in srvs:
             s.kill()
@@ -661,15 +667,107 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         return {"accepted": False, "why": (err or out)[-400:]}
     timed = [x for x in live if not x.get("warm")] or live
     v = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2]      # the median timed run
-    return {k: v.get(k) for k in ("accepted", "why", "prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
-                                  "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
-                                  "wire_recv", "statement_digest", "buckets")} | \
-        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": servers,
+    # accepted: every session, warm and timed, all warm + runs of them, and prove exited 0; not the median run's verdict alone
+    rejected = [x.get("run") for x in live if x.get("accepted") is not True]
+    broke = (f"prove exited {pr.returncode}" if pr.returncode else
+             f"{len(live)} LIVE records, not warm + runs = {warm + runs}" if len(live) != warm + runs else
+             f"sessions {rejected} not accepted" if rejected else None)
+    return {"accepted": broke is None, "why": broke or v.get("why")} | \
+        {k: v.get(k) for k in ("prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
+                               "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
+                               "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
+        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
+         "verifier": f"pod {remote.get('host')}" if remote else "loopback",
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
          # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
          # ring switch, Ligerito; t.total on the device), and host_s = the rep's wall time less t.total (host work and idle)
          "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
+
+
+def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
+           bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str]]:
+    """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, and their addresses. The prover's
+    FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by FC_VERIFY_SERVERS (default 1,
+    at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
+    system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
+    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits."""
+    servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
+    concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
+    logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
+    srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
+                              "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
+                              "--concurrency", str(concurrency)] + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
+                             stdout=open(log, "w"), stderr=subprocess.STDOUT)
+            for i, log in enumerate(logs)]
+    addrs = []
+    for log in logs:
+        for _ in range(600):
+            if (ln := next((x for x in log.read_text().splitlines() if x.startswith("SERVING ")), None)):
+                addrs.append(ln.split()[1])
+                break
+            time.sleep(0.2)
+    return srvs, addrs
+
+
+def _served_name(pin: str, n: int, sessions: int) -> str:
+    """The file a verifier pod publishes its addresses in: one circuit serves statements of several instance counts (a preflight
+    check's and a step's), each for its own sessions."""
+    return f"{pin[:32]}-n{n}-s{sessions}.json"
+
+
+def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int, points: int = 1) -> dict:
+    """``--serve-only``: serve one staged statement's ``sessions`` sessions on this host's address (FC_SERVE_HOST, else the
+    address its hostname resolves to: a pod's IP), for a prover in another pod (``points`` of them one after another, the points
+    of one GPU session, all on these processes), and publish the addresses under ``where`` (`_served_name`). The entry
+    `serve_wait` takes."""
+    circ, pub = d / "circuit.txt", d / f"pub-{n}.bin"
+    pin = FC.digest(circ.read_text())
+    import socket
+    ip = os.environ.get("FC_SERVE_HOST") or socket.gethostbyname(socket.gethostname())
+    srvs, bound = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True, points=points)
+    if len(bound) != len(srvs):
+        for s in srvs:
+            s.kill()
+        raise RuntimeError(f"serve-only: {len(bound)} of {len(srvs)} verifier processes started serving")
+    addrs = [f"{ip}:{a.rsplit(':', 1)[1]}" for a in bound]
+    doc = {"pin": pin, "addrs": addrs, "sessions": sessions, "points": points, "host": socket.gethostname(), "run": os.environ.get("RESEARCH_RUN_ID"),
+           "verify_ahead": int(os.environ.get("FC_VERIFY_AHEAD") or 0), "servers": len(srvs), "t": time.time()}
+    where.mkdir(parents=True, exist_ok=True)
+    f = where / _served_name(pin, n, sessions)
+    tmp = f.with_name(f"{f.name}.tmp{os.getpid()}")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, f)
+    return {"file": f, "srvs": srvs, "doc": doc, "d": d, "t0": time.time()}
+
+
+def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
+    """Wait for every `serve_remote` entry's processes to serve their sessions (killed after ``limit_s``), withdraw the address
+    files, and return each one's record: its sessions' verdicts and verify seconds (``sessions/index.jsonl``) and the
+    processes' peak memory, summed."""
+    peak = {id(s): 0.0 for e in entries for s in e["srvs"]}
+    deadline = time.time() + limit_s
+    while any(s.poll() is None for e in entries for s in e["srvs"]) and time.time() < deadline:
+        for e in entries:
+            for s in e["srvs"]:
+                peak[id(s)] = max(peak[id(s)], _vm_hwm(s.pid) or 0.0)
+        time.sleep(1)
+    out = []
+    for e in entries:
+        timed_out = any(s.poll() is None for s in e["srvs"])
+        for s in e["srvs"]:
+            s.kill()
+            s.wait()
+        e["file"].unlink(missing_ok=True)
+        idx = e["d"] / "sessions" / "index.jsonl"
+        lines = [json.loads(ln) for ln in idx.read_text().splitlines() if ln.strip()] if idx.exists() else []
+        vs = [x["verify_s"] for x in lines if x.get("verify_s") is not None]
+        out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and len(lines) == e["doc"]["sessions"] * e["doc"].get("points", 1)
+                               and all(x.get("accepted") is True for x in lines),
+                               "timed_out": timed_out, "wall_s": round(time.time() - e["t0"], 3),
+                               "verify_s_median": sorted(vs)[len(vs) // 2] if vs else None,
+                               "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)})
+    return out
 
 
 def _buckets(live: dict) -> list[dict] | None:
@@ -851,6 +949,98 @@ def _staged(jobs: list[str], workers: int):
                                "broke": {"at": "statement", "why": "its staging worker died twice (killed, likely out of memory)"}}
 
 
+#: seconds between the device-memory samples of selftest cases run at once
+SELFTEST_SAMPLE_S = 0.5
+
+
+def _gpu_free_mib() -> int | None:
+    """The least free memory of the GPUs this process sees (nvidia-smi), or None when it can't be read."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"], capture_output=True,
+                           text=True, timeout=60)
+        return min(int(v) for v in r.stdout.split()) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _case_device_mib() -> dict[str, int] | None:
+    """Each running selftest case process's device memory in MiB, by case (nvidia-smi's compute apps, whose pids the driver
+    gives in this pod's pid namespace; a case process is named by its ``--only`` argument), or None when it can't be read."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    out: dict[str, int] = {}
+    for ln in r.stdout.splitlines():
+        try:
+            pid, mib = (int(v) for v in ln.split(","))
+            argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+        except (ValueError, OSError):
+            continue
+        if b"--only" in argv[:-1]:
+            case = argv[argv.index(b"--only") + 1].decode()
+            out[case] = out.get(case, 0) + mib
+    return out
+
+
+def _selftest_cases(binary: str, d: Path, n: int, port: int, cases: Sequence[str], gpu: bool, jobs: int,
+                    case_mib: int | None) -> tuple[list[dict], dict | None]:
+    """Each case in its own selftest process, up to ``jobs`` at once, the records in case order, and how they ran (None for
+    ``jobs`` 1). On the GPU they run at once only while ``jobs`` x ``case_mib`` (one case process's device memory, measured)
+    fits the GPU's free memory, else one at a time, as when either is unknown; each case process's device memory is sampled
+    while they run."""
+    def one(c: str) -> dict:
+        return prove(binary, d, n, port, selftest=c, gpu=gpu)
+
+    if jobs <= 1:
+        return [one(c) for c in cases], None
+    how: dict[str, Any] = {"jobs_asked": jobs, "jobs": min(jobs, len(cases))}
+    if gpu and how["jobs"] > 1:
+        free = _gpu_free_mib()
+        how |= {"free_mib": free, "case_bound_mib": case_mib}
+        if free is None or case_mib is None or how["jobs"] * case_mib > free:
+            why = ("the GPU's free memory can't be read" if free is None else "no per-case device memory bound" if case_mib is None
+                   else f"{how['jobs']} x {case_mib} MiB is more than the {free} MiB free")
+            how |= {"jobs": 1, "fallback": why}
+    peak: dict[str, int] = {}
+    stop = threading.Event()
+
+    def sample() -> None:
+        while True:
+            now = _case_device_mib()
+            if now is None:
+                how["sampler"] = "nvidia-smi's compute apps can't be read"
+            else:
+                how["samples"] = how.get("samples", 0) + 1
+                for c, mib in now.items():
+                    peak[c] = max(peak.get(c, 0), mib)
+                how["sum_peak_mib"] = max(how.get("sum_peak_mib", 0), sum(now.values()))
+            if stop.wait(SELFTEST_SAMPLE_S):
+                return
+
+    sampler = threading.Thread(target=sample, daemon=True) if gpu else None
+    if sampler:
+        how["sampled_every_s"] = SELFTEST_SAMPLE_S
+        sampler.start()
+    try:
+        if how["jobs"] <= 1:
+            runs = [one(c) for c in cases]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(how["jobs"]) as ex:
+                runs = list(ex.map(one, cases))
+    finally:
+        stop.set()
+        if sampler:
+            sampler.join()
+    for c, x in zip(cases, runs):
+        x["device_peak_mib"] = peak.get(c)
+    return runs, how
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
@@ -874,6 +1064,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
     ap.add_argument("--selftest-jobs", type=int, default=1, help="case processes run at once (a read-bearing circuit's or "
                     "--selftest-cases'; each still its own process, the records in case order); each parses the circuit itself")
+    ap.add_argument("--selftest-case-mib", type=int, default=None, help="with --selftest-jobs above 1 on the GPU: one case "
+                    "process's device memory (measured); the cases run at once only while N of them fit the GPU's free memory")
     ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
                     help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
@@ -883,6 +1075,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "a GPU job with the same settings takes them from the cache and starts at the prove")
     ap.add_argument("--statement-digest", action="store_true", help="with --stage-only: also record each staged statement's digest "
                     "as --binary builds it from the public file (flock-circuit statement; nothing proved)")
+    ap.add_argument("--serve-only", default=None, metavar="DIR", help="stage the shapes (from FLOCK_STAGE_CACHE) and serve each one's "
+                    "--warm + --runs sessions on this host's address, published as DIR/<pin>-n<N>-s<sessions>.json for a prover in "
+                    "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
+    ap.add_argument("--serve-points", type=int, default=1, help="with --serve-only: serve that many provers' --warm + --runs "
+                    "sessions, one prover after another on the same verifier processes (the points of one GPU session)")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
@@ -926,7 +1123,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    results = out / ("selftests.jsonl" if a.selftest_only else "staged.jsonl" if a.stage_only else "results.jsonl")
+    results = out / ("selftests.jsonl" if a.selftest_only else "staged.jsonl" if a.stage_only else "served.jsonl" if a.serve_only
+                     else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
     per_definition: dict[str, dict[str, int]] = {}
@@ -959,9 +1157,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     # a shape taken from FLOCK_STAGE_CACHE composes nothing; built before _staged, so forked stagers share them
     if any(not ((c := _stage_cache(s)) and (c / "rec.json").exists()) for s in jobs):
         cache_slot_circuits()
+    serving: list[tuple[dict, dict]] = []
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
         t0 = time.time() - rec.pop("stage_wall_s", 0)
+        if "stage" in rec and a.serve_only:
+            serving.append((rec, serve_remote(a.binary, out / s[:16], rec["stage"]["n"], Path(a.serve_only), a.warm + a.runs,
+                                                a.serve_points)))
+            print(json.dumps({"shape": s, "serving": serving[-1][1]["doc"]["addrs"]}), flush=True)
+            continue
         if "stage" in rec:
             d = out / s[:16]
             try:
@@ -973,14 +1177,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
-                        if a.selftest_jobs <= 1:
-                            runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
-                        else:
-                            from concurrent.futures import ThreadPoolExecutor
-                            with ThreadPoolExecutor(min(a.selftest_jobs, len(cases))) as ex:
-                                runs = list(ex.map(lambda c: prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g), cases))
+                        runs, how = _selftest_cases(sb, d, rec["stage"]["n"], a.port, cases, g, a.selftest_jobs, a.selftest_case_mib)
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
-                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)} | \
+                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases),
+                                           "did_not_finish": [c for c, x in zip(cases, runs) if not x["finished"]],
+                                           "per_case": [{"case": c} | {k: x.get(k) for k in ("wall_s", "exit_code", "timed_out", "device_peak_mib",
+                                                                                                "stderr_tail") if k in x}
+                                                        for c, x in zip(cases, runs)]} | \
+                            ({"run": how} if how else {}) | \
                             ({"gpu_cases": gc} if (gc := [c for x in runs for c in x.get("gpu_cases", [])]) else {})
                     else:
                         rec["selftest"] = prove(sb, d, rec["stage"]["n"], a.port, selftest=True, gpu=g)
@@ -999,6 +1203,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({k: rec.get(k) for k in ("shape", "definition", "units", "word_gates", "broke")} |
                          ({"accepted": rec["live"].get("accepted"), "prove_s": rec["live"].get("prove_total_s"),
                            "proof_bytes": rec["live"].get("proof_bytes"), "k_log": rec["live"].get("k_log")} if "live" in rec else {})), flush=True)
+    for (rec, e), served in zip(serving, serve_wait([e for _r, e in serving], float(os.environ.get("FC_SERVE_WAIT_S") or 3600))):
+        rec["serve"] = served
+        for f in [*e["d"].glob("*.bin"), e["d"] / "circuit.txt"]:
+            f.unlink(missing_ok=True)
+        with results.open("a") as f:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+        print(json.dumps({"shape": rec["shape"]} | {k: served[k] for k in ("served", "accepted", "timed_out", "verify_s_median")}), flush=True)
     write_result(results, a)
     return 0
 
