@@ -357,6 +357,9 @@ def metrics(a) -> None:
         # another job on the job's own cores for more than half a core over the timed sessions
         if (out["slice_cores_steady"] or {}).get("others", 0) > 0.5:
             flags.append("cpu-slice-shared")
+        # the GPU held while this job staged the statement itself (74-gemm-hill.sh STAGE_ONLY=1 stages it in a job without one)
+        if not rec.get("stage_cached"):
+            flags.append("staged-on-gpu")
     # #554 is a draft, its statements unreviewed: these are costs, not claims, and a changed statement digest starts a new curve
     flags.append("draft-554-unreviewed")
     if not out["peak"]["matches_gpu"]:
