@@ -7,8 +7,9 @@ the weights record (vLLM's parameters in module order, then its buffers), one ca
 (`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `registry.targets`, the flat body wrapped as
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
 
-Vocabulary (v1, dense Llama-family decoders under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input norm), Gemm
-(target-keyed; the q/k/v projection's bias, when the family's rule gives it one, a BiasAdd per row), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
+Vocabulary (v1, Llama-family decoders, dense or fused-MoE, under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input
+norm, and the q/k norm: per head, or over all heads), Gemm (target-keyed; the q/k/v projection's bias, when the family's rule
+gives it one, a BiasAdd per row), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
 RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, the fused-MoE block in its indexed-read construction (router
 Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul / MoeExpertGemmW per (token, slot) pair, MoeSum per row), and the token select: greedy TokenSelect, or the seeded
 temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split count a `splits` Input entry, or the single
