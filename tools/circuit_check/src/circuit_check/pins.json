@@ -51,6 +51,9 @@
   "Fa2InvSum_v2": {
    "and": 947
   },
+  "Fa3InvSum_v2": {
+   "and": 947
+  },
   "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 18050
   },

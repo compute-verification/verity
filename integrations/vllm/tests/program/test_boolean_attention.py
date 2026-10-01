@@ -1,6 +1,7 @@
-"""`boolean_attention`: `AttnBlock_v6` / `AttentionHead_v6` / `Attention_v6` are Boolean, agree with their word views (the
-v3 chain at the same statics) on random words and on words that reach every guard (a zero query, signed zeros, subnormals,
-infinities, NaNs, scores that overflow), and are pinned by gate count and program digest."""
+"""`boolean_attention`: the v6 chain (`AttnBlock_v6` / `AttentionHead_v6` / `Attention_v6`), the v7 chain on both of its
+profiles (FA2 on mma.sync, FA3 on wgmma) and `Fa3InvSum_v2` are Boolean, agree with their word views (the v3 and v2 chains
+and `Fa3InvSum_v1`) on random words and on words that reach every guard (a zero query, signed zeros, subnormals, infinities,
+NaNs, scores that overflow), and are pinned by gate count and program digest."""
 from __future__ import annotations
 
 import numpy as np
@@ -26,15 +27,29 @@ PINS = {
         (679680, 1323168, 61457, "6dbcba90ccba5b0e33fcfff7254a34fef29c671ee42c754b2addaeb8755db868"),
     "Attention_v6{T=20,NH=4,KVH=2,D=16,BN=16}":
         (2718720, 5292672, 245828, "a808120f183c73409b306fe87ebdd2180b8235aa6c85e5e75465c9a5a2f3313e"),
+    "Fa3InvSum_v2": (947, 5695, 71, "c0ce2f7ff45cfa8da67b76e115100b9b34b691166dbb6c20689f2d6162b447bb"),
+    "AttnBlock_v7{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2}":
+        (428229, 839552, 36508, "64c27b5a8cc8387141408ca780ee0da8e1d62119a38c27d52c1a37dfea0332ea"),
+    "AttentionHead_v7{T=20,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2}":
+        (679680, 1323168, 61457, "434ce1efc9d0633da9094bcd9d00c873c18abc975c40bbe5b6986822a47e4f80"),
+    "AttentionHead_v7{T=20,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
+        (659504, 1288432, 56302, "4e58aef2275351298fa711950888b1d07fc50d72f76c5e62d6a51b33e45ddd0a"),
+    "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
+        (2638016, 5153728, 225208, "7e98b2335269aeb4fe3ebc80427d7995aa116540a7014abea5517a64e54e7b8e"),
 }
 
+FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3
 PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnBlockV6, D=16, NVIS=16, FIRST=False, BN=16),
-          bind(BAt.AttentionHeadV6, T=20, D=16, BN=16), bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16)]
+          bind(BAt.AttentionHeadV6, T=20, D=16, BN=16), bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16), bind(BAt.Fa3InvSum),
+          bind(BAt.AttnBlockV7, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"]), bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA2),
+          bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA3), bind(BAt.AttentionV7, T=20, NH=4, KVH=2, D=16, BN=16, **FA3)]
 
-#: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads
+#: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
+#: profiles
 AGREEMENT = PINNED[:2] + [bind(BAt.AttnBlockV6, D=16, NVIS=9, FIRST=False, BN=32), bind(BAt.AttentionHeadV6, T=5, D=16, BN=16),
                           bind(BAt.AttentionHeadV6, T=16, D=16, BN=16), bind(BAt.AttentionHeadV6, T=40, D=16, BN=32),
-                          bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16)]
+                          bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16)] + PINNED[5:] + [
+    bind(BAt.AttentionHeadV7, T=40, D=16, BN=32, **FA3)]
 
 #: bf16 words that reach FA2's guards: signed zeros, subnormals, the normal range's ends, infinities, NaNs, 2^63
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x807F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x5F00, 0xDF00],
@@ -82,10 +97,21 @@ def test_pinned_counts_and_digests(target) -> None:
     assert codec.program_digest(codec.encode_program(prog)) == digest
 
 
+def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
+    """On random words, the special words (signed zeros, infinities, NaNs, subnormals) and every mantissa at exponent 0x7F."""
+    target = bind(BAt.Fa3InvSum)
+    words = np.concatenate([np.random.default_rng(20).integers(0, 1 << 32, 200_000, dtype=np.uint64).astype(np.uint32),
+                            np.array([0, 0x80000000, 0x7FC00000, 0xFFC00001, 0x7F800000, 0xFF800000, 1, 0x00800000], np.uint32),
+                            np.arange(1 << 23, dtype=np.uint32) | np.uint32(0x3F800000)])
+    got = np.asarray(BS.evaluate_words(target, words)).astype(np.uint64)
+    assert np.array_equal(got, np.asarray(E.evaluate_batch(TR.word_of(target), words)).astype(np.uint64))
+
+
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
-    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 3, target.bindings)
+    lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
+    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 3 if target.defn.version == 6 else 2, lifted)
     inputs = _inputs(word, 96, sum(map(ord, target.id)))
     got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64)
     ref = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64)
