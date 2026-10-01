@@ -10,7 +10,10 @@ The executors, as they stand:
 - **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden. A guest runs at
   nice 19 on its share's CPUs, and node 2's ops daemon pauses it through a timed window.
 - **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools.
-- **vy-nebius-1, GPUs:** Kueue's, through kueue-fold's executor, which isn't built yet; such a job goes to node 2 or is refused.
+- **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
+  `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
+  GPU. Only with `CLUSTER_N1_GPU_EXECUTOR=n1-lease` in the brain's environment (the cutover's switch); without it such a job goes
+  to node 2 or is refused. A timed job never runs there: node 1 has no window protocol.
 
 A job asks for `max_s` of its own. A CPU job's allocation also covers `custody_s` (the runner's publish), so its `max_s` in the
 model is their sum; a GPU job's lease covers the workload alone, and custody runs in its CPU allocation after the lease ends.
@@ -18,6 +21,7 @@ model is their sum; a GPU job's lease covers the workload alone, and custody run
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import replace
 from typing import Any
 
@@ -28,7 +32,13 @@ from .plan import allowed_cpus, static_refusal
 from .route import place
 
 GPU_LEASE = "/workspace/pouw/infra/bin/gpu-lease"
+GPU_LEASE_N1 = "/workspace/verity-guest/bin/gpu-lease"
+N1_LEASE_ENV = ["GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus"]
 NODE1, NODE2 = "vy-nebius-1", "vy-nebius-2"
+
+
+def n1_gpus() -> bool:
+    return os.environ.get("CLUSTER_N1_GPU_EXECUTOR") == "n1-lease"
 
 
 class Refused(Exception):
@@ -49,8 +59,10 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     A kind is named in the lease's holder, `who=<kind>:<submitter>`, as the fill runner's leases are `fill:<owner>`."""
     if node not in (NODE1, NODE2):
         raise Refused(f"no executor on {node}")
-    if j.gpus and node != NODE2:
-        raise Refused(f"{node}'s GPUs are Kueue's, and its executor (kueue-fold's) isn't built yet")
+    if j.gpus and node == NODE1 and not n1_gpus():
+        raise Refused(f"{node}'s GPUs are Kueue's, and its lease executor isn't switched on (CLUSTER_N1_GPU_EXECUTOR)")
+    if j.gpus and node == NODE1 and j.quiet:
+        raise Refused(f"{node} has no timed windows")
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
@@ -59,7 +71,8 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
               "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
     if not j.gpus:
         return runner, []
-    lease = [GPU_LEASE, str(j.gpus), "--wait", "--max-min", str(math.ceil(j.max_s / 60)), "--mem-gb", str(j.memory_gib)]
+    lease = ["env", *N1_LEASE_ENV, GPU_LEASE_N1] if node == NODE1 else [GPU_LEASE]
+    lease += [str(j.gpus), "--wait", "--max-min", str(math.ceil(j.max_s / 60)), "--mem-gb", str(j.memory_gib)]
     lease += ["--preemptible"] if j.preempt == "requeue" else []
     lease += ["--timed"] if j.quiet else []
     lease += ["--on", ",".join(map(str, j.gpu_ids))] if j.gpu_ids else []
@@ -115,4 +128,4 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["GPU_LEASE", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["GPU_LEASE", "GPU_LEASE_N1", "Refused", "job", "wrappers", "resolve", "submit"]

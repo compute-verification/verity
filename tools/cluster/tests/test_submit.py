@@ -65,6 +65,19 @@ def test_a_pinned_node_is_the_only_one_tried():
     assert "vy-nebius-2" not in str(e.value)
 
 
+def test_node_1s_gpus_take_a_job_through_its_own_gpu_lease_only_with_the_executor_switched_on(monkeypatch):
+    c = model.load(NEBIUS)
+    with pytest.raises(submit.Refused, match="CLUSTER_N1_GPU_EXECUTOR"):
+        submit.resolve(c, _job(gpus=1, node="vy-nebius-1"), "r1", T)
+    monkeypatch.setenv("CLUSTER_N1_GPU_EXECUTOR", "n1-lease")
+    out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64, node="vy-nebius-1"), "r1", T)
+    assert out["node"] == "vy-nebius-1" and "systemd-run" in out["wrap"] and submit.GPU_LEASE_N1 not in out["wrap"]
+    assert out["workload_wrap"] == ["env", "GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus",
+                                    submit.GPU_LEASE_N1, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
+    with pytest.raises(submit.Refused, match="no timed windows"):
+        submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
+
+
 def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(T), "--project", "verity", "--submitter", "lane-x", "--max-s", "600",
             "--custody-s", "900"]
