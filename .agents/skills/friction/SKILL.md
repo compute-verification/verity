@@ -89,6 +89,10 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (4:31 PM PDT): a table that tabulates a fixed function is a value even with no program parameter
+  (`gelu_tanh_bf16`, `tanh_rn`). The only tables in an operation's own definition are the hardware's measured ones (the
+  MUFU tables, `tanh_mufu` included), which stay gates with the floating-point formats' constants. The hidden read's cost
+  is accepted for conceptual clarity unless it proves a bottleneck.
 - 2026-10-01 (3:32 PM PDT): no protocol deals with public values, so none gets an exemption; PoUW's tile check moves into
   a proof. During development a proof may be replaced by replay, or verification skipped, for research velocity: that's
   a shortcut, never the protocol. Shapes such as batch size and sequence length may stay public for now: the first
