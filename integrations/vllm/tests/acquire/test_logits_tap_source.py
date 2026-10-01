@@ -1,9 +1,9 @@
 """The logits tap (`acquire.sources.logits_tap_source`) on CPU tensors with a recording committer, over the call-boundary source's
-Gemma-2-style dense Program.  With `--logits-tap 1` it claims the soft-capped logits' call boundaries and, attached just before the
-call-boundary source, commits the served GEMM output, quotient and tanh: an honest forward commits the step stream the call-boundary source
-alone commits, name for name, word for word and in the same order; a dishonest one commits what it served; a forward without the chain
-is a collector error that commits nothing of the step; a manifest it cannot commit is refused, and the gate names it first; and a
-call-boundary plan derived without the claim refuses the Commit."""
+Gemma-2-style dense Program.  With `--logits-tap 1` it claims the soft-capped logits' call boundaries and holds the served GEMM output,
+quotient and tanh, which the call-boundary source commits in their place: an honest forward commits the step stream the call-boundary
+source alone commits, name for name, word for word and in the same order, each identity's source recorded; a dishonest one commits what it
+served; a forward without the chain is a collector error that commits nothing of the step; a manifest it cannot commit is refused, and the
+gate names it first; and a call-boundary plan derived without the claim refuses the Commit."""
 from __future__ import annotations
 
 import os
@@ -72,7 +72,8 @@ def _drive(world, com, steps=range(1 + T), logits=lambda s: True):
         for _ in range(int(logits(s))):
             mods["logits_processor"](mods["model.embed_tokens"], rows(world.at[(s, "y")][-1:]))
         for src in com.sources:
-            src.on_step_end(com._cur)
+            if hasattr(src, "on_step_end"):
+                src.on_step_end(com._cur)
     com._cur = None
 
 
@@ -100,6 +101,9 @@ def test_an_honest_forward_commits_the_call_boundary_sources_step_stream(dense, 
         assert {**tap.targets_at(s), **cb.targets_at(s)} == host.sources[0].targets_at(s)
         assert [n for e, n, _t in tapped.acquired if e == s][:3] == [LT.name(r) for r in ids if r["engine_step"] == s]
     assert tap.stats["tensors"] == len(ids) and tap.stats["steps"] == 1 + T and tap.stats["errors"] == 0
+    got, ref = cb.identity_sources(), host.sources[0].identity_sources()
+    assert set(got) == set(ref) and set(ref.values()) == {"host"}
+    assert {k for k, v in got.items() if v == "tap"} == {(int(r["engine_step"]), LT.name(r)) for r in ids}
     assert tap.extra_step_bytes({}, None) == {"per_token_bytes": 0, "per_seq_bytes": 3 * V * 2, "tensors_per_step": 3}
     d = tap.declaration_classes()[0]
     assert (d["class"], d["how"], d["tensors"]) == (CB.FAMILY, "bound-as-leaf", len(ids))

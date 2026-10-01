@@ -596,10 +596,10 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         from verity_vllm.commit import padding_steps as PS
         bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
                                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
-                                                  name_bindings=name_bindings or None)
+                                                  name_bindings=name_bindings or None, sources=B.identity_sources(com))
     else:
         bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, name_bindings=name_bindings or None)
+                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, name_bindings=name_bindings or None, sources=B.identity_sources(com))
     caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
     # [R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
