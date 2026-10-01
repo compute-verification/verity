@@ -115,7 +115,7 @@ def test_gemms_fit_sm120_shared_memory():
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
-    assert set(S.WANT) - {"words", "words_u", "words_win", *form_kernels()} == names
+    assert set(S.WANT) - {"words", "words_u", "words_win", "form_s5_bf16", *form_kernels()} == names
     assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
 
 
@@ -286,6 +286,8 @@ H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3
 #: `s`, A's row leaves and stats_s5's outputs in one pass)
 OWN_HEADERS = "".join((HERE / f).read_text() for f in ("h2_rows_stats.cuh",))
 H2_ONLY = {"hash_rows_b3s_stats"}
+#: what the check's check_bf16 launches beside: -h2's kernels at m_real = m and m - 48 (whose trees pad), A's BF16 hash_rows_b3s
+CHECK_BF16 = H2_LAUNCHED | {"hash_pad", "hash_rows_b3s_bf16"}
 
 
 def form_kernels() -> list[str]:
@@ -308,18 +310,20 @@ def kernel_names() -> list[str]:
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
-    """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm120.cu."""
+    """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm120.cu (a _bf16 kernel's rows
+    2 bytes a value)."""
+    xb = 2 if name.endswith("_bf16") else 4
     if name == "lines":
         count = i[2]
         return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count}
-    if name == "stats_s5":
+    if name in ("stats_s5", "stats_s5_bf16"):
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
+        return {0: xb * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
     if name.startswith("form_"):
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
+        return {0: xb * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K}
@@ -365,13 +369,13 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * i[0], 1: 32 * i[0], 2: 32}
     if name == "b3s_level_keys":
         return {0: 32 * i[0], 1: 32}
-    if name == "hash_rows_b3s":
-        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
+    if name in ("hash_rows_b3s", "hash_rows_b3s_bf16"):
+        return {0: i[0] * i[1] * xb // 4, 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
     if name == "hash_leaves_b3s":
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 64}
-    if name == "hash_rows_b3s_stats":
+    if name in ("hash_rows_b3s_stats", "hash_rows_b3s_stats_bf16"):
         rows = i[4]
-        return {0: rows * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64, 5: 4 * rows, 6: 4 * rows,
+        return {0: rows * i[1] * xb // 4, 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64, 5: 4 * rows, 6: 4 * rows,
                 7: 4 * rows, 8: 8 * rows}
     if name == "hash_node_keys":
         return {0: 32 * i[0], 1: 32}
@@ -396,7 +400,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
 
 def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
-    return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
+    return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "stats_s5_bf16": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
@@ -477,7 +481,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         track(ev, allocs, maps)
         if ev["op"] == "launch":
             seen.add(ev["name"])
-    assert seen == set(own_kernels()) - H2_ONLY | H1_LAUNCHED
+    assert seen == set(own_kernels()) | H1_LAUNCHED | CHECK_BF16
     for t in rows[3:]:
         assert t["fused"] and t["hashing"] == "h1"
         assert set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
@@ -548,7 +552,8 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("hash_rows_b3s", 3), ("hash_rows_b3s_stats", 3)}:
+            if not p[slot] and (name.removesuffix("_bf16"), slot) in {("seed_line_a", 3), ("hash_rows_b3s", 3),
+                                                                      ("hash_rows_b3s_stats", 3)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
@@ -574,11 +579,13 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert g[0] == i[0] // 16 and ev["block"] == 128
         if name == "words_win":
             assert g[0] == i[0] // 16 * (i[2] // (128 * RUN.WORDS_SPAN)) and ev["block"] == 128
-        if name == "hash_rows_b3s":
+        if name == "hash_rows_b3s_bf16":
+            assert i[1] % 256 == 0
+        if name.removesuffix("_bf16") == "hash_rows_b3s":
             assert g[0] == i[0] and -(-i[1] // 256) <= ev["block"] <= 512 and ev["block"] % 32 == 0 and i[3] <= 64
         if name == "hash_leaves_b3s":
             assert i[1] <= 256 and i[3] <= 64
-        if name == "hash_rows_b3s_stats":
+        if name.removesuffix("_bf16") == "hash_rows_b3s_stats":
             assert g[0] == i[4] >= i[0] and i[1] % 1024 == 0 and ev["block"] == 32 * -(-i[1] // 256 // 32) <= 512 and i[3] <= 64
             assert ev["smem"] == RUN.b3s_stats_smem(i[1]) <= 48 * 1024
 
