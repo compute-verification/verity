@@ -57,13 +57,18 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
     return json.dumps(t, sort_keys=True) if t else ""
 
 
+def request_shapes(wl: str) -> set[tuple[int, int]]:
+    """Every distinct (prompt length, cap - 1) of the manifest's requests: the shapes the workload Program composes."""
+    s = json.load(open(wl))["sweep"]
+    return {(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])}
+
+
 def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, int]]:
     """The batch's other request shapes: every distinct (prompt length, cap - 1) of the manifest but the (LP, T) the
     request wrapper was derived for, largest first (a derive's cost grows with LP + T, so parallel derives start with the
     longest)."""
-    s = json.load(open(wl))["sweep"]
     main = (int(lp), int(t))
-    pairs = sorted({(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])}, key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
+    pairs = sorted(request_shapes(wl), key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
     return [(p, c) for p, c in pairs if (p, c) != main]
 
 
