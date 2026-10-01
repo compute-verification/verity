@@ -5,8 +5,8 @@
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!
-//! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, each row's `b || c`,
-//! outputs; no row, no salt) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
+//! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
+//! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
 //! frame-v3-sha512 roots and the pinned padding values before any session. Session: `Hello(Σ)`, `Commit(root_f = Σ, root)`, two verifier
 //! points (the regions' claims), `Link(y = 0, 0)` (nothing is prover-supplied), Flock's coins.
 //!
@@ -198,6 +198,7 @@ fn identity(c: &Composite) -> Value {
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
     let mut id = json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
+           "outputs": "hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file has no output word",
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
@@ -1104,7 +1105,7 @@ fn ligerito_fields(v: &mut Value, lg: &flock_core::pcs::ligerito::LigeritoProof,
     v["lig_deep"] = json!(f128s_hex(&[f256(&msgs), lg.recursive_proofs[0].opened_rows[..2].concat(), lg.final_proof.yr.clone()].concat()));
 }
 
-/// M1's simulator for one rep's whole proof, from the public statement (`inst`'s public part: roots, `b || c`, outputs), the
+/// M1's simulator for one rep's whole proof, from the public statement (`inst`'s public part: roots and `b || c`), the
 /// verifier's coins for the rep's stream (every squeeze, in order) and the link points: uniform exposed values and masked
 /// claims' `s_hat_v`, the region claims' `s_hat_v` from the public data, the opening as the honest prover makes it on a dummy
 /// (all-zero) witness with fresh masks (`dummy`: such a proof against the same coins) with level 0's exposed values drawn
@@ -2768,6 +2769,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("honest_again", true, false),
     ("mask_cells_random", true, false),
     ("output_claim_false", false, true),
+    ("output_row_committed_false", false, true),
     ("digest_claim_false", false, true),
     ("row_ref_claim_false", false, true),
     ("message_byte_differs_from_the_committed_row", false, true),
@@ -2875,20 +2877,50 @@ fn load_composite(path: &str) -> Composite {
     Composite::parse(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
 }
 
+/// A row's `b || c` under its salt (the commitment scheme's own function: `b = x XOR M(key) y`, `c = SHA-512(salt_prefix || y)`).
+fn row_bc(row: &[u8], salt: &[u8]) -> [u8; BC_BYTES] {
+    let mut bc = row_bc_zero_salt(row);
+    for (b, m) in bc[..64].iter_mut().zip(flock_merkle::hm96::mask(salt)) {
+        *b ^= m;
+    }
+    let mut h = Sha512::new();
+    h.update(flock_merkle::hm96::consts().salt_prefix);
+    h.update(salt);
+    bc[64..].copy_from_slice(&h.finalize());
+    bc
+}
+
 /// The verifier's file with one public claim changed and its frame-v3 roots recomputed: a self-consistent, false statement. `ref`
-/// (a shared-row file) points instance 0 at another row of a table, whose roots are unchanged.
+/// (a shared-row file) points instance 0 at another row of a table, whose roots are unchanged; `row` (the prover's file too)
+/// flips instance 0's first output word in its committed output row and recomputes the row's `b || c` under its salt.
 fn false_statement(st: &Stmt, what: &str) -> Instances {
     let path = arg("--instances", "");
     let mut v = Instances::load(&path, &st.c).unwrap();
     let np = st.c.ports.len();
     match what {
+        "row" => {
+            let (n_in, words) = (st.c.n_in, st.c.ports[st.c.n_in].words);
+            let salt = v.instance_salts(np).expect("the prover's file")[n_in * SALT_BYTES..(n_in + 1) * SALT_BYTES].to_vec();
+            let at = match &v.tables {
+                Some(t) => (0..n_in).map(|p| t.counts[p] * 2 * st.c.ports[p].words).sum(),
+                None => 2 * st.c.in_words(),
+            };
+            let rows = match &mut v.tables {
+                Some(t) => std::sync::Arc::make_mut(t.rows.as_mut().expect("the prover's file")),
+                None => v.rows.as_mut().expect("the prover's file"),
+            };
+            rows[at] ^= 1;
+            let bc = row_bc(&rows[at..at + 2 * words], &salt);
+            let k = v.bc_index(0, n_in, np);
+            v.bcs[k] = bc;
+        }
         "output" => {
-            let k = 5.min(v.outputs.len() - 1);
-            v.outputs[k] ^= 1
+            let k = v.bc_index(0, st.c.n_in, np);
+            v.bcs[k][0] ^= 1
         }
         "ref" => {
             let t = v.tables.as_mut().expect("a shared-row file");
-            let p = (0..np).find(|&p| t.counts[p] > 1).expect("a table of two rows or more");
+            let p = (0..st.c.n_in).find(|&p| t.counts[p] > 1).expect("an input table of two rows or more");
             t.refs[p] = (t.refs[p] + 1) % t.counts[p] as u32;
         }
         _ => {
@@ -3317,6 +3349,11 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             p.public_sha512 = v.public_sha512;
             (st.clone(), Arc::new(p), v)
         }
+        // the prover commits to a false output: its row and b || c agree, so only the row's copy of the unit's output refuses it
+        "output_row_committed_false" => {
+            let v = Arc::new(false_statement(st, "row"));
+            (st.clone(), v.clone(), v)
+        }
         "prover_file_differs_from_verifier_file" => {
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
             p.public_sha512[0] ^= 1;
@@ -3708,7 +3745,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts.iter().any(|&r| r > 1)))
+        if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts[..st.c.n_in].iter().any(|&r| r > 1)))
             || (["gpu_proofs_match_cpu", "gpu_paths_agree", "verify_ahead_matches_serial"].contains(&name) && !gpu) {
             continue;
         }

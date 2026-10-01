@@ -30,7 +30,8 @@ def _low(template, **params):
     return lowerings.registry("C-Flock").module(template).lowering(sub), sub
 
 
-@pytest.mark.parametrize("template,params", [("rope-head", {"D": 64}), ("silu-mul", {"I": 8192})])
+# silu-mul at I = 8192, its output row hashed beside its inputs, needs a 2^27 block: past FC.K_MAX
+@pytest.mark.parametrize("template,params", [("rope-head", {"D": 64}), ("silu-mul", {"I": 4096})])
 @pytest.mark.slow
 def test_a_flat_class_carries_types_not_rows(template, params):
     low, sub = _low(template, **params)
