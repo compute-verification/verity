@@ -278,10 +278,12 @@ def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -
 
 def live_only(s: Site) -> str | None:
     """The protocol entry whose replay reads the live run (`pouw_circuit.around`): such a run's C2 cannot be deferred to a bundle."""
+    entries = getattr(s.protocols, "entries", None) or ()
+    if not entries:
+        return None
     from verity_vllm.check.replay import pouw_circuit as PWC
 
-    return next((e for e in (getattr(s.protocols, "entries", None) or ()) if e.split(":", 1)[0] == PWC.pouw.NAME
-                 and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
+    return next((e for e in entries if e.split(":", 1)[0] == PWC.pouw.NAME and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
 
 
 def plan(s: Site) -> dict[str, Any]:
@@ -341,9 +343,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
     lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=_pi0.embed_op_path(), splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
-    from verity_vllm.check.replay import pouw_circuit as PWC
-
-    sr = (lambda f: f() if plan else PWC.replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
+    sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                            seed_challenge=_seed_chal,
                            max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
                            workers=getattr(args, "replay_workers", None), retention=_retention,
@@ -365,6 +365,12 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     if s.after_replay is not None:
         s.after_replay(sr, _progs, _bm, _rd, _wp, _arr, _sr_kw, _loaded, _digs)
     return sr, lk
+
+
+def replayed(protocols: Any, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    from verity_vllm.check.replay import pouw_circuit as PWC
+
+    return PWC.replayed(protocols, run)
 
 
 def retention_of(com: Any, args: Any) -> str | None:
