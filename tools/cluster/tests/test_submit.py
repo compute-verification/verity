@@ -15,6 +15,10 @@ def _job(**kw):
     return submit.job(**{"run_id": "r1", "project": "verity", "submitter": "lane-x", "max_s": 600, "custody_s": 900, **kw})
 
 
+def _n1_executor(c, executor):
+    return replace(c, nodes={**c.nodes, "vy-nebius-1": replace(c.nodes["vy-nebius-1"], gpu_executor=executor)})
+
+
 def test_a_cpu_allocation_covers_the_jobs_time_and_its_custody_and_a_gpu_lease_the_workload_alone():
     j = _job()
     assert j.id == "rr-r1" and j.max_s == 1500 and j.kind == "batch"
@@ -34,7 +38,7 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
 
 def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_workload_alone_in_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
-    assert out["node"] == "vy-nebius-2" and "Kueue" in out["why"]
+    assert out["node"] == "vy-nebius-2" and "pinned there" in out["why"]
     assert "systemd-run" in out["wrap"] and out["wrap"][-6:] == ["taskset", "-c", "48-95", "nice", "-n", "19"]
     assert submit.GPU_LEASE not in out["wrap"], "custody runs in the CPU allocation, not under the GPU lease"
     assert out["workload_wrap"] == [submit.GPU_LEASE, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
@@ -62,21 +66,31 @@ def test_a_pinned_node_is_the_only_one_tried():
     c = model.load(NEBIUS)
     assert submit.resolve(c, _job(cpus=4, node="vy-nebius-2"), "r1", T)["node"] == "vy-nebius-2"
     with pytest.raises(submit.Refused) as e:
-        submit.resolve(c, _job(gpus=1, node="vy-nebius-1"), "r1", T)
+        submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
     assert "vy-nebius-2" not in str(e.value)
 
 
-def test_node_1s_gpus_take_a_job_through_its_own_gpu_lease_only_with_the_executor_switched_on():
+def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_executor_switched_on():
     c = model.load(NEBIUS)
+    assert c.nodes["vy-nebius-1"].gpu_executor == "n1-lease", "the cutover: the description switches node 1's executor on"
     with pytest.raises(submit.Refused, match="gpu_executor"):
-        submit.resolve(c, _job(gpus=1, node="vy-nebius-1"), "r1", T)
-    c = replace(c, nodes={**c.nodes, "vy-nebius-1": replace(c.nodes["vy-nebius-1"], gpu_executor="n1-lease")})
+        submit.resolve(_n1_executor(c, ""), _job(gpus=1, node="vy-nebius-1"), "r1", T)
     out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64, node="vy-nebius-1"), "r1", T)
     assert out["node"] == "vy-nebius-1" and "systemd-run" in out["wrap"] and submit.GPU_LEASE_N1 not in out["wrap"]
     assert out["workload_wrap"] == ["env", "GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus",
                                     submit.GPU_LEASE_N1, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
     with pytest.raises(submit.Refused, match="no timed windows"):
         submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
+
+
+def test_an_unpinned_gpu_job_skips_node_1s_pool_which_the_submit_path_cant_see():
+    c = model.load(NEBIUS)
+    out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
+    assert out["node"] == "vy-nebius-2" and submit.UNSEEN_POOL in out["why"]
+    with pytest.raises(submit.Refused, match="pinned there") as e:
+        submit.resolve(c, _job(gpus=1, preempt="never"), "r1", T)
+    assert "must be preemptible" in str(e.value), "node 2's reason too, so the lane learns it may pin node 1"
+    assert submit.resolve(c, _job(cpus=4), "r1", T)["node"] == "vy-nebius-1", "a CPU job still goes home"
 
 
 def test_the_cli_prints_the_placement_or_the_refusal(capsys):

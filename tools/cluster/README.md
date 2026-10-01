@@ -22,7 +22,8 @@ places it and names the wrappers its node's executor runs it under (`submit.py`)
 and pinned systemd scope, the job's CPU allocation, so the run's custody finishes before it is released, and a GPU job's
 workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked only while it runs. On node 1 it runs under node 1's
 `gpu-lease`, whose GPUs `n1_lease.py` lends from Kueue, once the description sets its `gpu_executor = "n1-lease"`; until then
-such a job goes to node 2 or is refused. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
+such a job goes to node 2 or is refused. Only a GPU job pinned to node 1 (`--on vy-nebius-1`) goes there, since the submit path
+can't see node 1's lease pool. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
 `kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now.
 
 ## Layout
