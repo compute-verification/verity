@@ -368,22 +368,46 @@ def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = 
     return out
 
 
-class Cache:
-    """Task results by key, persisted as JSONL (a scoring run resumes where a suspended one stopped)."""
+#: the code version of a cached result written before results carried one
+UNSTAMPED = "unstamped"
 
-    def __init__(self, path: str | None) -> None:
-        self.path, self.d = path, {}
+
+def code_version() -> str:
+    """The predictor's code: a digest of every source file of the two packages a predicted Program is built from (`verity`,
+    `verity_vllm`)."""
+    from pathlib import Path
+
+    import verity
+    import verity_vllm
+    h = hashlib.sha256()
+    for pkg in (verity, verity_vllm):
+        root = Path(pkg.__file__).resolve().parent
+        for p in sorted(root.rglob("*")):
+            if p.is_file() and "__pycache__" not in p.parts:
+                h.update(f"{pkg.__name__}/{p.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
+    return h.hexdigest()[:16]
+
+
+class Cache:
+    """Task results by (code version, key), persisted as JSONL (a scoring run resumes where a suspended one stopped).  A result
+    is stamped with the `code` that wrote it, and only results of `code`, or of a version `reuse` names (`UNSTAMPED` for results
+    written before they carried one), are reused: an older predictor's refusal or Program never stands in for this one's."""
+
+    def __init__(self, path: str | None, code: str, reuse: tuple[str, ...] = ()) -> None:
+        self.path, self.code, self.d = path, code, {}
+        accepted = {code, *reuse}
         if path and os.path.exists(path):
             for line in open(path):
                 if line.strip():
                     r = json.loads(line)
-                    if r.get("status") != "killed":
+                    if r.get("status") != "killed" and r.get("code", UNSTAMPED) in accepted:
                         self.d[r["key"]] = r
 
     def get(self, key: str) -> dict | None:
         return self.d.get(key)
 
     def put(self, r: dict) -> None:
+        r["code"] = self.code
         self.d[r["key"]] = r
         if self.path:
             with open(self.path, "a") as f:
@@ -471,13 +495,16 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
 def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 600, max_mem_mb: int | None = None, workers: int = 2,
           mem_mb: int | None = 8000,
           path_map: list[tuple[str, str]] | None = None, diverge: bool = True, max_diverge: int = 40, equivalence_on: bool = True,
-          rows_filter: str | None = None, workload: bool = True, cache: str | None = None, cached_only: bool = False, log=None) -> dict:
+          rows_filter: str | None = None, workload: bool = True, cache: str | None = None, cached_only: bool = False,
+          reuse_code: tuple[str, ...] = (), log=None) -> dict:
     """`max_rows`: request units over LP+T = max_rows (and workloads over that many summed rows) are `over_budget`; the units
     running at once have estimated peaks summing to at most `mem_mb` (`mem_estimate_mb`). `cached_only`: no prediction runs, the
-    units without one in `cache` are `not_run` (the cached ones' first divergences are still located)."""
+    units without one in `cache` are `not_run` (the cached ones' first divergences are still located). `cache` reuses this
+    code's results (`code_version`) and those of the versions `reuse_code` names; each unit records the version that predicted it."""
     t0 = time.time()
     log = log or (lambda r: print(json.dumps({k: v for k, v in r.items() if k != "phi"})[:400], file=sys.stderr, flush=True))
-    C = Cache(cache)
+    code = code_version()
+    C = Cache(cache, code, tuple(reuse_code))
     P = plan(inv, hf_home=hf_home, checkpoints=checkpoints, max_rows=max_rows, rows_filter=rows_filter, max_mem_mb=max_mem_mb)
     tasks = sorted(P["tasks"].values(), key=lambda t: t["rows"])
     pred = _pool_map(_predict_task, tasks, workers, log, C, mem_mb, run=not cached_only)
@@ -494,6 +521,7 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
                              "workload prediction skipped" if INV.unit_kind(u["unit"]) == "build_workload" else "no prediction result")
                 continue
             u["predict_secs"] = p.get("secs")
+            u["predicted_by"] = p.get("code", UNSTAMPED)
             if p["status"] != "predicted":
                 u.update(status=p["status"], reason=p.get("reason"))
                 continue
@@ -523,7 +551,7 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
             elif u.get("status") == "differs" and INV.unit_kind(u["unit"]) != "build_workload":
                 u["first_divergence"] = {"where": "not located", "reason": "traced descriptor not at hand or over the divergence budget"}
     res = {"schema": SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "inventory_root": inv.get("root"), "max_rows": max_rows,
-           "rows": P["rows"], "n_prediction_tasks": len(tasks), "n_workload_tasks": len(P["wtasks"]), "n_divergence_tasks": len(dt),
+           "code": code, "reuse_code": sorted(reuse_code), "rows": P["rows"], "n_prediction_tasks": len(tasks), "n_workload_tasks": len(P["wtasks"]), "n_divergence_tasks": len(dt),
            "secs": round(time.time() - t0, 1)}
     res["summary"] = summarize(res)
     return res
@@ -549,6 +577,7 @@ def summarize(res: dict) -> dict:
     by = Counter()
     by_gran = Counter()
     by_tree = Counter()
+    by_code = Counter()
     causes = Counter()
     unexpressible = Counter()
     rows_exact = rows_scored = 0
@@ -561,6 +590,7 @@ def summarize(res: dict) -> dict:
             by_gran[(g, u.get("status"))] += 1
             if u.get("status") in ("exact", "differs"):
                 by_tree[(os.path.basename(str(row.get("source_root"))), u["status"])] += 1
+                by_code[u.get("predicted_by", UNSTAMPED)] += 1
             if u.get("status") == "differs":
                 causes[_cause(u)] += 1
             if u.get("status") == "unexpressible":
@@ -575,6 +605,7 @@ def summarize(res: dict) -> dict:
             "units_compared": by["exact"] + by["differs"], "units_exact": by["exact"], "units_equivalent": eq,
             "rows": len(res["rows"]), "rows_with_a_compared_unit": rows_scored, "rows_all_compared_exact": rows_exact,
             "top_divergence_causes": causes.most_common(10), "top_unexpressible": unexpressible.most_common(10),
+            "compared_by_code": dict(sorted(by_code.items())),
             "compared_by_source_tree": {t: {"exact": by_tree[(t, "exact")], "differs": by_tree[(t, "differs")]}
                                         for t in sorted({t for t, _ in by_tree})}}
 
@@ -584,6 +615,8 @@ def table_md(res: dict) -> str:
     lines = [f"# predictor score ({res['utc']}, max_rows {res['max_rows']})", "",
              f"units compared {s['units_compared']}: exact {s['units_exact']}, equivalent {s['units_equivalent']}; rows {s['rows']}, "
              f"rows with a compared unit {s['rows_with_a_compared_unit']}, all-exact rows {s['rows_all_compared_exact']}", "",
+             f"predictor code {res.get('code')}; compared units by the code that predicted them: "
+             + (", ".join(f"{c} {n}" for c, n in s.get("compared_by_code", {}).items()) or "none"), "",
              "| granularity:status | units |", "|---|---|"]
     lines += [f"| {k} | {v} |" for k, v in s["units_by_granularity"].items()]
     lines += ["", "| first divergence | units |", "|---|---|"] + [f"| {c} | {n} |" for c, n in s["top_divergence_causes"]]
@@ -630,6 +663,9 @@ class Options:
     no_equivalence: bool = option("--no-equivalence", action="store_true", default=False)
     no_workload: bool = option("--no-workload", action="store_true", default=False)
     cached_only: bool = option("--cached-only", action="store_true", default=False, help="predict nothing: score the predictions already in --cache")
+    reuse_code: list[str] | None = option("--reuse-code", default=None, nargs="*",
+                                          help="also reuse --cache results of these predictor code versions (`unstamped`: written "
+                                               "before results carried one); by default only this code's are")
     rows_filter: str | None = option("--rows-filter", default=None, help="regex on the row id")
     out: str = option("--out", help="score JSON")
     md: str | None = option("--md", default=None, help="markdown table")
@@ -646,7 +682,7 @@ def main(a: Options) -> int:
     pm = [tuple(x.split("=", 1)) for x in (a.path_map or [])]
     res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, max_mem_mb=a.max_mem_mb, mem_mb=a.mem_mb, workers=a.workers, path_map=pm,
                 max_diverge=a.max_diverge, equivalence_on=not a.no_equivalence, rows_filter=a.rows_filter, workload=not a.no_workload,
-                cache=a.cache, cached_only=a.cached_only)
+                cache=a.cache, cached_only=a.cached_only, reuse_code=tuple(a.reuse_code or ()))
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1, sort_keys=True)

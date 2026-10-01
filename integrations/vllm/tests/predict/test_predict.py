@@ -251,6 +251,18 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     assert (s["units_compared"], s["units_exact"]) == (7, 6)
     assert s["units_by_granularity"]["step:exact"] == 4
     assert "| first divergence | units |" in S.table_md(res)
+    entries = [json.loads(line) for line in open(cache)]
+    assert res["code"] == S.code_version() and {e["code"] for e in entries} == {res["code"]} and s["compared_by_code"] == {res["code"]: 7}
+    other, unstamped = str(tmp_path / "other.jsonl"), str(tmp_path / "unstamped.jsonl")
+    with open(other, "w") as f:
+        f.writelines(json.dumps({**e, "code": "0" * 16}) + "\n" for e in entries)
+    with open(unstamped, "w") as f:
+        f.writelines(json.dumps({k: v for k, v in e.items() if k != "code"}) + "\n" for e in entries)
+    for path, version in ((other, "0" * 16), (unstamped, S.UNSTAMPED)):
+        kw = dict(hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=path, cached_only=True)
+        assert S.score(inv, **kw)["summary"]["units_by_status"]["not_run"] == 7, "another code's results are not this code's"
+        old = S.score(inv, **kw, reuse_code=(version,))["summary"]
+        assert old["compared_by_code"] == {version: 7} and {**old, "compared_by_code": 0} == {**s, "compared_by_code": 0}
 
 
 def test_memory_estimate_is_above_a_measured_peak():
