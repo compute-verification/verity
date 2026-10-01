@@ -15,7 +15,8 @@
                      certified by exactly one unit, cross-unit reads only through committed values, no value computed in two
                      units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes)
     lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
-                     a template unit's), a template unit's circuit digest against its C-Flock
+                     a template unit's; a Boolean Definition's lowering has at most its own And gates), a template unit's
+                     circuit digest against its C-Flock
                      module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
                      (`verity_flock.boolean_export`)
 
@@ -394,6 +395,12 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"]}, pins, F, t.id)
     elif is_boolean(t):
+        from verity.evaluation.bits import compile as compile_bits
+
+        own = rec["definition_ands"] = compile_bits(t).counts["and"]
+        if counts["ands"] > own:
+            F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands']} ANDs for the Definition's {own} And gates",
+                   via="c-flock:ir_lower", ands=counts["ands"], definition_ands=own)
         rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"]}, pins, F, t.id)
     return rec
 
