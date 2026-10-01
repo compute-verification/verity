@@ -192,8 +192,8 @@ VOCAB_PADDING = 64
 
 def rank_shape(C: ModelShape, world: int) -> ModelShape:
     """One rank's slice of C under vLLM's tensor parallelism: the query and key/value heads and the MLP width split `world` ways
-    (`QKVParallelLinear`, `MergedColumnParallelLinear` then `RowParallelLinear`), the hidden size, the norms and the rotary table
-    whole.  V stays the full vocabulary: the embedding and the LM head take V / world rows each (`VocabParallelEmbedding`,
+    (`QKVParallelLinear`, `MergedColumnParallelLinear` then `RowParallelLinear`; under the fused MoE each expert's width, the router
+    and the experts whole), the hidden size, the norms and the rotary table whole.  V stays the full vocabulary: the embedding and the LM head take V / world rows each (`VocabParallelEmbedding`,
     `ParallelLMHead`) and the token select reads the gathered row.  A split vLLM pads or replicates is `Unexpressible`."""
     if world == 1:
         return C
@@ -204,10 +204,6 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
         facts.append(f"an MLP width of {C.I} over {world} ranks")
     if C.V % VOCAB_PADDING or C.V % world:
         facts.append(f"a vocabulary of {C.V} over {world} ranks (padded to a multiple of {VOCAB_PADDING}: the padding rows' trim)")
-    if C.E:
-        facts.append("the fused-MoE block under tensor parallelism")
-    if C.qk_norm == "all":
-        facts.append("a q/k norm over all heads under tensor parallelism (its all-gather)")
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
     return replace(C, NH=C.NH // world, KVH=C.KVH // world, I=C.I // world)
@@ -243,7 +239,7 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
         if C.qkv_bias:
             out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
         if C.qk_norm == "all":
-            out += [(p + "self_attn.q_norm.weight", bf(C.NH * C.D)), (p + "self_attn.k_norm.weight", bf(C.KVH * C.D))]
+            out += [(p + "self_attn.q_norm.weight", bf(C.NH * C.D * world)), (p + "self_attn.k_norm.weight", bf(C.KVH * C.D * world))]
         out.append((p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)))
         if C.qk_norm == "head":
             out += [(p + "self_attn.q_norm.weight", bf(C.D)), (p + "self_attn.k_norm.weight", bf(C.D))]
@@ -299,7 +295,8 @@ class _Specs:
                 self.qkv = self.qkv_fused = self.kind(role[0], K=C.H, N=C.QKV, **role[1])
         self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm == "head" else None
         if C.qk_norm == "all":
-            self.q_norm, self.k_norm = self.kind("rmsnorm", N=C.NH * C.D, EPS=C.EPS), self.kind("rmsnorm", N=C.KVH * C.D, EPS=C.EPS)
+            self.q_norm, self.k_norm = (self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS) for n in (C.NH, C.KVH))
+            self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
         self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
@@ -458,6 +455,15 @@ class _Model:
         parts = [(x.refs, peer.refs.slice(i * n, (i + 1) * n)) for i, x in enumerate(own)]
         return [self.call(fn, Coll(p, concat(list(a if self.rank == 0 else a[::-1])))) for a in parts]
 
+    def norm_all_heads(self, parts: list[tuple]) -> list[list]:
+        """The q and k norms over all heads (`OlmoeAttention._apply_qk_norm`), each part (rows, width, gather, norm, weight): each
+        row normed whole, which under tensor parallelism is both parts' rows all-gathered across the ranks, both normed, then this
+        rank's slice of each normed row."""
+        rows = [[c.refs for c in self.collective(g, [Coll(_arr((n,), 16), r) for r in x])] if g else x for x, n, g, _, _ in parts]
+        normed = [[self.call(fn, Coll(_ptypes(fn)[0], r), Coll(_ptypes(fn)[1], w.refs)).refs for r in x]
+                  for x, (_, _, _, fn, w) in zip(rows, parts)]
+        return [[r.slice(self.rank * n, (self.rank + 1) * n) for r in x] if g else x for x, (_, n, g, _, _) in zip(normed, parts)]
+
     def forward(self, toks: list[Coll], pos0: int) -> list[Coll]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
         S, C, M = self.S, self.C, len(toks)
@@ -489,9 +495,8 @@ class _Model:
             if C.qk_norm == "head":
                 q_in, k_in = self.head_norms(q_in, C.NH, lw["q_norm"]), self.head_norms(k_in, C.KVH, lw["k_norm"])
             elif C.qk_norm == "all":
-                pqn, pkn = _ptypes(S.q_norm), _ptypes(S.k_norm)
-                q_in = [self.call(S.q_norm, Coll(pqn[0], q_in[i]), Coll(pqn[1], lw["q_norm"].refs)).refs for i in range(M)]
-                k_in = [self.call(S.k_norm, Coll(pkn[0], k_in[i]), Coll(pkn[1], lw["k_norm"].refs)).refs for i in range(M)]
+                q_in, k_in = self.norm_all_heads([(q_in, q_w, S.q_gather, S.q_norm, lw["q_norm"]),
+                                                  (k_in, k_w, S.k_gather, S.k_norm, lw["k_norm"])])
             q = [self.call(S.rope_q, Coll(prq[0], q_in[i]), cs[i]) for i in range(M)]
             k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
@@ -516,7 +521,7 @@ class _Model:
             else:
                 x, res = self.rms(o, lw["ln2"], res)
             if C.E:
-                d = self.moe(x, lw)
+                d = self.collective(S.all_reduce, self.moe(x, lw))
             else:
                 gu = [self.call(S.gate_up, Coll(pgu[0], x[i].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
                 a = [self.call(S.silu, Coll(ps[0], gu[i].refs)) for i in range(M)]
@@ -665,10 +670,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
             params.append(("splits", Array(events, I32)))
     n_user = len(params)
     if world > 1:
-        # `vllm_meta.WithPeers`: per forward pass the embedding's and each layer's o / down all-reduces over its rows, then the
-        # sampled row's logits all-gather
-        passes = [n] + [1] * (events - 1)
-        shapes = [s for r in passes for s in [(r, C.H)] * (2 * C.NL + 1) + [(1, C.V // world)]]
+        # `vllm_meta.WithPeers`: per forward pass the embedding's all-reduce, each layer's q / k all-gathers (a norm over all heads)
+        # and o / down all-reduces over its rows, then the sampled row's logits all-gather
+        R, passes = specs.C, [n] + [1] * (events - 1)
+        layer = lambda r: ([(r, R.NH * R.D), (r, R.KVH * R.D)] if R.qk_norm == "all" else []) + [(r, C.H)] * 2  # noqa: E731
+        shapes = [s for r in passes for s in [(r, C.H)] + layer(r) * C.NL + [(1, C.V // world)]]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     params.append(("weights", wrec))
     params = tuple(params)

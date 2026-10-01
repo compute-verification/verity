@@ -3,7 +3,7 @@
 The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
 (`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7, Qwen2.5-0.5B from
 cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5, Llama-3.2-1B's TP2 ranks from cov-p000,
-Gemma-2-2B's from cov-p058-2.
+Gemma-2-2B's from cov-p058-2, Qwen3-30B-A3B's from cov-p081 and OLMoE's from cov-p069.
 A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 """
@@ -70,11 +70,17 @@ def test_request_and_workload_programs_equal_the_traced_build():
     ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 1, "c3765e958ca00e3838c30f4b744670d28833fcab785450ef2f88fac7ae177b62"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 0, "7ca0319a25893edc2bccf7866f25cd29cc28f58b6eef3158b0c2b04feda0c753"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 1, "7da1ceee0fc64bbd16aa0267c5c283708eb75740ac532659a6e7c64c2bac05db"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 0, "a298bf4de283b18b99007f68c1350291cf06f2455d553db473a11bc8239df33a"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 1, "17ae54266d9be49f7609996873457eab0f1a44c3bf64fe4efa6a791c36320cda"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 0, "d9c274169bd67e88d416f8ec1affae93f5d927b5971c8881a099ad5fae250e80"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 1, "372ee2bfdfecd5d6718f70fb738f96033a758697a95d5a282888bf2ba0f078af"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
-    """Llama-3.2-1B (cov-p000) and Gemma-2-2B (cov-p058-2) at TP2: each rank's step over its shards, with a peer Input per
-    collective in call order (the embedding's and each layer's o / down all-reduces, the logits all-gather) and the two partials in
-    rank order; Gemma-2's normalizer scales the reduced embedding and its soft-cap the gathered logits."""
+    """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
+    over its shards, with a peer Input per collective in call order (the embedding's all-reduce, each layer's o and down / MoE
+    all-reduces, the logits all-gather) and the two partials in rank order.  Gemma-2's normalizer scales the reduced embedding and
+    its soft-cap the gathered logits; the fused MoE keeps its router and experts whole over each expert's width shard; OLMoE's q / k
+    norm over all heads reads its q and k rows all-gathered, then keeps this rank's slice."""
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text()), tp={"world": 2, "rank": rank}), "step", M=1, pos0=8)
     assert r.function == "Derived[vLLMStep[" + function
     assert r.digest == digest
@@ -168,7 +174,6 @@ def test_the_biased_linear_follows_the_targets_rule(target, fused):
     (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
     ({**TINY, "num_key_value_heads": 1}, {"tp": {"world": 2, "rank": 0}}, "4 query and 1 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
-    (json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), {"tp": {"world": 2, "rank": 0}}, "the fused-MoE block under tensor parallelism"),
     (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
