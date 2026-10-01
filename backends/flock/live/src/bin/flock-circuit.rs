@@ -3591,7 +3591,7 @@ fn gpu_cpu_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         .collect();
     let (pe, te) = (c.1 == g.1, c.2 == g.2);
     json!({"case": "gpu_proofs_match_cpu", "expect": "the device's proofs and transcripts are the CPU prover's, byte for byte", "gpu": true, "zk": is_zk(st),
-           "accepted": c.0 && g.0, "proofs_equal": pe, "transcripts_equal": te, "proofs": proof_diff,
+           "accepted": c.0 && g.0, "proofs_equal": pe, "transcripts_equal": te, "proofs": proof_diff, "proof_sha512": g.2["proofs"],
            "transcript_first_difference": first_diff(&c.2, &g.2, String::new()), "pass": c.0 && g.0 && pe && te})
 }
 
