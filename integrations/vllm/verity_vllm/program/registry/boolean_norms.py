@@ -223,6 +223,25 @@ def _check_mufu(b: dict, keys) -> None:
             raise ValueError(f"{k} computes {got}, not {' or '.join(sorted(_MUFU_WORDS[k]))}")
 
 
+def _word_view(word, statics: tuple[str, ...], mufu: tuple[str, ...] = ()) -> Callable[[dict], object]:
+    """The word view of a binding ``b``: ``word`` bound at ``b``'s ``statics``, once each MUFU static in ``mufu`` is checked."""
+    def view(b: dict):
+        _check_mufu(b, mufu)
+        return bind(word, **{k: b[k] for k in statics})
+    return view
+
+
+def _on_bits(name: str, version: int, statics: list[str], signature: Callable, word: Callable[[dict], object]):
+    """Decorator: the Boolean composite ``name_v{version}``, documented by its body's docstring, whose word view
+    (`trace.word_of`) is ``word`` of its bindings."""
+    def deco(body: Callable) -> CompositeDefinition:
+        d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
+                                conformance="exact-model-tested")
+        d.word = word  # type: ignore[attr-defined]
+        return d
+    return deco
+
+
 class _F32:
     """An f32 of a norm's body as bits, as a word, or both; each form made at most once (`UnpackF32_v1`, `PackF32_v1`, or a
     constant's own Calls), so a value two MUFU word Calls read is packed once."""
@@ -499,22 +518,14 @@ def rmsnorm_cuda_calls(B, N: int, EPS: float, RSQRT, x: Coll, res: Coll, w: Coll
     return tuple_of(out, lanes[0])
 
 
-@composite("RMSNormFusedCuda", 3, ["N", "EPS", "RSQRT"],
-           lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
-                      Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-           conformance="exact-model-tested")
+@_on_bits("RMSNormFusedCuda", 3, ["N", "EPS", "RSQRT"],
+          lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
+                     Tuple(Array(S.N, BF16), Array(S.N, BF16))),
+          _word_view(b1.RMSNormFusedCuda, ("N", "EPS"), ("RSQRT",)))
 def RMSNormFusedCuda(B, S, x, res, w):
     """`RMSNormFusedCuda_v2` on bits (`rmsnorm_cuda_calls`): vLLM's generic `fused_add_rms_norm_kernel<bf16, 0, true>`,
     `s = rsqrtf(variance / N + eps)` with ``RSQRT`` computing `RsqrtApprox_v1`. Returns (normed, res')."""
     return rmsnorm_cuda_calls(B, S.N, S.EPS, S.RSQRT, x, res, w)
-
-
-def _cuda_word(b: dict):
-    _check_mufu(b, ("RSQRT",))
-    return bind(b1.RMSNormFusedCuda, N=b["N"], EPS=b["EPS"])
-
-
-RMSNormFusedCuda.word = _cuda_word  # type: ignore[attr-defined]
 
 
 # --- the Triton norm (vLLM's batch-invariant _rms_norm_kernel) ------------------------------------------------------------------
@@ -599,19 +610,11 @@ def rmsnorm_triton_calls(B, N: int, EPS: float, SQRT, SCALEA, RCP, x: Coll, w: C
     return B.call(bind(RMSNormOutRowTriton, N=N), inv, B.call(RMSNormInvTriton, inv), x, th[1], w)
 
 
-@composite("RMSNormTriton", 2, ["N", "EPS", "SQRT", "SCALEA", "RCP"],
-           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
-           conformance="exact-model-tested")
+@_on_bits("RMSNormTriton", 2, ["N", "EPS", "SQRT", "SCALEA", "RCP"],
+          lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
+          _word_view(b1.RMSNormTriton, ("N", "EPS"), ("SQRT", "SCALEA", "RCP")))
 def RMSNormTriton(B, S, x, w):
     """`RMSNormTriton_v1` on bits (`rmsnorm_triton_calls`): vLLM's batch-invariant Triton `_rms_norm_kernel`,
     `inv = div.full(1, sqrt.approx.ftz(fma(rcp(N), sum, eps)))` with ``SQRT``, ``SCALEA`` and ``RCP`` computing `MufuSqrtFtz_v1`,
     `DivFullScaleA_v1` and `DivFullRcp_v1`."""
     return rmsnorm_triton_calls(B, S.N, S.EPS, S.SQRT, S.SCALEA, S.RCP, x, w)
-
-
-def _triton_word(b: dict):
-    _check_mufu(b, ("SQRT", "SCALEA", "RCP"))
-    return bind(b1.RMSNormTriton, N=b["N"], EPS=b["EPS"])
-
-
-RMSNormTriton.word = _triton_word  # type: ignore[attr-defined]

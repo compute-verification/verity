@@ -46,8 +46,8 @@ from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean import trace as TR
 from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _bits, _check_mufu, _f32, _on_word,
-                                                        _rcp_n, _split, _traced)
+from verity_vllm.program.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _bits, _f32, _on_bits, _on_word,
+                                                        _rcp_n, _split, _traced, _word_view)
 
 __all__ = ["AddScalarBf16", "AddScalarF32", "AddWidenedBf16", "MeanTriton", "MulVecF32", "NarrowF32ToBf16", "RsqrtF32",
            "ScaleRowBf16", "ScaleRowF32", "SquareBf16", "SquareF32", "mean_triton_calls"]
@@ -55,10 +55,6 @@ __all__ = ["AddScalarBf16", "AddScalarF32", "AddWidenedBf16", "MeanTriton", "Mul
 WARP = 32
 #: f32 registers per thread per 1024-column chunk (`BLOCK_SIZE / THREADS`, either layout)
 REGS = D.BLOCK_SIZE // D.THREADS
-
-
-def _word(family, *statics: str):
-    return lambda b: bind(family, **{k: b[k] for k in statics})
 
 
 # --- the element leaves -------------------------------------------------------------------------------------------------------
@@ -136,41 +132,41 @@ ScaleRowF32El = _traced("ScaleRowF32El", 1, (),
 
 # --- the element-wise families ------------------------------------------------------------------------------------------------
 
-@composite("SquareBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, F32)), conformance="exact-model-tested")
+@_on_bits("SquareBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, F32)), _word_view(D.SquareBf16, ("N",)))
 def SquareBf16(B, S, x):
     """`SquareBf16_v1` on bits: `SquareBf16El_v1` per element (separable)."""
     return B.batch(SquareBf16El, x, axes=(0,))
 
 
-@composite("SquareF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)), conformance="exact-model-tested")
+@_on_bits("SquareF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)), _word_view(D.SquareF32, ("N",)))
 def SquareF32(B, S, x):
     """`SquareF32_v1` on bits: `SquareF32El_v1` per element (separable)."""
     return B.batch(SquareF32El, x, axes=(0,))
 
 
-@composite("AddScalarF32", 2, ["N", "C"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("AddScalarF32", 2, ["N", "C"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
+          _word_view(D.AddScalarF32, ("N", "C")))
 def AddScalarF32(B, S, x):
     """`AddScalarF32_v1` on bits: `F32AddConst_v1{C}` per element (separable)."""
     return B.batch(bind(F32AddConst, C=S.C), x, axes=(0,))
 
 
-@composite("AddScalarBf16", 2, ["N", "C"], lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("AddScalarBf16", 2, ["N", "C"], lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)),
+          _word_view(D.AddScalarBf16, ("N", "C")))
 def AddScalarBf16(B, S, w):
     """`AddScalarBf16_v1` on bits: `Bf16AddConstF32_v1{C}` per element (separable)."""
     return B.batch(bind(Bf16AddConstF32, C=S.C), w, axes=(0,))
 
 
-@composite("AddWidenedBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("r", Array(S.N, BF16))), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("AddWidenedBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("r", Array(S.N, BF16))), Array(S.N, F32)),
+          _word_view(D.AddWidenedBf16, ("N",)))
 def AddWidenedBf16(B, S, x, r):
     """`AddWidenedBf16_v1` on bits: `AddWidenedBf16El_v1` per element (separable)."""
     return B.batch(AddWidenedBf16El, x, r, axes=(0, 0))
 
 
-@composite("RsqrtF32", 2, ["N", "RSQRT"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("RsqrtF32", 2, ["N", "RSQRT"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
+          _word_view(D.RsqrtF32, ("N",), ("RSQRT",)))
 def RsqrtF32(B, S, x):
     """`RsqrtF32_v1` on bits: ``RSQRT`` (computing `RsqrtApprox_v1`) per element; on the word id, each element packed and its
     result unpacked."""
@@ -180,29 +176,29 @@ def RsqrtF32(B, S, x):
     return B.batch(S.RSQRT, x, axes=(0,))
 
 
-@composite("ScaleRowBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, F32))), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("ScaleRowBf16", 2, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, F32))), Array(S.N, F32)),
+          _word_view(D.ScaleRowBf16, ("N",)))
 def ScaleRowBf16(B, S, x, s):
     """`ScaleRowBf16_v1` on bits: s's own gates once (`ScaleRowBf16Scale_v1`), then `ScaleRowBf16El_v1` per element."""
     return B.batch(ScaleRowBf16El, x, s[0], B.call(ScaleRowBf16Scale, s[0]), axes=(0, None, None))
 
 
-@composite("ScaleRowF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)), ("s", Array(1, F32))), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("ScaleRowF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)), ("s", Array(1, F32))), Array(S.N, F32)),
+          _word_view(D.ScaleRowF32, ("N",)))
 def ScaleRowF32(B, S, x, s):
     """`ScaleRowF32_v1` on bits: s's own gates once (`ScaleRowF32Scale_v1`), then `ScaleRowF32El_v1` per element."""
     return B.batch(ScaleRowF32El, x, s[0], B.call(ScaleRowF32Scale, s[0]), axes=(0, None, None))
 
 
-@composite("MulVecF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)), ("w", Array(S.N, F32))), Array(S.N, F32)),
-           conformance="exact-model-tested")
+@_on_bits("MulVecF32", 2, ["N"], lambda S: ((("x", Array(S.N, F32)), ("w", Array(S.N, F32))), Array(S.N, F32)),
+          _word_view(D.MulVecF32, ("N",)))
 def MulVecF32(B, S, x, w):
     """`MulVecF32_v1` on bits: `F32Mul_v3` per element (separable)."""
     return B.batch(EW.F32Mul, x, w, axes=(0, 0))
 
 
-@composite("NarrowF32ToBf16", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, BF16)),
-           conformance="exact-model-tested")
+@_on_bits("NarrowF32ToBf16", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, BF16)),
+          _word_view(D.NarrowF32ToBf16, ("N",)))
 def NarrowF32ToBf16(B, S, x):
     """`NarrowF32ToBf16_v1` on bits: `NarrowF32ToBf16El_v1` per element (separable)."""
     return B.batch(NarrowF32ToBf16El, x, axes=(0,))
@@ -345,21 +341,7 @@ def mean_triton_calls(B, N: int, x: Coll) -> Coll:
     return B.call(bind(MeanCombineTriton, N=N), B.call(bind(MeanWarpsTriton, N=N), th))
 
 
-@composite("MeanTriton", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(1, F32)), conformance="exact-model-tested")
+@_on_bits("MeanTriton", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(1, F32)), _word_view(D.MeanTriton, ("N",)))
 def MeanTriton(B, S, x):
     """`MeanTriton_v1` on bits (`mean_triton_calls`): vLLM's batch-invariant `mean_dim` over one row of N f32 values."""
     return mean_triton_calls(B, S.N, x)
-
-
-for _fam, _statics in ((SquareBf16, ("N",)), (SquareF32, ("N",)), (MeanTriton, ("N",)), (AddScalarF32, ("N", "C")),
-                       (AddScalarBf16, ("N", "C")), (AddWidenedBf16, ("N",)), (ScaleRowBf16, ("N",)), (ScaleRowF32, ("N",)),
-                       (MulVecF32, ("N",)), (NarrowF32ToBf16, ("N",))):
-    _fam.word = _word(getattr(D, _fam.name), *_statics)  # type: ignore[attr-defined]
-
-
-def _rsqrt_word(b: dict):
-    _check_mufu(b, ("RSQRT",))
-    return bind(D.RsqrtF32, N=b["N"])
-
-
-RsqrtF32.word = _rsqrt_word  # type: ignore[attr-defined]
