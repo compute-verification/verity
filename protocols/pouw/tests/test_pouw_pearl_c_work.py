@@ -4,9 +4,12 @@ excluded rows fail, the debit under the cap), draws keyed by a beacon round afte
 
 from __future__ import annotations
 
+import struct
 from fractions import Fraction
 
 import pytest
+
+import quicknet as Q
 
 import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
@@ -19,7 +22,8 @@ from verity_pouw.schemes import pearl_kw as P
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
 K = 128
-BEFORE, AFTER = 4, W.Beacon(5, b"beacon round 5")
+AFTER = Q.LATEST
+BEFORE = Q.recorded_before(AFTER)
 
 
 def record(real=20, excluded_a=(), excluded_b=(), k=K, kept=K) -> W.UnitRecord:
@@ -153,7 +157,7 @@ def lifecycle(rows_a=None, real=20, scheme=S):
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
     prover = Prover(scheme, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
 
@@ -168,6 +172,50 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     assert out.audit.accepted and len(out.audit.verdicts) == 9 and out.audit.selected[-1] == 0
     assert out.wref == W.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
     assert out.credit == (1 - D.CAP) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
+
+
+def test_r1_is_a_no_op_on_pearl_c():
+    """R1, the salted per-row credit rule `check_opened` and `declare` now consult, is Pearl-C4's (its F1′ bound).
+    Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring
+    with the transcript gives the same records as without."""
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    assert not hasattr(S, "row_over_debit") and not hasattr(S, "r1_rows")
+    plain = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, transcript=tr) == plain
+    u = epoch.workload.matmuls[0]
+    tile = S.tiles(u.shape)[0]
+    rec = W.UnitRecord(u, 20, K, (0, 3), ())
+    reason = W.check_opened(S, rec, tile, [rows_a[i] for i in tile.rows], [rows_b[j] for j in tile.cols], None)
+    assert reason == "A row 0 is excluded but passes the per-row rules"
+
+
+def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
+    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
+    `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
+    from verity_pouw.schemes import pearl_c4
+
+    def unreachable(*args, **kwargs):
+        raise AssertionError("Pearl-C reached Pearl-C4's debit")
+
+    monkeypatch.setattr(pearl_c4, "tile_debit", unreachable)
+    monkeypatch.setattr(pearl_c4, "salt_dead", unreachable)
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    assert not hasattr(S, "tile_cap")
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+
+
+def test_v_ex_is_a_no_op_on_pearl_c():
+    """V-EX adds nothing to a declaration without voluntary rows: Pearl-C's records declare none, each encodes byte for
+    byte in the v2 layout (so `records_root` is unchanged), and the audit accepts as before."""
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    for r in records:
+        u, s, a, b = r.matmul, r.matmul.shape, r.excluded_a, r.excluded_b
+        assert r.voluntary_a == r.voluntary_b == ()
+        assert r.encode() == struct.pack(f"<QQIIIIIII{len(a)}I{len(b)}I", u.index, u.weight, s.m, s.k, s.n, r.real_rows,
+                                         r.k_kept, len(a), len(b), *a, *b)
+    assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
 
 
 def test_audit_under_hashing_h1():
@@ -192,7 +240,8 @@ def test_audit_rejects_what_the_red_team_found():
     pads = audit([W.UnitRecord(u, 32, K, (3,))])
     assert not pads.audit.accepted and "is credited but fails" in reasons(pads)
     honest = [W.UnitRecord(u, 20, K, (3,))]
-    assert "not after the commitment" in reasons(audit(honest, before=5))
+    assert "not at least 2 rounds after" in reasons(audit(honest, before=BEFORE + 3))
+    assert "does not verify" in reasons(audit(honest, beacon=type(AFTER)(AFTER.round, bytes(48))))
     wide = {9: W.Split(K + 2, (7,), b"calib")}
     assert "not its weight's split" in reasons(audit(honest, splits=wide))
     narrow = {9: W.Split(K + 1, (7,), b"calib")}
@@ -220,7 +269,7 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
         rows_a, rows_b = spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike)
         work = Workload((Matmul(0, Shape(t, k, t), 1),))
         prover = Prover(s, {1: rows_b})
-        epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+        epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
         tr = prover.prove(epoch, {0: rows_a})
         splits = {1: W.Split(k)}
         records = W.declare(s, epoch, {0: rows_a}, {1: rows_b}, splits)
