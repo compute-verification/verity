@@ -1,9 +1,9 @@
 """verity_vllm.predict: predicted Programs equal the traced Builds of record, and the scorer says where they do not.
 
 The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
-(`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7.  A library change that
-moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper step --M 1 --pos0 8`, CPU only)
-and pin the new digest with the predictor's.
+(`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7, Qwen2.5-0.5B from
+cov-k03-7.  A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
+step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 """
 
 from __future__ import annotations
@@ -36,10 +36,12 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
     ("smollm2-135m", "53aa6ed20e8dd0c1e74a0a332f359bda5dc36c40da38383d3a2e0a54a9c2a9c4"),
     ("llama32-1b", "e0b060772e8179fcab09da11adc3998c7fcca7d124111d50a02be73bbf123408"),
     ("tinyllama-11b", "c0a2fef1966af8284024e60603d3f63929903fd9ddcbd4349e184e7842b27a48"),
+    ("qwen25-05b", "312cae23ded0630175327fc649a7428a55f3617d415a10a58b8108cead775860"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
-    assert r.function == "Derived[vLLMStep[LlamaForCausalLM]]_v1{SRC={f8a263a011b5}}"
+    cls = "Qwen2ForCausalLM" if model.startswith("qwen2") else "LlamaForCausalLM"
+    assert r.function == f"Derived[vLLMStep[{cls}]]_v1{{SRC={{f8a263a011b5}}}}"
     assert r.digest == digest
 
 
@@ -85,12 +87,16 @@ def test_weights_record_follows_the_module_order():
     assert len(names) == 1 + 6 * 2 + 1 + 1 + 4 * 2
     untied = [n for n, _ in weight_leaves(model_shape({**TINY, "tie_word_embeddings": False}))]
     assert untied.index("model.lm_head.weight") == untied.index("model.model.norm.weight") + 1
+    biased = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen2", "use_sliding_window": False, "sliding_window": 32}))]
+    assert biased[1:4] == ["model.model.layers.0.self_attn.qkv_proj.weight", "model.model.layers.0.self_attn.qkv_proj.bias",
+                           "model.model.layers.0.self_attn.o_proj.weight"]
 
 
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
     ({**TINY, "model_type": "gpt2"}, {}, "model_type 'gpt2': not in the family facts table"),
-    ({**TINY, "model_type": "qwen2"}, {}, "linear biases"),
-    ({**TINY, "attention_bias": True}, {}, "linear biases"),
+    ({**TINY, "attention_bias": True}, {}, "attention_bias"),
+    ({**TINY, "mlp_bias": True}, {}, "MLP biases"),
+    ({**TINY, "sliding_window": 32}, {}, "sliding window 32"),
     ({**TINY, "hidden_act": "gelu"}, {}, "hidden_act 'gelu'"),
     (TINY, {"sampling": {**STOCH, "top_k": 50}}, "top_k 50"),
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),

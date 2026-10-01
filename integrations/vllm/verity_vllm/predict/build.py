@@ -8,7 +8,7 @@ the weights record (vLLM's parameters in module order, then its buffers), one ca
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
 
 Vocabulary (v1, dense Llama-family decoders under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input norm), Gemm
-(target-keyed), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
+(target-keyed; the q/k/v projection's bias, when the family's rule gives it one, a BiasAdd per row), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
 RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, and the token select: greedy TokenSelect, or the seeded
 temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split count a `splits` Input entry, or the single
 request's constant S).  Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a silent
@@ -68,6 +68,7 @@ class ModelShape:
     tie: bool
     max_pos: int
     rot: int
+    qkv_bias: bool = False
 
     @property
     def QKV(self) -> int:
@@ -97,8 +98,14 @@ def model_shape(hf: dict) -> ModelShape:
         C, _ = analytic.config_of(hf, family_rules={family: rules})
     except (KeyError, ValueError) as e:
         raise Unexpressible(f"config.json: {e}") from None
-    if C.get("BIAS") or hf.get("mlp_bias"):
-        facts.append("linear biases (q/k/v or MLP)")
+    qkv_bias = bool(C.get("BIAS"))
+    if qkv_bias and "qkv_bias" not in rules:
+        facts.append("attention_bias (q/k/v and o_proj biases)")
+    if hf.get("mlp_bias"):
+        facts.append("MLP biases")
+    gate = ff.get("sliding_window_gate")
+    if hf.get("sliding_window") is not None and (gate is None or hf.get(gate)):
+        facts.append(f"sliding window {hf.get('sliding_window')}")
     act = hf.get("hidden_act", hf.get("hidden_activation", "silu"))
     if act != "silu":
         facts.append(f"hidden_act {act!r} (SiluMul only)")
@@ -115,7 +122,7 @@ def model_shape(hf: dict) -> ModelShape:
     cls = re.match(r"\w+", ff["vllm_class"]).group(0)
     return ModelShape(arch=family, model_class=cls, H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
                       D=int(C["D"]), I=int(C["I"]), EPS=float(C["EPS"]), tie=bool(C["tie_word_embeddings"]), max_pos=int(C["MAX_POS"]),
-                      rot=int(C["D"]))
+                      rot=int(C["D"]), qkv_bias=qkv_bias)
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
@@ -134,14 +141,17 @@ def _arr_shape(t: Type) -> tuple[int, ...]:
 
 
 def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
-    """The weights record of `LlamaForCausalLM` on meta, as `derive._weights_of` lists it: the distinct parameters in module order
+    """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the one shared rotary `cos_sin_cache` [max_pos, rot]
     bf16, each attention layer's four f32 scalar scales).  The field names are informational: the descriptor carries types only."""
     bf = lambda *s: _arr(s, 16)  # noqa: E731
     out: list[tuple[str, Type]] = [("model.model.embed_tokens.weight", bf(C.V, C.H))]
     for L in range(C.NL):
         p = f"model.model.layers.{L}."
-        out += [(p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)), (p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)),
+        out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
+        if C.qkv_bias:
+            out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
+        out += [(p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)),
                 (p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I)),
                 (p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
     out.append(("model.model.norm.weight", bf(C.H)))
@@ -171,6 +181,7 @@ class _Specs:
         self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS)
         self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
+        self.qkv_bias = self.kind("bias_add", N=C.QKV) if C.qkv_bias else None
         self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, C.V)
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
         self.silu = self.kind("silu_mul", I=C.I)
@@ -248,8 +259,14 @@ class _Model:
         n += 1
         self.layers = []
         for _ in range(C.NL):
-            self.layers.append({"qkv": W[n], "o": W[n + 1], "gate_up": W[n + 2], "down": W[n + 3], "ln1": W[n + 4], "ln2": W[n + 5]})
-            n += 6
+            lw = {"qkv": W[n]}
+            n += 1
+            if C.qkv_bias:
+                lw["qkv_b"] = W[n]
+                n += 1
+            lw.update(o=W[n], gate_up=W[n + 1], down=W[n + 2], ln1=W[n + 3], ln2=W[n + 4])
+            self.layers.append(lw)
+            n += 5
         self.norm = W[n]
         n += 1
         self.lm_head = self.embed if C.tie else W[n]
@@ -279,6 +296,9 @@ class _Model:
                 x = [Coll(pq[0], f[i][0].refs) for i in range(M)]
                 res = [f[i][1].refs for i in range(M)]
             qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs)) for i in range(M)]
+            if S.qkv_bias is not None:
+                pb = _ptypes(S.qkv_bias)
+                qkv = [self.call(S.qkv_bias, Coll(pb[0], qkv[i].refs), Coll(pb[1], lw["qkv_b"].refs)) for i in range(M)]
             cs = [Coll(prq[1], self.cos_sin.refs.slice((pos0 + i) * C.rot, (pos0 + i + 1) * C.rot)) for i in range(M)]
             q = [self.call(S.rope_q, Coll(prq[0], qkv[i].refs.slice(0, q_w)), cs[i]) for i in range(M)]
             k = [self.call(S.rope_k, Coll(prk[0], qkv[i].refs.slice(q_w, q_w + k_w)), Coll(prk[1], cs[i].refs)) for i in range(M)]
