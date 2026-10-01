@@ -247,20 +247,29 @@ class WarmDeps:
         return f
 
     def take(self, pkg: Path, log=print) -> None:
+        """Move ``pkg``'s kept dependencies in; when another package of this run with the same manifest and toolchain holds
+        them, copy its tree (taken before either builds), never shared: each build may write in its own."""
         if (k := deps_key(pkg)) is None:
             return
         dst = pkg / ".lake" / "packages"
         with self._lock(k):
             src = self.store / k
-            if not src.is_dir() and not dst.exists() and k in self.urls and (pin := pins().get(k)):
+            twin = next((p for p, h in list(self.held.items()) if h.name == k and (p / ".lake" / "packages").is_dir()), None)
+            if not src.is_dir() and not dst.exists() and twin is None and k in self.urls and (pin := pins().get(k)):
                 restore(self.store, k, self.urls[k], pin, pkg.name, log)
             if src.is_dir() and not dst.exists():
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 _move(src, dst)
                 log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]})")
+            elif twin is not None and not dst.exists():
+                t0 = time.monotonic()
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(twin / ".lake" / "packages", dst, symlinks=True)
+                log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]}), copied from {twin.name}'s in "
+                    f"{time.monotonic() - t0:.0f} s")
             else:
                 log(f"lean-audit: {pkg.name}: dependencies cold ({k[:12]})")
-        self.held[pkg] = self.store / k
+            self.held[pkg] = self.store / k
 
     def give_back(self, passed: set[Path]) -> None:
         """Keep the dependencies of the packages in ``passed`` (an audit that passed, whose imported `.olean` files matched
