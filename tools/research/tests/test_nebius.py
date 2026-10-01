@@ -921,6 +921,34 @@ def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path
     assert fetch("art:abc").returncode == 2
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
+    """offload moves a held Commit only when n1-free prints 0 (node 1 fills first): deployments-gpu's own unused quota counts even
+    while provers borrows it (Kueue reclaims it), the cohort's idle GPUs count up to the borrowing limit, and an unreadable Kueue
+    prints nothing, so the Commit stays."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+
+    def free(dep: tuple[int, int, int], prov: tuple[int, int, int], fail: bool = False) -> str:
+        def cq(name, nom, bl, use):
+            return {"metadata": {"name": name}, "spec": {"cohort": "nebius", "resourceGroups": [{"flavors": [{"resources": [
+                {"name": "cpu", "nominalQuota": "24"}, {"name": "nvidia.com/gpu", "nominalQuota": str(nom), "borrowingLimit": str(bl)}]}]}]},
+                "status": {"flavorsUsage": [{"resources": [{"name": "nvidia.com/gpu", "total": str(use)}]}]}}
+        (tmp_path / "cq.json").write_text(json.dumps({"items": [cq("deployments-gpu", *dep), cq("provers", *prov),
+                                                                 cq("backfill", 0, 0, 0)]}))
+        (bin_ / "kubectl").write_text("#!/bin/sh\nexit 1\n" if fail else f'#!/bin/sh\ncat "{tmp_path}/cq.json"\n')
+        (bin_ / "kubectl").chmod(0o755)
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "n1-free"], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}).stdout.strip()
+
+    assert free((6, 2, 5), (2, 1, 3)) == "1"      # 1 Oct 02:27Z: its sixth GPU is lent to provers
+    assert free((6, 2, 6), (2, 1, 2)) == "0"
+    assert free((6, 2, 6), (2, 1, 0)) == "2"      # provers idle: borrow up to the limit
+    assert free((6, 2, 7), (2, 1, 0)) == "1"
+    assert free((6, 2, 2), (2, 1, 0)) == "6"
+    assert free((6, 2, 6), (2, 1, 2), fail=True) == ""
+
+
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)

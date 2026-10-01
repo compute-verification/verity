@@ -7,7 +7,9 @@
 #   on node 1:  n2_commit.sh submit KEY ITEM.json|- [NODE1_JOB]   (ITEM: the config-run item, as in a Job's verity.dev/item-json;
 #                                                                 NODE1_JOB: its queued Commit Job, deleted once node 2 has it)
 #   on node 1:  n2_commit.sh item NODE1_JOB                       (prints that Job's item)
-#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has)
+#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has,
+#                                                                 while node 1's deployments-gpu has no free GPU)
+#   on node 1:  n2_commit.sh n1-free                              (the GPUs deployments-gpu could still admit)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
 #   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
@@ -449,8 +451,29 @@ EOF
   done
 }
 
-# move each held Commit on a staged checkpoint to node 2 while node 2 has fewer than VY_N2_MAX_COMMITS Verity Commits queued;
-# `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1, as research)
+# the GPUs node 1's deployments-gpu could still admit: its unused nominal quota (a lent GPU comes back by reclaim) or the cohort's
+# idle GPUs within its borrowing limit. Prints nothing and fails when Kueue can't be read.
+n1_free() {
+  KUBECONFIG=$HOME/.kube/config kubectl get clusterqueue -o json | python3 -c '
+import json, sys
+cqs, G = json.load(sys.stdin)["items"], "nvidia.com/gpu"
+def gpu(cq):
+    q = [r for rg in cq["spec"]["resourceGroups"] for f in rg["flavors"] for r in f["resources"] if r["name"] == G]
+    used = [r for f in (cq.get("status") or {}).get("flavorsUsage") or [] for r in f["resources"] if r["name"] == G]
+    bl = [float(r["borrowingLimit"]) for r in q if "borrowingLimit" in r]
+    return sum(float(r.get("nominalQuota", 0)) for r in q), sum(bl) if len(bl) == len(q) else float("inf"), sum(float(r.get("total", 0)) for r in used)
+me = next(c for c in cqs if c["metadata"]["name"] == sys.argv[1])
+cohort = [gpu(c) for c in cqs if (c["spec"].get("cohort") or c["spec"].get("cohortName")) == (me["spec"].get("cohort") or me["spec"].get("cohortName"))]
+nom, bl, use = gpu(me)
+idle = sum(c[0] for c in cohort) - sum(c[2] for c in cohort)
+print(int(max(0, min(nom + bl - use, max(nom - use, idle)))))
+' "${VY_N1_GPU_QUEUE:-deployments-gpu}"
+}
+
+# move each held Commit on a staged checkpoint to node 2 while node 1's deployments-gpu has no free GPU (n1_free prints 0; circuits,
+# approved by top-level 1 Oct 7:24 PM PDT: node 1 fills first, and node 2's disk is filling) and node 2 has fewer than
+# VY_N2_MAX_COMMITS Verity Commits queued; `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1,
+# as research)
 offload() {
   case "${1:-}" in
     --loop) while :; do offload || true; sleep "${VY_OFFLOAD_EVERY_S:-120}"; done ;;
@@ -462,6 +485,8 @@ offload() {
     reclaim
     while read -r job key n2key; do
       grep -qxF "$key" "$GUEST/reclaimed.txt" 2> /dev/null && continue
+      free=$(n1_free) || free=
+      [ "$free" = 0 ] || { echo "node 1 has ${free:-unknown (Kueue unreadable)} free GPUs in deployments-gpu; $job stays"; break; }
       queued=$(ssh -n "$N2" 'ls /workspace/pouw/fill/queue/ | grep -c "^verity-commit-"' || true)
       [ "${queued:-0}" -lt "${VY_N2_MAX_COMMITS:-16}" ] || { echo "node 2 has $queued Verity Commits waiting; $job stays"; break; }
       VY_COMMIT_KEY=$key bash "$0" submit "$n2key" "$tmp/$n2key.json" "$job" < /dev/null 2> >(grep -v '^rsync' >&2) \
@@ -477,7 +502,8 @@ case "$cmd" in
   run) run "$@" ;;
   replay) replay "$@" ;;
   offload) offload "$@" ;;
+  n1-free) n1_free ;;
   check) check_item "$@" ;;
   fetch-manifests) fetch_manifests "$@" ;;
-  *) sed -n '7,12p' "$0" >&2; exit 2 ;;
+  *) sed -n '7,14p' "$0" >&2; exit 2 ;;
 esac
