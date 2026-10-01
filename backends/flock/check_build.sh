@@ -16,7 +16,7 @@ flock 9
 [ -d "$F/.git" ] || git clone -q https://github.com/succinctlabs/flock "$F"
 cd "$F"
 git checkout -q b684b12 && git checkout -q -- . && git clean -qfd -e target
-for p in link gpu-link sha512 glue zk; do
+for p in link gpu-link sha512 glue zk vtime; do
   git apply "$ROOT/backends/flock/flock-$p-b684b12.patch"
 done
 ln -s "$ROOT/backends/flock/live" crates/flock-live

@@ -25,11 +25,11 @@ use flock_core::{
     merkle::HashKind,
     pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default}, verify_opening_batch_ligerito_mixed_with_grinding_zk},
     proof::{R1csProofLigerito, bind_statement},
-    verifier::verify_ligerito_extra,
 };
 use flock_field::F128;
 use flock_live::{
     circuit::*,
+    session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
     zk_veil::{self as zkv, InnerProof, Layout},
     *,
@@ -319,6 +319,8 @@ fn tables_arg() -> usize {
 
 struct CircuitVerifier {
     tabs: Tables,
+    /// the last `verify` call's phase timers
+    phases: Mutex<Option<Value>>,
 }
 
 impl StatementVerifier for CircuitVerifier {
@@ -331,8 +333,35 @@ impl StatementVerifier for CircuitVerifier {
         if is_zk(&tb.st) {
             return Self::verify_zk(tb, rep, proof, ch, link);
         }
+        let t0 = Instant::now();
+        let mut ph = sverify::Phases::default();
+        let r = self.verify_circuit(tb, proof, ch, link, &mut ph);
+        ph.total_s = t0.elapsed().as_secs_f64();
+        *self.phases.lock().unwrap_or_else(PoisonError::into_inner) = Some(ph.json());
+        r
+    }
+
+    fn take_phases(&self) -> Option<Value> {
+        self.phases.lock().unwrap_or_else(PoisonError::into_inner).take()
+    }
+}
+
+impl CircuitVerifier {
+    fn new(tabs: Tables) -> Self {
+        CircuitVerifier { tabs, phases: Mutex::new(None) }
+    }
+
+    /// The verifier of one-table sessions.
+    fn one(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Self {
+        Self::new(Tables::one(st, inst))
+    }
+
+    /// M0: upstream's `verify_ligerito_extra` on the session's challenger (`session_verify::verify_extra`), timed into `ph`.
+    fn verify_circuit(&self, tb: &Table, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>, ph: &mut sverify::Phases) -> Result<Vec<u8>, String> {
         let st = &tb.st;
+        let t = Instant::now();
         let (commitment, proof): (Commitment, R1csProofLigerito) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
+        ph.decode_s = t.elapsed().as_secs_f64();
         let pcs = params(st.m, LigeritoProfile::Fast100);
         if commitment.params != pcs {
             return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
@@ -340,18 +369,13 @@ impl StatementVerifier for CircuitVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
+        let t = Instant::now();
         let extra = st.extra_claims(link.points, &tb.inst);
-        catch_unwind(AssertUnwindSafe(|| verify_ligerito_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch)))
+        ph.regions_s = t.elapsed().as_secs_f64();
+        catch_unwind(AssertUnwindSafe(|| sverify::verify_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch, ph)))
             .map_err(|_| "verifier panicked".to_string())?
             .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
-    }
-}
-
-impl CircuitVerifier {
-    /// The verifier of one-table sessions.
-    fn one(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Self {
-        CircuitVerifier { tabs: Tables::one(st, inst) }
     }
 
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
@@ -598,7 +622,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
 
 /// One session's server.
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
-    let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier { tabs: sv.tabs.clone() }));
+    let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
     if let Some(draw) = &sv.given {
         let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
@@ -618,7 +642,7 @@ fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_li
     let (st, inst) = (st.clone(), inst.clone());
     s.with_draw(Box::new(move |draw: &Value| {
         let tabs = session_tables(&st, &inst, Some(draw), count)?;
-        Ok((config_of(&tabs), Box::new(CircuitVerifier { tabs }) as Box<dyn StatementVerifier>))
+        Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
 }
 
@@ -1554,7 +1578,7 @@ impl VStar {
 
     /// V* for sessions of the given tables (the population's, without a draw).
     fn of(tabs: &Tables, strategy: Strategy, tape: [u8; 32]) -> Self {
-        Self::with_server(Server::new(config_of(tabs), Box::new(CircuitVerifier { tabs: tabs.clone() })), &tabs.list[0].name, strategy, tape)
+        Self::with_server(Server::new(config_of(tabs), Box::new(CircuitVerifier::new(tabs.clone()))), &tabs.list[0].name, strategy, tape)
     }
 
     fn with_server(mut s: Server, table0: &str, strategy: Strategy, tape: [u8; 32]) -> Self {
@@ -1754,7 +1778,7 @@ fn rewind(tabs: &Tables, v: impl Transport + 'static, hello: &str, points: &[Vec
 /// table of the session.
 #[cfg(feature = "seed-injection")]
 fn fresh_dummy(st: &Arc<Stmt>, inst: &Arc<Instances>, tabs: &Tables, points: &[Vec<F128>], coins: &[Vec<Vec<F128>>]) -> Result<Vec<Vec<u8>>, String> {
-    let mut s = Server::new(config_of(tabs), Box::new(CircuitVerifier { tabs: tabs.clone() }));
+    let mut s = Server::new(config_of(tabs), Box::new(CircuitVerifier::new(tabs.clone())));
     let (pts, cs, streams) = (points.concat(), coins.to_vec(), tabs.streams());
     s.inject_coin_edit(Box::new(move |stream, round, b| {
         if stream == flock_live::coin_tree::SESSION && round == 0 {
