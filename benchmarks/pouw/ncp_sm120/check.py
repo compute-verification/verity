@@ -2,7 +2,9 @@
 
 Every check run (OUT/check/, small shapes) is compared whole: C (plain and chash: one accumulator chained over the first K
 columns; every other arm: R_(T-1)) and, for the hashing arms, every lane's digest.  Every timed arm's sampled lanes (OUT/arms.json, the
-full shapes) are compared: their C cells and digests.  Operands are regenerated from gen_codes's rule (ncp_sm120.cu).
+full shapes) are compared: their C cells and digests.  The negative control (an arms.json row `control`: C and the
+digests poisoned, nothing launched) must fail every comparison against the arm it stands as (`as`).  Operands are
+regenerated from gen_codes's rule (ncp_sm120.cu).
 
   uv run python benchmarks/pouw/ncp_sm120/check.py OUT     exit 0 when every comparison matches, 1 otherwise
 """
@@ -170,6 +172,9 @@ def check_arms(out: str) -> list[str]:
         n, T = shape["n"], shape["T"]
         cache = {}
         for arm in shape["arms"]:
+            control = arm["arm"] == "control"
+            name = arm.get("as", arm["arm"])
+            matched = 0
             for ln in arm["lanes"]:
                 key = (ln["tm"], ln["tn"], ln["tid"])
                 if key not in cache:
@@ -179,21 +184,31 @@ def check_arms(out: str) -> list[str]:
                     cache[key] = (rows, cols, live, a, b, I, R, chained(a, b, T))
                 rows, cols, live, a, b, I, R, Q = cache[key]
                 got = np.array([int(h, 16) for h in ln["cells"]], dtype=np.uint32)
-                if arm["arm"].startswith("chash"):
+                if name.startswith("chash"):
                     want = Q[:, -1]
-                elif arm["arm"] == "plain":
+                elif name == "plain":
                     want = plain(a, b, arm["K"] // 32)
                 else:
                     want = R[:, -1]
                 stagger = arm.get("stagger", 0)
                 tag = (f"{shape['kind']} {arm['arm']} S={arm['S']} K={arm['K']}{' stagger' if stagger else ''} "
                        f"tile {ln['tile']} lane {ln['tid']}")
-                if (got != want).any():
+                ok = not (got != want).any()
+                if not ok and not control:
                     fails.append(f"{tag}: {int((got != want).sum())} of {len(got)} cells differ")
+                matched += ok
                 if "digest" in ln:
-                    d = digest(I, R, Q, ln["tile"], ln["tid"], arm["arm"], arm["S"], stagger, live)
-                    if d.hex() != ln["digest"]:
+                    d = digest(I, R, Q, ln["tile"], ln["tid"], name, arm["S"], stagger, live)
+                    ok = d.hex() == ln["digest"]
+                    if not ok and not control:
                         fails.append(f"{tag}: digest differs")
+                    matched += ok
+            if control:
+                if matched:
+                    fails.append(f"{shape['kind']} control: {matched} comparisons of poisoned, unwritten buffers match")
+                print(f"arms {shape['kind']} control (as {name} S={arm['S']}): "
+                      f"{'rejected' if not matched else 'ACCEPTED'} on {len(arm['lanes'])} lanes", flush=True)
+                continue
             print(f"arms {shape['kind']} {arm['arm']} S={arm['S']} K={arm['K']} stagger={arm.get('stagger', 0)}: "
                   f"{len(arm['lanes'])} lanes checked", flush=True)
     return fails

@@ -14,13 +14,16 @@
    at each S of S_C_LB (the same words, only their bits 8-15 bound); and hash_r and chash at each S of S_STAGGER (none by
    default; run 2 measured 4 and 8 slower than unstaggered) with the bound atoms staggered across warps.  A sample of
    lanes (their C cells and digests) at every arm, and sha256 of the whole C and digest buffers, go to OUT/arms.json for
-   check.py.  NVML's clocks before and after every arm.
+   check.py: dumped from one more call of the arm after C and the digests are poisoned (0xA5), and last a negative control
+   (poisoned, nothing launched) that check.py must reject.  NVML's clocks before and after every arm.  With INTERLEAVE=1
+   each rep is a pair, the plain GEMM at K = k (the baseline) then the arm, each a dependent chain of CHAIN_P or CHAIN_D
+   launches (default 1), with the SM clock read after each.
 
 Operands are stand-ins for the formed X~ and Y~ (finite E4M3 codes from gen_codes, seeds 1 and 2): forming is not timed
 here.  Diagnostic timing, untimed-node rules apply: the run says which node and lease it ran under.
 
   python3 run.py OUT   (env: CUDA, SHAPES="p d", REPS=5, S_R="1 2 4 8 16 32 64 768", S_IR="1 4 16", S_C="1 2 4 8 16 32",
-                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", NCP_LIBCUDA)
+                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", INTERLEAVE, CHAIN_P=1, CHAIN_D=1, NCP_LIBCUDA)
 """
 
 from __future__ import annotations
@@ -44,6 +47,7 @@ NEVER = 1 << 30            # an S no atom reaches: core's guard and nothing boun
 RASTER = 8
 SEED_X, SEED_Y = 1, 2
 SAMPLE_LANES = (0, 101, 255)
+POISON = 0xA5
 
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", os.path.join(HERE, "..", "pearl_c_sm120", "run.py"))
 pc = importlib.util.module_from_spec(_spec)
@@ -144,6 +148,18 @@ class Ncp:
         self.d.launch(name, self.grid, self.nt, self.cfg[name][0], p=(self.tmaps(K), self.c, self.dg, self.ring),
                       i=(self.m, self.n, K, RASTER, 0, S, self.rows, stagger))
 
+    def poison(self) -> None:
+        """C and the digests set to 0xA5 bytes, so a dump reads only what the next launch writes."""
+        self.d.ck("cuMemsetD8_v2", pc.u64(self.c), POISON, self.m * self.n * 4)
+        self.d.ck("cuMemsetD8_v2", pc.u64(self.dg), POISON, self.tiles * self.nct * 32)
+
+    def dump(self, tiles: list[int], digests: bool) -> dict:
+        out = {"c_sha256": hashlib.sha256(self.d.read(self.c, self.m * self.n * 4)).hexdigest()}
+        if digests:
+            out["dg_sha256"] = hashlib.sha256(self.d.read(self.dg, self.tiles * self.nct * 32)).hexdigest()
+        out["lanes"] = self.lanes(tiles, digests)
+        return out
+
     def lanes(self, tiles: list[int], digests: bool) -> list[dict]:
         """The sampled lanes: tile coordinates, their C cells in fragment order (mi, ni, e) as FP32 bit patterns (hex, big
         endian), and their digests (32 bytes, the eight words little endian)."""
@@ -218,8 +234,7 @@ def check(d: pc.Dev, out: str) -> None:
         meta = {"kind": kind, "m": x.m, "rows": m, "n": n, "k": k, "K": x.K, "tm": x.tm, "bn": x.bn, "nct": x.nct,
                 "tiles": x.tiles, "grid": x.grid, "seeds": [SEED_X, SEED_Y], "layout": layout(kind), "runs": []}
         for arm, S, K, stagger in runs:
-            d.ck("cuMemsetD8_v2", pc.u64(x.c), 0, x.m * n * 4)
-            d.ck("cuMemsetD8_v2", pc.u64(x.dg), 0, x.tiles * x.nct * 32)
+            x.poison()
             x.launch(arm, S, K, stagger)
             d.sync()
             tag = f"{kind}_{arm}_S{S}_K{K}" + ("_stagger" if stagger else "")
@@ -234,25 +249,66 @@ def check(d: pc.Dev, out: str) -> None:
         emit({"part": "check", "kind": kind, "runs": len(runs)})
 
 
+def once(d: pc.Dev, body, chain: int) -> float:
+    """One rep: `chain` launches back to back (a dependent chain on the stream) between two events, ms per launch."""
+    a, b, ms = pc.vp(), pc.vp(), C.c_float()
+    d.ck("cuEventCreate", C.byref(a), 0)
+    d.ck("cuEventCreate", C.byref(b), 0)
+    d.ck("cuEventRecord", a, None)
+    for _ in range(chain):
+        body()
+    d.ck("cuEventRecord", b, None)
+    d.ck("cuEventSynchronize", b)
+    d.ck("cuEventElapsedTime", C.byref(ms), a, b)
+    d.cu.cuEventDestroy_v2(a)
+    d.cu.cuEventDestroy_v2(b)
+    return ms.value / chain
+
+
+def interleaved(d: pc.Dev, nv, arm, base, reps: int, chain: int) -> dict:
+    """reps pairs, the baseline then the arm, each a dependent chain of `chain` launches, with the SM clock after each."""
+    arm()
+    base()
+    d.sync()
+    got = {"reps": [], "base_reps": [], "sm_mhz_arm": [], "sm_mhz_base": []}
+    for _ in range(reps):
+        got["base_reps"].append(once(d, base, chain))
+        got["sm_mhz_base"].append(nv.read().get("sm_mhz"))
+        got["reps"].append(once(d, arm, chain))
+        got["sm_mhz_arm"].append(nv.read().get("sm_mhz"))
+    return got
+
+
 def arms(d: pc.Dev, nv, out: str, kind: str, reps: int) -> dict:
     m, n, k = SHAPES[kind]
     x = Ncp(d, kind, m, n, k)
     tiles = sorted({0, x.tiles // 2 + 1, x.tiles - 1})
     res = {"kind": kind, "m": x.m, "rows": m, "n": n, "k": k, "K": x.K, "T": x.K // 32, "tm": x.tm, "bn": x.bn, "nct": x.nct,
            "tiles": x.tiles, "grid": x.grid, "seeds": [SEED_X, SEED_Y], "layout": layout(kind), "arms": []}
+    chain = int(os.environ.get(f"CHAIN_{kind.upper()}", "1"))
     for arm, S, K, stagger in arm_list(kind, k):
         before = nv.read()
-        times = d.timed(lambda: x.launch(arm, S, K, stagger), reps)
+        if os.environ.get("INTERLEAVE") == "1":
+            got = interleaved(d, nv, lambda: x.launch(arm, S, K, stagger), lambda: x.launch("plain", 0, k, 0), reps, chain)
+            times = got["reps"]
+        else:
+            got, times = {}, d.timed(lambda: x.launch(arm, S, K, stagger), reps)
         after = nv.read()
         row = {"arm": arm, "S": S, "K": K, "stagger": stagger, "ms": statistics.median(times), "reps": times,
-               "nvml_before": before, "nvml_after": after}
-        row["c_sha256"] = hashlib.sha256(d.read(x.c, x.m * n * 4)).hexdigest()
-        if hashed(arm):
-            row["dg_sha256"] = hashlib.sha256(d.read(x.dg, x.tiles * x.nct * 32)).hexdigest()
-        row["lanes"] = x.lanes(tiles, hashed(arm))
+               "nvml_before": before, "nvml_after": after, "chain": chain if got else 1, **got}
+        if got:
+            row["base_ms"] = statistics.median(got["base_reps"])
+        x.poison()
+        x.launch(arm, S, K, stagger)
+        d.sync()
+        row.update(x.dump(tiles, hashed(arm)))
         res["arms"].append(row)
         emit({"part": "arm", "kind": kind, "arm": arm, "S": S, "K": K, "stagger": stagger, "ms": round(row["ms"], 4),
-              "sm_mhz": [before.get("sm_mhz"), after.get("sm_mhz")]})
+              "base_ms": round(row["base_ms"], 4) if got else None, "sm_mhz": [before.get("sm_mhz"), after.get("sm_mhz")]})
+    # the negative control: the buffers poisoned and dumped with no launch, which check.py must reject as hash_ir S = 1
+    x.poison()
+    d.sync()
+    res["arms"].append({"arm": "control", "as": "hash_ir", "S": 1, "K": x.K, "stagger": 0, **x.dump(tiles, True)})
     return res
 
 
