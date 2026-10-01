@@ -4,6 +4,7 @@ the twin against `pearl_c`'s scalar reference and the fixture's buffers, the sam
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -19,7 +20,16 @@ import pytest
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 sys.path.insert(0, str(HERE))
 
-import bench as B  # noqa: E402
+
+def _load(name: str, path: Path):
+    """The module at `path` under its own name: the harness has a bench.py too, and the suite imports both in one process."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+B = _load("pearl_c_bench", HERE / "bench.py")
 import fixture as F  # noqa: E402
 import twin as W  # noqa: E402
 from test_pearl_c_kernel import kernel_names, needs, small_fixture, threads, within  # noqa: E402, F401

@@ -109,6 +109,18 @@ def touched(com: Any) -> Iterator[Touched]:
         com._gpu_blocks, com._gpu_levels = blocks, levels
 
 
+def touch(com: Any, reads: Iterable[tuple[int, str, int, int]]) -> None:
+    """Opens, without verifying, the leaves of every read (step, member name, byte lo, byte hi) as `OpenedReader` would: under `touched`
+    the ranges and tree nodes a verified read of the same bytes opens are recorded, and no leaf is hashed."""
+    from verity_vllm.commit.opened import meta_by_name
+
+    for step, name, lo, hi in reads:
+        m = meta_by_name(com._layouts.get(step) or [], name)
+        lo, hi = max(0, int(lo)), min(int(hi), int(m.nbytes)) if m is not None else 0
+        if m is not None and hi > lo:
+            com.open_range(step, *com.leaf_span(step, m, lo, hi)[:2])
+
+
 def _slim_ranges(blk: Any, want: list[tuple[int, int]]) -> list[tuple[int, int, Any]]:
     """The parts of the wanted byte ranges the retained block holds, as `_ranges` gives them."""
     out = []
