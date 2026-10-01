@@ -422,10 +422,11 @@ EOF
 }
 
 # a guest Commit that has waited VY_N2_RECLAIM_MIN (60) on node 2 (PoUW's own GPU queue refilled) goes back to node 1's queue, and
-# offload leaves its key alone after that. Taking it out of node 2's queue is a mv, which fails once the runner has started it
+# offload leaves its key alone after that. Taking it out of node 2's queue is a mv, which fails once the runner has started it.
+# The wait counts from the file's ctime, which a mv into the queue resets: a Commit released from a held dir keeps its old mtime
 reclaim() {
   local f key item
-  for f in $(ssh -n "$N2" "find /workspace/pouw/fill/queue -maxdepth 1 -name 'verity-commit-*.sh' -mmin +${VY_N2_RECLAIM_MIN:-60} -printf '%f\n'"); do
+  for f in $(ssh -n "$N2" "find /workspace/pouw/fill/queue -maxdepth 1 -name 'verity-commit-*.sh' -cmin +${VY_N2_RECLAIM_MIN:-60} -printf '%f\n'"); do
     key=${f#verity-commit-}; key=${key%.sh}
     ssh -n "$N2" "mkdir -p $GUEST/reclaimed && mv /workspace/pouw/fill/queue/$f $GUEST/reclaimed/$f" || continue
     item=$(mktemp)
