@@ -868,6 +868,21 @@ __constant__ uint64_t KECCAK_RC_IL[24] = {
     il_const(0x000000000000800aULL), il_const(0x800000008000000aULL), il_const(0x8000000080008081ULL),
     il_const(0x8000000000008080ULL), il_const(0x0000000080000001ULL), il_const(0x8000000080008008ULL)};
 
+// keccak_f⁻¹(0): the state that one Keccak-f[1600] takes to zero.
+#define KECCAK_INV0_WORDS(F)                                                                                               \
+  F(0xcc4d1e7d1c79203eULL), F(0x6b32368d50535f93ULL), F(0x9713d1ce0a8fb28dULL), F(0x0470b04a7b61e14dULL),                  \
+      F(0x21552170c52cedceULL), F(0x5be4fcc94142d55eULL), F(0xd9b9a48a12a1eaf5ULL), F(0x1f8a488af9cbdda6ULL),              \
+      F(0x365393602d8722f6ULL), F(0x01af24a3911bd988ULL), F(0x3b5553a4e4b740b6ULL), F(0x3afb57db8e1af00eULL),              \
+      F(0x9cd16a0661b88bebULL), F(0x65615c31cd1edfbcULL), F(0xf6afd3425b23d04bULL), F(0x3d193dc58305b252ULL),              \
+      F(0xb0eb3fb00ce6f58aULL), F(0xf8d1cc14b89e3232ULL), F(0x0c9b488cd8d6e9f9ULL), F(0x4e7bee29a28abfeaULL),              \
+      F(0x6b46aa8373a02557ULL), F(0x4248f34262c5c631ULL), F(0xc77e49e623b73192ULL), F(0x999d4f988449fae6ULL),              \
+      F(0x798babf6870ad180ULL)
+#define KECCAK_INV0_SAME(x) (x)
+__constant__ uint64_t KECCAK_INV0[25] = {KECCAK_INV0_WORDS(KECCAK_INV0_SAME)};
+__constant__ uint64_t KECCAK_INV0_IL[25] = {KECCAK_INV0_WORDS(il_const)};
+#undef KECCAK_INV0_SAME
+#undef KECCAK_INV0_WORDS
+
 __device__ __forceinline__ uint32_t delta_swap32(uint32_t x, uint32_t m, int s) {
   const uint32_t t = ((x >> s) ^ x) & m;
   return x ^ t ^ (t << s);
@@ -972,6 +987,17 @@ __device__ __forceinline__ void slot_store_cg(uint64_t* p, ulonglong2 v[SLOT_VEC
   for (int w = 0; w < RATE_WORDS; ++w) __stcg(q + w, chunk_word(v, w));
 }
 
+// slot_store_cg on the lanes where `on` holds, in predicated stores: a branch around them would put a convergence barrier
+// in the chunk loop.
+__device__ __forceinline__ void slot_store_cg_if(uint64_t* p, ulonglong2 v[SLOT_VECS], bool on) {
+  unsigned long long* q = reinterpret_cast<unsigned long long*>(p);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w)
+    asm volatile("{\n\t.reg .pred q;\n\tsetp.ne.u32 q, %2, 0;\n\t@q st.global.cg.u64 [%0], %1;\n\t}" ::"l"(q + w),
+                 "l"(chunk_word(v, w)), "r"((unsigned)on)
+                 : "memory");
+}
+
 // t ^ (s & m), one LOP3 per half (ptxas otherwise turns a mask it can prove all-or-nothing into a SEL before the XOR).
 __device__ __forceinline__ uint64_t xor_and(uint64_t t, uint64_t s, uint64_t m) {
   uint32_t lo, hi;
@@ -1059,7 +1085,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
     if (!__any_sync(ALL, act)) continue;
     // LAG's loads run on every lane, a lane past the last row reading its group's first row's slots (and never writing).
     const int64_t ra = n < rows ? r : row0 + g * PAIR_ROWS;
-    const bool any_more = __any_sync(ALL, more);
+    const bool any_more = __any_sync(ALL, more), any_fin = __any_sync(ALL, fin);
     if (s > 0) {
       if (lane == 0)
         while (ld_acquire_gpu(done + g) < s) __nanosleep(64);
@@ -1158,29 +1184,40 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       };
       if constexpr (LAG) {
         // The absorber takes chunk cc - 1 in step cc, reading back the slot the squeezer wrote a Keccak-f earlier (in the
-        // same load instructions as the squeezer's chunk cc + 1), so a round is nch + 1 steps; its sponge starts in step 1.
-        for (int64_t cc = 0; cc <= nch; ++cc) {
-          if (cc == 1) {
+        // same load instructions as the squeezer's chunk cc + 1), so a round is nch + 1 steps.  Its sponge starts as
+        // keccak_f⁻¹(0), which step 0 (absorbing nothing) takes to zero, so that only the last step differs from the rest:
+        // the rounds that read X or may write W run `produce`'s branches, the others predicated stores and no branch.
 #pragma unroll
-            for (int w = 0; w < 25; ++w) x[w] &= ~m;
-          }
-          if (cc > 0) {
-            if (cc - 1 < full) absorb_masked<false, IL>(x, v, carry, m);
-            else absorb_masked<true, IL>(x, v, carry, m);
-          }
-          if (cc < nch) {
-            produce(cc);
+        for (int w = 0; w < 25; ++w) x[w] = sq ? x[w] : IL ? KECCAK_INV0_IL[w] : KECCAK_INV0[w];
+        const uint64_t carry0 = carry;
+        auto steps = [&](auto plain) {
+          constexpr bool PLAIN = decltype(plain)::value;
+#pragma unroll 1
+          for (int64_t cc = 0; cc < nch; ++cc) {
+            absorb_masked<false, IL>(x, v, carry, cc > 0 ? m : 0);
+            carry = cc > 0 ? carry : carry0;
+            if constexpr (PLAIN) {
+#pragma unroll
+              for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
+              slot_store_cg_if(p, v, sq && st);
+            } else {
+              produce(cc);
+            }
             __syncwarp();
-            if (x_in && cc + 1 <= xch) {
+            if (!PLAIN && x_in && cc + 1 <= xch) {
               if (sq) src(cc + 1, p + cstride, v);
               else slot_load_cg(p, v);
             } else {
               slot_load_cg(sq && cc + 1 < nch ? p + cstride : p, v);
             }
             p += cstride;
+            keccak_f_pairs<U, IL>(x);
           }
-          keccak_f_pairs<U, IL>(x);
-        }
+        };
+        if (x_in || (i == 9 && any_fin)) steps(std::false_type{});
+        else steps(std::true_type{});
+        absorb_masked<true, IL>(x, v, carry, m);
+        keccak_f_pairs<U, IL>(x);
       } else {
         for (int64_t cc = 0; cc < nch; ++cc) {
           produce(cc);
