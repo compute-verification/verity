@@ -396,7 +396,8 @@ replay() {
   echo "n2-commit $KEY: replay $run_id on node 2 rc $rc"
 }
 
-# node 1's Commits that Kueue has held at least VY_OFFLOAD_WAIT_S, on a checkpoint staged on node 2, one per line: JOB KEY N2KEY,
+# node 1's Commits that Kueue has held at least VY_OFFLOAD_WAIT_S, on a checkpoint staged on node 2, except rows the pacer keeps
+# held (it deactivates every arrival, so a kept row looks like any held Commit here), one per line: JOB KEY N2KEY,
 # their items in $1/N2KEY.json
 held_commits() {
   KUBECONFIG=$HOME/.kube/config kubectl get jobs -l verity.dev/dispatch=node1 -o json > "$1/k8s.json"
@@ -406,6 +407,11 @@ held_commits() {
 import calendar, json, os, re, sys, time
 d, wait, streams = sys.argv[1], int(sys.argv[2]), sys.argv[3].split()
 staged = set(open(f"{d}/staged.txt").read().split())
+BIG = ("mistral-7b", "qwen25-7b", "qwen3-30b", "olmoe", "llama31-8b", "gemma2-9b")
+def kept(row):  # rows the steward's pacer (release.py) never reactivates; Gemma-2 at batch 16+ and 1024 input tokens: top-level, 1:30 AM PDT
+    m = re.search(r"__b(\d+)__", row)
+    b = int(m.group(1)) if m else 0
+    return b >= 64 or b >= 16 and (row.startswith(BIG) or row.startswith("gemma2-") and "__i1024__" in row)
 for j in json.load(open(f"{d}/k8s.json"))["items"]:
     a, lab, st = j["metadata"]["annotations"], j["metadata"]["labels"], j.get("status") or {}
     if lab.get("verity.dev/task") != "1" or not j["spec"].get("suspend") or st.get("succeeded") or st.get("failed"):
@@ -416,7 +422,7 @@ for j in json.load(open(f"{d}/k8s.json"))["items"]:
         continue
     item = json.loads(a["verity.dev/item-json"])
     e = item.get("env") or {}
-    if item.get("template") != "config-run" or not re.search(r"__tp[12]__", e.get("ROW", "")):
+    if item.get("template") != "config-run" or not re.search(r"__tp[12]__", e.get("ROW", "")) or kept(e.get("ROW", "")):
         continue
     if f"models--{e.get('REPO', '').replace('/', '--')}/snapshots/{e.get('REVISION')}" not in staged:
         continue
