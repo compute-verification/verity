@@ -6,6 +6,9 @@
                                                     every construction's counts; --heavy adds today's read of the 2^27 tanh_rn table
     python hidden_reads.py stage --unit merkle|mux --n N [N ...] --out DIR [--depth D | --tab-log T --reads R]
                                                     circuit.txt, inst-N.bin, pub-N.bin (verity_flock.circuit's composite)
+    python hidden_reads.py summary --runs RUN [RUN ...] --out FILE
+                                                    from runs of 75-hidden-reads.sh: seconds per committed bit, and the table
+                                                    (case x construction: ANDs, rows and prover seconds per read)
 
 A count is the live cone of a circuit built with ``verity.ml.boolean.forms``: ``ands`` are products of two non-constant forms,
 ``rows`` every committed bit (``ands``, the SHA-512 gadget's committed copies, inputs, assertion rows): what Flock commits.
