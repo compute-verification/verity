@@ -105,6 +105,16 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
     return Started(fut, hashed)
 
 
+def prepare(args: Any) -> Any:
+    """`refuse`, then the slim bundle's planner (`replay_plan.Planner`), started now so it prepares while the engine runs."""
+    refuse(args)
+    if args.replay_deferred != "slim":
+        return None
+    from verity_vllm.pipeline.replay_plan import Planner
+
+    return Planner(args)
+
+
 def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
           tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None,
           plan: Callable[[], dict[str, Any]] | None = None, row: dict[str, Any], deferred: dict[int, dict],
@@ -126,8 +136,13 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     else:
         if plan is not None:
             t0 = time.perf_counter()
-            with SD.touched(com) as t:
-                planned = plan()
+            try:
+                with SD.touched(com) as t:
+                    planned = plan()
+            except Exception as e:  # noqa: BLE001  -- no plan, no slim bundle: the replay runs in this process
+                tl.end("validate.replay_bundle", pair=pair, ok=False)
+                print(f"[delta] REPLAY BUNDLE (pair {pair}): no plan ({e!r:.300}); the C2 replay runs in this process", flush=True)
+                return False
             sr_p = planned.get("replay") or {}
             slim = {"bytes": t.nbytes(), "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
