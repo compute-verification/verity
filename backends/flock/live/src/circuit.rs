@@ -1547,6 +1547,8 @@ pub struct Stmt {
     pub flock_digest: [u8; 32],
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
+    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification, read by the rest
+    pub c0_identity: OnceLock<bool>,
 }
 
 /// The strongly connected components of the per-VU slot graph (`(net, slot)`, an edge from each wire's source slot to its
@@ -1894,7 +1896,8 @@ impl Stmt {
             csc_cache: OnceLock::new(),
         };
         let circuit = BlockCircuit { k_log, pin, types, tables, ranges, da, db };
-        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity })
+        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity,
+                  c0_identity: OnceLock::new() })
     }
 
     fn regions(c: &Composite) -> Result<Vec<RegionShape>, String> {
