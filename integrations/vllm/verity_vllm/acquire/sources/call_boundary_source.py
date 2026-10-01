@@ -335,11 +335,15 @@ class CallBoundarySource:
         return {"per_token_bytes": self.plan.bytes_per_token, "per_seq_bytes": 0, "tensors_per_step": self.plan.tensors_per_step}
 
     def declaration_classes(self) -> list[dict]:
-        return [{"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
-                 "tensors": self.stats["tensors"], "bodies": self.stats["bodies"], "errors": self.stats["errors"],
-                 "evidence": (f"call-boundary source: `<module>/<fx node>/<member>` of {self.plan.covered} identities in {len(self.modules)} "
-                              f"module bodies, evaluated on the host from each module's forward arguments by verity.evaluation.evaluate_batch "
-                              f"(the Programs of {sorted(self.plan.program_dirs)}); the consuming Calls' replay checks the served outputs")}]
+        """The class of every word this source commits, evaluated on the host or served (`host_tensors`; `served`, each tap's part)."""
+        served = [t.served() for t in self.taps]
+        n, nb = self.stats["tensors"] + sum(s["tensors"] for s in served), self.stats["bytes"] + sum(s["bytes"] for s in served)
+        host = ([f"call-boundary source: `<module>/<fx node>/<member>` of {self.plan.covered} identities in {len(self.modules)} module bodies, "
+                 f"evaluated on the host from each module's forward arguments by verity.evaluation.evaluate_batch (the Programs of "
+                 f"{sorted(self.plan.program_dirs)}); the consuming Calls' replay checks the served outputs"] if self.plan.bodies else [])
+        return [{"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": n, "bytes": nb, "tensors": n, "host_tensors": self.stats["tensors"],
+                 "bodies": self.stats["bodies"], "errors": self.stats["errors"] + sum(s["errors"] for s in served), "served": served,
+                 "evidence": "; ".join([*host, *(s["evidence"] for s in served)])}]
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,

@@ -2,7 +2,8 @@
 (`call_boundary_source.CLAIMS`), for the call-boundary source to commit (`ServedTap.words`).  A tap commits nothing itself: the
 call-boundary source commits every `call_boundaries` identity, evaluated on the host or served, module by module in the order it commits
 host words, so the run root is the same whichever source a word came from, and the binding map records each identity's source
-(`call_boundary_source.CallBoundarySource.identity_sources`: `host` or `tap`).  A served tensor of another dtype, element count or row
+(`call_boundary_source.CallBoundarySource.identity_sources`: `host` or `tap`); its declaration of the class counts both (each tap's
+`served`), and a tap declares none of its own.  A served tensor of another dtype, element count or row
 width than its identity's (`layout`), or one a torch call of the forward wrote in place after computing it (`note_writes`; an inference
 tensor has no version counter), is a collector error naming it, and nothing of that module at that step is committed; the tap keeps a
 copy of each served tensor as the forward left it (`hold`), so nothing after the forward changes what is committed.  A run that is never
@@ -15,7 +16,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES
+from verity_vllm.acquire.sources.call_boundary_plan import WORD_DTYPES
 
 #: the in-place dunders and item assignment, beside the in-place methods `name_`
 INPLACE = frozenset({"__iadd__", "__isub__", "__imul__", "__itruediv__", "__ifloordiv__", "__imod__", "__ipow__", "__imatmul__", "__iand__",
@@ -163,12 +164,18 @@ class ServedTap:
                       max(int(r["rows"]) for r in rs), len(rs))
         return out
 
-    def declaration(self, evidence: str) -> list[dict]:
-        return [{"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
-                 "tensors": self.stats["tensors"], "steps": self.stats["steps"], "errors": self.stats["errors"], "source": "tap",
-                 "evidence": f"{evidence}; committed by the call-boundary source in its place in the step stream, as the runtime computed "
-                             "them; the replay's openings of the producing Calls, every one in its draw's population, check them against "
-                             "the Program"}]
+    def declaration_classes(self) -> list[dict]:
+        """None: the call-boundary source commits a tap's words and declares them in its class (`CallBoundarySource.declaration_classes`,
+        from each tap's `served`), one declaration per class as the Commit's omitted-producer check (R-14) reads them."""
+        return []
+
+    def summary(self, evidence: str) -> dict[str, Any]:
+        """This tap's part of the call-boundary class: its counts and what it served (`evidence`)."""
+        return {"source": self.short_name, "tensors": self.stats["tensors"], "bytes": self.stats["bytes"], "steps": self.stats["steps"],
+                "errors": self.stats["errors"],
+                "evidence": f"{evidence}, as the runtime computed them, committed by the call-boundary source in their place in the step "
+                            "stream; the replay's openings of the producing Calls, every one in its draw's population, check them against "
+                            "the Program"}
 
 
-__all__ = ["ServedTap", "name", "module_of", "layout", "element_refusal"]
+__all__ = ["ServedTap", "INPLACE", "name", "module_of", "layout", "note_writes", "element_refusal"]
