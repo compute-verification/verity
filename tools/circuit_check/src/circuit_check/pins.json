@@ -57,6 +57,9 @@
   "MufuSqrtFtz_v2": {
    "and": 879
   },
+  "MufuTanh_v2": {
+   "and": 1049
+  },
   "RsqrtApprox_v2": {
    "and": 1134
   }
