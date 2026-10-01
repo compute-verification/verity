@@ -480,6 +480,9 @@
   "RsqrtApprox_v2": {
    "and": 1134
   },
+  "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}": {
+   "and": 1134
+  },
   "ScaleRowBf16Element_v1": {
    "and": 1136
   },
