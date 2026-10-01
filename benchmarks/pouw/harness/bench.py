@@ -17,10 +17,10 @@ gate; after the timed items, each arm's transcript from poisoned buffers and its
 with `dump`: panel rule, server.md 11:50Z); the report (`report.py`), whose panel rows carry both sides' reps and clocks
 (server.md 08:50Z). Every failure stops what it guards and writes no timing for it.
 
-Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
-gate, or it couldn't run); 6 the consistency gate rejected an arm; 7 the SASS gate refused a binary (an FP32 .FTZ instruction,
-or a binary it couldn't read); 143 terminated (SIGTERM: a timeout or the fill queue's preemption). The JSON (`--out`) is
-written in every case.
+Exit codes: 0 ok; 2 identity or usage (also a configuration --lt-enumerate-names names that the enumeration didn't take); 3 a
+device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its gate, or it couldn't run); 6 the
+consistency gate rejected an arm; 7 the SASS gate refused a binary (an FP32 .FTZ instruction, or a binary it couldn't read); 143
+terminated (SIGTERM: a timeout or the fill queue's preemption). The JSON (`--out`) is written in every case.
 """
 
 from __future__ import annotations
@@ -70,6 +70,11 @@ ITEM_MS, CLOCK_GAP = 40.0, 0.005
 
 class NegativeControlFailed(RuntimeError):
     """A known-bad variant passed its gate, or couldn't be run: the gates' power is unshown, so nothing is timed."""
+
+
+class NamesNotTaken(RuntimeError):
+    """A configuration --lt-enumerate-names names isn't in the shape's enumeration (past --lt-enumerate-max, or no library
+    loaded accepts it): the search the run claims isn't the one it would time."""
 
 
 class Terminated(BaseException):
@@ -510,6 +515,22 @@ def lt_pick(args) -> B.LtPick:
     return B.LtPick(start, stop, names, getattr(args, "lt_enumerate_max", None) or B.LT_ENUMERATED_MAX)
 
 
+def name_family(name: str) -> str | None:
+    """The family an enumerated configuration's name (`baselines._enum_name`) is of."""
+    parts = name.split("_", 2)
+    return parts[1] if len(parts) == 3 else None
+
+
+def names_not_taken(fam: str, label: str, missing: list[str], enumeration: dict, pick: B.LtPick) -> str:
+    cut = {p: e["accepted"] for p, e in enumeration.items() if e.get("truncated")}
+    why = (f"the enumeration keeps the first {pick.want} configurations per library and swap, and "
+           + ", ".join(f"{p} accepted {n}" for p, n in cut.items())
+           + f": pass --lt-enumerate-max {max(cut.values())}" if cut else
+           "no cuBLASLt loaded accepts them at this shape")
+    return (f"{len(missing)} of the {fam} configurations --lt-enumerate-names names aren't in the enumeration at {label} "
+            f"(e.g. {missing[0]}): {why}")
+
+
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
                    enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick(),
                    sched_fams: frozenset = frozenset()) -> dict:
@@ -534,9 +555,10 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
                 lts += more
         missing = None
         if fam.name in enumerate_fams and pick.names is not None:
-            missing = sorted({n for n in pick.names if n.split("_", 2)[1:2] == [fam.name]} - {c.name for c in lts})
+            took = {n for e in enumeration.values() for n in e.get("named", ())}
+            missing = sorted({n for n in pick.names if name_family(n) == fam.name} - took)
             if missing:
-                bench.log(f"{len(missing)} named {fam.name} configurations aren't in this enumeration, e.g. {missing[0]}")
+                raise NamesNotTaken(names_not_taken(fam.name, shape.label, missing, enumeration, pick))
         cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels, fam.name in sched_fams)
         gated = []
         for c in lts + cuts:
@@ -981,7 +1003,9 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                    help="take only the enumerated configurations with index in [START, STOP) of each library's "
                         "enumeration, so a space too big for one run is searched in slices")
     p.add_argument("--lt-enumerate-names", type=Path, metavar="FILE",
-                   help="take only the enumerated configurations named in FILE, one per line (a slice search's best)")
+                   help="take only the enumerated configurations named in FILE, one per line (a slice search's best); "
+                        "each of them, at every shape, or the run stops (exit 2). Their families must be --lt-enumerate's, "
+                        "and --lt-enumerate-max must reach them: cuBLASLt 13's FP8 space at m32-n8192-k8192 is 134,216")
     p.add_argument("--lt-enumerate-max", type=int, default=B.LT_ENUMERATED_MAX, metavar="N",
                    help="how many configurations the enumeration keeps (it counts all it accepts); STOP raises it")
     p.add_argument("--cutlass-sched", nargs="*", default=[], choices=list(B.FAMILIES), metavar="FAMILY",
@@ -1013,6 +1037,14 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
         p.error("--lock-mhz and --clock-label are exclusive")
     if a.reps < S.MIN_REPS:
         p.error(f"--reps is at least {S.MIN_REPS}")
+    if a.lt_enumerate_names is not None:
+        names = lt_pick(a).names
+        if not names:
+            p.error(f"--lt-enumerate-names {a.lt_enumerate_names} names no configuration")
+        other = sorted(n for n in names if name_family(n) not in a.lt_enumerate)
+        if other:
+            p.error(f"--lt-enumerate-names names {len(other)} configurations of families --lt-enumerate doesn't "
+                    f"enumerate (e.g. {other[0]}), so it would take none of them")
     return a
 
 
@@ -1169,6 +1201,8 @@ def main(argv: list[str] | None = None) -> int:
         code, out["error"] = EXIT_TERMINATED, f"terminated: {ex}"
     except I.IdentityError as ex:
         code, out["error"] = EXIT_USAGE, f"identity: {ex}"
+    except NamesNotTaken as ex:
+        code, out["error"] = EXIT_USAGE, f"enumeration names: {ex}"
     except NegativeControlFailed as ex:
         code, out["error"] = EXIT_NEGATIVE, f"negative control: {ex}"
     except SG.SassGateFailed as ex:
