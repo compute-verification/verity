@@ -17,6 +17,7 @@ from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
+from verity_vllm.program.registry import pouw_rows as _pouw_rows
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
@@ -60,6 +61,8 @@ PROFILE_B1_EAGER = Vocabulary(
     "b1-eager", "profile", "b1-eager",
     kinds={
         "gemm": lambda K, N: ir_bind(b1.Gemm, K=K, N=N),
+        "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
+        "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
@@ -73,6 +76,8 @@ PROFILE_B1_EAGER = Vocabulary(
     },
     notes={
         "gemm": "Gemm_v1{K,N}: vLLM batch-invariant Triton matmul (AmpereBF16TcDot16 chains), bf16 in/out",
+        "pouw_linear_row": "NcpLinearRow_v1{K,N}: one row of a pouw:ncp-v2 linear's served y (quantize, exact int7 dot, NcpDequant)",
+        "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
         "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
         "rmsnorm": "RMSNormTriton_v1{N,EPS}: vLLM batch-invariant Triton _rms_norm_kernel",
@@ -138,6 +143,7 @@ from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
 
 
 def _norm_v2(role: str):
@@ -151,6 +157,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
         "gemm": lambda K, N: ir_bind(b1.GemmV2, K=K, N=N, DOT=b1.GEMM_AMPERE["DOT"]),
+        "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
+        "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "rmsnorm": _norm_v2("L0"),
         "rmsnorm_fused": _norm_v2("FUSED"),
@@ -170,6 +178,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
     },
     notes={
         "gemm": "Gemm_v2{K,N,DOT=AmpereBF16TcDot16_v2}: batch(GemmCoordinate_v2) — Serve_v2/v3's linear",
+        "pouw_linear_row": "NcpLinearRow_v1{K,N}: one row of a pouw:ncp-v2 linear's served y (quantize, exact int7 dot, NcpDequant)",
+        "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}", "rmsnorm": "norm_bundle(C)['L0'] = RMSNormTriton_v1{N,EPS}",
         "rmsnorm_fused": "norm_bundle(C)['FUSED'] = RMSNormFusedCuda (b1's default fused norm){N,EPS}",
         "rope": "RoPE_v1{NHEADS,D}", "attention": "Attention_v2{T,NH,KVH,D,BN=64,DOT=AmpereBF16TcDot16_v2,INV=Fa2InvSum_v1} (FA2)",
@@ -235,6 +245,13 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     from verity_vllm.program.registry import moe_pad as _mp  # noqa: PLC0415
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
+
+def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
+    if FA2_MASKED_FROM is None:
+        raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
+    from verity_vllm.program.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+
 # -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
@@ -252,9 +269,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
            # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
-           # this vocabulary's version -- stay as they were
-           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None:
-               ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+           # this vocabulary's version -- stay as they were; a `CAP` with an `FA2_MASKED_FROM` binds the softcapped chain
+           # (`AttentionSoftcap_v2`), and a `CAP` without one has no kind
+           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None, CAP=None:
+               _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP) if CAP is not None
+               else ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
                if FA2_MASKED_FROM is not None
                else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
@@ -304,7 +323,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G)},
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
+           # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
+           # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -346,7 +368,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
-                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs"})
+                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
+           "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
+                              "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
+                              "bf16(w * (rstd * (x - mean)) + b)"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

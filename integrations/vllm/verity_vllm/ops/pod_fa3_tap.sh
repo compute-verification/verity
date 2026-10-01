@@ -3,7 +3,7 @@
 # forward, VERITY_TAP=3 / VERITY_MAT_SRC=59, layout v9 = the FA2 v8 word layout over PackGQA-packed rows) for THIS pod's H100 with
 # the bf16 paged PackGQA forward kernels of head dims 64 and 128 in one .so.
 #
-#   cd /workspace/cp/veritor && bash verity_vllm/ops/pod_fa3_tap.sh          # ~15-30 min first time (nvcc 12.4, sm_90a)
+#   cd <tree>/integrations/vllm && bash verity_vllm/ops/pod_fa3_tap.sh          # ~15-30 min first time (nvcc 12.4, sm_90a)
 #   -> prints  FA3-TAP-OK <sha256> hdims=<mask> <path>   (or FA3-TAP-FAIL <reason>, exit 1)
 #
 # (1) pinned vllm-project/flash-attention @ 506341a1 (+ cutlass) at /workspace/cp/vllm-flash-attn (cloned if absent); (2) copied to

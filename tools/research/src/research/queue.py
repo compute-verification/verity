@@ -261,6 +261,8 @@ class Queue:
         if not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
             _git(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
+        # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
+        _git(self.workdir, "remote", "set-url", "origin", self.remote)
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")

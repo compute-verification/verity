@@ -230,7 +230,8 @@ released: `protocol_options.weights_view`).  Adapters install innermost first (P
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
-bit-identical decode; an executor with its Definition, `traced_as`), so its verdict is of record as usual and carries the set
+bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
+`traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `beacon` (hex, at least 32 bytes),
 `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so

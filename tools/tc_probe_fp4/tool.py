@@ -32,6 +32,7 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--golden-per-family", type=int, default=60)
     ap.add_argument("--families", default=None)
     ap.add_argument("--sass-check", action="store_true")
+    ap.add_argument("--library", default=None)                  # a prebuilt library; its sha256 is in the result's nvcc identity
     ap.add_argument("--chain2", action="store_true")            # lane tcgen05: K=128 chains on the TMEM accumulator
     ap.add_argument("--smem-strides", default=None)             # lane tcgen05: shared-memory descriptor strides
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
