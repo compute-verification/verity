@@ -22,7 +22,7 @@ def reading(node: str = "n1", *, root_free_gb: float = 150, ws_pct: float = 70.0
     return {"node": node, "t": t,
             "disk": {"root": {"path": "/", "free_b": root_free_gb * GB, "pct": 40.0, "ipct": 5.0, "iused": 1_000_000, "t": t},
                      "workspace": {"path": "/workspace", "free_b": ws_size * (1 - ws_pct / 100), "pct": ws_pct, "ipct": ipct,
-                                   "iused": iused, "t": t}},
+                                   "inodes": 20_000_000, "iused": iused, "t": t}},
             "mem": {"total_b": total, "avail_b": total * avail_pct / 100, "avail_pct": avail_pct},
             "ramlock": {"reserved_gb": reserved_gb},
             "replay_queue": {"queued": 1 if replay_gb else 0, "gb": replay_gb},
@@ -61,7 +61,11 @@ def test_inode_growth_rate_uses_the_previous_reading():
     assert P.evaluate(reading(iused=7_030_000, t=T0 + 1200), prev, lim("n1")) == []          # 30k in 20 min = 90k/h
     b = P.evaluate(reading(iused=7_060_000, t=T0 + 1200), prev, lim("n1"))                  # 60k in 20 min = 180k/h
     assert len(b) == 1 and "inodes/h" in b[0]
+    assert not b[0].startswith("HARD")                                                     # 80% of 20M is 52 h away
     assert P.evaluate(reading(iused=7_060_000, t=T0 + 300), prev, lim("n1")) == []           # a 5-min burst is not a rate
+    prev = reading(iused=14_000_000, t=T0)
+    b = P.evaluate(reading(iused=14_400_000, t=T0 + 1200), prev, lim("n1"))                 # 1.2M/h, 1.6M left: 1.3 h
+    assert b[0].startswith("HARD /workspace gaining 1,200,000 inodes/h: 80% of inodes in 1.3 h")
 
 
 def test_replay_queue_against_half_of_available_ram_after_reservations():
