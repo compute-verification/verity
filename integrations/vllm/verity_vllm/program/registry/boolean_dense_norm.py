@@ -11,7 +11,7 @@
     ScaleRowBf16_v2{N}     (x: Array<N, BF16>, s: Array<1, F32>) -> ...   f32(x_j) * s                       ScaleRowBf16_v1{N}
     ScaleRowF32_v2{N}      (x: Array<N, F32>, s: Array<1, F32>) -> ...    x_j * s                            ScaleRowF32_v1{N}
     MulVecF32_v2{N}        (x, w: Array<N, F32>) -> Array<N, F32>         x_j * w_j (`F32Mul_v3`)            MulVecF32_v1{N}
-    NarrowF32ToBf16_v2{N}  (x: Array<N, F32>) -> Array<N, BF16>           cvt.rn.bf16.f32 (`F2fpBf16_v2`)    NarrowF32ToBf16_v1{N}
+    NarrowF32ToBf16_v2{N}  (x: Array<N, F32>) -> Array<N, BF16>           cvt.rn.bf16.f32 (`F2fpBf16_v1`)    NarrowF32ToBf16_v1{N}
 
 (F32 and BF16 are 32 and 16 bits.) Gemma-2-2B (H = 2304, EPS = 1e-6) calls SquareBf16, MeanTriton, AddScalarF32{1, EPS},
 RsqrtF32{1} and ScaleRowBf16, then MulVecF32 by AddScalarBf16{H, 1.0} of the weight, then NarrowF32ToBf16; with a residual it
@@ -41,9 +41,9 @@ from functools import cache
 from verity.ir.defs import bind, composite
 from verity.ir.refs import Coll, array_of, coll_concat
 from verity.ir.types import Array
+from verity.ml import fp32 as W
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
-from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import trace as TR
 from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _bits, _check_mufu, _f32, _on_word,
@@ -88,6 +88,11 @@ Bf16AddConstF32 = _const_leaf("Bf16AddConstF32", ("w", BF16),
                               lambda S: lambda C, w: fp.f32_add(C, fp.bf16_to_f32(w), fp.f32_const(_f32(float(S.C))),
                                                                 ir_nan=True),
                               "F32Add_v1(f32(w), f32(C)), C folded: one element of AddScalarBf16_v1{N, C}")
+# not `verity.ml.boolean.gemm`'s `F2fpBf16_v2`: `catalog.load` imports this module, and importing `gemm` registers
+# `AmpereBF16TcDot16_v3` beside `_v2`, which leaves the torch frontend's unversioned `AmpereBF16TcDot16` ambiguous
+NarrowF32ToBf16El = _traced("NarrowF32ToBf16El", 1, (), lambda S: ((("x", F32),), BF16),
+                            lambda S: TR.trace(lambda C, x: fp.f32_to_bf16(C, x, W.BF16_NAN_F2FP), [F32], BF16),
+                            "cvt.rn.bf16.f32(x), NaN -> 0x7FFF (F2fpBf16_v1): one element of NarrowF32ToBf16_v1")
 MeanDivTriton = _traced("MeanDivTriton", 1, ("N",), lambda S: ((("acc", F32),), F32),
                         lambda S: TR.trace(lambda C, a: fp.f32_mul(C, a, fp.f32_const(_rcp_n(S.N)), ir_nan=True), [F32], F32),
                         "div.full.f32(acc, f32(N)) = F32Mul_v1(acc, DivFullRcp_v1(f32(N))), the reciprocal folded "
@@ -199,8 +204,8 @@ def MulVecF32(B, S, x, w):
 @composite("NarrowF32ToBf16", 2, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, BF16)),
            conformance="exact-model-tested")
 def NarrowF32ToBf16(B, S, x):
-    """`NarrowF32ToBf16_v1` on bits: `F2fpBf16_v2` per element (separable)."""
-    return B.batch(BG.F2fpBf16, x, axes=(0,))
+    """`NarrowF32ToBf16_v1` on bits: `NarrowF32ToBf16El_v1` per element (separable)."""
+    return B.batch(NarrowF32ToBf16El, x, axes=(0,))
 
 
 # --- the mean (batch-invariant `mean_kernel`) -----------------------------------------------------------------------------------

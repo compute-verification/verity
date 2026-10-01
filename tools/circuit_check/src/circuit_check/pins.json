@@ -123,6 +123,9 @@
   "MulVecF32_v2{N=16}": {
    "and": 38880
   },
+  "NarrowF32ToBf16El_v1": {
+   "and": 66
+  },
   "NarrowF32ToBf16_v2{N=16}": {
    "and": 1056
   },

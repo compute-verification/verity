@@ -52,11 +52,12 @@ PINS = {
     "ScaleRowF32Scale_v1": (34, 62, 2, "74a63e615f8541c21e090e65157d60cd51ef1bee39eb7d63a007d847f2a413dd"),
     "ScaleRowBf16El_v1": (1136, 1938, 87, "cb89cff17fb37b5882d30e336ea0c5a7d46d6d70b3ee7b7d2ad3d1ea4a8ca12c"),
     "ScaleRowF32El_v1": (2396, 4588, 108, "a666c0e7a4b394740466005921d16f5f8fe0aee33072f088f5eed658bdc7f924"),
+    "NarrowF32ToBf16El_v1": (66, 98, 15, "aac6bea5e40d08dd643086e3bde296fd2749c358c94536dd738c20cb0148ecbc"),
 }
 LEAVES = [bind(DN.SquareBf16El), bind(DN.SquareF32El), bind(DN.AddWidenedBf16El), bind(DN.F32AddZero),
           bind(DN.F32AddConst, C=EPS), bind(DN.F32AddConst, C=ONE), bind(DN.Bf16AddConstF32, C=ONE),
           bind(DN.MeanDivTriton, N=H), bind(DN.ScaleRowBf16Scale), bind(DN.ScaleRowF32Scale), bind(DN.ScaleRowBf16El),
-          bind(DN.ScaleRowF32El)]
+          bind(DN.ScaleRowF32El), bind(DN.NarrowF32ToBf16El)]
 
 
 def _parts(N: int) -> list:
@@ -189,6 +190,10 @@ def test_the_f32_leaves_are_their_word_primitives() -> None:
     for c in (EPS, ONE):
         u = np.concatenate([v, _near(rng, 60_000, c)])
         assert np.array_equal(_words(bind(DN.F32AddConst, C=c), u)[:, 0], _w(P.F32Add, u, _full(u, BN._f32(c))))
+    ties = rng.integers(0, 1 << 16, 30_000, dtype=np.uint64) << np.uint64(16) | rng.choice(
+        np.array([0x7FFF, 0x8000, 0x8001], np.uint64), 30_000)
+    u = np.concatenate([v, ties])
+    assert np.array_equal(_words(bind(DN.NarrowF32ToBf16El), u)[:, 0], _w(P.F2fpBf16, u))
 
 
 def _nan_plus_zero_both_orders(m: np.ndarray) -> None:
