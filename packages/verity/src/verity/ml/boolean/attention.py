@@ -9,6 +9,7 @@
 Each is traced from `softmax`'s builder (`trace.definition`), the circuit C-Flock's lowering runs for its word primitive, so its
 And gates are that builder's live ANDs. `Fa2InvSum_v2` is ``(sum == 0 || sum != sum) ? 1 : MUFU.RCP(sum)`` with `mufu`'s
 reciprocal, whose table read is a plain circuit. The QK dot is `gemm.DotBf16_v3` and MUFU.EX2 is `mufu.MufuEx2Ftz_v2`.
+`fa3_inv_sum` is FA3's epilogue (``? 0 : MUFU.RCP(sum)``); its Definition is in `verity_vllm`, beside its word primitive.
 """
 from __future__ import annotations
 
@@ -52,6 +53,12 @@ def fa2_inv_sum(C, s):
     """``Fa2InvSum_v1``: ``(sum == 0 || sum != sum) ? 1 : MUFU.RCP(sum)``."""
     one = OR(C, NOT(or_reduce(C, s[:31])), SM._is_nan(C, s))
     return mux(C, one, const_bits(ONE_F, 32), MU.mufu_rcp(C, s))
+
+
+def fa3_inv_sum(C, s):
+    """FA3's ``Softmax::finalize`` (``Fa3InvSum_v1`` in `verity_vllm`): ``(sum == 0 || sum != sum) ? 0 : MUFU.RCP(sum)``."""
+    zero = OR(C, NOT(or_reduce(C, s[:31])), SM._is_nan(C, s))
+    return mux(C, zero, const_bits(0, 32), MU.mufu_rcp(C, s))
 
 
 Fa2InvSum = definition("Fa2InvSum", 2, fa2_inv_sum, (("sum", F32),), F32, word=M.Fa2InvSum,

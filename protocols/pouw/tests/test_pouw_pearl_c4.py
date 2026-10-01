@@ -12,6 +12,7 @@ import math
 import pickle
 import random
 import types
+from collections import Counter
 from fractions import Fraction
 
 import pytest
@@ -176,6 +177,53 @@ def test_domain_and_registry():
             s.check(Matmul(0, bad, 0))
     assert s.n_min == F.B_OVF_MIN_N == 128 and ("n_min", 128) in s.certificate.parameters
     V.scheme("nvfp4", True).check(Matmul(0, Shape(16, 128, 16), 0))
+
+
+def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_only():
+    """Daniel's 5:52 PM PDT ruling: the keyed V/O rotation plus the head interleave register inside the keyed 8-block
+    rotation, and the same transforms on an unrotated checkpoint are refused, curated or not."""
+    s = get("pearl-c-nvfp4-v0")
+    vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
+    for curated in (False, True):
+        s.check_registration((F.ROTATION_8, *vo), curated)
+        for unrotated in (vo, vo[:1], vo[1:]):
+            with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+                s.check_registration(unrotated, curated)
+
+
+def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
+    """The keyed 8-block rotation is the registered-weights rule, and an unrotated checkpoint registers only from the curated
+    list (Daniel, 1:36 PM PDT).  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
+    s = get("pearl-c-nvfp4-v0")
+    s.check_registration((F.ROTATION_8,))
+    s.check_registration((), curated=True)
+    with pytest.raises(DomainError, match="curated list"):
+        s.check_registration(())
+    for bad in ((F.ROTATION_8, F.VO_ROTATION), (F.ROTATION_8, F.HEAD_INTERLEAVE),
+                (F.ROTATION_8, F.HEAD_INTERLEAVE, F.VO_ROTATION), (F.VO_ROTATION, F.ROTATION_8, F.HEAD_INTERLEAVE),
+                (F.ROTATION_8, F.ROTATION_8), (F.ROTATION_8, "an-unnamed-transform"), (F.GAMMA_FOLD, F.ROTATION_8),
+                (F.ROTATION_8, F.GAMMA_FOLD), (F.GAMMA_FOLD, F.GAMMA_FOLD), ("an-unnamed-transform",)):
+        with pytest.raises(DomainError, match="not an adopted stack"):
+            s.check_registration(bad, curated=True)
+
+
+def test_a_checkpoint_that_needs_gamma_folded_registers_only_with_it():
+    """70B registrations fold γ (research store docs/pouw/keyed-transforms.md §14: the cast moves Llama-3.1-70B's layer 0
+    update by 158% unfolded).  The rotation folds γ, so its stacks pass as they are; an unrotated checkpoint declares
+    `GAMMA_FOLD`, and is still curated only.  A folded but unrotated checkpoint takes no V/O or interleave."""
+    s = get("pearl-c-nvfp4-v0")
+    vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
+    for stack in F.REGISTRATION_STACKS:
+        s.check_registration(stack, needs_gamma_fold=True)
+    s.check_registration((F.GAMMA_FOLD,), curated=True, needs_gamma_fold=True)
+    s.check_registration((F.GAMMA_FOLD,), curated=True)
+    with pytest.raises(DomainError, match="only with γ folded"):
+        s.check_registration((), curated=True, needs_gamma_fold=True)
+    with pytest.raises(DomainError, match="curated list"):
+        s.check_registration((F.GAMMA_FOLD,), needs_gamma_fold=True)
+    for curated in (False, True):
+        with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+            s.check_registration((F.GAMMA_FOLD, *vo), curated, needs_gamma_fold=True)
 
 
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
@@ -401,6 +449,15 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
     assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
 
 
+def test_d24_is_the_hardware_pair_rule():
+    """NVFP4's sparse MMA keeps 2 of each 8-chunk's 4 pairs: a window counts when every chunk has at most 2 nonzero pairs,
+    whatever its 4-groups hold (a sign-only code, 0x8, is zero)."""
+    assert F.two_four_windows([0x3, 0x5, 0x6, 0x7, 0, 0, 0x8, 0] * 16) == [True]
+    assert F.two_four_windows([0x1, 0, 0x2, 0, 0x3, 0, 0, 0] * 16) == [False]
+    assert F.two_four_windows([0x1] * 4 + [0] * 4 + [0x1, 0, 0x2, 0, 0x3, 0, 0, 0] + [0] * 112) == [False]
+    assert F.two_four_windows([0] * 128 + [0x1, 0x9] * 64) == [True, False]
+
+
 def _row(values) -> list[int]:
     return F.parse_row(F.bf16_row([P.f32_to_bf16(v) for v in values]), len(values))
 
@@ -527,6 +584,59 @@ def test_f1_prime_reads_the_exact_noise_law():
     assert lo == -144 and pmf[0] == pytest.approx(1 / 16) and pmf[144] == pytest.approx(2 / 16)
 
 
+def two_draw_row(k: int = 128) -> tuple[list[int], tuple[int, ...], list[int]]:
+    """A row, an E line with codes at two positions and 0 elsewhere (so an element's noise takes one of 256 equally likely
+    values, by its F line's codes there), and those positions."""
+    x = F.parse_row(V.rows("law", "A", 1, k)[0], k)
+    e = [0] * F.R
+    e[3], e[17] = 0x6, 0xB
+    return x, tuple(e), [3, 17]
+
+
+def atom_words(c: int, e, ae: int, at) -> list[int]:
+    """The noise atom's D on each of the 256 pairs of F codes at `at`, every other F code 0."""
+    out = []
+    for f1 in range(16):
+        for f2 in range(16):
+            f = [0] * F.R
+            f[at[0]], f[at[1]] = f1, f2
+            out.append(F.noise_atom(c, e, ae, f))
+    return out
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
+    """The law against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
+    words, so its p_t is enumerable.  `change_probabilities_exact`' p_t at the block's modal byte is 1 − the most common
+    code value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no
+    word across a cell edge here), and 0 on salt-dead codes."""
+    f = F.FORMATS[fmt]
+    x, e, at = two_draw_row()
+    _, _, alpha, _, ae = F.stats(f, x)
+    dead = F.salt_dead(f, x, alpha, ae)
+    p, modes = F.change_probabilities_exact(f, x, alpha, e, ae, dead)
+    for t in range(0, len(x), 3):
+        byte = modes[t // f.block]
+        r = fp32.div(F.ONE, F.ue4m3_word(byte)) if f is F.NVFP4 else F.pow2_word(127 - byte)
+        codes = Counter(F.e2m1_value(F.e2m1(fp32.mul(d, r))) for d in atom_words(fp32.mul(alpha, x[t]), e, ae, at))
+        assert p[t] == (0.0 if dead[t] else pytest.approx(1 - max(codes.values()) / 256, abs=1e-12))
+
+
+def test_the_modal_byte_is_the_realised_bytes_mode():
+    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line drawn afresh: the
+    most frequent realised byte."""
+    f, rng = F.NVFP4, random.Random(3)
+    x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
+    _, _, alpha, _, ae = F.stats(f, x)
+    e = tuple(F.line(b"mode" * 8, F.ROLE_EA, 0))
+    cdf, sigma = F._below_law(e, F._scale_value(F.NVFP4, ae) / 64), F.noise_sigma(e, ae)
+    for b0 in (0, 16 * 9):
+        cs = [fp32.mul(alpha, w) for w in x[b0:b0 + 16]]
+        seen = Counter(F.block_scale(f, max(F.noise_atom(c, e, ae, [rng.randrange(16) for _ in range(F.R)]) & 0x7FFFFFFF
+                                            for c in cs))[0] for _ in range(600))
+        assert seen.most_common(1)[0][0] == F.modal_byte(f, [F.P.f32_of_bits(c) for c in cs], cdf, sigma)
+
+
 def r1_tile():
     """A 4 x 4 credited tile of a 4 x 1024 x 4096 NVFP4 unit: A row 0 the assessor's spike row, rows 1–3 and B Gaussian."""
     s, k = V.scheme("nvfp4", False), 1024
@@ -574,14 +684,15 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
 
 
 def test_b_ovf_discounts_credit_by_its_pinned_table():
-    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b): creditOf less ⌈β(n_b)·mnk⌉, β the measured table
-    (`beta_table.py --mu 1.5`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from 4,096 up."""
-    assert F.B_OVF == ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
-                       (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
+    measured on each bucket's R1 boundary (`beta_final.py`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from
+    4,096 up."""
+    assert F.B_OVF == ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
+                       (1024, Fraction(50, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
     got = {n: F.b_ovf(n) for n in (128, 192, 256, 512, 896, 1024, 2047, 2048, 3584, 4096, 1 << 18)}
-    assert got == {128: Fraction(342, 10_000), 192: Fraction(342, 10_000), 256: Fraction(200, 10_000),
-                   512: Fraction(111, 10_000), 896: Fraction(111, 10_000), 1024: Fraction(49, 10_000),
-                   2047: Fraction(49, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
+    assert got == {128: Fraction(414, 10_000), 192: Fraction(414, 10_000), 256: Fraction(223, 10_000),
+                   512: Fraction(119, 10_000), 896: Fraction(119, 10_000), 1024: Fraction(50, 10_000),
+                   2047: Fraction(50, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
                    1 << 18: 0}
     assert [b for _, b in F.B_OVF] == sorted((b for _, b in F.B_OVF), reverse=True)
     s = F.PearlC4()
@@ -595,7 +706,7 @@ def test_b_ovf_discounts_credit_by_its_pinned_table():
 
 def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
     """R1's per-row bound and the tile cap are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
-    unit of n = 1,024 (β = 0.49%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
+    unit of n = 1,024 (β = 0.50%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     k, n = record.k_kept, record.matmul.shape.n
     disc = s.credit_of(Shape(1, k, n))
@@ -604,7 +715,7 @@ def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
     assert cap == F.CAP * Fraction(disc, n) * 16
     monkeypatch.setattr(F, "B_OVF", ((128, Fraction(0)),))
     plain = s.credit_of(Shape(1, k, n))
-    assert plain - disc == math.ceil(Fraction(49, 10_000) * n * k) > 0
+    assert plain - disc == math.ceil(Fraction(50, 10_000) * n * k) > 0
     assert s.tile_cap(record, ops, range(4), range(4))[1] == cap * Fraction(plain, disc)
     assert s.row_debit_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
 

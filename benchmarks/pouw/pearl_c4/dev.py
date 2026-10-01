@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-SM_COUNT, MAX_DYN_SMEM = 16, 8
+SM_COUNT, MAX_DYN_SMEM, CARVEOUT, CARVEOUT_MAX_SHARED = 16, 8, 9, 100
 ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
 FMTS = {"nvfp4": ("nv", 16), "mxfp4": ("mx", 32)}
 MODES = ("hash", "nohash", "plain")
@@ -241,6 +241,10 @@ class Pipeline:
             self.sizes.update(c=4 * m * n, u=4 * m * n)
         self.buf = {name: self.external.get(name) or dev.alloc(size) for name, size in self.sizes.items()}
         self.threads = 32 * (self.bm // 32) * (self.bn // 64)
+        self.form = f"form_{self.tag}"
+        self.form_smem = dev.dyn_smem(self.form)
+        if self.form_smem:
+            dev.ck("cuFuncSetAttribute", dev.fn(self.form), CARVEOUT, CARVEOUT_MAX_SHARED)
 
     def gemm(self, mode: str) -> str:
         return f"gemm_{self.tag}_{mode}" + ("" if self.bm == 128 else "_m64") + ("" if self.bn == 128 else "n64")
@@ -273,7 +277,7 @@ class Pipeline:
             L("lines", cdiv(n, 128), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fa"], b["fat"]], i=[k])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fb"], b["fbt"]], i=[k])
-        L(f"form_{self.tag}", (n // 16, self.split_b), 256, p=[
+        L(self.form, (n // 16, self.split_b), 256, self.form_smem, p=[
             b["xb"], b["lines_eb"], b["lines_fb"], b["b_codes"], b["b_scales"], b["b_alpha"], b["b_inv"], b["b_ae"], b["pb"],
             b["seed_b"] if hashing else 0], i=[n, k, 32, 1, ROLE_EB])
         for name, geo, kw in (self.chain32(32, [b["fbt"], 0, b["fat"], b["g"]], [32, k, 0]),
@@ -297,7 +301,7 @@ class Pipeline:
         out = []
         if mode == "hash":
             out.append(self.commit("a"))
-        out.append((f"form_{self.tag}", ((m // 16, self.split_a), 256), dict(
+        out.append((self.form, ((m // 16, self.split_a), 256, self.form_smem), dict(
             p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"], b["a_inv"], b["a_ae"], b["pa"],
                b["seed_a"] if mode == "hash" else 0], i=[m, k, 0, 0, ROLE_EA])))
         out.append(self.chain32(m, [b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], [m, k, 1]))

@@ -31,7 +31,7 @@ PINS = {
     "F32FmaSubFtz_v3": (4584, 7877, 268, "c40a13e35744d2326b4c46690191d4aefbd92a6ac20e835fa376457c22b4ac46"),
     "F32Max_v2": (237, 408, 70, "51cbd51389f3a835b06a9d18aede9466d22a6a4b8c3072559c6d15e8331b0958"),
     "GuardNegInfZero_v2": (63, 0, 24, "cecb89db1b7296e52d903a278f0a5a4321ff61bca24bda4c28c7c921c96db130"),
-    "Fa2InvSum_v2": (947, 5695, 78, "617b85b30c8416660afa22843f276d38347ec95c25bbb0d53de57c3dd286dbd3"),
+    "Fa2InvSum_v2": (947, 4866, 109, "8a134c216e0888fee6993aaac41a9ef07185b70712ab9581a5066dc95307408e"),
 }
 
 #: signed zeros, subnormals (the FTZ boundary), the normal range's ends, ones, infinities, NaNs of both signs and kinds, and

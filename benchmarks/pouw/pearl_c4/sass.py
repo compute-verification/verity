@@ -69,7 +69,7 @@ def problems(ptxas: str, funcs: dict[str, dict]) -> list[str]:
                 out.append(f"{name}: {n} {op} (want " + (f"a multiple of {mult}, at least {least})" if mult else "none)"))
     expected = {f"gemm_{f}_{m}{h}" for f in ("nv", "mx") for m in ("hash", "nohash", "plain") for h in ("", "_m64", "_m64n64")}
     expected |= {f"{k}_{f}{r}" for k, r in (("form", ""), ("chain32", ""), ("chain32", "_r2")) for f in ("nv", "mx")}
-    expected |= {"lines", "transpose", "commit_rows", "pb", "leaves", "form_nv_v1", "form_nv_v2", "form_nv_v2_smem"}
+    expected |= {"lines", "transpose", "commit_rows", "pb", "leaves", "form_nv_v0", "form_nv_v1", "form_nv_smem", "form_mx_smem"}
     out += [f"{name}: missing" for name in sorted(expected - set(funcs))]
     return out
 

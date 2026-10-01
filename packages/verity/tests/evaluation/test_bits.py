@@ -103,6 +103,27 @@ def test_bit_sliced_equals_the_reference(seed: int, n: int) -> None:
     assert got.shape == ref.shape and np.array_equal(got, ref)
 
 
+def test_a_batch_of_composites_runs_in_chunks_of_members_within_the_row_budget(monkeypatch) -> None:
+    spec = bind(_random(3))
+    params, _ = spec.signature()
+    inputs = [_bits(np.random.default_rng(3), 200, t) for _, t in params]
+    fa, run = BS.compile(FULL_ADDER), BS._run
+    widths: list[int] = []
+
+    def spy(c, args):
+        if c is fa:
+            widths.append(args.shape[1])
+        return run(c, args)
+
+    monkeypatch.setattr(BS, "_run", spy)
+    whole = BS.evaluate_bits(spec, *inputs)
+    assert max(widths) == W * 4  # the batch of W full adders side by side, 200 instances in 4 words each
+    widths.clear()
+    monkeypatch.setattr(BS, "_ROW_BUDGET", 1)
+    assert np.array_equal(BS.evaluate_bits(spec, *inputs), whole)
+    assert set(widths) == {1}  # one member of one word of instances at a time
+
+
 def test_the_word_view_adds() -> None:
     rng = np.random.default_rng(1)
     x = rng.integers(0, 1 << W, size=1000, dtype=np.uint16)
