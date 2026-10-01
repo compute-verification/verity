@@ -14,8 +14,8 @@ the rule, with r1_xlayer's codes (one keyed Q for every layer, RMSNorm's weight 
   credited  the share of P's nonzero slices more than d codes (up to sign) from every slice credited before them, in the
             order layer l+1 qkv, l+1 gate/up, l+2 qkv, ...: what the rule still pays for at P
   cheap     over the credited slices' steps against a keyed sample of the layer's rotated weight rows, from R1-H's
-            separable hot start, the share r1_sdet calls cheap (S-determined, and spotted from the operands' 2-adic
-            valuations): what a prover could take below the atom's price
+            centred hot start (--start separable: r1_sdet's), the share r1_sdet calls cheap (S-determined, and spotted
+            from the operands' 2-adic valuations): what a prover could take below the atom's price
   update    |h_j(p) - x_p| / |x_p|, and the codes a slice moves from layer l+1's
 and the same for natural rows at other positions of the same batch element, the honest reference.  The bound fails if a
 layer past l+1 credits written slices that are cheap well beyond the natural rows' share.
@@ -35,6 +35,7 @@ import torch
 import transformers
 
 import r1_census as rc
+from r1_binade import centred_start
 from r1_sdet import top_bit, v2
 from r1_slices import unsigned
 from verity.ml.kernels import group_sum_total_batch
@@ -55,10 +56,11 @@ def weights(st: rc.Safetensors, layer: int, cls: str, q: np.ndarray, cols: int, 
     return gamma, (w[pick].astype(np.float64) * gamma) @ q
 
 
-def cheap_steps(ac: np.ndarray, bc: np.ndarray, h: int, g: np.random.Generator) -> np.ndarray:
-    """(atoms, rows, cols): r1_sdet's `cheap` flag of every step of R1-H's chain from the separable hot start."""
+def cheap_steps(ac: np.ndarray, bc: np.ndarray, h: int, g: np.random.Generator, start: str) -> np.ndarray:
+    """(atoms, rows, cols): r1_sdet's `cheap` flag of every step of R1-H's chain from the hot start: the design's centred one
+    (r1_binade, as r1_tiles.py scores model rows) or r1_sdet's separable one."""
     av, bv = rc.values(ac), rc.values(bc)
-    start = rc.separable_start(av, bv, h, g)
+    start = (centred_start if start == "centred" else rc.separable_start)(av, bv, h, g)
     rows, cols = len(ac), len(bc)
     ii, jj = (x.ravel() for x in np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij"))
     ai, bi = (av * 512).astype(np.int64), (bv * 512).astype(np.int64)
@@ -101,7 +103,7 @@ def score(variant: dict, layer: int, cls: str, codes: np.ndarray, rows_w: np.nda
         # rows credited in this set are pooled for the next sets, not against each other (per-linear dedup is r1_xlayer's)
         pools[t].append(u[cred])
         credited[:, t], nonzero[:, t] = cred, nz
-    cheap = cheap_steps(codes, bc, args.h, rc.rng(key, "start", variant["family"], variant["c"], layer, cls))
+    cheap = cheap_steps(codes, bc, args.h, rc.rng(key, "start", variant["family"], variant["c"], layer, cls), args.start)
     out = {}
     for name, rows in (("written", rows_w), ("natural", rows_n)):
         cr = credited[rows]
@@ -131,6 +133,7 @@ def main() -> int:
     ap.add_argument("--cols", type=int, default=128, help="weight rows sampled for the cheap test")
     ap.add_argument("--d", type=int, default=6)
     ap.add_argument("--h", type=int, default=10)
+    ap.add_argument("--start", choices=("centred", "separable"), default="centred")
     ap.add_argument("--threads", type=int, default=16)
     ap.add_argument("--key", default="r1-carry/v0")
     ap.add_argument("--xkey", default="r1-census/v0", help="r1_xlayer's key, for the residual rotation Q")

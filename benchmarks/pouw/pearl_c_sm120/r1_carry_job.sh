@@ -15,4 +15,4 @@ env PYTHONPATH=packages/verity/src:protocols/pouw:benchmarks/pouw/pearl_c_sm120 
   uv run --no-project --with torch --with transformers --with safetensors --with numpy \
   python benchmarks/pouw/pearl_c_sm120/r1_carry.py --weights "$SNAP" --ids "$CAPTURES/natural-every1-512/ids.npy" \
   --layers "${LAYERS:-4,16,27}" --after "${AFTER:-3}" --scales "${SCALES:-1,8,64,512}" --families "${FAMILIES:-pow2,flat-z50}" \
-  --threads "${THREADS:-16}" --out "$OUT/carry.json" 2>&1 | tee "$OUT/carry.log"
+  --start "${START:-centred}" --threads "${THREADS:-16}" --out "$OUT/carry.json" 2>&1 | tee "$OUT/carry.log"
