@@ -9,13 +9,15 @@
 #   on node 1:  n2_commit.sh item NODE1_JOB                       (prints that Job's item)
 #   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
+#   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
 #
 # submit (as research on node 1) refuses a row that isn't TP1, whose Build hasn't passed on node 1 (no manifest.json or Build run),
 # or whose checkpoint REPO@REVISION isn't staged on node 2 as plain files (/workspace/jobs/hf, or PoUW's /workspace/hf, which is only
 # read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row (Programs, manifest), the bootstrap
 # stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has a timed window running or waiting,
-# resolves the Build's artifact in node 1's store, and writes the fill job.
+# resolves the Build's artifact in node 1's store, copies that artifact's store manifest into node 2's store (which has no remote,
+# and the Commit's precheck reads it), and writes the fill job.
 # run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, records the GPU's
 # driver, clocks and vLLM version in the row (n2_gpu_env.json), then sends the row (without the replay bundle) and the run dir back
 # to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
@@ -72,6 +74,30 @@ check_item() {  # check_item KEY ITEM.json: exit 2 unless KEY is a key and ITEM 
 
 item() { ssh "$N1" "$KUBE get job $1 -o jsonpath='{.metadata.annotations.verity\.dev/item-json}'"; echo; }
 
+# node 2's store has no remote, so a stage's precheck reads the manifests it cites (the Build's; the replay's Commit) from node 2's
+# own store: submit copies them there, and run and replay fetch any still missing from node 1's. A manifest's sha256 is its id
+STORE=${VY_STORE:-/workspace/jobs/store}
+art_hex() {  # art_hex ART: its 64 hex digits, or exit 2
+  [[ $1 =~ ^art:([0-9a-f]{64})$ ]] || { echo "not an art: id: $1" >&2; exit 2; }
+  echo "${BASH_REMATCH[1]}"
+}
+
+fetch_manifests() {  # fetch_manifests ART...: (on node 2) every manifest node 2's store lacks, from node 1's, checked against its id
+  local art hex f tmp
+  for art in "$@"; do
+    [ -n "$art" ] || continue
+    hex=$(art_hex "$art") f=$STORE/manifests/$hex.json
+    [ -s "$f" ] && continue
+    tmp=$STORE/manifests/.n2-$hex-$$
+    if rsync -a "$N1:$STORE/manifests/$hex.json" "$tmp" && [ "$(sha256sum < "$tmp" | cut -d' ' -f1)" = "$hex" ]; then
+      mv "$tmp" "$f" && echo "fetched the manifest of $art from node 1's store"
+    else
+      rm -f "$tmp"
+      echo "the manifest of $art isn't in node 1's store (or doesn't hash to its id); the precheck will refuse it" >&2
+    fi
+  done
+}
+
 submit() {
   local key=$1 item=$2 job=${3:-}
   if [ "$item" = - ]; then
@@ -102,6 +128,12 @@ submit() {
     /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$build_run" --json 2> /dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
     2> /dev/null || true)
+  if [ -n "$build_art" ]; then
+    local m
+    m=$STORE/manifests/$(art_hex "$build_art").json
+    [ -s "$m" ] || { echo "Build $build_run cites $build_art, which node 1's store has no manifest for; not queued" >&2; exit 3; }
+    push "$m" "$m" --ignore-existing || { echo "the manifest of $build_art didn't go over to node 2; not queued" >&2; exit 3; }
+  fi
   push "$src/" "$src/"
   push "$row_dir/" "$row_dir/" --exclude=/commit/ --exclude=/pipeline-commit-run --exclude=/.n2-commit
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
@@ -257,6 +289,7 @@ run() {
       echo "n2-commit $KEY: stopped $((tries - 1)) times on node 2; node 1 runs it"
       return 0
     fi
+    fetch_manifests "$BUILD_ART"
     (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" \
       --out "/workspace/jobs/bootstrap/$ROLE")
     export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
@@ -280,12 +313,13 @@ run() {
     echo "$run_id $rc" > "$marker"
   fi
   # a proof (VY_N2_PROOF=1 at submit) runs the Commit as node 1's gpu task did, its replay on the GPU, and only comes home: it is
-  # compared with node 1's record of the same row, and nothing is queued after it
+  # compared with node 1's record of the same row, and nothing is queued after it. It exits with the Commit's rc, so its lease's
+  # holder sees a failed proof as one
   if [ -n "${PROOF:-}" ]; then
     home "$run_id"
     rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
     echo "n2-commit $KEY: proof Commit $run_id on node 2 rc $rc; its row and Attempt are on node 1"
-    return 0
+    return "$rc"
   fi
   if [ "$rc" != 0 ] || [ "${VY_N2_REPLAY:-n2}" = n1 ]; then
     # node 1 takes it from here: the Commit again (task 1) after a failure here, else the replay (task 2), with the whole row
@@ -323,6 +357,7 @@ replay() {
   if [ -s "$marker" ]; then
     read -r run_id rc < "$marker"
   else
+    fetch_manifests "$BUILD_ART" "$COMMIT_ART"
     (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu \
       --out "/workspace/jobs/bootstrap/$ROLE-cpu")
     export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
@@ -428,5 +463,6 @@ case "$cmd" in
   replay) replay "$@" ;;
   offload) offload "$@" ;;
   check) check_item "$@" ;;
-  *) sed -n '5,10p' "$0" >&2; exit 2 ;;
+  fetch-manifests) fetch_manifests "$@" ;;
+  *) sed -n '7,12p' "$0" >&2; exit 2 ;;
 esac

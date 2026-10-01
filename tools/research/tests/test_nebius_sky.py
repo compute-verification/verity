@@ -351,14 +351,18 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
 
 
 def test_submit_caps_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
-    """A job waiting for quota holds one of SkyPilot's 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait."""
+    """A SkyPilot job waiting for quota holds one of its 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait. The
+    dispatcher's Kueue Jobs hold none, so any number of them waiting blocks nothing."""
     import subprocess
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "waiting.py").write_text(sub[sub.index("\n", sub.index("<<'WAITING'")) + 1:sub.index("\nWAITING\n")])
     assert sub.index("<<'WAITING'") > sub.index("<<'PY'") and sub.index("<<'WAITING'") < sub.index("sky jobs launch -y")
 
     def check(template, queues, finished=0):
-        items = [{"spec": {"queueName": q}, "status": {}} for q in queues]
+        pod = {"ownerReferences": [{"kind": "Pod", "name": "sky-head"}]}
+        items = [{"metadata": pod, "spec": {"queueName": q}, "status": {}} for q in queues]
+        items += [{"metadata": {"ownerReferences": [{"kind": "Job", "name": "nd-x"}]}, "spec": {"queueName": "deployments-gpu"},
+                   "status": {}}] * 40                                                  # the dispatcher's waiting Kueue Jobs
         items += [{"spec": {"queueName": "circuits"}, "status": {"admission": {"clusterQueue": "circuits"}}}] * 3
         items += [{"spec": {"queueName": "circuits"}, "status": {"conditions": [{"type": "Finished", "status": "True"}]}}] * finished
         (tmp_path / "wl.json").write_text(json.dumps({"items": items}))

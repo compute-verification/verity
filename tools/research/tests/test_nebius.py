@@ -7,6 +7,7 @@ import base64
 import datetime
 import fcntl
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -882,6 +883,36 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
     assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 2
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path):
+    """Node 2's store has no remote, so a cited Build's manifest missing there failed cov-g217's precheck after a 19-min bootstrap:
+    fetch-manifests copies it from node 1's store, keeps only bytes whose sha256 is the id, and leaves present ones alone."""
+    n1, n2, bin_ = tmp_path / "n1", tmp_path / "n2", tmp_path / "bin"
+    for d in (n1 / "manifests", n2 / "manifests", bin_):
+        d.mkdir(parents=True)
+    # node 1 is a directory here: the fake rsync maps HOST:/PATH to n1/PATH's last two parts
+    (bin_ / "rsync").write_text('#!/bin/sh\nfor a; do :; done\nsrc=$(eval echo \\${$(($#-1))})\n'
+                                f'cp "{n1}/manifests/${{src##*/}}" "$a"\n')
+    (bin_ / "rsync").chmod(0o755)
+    good, other = b'{"kind":"vllm-build/v1"}', b'{"kind":"other"}'
+    art = lambda b: "art:" + hashlib.sha256(b).hexdigest()
+    (n1 / "manifests" / f"{art(good)[4:]}.json").write_bytes(good)
+    forged = "art:" + "0" * 64
+    (n1 / "manifests" / f"{forged[4:]}.json").write_bytes(other)
+
+    def fetch(*arts: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "fetch-manifests", *arts], capture_output=True, text=True,
+                              env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_N1": "n1.invalid", "VY_N2": "n2.invalid",
+                                   "VY_STORE": str(n2)})
+
+    assert fetch(art(good), forged, "").returncode == 0
+    assert (n2 / "manifests" / f"{art(good)[4:]}.json").read_bytes() == good
+    assert sorted(p.name for p in (n2 / "manifests").iterdir()) == [f"{art(good)[4:]}.json"]
+    (n1 / "manifests" / f"{art(good)[4:]}.json").unlink()
+    assert fetch(art(good)).returncode == 0 and "fetched" not in fetch(art(good)).stdout
+    assert fetch("art:abc").returncode == 2
+
+
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
@@ -1068,6 +1099,10 @@ def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_b
     assert started(fr, cmds, "b.sh", "gpus=0")[:2] == ["numactl", "--membind=1"]
     assert started(fr, cmds, "c.sh", "gpus=0 project=verity")[0] == "nice"
     assert started(fr, cmds, "d.sh", "gpus=1")[0] == fr.GPU_LEASE
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("Node 0 MemFree:        2097152 kB\nNode 0 Inactive(file): 6291456 kB\nNode 0 AnonPages:      1048576 kB\n")
+    monkeypatch.setattr(fr, "NODE_MEMINFO", str(meminfo))
+    assert fr.numa0_gb() == {"numa0_reclaimable_gb": 8.0, "numa0_anon_gb": 1.0}
 
 
 @pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")
