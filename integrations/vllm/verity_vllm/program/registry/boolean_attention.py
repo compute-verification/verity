@@ -184,16 +184,15 @@ def AttentionV7(B, S, q, kc, vc):
     return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV7, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV), q, kc, vc)
 
 
-def _words(b: dict) -> dict:
-    return {k: (word_of(x) if k in ("DOT", "INV") else x) for k, x in b.items()}
+def _view(word, lifted: tuple[str, ...] = ()):
+    """A word view (`trace.word_of`): ``word`` at the bindings, the statics in ``lifted`` through their own word views."""
+    return lambda b: bind(word, **{k: (word_of(x) if k in lifted else x) for k, x in b.items()})
 
 
-AttnBlockV6.word = lambda b: bind(AttnBlockV3, **b)  # type: ignore[attr-defined]
-AttentionHeadV6.word = lambda b: bind(AttentionHeadV3, **b)  # type: ignore[attr-defined]
-AttentionV6.word = lambda b: bind(AttentionV3, **b)  # type: ignore[attr-defined]
-AttnBlockV7.word = lambda b: bind(AttnBlockV2, **_words(b))  # type: ignore[attr-defined]
-AttentionHeadV7.word = lambda b: bind(AttentionHeadV2, **_words(b))  # type: ignore[attr-defined]
-AttentionV7.word = lambda b: bind(AttentionV2, **_words(b))  # type: ignore[attr-defined]
+for _bits, _word, _lifted in ((AttnBlockV6, AttnBlockV3, ()), (AttentionHeadV6, AttentionHeadV3, ()), (AttentionV6, AttentionV3, ()),
+                              (AttnBlockV7, AttnBlockV2, ("DOT", "INV")), (AttentionHeadV7, AttentionHeadV2, ("DOT", "INV")),
+                              (AttentionV7, AttentionV2, ("DOT", "INV"))):
+    _bits.word = _view(_word, _lifted)  # type: ignore[attr-defined]
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV
 ATTENTION_FA2: dict = {"DOT": BG.AmpereBF16TcDot16, "INV": BA.Fa2InvSum}
