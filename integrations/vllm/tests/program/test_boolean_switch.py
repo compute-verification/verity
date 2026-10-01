@@ -1,7 +1,8 @@
 """`TargetProfile.ir = "boolean"` (`verity_vllm.program.boolean`): a derived Program on bits.
 
 * the table: each word Definition's Boolean version is the registered Boolean Definition whose `word` names it, a function-valued
-  static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`);
+  static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`), and a static
+  the word has no counterpart for to the Boolean version of the word Definition its `word_statics` names;
 * `lift` re-emits a derived function's Calls on bits, every word run mapped to the bits it occupies (affine, strided, explicit,
   concatenated and `PartLog`-cut operands, a record of mixed widths), and computes the word function's outputs (bit-sliced
   evaluation of the lift against the plain-integer reference of the word function);
@@ -78,6 +79,36 @@ def test_the_table_reads_the_boolean_definitions_word_links():
     assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
     word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
     assert _spec_id(BB.boolean_version(word)) == 'DotBf16_v3{K=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"}}'
+
+
+def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_statics_entry(monkeypatch):
+    from verity.ml.boolean.trace import word_of
+
+    sig = lambda t: lambda S: ((("x", Array(S.N, t)),), Array(S.N, t))  # noqa: E731
+    word = CompositeDefinition("Twice", 1, ("N",), sig(F32), lambda B, S, x: B.batch(W.F32AddFtz, x, x, axes=(0, 0)), register=False)
+    bits = CompositeDefinition("Twice", 2, ("N", "ADD"), sig(BL.bit_type(F32)), lambda B, S, x: B.batch(S.ADD, x, x, axes=(0, 0)),
+                               register=False)
+
+    def twice_word(b):
+        if word_of(b["ADD"]).id != W.F32AddFtz.id:
+            raise ValueError(f"ADD computes {word_of(b['ADD']).id}")
+        return bind(word, N=b["N"])
+    bits.word, bits.word_statics = twice_word, {"ADD": W.F32AddFtz}
+    exact, by_name, errors = BB._load()
+    monkeypatch.setattr(BB, "_TABLE", [(exact, {**by_name, "Twice": [bits]}, errors)])
+    monkeypatch.setattr(BB, "_VERSIONS", {})
+    got = BB.boolean_version(bind(word, N=3))
+    assert _spec_id(got) == 'Twice_v2{N=3,ADD={"fn":"F32AddFtz_v3"}}'
+    x = _inputs(32)[0][:, :3]
+    want = np.array([evaluate(bind(word, N=3), list(map(int, r))) for r in x], dtype=np.uint64)
+    assert (evaluate_words(got, x).astype(np.uint64) == want).all()
+
+    lonely = PrimitiveDefinition("LonelyWord", 1, (("a", F32), ("b", F32)), F32, lambda a, b: a, register=False)
+    monkeypatch.setattr(bits, "word_statics", {"ADD": lonely})
+    monkeypatch.setattr(BB, "_VERSIONS", {})
+    with pytest.raises(BB.NoBooleanVersion, match=r"Twice_v2's ADD: no Boolean version of LonelyWord_v1") as e:
+        BB.boolean_version(bind(word, N=4))
+    assert list(e.value.missing) == ["Twice_v1{N=4}"]
 
 
 def test_lift_computes_the_word_function_on_bits():

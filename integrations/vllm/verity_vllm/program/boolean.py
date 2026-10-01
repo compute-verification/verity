@@ -6,7 +6,9 @@ only, through every sub-Call.  A Boolean Definition names the word Definition it
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
 looked up among every module of `verity.ml.boolean` and of `verity_vllm.program.registry` (`registry.catalog`), and
-`NoBooleanVersion` names each Definition it finds none for.
+`NoBooleanVersion` names each Definition it finds none for.  A function-valued static is bound to its own Boolean version; a
+static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
+names for it.
 
 `lift(fn)` is a derived Program's function (`frontend.derive`'s flat `Derived[...]`) on bits: the same Calls in the same order,
 each of the Boolean version of its Definition, over parameters and values whose every w-bit word is an element
@@ -136,22 +138,31 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
     exact, by_name, errors = _load()
     cands = [bind(d) for d in exact.get(fid, ())]
     bindings = getattr(fn, "bindings", None) or {}
+    notes: list[str] = []
     if isinstance(fn, SpecializedDefinition) and bindings:
         from verity.ml.boolean.trace import word_of
         for d in by_name.get(fn.name, ()):
-            if not set(d.statics) <= set(bindings):
+            # ``word_statics``: the statics its word has no counterpart for, as the word Definitions they compute, each bound to its
+            # Boolean version (`RMSNormFusedCuda_v3`'s RSQRT computes `RsqrtApprox_v1`)
+            extra = getattr(d, "word_statics", {})
+            if not set(d.statics) <= set(bindings) | set(extra):
                 continue
-            raw = {k: bindings[k] for k in d.statics}
+            raw = {k: bindings[k] for k in d.statics if k in bindings}
+            try:
+                more = _statics_on_bits({k: extra[k] for k in d.statics if k not in bindings})
+            except NoBooleanVersion as e:
+                notes.append(f"{d.name}_v{d.version}'s {', '.join(k for k in d.statics if k not in bindings)}: {e}")
+                continue
             for on_bits in True, False:
                 try:
-                    sp = bind(d, **(_statics_on_bits(raw) if on_bits else raw))
+                    sp = bind(d, **(_statics_on_bits(raw) if on_bits else raw), **more)
                     if _fid(word_of(sp)) == fid:
                         cands.append(sp)
                         break
                 except (LookupError, TypeError, ValueError):
                     continue
     if not cands:
-        why = "no registered Boolean Definition names it as its word"
+        why = "; ".join(notes) or "no registered Boolean Definition names it as its word"
         if errors:
             why += f" (registry modules that failed to import: {errors})"
         raise NoBooleanVersion({fid: why})
