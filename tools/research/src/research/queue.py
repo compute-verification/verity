@@ -557,8 +557,9 @@ def ready(github, store, number: int | None, by: str) -> int:
         return 2
     target = grant_target(pr.number, pr.head)
     store.add_label(target, vocab.READY, True, by)
-    print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {_label_write_through(store, target)}")
-    return 0
+    said, lost = _label_write_through(store, target)
+    print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {said}")
+    return 1 if lost else 0
 
 
 def main(argv: list[str]) -> int:
