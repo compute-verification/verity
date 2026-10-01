@@ -6,8 +6,8 @@ description: >
   tools/lean/audit.py, stating assumptions as named Props, freezing and pinning the theorems a ledger or PR
   cites in lean-audit.json, watching ArkLib and other dependencies for proofs of what we assume
   (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build directories, and Daniel's
-  Lean rulings (working theorems, Lean as the source of truth for assumptions). Use when adding or changing Lean
-  proofs, definitions or packages (backends/flock/verifier/lean, level3, soundness, packages/verity/lean,
+  Lean rulings (theorems proved under their assumptions, Lean as the source of truth for them). Use when adding or
+  changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3, soundness, packages/verity/lean,
   protocols/pous/lean, protocols/network_warden/lean), when a Lean build or proof is slow, editing a lean-audit.json
   or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
@@ -86,7 +86,8 @@ simp with that.
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
-  `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is a hypothesis, or a theorem in a lane branch, not on `main`.
+  `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
+  assumption, or a theorem in a lane branch, not on `main`.
 - **Freeze the statement, then prove it.** In your lane branch, state the theorem on a `sorry` stub, check it against the
   paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
   statement, so it passes once the proof lands, and the pin shows if the statement moved on the way. Never make a theorem
@@ -122,11 +123,11 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
-- 2026-09-30: a theorem whose statement takes an obligation we haven't proved yet (`HmRowComputes`, an audit-layer `Prop`)
-  is a **working theorem**, not a proved one, even when the obligation is a named `Prop` in the assumptions module. A
-  table, a ledger or a PR calls it a working theorem and names its open obligations. "Proved" means its only hypotheses
-  are external claims (hardness such as `cr/sha-512`, platform such as `uniform/io-getrandombytes`, or a model) and
-  conditions on its parameters.
+- 2026-10-01: there are theorems and assumptions, and a theorem is **proved under its assumptions**; there is no third
+  status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one than a
+  fact about our own circuit that we mean to prove (`HmRowComputes`). So what a theorem assumes is explicit and hard to
+  break, a table, a ledger or a PR cites a theorem with its assumptions, and proving an assumption removes it from every
+  theorem that took it.
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
   derived from Lean and the audit's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
