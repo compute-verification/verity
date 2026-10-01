@@ -9,6 +9,7 @@ same checks as `circuit-check --all`.
 """
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import importlib.util
 import json
@@ -206,9 +207,9 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
 
-def _partition(fn, q_word):
+def _partition(fn, q_word, opts=OPTS):
     F = CK.Findings()
-    rec, _rule = CK.partition(fn, OPTS, F, {}, applies=True, q_word=q_word)
+    rec, _rule = CK.partition(fn, opts, F, {}, applies=True, q_word=q_word)
     rec.pop("_graph", None)
     return rec, [f["name"] for f in F.failures if f["check"] == "partition"]
 
@@ -225,6 +226,8 @@ def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
     assert CK.summarize([{"definition": fn.id, "partition": rec, "failures": [], "warnings": []}])["recomputed_across"] == {fn.id: 1120}
     _rec, failed = _partition(fn, 1)
     assert failed == [f"partition/gate-recomputed {fn.id} (1120 gate(s))"]
+    rec, failed = _partition(fn, 2, dataclasses.replace(OPTS, partition_max_gates=10))   # over the budget: unchecked, no count
+    assert not failed and not rec["checked"] and rec["recomputed_across"] is None
 
 
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):

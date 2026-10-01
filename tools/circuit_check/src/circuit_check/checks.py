@@ -450,8 +450,8 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     """`Q_word_v1` on one Call of ``fn`` (its record and the word's unit rule).  Where the invariant applies (``fn`` is a Call of a
     served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
     are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
-    units is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else the unit rule's count),
-    and every other code fails as under v1."""
+    units is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else the unit rule's count;
+    None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
     from verity_vllm.query import word as W
 
     P = F if applies else Findings()
@@ -497,7 +497,8 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         rec["_graph"] = (G, R)
     if v2:
         rec["q_word"] = 2
-        rec["recomputed_across"] = rec["whole"]["q_word_v2"]["recomputed_across"] if "whole" in rec else across_rule
+        rec["recomputed_across"] = (rec["whole"]["q_word_v2"]["recomputed_across"] if "whole" in rec
+                                    else across_rule if rec["checked"] else None)
     elif applies:
         rec["q_word"] = 1
     if not applies:
