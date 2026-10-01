@@ -14,7 +14,8 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count)
 
 It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at any moment and started again from the top,
-so it resumes from checkpoints in its own output directory.  Its exit status says what happened:
+so it resumes from checkpoints in its own output directory.  Its exit status (recorded in running/.<job>.rc, so a restarted
+runner that adopted the job still knows it) says what happened:
     0 done (moved to done/);  99 more chunks remain (requeued at once);  143 preempted by a waiter (requeued);
     anything else failed (failed/, after 2 tries).
 It runs with FILL=1, FILL_JOB=<name>, GPU_LEASE_WHO=fill:<owner>; a GPU job through `gpu-lease 1 --preemptible`, so the
@@ -87,6 +88,10 @@ COMMIT_PREFIX = "verity-commit-"
 # a Commit reruns from the top when stopped, and a Gemma-2 Commit's CPU phases alone outlast 30 min; booked windows still bound it
 COMMIT_MAX_MIN = int(os.environ.get("FILL_COMMIT_MAX_MIN", "120"))
 CGROUP_ROOT = os.environ.get("FILL_CGROUP_ROOT", "/sys/fs/cgroup")
+# the job's own exit status, kept in running/.<job>.rc so a restarted runner can still tell done from failed (a job that finished
+# while adopted was rerun from the top, and a job that wipes its output first lost a passing run, 1 Oct 08:50Z). The trap is not
+# an ignore, so the job still gets the group's SIGTERM, and the shell records the status once the job has handled it.
+RECORD_RC = 'trap : TERM; bash "$1"; rc=$?; echo $rc > "$2"; exit $rc'
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -232,7 +237,9 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     unit_name = None
     own = h.get("cpuset") if not h["gpus"] else None
     cpus = own or (VERITY_CPU_SET if in_pool else CPU_SET)
-    cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "bash", str(run)]
+    rc_file = FILL / "running" / f".{name}.rc"
+    rc_file.unlink(missing_ok=True)
+    cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "sh", "-c", RECORD_RC, "fill-job", str(run), str(rc_file)]
     if own:
         cmd = ["ionice", "-c3", *cmd]
     if CPU_MEMBIND and not h["gpus"] and not verity:
@@ -335,15 +342,22 @@ def tries(name: str) -> int:
     return d[name]
 
 
+def recorded_rc(name: str) -> int | str:
+    try:
+        return int((FILL / "running" / f".{name}.rc").read_text().strip())
+    except (OSError, ValueError):
+        return "adopted-exit"
+
+
 def reap() -> None:
     global backoff_until
     for name, j in list(running.items()):
-        if j["proc"] is None:                       # adopted from an earlier runner: no exit status, only whether it lives
+        if j["proc"] is None:                       # adopted from an earlier runner: only its recorded status, if it wrote one
             try:
                 os.killpg(j["pid"], 0)
                 rc = None
             except ProcessLookupError:
-                rc = "adopted-exit"
+                rc = recorded_rc(name)
         else:
             rc = j["proc"].poll()
         if rc is None and j.get("unit") and not j["h"]["gpus"]:
@@ -363,10 +377,10 @@ def reap() -> None:
         run = FILL / "running" / name
         mins = round((time.monotonic() - j["t0"]) / 60, 1)
         paused_min = round((j.get("paused_s", 0.0) + (time.monotonic() - j["paused_at"] if j["paused"] else 0.0)) / 60, 1)
-        (FILL / "running" / f".{name}.pgid").unlink(missing_ok=True)
-        (FILL / "running" / f".{name}.unit").unlink(missing_ok=True)
+        for side in ("pgid", "unit", "rc"):
+            (FILL / "running" / f".{name}.{side}").unlink(missing_ok=True)
         if rc == "adopted-exit":
-            dest, kind = "queue", "adopted-exit"      # its own checkpoint makes the rerun a no-op if it finished
+            dest, kind = "queue", "adopted-exit"      # started before RECORD_RC, or killed before recording: rerun from the top
         elif j.get("stopping") and j.get("requeue"):
             dest, kind = "queue", "requeued"
         elif rc == 0:
@@ -593,7 +607,8 @@ def main() -> None:
         side = FILL / "running" / f".{p.name}.pgid"
         try:
             pgid = int(side.read_text().strip())
-            os.killpg(pgid, 0)
+            if recorded_rc(p.name) == "adopted-exit":     # one that recorded its exit is adopted even if gone; reap files it
+                os.killpg(pgid, 0)
         except (OSError, ValueError):
             side.unlink(missing_ok=True)
             shutil.move(str(p), FILL / "queue" / p.name)

@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -774,6 +775,46 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
     assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
     assert not fr.scope({"unit": None}, "freeze") and len(calls) == 1
+
+
+def test_fill_runner_files_a_job_that_ended_while_adopted_by_its_recorded_exit_status(tmp_path, monkeypatch):
+    """A runner restart adopts running jobs without their exit status. Requeueing every one that then ended reran four passing
+    verifies and wiped a passing PoUS climb whose script clears its output first (node 2, 1 Oct 08:42-08:51Z). Each job's own
+    status is now recorded beside it: a passing job goes to done/, a failing one is retried, a stopped one still gets its
+    SIGTERM and says 99, and only a job that recorded nothing is rerun."""
+    monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
+    spec = importlib.util.spec_from_file_location("fill_runner_adopt", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr, "CPU_SET", "0")
+    monkeypatch.setattr(fr.shutil, "which", lambda cmd: None)
+    for d in ("queue", "running", "done", "failed", "logs"):
+        (fr.FILL / d).mkdir(parents=True)
+    up = tmp_path / "up"
+    os.mkfifo(up)
+    trap = f'trap \'kill -TERM "$c"; wait "$c"; exit 99\' TERM\nsleep 600 & c=$!\necho up > {up}\nwait "$c"\n'
+    for name, body in (("pass.sh", "exit 0\n"), ("fail.sh", "exit 1\n"), ("stopped.sh", trap)):
+        p = fr.FILL / "queue" / name
+        p.write_text(f"#!/usr/bin/env bash\n# fill: owner=t gpus=0\n{body}")
+        fr.start(p, fr.header(p))
+    for name in ("pass.sh", "fail.sh"):
+        fr.running[name]["proc"].wait()
+    assert up.read_text() == "up\n"
+    os.killpg(fr.running["stopped.sh"]["pid"], signal.SIGTERM)
+    fr.running["stopped.sh"]["proc"].wait()
+    (fr.FILL / "running" / "gone.sh").write_text("# fill: owner=t gpus=0\n")
+    fr.running["gone.sh"] = {"pid": fr.running["pass.sh"]["pid"], "proc": None, "h": fr.header(fr.FILL / "running" / "gone.sh"),
+                             "t0": 0.0, "unit": None, "paused": False}
+    for j in fr.running.values():
+        j["proc"] = None
+    fr.reap()
+    assert sorted(p.name for p in (fr.FILL / "done").iterdir()) == ["pass.sh"]
+    assert sorted(p.name for p in (fr.FILL / "queue").iterdir()) == ["fail.sh", "gone.sh", "stopped.sh"]
+    kinds = {e["job"]: (e["event"], e["rc"]) for e in map(json.loads, (fr.FILL / "events.jsonl").read_text().splitlines())
+             if e["event"] != "start"}
+    assert kinds == {"pass.sh": ("done", 0), "fail.sh": ("retry", 1), "stopped.sh": ("more", 99),
+                     "gone.sh": ("adopted-exit", "adopted-exit")}
+    assert not list((fr.FILL / "running").iterdir())
 
 
 def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(tmp_path, monkeypatch):
