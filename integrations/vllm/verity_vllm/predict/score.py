@@ -278,15 +278,28 @@ def _map_path(p: str | None, path_map: list[tuple[str, str]]) -> str | None:
     return p
 
 
+def mem_estimate_mb(C, request_rows: list[int]) -> int:
+    """A unit's peak resident memory, over-estimated: the root's nodes (about 14 per row and layer, plus the q/k/v bias and one
+    RMSNorm per q and k head) at 6 KB each, and the attention reads of the earlier rows' keys (rows²/2 per layer) at 0.4 KB each.
+    Measured: a Qwen3-4B request of LP+T = 79 peaks at 814 MB (estimated 1.2 GB)."""
+    per = 14 + C.qkv_bias + ((C.NH + C.KVH) if C.qk_norm else 0)
+    rows = sum(request_rows)
+    return int(250 + 0.006 * rows * C.NL * per + 0.0002 * C.NL * sum(r * r for r in request_rows))
+
+
 def _child(fn, task: dict, conn) -> None:
-    conn.send(fn(task))
+    import resource
+    r = fn(task)
+    r["max_rss_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+    conn.send(r)
     conn.close()
 
 
-def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = None, big_rows: int | None = None) -> dict:
-    """fn over tasks, each in its own spawned process (`workers` at a time; tasks over `big_rows` one at a time, after the rest).
-    A process that dies without a result (the OOM killer) is recorded as `killed`, never waited on; results already in `cache`
-    are reused and every new one is appended to it as it arrives."""
+def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = None, mem_mb: int | None = None, run: bool = True) -> dict:
+    """fn over tasks, each in its own spawned process: at most `workers` at a time, and, past the first, only while the running
+    tasks' `mem_mb` estimates (`mem_estimate_mb`) sum to at most `mem_mb`. A process that dies without a result (the OOM killer)
+    is recorded as `killed`, never waited on; results already in `cache` are reused and every new one is appended to it as it
+    arrives. `run=False` returns the cached results only."""
     from multiprocessing.connection import wait
     out: dict = {}
     todo = []
@@ -294,7 +307,7 @@ def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = 
         hit = cache.get(t["key"]) if cache is not None else None
         if hit is not None:
             out[t["key"]] = hit
-        else:
+        elif run:
             todo.append(t)
     if workers <= 0:  # in this process (tests, debugging): no isolation from a unit that exhausts memory
         for t in todo:
@@ -307,22 +320,21 @@ def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = 
     ctx = mp.get_context("spawn")
     running: dict = {}
 
-    def limit() -> int:
-        if big_rows is not None and any(t.get("rows", 0) > big_rows for _, _, t in running.values()):
-            return 1
-        return workers
-
     def finish(r: dict) -> None:
         out[r["key"]] = r
         if cache is not None:
             cache.put(r)
         log(r)
 
+    def admissible() -> int | None:
+        if not running:
+            return 0
+        used = sum(t.get("mem_mb", 0) for _, _, t in running.values())
+        return next((i for i, t in enumerate(todo) if mem_mb is None or used + t.get("mem_mb", 0) <= mem_mb), None)
+
     while todo or running:
-        while todo and len(running) < limit():
-            if big_rows is not None and todo[0].get("rows", 0) > big_rows and running:
-                break
-            t = todo.pop(0)
+        while todo and len(running) < workers and (i := admissible()) is not None:
+            t = todo.pop(i)
             rd, wr = ctx.Pipe(duplex=False)
             p = ctx.Process(target=_child, args=(fn, t, wr))
             p.start()
@@ -383,7 +395,7 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
             pk = phi_key(phi)
             try:
                 _check_phi(phi)
-                model_shape(phi.hf_config)
+                C = model_shape(phi.hf_config)
                 pre = None
             except Unexpressible as e:
                 pre = str(e)
@@ -409,7 +421,8 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
             else:
                 key = f"{pk}:{':'.join(str(x) for x in shape)}"
                 u["key"] = key
-                tasks.setdefault(key, {"key": key, "phi": phi.to_json(), "shape": list(shape), "rows": u["rows"]})
+                tasks.setdefault(key, {"key": key, "phi": phi.to_json(), "shape": list(shape), "rows": u["rows"],
+                                       "mem_mb": mem_estimate_mb(C, [u["rows"]])})
             row["units"].append(u)
         if phi is not None:
             pred_req = set(phi.request_shapes())
@@ -429,24 +442,27 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
             else:
                 key = f"W:{row['context_digest'][:16]}"
                 u["key"] = key
-                wtasks.setdefault(key, {"key": key, "phi": phi.to_json(), "rows": total})
+                wtasks.setdefault(key, {"key": key, "phi": phi.to_json(), "rows": total,
+                                        "mem_mb": mem_estimate_mb(C, [int(lp) + int(t) for lp, t in phi.request_shapes()])})
             row["units"].append(u)
         rows.append(row)
     return {"rows": rows, "tasks": tasks, "wtasks": wtasks}
 
 
-def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 600, workers: int = 2, big_rows: int = 300,
+def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows: int = 600, workers: int = 2, mem_mb: int | None = 8000,
           path_map: list[tuple[str, str]] | None = None, diverge: bool = True, max_diverge: int = 40, equivalence_on: bool = True,
-          rows_filter: str | None = None, workload: bool = True, cache: str | None = None, log=None) -> dict:
-    """`max_rows`: request units over LP+T = max_rows (and workloads over that many summed rows) are `over_budget`; units over
-    `big_rows` run one at a time (a request Program of LP+T = 512 peaks near 3 GB)."""
+          rows_filter: str | None = None, workload: bool = True, cache: str | None = None, cached_only: bool = False, log=None) -> dict:
+    """`max_rows`: request units over LP+T = max_rows (and workloads over that many summed rows) are `over_budget`; the units
+    running at once have estimated peaks summing to at most `mem_mb` (`mem_estimate_mb`). `cached_only`: no task runs, the
+    units without a result in `cache` are `not_run`."""
     t0 = time.time()
     log = log or (lambda r: print(json.dumps({k: v for k, v in r.items() if k != "phi"})[:400], file=sys.stderr, flush=True))
     C = Cache(cache)
     P = plan(inv, hf_home=hf_home, checkpoints=checkpoints, max_rows=max_rows, rows_filter=rows_filter)
     tasks = sorted(P["tasks"].values(), key=lambda t: t["rows"])
-    pred = _pool_map(_predict_task, tasks, workers, log, C, big_rows)
-    wpred = _pool_map(_workload_task, sorted(P["wtasks"].values(), key=lambda t: t["rows"]), workers, log, C, big_rows) if workload else {}
+    pred = _pool_map(_predict_task, tasks, workers, log, C, mem_mb, run=not cached_only)
+    wpred = _pool_map(_workload_task, sorted(P["wtasks"].values(), key=lambda t: t["rows"]), workers, log, C, mem_mb,
+                      run=not cached_only) if workload else {}
     # divergence: one task per (prediction, traced digest), smallest first
     dtasks = {}
     for row in P["rows"]:
@@ -454,7 +470,8 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
             p = (wpred if u["unit"] == "build_workload" else pred).get(u.get("key")) if u.get("key") else None
             if p is None:
                 if u.get("key"):
-                    u.update(status="not_run", reason="workload prediction skipped" if u["unit"] == "build_workload" else "no prediction result")
+                    u.update(status="not_run", reason="not in the cache (cached_only)" if cached_only else
+                             "workload prediction skipped" if u["unit"] == "build_workload" else "no prediction result")
                 continue
             u["predict_secs"] = p.get("secs")
             if p["status"] != "predicted":
@@ -472,9 +489,10 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
                 u["divergence_key"] = f"D:{u['key']}:{u['traced_digest'][:16]}"
                 if diverge and desc and os.path.exists(desc):
                     dtasks.setdefault(u["divergence_key"], {"key": u["divergence_key"], "phi": P["tasks"][u["key"]]["phi"], "shape": u["shape"],
-                                                            "descriptor": desc, "rows": u["rows"], "equivalence": equivalence_on})
+                                                            "descriptor": desc, "rows": u["rows"], "equivalence": equivalence_on,
+                                                            "mem_mb": 3 * P["tasks"][u["key"]]["mem_mb"]})
     dt = sorted(dtasks.values(), key=lambda t: t["rows"])[:max_diverge] if diverge else []
-    div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log, C, big_rows)
+    div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log, C, mem_mb, run=not cached_only)
     for row in P["rows"]:
         for u in row["units"]:
             d = div.get(u.get("divergence_key")) if u.get("status") == "differs" else None
@@ -582,12 +600,13 @@ class Options:
     checkpoints: str | None = option("--checkpoints", default=None, help="manifests/checkpoints.json (the pinned revisions)")
     path_map: list[str] | None = option("--path-map", default=None, nargs="*", help="OLD=NEW prefixes for the inventory's descriptor paths")
     max_rows: int = option("--max-rows", type=int, default=600, help="skip request units with LP+T above this (over_budget)")
-    big_rows: int = option("--big-rows", type=int, default=300, help="units with LP+T above this run one at a time")
+    mem_mb: int = option("--mem-mb", type=int, default=8000, help="the units running at once have estimated peaks summing to at most this")
     workers: int = option("--workers", type=int, default=2)
     cache: str | None = option("--cache", default=None, help="JSONL of task results: reused, and appended to as results arrive")
     max_diverge: int = option("--max-diverge", type=int, default=40, help="locate the first divergence of at most this many differing units")
     no_equivalence: bool = option("--no-equivalence", action="store_true", default=False)
     no_workload: bool = option("--no-workload", action="store_true", default=False)
+    cached_only: bool = option("--cached-only", action="store_true", default=False, help="run no task: score the results already in --cache")
     rows_filter: str | None = option("--rows-filter", default=None, help="regex on the row id")
     out: str = option("--out", help="score JSON")
     md: str | None = option("--md", default=None, help="markdown table")
@@ -602,9 +621,9 @@ def main(a: Options) -> int:
     _refuse_inside(a.cache, [inv.get("root"), a.rows])
     checkpoints = json.load(open(a.checkpoints)) if a.checkpoints else None
     pm = [tuple(x.split("=", 1)) for x in (a.path_map or [])]
-    res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, big_rows=a.big_rows, workers=a.workers, path_map=pm,
+    res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, mem_mb=a.mem_mb, workers=a.workers, path_map=pm,
                 max_diverge=a.max_diverge, equivalence_on=not a.no_equivalence, rows_filter=a.rows_filter, workload=not a.no_workload,
-                cache=a.cache)
+                cache=a.cache, cached_only=a.cached_only)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1, sort_keys=True)
