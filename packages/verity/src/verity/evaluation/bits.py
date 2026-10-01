@@ -212,10 +212,9 @@ def _run(c: Compiled, args: np.ndarray) -> np.ndarray:
 def _pack(bits: np.ndarray) -> np.ndarray:
     """(N, leaves) of 0/1 -> (leaves, ceil(N / 64)) uint64, instance i at bit i % 64 of word i // 64."""
     n = bits.shape[0]
-    words = -(-n // 64)
-    b = np.zeros((bits.shape[1], words * 64), dtype=np.uint8)
-    b[:, :n] = bits.T
-    return np.packbits(b, axis=1, bitorder="little").view("<u8").astype(np.uint64, copy=False)
+    b = np.zeros((bits.shape[1], -(-n // 64) * 8), dtype=np.uint8)
+    b[:, :-(-n // 8)] = np.packbits(bits.T, axis=1, bitorder="little")
+    return b.view("<u8").astype(np.uint64, copy=False)
 
 
 def _unpack(rows: np.ndarray, n: int) -> np.ndarray:
