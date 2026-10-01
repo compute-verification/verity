@@ -69,6 +69,8 @@ class ModelShape:
     max_pos: int
     rot: int
     qkv_bias: bool = False
+    window: int | None = None
+    qk_norm: bool = False
 
     @property
     def QKV(self) -> int:
@@ -79,9 +81,12 @@ def model_shape(hf: dict) -> ModelShape:
     """The shape facts of an HF `config.json` the vocabulary reads, through the two declared homes of model facts: the family facts
     table (`engine.profiles.family_facts`: vLLM's class and constructor kind per `model_type`) and `program.model.config_of` (the
     static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense block with
-    no per-family facts: a family with any (a norm variant, a soft-cap, per-head q/k norm, MoE, LayerNorm), a linear bias, an
-    activation other than SiLU, a partial rotary width or a rotary scaling without an analytic table raises `Unexpressible`."""
+    no per-family facts beyond the per-head q/k RMSNorm: a family with any (a norm variant, a soft-cap, MoE, LayerNorm), a linear bias other
+    than the q/k/v one a family's rule gives, an activation other than SiLU, a partial rotary width or a rotary scaling without an
+    analytic table raises `Unexpressible`.  A sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for
+    the families whose vLLM code hands it to FA2 (the `dense2` patterns); `build_program` refuses a history longer than it."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    from verity_vllm.engine.profiles.generic import effective_sliding_window
     from verity_vllm.program import model as analytic
     family = str(hf.get("model_type", "")).lower()
     ff = FAMILY_FACTS.get(family)
@@ -91,9 +96,8 @@ def model_shape(hf: dict) -> ModelShape:
     facts = []
     if ff.get("arch") != "dense":
         facts.append(f"family {family!r} constructor {ff.get('arch')!r} (the dense block only)")
-    if ff.get("facts") or ff.get("patterns") or rules.get("qk_norm"):
-        facts.append(f"family {family!r} per-family facts {sorted(ff.get('facts') or {})}, patterns {ff.get('patterns')}, "
-                     f"q/k norm {rules.get('qk_norm')}")
+    if ff.get("facts") or rules.get("qk_norm") not in (None, "head"):
+        facts.append(f"family {family!r} per-family facts {sorted(ff.get('facts') or {})}, q/k norm {rules.get('qk_norm')}")
     try:
         C, _ = analytic.config_of(hf, family_rules={family: rules})
     except (KeyError, ValueError) as e:
@@ -103,9 +107,9 @@ def model_shape(hf: dict) -> ModelShape:
         facts.append("attention_bias (q/k/v and o_proj biases)")
     if hf.get("mlp_bias"):
         facts.append("MLP biases")
-    gate = ff.get("sliding_window_gate")
-    if hf.get("sliding_window") is not None and (gate is None or hf.get(gate)):
-        facts.append(f"sliding window {hf.get('sliding_window')}")
+    window = effective_sliding_window(hf)
+    if window and "dense2" not in (ff.get("patterns") or ()):
+        facts.append(f"sliding window {window} (family {family!r} has no inert-window patterns)")
     act = hf.get("hidden_act", hf.get("hidden_activation", "silu"))
     if act != "silu":
         facts.append(f"hidden_act {act!r} (SiluMul only)")
@@ -122,7 +126,7 @@ def model_shape(hf: dict) -> ModelShape:
     cls = re.match(r"\w+", ff["vllm_class"]).group(0)
     return ModelShape(arch=family, model_class=cls, H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
                       D=int(C["D"]), I=int(C["I"]), EPS=float(C["EPS"]), tie=bool(C["tie_word_embeddings"]), max_pos=int(C["MAX_POS"]),
-                      rot=int(C["D"]), qkv_bias=qkv_bias)
+                      rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None, qk_norm=rules.get("qk_norm") == "head")
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
@@ -151,8 +155,10 @@ def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
         out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
         if C.qkv_bias:
             out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
-        out += [(p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)),
-                (p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I)),
+        out.append((p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)))
+        if C.qk_norm:
+            out += [(p + "self_attn.q_norm.weight", bf(C.D)), (p + "self_attn.k_norm.weight", bf(C.D))]
+        out += [(p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I)),
                 (p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
     out.append(("model.model.norm.weight", bf(C.H)))
     if not C.tie:
@@ -182,6 +188,7 @@ class _Specs:
         self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
         self.qkv_bias = self.kind("bias_add", N=C.QKV) if C.qkv_bias else None
+        self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm else None
         self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, C.V)
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
         self.silu = self.kind("silu_mul", I=C.I)
@@ -264,9 +271,14 @@ class _Model:
             if C.qkv_bias:
                 lw["qkv_b"] = W[n]
                 n += 1
-            lw.update(o=W[n], gate_up=W[n + 1], down=W[n + 2], ln1=W[n + 3], ln2=W[n + 4])
+            lw["o"] = W[n]
+            n += 1
+            if C.qk_norm:
+                lw.update(q_norm=W[n], k_norm=W[n + 1])
+                n += 2
+            lw.update(gate_up=W[n], down=W[n + 1], ln1=W[n + 2], ln2=W[n + 3])
             self.layers.append(lw)
-            n += 5
+            n += 4
         self.norm = W[n]
         n += 1
         self.lm_head = self.embed if C.tie else W[n]
@@ -300,8 +312,12 @@ class _Model:
                 pb = _ptypes(S.qkv_bias)
                 qkv = [self.call(S.qkv_bias, Coll(pb[0], qkv[i].refs), Coll(pb[1], lw["qkv_b"].refs)) for i in range(M)]
             cs = [Coll(prq[1], self.cos_sin.refs.slice((pos0 + i) * C.rot, (pos0 + i + 1) * C.rot)) for i in range(M)]
-            q = [self.call(S.rope_q, Coll(prq[0], qkv[i].refs.slice(0, q_w)), cs[i]) for i in range(M)]
-            k = [self.call(S.rope_k, Coll(prk[0], qkv[i].refs.slice(q_w, q_w + k_w)), Coll(prk[1], cs[i].refs)) for i in range(M)]
+            q_in = [qkv[i].refs.slice(0, q_w) for i in range(M)]
+            k_in = [qkv[i].refs.slice(q_w, q_w + k_w) for i in range(M)]
+            if S.head_norm is not None:
+                q_in, k_in = self.head_norms(q_in, C.NH, lw["q_norm"]), self.head_norms(k_in, C.KVH, lw["k_norm"])
+            q = [self.call(S.rope_q, Coll(prq[0], q_in[i]), cs[i]) for i in range(M)]
+            k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
             P0 = len(kh)
             if P0 == 0:
@@ -325,6 +341,13 @@ class _Model:
             d = [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)]
         f = [self.call(S.fused, Coll(pf[0], d[i].refs), Coll(pf[1], res[i]), Coll(pf[2], self.norm.refs)) for i in range(M)]
         return [f[i][0] for i in range(M)]
+
+    def head_norms(self, rows: list, heads: int, weight: Coll) -> list:
+        """The per-head q/k RMSNorm over every row's heads, rows major (one launch over [rows, heads, D]) -> each row's normed heads."""
+        fn, D = self.S.head_norm, self.C.D
+        ph = _ptypes(fn)
+        out = [self.call(fn, Coll(ph[0], r.slice(h * D, (h + 1) * D)), Coll(ph[1], weight.refs)) for r in rows for h in range(heads)]
+        return [concat([out[i * heads + h].refs for h in range(heads)]) for i in range(len(rows))]
 
     def sample(self, hidden_row: Coll, event: int, pos: int, policy: "_Stochastic | None" = None) -> Coll:
         """The token of sampling event `event` from the logits of `hidden_row` (at position `pos`): greedy `TokenSelect`, or the seeded
@@ -387,6 +410,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     C = model_shape(phi.hf_config)
+    history = pos0 + M if wrapper == "step" else int(LP) + int(T)
+    if C.window is not None and history > C.window:
+        raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
     target = phi.target_profile()
     specs = _Specs(C, target)
     leaves = weight_leaves(C)
