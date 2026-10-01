@@ -19,7 +19,7 @@ from verity_vllm.program import workload as W
 row, out = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
 gc_tuning.tune()
-dirs = sorted((d for d in os.listdir(row) if d.startswith("build_request_LP")),
+dirs = sorted((d for d in os.listdir(row) if d.startswith("build_request_LP") and os.path.isdir(os.path.join(row, d))),
               key=lambda d: -os.path.getsize(os.path.join(row, d, "descriptor.json.gz")))
 canon, rows = {}, []
 for i, name in enumerate(dirs):
