@@ -5,7 +5,9 @@ The row's processes see no CUDA device (``CUDA_VISIBLE_DEVICES`` empty), so noth
 of the node. The Commit process starts without a GPU too: its imports, the manifest, the producer facts and the boundary plan run on
 the CPU, and only right before the engine (its target reads the device, then the build) does it take the lease (``acquire``):
 ``"$GPU_LEASE" N --wait --max-min M --mem-gb 0 -- holder``, a child of the Commit that hands it the lease's lock descriptors and the
-leased ``CUDA_VISIBLE_DEVICES``. The lease tool ending the holder (M minutes, the Commit's timeout) ends the Commit.
+leased ``CUDA_VISIBLE_DEVICES``. The lease tool ending the holder (M minutes, the Commit's timeout) ends the Commit. The holder ends
+once the Commit lets go and nvidia-smi lists nothing on the leased GPUs, so a Commit's exit, whose context the driver frees seconds
+after the process has closed the lease's descriptors, stays inside its lease.
 
 After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every
 allocation in it (as at the process's exit), nvidia-smi showing nothing left on the leased GPU (the node's stray probe reads the
@@ -43,10 +45,14 @@ STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker t
 MAX_MIN = "VERITY_LEASE_MAX_MIN"
 TOOL_START = "GPU_LEASE_STARTED"   # the lease tool's own start-time override (its tests): never passed to it
 
+EMPTY_LOOKS, EMPTY_EVERY_S = 120, 0.5   # how long the holder outlives the Commit's exit at most, waiting for its context to go
+
 # the holder: start marker, the lease's lock descriptors to the Commit (socket argv[2]), the leased devices on stdout, then wait for
-# the Commit to exit (EOF on stdin)
+# the Commit to let go (EOF on stdin: its release, or its exit). A Commit's exit closes the lease's descriptors before the driver has
+# freed its context, which nvidia-smi lists for seconds after: the holder ends only once nothing is on the leased GPUs (argv[3] looks
+# at most, argv[4] seconds apart; one that nvidia-smi can't answer counts as occupied), so the lease outlives the context.
 _HOLDER = r"""
-import json, os, re, socket, sys, time
+import json, os, re, socket, subprocess, sys, time
 open(sys.argv[1], "w").write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
 fds = []
 for f in os.listdir("/proc/self/fd"):
@@ -58,6 +64,20 @@ for f in os.listdir("/proc/self/fd"):
 socket.send_fds(socket.socket(fileno=int(sys.argv[2])), [b"L"], fds)
 print(json.dumps({k: os.environ[k] for k in ("CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "GPU_LEASE_UUID") if k in os.environ}), flush=True)
 sys.stdin.buffer.read()
+uuids, looks, t0, k = {u for u in os.environ.get("GPU_LEASE_UUID", "").split(",") if u}, int(sys.argv[3]), time.monotonic(), 0
+while k < looks:
+    try:
+        on = set(subprocess.run(["nvidia-smi", "--query-compute-apps=gpu_uuid", "--format=csv,noheader"], capture_output=True, text=True,
+                                timeout=10, check=True).stdout.split())
+    except (OSError, subprocess.SubprocessError):
+        on = uuids
+    if not on & uuids:
+        break
+    k += 1
+    time.sleep(float(sys.argv[4]))
+if k:
+    print(f"gpu-lease holder: {'nvidia-smi still lists a compute process on' if k == looks else 'nothing is left on'} the leased GPU "
+          f"{time.monotonic() - t0:.1f} s after the Commit let go ({k} look(s) occupied); the lease ends", file=sys.stderr, flush=True)
 """
 _HELD: list[Any] = []
 _EXITING = threading.Event()
@@ -98,7 +118,7 @@ def _released(started: str) -> str:
 def holder_argv(environ: MutableMapping[str, str], sock: int) -> list[str]:
     """The lease request: the task's GPU count (``GPU_LEASE_N``, which dispatch sets; else one) for at most the Commit's timeout."""
     return [environ["GPU_LEASE"], environ.get("GPU_LEASE_N") or "1", "--wait", "--max-min", environ.get(MAX_MIN) or "60", "--mem-gb", "0",
-            "--", sys.executable, "-c", _HOLDER, environ[STARTED], str(sock)]
+            "--", sys.executable, "-c", _HOLDER, environ[STARTED], str(sock), str(EMPTY_LOOKS), str(EMPTY_EVERY_S)]
 
 
 def cuda_initialised() -> bool:
