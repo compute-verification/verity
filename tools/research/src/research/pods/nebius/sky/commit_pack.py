@@ -6,8 +6,10 @@ The dispatcher (dispatch.py, PACK_COMMITS=1) spools each eligible Commit, config
 `$PACK_SPOOL/queue/<name>.json` ({"key", "item", "idx", "tries", "env", "script"}). This pod claims one by renaming it into
 `claimed/<pod>/` (a rename has one winner), runs its script as a subprocess with the MPS client environment, and writes
 `results/<name>.json` when it ends; the dispatcher reads that back into the item's chain. It takes the next entry as each one
-finishes, and stops claiming at PACK_CLAIM_UNTIL_S, in the quiet hour (12:30-13:30Z), or after an MPS fault; it exits once
-nothing runs and the queue has been empty for PACK_IDLE_S, or at PACK_MAX_WALL_S, when whatever still runs is stopped.
+finishes, and stops claiming at PACK_CLAIM_UNTIL_S, from 12:10Z to the quiet hour's end (13:30Z; node 1's quota cutover holds its
+queues at 12:10Z), or after an MPS fault; it exits once nothing runs and the queue has been empty (or held) for PACK_IDLE_S, or at
+PACK_MAX_WALL_S, when whatever still runs is stopped. At 12:28Z it drains: every Commit still running is stopped and reported
+`drained` (not a fault), the dispatcher requeues each unpacked, and the pod exits, so none runs into the 12:30Z quiet hour.
 Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
 and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (150): the bundles waiting,
 plus an estimate for each Commit running here and for the candidate (PACK_BUNDLE_EST_GB, 120, for B8 with 1,024 + 128 tokens,
@@ -24,7 +26,9 @@ stopped and reported `fault: true`, and the pod claims nothing more; the dispatc
 packed Commit that fails).
 
 **Record.** `stats/<pod>.jsonl` every PACK_STATS_S: running Commits, the GPU's utilization and memory used (nvidia-smi).
-`logs/<pod>/<name>.log` is each Commit's wrapper output; the Commit's own `research run` writes its Attempt.
+`logs/<pod>/<name>.log` is each Commit's wrapper output; the Commit's own `research run` writes its Attempt, which this pod labels
+`ov.mps_packed true` when the Commit ends (`label_packed`, with the Commit's tree's `research data label` and this pod's store
+credentials; the result's `label` says what happened).
 """
 from __future__ import annotations
 
@@ -67,7 +71,10 @@ BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "150")) * 1e9
 BUNDLE_BATCH = 8
 BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "120")) * 1e9
 FAULT_EXIT = 87
-QUIET = ((12, 30), (13, 30))
+HOLD = ((12, 10), (13, 30))     # node 1's quota cutover (Kueue holds its queues at 12:10Z) and the quiet hour (12:30-13:30Z)
+DRAIN = (12, 28)                # pack pods must be gone by 12:35Z
+LABEL_KEY = "ov.mps_packed"
+LABEL_TIMEOUT_S = int(os.environ.get("PACK_LABEL_TIMEOUT_S", "30"))
 CLIENT_FAULT = re.compile(r"illegal memory access|unspecified launch failure|CUDA_ERROR_MPS|cudaErrorMps|MPS server|"
                           r"CUDA-capable device\(s\) is/are busy|uncorrectable ECC|GPU is lost|Xid", re.IGNORECASE)
 MPS_LOG_FAULT = re.compile(r"exited with status [1-9-]|\bfatal|\bfault|\bERROR\b|failed to", re.IGNORECASE)
@@ -79,9 +86,14 @@ def now_utc() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def quiet(t: float) -> bool:
+def held(t: float) -> bool:
     g = time.gmtime(t)
-    return QUIET[0] <= (g.tm_hour, g.tm_min) < QUIET[1]
+    return HOLD[0] <= (g.tm_hour, g.tm_min) < HOLD[1]
+
+
+def draining(t: float) -> bool:
+    g = time.gmtime(t)
+    return DRAIN <= (g.tm_hour, g.tm_min) < HOLD[1]
 
 
 def write_json(path: Path, obj: dict) -> None:
@@ -244,6 +256,29 @@ def gpu_sample() -> dict:
         return {"gpu_util": None, "mem_used_mib": None}
 
 
+def label_packed(c: Client) -> str:
+    """`ov.mps_packed true` on the Commit's Attempt (the run id its script wrote to <row>/pipeline-commit-run after this client
+    started), by the Commit's tree's `research data label`; what happened, for the result."""
+    env = {k: str(v) for k, v in (c.entry.get("env") or {}).items()}
+    if not (env.get("SWEEP_DIR") and env.get("ROW") and env.get("SRC")):
+        return "unlabelled: the entry names no SWEEP_DIR, ROW or SRC"
+    f = Path(env["SWEEP_DIR"]) / env["ROW"] / "pipeline-commit-run"
+    try:
+        if f.stat().st_mtime < c.started - 1:
+            return f"unlabelled: {f} predates this Commit"
+        run = f.read_text().strip()
+    except OSError as e:
+        return f"unlabelled: {e}"
+    cmd = [sys.executable, "-m", "research", "data", "label", run, LABEL_KEY, "true", "--by", "mps-pack", "--off-vocab"]
+    try:
+        r = subprocess.run(cmd, env={**os.environ, **env, "PYTHONPATH": f"{env['SRC']}/tools/research/src"}, capture_output=True,
+                           text=True, timeout=LABEL_TIMEOUT_S, check=False)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"unlabelled {run}: {e}"
+    last = (r.stderr.strip().splitlines() or [""])[-1][:240]
+    return f"unlabelled {run}: rc {r.returncode}: {last}" if r.returncode else f"labelled {run}: {last}"
+
+
 def stop_client(c: Client, grace_s: int) -> None:
     try:
         os.killpg(c.proc.pid, signal.SIGTERM)
@@ -257,6 +292,25 @@ def stop_client(c: Client, grace_s: int) -> None:
         except ProcessLookupError:
             pass
         c.proc.wait()
+
+
+def stop_all(clients: list[Client], grace_s: int) -> None:
+    """stop_client for several at once: SIGTERM to every one, then SIGKILL to whatever outlives the shared grace."""
+    for c in clients:
+        try:
+            os.killpg(c.proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.time() + grace_s
+    for c in clients:
+        try:
+            c.proc.wait(max(0.0, deadline - time.time()))
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(c.proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            c.proc.wait()
 
 
 def _terminate(signum, frame):
@@ -281,11 +335,12 @@ def main() -> int:
     print(f"{now_utc()} commit-pack {POD}: slots {SLOTS}, max wall {MAX_WALL_S}s, client env {CLIENT_ENV}", flush=True)
 
     def report(c: Client, rc: int | None, fault_: bool, reason: str) -> None:
+        ended, wall = now_utc(), round(time.time() - c.started, 1)
         write_json(SPOOL / "results" / f"{c.name}.json",
                    {"name": c.name, "key": c.entry["key"], "idx": c.entry["idx"], "tries": c.entry["tries"], "entry": c.entry,
                     "rc": rc, "fault": fault_, "reason": reason, "pod": POD, "slot": c.slot, "log": str(c.log),
-                    "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(c.started)), "ended": now_utc(),
-                    "wall_s": round(time.time() - c.started, 1)})
+                    "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(c.started)), "ended": ended,
+                    "wall_s": wall, "label": label_packed(c)})
         (SPOOL / "claimed" / POD / f"{c.name}.json").unlink(missing_ok=True)
         print(f"{now_utc()} {c.name} ({c.entry['key']}) rc={rc} fault={fault_} {reason}", flush=True)
 
@@ -321,6 +376,13 @@ def main() -> int:
                     report(c, None, True, f"stopped: pod fault ({fault})")
                 running.clear()
                 break
+            if running and draining(time.time()):
+                print(f"{now_utc()} draining {len(running)} Commit(s) before node 1's 12:30Z quiet hour and quota cutover", flush=True)
+                stop_all(list(running.values()), STOP_GRACE_S)
+                for c in running.values():
+                    report(c, None, False, "drained: no packed Commit runs into node 1's 12:30Z quiet hour and quota cutover")
+                running.clear()
+                break
             age = time.time() - t0
             if age >= MAX_WALL_S:
                 for c in running.values():
@@ -338,7 +400,7 @@ def main() -> int:
 
             def accept(e: dict, waiting: int = waiting) -> bool:
                 return bundle_ok(e, waiting, [c.entry for c in running.values()])
-            while (len(running) < SLOTS and age < CLAIM_UNTIL_S and disk_ok and not quiet(time.time())
+            while (len(running) < SLOTS and age < CLAIM_UNTIL_S and disk_ok and not held(time.time())
                    and (got := claim(SPOOL, POD, accept))):
                 name, entry = got
                 slot = min(set(range(SLOTS)) - {c.slot for c in running.values()})
@@ -350,7 +412,7 @@ def main() -> int:
                                             start_new_session=True, umask=0o022)
                 running[name] = Client(name, entry, proc, log, slot)
                 print(f"{now_utc()} started {name} ({entry['key']}) in slot {slot}, pid {proc.pid}", flush=True)
-            if running or (disk_ok and any(_accepts(f, accept) for f in (SPOOL / "queue").glob("*.json"))):
+            if running or (disk_ok and not held(time.time()) and any(_accepts(f, accept) for f in (SPOOL / "queue").glob("*.json"))):
                 idle_since = time.time()
             elif time.time() - idle_since >= IDLE_S:
                 break

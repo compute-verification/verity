@@ -4,6 +4,7 @@
     dispatch.py tick [--dry-run]      one pass: advance chains, requeue exit 99, top every queue up from the ready files
     dispatch.py loop [--every 60]     tick forever (tmux `node1-dispatch` on the server, as research)
     dispatch.py status                queues, this dispatcher's jobs, GPU-busy and CPU-busy (DCGM / node-exporter, 10 and 60 min)
+    dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
 Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/python`) and research's kubeconfig.
 
@@ -57,11 +58,22 @@ out as a normal Job), and the pilot claims nothing. Their `results/` come back i
 chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
 resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
 Entries claimed by a pod that is gone count as a fault. Rollback: PACK_COMMITS=0, then let the pods finish or delete them.
+A packed Commit's replay task is judged (circuits' yes, 10:55 PM PDT Sep 30): it passes only when it exits 0 and the row's
+`config_record.json`, written by that replay, is outcome PASS with replay k = evaluated = equal = 460 and nothing mismatched or
+unevaluated (`packed_replay`: `commit-replay` exits 0 on a PASS that carries a named gap, so the exit alone is not enough).
+Anything short ends the item failed and stops packing for its model (`stop_model`): an entry in `$PACK_SPOOL/stopped-models.json`
+(append-only, the last entry per model decides), an `ev: pack-stop` line and an alert note for node1-dispatcher in PACK_ALERT_DIR
+(the steward's alert_pull.sh delivers it), after which `packable` refuses the model. Only circuits lifts a stop
+(`dispatch.py pack-lift MODEL --by circuits ...`). Each packed Commit's Attempt is labelled `ov.mps_packed` by its pilot.
+From 12:10Z to the quiet hour's end (13:30Z; Kueue holds node 1's queues at 12:10Z) nothing is spooled, adopted or started: queued
+entries go back out as normal Jobs, pack Jobs not yet started are deleted, and from 12:33Z any pack Job still active is deleted, so
+its Commits requeue unpacked (the pilot itself drains at 12:28Z).
 """
 from __future__ import annotations
 
 import argparse
 import ast
+import calendar
 import hashlib
 import json
 import os
@@ -102,7 +114,11 @@ PACK_TEMPLATE = "commit-pack"
 PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b")
 PACK_MAX_BATCH = 8
 PACK_DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
+PACK_REPLAY_K = 460
+PACK_ALERTS = Path(os.environ.get("PACK_ALERT_DIR", "/workspace/monitoring/alerts/outbox"))
 QUIET = ((12, 30), (13, 30))
+PACK_HOLD = ((12, 10), QUIET[1])     # node 1's daily quota cutover and quiet hour: Kueue holds every queue at 12:10Z
+PACK_DRAIN = (12, 33)                # pack pods must be gone by 12:35Z
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -322,6 +338,97 @@ def quiet(t: float | None = None) -> bool:
     return QUIET[0] <= (g.tm_hour, g.tm_min) < QUIET[1]
 
 
+def held(t: float | None = None) -> bool:
+    g = time.gmtime(time.time() if t is None else t)
+    return PACK_HOLD[0] <= (g.tm_hour, g.tm_min) < PACK_HOLD[1]
+
+
+def draining(t: float | None = None) -> bool:
+    g = time.gmtime(time.time() if t is None else t)
+    return PACK_DRAIN <= (g.tm_hour, g.tm_min) < PACK_HOLD[1]
+
+
+def model_of(item: dict) -> str:
+    return str((item.get("env") or {}).get("ROW", "")).split("__")[0]
+
+
+def stops_file() -> Path:
+    return PACK / "stopped-models.json"
+
+
+def stop_entries() -> list[dict]:
+    """The stop list's entries, oldest first ([] when there is none); raises when the file can't be read as a list."""
+    p = stops_file()
+    if not p.exists():
+        return []
+    entries = json.loads(p.read_text())
+    if not isinstance(entries, list):
+        raise ValueError(f"{p} is not a JSON list")
+    return entries
+
+
+def stopped_models() -> dict[str, dict] | None:
+    """{model: its stop entry} for every model whose last entry is a stop, or None when the list can't be read."""
+    try:
+        entries = stop_entries()
+    except (OSError, ValueError):
+        return None
+    out: dict[str, dict] = {}
+    for e in entries:
+        if e.get("lift"):
+            out.pop(e.get("model"), None)
+        else:
+            out[e.get("model")] = e
+    return out
+
+
+def append_stop(entry: dict) -> None:
+    pack_tree()
+    entries = stop_entries()
+    p = stops_file()
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps([*entries, {"t": now_utc(), **entry}], indent=1, sort_keys=True) + "\n")
+    tmp.rename(p)
+
+
+def stop_model(model: str, key: str, run: str | None, reason: str, **extra) -> None:
+    """Stop packing `model`: a stop entry, an `ev: pack-stop` line and an alert note for node1-dispatcher."""
+    try:
+        append_stop({"model": model, "key": key, "run": run, "reason": reason, **extra})
+    except (OSError, ValueError) as e:     # an unreadable list already stops every model (packable)
+        extra = {**extra, "unrecorded": str(e)}
+    append("log.jsonl", {"ev": "pack-stop", "model": model, "key": key, "run": run, "reason": reason, **extra})
+    print(f"pack-stop {model}: {reason} ({key})", file=sys.stderr)
+    stamp = time.strftime("%Y%m%dT%H%MZ", time.gmtime())
+    stem = f"{stamp}-alert-pack-stop-{dns(model, 40)}-{hashlib.sha256(key.encode()).hexdigest()[:8]}"
+    facts = "\n".join(f"- **{k}:** {v}" for k, v in (("Item", f"`{key}`"), ("Runs", f"replay `{run}`, Commit `{extra.get('commit_run')}`"),
+                                                       ("Pack pod", f"`{extra.get('pod')}`"), ("Replay Job", f"`{extra.get('job')}`")))
+    note = (f"---\nid: {stem}\ncampaign: one-pool\nlane: node1-dispatcher\nkind: finding\nstatus: open\nrepo: danielreuter/verity\n"
+            f"origin: node 1's dispatcher (dispatch.py stop_model; MPS Commit packing, circuits' rule of 10:55 PM PDT Sep 30)\n---\n\n"
+            f"# MPS packing stopped for {model}: a packed Commit's replay failed\n\n{facts}\n- **Why:** {reason}\n"
+            f"- **Effect:** the item ended failed, and `packable` refuses {model} from now on (`{stops_file()}`). Other models still pack.\n"
+            f"- **Lift (circuits only):** on node 1, `cd /workspace/jobs/dispatch/infra/nebius && /workspace/jobs/venv312/bin/python "
+            f"dispatch.py pack-lift {model} --by circuits --why '...'`\n")
+    try:
+        PACK_ALERTS.mkdir(parents=True, exist_ok=True)
+        tmp = PACK_ALERTS / f".{stem}.md.tmp"
+        tmp.write_text(note)
+        tmp.rename(PACK_ALERTS / f"{stem}.md")
+    except OSError as e:
+        append("log.jsonl", {"ev": "pack-stop-alert-failed", "model": model, "key": key, "why": str(e)})
+        print(f"pack-stop {model}: no alert note in {PACK_ALERTS}: {e}", file=sys.stderr)
+
+
+def lift_model(model: str, by: str, why: str) -> None:
+    if not by.startswith("circuits"):
+        raise SystemExit(f"only circuits lifts a packing stop (--by {by!r})")
+    if model not in (stopped_models() or {}):
+        raise SystemExit(f"{model!r} is not stopped")
+    append_stop({"model": model, "lift": True, "by": by, "why": why})
+    append("log.jsonl", {"ev": "pack-lift", "model": model, "by": by, "why": why})
+    print(f"lifted the packing stop on {model}")
+
+
 def packable(item: dict, key: str, idx: int) -> str | None:
     """Why task `idx` of the item isn't packed, or None when it is (the cutover plan's eligibility)."""
     if item.get("template") != "config-run":
@@ -339,6 +446,11 @@ def packable(item: dict, key: str, idx: int) -> str | None:
     parts = str(env.get("ROW", "")).split("__")
     if parts[0] not in PACK_MODELS:
         return f"model {parts[0]!r} is not on the packing list"
+    stops = stopped_models()
+    if stops is None:
+        return f"the packing stop list {stops_file()} can't be read"
+    if parts[0] in stops:
+        return f"model {parts[0]!r} stopped packing: {stops[parts[0]].get('reason')} (only circuits lifts it: dispatch.py pack-lift)"
     if "tp1" not in parts:
         return "not TP1"
     batch = next((int(p[1:]) for p in parts if re.fullmatch(r"b\d+", p)), None)
@@ -393,9 +505,58 @@ def disk_full() -> bool:
 
 
 def route(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
-    if PACK_COMMITS and packable(item, key, idx) is None and not disk_full():
+    if PACK_COMMITS and not held() and packable(item, key, idx) is None and not disk_full():
         return spool(item, key, idx, tries, dry)
     return submit(item, key, idx, tries, dry)
+
+
+def row_dir(job: dict) -> Path:
+    env = {e["name"]: e["value"] for e in job["spec"]["template"]["spec"]["containers"][0].get("env") or []}
+    return Path(env.get("SWEEP_DIR", "")) / env.get("ROW", "")
+
+
+def packed_replay(job: dict, state: str, rc: int | None) -> tuple[str | None, dict]:
+    """(why a packed Commit's ended replay task falls short of 460/460, else None; the record's replay counts). It passes only when it
+    exited 0 and the row's config_record.json, written since the Job started, is PASS with k = evaluated = equal = PACK_REPLAY_K and
+    nothing mismatched or unevaluated."""
+    rec_path = row_dir(job) / "config_record.json"
+    try:
+        started = (job.get("status") or {}).get("startTime")
+        if started and rec_path.stat().st_mtime < calendar.timegm(time.strptime(started, "%Y-%m-%dT%H:%M:%SZ")):
+            raise ValueError(f"it predates the replay Job (started {started}): this replay wrote no record")
+        rec = json.loads(rec_path.read_text())
+    except (OSError, ValueError) as e:
+        rec, err = {}, f"no config_record.json of this replay ({e})"
+    else:
+        err = None
+    rp = rec.get("replay") or {}
+    counts = {"outcome": rec.get("outcome"), **{k: rp.get(k) for k in ("k", "evaluated", "equal", "mismatch_n", "not_evaluated_n")}}
+    k = PACK_REPLAY_K
+    if state != "succeeded":
+        return f"the replay task failed (rc {rc})", counts
+    if err:
+        return err, counts
+    if (rec.get("outcome"), rp.get("k"), rp.get("evaluated"), rp.get("equal")) == ("PASS", k, k, k) \
+            and not rp.get("mismatch_n") and not rp.get("not_evaluated_n"):
+        return None, counts
+    return (f"replay {rp.get('equal')}/{rp.get('evaluated')} equal of k={rp.get('k')} (mismatch {rp.get('mismatch_n')}, not evaluated "
+            f"{rp.get('not_evaluated_n')}, grade {rp.get('grade')}), outcome {rec.get('outcome')}: packing needs {k}/{k} and PASS"), counts
+
+
+def run_ids(job: dict, pod_list: list[dict]) -> tuple[str | None, str | None]:
+    """(the replay's research run id, from its pod's log; the Commit's, from <row>/pipeline-commit-run), None where unknown."""
+    try:
+        commit = (row_dir(job) / "pipeline-commit-run").read_text().strip() or None
+    except OSError:
+        commit = None
+    replay = None
+    for p in pod_list:
+        try:
+            m = re.search(r"research: run (\S+) ->", kubectl("logs", p["metadata"]["name"], "--limit-bytes=1000000"))
+        except RuntimeError:
+            continue
+        replay = m.group(1) if m else replay
+    return replay, commit
 
 
 def pack_keys() -> set[str]:
@@ -444,9 +605,10 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
             continue
         append("log.jsonl", {"ev": "end", "job": entry["job"], "key": key, "task": idx, "try": tries,
                              "state": "succeeded" if rc == 0 else "failed", "rc": rc, "wall_s": res.get("wall_s"),
-                             "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason")})
+                             "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason"),
+                             "label": res.get("label")})
         if rc == 0 and idx + 1 < ntasks:
-            route(item, key, idx + 1, 0)
+            route({**item, "packed": res.get("pod")}, key, idx + 1, 0)     # its replay is judged by circuits' 460/460 rule (tick)
         elif rc == REQUEUE_RC and not res.get("fault") and tries + 1 < MAX_TRIES:
             route(item, key, idx, tries + 1)
         elif rc != 0 and not item.get("unpacked"):
@@ -463,7 +625,7 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
 
 def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
     """Move still-suspended gpu Jobs of eligible items into the spool, keeping it at most two pods' slots deep."""
-    if disk_full():
+    if disk_full() or held():
         return
     room = 2 * PACK_PODS * PACK_SLOTS - len(list(PACK.glob("queue/*.json")))
     for j in sorted(jobs, key=lambda j: j["metadata"].get("creationTimestamp", "")):
@@ -492,12 +654,51 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
         room -= 1
 
 
+def active_pack_jobs(jobs: list[dict]) -> list[dict]:
+    return [j for j in jobs if j["metadata"]["annotations"].get("verity.dev/template", "").startswith(PACK_TEMPLATE + "@")
+            and not (j.get("status") or {}).get("succeeded") and not (j.get("status") or {}).get("failed")]
+
+
+def pack_hold(jobs: list[dict], dry: bool = False) -> None:
+    """In the hold (PACK_HOLD): queued spool entries go out as normal Jobs, pack Jobs not yet started are deleted, and from
+    PACK_DRAIN every pack Job still active is deleted (pack_results requeues its claimed Commits unpacked)."""
+    if not held():
+        return
+    for f in sorted(PACK.glob("queue/*.json")):
+        if dry:
+            print(f"would unspool {f.name}: the pack hold")
+            continue
+        mine = PACK / "unspooled" / f.name
+        mine.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            f.rename(mine)
+        except OSError:
+            continue
+        entry = json.loads(mine.read_text())
+        item = pinned_item(entry["item"], entry.get("template", ""))
+        append("log.jsonl", {"ev": "unspool", "job": entry["job"], "key": entry["key"], "task": entry["idx"], "why": "pack hold"})
+        submit(item, entry["key"], entry["idx"], entry["tries"])
+        mine.unlink(missing_ok=True)
+    for j in active_pack_jobs(jobs):
+        name, started = j["metadata"]["name"], bool((j.get("status") or {}).get("startTime"))
+        if (started and not draining()) or j["metadata"].get("deletionTimestamp"):
+            continue
+        if dry:
+            print(f"would delete {name}: the pack hold")
+            continue
+        try:
+            kubectl("delete", "job", name, "--wait=false")
+        except RuntimeError as e:
+            print(f"pack hold: {e}", file=sys.stderr)
+            continue
+        append("log.jsonl", {"ev": "pack-hold-delete", "job": name, "started": started})
+
+
 def pack_pods(jobs: list[dict], dry: bool = False) -> None:
     """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots."""
-    if quiet() or disk_full():
+    if quiet() or held() or disk_full():
         return
-    active = [j for j in jobs if j["metadata"]["annotations"].get("verity.dev/template", "").startswith(PACK_TEMPLATE + "@")
-              and not (j.get("status") or {}).get("succeeded") and not (j.get("status") or {}).get("failed")]
+    active = active_pack_jobs(jobs)
     claimed = len(list(PACK.glob("claimed/*/*.json")))
     queued = len(list(PACK.glob("queue/*.json")))
     if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
@@ -593,10 +794,11 @@ def tick(dry: bool = False) -> None:
         item = job_item(j)
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
         try:
-            ntasks = len(load_template(item["template"], item["template_sha"])[0])
+            tasks = load_template(item["template"], item["template_sha"])[0]
         except (OSError, ValueError) as e:
             print(f"held {j['metadata']['name']} ({key}): {e}", file=sys.stderr)
             continue
+        ntasks, name = len(tasks), j["metadata"]["name"]
         st = j.get("status") or {}
         wall = None
         if st.get("startTime") and st.get("completionTime"):
@@ -607,21 +809,33 @@ def tick(dry: bool = False) -> None:
             nxt = (idx + 1, 0)
         elif state == "failed" and rc == REQUEUE_RC and tries + 1 < MAX_TRIES:
             nxt = (idx, tries + 1)
+        judged = not nxt and bool(item.get("packed")) and (tasks[idx].get("name") or "") == "replay"
+        why, counts = packed_replay(j, state, rc) if judged else (None, {})
         if dry:
             then = "the item ends" if not nxt else \
                 f"then {render(item, key, *nxt)['metadata']['name']} (task {nxt[0]} of {ntasks})"
-            print(f"would end {j['metadata']['name']} ({key}, {state} rc {rc}) on {item['template']}@{item['template_sha']}: {then}")
+            verdict = "" if not judged else f"; packed replay {'PASS' if why is None else 'FAIL, would stop ' + model_of(item)}: {counts}"
+            print(f"would end {name} ({key}, {state} rc {rc}) on {item['template']}@{item['template_sha']}: {then}{verdict}")
         else:
-            append("log.jsonl", {"ev": "end", "job": j["metadata"]["name"], "key": key, "task": idx, "try": tries, "state": state,
+            append("log.jsonl", {"ev": "end", "job": name, "key": key, "task": idx, "try": tries, "state": state,
                                  "rc": rc, "wall_s": wall})
+            if judged:
+                append("log.jsonl", {"ev": "packed-replay", "job": name, "key": key, "pod": item["packed"],
+                                     "verdict": "pass" if why is None else "fail", "why": why, **counts})
             if nxt:
                 route(item, key, *nxt)
             else:
-                append("done.jsonl", {"key": key, "state": state, "rc": rc, "task": idx, "job": j["metadata"]["name"]})
+                end = {"key": key, "state": state, "rc": rc, "task": idx, "job": name, **({"packed": item["packed"]} if judged else {})}
+                if why:
+                    end.update(state="failed", why=f"packed replay: {why}")
+                    replay_run, commit_run = run_ids(j, pods.get(name, []))
+                    stop_model(model_of(item), key, replay_run, why, commit_run=commit_run, pod=item["packed"], job=name)
+                append("done.jsonl", end)
                 inflight.discard(key)
-            kubectl("label", "job", j["metadata"]["name"], "verity.dev/seen=1", "--overwrite")
+            kubectl("label", "job", name, "verity.dev/seen=1", "--overwrite")
     if PACK_COMMITS and PACK_ADOPT:
         pack_adopt(jobs, dry)
+    pack_hold(jobs, dry)
     wls = json.loads(kubectl("get", "workloads", "-o", "json"))["items"]
     pending: dict[str, int] = {}
     for w in wls:
@@ -733,6 +947,11 @@ def main(argv: list[str]) -> int:
     pp = sub.add_parser("pack-pod", help="submit one commit-pack Job now")
     pp.add_argument("--priority")
     pp.add_argument("--dry-run", action="store_true")
+    pl = sub.add_parser("pack-lift", help="let a model stopped by a failed packed replay pack again (circuits only)")
+    pl.add_argument("model")
+    pl.add_argument("--by", required=True)
+    pl.add_argument("--why", required=True)
+    sub.add_parser("pack-stops", help="the models stopped from packing, with their stop entries")
     t = sub.add_parser("tick")
     t.add_argument("--dry-run", action="store_true")
     lp = sub.add_parser("loop")
@@ -756,6 +975,10 @@ def main(argv: list[str]) -> int:
         spool(item, ns.key, ns.task, dry=ns.dry_run)
     elif ns.cmd == "pack-pod":
         submit_pack_pod(ns.priority, dry=ns.dry_run)
+    elif ns.cmd == "pack-lift":
+        lift_model(ns.model, ns.by, ns.why)
+    elif ns.cmd == "pack-stops":
+        print(json.dumps(stopped_models(), indent=1, sort_keys=True))
     elif ns.cmd == "tick":
         tick(ns.dry_run)
     elif ns.cmd == "loop":
