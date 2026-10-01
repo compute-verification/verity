@@ -134,11 +134,13 @@ fn on_fold_pool<T: Send>(n_cols: usize, f: impl FnOnce() -> T + Send) -> T {
 }
 
 /// [`flock_core::verifier::verify_ligerito_extra`] with `circuit`'s lincheck computed as `mode` says, timed into `ph`.
+/// `c0_identity` keeps `r1cs.c0_is_identity()` once computed, for the statement's later verifications.
 #[allow(clippy::too_many_arguments)]
-pub fn verify_extra<Ch: Challenger>(r1cs: &BlockR1cs, commitment: &Commitment, proof: &R1csProofLigerito, circuit: &BlockCircuit,
-                                    pcs: &PcsParams, extra: &[ExtraClaim], mode: Lincheck, ch: &mut Ch, ph: &mut Phases)
+pub fn verify_extra<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, commitment: &Commitment, proof: &R1csProofLigerito,
+                                    circuit: &BlockCircuit, pcs: &PcsParams, extra: &[ExtraClaim], mode: Lincheck, ch: &mut Ch,
+                                    ph: &mut Phases)
     -> Result<R1csClaim, FlockVerifyError> {
-    let (ab, c) = pool().install(|| core(r1cs, &proof.zerocheck, &proof.lincheck, commitment, circuit, pcs.zerocheck_grinding(),
+    let (ab, c) = pool().install(|| core(r1cs, c0_identity, &proof.zerocheck, &proof.lincheck, commitment, circuit, pcs.zerocheck_grinding(),
                                          pcs.lincheck_grinding(), mode, ch, ph))?;
     let t_setup = Instant::now();
     let full = |z: &ZClaim| [z.point.x_inner_rest.as_slice(), z.point.x_outer.as_slice()].concat();
@@ -177,11 +179,12 @@ pub fn verify_extra<Ch: Challenger>(r1cs: &BlockR1cs, commitment: &Commitment, p
 
 /// Upstream's `verify_core_inner`.
 #[allow(clippy::too_many_arguments)]
-fn core<Ch: Challenger>(r1cs: &BlockR1cs, zc_proof: &ZerocheckProof, lc_proof: &LincheckProof, commitment: &Commitment, circuit: &BlockCircuit,
-                        zg: ZerocheckGrinding, lg: LincheckGrinding, mode: Lincheck, ch: &mut Ch, ph: &mut Phases)
+fn core<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc_proof: &ZerocheckProof, lc_proof: &LincheckProof,
+                        commitment: &Commitment, circuit: &BlockCircuit, zg: ZerocheckGrinding, lg: LincheckGrinding, mode: Lincheck,
+                        ch: &mut Ch, ph: &mut Phases)
     -> Result<(ZClaim, ZClaim), FlockVerifyError> {
     let t = Instant::now();
-    let c0_identity = r1cs.c0_is_identity();
+    let c0_identity = *c0_identity.get_or_init(|| r1cs.c0_is_identity());
     ph.c0_check_s = t.elapsed().as_secs_f64();
     if !c0_identity {
         return Err(FlockVerifyError::NonIdentityC);

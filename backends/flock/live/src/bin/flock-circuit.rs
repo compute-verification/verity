@@ -394,7 +394,7 @@ impl CircuitVerifier {
         let t = Instant::now();
         let extra = st.extra_claims(link.points, &tb.inst);
         ph.regions_s = t.elapsed().as_secs_f64();
-        catch_unwind(AssertUnwindSafe(|| sverify::verify_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, self.lincheck, ch, ph)))
+        catch_unwind(AssertUnwindSafe(|| sverify::verify_extra(&st.r1cs, &st.c0_identity, &commitment, &proof, &st.circuit, &pcs, &extra, self.lincheck, ch, ph)))
             .map_err(|_| "verifier panicked".to_string())?
             .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
