@@ -11,6 +11,7 @@
 #   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has;
 #                                                                 VY_N2_FIRST=0: only while deployments-gpu has no free GPU)
 #   on node 1:  n2_commit.sh n1-free                              (the GPUs deployments-gpu could still admit)
+#   on node 1:  n2_commit.sh place KIND KEY GPUS MAX_MIN QUESTION (the queue's placement on node 2, as submit records it; a dry run)
 #   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
 #   on node 2:  n2_commit.sh fetch-manifests ART...              (the manifests of ART... that node 2's store lacks, from node 1's)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
@@ -20,7 +21,10 @@
 # read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row (Programs, manifest), the bootstrap
 # stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has a timed window running or waiting,
 # resolves the Build's artifact in node 1's store, copies that artifact's store manifest into node 2's store (which has no remote,
-# and the Commit's precheck reads it), and writes the fill job.
+# and the Commit's precheck reads it), and writes the fill job. Before any of that it asks the queue (`cluster submit`, from
+# VY_QUEUE_SRC's tools/cluster) to place the Commit on node 2 with its research question: a refusal keeps the row on node 1, and
+# once the fill job is written the placement is appended to node 1's $GUEST/placed.jsonl. Node 2's fill queue stays the executor,
+# so these count apart from `research run --queue` (top-level 5:14 AM PDT). A queue that gives no answer doesn't hold the row back.
 # run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, records the GPU's
 # driver, clocks and vLLM version in the row (n2_gpu_env.json), then sends the row (without the replay bundle) and the run dir back
 # to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
@@ -106,6 +110,33 @@ fetch_manifests() {  # fetch_manifests ART...: (on node 2) every manifest node 2
   done
 }
 
+n2_question() {  # n2_question ROW: node 2's question for a Commit of ROW (the Attempt's second `question` label, load_item's)
+  printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit, as node 1's Commits of its Build do?" "$1"
+}
+
+place() {  # place KIND KEY GPUS MAX_MIN QUESTION [CPUS [MEM_GB [SUBMITTER]]]: the queue's placement on node 2 as one placed.jsonl
+  # line (none when it gives no answer); exit 3 when it refuses the job. n2_build.sh's submit calls it too.
+  local src=${VY_QUEUE_SRC:-$GUEST/cluster-src} out mem=()
+  [ -z "${7:-}" ] || mem=(--mem-gb "$7")
+  out=$(PYTHONPATH=$src/src python3 -m cluster submit "$src/descriptions/nebius.toml" --run-id "n2-$1-$2" --now "$(date +%s)" \
+    --project verity --submitter "${8:-$OWNER}" --question "$5" --gpus "$3" --cpus "${6:-8}" "${mem[@]}" --max-s $(($4 * 60)) \
+    --preempt requeue --node vy-nebius-2 2> /dev/null | tail -1) || true
+  python3 - "$1" "$2" "$5" "$out" << 'EOF'
+import json, sys, time
+kind, key, question, out = sys.argv[1:]
+try:
+    placed = json.loads(out)
+except ValueError:
+    print(f"the queue gave no placement for {kind} {key}", file=sys.stderr)
+    sys.exit(0)
+if "refused" in placed:
+    print(f"the queue refuses {kind} {key}: {placed['refused']}", file=sys.stderr)
+    sys.exit(3)
+print(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": kind, "key": key, "node": placed.get("node"),
+                  "why": placed.get("why"), "question": placed.get("question") or question, "executor": "fill-queue"}))
+EOF
+}
+
 submit() {
   local key=$1 item=$2 job=${3:-}
   if [ "$item" = - ]; then
@@ -125,6 +156,10 @@ submit() {
     fi
     [ -f \$d/config.json ] && [ -z \"\$(find \$d -type l -print -quit)\" ]" \
     || { echo "checkpoint $repo@$rev isn't staged on node 2 (n2_build.sh stage REPO REV); not queued" >&2; exit 3; }
+  local question placed
+  question=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("question") or "")' "$item")
+  placed=$(place commit "$key" "$(tp_of "$row")" "${VY_N2_COMMIT_MAX_MIN:-40}" "${question:-$(n2_question "$row")}") \
+    || { echo "not queued" >&2; exit 3; }
   local src build_run build_art
   # the Commit keeps node 1's dispatcher key, so its replay and records chain on under it
   [ -z "$job" ] || [ -n "${VY_COMMIT_KEY:-}" ] || VY_COMMIT_KEY=$(ssh -n "$N1" "$KUBE get job $job -o jsonpath='{.metadata.annotations.verity\\.dev/item}'")
@@ -173,6 +208,7 @@ EOF
       exit 4
     fi
   fi
+  [ -z "$placed" ] || echo "$placed" >> "$GUEST/placed.jsonl"
   echo "queued verity-commit-$key on node 2 ($row, Build $build_run ${build_art:-without an artifact})"
 }
 
@@ -564,6 +600,7 @@ case "$cmd" in
   offload) offload "$@" ;;
   n1-free) n1_free ;;
   check) check_item "$@" ;;
+  place) place "$@" ;;
   fetch-manifests) fetch_manifests "$@" ;;
-  *) sed -n '7,14p' "$0" >&2; exit 2 ;;
+  *) sed -n '7,15p' "$0" >&2; exit 2 ;;
 esac
