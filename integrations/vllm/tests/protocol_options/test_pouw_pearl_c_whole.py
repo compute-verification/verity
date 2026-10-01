@@ -3,10 +3,12 @@ hooks on a stand-in of Model Runner V2's graph manager (each key's graphs, a ret
 key has none, the calls a capture recorded handed to the run around each replay, the scratch pass dropped), and the run's
 bookkeeping (each call's slot and offsets, the next forward's staged after a replay and uploaded by the next only from where
 they were staged for, its records appended as `_after` appends them, a retained capture's stages and the records and files
-kept from them).  The bytes on the card are the e2e's ``whole`` gate's.
+kept from them, and a deferred capture's forks and joins over stand-in streams).  The bytes on the card are the e2e's
+``whole`` gate's.
 """
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -337,11 +339,13 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     torch = pytest.importorskip("torch")
     run = Calls(torch)
     name = run.schedule.name
-    assert run.whole_key() == (True, frozenset(), name, False) and run.whole_key(True) == (True, frozenset(), name, True)
+    assert run.whole_key() == (True, frozenset(), name, False, False) and run.whole_key(True) == (True, frozenset(), name, True, False)
     run.cur = PPD._Pass(Path("/tmp/retained"))
-    assert run.whole_key() == (True, frozenset(), name, True) and run.whole_key(False) == (True, frozenset(), name, False)
+    assert run.whole_key() == (True, frozenset(), name, True, False) and run.whole_key(False) == (True, frozenset(), name, False, False)
+    run.whole_defer = True
+    assert run.whole_key() == (True, frozenset(), name, True, True)
     run.hashing = False
-    assert run.whole_key() == (False, frozenset(), name, False)
+    assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
     run.cur, run.graphs = PPD._Pass(None), False
     assert run.whole_key() is None
     run.graphs, run.schedule = True, PPD.schedule_of("deferred", PPD.scheme_of(PPD.SCHEMES[2]))
@@ -398,3 +402,83 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     run.whole_replay(calls)
     run.whole_replayed(calls)                                 # an unretained pass keeps nothing
     assert run.cur.records == [] and run.cur.files == []
+
+
+class Lane:
+    """A stand-in of torch's CUDA stream: its handle, and each wait it is told to make, in `log`."""
+
+    def __init__(self, log, name="side", device=None):
+        self.log, self.name, self.cuda_stream = log, name, {"main": 1, "side": 2}[name]
+
+    def wait_stream(self, other):
+        self.log.append(f"{self.name} waits for {other.name}")
+
+
+def _lanes(monkeypatch, torch, log):
+    """torch.cuda's current stream, `Stream` and `stream` over `Lane`s, the current one the capturing stream ("main")."""
+    current = [Lane(log, "main")]
+
+    @contextlib.contextmanager
+    def stream(s):
+        held, current[0] = current[0], s
+        try:
+            yield
+        finally:
+            current[0] = held
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: current[0])
+    monkeypatch.setattr(torch.cuda, "Stream", lambda device=None: Lane(log, "side"))
+    monkeypatch.setattr(torch.cuda, "stream", stream)
+    return current
+
+
+def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a_tree(monkeypatch):
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.device, run._graphs = True, "cuda", {}
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
+    current = _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    shapes = {7: SimpleNamespace(m16=32, k=8, n=16), 8: SimpleNamespace(m16=32, k=8, n=32)}
+    shapes[9] = shapes[8]
+    names = ("a_tree", "forming", "gemm", "hash_msg", "hash_leaf", "scatter")
+
+    def step(w, name):
+        return lambda: log.append(f"{w}:{name} on {current[0].name} ({run.kernel.dev.stream})")
+    for w, sh in shapes.items():
+        run._graphs[run._graph_key(w, sh, 32)[0]] = PG._Graph(torch.zeros(1), torch.zeros(1), "graph",
+                                                               [step(w, x) for x in names], (1, 3))
+
+    def forward():
+        run.whole_capture_begin()
+        for i, (w, sh) in enumerate(shapes.items()):
+            run.join_before(sh)                               # as `_gemm` does, before it writes the call's A words
+            run._graph_call(w, sh, SimpleNamespace(b={}), 1, 4, 32, i, None)
+        return run.whole_capture_end()
+
+    calls = forward()
+    side = lambda w: [f"{w}:{x} on side (2)" for x in names[3:]]   # noqa: E731
+    assert log == ["7:a_tree on main (1)", "7:forming on main (1)", "7:gemm on main (1)", "side waits for main", *side(7),
+                   "8:a_tree on main (1)", "main waits for side", "8:forming on main (1)", "8:gemm on main (1)",
+                   "side waits for main", *side(8),
+                   "main waits for side",                     # 9's call is of 8's shape: joined before it writes
+                   "9:a_tree on main (1)", "9:forming on main (1)", "9:gemm on main (1)", "side waits for main", *side(9),
+                   "main waits for side"]                     # the forward's last call joins its own
+    assert [c.w for c in calls] == [7, 8, 9] and run._deferred is None and run.kernel.dev.stream is None
+    log.clear()
+    run.whole_defer = False
+    forward()
+    assert log == [f"{w}:{x} on main (1)" for w in shapes for x in names]
+
+
+def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
+    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x != "pad_a"])
+    run = SimpleNamespace(entry="test", hashing=True, omit=frozenset(), _rows=lambda: "s")
+    run._call_names = lambda: PPD.PearlCDeviceRun._call_names(run)
+    a, b = PPD.PearlCDeviceRun._call_cuts(run, pipe)
+    names = [x for x in run._call_names() if x != "pad_a"]
+    assert names[:a] == ["node_keys_a", "hash_rows_a", "tree_a", "seed_a"] and names[b:] == ["hash_msg", "hash_leaf"]
+    run.hashing = False
+    assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names()))
+    run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_msg")
+    with pytest.raises(RuntimeError, match="A's tree"):
+        PPD.PearlCDeviceRun._call_cuts(run, pipe)

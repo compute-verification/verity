@@ -12,6 +12,12 @@ screened rows to the pass and stages the next forward's slots, which the next `w
 they were staged for (else it makes them itself: the same bytes either way).  A retained pass's capture also copies each
 call's A words and tree, as its steps leave them, to its weight's stage, from which `whole_replayed` writes the call's record
 and files, as `_retained` writes them for a call made alone.
+
+With ``whole_defer`` (and hashing), a whole capture forks each call's tile hashing and scatter, after its GEMM, onto a side
+stream of the run's own, and the next call joins it after its own A tree, so the two run side by side in the forward's graph;
+a call joins at once when the call before is of its shape (the side steps still read that shape's buffers), and the
+forward's last call joins its own before vLLM's capture ends.  The same kernels write the same bytes, so the commitments are
+the serial capture's.
 """
 from __future__ import annotations
 
@@ -45,6 +51,8 @@ class _Graph:
     leaves: Any
     graph: Any = None
     steps: list = field(default_factory=list)
+    #: where a deferred whole capture splits `steps` (`_call_cuts`): the end of A's tree, the start of the tile hashing
+    cuts: tuple[int, int] = (0, 0)
 
 
 @dataclass(frozen=True)
@@ -73,8 +81,8 @@ class _Slots:
 
 class GraphCalls:
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``key_slots``, ``offs``,
-    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps`, and its pass and the
-    pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
+    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
+    its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
     _whole: list[WholeCall] | None = None
@@ -85,6 +93,11 @@ class GraphCalls:
     #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
     _uploaded: _Slots | None = None
     _next: _Slots | None = None
+    #: whether a whole capture defers each call's tile hashing beside the next call (with hashing)
+    whole_defer: bool = False
+    #: inside a deferred whole capture, the shape whose call's side steps no call has joined yet, and the side stream
+    _deferred: Any = None
+    _side_stream: Any = None
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
         """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
@@ -123,24 +136,28 @@ class GraphCalls:
                           "tree": _write(d / f"{mm.index}.tree", _bytes(tree))})
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:
-        """What a forward captured whole depends on (hashing, omitted steps, schedule, and with hashing whether its pass is
-        retained, which `retained` sets in place of the open pass's), or None when the pass can't replay one: graphs off, or a
-        schedule the graph path doesn't run."""
+        """What a forward captured whole depends on (hashing, omitted steps, schedule, with hashing whether its pass is
+        retained, which `retained` sets in place of the open pass's, and whether it defers the tile hashing), or None when the
+        pass can't replay one: graphs off, or a schedule the graph path doesn't run."""
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
-        return (self.hashing, self.omit, self.schedule.name, self.hashing and retained)
+        return (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+
+    def _defers(self) -> bool:
+        """Whether a whole capture forks each call's tile hashing beside the next call (`whole_defer`, with hashing)."""
+        return self.whole_defer and self.hashing
 
     def whole_capture_begin(self, key: tuple | None = None) -> None:
         """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None)."""
-        self._whole, self._whole_retained = [], bool(key and key[3])
+        self._whole, self._whole_retained, self._deferred = [], bool(key and key[3]), None
         if self._whole_retained and self._stages is None:
             self._stages = {}
 
     def whole_capture_end(self) -> tuple[WholeCall, ...]:
         """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
         in one forward is refused."""
-        calls, self._whole, self._whole_retained = tuple(self._whole or ()), None, False
+        calls, self._whole, self._whole_retained, self._deferred = tuple(self._whole or ()), None, False, None
         seen = [c.w for c in calls]
         if len(set(seen)) != len(seen):
             raise RuntimeError(f"{self.entry}: a weight is called twice in one captured forward, and its slot holds one call")
@@ -270,6 +287,7 @@ class GraphCalls:
                 g.leaves.fill_(self.cur.poison)
             pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
             steps = self._call_steps(pipe)
+            g.cuts = self._call_cuts(pipe)
             if self.hashing:
                 steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
             g.steps = steps
@@ -304,7 +322,8 @@ class GraphCalls:
         """The call's graph steps launched on `raw`, the stream vLLM is capturing, over the graph's own buffers.  The graph
         must exist: made outside any capture (its eager run syncs), by vLLM's warm-up forward.  Returns the graph's own y, not
         a copy: a captured forward calls each weight once (`whole_capture_end`), and reads that call's y, or changes it in
-        place, before the weight's next call rewrites it."""
+        place, before the weight's next call rewrites it.  Deferred (`_defers`), the call joins the call before's side steps
+        after its A tree and forks its own after its GEMM; the forward's last call (every weight called once) joins them."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -313,11 +332,54 @@ class GraphCalls:
         pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
         self.kernel.dev.stream = raw
         try:
-            for f in g.steps:
-                f()
+            if not self._defers():
+                for f in g.steps:
+                    f()
+            else:
+                a, b = g.cuts
+                for f in g.steps[:a]:
+                    f()
+                self._join()
+                for f in g.steps[a:b]:
+                    f()
+                self._fork(sh, g.steps[b:], raw)
+                if len(self._whole) == len(self.order):
+                    self._join()
         finally:
             self.kernel.dev.stream = None
         return g.y, screen
+
+    def _fork(self, sh: Any, steps: list, raw: int) -> None:
+        """`steps` on the side stream, after everything the capturing stream has launched so far, with torch's current stream
+        the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them."""
+        import torch
+        main = torch.cuda.current_stream(self.device)
+        if self._side_stream is None:
+            self._side_stream = torch.cuda.Stream(device=self.device)
+        side = self._side_stream
+        side.wait_stream(main)
+        self.kernel.dev.stream = side.cuda_stream
+        try:
+            with torch.cuda.stream(side):
+                for f in steps:
+                    f()
+        finally:
+            self.kernel.dev.stream = raw
+        self._deferred = sh
+
+    def _join(self) -> None:
+        """The capturing stream waits for the side steps no call has joined yet, if any."""
+        if self._deferred is None:
+            return
+        import torch
+        torch.cuda.current_stream(self.device).wait_stream(self._side_stream)
+        self._deferred = None
+
+    def join_before(self, sh: Any) -> None:
+        """Before a call writes `sh`'s buffers (its A words first): the side steps of a call of the same shape, which still
+        read them, joined."""
+        if self._deferred is not None and self._deferred is sh:
+            self._join()
 
     def _scatter(self, w: int, sh: Any, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
         """The graph's last step, one launch: the screen of the call's first `flag_rows` rows (all of them when it screens,

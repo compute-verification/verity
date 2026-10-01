@@ -36,7 +36,8 @@ size only), and each Pearl-C arm's decode forward is captured whole with its cal
 replays its own capture, which also keeps each call's A words and tree.  Its gate (`whole_check`) holds a forward's calls
 replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
 counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
-check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.
+check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
+``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
 
 ``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
 (`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
@@ -142,7 +143,7 @@ def install(model, args, beacon: bytes):
     salt = Epoch.unverified(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"))
+                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False))
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
@@ -677,8 +678,8 @@ def smoke(args) -> None:
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
-                 "whole_step": getattr(args, "whole_step", False), "run": os.environ.get("RESEARCH_RUN_ID"),
-                 "steps": [], "resident": False}
+                 "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
+                 "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
     def step(name, f):
         t0 = time.perf_counter()
@@ -814,6 +815,8 @@ def main() -> None:
     ap.add_argument("--whole-step", action="store_true",
                     help="(implies --graphs) the arm engine runs vLLM's FULL decode graphs, Pearl-C's captured inside them "
                          "(pouw_pearl_c_whole); retained passes run eagerly")
+    ap.add_argument("--whole-defer", action="store_true",
+                    help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
     ap.add_argument("--rows-form", choices=("w", "s"), default="w",
                     help="A's rows form: s takes forming's statistics from -h2's row-leaf pass over A (-h2 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
@@ -822,6 +825,8 @@ def main() -> None:
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
     args.graphs = args.graphs or args.whole_step
+    if args.whole_defer and not args.whole_step:
+        ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
     if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing != "h2":
         ap.error(f"--rows-form s is -h2's, and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
@@ -832,7 +837,7 @@ def main() -> None:
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
-                 "rows_form": args.rows_form, "whole_step": args.whole_step,
+                 "rows_form": args.rows_form, "whole_step": args.whole_step, "whole_defer": args.whole_defer,
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

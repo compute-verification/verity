@@ -348,10 +348,11 @@ class PearlCDeviceRun(GraphCalls):
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w"):
+                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.rows_form = rows_form
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
+        self.whole_defer = whole_defer
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -392,7 +393,9 @@ class PearlCDeviceRun(GraphCalls):
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
-            "schedule": None, "graphs": f"calls of at most {GRAPH_ROWS} rows, serial schedule" if self.graphs else None,
+            "schedule": None,
+            "graphs": (f"calls of at most {GRAPH_ROWS} rows, serial schedule"
+                       + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -496,6 +499,17 @@ class PearlCDeviceRun(GraphCalls):
         """The call's steps in order (`_call_names`)."""
         return _steps(pipe, self._call_names())
 
+    def _call_cuts(self, pipe: Any) -> tuple[int, int]:
+        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
+        tile hashing runs, and before the call's own tile hashing, which it forks."""
+        have = {name for name, _, _ in pipe.steps()}
+        groups = [STEP_GROUPS[x] for x in self._call_names() if x in have]
+        a = next((i for i, g in enumerate(groups) if g != "a_tree"), len(groups))
+        b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
+        if "a_tree" in groups[a:] or any(g != "tile_hash" for g in groups[b:]):
+            raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's tree and end with the tile hashing")
+        return a, b
+
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
         key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16))
@@ -563,6 +577,7 @@ class PearlCDeviceRun(GraphCalls):
         if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > FLAG_ROWS):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
                                f"{FLAG_ROWS} screened rows); end it and begin another")
+        self.join_before(sh)
         sh.xa[:m].copy_(x2)
         if m16 > m:
             sh.xa[m:m16].zero_()
