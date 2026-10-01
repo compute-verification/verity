@@ -63,6 +63,10 @@ PROFILE = "bf16-hopper-mma-draft/2026-09-22"
 #: round); points under different coin modes are never compared
 COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-512 commitment, its coins a SHA-256 counter-mode PRF",
          "live-os": "live-os: the verifier's OS draws, round by round"}
+#: the proof-system scheme a point measured, from its coins (docs/protocol-schemes.md): flock-i-v1 is M0's configuration (SHA-512
+#: Merkle, two Fast100 repetitions, os-seed-prf coins, the batched session, the tile layout); written into every point, never
+#: inferred later
+SCHEMES = {"os-seed-prf": "flock-i-v1", "live-os": "flock-i-v1+livecoins"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
 
 
@@ -460,8 +464,10 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "throughput_vu_per_s": out.get("throughput_coords_per_s"), "gpu_util": out.get("gpu_util_steady"),
             "gpu_held_s_per_vu": out.get("gpu_held_s_per_coord"), "verify_s_per_statement": out.get("verify_s_per_statement"),
             "byte_identical": g["status"] == "passed" and bool(out.get("accepted")), "coins": out.get("coins"),
-            "session": (out.get("session") or {}).get("label"), "flags": flags,
-            "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
+            "session": (out.get("session") or {}).get("label"), "scheme": SCHEMES.get(out.get("coins")),
+            # flock-circuit is both the prover (`prove`) and the verifier (`serve`)
+            "impl": {"commit": out["commit"]["commit"], "prover_sha256": _read(a.binary_sha), "verifier_sha256": _read(a.binary_sha)},
+            "flags": flags, "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
             "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why")}
