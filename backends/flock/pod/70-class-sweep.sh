@@ -15,6 +15,7 @@
 #      BATCH_ANDS= MAX_STATEMENT_BITS= (larger statements: --batch auto's AND budget and the witness-bit cap per statement)
 #      N= with BATCH=fixed (instances per statement, the bit cap still applies)
 #      STAGE_ONLY=1 (no GPU: build, stage the shapes into FLOCK_STAGE_CACHE and prove nothing; give SM, nvidia-smi is absent)
+#      STATEMENT_DIGEST=1 (with STAGE_ONLY: each staged statement's digest, as the verifier builds it, in its record)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -70,6 +71,7 @@ SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS"); [
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST:-1}" = 0 ] && SEL+=(--no-selftest-largest)
 [ -n "${BATCH_ANDS:-}" ] && SEL+=(--batch-ands "$BATCH_ANDS"); [ -n "${MAX_STATEMENT_BITS:-}" ] && SEL+=(--max-statement-bits "$MAX_STATEMENT_BITS"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
+[ "${STAGE_ONLY:-0}" = 1 ] && [ "${STATEMENT_DIGEST:-0}" = 1 ] && SEL+=(--statement-digest)
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \

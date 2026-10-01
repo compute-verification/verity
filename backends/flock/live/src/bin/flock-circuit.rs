@@ -4,6 +4,7 @@
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
+//!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, each row's `b || c`,
 //! outputs; no row, no salt) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -3968,6 +3969,10 @@ fn main() {
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
+        "statement" => println!("STATEMENT\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "instances": st.n,
+            "vus_per_block": st.c.g, "blocks": st.blocks_real, "k_log": st.c.k_log, "nbl": st.nbl, "dense_m": st.m,
+            "regions": st.regions.len(), "circuit_sha512": hex(&st.c.sha512), "statement_digest": hex(&st.digest),
+            "public_sha512": hex(&inst.public_sha512), "identity": st.identity})),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
@@ -3994,6 +3999,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }

@@ -490,6 +490,15 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
+def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
+    """The statement as the verifier builds it from its public file (``flock-circuit statement``: its digest, the circuit's and
+    the public file's SHA-512, k_log, blocks; nothing proved), or why it couldn't."""
+    r = subprocess.run([binary, "statement", "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt")],
+                       capture_output=True, text=True, timeout=timeout, check=False)
+    got = next((json.loads(ln.split("\t", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith("STATEMENT\t")), None)
+    return got if r.returncode == 0 and got else {"why": f"exit {r.returncode}: {(r.stderr or r.stdout)[-400:]}"}
+
+
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
           warm: int = 0, runs: int = 1) -> dict:
     """A loopback session (``serve`` on 127.0.0.1 and ``prove``), or ``selftest``: the LIVE or SELFTEST record."""
@@ -762,6 +771,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
     ap.add_argument("--stage-only", action="store_true", help="stage the shapes (into FLOCK_STAGE_CACHE) and run nothing, into staged.jsonl: "
                     "a GPU job with the same settings takes them from the cache and starts at the prove")
+    ap.add_argument("--statement-digest", action="store_true", help="with --stage-only: also record each staged statement's digest "
+                    "as --binary builds it from the public file (flock-circuit statement; nothing proved)")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
@@ -846,6 +857,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 if not (a.selftest_only or a.stage_only):
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
+                elif a.stage_only and a.statement_digest:
+                    rec["statement"] = statement(a.binary, d, rec["stage"]["n"])
                 if a.selftest and not a.stage_only and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each

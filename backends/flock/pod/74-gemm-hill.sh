@@ -22,6 +22,7 @@
 #      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the gate's and the step's statements into FLOCK_STAGE_CACHE,
 #      default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the cache, so it holds its
 #      GPU from the gate's selftests on, and its point is flagged staged-on-gpu if it staged the step's statement itself)  SM=120
+#      STATEMENT_DIGEST=1 (with STAGE_ONLY: each staged statement's digest in out/staged.jsonl, as the verifier builds it)
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
