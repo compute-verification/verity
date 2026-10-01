@@ -50,11 +50,12 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - the pinned theorems say what their records say (below);
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
-- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
-  that skipped the kernel shows no axiom, and only the replay catches it. The replay also walks the environment it
-  checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
-  No `#print axioms` output is parsed anywhere. A replay killed by a signal (out of memory) is reported as a kill, not
-  as a verdict;
+- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
+  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS`, checked against the import and the
+  declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
+  The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
+  from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
+  (out of memory) is reported as a kill, not as a verdict;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below);
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
@@ -69,7 +70,8 @@ through the kernel into an empty environment. It needs one module per root and a
 every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
 ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
-`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain (`--build`
+`--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/lean` suite runs them, only
+when `tools/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
 installs it first, so a machine without elan works), must pass clean and fail once for each violation in
 `tests/fixtures/violations.json`. Among them:
 
