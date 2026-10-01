@@ -93,6 +93,19 @@ fn is_zk(st: &Stmt) -> bool {
     st.identity["hooks"]["zk"] == true
 }
 
+/// A non-ZK session's coins: M0's step-0 seed by default (`coin_seed`: the verifier's OS-random seed under a SHA-512
+/// commitment sent at Hello and opened in the verdict, every round's coins its SHA-256 counter-mode PRF), or under
+/// `FC_COINS=os` every round's coins drawn from the OS, so soundness rests on SHA-512 collision resistance alone. The Hello and
+/// the identity carry the mode, so a prover and a server that disagree refuse the session. A selftest build always seeds: its
+/// harness fixes the coins through the seed.
+fn seed_coins() -> bool {
+    match std::env::var("FC_COINS").as_deref() {
+        Err(_) | Ok("" | "seed") => true,
+        Ok("os") => cfg!(feature = "seed-injection"),
+        Ok(v) => refuse(format!("FC_COINS={v}: \"seed\" (the default) or \"os\"")),
+    }
+}
+
 /// M1's pad layout for the statement: the algebraic phase's, then Ligerito level 0's (its OOD samples and lane rounds).
 fn zk_layout(st: &Stmt) -> Layout {
     let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
@@ -183,7 +196,7 @@ fn zk_identity(c: &Composite) -> Value {
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
-    json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
+    let mut id = json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
@@ -193,7 +206,14 @@ fn identity(c: &Composite) -> Value {
                       "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
-           "hooks": hooks})
+           "hooks": hooks});
+    // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move
+    if !zk_mode() && !seed_coins() {
+        id["coins"] = json!("live-os (every round's coins the verifier's OS draws: no seed, no PRF)");
+        id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
+        id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
+    }
+    id
 }
 
 /// Σ = SHA-512(the statement's Σ tag ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
@@ -489,11 +509,11 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
     let mut cfg = SessionConfig::flock_128_r2(specs);
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
-    // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed
+    // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed, or OS coins (seed_coins)
     if is_zk(st) {
         cfg.coin_tree = Some(coin_spec_of(&tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>()));
     } else {
-        cfg.coin_seed = true;
+        cfg.coin_seed = seed_coins();
     }
     cfg.retain_rounds = true;
     cfg.sha512_digests = true;
@@ -2472,8 +2492,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
             // M0's seed commitment (4 words), or the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them)
-            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } => commit = c,
-            r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
+            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
+            // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws
+            Resp::Ok if !is_zk(st) && !seed_coins() => {}
+            r => return Err(format!("hello: step 0 expects the verifier's {}, got {r:?}",
+                                    if is_zk(st) || seed_coins() { "seed commitment" } else { "Ok (FC_COINS=os)" })),
         }
         // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
         // opens, so the session's one Commit, in table 0's first rep, carries every table's root
@@ -2716,8 +2739,9 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     };
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
-    // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used
-    let step0 = if v["accepted"] == true && !is_zk(st) { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
+    // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used, and OS coins
+    // commit to nothing
+    let step0 = if v["accepted"] == true && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
@@ -2733,7 +2757,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && v["accepted"] == true}),
+               "step0_checked": step0.is_ok() && v["accepted"] == true && (is_zk(st) || seed_coins())}),
         proofs,
     )
 }
@@ -3608,45 +3632,52 @@ fn gpu_paths_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
     json!({"case": "gpu_paths_agree", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
-/// The prove loop with its verdicts awaited beside the next sessions' proving (`FC_VERIFY_AHEAD`), against a server verifying
-/// its sessions at once (`serve --concurrency`), over loopback TCP, against the loop and server one session at a time: with
-/// each session's prover seed and the verifier's coins injected, every session's proofs and transcript are byte-identical.
+/// The prove loop with its verdicts awaited beside the next sessions' proving (`FC_VERIFY_AHEAD`), against two servers taking
+/// turns, each verifying its sessions at once (`serve --concurrency`), over loopback TCP, against the loop and one server one
+/// session at a time: with each session's prover seed and the verifier's coins injected, every session's proofs and transcript
+/// are byte-identical.
 #[cfg(feature = "seed-injection")]
 fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     const SESSIONS: usize = 3;
     let seeds: Vec<ProverSeed> = (0..SESSIONS).map(|k| ProverSeed::injected([1 + k as u8; 32])).collect();
     let base = Plan { gpu, ..Plan::default() };
-    let run = |ahead: usize, tag: &str| {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = l.local_addr().unwrap().to_string();
-        let dir = std::env::temp_dir().join(format!("fc-verify-ahead-{}-{tag}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+    let run = |ahead: usize, servers: usize, tag: &str| {
+        let ls: Vec<std::net::TcpListener> = (0..servers).map(|_| std::net::TcpListener::bind("127.0.0.1:0").unwrap()).collect();
+        let addrs: Vec<String> = ls.iter().map(|l| l.local_addr().unwrap().to_string()).collect();
+        let dirs: Vec<std::path::PathBuf> = (0..servers).map(|j| std::env::temp_dir().join(format!("fc-verify-ahead-{}-{tag}-{j}", std::process::id()))).collect();
+        for d in &dirs {
+            let _ = std::fs::remove_dir_all(d);
+        }
         let mut got: Vec<(Value, Vec<Vec<u8>>)> = Vec::new();
         let ts = Instant::now();
         std::thread::scope(|sc| {
-            sc.spawn(|| serve_on(&l, &dir, Some(SESSIONS), ahead + 1, &addr, || {
-                let mut s = server(st, inst);
-                fix_verifier_coins(&mut s, [9; 32]);
-                s
-            }));
-            prove_sessions(st, inst, &base, &seeds, 0, &addr, ahead, &mut |_, v, proofs| got.push((v, proofs)));
+            for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
+                sc.spawn(move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
+                    let mut s = server(st, inst);
+                    fix_verifier_coins(&mut s, [9; 32]);
+                    s
+                }));
+            }
+            prove_sessions(st, inst, &base, &seeds, 0, &addrs.join(","), ahead, &mut |_, v, proofs| got.push((v, proofs)));
         });
         let wall_s = ts.elapsed().as_secs_f64();
-        let recs: Vec<Value> = (0..SESSIONS).map(|i| {
-            let p = dir.join(format!("l{i:04}-{}", std::process::id())).join("session.json");
+        let recs: Vec<Value> = (0..SESSIONS).map(|k| {
+            let p = dirs[k % servers].join(format!("l{:04}-{}", k / servers, std::process::id())).join("session.json");
             let rec: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap_or_default()).unwrap_or(Value::Null);
             json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]})
         }).collect();
-        let _ = std::fs::remove_dir_all(&dir);
+        for d in &dirs {
+            let _ = std::fs::remove_dir_all(d);
+        }
         (got, recs, wall_s)
     };
-    let (a, b) = (run(0, "serial"), run(SESSIONS - 1, "ahead"));
+    let (a, b) = (run(0, 1, "serial"), run(SESSIONS - 1, 2, "ahead"));
     let accepted = a.0.len() == SESSIONS && b.0.len() == SESSIONS && a.0.iter().chain(&b.0).all(|(v, _)| v["accepted"] == true && v["step0_checked"] == true);
     let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|(_, p)| !p.is_empty());
     let te = a.1 == b.1 && a.1.iter().all(|r| !r["streams"].is_null());
     let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);
     json!({"case": "verify_ahead_matches_serial", "expect": "each session's proofs and transcript are its serial twin's, byte for byte", "gpu": gpu,
-           "zk": is_zk(st), "sessions": SESSIONS, "verify_ahead": SESSIONS - 1, "accepted": accepted, "proofs_equal": pe, "transcripts_equal": te,
+           "zk": is_zk(st), "sessions": SESSIONS, "verify_ahead": SESSIONS - 1, "verify_servers": 2, "accepted": accepted, "proofs_equal": pe, "transcripts_equal": te,
            "sessions_differ": seeds_differ, "transcript_first_difference": first_diff(&json!(a.1), &json!(b.1), String::new()),
            "wall_s": [a.2, b.2], "pass": accepted && pe && te && seeds_differ})
 }
@@ -3710,7 +3741,8 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         "unit_rows_sha256": hex(&st.c.unit().sha256), "rows_per_vu": st.c.sizes_per_vu().0, "ands_per_vu": st.c.sizes_per_vu().1, "all_pass": all}));
 }
 
-/// The prove loop: one session per seed, each on its own connection to the verifier at `addr`, the first `warm` of them warm.
+/// The prove loop: one session per seed, each on its own connection to the verifier at `addr`, the first `warm` of them warm
+/// (`addr` a comma-separated list: session k's verifier is the (k mod n)th, so n verifier processes take turns).
 /// The next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
 /// witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts). Up to
 /// `verify_ahead` proved sessions send their proofs and wait for their verdicts on their own threads while the next session
@@ -3740,6 +3772,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
         emit(run, v, proofs);
     };
     let join = |h: Verdict| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
+    let addrs: Vec<&str> = addr.split(',').collect();
     for run in 0..n {
         let mut plan = base.clone();
         if pipeline {
@@ -3767,7 +3800,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 emit_one(r, join(h), rtt);
             }
         }
-        let mut tcp = TcpTransport::connect(addr).unwrap();
+        let mut tcp = TcpTransport::connect(addrs[run % addrs.len()]).unwrap();
         let rtt = tcp.ping_rtt(30);
         let proved = session_proved(st, inst, shared(tcp), &plan, seeds[run]);
         let finish = move || match proved {
@@ -3797,8 +3830,10 @@ fn serve_loop(make: impl Fn() -> Server) {
     // --concurrency C: up to C sessions at once, each on its own thread (a prover's FC_VERIFY_AHEAD sessions awaiting their
     // verdicts, and the one it proves); a connection past them waits to be accepted
     let concurrency = arg("--concurrency", "1").parse::<usize>().unwrap_or(1).max(1);
-    println!("SERVING {listen}");
-    serve_on(&l, &out, max, concurrency, &listen, make);
+    // the bound address: --listen 127.0.0.1:0 serves on a port the system picks
+    let bound = l.local_addr().unwrap().to_string();
+    println!("SERVING {bound}");
+    serve_on(&l, &out, max, concurrency, &bound, make);
 }
 
 /// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`); each
@@ -3840,7 +3875,8 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
                           "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"]});
         let _whole_lines = index.lock().unwrap_or_else(PoisonError::into_inner);
         let mut idx = std::fs::OpenOptions::new().create(true).append(true).open(out.join("index.jsonl")).unwrap();
-        writeln!(idx, "{line}").unwrap();
+        // one write per line: servers sharing `out` append to the same index
+        idx.write_all(format!("{line}\n").as_bytes()).unwrap();
         println!("SESSION\t{line}");
     };
     std::thread::scope(|sc| {

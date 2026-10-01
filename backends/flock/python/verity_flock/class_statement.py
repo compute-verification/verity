@@ -505,26 +505,37 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         return {"all_pass": all_pass, "cases": len(neg), "failed": failed} | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
     pin = FC.digest(circ.read_text())
-    # the prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once
-    concurrency = 1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)
-    srv = subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(d / "sessions"), "--instances", str(pub),
-                            "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress", "--concurrency", str(concurrency)],
-                           stdout=open(d / "serve.log", "w"), stderr=subprocess.STDOUT)
+    # the prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by
+    # FC_VERIFY_SERVERS (default 1) verifier processes taking turns (session k the (k mod n)th's): the first on `port`, the
+    # rest on ports the system picks
+    servers = max(1, int(os.environ.get("FC_VERIFY_SERVERS") or 1))
+    concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
+    logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
+    srvs = [subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port if i == 0 else 0}", "--out", str(d / "sessions"),
+                              "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress",
+                              "--concurrency", str(concurrency)], stdout=open(log, "w"), stderr=subprocess.STDOUT)
+            for i, log in enumerate(logs)]
     try:
-        for _ in range(600):
-            if "SERVING" in (d / "serve.log").read_text():
-                break
-            time.sleep(0.2)
+        addrs = []
+        for log in logs:
+            for _ in range(600):
+                if (ln := next((x for x in log.read_text().splitlines() if x.startswith("SERVING ")), None)):
+                    addrs.append(ln.split()[1])
+                    break
+                time.sleep(0.2)
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
             timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
-            pr = subprocess.Popen(timer + [binary, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(inst), "--circuit", str(circ),
-                                           "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else []), stdout=fo, stderr=fe)
+            pr = subprocess.Popen(timer + [binary, "prove", "--verifier", ",".join(addrs) or f"127.0.0.1:{port}", "--instances", str(inst),
+                                           "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else []),
+                                  stdout=fo, stderr=fe)
             pr.wait()
         prover_gb = int((d / "prove.maxrss").read_text().split()[-1]) / 2**20 if timer else None   # the prover's own peak, KB
-        verifier_gb = _vm_hwm(srv.pid)
+        hwm = [_vm_hwm(s.pid) for s in srvs]
+        verifier_gb = round(sum(hwm), 2) if None not in hwm else None    # the verifier processes' peaks, summed
     finally:
-        srv.kill()
-        srv.wait()
+        for s in srvs:
+            s.kill()
+            s.wait()
     out, err = (d / "prove.out").read_text(), (d / "prove.err").read_text()
     live = [json.loads(ln[5:]) for ln in out.splitlines() if ln.startswith("LIVE")]
     if not live:
@@ -532,9 +543,9 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     timed = [x for x in live if not x.get("warm")] or live
     v = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2]      # the median timed run
     return {k: v.get(k) for k in ("accepted", "why", "prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
-                                  "witness_s", "witness_prebuilt_s", "pipeline_depth", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
+                                  "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                   "wire_recv", "statement_digest", "buckets")} | \
-        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb,
+        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": servers,
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
          # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
@@ -747,6 +758,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
+    ap.add_argument("--stage-only", action="store_true", help="stage the shapes (into FLOCK_STAGE_CACHE) and run nothing, into staged.jsonl: "
+                    "a GPU job with the same settings takes them from the cache and starts at the prove")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
@@ -791,7 +804,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    results = out / ("selftests.jsonl" if a.selftest_only else "results.jsonl")
+    results = out / ("selftests.jsonl" if a.selftest_only else "staged.jsonl" if a.stage_only else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
     per_definition: dict[str, dict[str, int]] = {}
@@ -827,9 +840,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if "stage" in rec:
             d = out / s[:16]
             try:
-                if not a.selftest_only:
+                if not (a.selftest_only or a.stage_only):
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
-                if a.selftest and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
+                if a.selftest and not a.stage_only and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
