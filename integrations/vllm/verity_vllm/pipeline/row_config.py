@@ -4,9 +4,10 @@ check over the ranks' components, the record per rank), docs/vllm-config-sweep-p
 A config run (`--config-run 1`) is the Build, the strict word check of its manifest (`word_check`), ONE instrumented Commit (`--pairs 1
 --only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay stratified by family, and
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
-decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match there is no account
-for the executed-prefix class (`check.executed_prefix`) to link to: when every request ran to its cap the class has nothing to classify and the
-replay's population is the whole manifest; a request stopped before its cap fails the Commit by name, as a missing input.  Every derive of
+decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match the account the
+executed-prefix class (`check.executed_prefix`) links to is the Commit's own token record (`check.commit_tokens`, `commit/tokens_p<pair>.json`):
+when every request ran to its cap the class has nothing to classify and the replay's population is the whole manifest; a request stopped
+before its cap is accepted only when every token it served opens from the run root to the committed sampled id.  Every derive of
 a Build goes through the host's Program cache when one is named (`derive_cached`, `pipeline.program_cache`).
 """
 from __future__ import annotations
