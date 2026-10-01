@@ -413,3 +413,9 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {}, "runs": {"T": entry}})[0] == [
         "runs: T is not under `exempt`: a run is a test, not a proof the audit reads"]
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_controls(tmp_path):
+    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
+    assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []
