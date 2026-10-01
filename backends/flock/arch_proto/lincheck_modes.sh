@@ -17,6 +17,8 @@ done
 bins=$(OUT=$R/out/build bash backends/flock/pod/70-class-sweep.sh BUILD_ONLY=1 SM=${SM:-120} 2> $R/out/build.err) || { echo "$bins"; tail -30 $R/out/build.err; exit 1; }
 SB=$(echo "$bins" | sed -n 's/^SELFTEST_BINARY=//p')
 sha256sum $SB | tee $R/out/binary.sha256
+# the build's CUDA 13.3 runtime, as 70-class-sweep.sh runs its binaries (it links libcudart even off the GPU)
+C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 . backends/flock/pod/cpu-slices.sh
 hold_slices "" ${CPUS:-16}
 export RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l) OMP_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
