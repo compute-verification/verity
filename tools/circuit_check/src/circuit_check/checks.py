@@ -5,7 +5,8 @@
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof units otherwise)
+                     proof units otherwise); a Boolean Definition with a word counterpart
+                     (`verity.ml.boolean.gemm.word_of`) also equals that word Definition through its word view
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
@@ -13,7 +14,8 @@
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a row): every gate
                      certified by exactly one unit, cross-unit reads only through committed values, no value computed in two
                      units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes)
-    lowering pins    a lowering's AND/XOR/NOT counts against `pins.json`, a template unit's circuit digest against its C-Flock
+    lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
+                     a template unit's), a template unit's circuit digest against its C-Flock
                      module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
                      (`verity_flock.boolean_export`)
 
@@ -33,6 +35,7 @@ import numpy as np
 
 from verity.evaluation import ScalarReference, evaluate, kernels, self_check
 from verity.evaluation.reference import resolve, signature_of, standalone_call
+from verity.ir.boolean import is_boolean
 from verity.ir.defs import PrimitiveDefinition
 
 from .vectors import edge_count, flat, instance_args, vectors
@@ -169,6 +172,32 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
         F.fail("correspondence", "target-mismatch", definition.id, f"[{target.id}]: {len(bad)} of {len(rows)} vectors", via=target.id,
                examples=[{"instance": i, "target": _short(g), "reference": _short(w)} for i, g, w in bad[:_EXAMPLES]])
     return {"target": target.id, "compared": len(rows), "mismatches": len(bad)}
+
+
+def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
+    """A Boolean Definition against the word Definition it computes (`verity.ml.boolean.gemm.word_of`), through the word view
+    (`verity.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
+    if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
+        return None
+    from verity.evaluation import evaluate_batch
+    from verity.evaluation.bits import evaluate_words
+    from verity.ml.boolean.gemm import word_of
+
+    try:
+        word = word_of(t)
+    except KeyError:
+        return None
+    pw, _ = signature_of(word)
+    arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
+    n = arrays[0].shape[0]
+    want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
+    got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
+    bad = np.flatnonzero((got != want).any(axis=1)).tolist()
+    if bad:
+        F.fail("correspondence", "word-view-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word-view:{word.id}",
+               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "boolean": _short(got[i].tolist()),
+                          "word": _short(want[i].tolist())} for i in bad[:_EXAMPLES]])
+    return {"via": f"word-view:{word.id}", "compared": n, "mismatches": len(bad)}
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -317,7 +346,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
             return _topp_word(t, arrays, ref, F)
         if t.id not in IL.PIECES:
             return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
-    elif t.gates > opts.lower_max_gates:
+    elif t.gates > opts.lower_max_gates and not is_boolean(t):
         return {"lowered": False, "reason": f"{t.gates} IR gates: lowered as a template's units, not whole (budget {opts.lower_max_gates})"}
     else:
         used, missing, est = _pieces_used(t, pins)
@@ -364,6 +393,8 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its C-Flock lowering")
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"]}, pins, F, t.id)
+    elif is_boolean(t):
+        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"]}, pins, F, t.id)
     return rec
 
 
@@ -475,6 +506,9 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo) if lower_whole or kind != "composite" else \
         {"lowered": False, "reason": "lowered as its template's units"}
     corr["realizations"].append({"via": "c-flock:ir_lower", **low})
+    wv = word_view(t, opts, F)
+    if wv is not None:
+        corr["realizations"].append(wv)
     entry["correspondence"] = corr
     if kind == "composite":
         part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call)

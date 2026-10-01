@@ -43,6 +43,7 @@ def load_registries() -> None:
         return
     from verity.ir.defs import REGISTRY
 
+    import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -204,6 +205,14 @@ def _core_roots() -> list[Any]:
             K.SM120_MXF4_DOT.bind(K=256)]
 
 
+def _boolean_roots() -> list[Any]:
+    """The Boolean BF16 coordinate (`verity.ml.boolean.gemm`) on both steps at K = 64; the steps and the cast are static-free."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean import gemm as BG
+
+    return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -335,7 +344,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

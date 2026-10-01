@@ -1,10 +1,30 @@
 {
+ "definitions": {
+  "AmpereBF16TcDot16_v3": {
+   "and": 8260
+  },
+  "F2fpBf16_v2": {
+   "and": 66
+  },
+  "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 32842
+  },
+  "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 31286
+  },
+  "HopperBF16WgmmaDot16_v2": {
+   "and": 7872
+  }
+ },
  "pieces": {
   "AmpereBF16TcDot16_v1": {
    "and": 8623
   },
   "AmpereBF16TcDot16_v2": {
    "and": 8623
+  },
+  "And_v1": {
+   "and": 1
   },
   "Bf16AddF2fp_v1": {
    "and": 754
@@ -231,6 +251,9 @@
   "MufuTanh_v1": {
    "and": 160
   },
+  "Not_v1": {
+   "and": 0
+  },
   "NvLogf_v1": {
    "and": 48646
   },
@@ -268,6 +291,9 @@
    "and": 425
   },
   "U32Xor_v1": {
+   "and": 0
+  },
+  "Xor_v1": {
    "and": 0
   }
  },
