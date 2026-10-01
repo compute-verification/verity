@@ -16,10 +16,15 @@ top bits and the offset u below them give ``base + ((C0[g] + C1[g] u + (C2[g] Q(
 hardware's truncated square (`Fit.square`), with the integer coefficients of `tables/mufu_quadratic.json` (rcp 128 segments of
 2^16 words, ex2 64 of 2^17, rsq and sqrt 64 of 2^17 per exponent parity). Every word but one is that interpolant: rsq's first
 (1/sqrt(1) = 1.0) is one above it, an override (`overrides`, computed from the measured words when the circuit is built, so a
-table the coefficients do not reproduce fails the build). In the circuit the segment bits decode to minterms and each
-coefficient bit is an XOR of them; the squarer's kept partial products, the two products and C0 are one carry-save sum
-(`compress_columns`) whose bits ``shift ..`` are the word's mantissa. A negative coefficient column multiplies the complemented
-operand (``-|c| u = |c| ~u - |c| (2^n - 1)``), the constant folded into C0, so every partial product is one AND.
+table the coefficients do not reproduce fails the build).
+
+The circuit computes 2v (v the sum above) as one carry-save sum (`compress_columns`) whose bits ``shift + 1 ..`` are the word's
+mantissa, and no product in it costs an AND: each coefficient c is written as ``2c + 1 = sum_k (2 b_k - 1) 2^k``, every digit
+±1, so ``2 c x = sum_k (x XOR n_k) 2^k + ~x - (2^n - 1)(N + 1)`` for the n-bit operand x (u, or Q(u) at ``square_shift``),
+with n_k = 1 - b_k and N = sum_k n_k 2^k. A row ``x XOR n_k`` is free; the constant is folded into the segment's C0. Each
+n_k and each bit of C0 is a function of the segment bits g, written as the XOR of the monomials of its algebraic normal form
+(the 2^|g| products of subsets of g: one AND each). So the ANDs are the monomials, the squarer's kept pairs, the sum's
+full adders, and the overrides' index matches.
 """
 from __future__ import annotations
 
@@ -54,8 +59,7 @@ TWO24 = 0x4B800000     # 2^24
 
 class Fit:
     """One table's interpolator: ``base``, the index's ``bits``, the offset's ``nb`` (the segment is the rest), the square's
-    first kept column ``p``, ``square_shift``, ``shift`` and the coefficients ``C0``, ``C1``, ``C2`` per segment (C1 and C2
-    each of one sign, ``s1`` and ``s2``)."""
+    first kept column ``p``, ``square_shift``, ``shift`` and the coefficients ``C0``, ``C1``, ``C2`` per segment."""
 
     def __init__(self, name: str, entry: dict) -> None:
         self.name = name
@@ -70,10 +74,6 @@ class Fit:
             raise ValueError(f"MUFU fit {name}: {len(self.C0)} segments for {self.bits - self.nb} segment bits")
         if self.base & 0x807FFFFF or not self.nb < self.p < 2 * self.nb:
             raise ValueError(f"MUFU fit {name}: base {self.base:#x}, square from {self.p} of {2 * self.nb} columns")
-        self.s1, self.s2 = (-1 if v[0] < 0 else 1 for v in (self.C1, self.C2))
-        if any((c < 0) != (self.s1 < 0) for c in self.C1) or any((c < 0) != (self.s2 < 0) for c in self.C2):
-            raise ValueError(f"MUFU fit {name}: a coefficient column changes sign")
-        self.wq = 2 * self.nb - self.p
 
     def square(self, u: np.ndarray) -> np.ndarray:
         """Q(u): of u^2's folded partial products (u_a at column 2a, u_a u_b at a + b + 1 for a < b), the sum of those in
@@ -150,17 +150,34 @@ def _xor_all(terms):
     return terms[0]
 
 
-def _select(m, values, width: int):
-    """``values[i]`` (``width`` bits) at the one-hot minterms ``m``: each bit the XOR of the minterms of the values that have
-    it, or the complement of the XOR of the others (the minterms sum to 1), whichever is shorter."""
-    out = []
-    for j in range(width):
-        has = [(v >> j) & 1 for v in values]
-        if 2 * sum(has) <= len(values):
-            out.append(_xor_all(m[i] for i, h in enumerate(has) if h))
-        else:
-            out.append(NOT(_xor_all(m[i] for i, h in enumerate(has) if not h)))
-    return out
+def _monomials(C, bits):
+    """The 2^n products of subsets of ``bits`` (index i = the subset whose mask is i), one AND each beyond the bits."""
+    m = [ONE]
+    for b in bits:
+        m += [C.AND(x, b) for x in m]
+    return m
+
+
+def _selector(C, g):
+    """``sel(column)``: the function of the segment bits ``g`` whose value at segment s is ``column[s]`` (0 or 1), as the XOR
+    of the monomials of its algebraic normal form."""
+    mono = _monomials(C, list(g))
+
+    def sel(column) -> object:
+        a = np.array(column, dtype=np.uint8)
+        for i in range(len(g)):
+            a = a.reshape(-1, 2, 1 << i)
+            a[:, 1, :] ^= a[:, 0, :]
+            a = a.reshape(-1)
+        return _xor_all(mono[i] for i in np.flatnonzero(a).tolist())
+
+    return sel
+
+
+def _digits(cs) -> tuple[int, list[int]]:
+    """``2c + 1 = sum_k (2 b_k - 1) 2^k`` (k < K) for each c of ``cs``: K and each c's ``B = sum_k b_k 2^k``."""
+    K = max(abs(2 * c + 1).bit_length() for c in cs)
+    return K, [c + (1 << (K - 1)) for c in cs]
 
 
 def truncated_square(C, u, p: int):
@@ -180,30 +197,30 @@ def table_word(C, name: str, idx):
     f = fit(name)
     assert len(idx) == f.bits
     u, top = list(idx[:f.nb]), _top(name)
-    m = fp.decode(C, list(idx[f.nb:]))
-    W = f.shift + 23 + top                     # the sum's bits: the word below base is < 2^(23 + top)
-    q = truncated_square(C, u, f.p)
-    ops = [(u if f.s1 > 0 else [NOT(b) for b in u], [abs(c) for c in f.C1], 0),
-           (q if f.s2 > 0 else [NOT(b) for b in q], [abs(c) for c in f.C2], f.square_shift)]
-    c0 = list(f.C0)
-    for (x, mag, at), s in zip(ops, (f.s1, f.s2)):
-        if s < 0:
-            c0 = [c - (((1 << len(x)) - 1) * c_ << at) for c, c_ in zip(c0, mag)]
+    sel = _selector(C, idx[f.nb:])
+    W = f.shift + 24 + top                     # the bits of 2 v: the word below base is < 2^(23 + top)
+    c0 = [2 * c for c in f.C0]
     cols: list[list] = [[] for _ in range(W)]
-    for j, b in enumerate(_select(m, [c % (1 << W) for c in c0], W)):
-        cols[j].append(b)
-    for x, mag, at in ops:
-        for i, c in enumerate(_select(m, mag, max(mag).bit_length())):
+    for x, cs, at in ((u, f.C1, 0), (truncated_square(C, u, f.p), f.C2, f.square_shift)):
+        # 2 c x = sum_k (x XOR n_k) 2^k + ~x - (2^len(x) - 1)(N + 1), n_k = 1 - b_k the digit's sign, N = sum_k n_k 2^k
+        K, B = _digits(cs)
+        for k in range(K):
+            n_k = sel([1 - ((b >> k) & 1) for b in B])
             for j, b in enumerate(x):
-                if i + j + at < W:
-                    cols[i + j + at].append(C.AND(c, b))
+                if j + k + at < W:
+                    cols[j + k + at].append(b ^ n_k)
+        for j, b in enumerate(x):
+            if j + at < W:
+                cols[j + at].append(NOT(b))
+        c0 = [c - (((1 << len(x)) - 1) * ((((1 << K) - 1) ^ b) + 1) << at) for c, b in zip(c0, B)]
+    for j in range(W):
+        cols[j].append(sel([(c >> j) & 1 for c in c0]))
     for i, d in overrides(name):
-        lit = [b if (i >> k) & 1 else NOT(b) for k, b in enumerate(u)]
-        hit = C.AND(m[i >> f.nb], and_reduce(C, lit))
-        for k in range(W - f.shift):
-            if (d % (1 << (W - f.shift))) >> k & 1:
-                cols[f.shift + k].append(hit)
-    y = compress_columns(C, cols)[f.shift:W]
+        hit = and_reduce(C, [b if (i >> k) & 1 else NOT(b) for k, b in enumerate(idx)])
+        for k in range(W - f.shift - 1):
+            if (d % (1 << (W - f.shift - 1))) >> k & 1:
+                cols[f.shift + 1 + k].append(hit)
+    y = compress_columns(C, cols)[f.shift + 1:W]
     # base's mantissa is 0 and y <= 2^23: below 2^23 the exponent is base's; at 2^23 (mantissa 0) base's even exponent + 1
     exp = const_bits(f.base >> 23, 8)
     if top:
