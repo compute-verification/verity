@@ -28,6 +28,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
     "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
+    "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "canonical-profiles": ("verity_vllm.engine.profiles.canonical", "check or rewrite the canonical profile pins"),
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),

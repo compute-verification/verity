@@ -8,7 +8,8 @@
   workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
   ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
   row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
-  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``).
+  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``, over the Programs the Commit reads with ``boundary-plan``, which
+  writes the Commit's call-boundary plan on a PASS).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
   a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
@@ -412,7 +413,7 @@ class SingleRow(Row):
             self.log("BUILD FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10 if mrc == 0 else 13)
-        self.call_boundaries(to)
+        self.call_boundaries(to, RP.call_boundaries_cmd(self))
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
