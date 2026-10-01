@@ -1238,7 +1238,8 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     state["workloads"], state["holders"] = [], [("gpu-pool-1", "gpu-pool-1-x", "GPU-a")]
     c = m.Controller()
     c.tick(t)
-    proc = subprocess.Popen(["sh", "-c", "trap '' TERM; exec cat"], stdin=subprocess.PIPE)
+    proc = subprocess.Popen(["sh", "-c", "trap '' TERM; echo ready; exec cat"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    assert proc.stdout.readline() == b"ready\n"   # the trap is set before the lease is signalled
     lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
