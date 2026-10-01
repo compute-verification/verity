@@ -16,7 +16,7 @@ out, here, pkg = map(Path, sys.argv[1:])
 data = json.loads(out.read_text())
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 soundness = "backends/flock/verifier/lean/soundness/"
-data["inputs"] = {"protocols/one_stage/tests/lean/ExfiltrationVectors.lean": sha(here / "ExfiltrationVectors.lean"),
+data["inputs"] = {"protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean": sha(here / "ExfiltrationVectors.lean"),
                   **{soundness + f: sha(pkg / f) for f in ("FlockSoundness/Audit/Influence.lean",
                                                            "FlockSoundness/Audit/Law.lean",
                                                            "FlockSoundness/Audit/Stratified.lean",
