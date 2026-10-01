@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -79,6 +80,43 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
     assert all(json.loads(ln)["stage_cached"] for ln in (tmp_path / "hit" / "staged.jsonl").read_text().splitlines())
     monkeypatch.setattr(CS, "_stage_cache", lambda s: None)
     assert CS.main([*args, "--out", str(tmp_path / "miss")]) == 0 and built == [1]
+
+
+def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_in_case_order(monkeypatch, tmp_path: Path):
+    cases = ["gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial"]
+    st: dict = {}
+
+    def run(cmd, **_kw):
+        case = cmd[cmd.index("--only") + 1]
+        st["argv"][case] = cmd
+        on = "caller" if threading.current_thread() is st["caller"] else "pool"
+        if on == "pool":
+            st["started"].wait()                                   # every case's process is running before any returns
+            if case != cases[-1]:
+                st["returned"][cases[cases.index(case) + 1]].wait()   # and they return last case first
+        st["finished"].append(case)
+        st["returned"][case].set()
+        return CS.subprocess.CompletedProcess(cmd, 0, stdout=f"NEG\t{json.dumps({'case': case, 'pass': True, 'on': on})}\n", stderr="")
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    monkeypatch.setattr(CS, "cache_slot_circuits", lambda: None)
+    monkeypatch.setattr(CS, "_stage_job", lambda s: {"shape": s, "stage": {"n": 16}, "table_reads": {}})
+    args = ["--model", "tiny", "--partition", "q-word", "--sample", "1", "--selftest-only", "--selftest", "1", "--selftest-gpu",
+            "--selftest-cases", ",".join(cases), "--selftest-binary", "flock-circuit-seeded"]
+    argvs = {}
+    for jobs, on, order in (("1", "caller", cases), ("3", "pool", cases[::-1])):
+        st.update(argv={}, finished=[], started=threading.Barrier(len(cases)), returned={c: threading.Event() for c in cases},
+                  caller=threading.current_thread())
+        (tmp_path / "selftests.jsonl").unlink(missing_ok=True)
+        assert CS.main([*args, "--selftest-jobs", jobs, "--out", str(tmp_path)]) == 0
+        (rec,) = [json.loads(ln) for ln in (tmp_path / "selftests.jsonl").read_text().splitlines()]
+        assert st["finished"] == order
+        assert rec["selftest"]["all_pass"] is True and rec["selftest"]["subset"] == cases
+        assert rec["selftest"]["gpu_cases"] == [{"case": c, "pass": True, "on": on} for c in cases]
+        argvs[jobs] = st["argv"]
+    assert argvs["3"] == argvs["1"]                                # each case its own process, with the same binary and arguments
+    assert all(cmd[0] == "flock-circuit-seeded" and "--gpu" in cmd and cmd[-2:] == ["--only", c] for c, cmd in argvs["3"].items())
 
 
 def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
