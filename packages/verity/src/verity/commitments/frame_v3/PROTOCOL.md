@@ -1,4 +1,4 @@
-# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512` and its element rows; `frame-b3`
+# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512`, its bit rows and element rows; `frame-b3`
 
 frame-v3 is SHA-256 indexed trees over verifier-derived domains. The framing itself (frame
 `veritor/protocol/merkle/frame/v3\0`, the `leaf`, `pad`, `node` and `empty` tags, and domain ids) is in
@@ -117,8 +117,8 @@ outlive: a header, a replay phase or a weights tag. It is an identity from the p
 It moves to SHA-512 with the other identity digests at the re-baseline, which Daniel's rule of 2026-09-26 extends E4 to. That makes
 it a fixed-width change to this section, with new vectors.
 
-**Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows and the element rows below, and no other row kind. `FrameV3` refuses
-SHA-256 and BLAKE3 rows under it, and SHA-512 rows under a SHA-256 frame.
+**Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows, the bit rows and the element rows below, and no other row kind. `FrameV3`
+refuses SHA-256 and BLAKE3 rows under it, and SHA-512 rows under a SHA-256 frame.
 
 ~~~text
 prefix = ( "verity/sha512-row/v1\0" ‖ u8 role ‖ u8 word_bits ‖ u32be n_words )  zero-padded to 128 bytes
@@ -127,6 +127,36 @@ digest = SHA-512( prefix ‖ row_bytes )
 
 The prefix is one SHA-512 block, so a gadget starts from a constant midstate. The tree leaf is the frame leaf over the 64-byte digest,
 with schema `sha512/row/v1`.
+
+**Bit rows: `sha512/row/v2`.** A row is a string of ℓ bits and nothing else: no format, role or word width enters its digest, since
+format labels stay outside every digest (Daniel, 2026-10-01). `BitRowLeaf(n_bits)` is its leaf.
+
+~~~text
+row bytes = the row's bits eight a byte: row bit i is bit (i mod 8) of byte ⌊i/8⌋, and the last byte's fill is zero bits  (⌈ℓ/8⌉ bytes)
+P(ℓ)      = ( "verity/sha512-row/v2\0" ‖ u64be ℓ )  zero-padded to 128 bytes
+digest    = SHA-512( P(ℓ) ‖ row bytes )
+~~~
+
+- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the Boolean IR's element
+  convention. For every format in use the row bytes are then the tensor's memory: two E2M1 codes a byte, the first in the low nibble;
+  one byte per E4M3 element or scale; two little-endian bytes per BF16 element. An NVFP4 or MXFP4 row is its k codes followed by its
+  scales, as one row (4k + 8·k/16 or 4k + 8·k/32 bits), so an NVFP4 row's bytes are §4a's `nvfp4_row_bytes`. Which values form a
+  row, their widths and their formats are layout and annotations, never part of the digest.
+- **Lengths.** ℓ is any u64, and no shape is refused. A gadget wires the fill bits and SHA-512's padding as constants derived from ℓ.
+  The empty row is a row: its message is P(0) alone, which needs no special case, while refusing it would leave a row of n elements
+  undefined at n = 0 for no soundness reason.
+- **What the digest fixes.** A message decodes to one bit string: the tag, then ℓ, then ⌈ℓ/8⌉ bytes with a zero fill. The encoding is
+  therefore injective, the one property the soundness theorem asks of a row encoding (`HmRows.enc_inj`,
+  `backends/flock/verifier/lean/soundness/FlockSoundness/Binding/Rows.lean`), and under `cr/sha-512` two rows with equal digests are
+  the same bit string. They need not have one format or role: an x row and a W column with equal bits have one digest. The tree leaf
+  binds the port's domain, the rank, the position and the schema (§1), so rows of different ports or positions keep different tree
+  leaves. The tag differs from `sha512/row/v1`'s before its zero byte, so no P(ℓ) is a `sha512/row/v1` prefix.
+- **Constant midstate.** P(ℓ) is one SHA-512 block, so a gadget starts from a midstate fixed by ℓ.
+- **Reference and conformance.** `verity.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
+  refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
+  random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
+  needs another block), then NVFP4 (k = 32), MXFP4 (k = 64), E4M3 (k = 5), BF16 (k = 3) and three-E2M1 rows with their elements.
+  `test_rowleaf_bits.py` checks them.
 
 **Element rows.** A row of `k` low-precision elements hashes the bytes the tensor holds, as §4a's NVFP4 rows do: its codes, then its
 scales, with nothing between or after them. The format is a core constant (`rowleaf.ELEMENT_FORMATS`), and `ElementRowLeaf(format,
@@ -165,7 +195,8 @@ digest = SHA-512( prefix ‖ element_row_bytes )
 tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_leaf(key, b ‖ c))
 ~~~
 
-The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over an element row's digest it is
+The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over a bit row's digest it is
+`hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`); over an element row's digest it is
 `hm96-sha512/row-nvfp4/v1`, `hm96-sha512/row-mxfp4/v1` or `hm96-sha512/row-e4m3/v1` (`ElementRowLeaf.hiding_schema`). The SHA-256
 frame's counterpart is `hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b ‖ c)`. `rowleaf.row_leaf` accepts each at its width.
 
@@ -175,8 +206,8 @@ frame's counterpart is `hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b 
 - `multiproof(tree, ranks)` reads the hash from the tree's domain, and `verify_multiproof(…, hash="sha512")` checks one.
 
 **Vectors.** `vectors_sha512.json`, written by `python -m verity.commitments.frame_v3.vectors_sha512`, covers SHA-512 row digests,
-element-row digests and their hiding leaves, trees with their pads and paths, word leaves and an empty root. `test_sha512_framings.py`
-and `test_rowleaf_elements.py` check them.
+bit-row and element-row digests and their hiding leaves, trees with their pads and paths, word leaves and an empty root.
+`test_sha512_framings.py`, `test_rowleaf_bits.py` and `test_rowleaf_elements.py` check them.
 
 **Cost.** Native compressions per message:
 
