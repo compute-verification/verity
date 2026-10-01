@@ -91,3 +91,25 @@ def test_a_norm_scale_manifest_addresses_every_rsqrt_row_where_it_is_committed(t
     assert not addresses(ProgramIndex(doc, program_dir=pdir, query=q)) <= named
     vus, ne, _nef = population(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True), "r0")
     assert "RsqrtF32_v1" in {v["family"] for v in vus} and not [w for w in ne if "no registered evaluator" in w], dict(ne)
+
+
+def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_spells_it(monkeypatch):
+    """The ATen norm's rsqrt is `<norm module>/norm_scale` and its residual narrow `<norm module>/1`: the relation's one output is compared
+    under that member, equal and unequal alike; a row requiring two members of a one-output relation is not evaluated, by name."""
+    from types import SimpleNamespace
+    from verity_vllm.check.replay import evaluate as E
+
+    words = np.arange(4, dtype=np.uint32)
+    monkeypatch.setattr(E, "_evaluate_row", lambda *a, **k: ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)]))
+    rsqrt4 = ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)])["out"]
+
+    def replay(members, committed):
+        d = {"family": "RsqrtF32_v1", "statics": {"N": 1}, "op_path": "model.norm", "row": 0, "step": 0, "members": members}
+        pi = SimpleNamespace(by_i={0: {"i": 0, "spec": "RsqrtF32_v1{N=1}"}}, describe=lambda r: d)
+        store = SimpleNamespace(words=lambda *a: (committed, ""))
+        return E.replay_vu(pi, store, None, {"i": 0, "request_id": "r0", "phase": "prefill"}, arrive=0)
+
+    assert replay([("norm_scale", 1, "f32")], rsqrt4)["result"] is True
+    assert replay([("norm_scale", 1, "f32")], rsqrt4 ^ 1)["result"] is False
+    two = replay([("norm_scale", 1, "f32"), ("1", 1, "f32")], words[:1])
+    assert two["result"] is None and "no member 'norm_scale'" in two["why"]
