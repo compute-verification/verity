@@ -143,7 +143,7 @@ def _collect(d: Path, rels: list[str], globs: list[str] = ()) -> tuple[list[str]
     for pat in globs:
         for p in sorted(d.glob(pat)):
             if p.is_dir():
-                for f in sorted(x for x in p.rglob("*") if x.is_file()):
+                for f in sorted(x for x in p.rglob("*") if x.is_file() and not any(q.startswith("replay_bundle_p") for q in x.relative_to(p).parts)):
                     rel = f.relative_to(d).as_posix()
                     (present if _eligible(f) else skipped).append(rel)
             elif p.is_file():
