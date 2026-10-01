@@ -36,6 +36,9 @@
   "F32SubFtz_v3": {
    "and": 952
   },
+  "Fa2InvSum_v2": {
+   "and": 947
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
   },
