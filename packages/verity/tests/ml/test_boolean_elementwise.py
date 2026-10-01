@@ -1,5 +1,6 @@
 """`verity.ml.boolean.elementwise`: the Boolean element-wise operations agree with their word primitives (`trace.word_of`) on
-every pair (triple) of special words, on random words and on words chosen to land in the subnormal range, carry exactly their
+every pair (triple) of special words, on random words and on words chosen to land in the subnormal range (a bf16 operation also
+on every word against a few specials, and a product at f32's subnormal and overflow ends), carry exactly their
 builders' live ANDs, and are pinned by gate count and program digest. Bf16AddF2fp_v2 is checked on every pair of words when
 ``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is set."""
 from __future__ import annotations
@@ -8,6 +9,7 @@ import itertools
 import json
 import os
 import zlib
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -22,9 +24,9 @@ from verity.ml import fp32 as W
 from verity.ml import kernels as K
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import trace as TR
-from verity.ml.boolean.forms import Circuit
+from verity.ml.boolean.forms import Circuit, const_bits
 
-DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.Bf16AddF2fp, EW.I32Add]
+DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.Bf16AddF2fp, EW.Bf16Add, EW.Bf16MulBf16, EW.Bf16MulF32, EW.I32Add]
 F32_DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -34,6 +36,9 @@ PINS = {
     "F32Fma_v3": (4485, 7863, 267, "fd402c079584408027c10870dbba98867e7ba3088dd798c48b0b5289c7474667"),
     "F32Div_v3": (2517, 5592, 252, "13f6fbbdffbcb6506ae3fa9555bffb62376ec4827a74ef6303f528abe6365d93"),
     "Bf16AddF2fp_v2": (717, 1061, 122, "f8ebc9ea23ac0786e86867d665f03b9a7ac05e5e295e91293fe0dc2257f907d1"),
+    "Bf16Add_v2": (717, 1061, 116, "e53e03e7897b888534a6042b2c5134461f2e14e09b3b386077b3fecdd7d32428"),
+    "Bf16MulBf16_v2": (799, 1155, 99, "cdbe0fe0f44a2f201c749cb3c54303142a45954f0e7d1b00acce6eb117235439"),
+    "Bf16MulF32_v2": (1220, 2042, 112, "800d334d17cf09fe85fa896d4864f8172f01b0601fb08001d83e1e7366a9a7e2"),
     "I32Add_v2": (31, 153, 0, "d5522187d01b2e76d64689c006ef304fc0b87d8b83337a7534ef2d3f1306cdca"),
 }
 
@@ -119,9 +124,19 @@ _BF16_MAGNITUDES = [0x0000, 0x0001, 0x0002, 0x003F, 0x0040, 0x007F, 0x0080, 0x00
 BF16_SPECIALS = np.array([m | s for m in _BF16_MAGNITUDES for s in (0, 0x8000)], np.uint16)
 
 
-def test_the_bf16_add_agrees_with_bf16_add_f2fp_v1() -> None:
-    """Every pair of special words, every word against each of 8 specials (both orders), random pairs, and pairs that cancel to
-    a few ulps (subnormal and zero sums)."""
+def _edge_exponents(rng, ea: np.ndarray) -> np.ndarray:
+    """For operands of exponent fields ``ea`` (bf16's and f32's are the same 8 bits), the other operand's exponent fields chosen so
+    that the product's is in -26..3 (f32's subnormal range and below, rounded to f32 and then to bf16) or in 250..257 (around
+    f32's overflow)."""
+    target = np.where(rng.integers(0, 2, ea.size) == 1, rng.integers(-26, 4, ea.size), rng.integers(250, 258, ea.size))
+    return np.clip(target - ea + 127, 0, 254)
+
+
+@pytest.mark.parametrize("d", [EW.Bf16AddF2fp, pytest.param(EW.Bf16Add, marks=pytest.mark.slow),
+                               pytest.param(EW.Bf16MulBf16, marks=pytest.mark.slow)], ids=lambda d: d.name)
+def test_the_bf16_operations_agree_with_their_word_primitives(d) -> None:
+    """Every pair of special words, every word against each of 8 specials (both orders), random pairs, pairs that cancel to a
+    few ulps (subnormal and zero sums) and pairs whose product lands at f32's subnormal or overflow end."""
     rng = np.random.default_rng(21)
     every = np.arange(1 << 16, dtype=np.uint16)
     some = BF16_SPECIALS[[0, 1, 5, 7, 16, 19, 20, 23]]
@@ -131,8 +146,63 @@ def test_the_bf16_add_agrees_with_bf16_add_f2fp_v1() -> None:
     b = np.concatenate([BF16_SPECIALS[grid[1]], np.tile(some, len(every)), np.repeat(every, len(some)),
                         rng.integers(0, 1 << 16, 60_000).astype(np.uint16)])
     c = rng.integers(0, 1 << 15, 20_000).astype(np.int64)
-    d = ((c + rng.integers(-3, 4, c.size)).clip(0, 0x7FFF) | (1 << 15)).astype(np.uint16)
-    _agree(bind(EW.Bf16AddF2fp), [np.concatenate([a, c.astype(np.uint16)]), np.concatenate([b, d])])
+    d_ = ((c + rng.integers(-3, 4, c.size)).clip(0, 0x7FFF) | (1 << 15)).astype(np.uint16)
+    p = rng.integers(0, 1 << 16, 20_000).astype(np.int64)
+    q = rng.integers(0, 2, p.size) << 15 | _edge_exponents(rng, p >> 7 & 0xFF) << 7 | rng.integers(0, 128, p.size)
+    _agree(bind(d), [np.concatenate([a, c.astype(np.uint16), p.astype(np.uint16)]),
+                     np.concatenate([b, d_, q.astype(np.uint16)])])
+
+
+@pytest.mark.slow
+def test_the_bf16_by_f32_multiply_agrees_with_bf16_mul_f32_v1() -> None:
+    """Every bf16 word against each of 12 special f32 words, every pair of special words (bf16 by f32), random pairs, and pairs
+    whose product lands at f32's subnormal or overflow end."""
+    rng = np.random.default_rng(24)
+    every = np.arange(1 << 16, dtype=np.uint16)
+    some = SPECIALS[[0, 1, 5, 8, 12, 15, 17, 23, 26, 27, 32, 49]]
+    grid = np.array(list(itertools.product(range(len(BF16_SPECIALS)), range(len(SPECIALS)))), np.int64).T
+    p = rng.integers(0, 1 << 16, 20_000).astype(np.int64)
+    q = (rng.integers(0, 2, p.size).astype(np.uint64) << np.uint64(31)
+         | _edge_exponents(rng, p >> 7 & 0xFF).astype(np.uint64) << np.uint64(23)
+         | rng.integers(0, 1 << 23, p.size).astype(np.uint64))
+    a = np.concatenate([np.repeat(every, len(some)), BF16_SPECIALS[grid[0]], rng.integers(0, 1 << 16, 60_000).astype(np.uint16),
+                        p.astype(np.uint16)])
+    s = np.concatenate([np.tile(some, len(every)), SPECIALS[grid[1]],
+                        rng.integers(0, 1 << 32, 60_000, dtype=np.uint64).astype(np.uint32), q.astype(np.uint32)])
+    _agree(bind(EW.Bf16MulF32), [a, s])
+
+
+def test_a_shared_operand_split_is_the_operation() -> None:
+    """`shared_operand` cuts `Bf16MulBf16_v2`'s builder at s: the two parts have exactly the builder's gates, the first reads s
+    alone, and the second over (x, s, the first's frontier) is `Bf16MulBf16_v1` on every x against 4 special words and on random
+    pairs."""
+    own, rest = EW.shared_operand(("SharedOwnCheck", "SharedRestCheck"), 1, EW.Bf16MulBf16.build, (("x", EW.BF16), ("s", EW.BF16)),
+                                  EW.BF16, 1, ("", ""), register=False)
+    whole = EW.Bf16MulBf16.traced().counts
+    assert {k: own.traced().counts[k] + rest.traced().counts[k] for k in whole} == whole
+    assert [n for n, _ in own.signature(None)[0]] == ["s"] and [n for n, _ in rest.signature(None)[0]] == ["x", "s", "sd"]
+    rng = np.random.default_rng(25)
+    every = np.arange(1 << 16, dtype=np.uint16)
+    some = BF16_SPECIALS[[1, 7, 16, 23]]
+    x = np.concatenate([np.repeat(every, len(some)), rng.integers(0, 1 << 16, 20_000).astype(np.uint16)])
+    s = np.concatenate([np.tile(some, len(every)), rng.integers(0, 1 << 16, 20_000).astype(np.uint16)])
+    got = np.asarray(BS.evaluate_words(rest, x, s, BS.evaluate_words(own, s))).reshape(-1)
+    assert np.array_equal(got, np.asarray(E.evaluate_batch(W.Bf16MulBf16, x, s)).reshape(-1))
+
+
+def test_a_specialized_constant_is_folded() -> None:
+    """`specialized` folds the f32 word K into `bf16_mul_f32`: no gate reads a constant wire, it has fewer ANDs than
+    `Bf16MulF32_v2`, and on every bf16 word it is `Bf16MulF32_v1(x, K)` at K = 30.0 and K = RN32(1 / 30)."""
+    d = EW.specialized("SpecializedCheck", 1, ["K"], lambda S: lambda C, x: EW.bf16_mul_f32(C, x, const_bits(S.K, 32)),
+                       lambda S: ((("x", EW.BF16),), EW.BF16), register=False)
+    every = np.arange(1 << 16, dtype=np.uint16)
+    for K in (0x41F00000, 0x3D088889):
+        target = bind(d, K=K)
+        T = d.traced(SimpleNamespace(K=K))
+        assert all(o >= 2 for _, ops in T.gates for o in ops)
+        assert T.counts["and"] < PINS["Bf16MulF32_v2"][0]
+        got = np.asarray(BS.evaluate_words(target, every)).reshape(-1)
+        assert np.array_equal(got, np.asarray(E.evaluate_batch(W.Bf16MulF32, every, np.full(every.shape, K, np.uint32))).reshape(-1))
 
 
 _I32_SPECIALS = np.array([0, 1, 2, 0x7FFFFFFE, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFE, 0xFFFFFFFF, 0x0000FFFF, 0x00010000,

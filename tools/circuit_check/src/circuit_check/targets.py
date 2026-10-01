@@ -218,30 +218,38 @@ def _core_roots() -> list[Any]:
 
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, `silu_and_mul`'s row at I = 8
-    (`verity_vllm.program.registry.boolean_silu`) and the final-logit softcap's tanh row at N = 8 (`boolean_activation`); the steps,
-    the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise operations
-    (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator and selects
-    (`verity.ml.boolean.scalar`), the argmax step and `SiluMulBf16_v3` are static-free. vLLM's Boolean RoPE
-    (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which reaches its head and halves;
-    greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its tree, which reach every
-    stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served norms on bits
+    (`verity_vllm.program.registry.boolean_silu`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
+    `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
+    RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
+    (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
+    operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator and selects
+    (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are static-free. vLLM's
+    Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which reaches its head and
+    halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its tree, which reach
+    every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served norms on bits
     (`boolean_norms`) at N = 16 with their MUFU statics at the word ids, the fused norm's lanes at two elements per thread, and
     the word Definitions of its constant steps."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity_vllm.program.registry import boolean_activation as BA
+    from verity_vllm.program.registry import boolean_dense as BDN
+    from verity_vllm.program.registry import boolean_moe as BMOE
     from verity_vllm.program.registry import boolean_norms as BN
     from verity_vllm.program.registry import boolean_rope
     from verity_vllm.program.registry import boolean_silu as BSL
     from verity_vllm.program.registry import sampling_boolean as SB
 
+    rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
+                                   BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
+    rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
+             bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8)]
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8),
             bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
             bind(SB.TokenSelect, V=4161),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
             bind(BN.RMSNormLanesCuda, N=40, BLOCK=32), bind(BN.RMSNormVarEpsCudaWord, N=16, EPS=1e-5),
-            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5), bind(BA.Bf16Tanh, N=8)]
+            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5), bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:

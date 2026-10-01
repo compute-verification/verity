@@ -1,5 +1,14 @@
 {
  "definitions": {
+  "AddScalarBf16_v2{N=8,C=1.0}": {
+   "and": 4968
+  },
+  "AddScalarF32_v2{N=8,C=1e-06}": {
+   "and": 5936
+  },
+  "AddWidenedBf16_v2{N=8}": {
+   "and": 5328
+  },
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
@@ -36,8 +45,26 @@
   "Bf16AddF2fp_v2": {
    "and": 717
   },
+  "Bf16Add_v2": {
+   "and": 717
+  },
+  "Bf16DivScalar_v2{N=8,C=30.0}": {
+   "and": 6920
+  },
   "Bf16GtStrict_v2": {
    "and": 56
+  },
+  "Bf16MulBf16_v2": {
+   "and": 799
+  },
+  "Bf16MulF32_v2": {
+   "and": 1220
+  },
+  "Bf16MulScalarTensor_v2{N=8}": {
+   "and": 6266
+  },
+  "Bf16MulScalar_v2{N=8,C=30.0}": {
+   "and": 5032
   },
   "Bf16Tanh_v2{N=8}": {
    "and": 3128
@@ -111,6 +138,12 @@
   "GatherBf16x76u10_v1": {
    "and": 1296
   },
+  "GeluTanhMulBf16_v2": {
+   "and": 1347
+  },
+  "GeluTanhMul_v2{I=8}": {
+   "and": 10776
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
   },
@@ -126,6 +159,9 @@
   "I32Add_v2": {
    "and": 31
   },
+  "MoeSum_v2{TOPK=8,H=8}": {
+   "and": 41776
+  },
   "MufuEx2Ftz_v2": {
    "and": 1073
   },
@@ -134,6 +170,9 @@
   },
   "MufuSqrtFtz_v2": {
    "and": 879
+  },
+  "MulVecF32_v2{N=8}": {
+   "and": 19440
   },
   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
    "and": 1673
@@ -213,6 +252,12 @@
   "RsqrtApprox_v2": {
    "and": 1134
   },
+  "ScaleRowBf16_v2{N=8}": {
+   "and": 9138
+  },
+  "ScaleRowF32_v2{N=8}": {
+   "and": 19202
+  },
   "SelectBf16_v2": {
    "and": 16
   },
@@ -224,6 +269,12 @@
   },
   "SiluMul_v3{I=8}": {
    "and": 10976
+  },
+  "SquareBf16_v2{N=8}": {
+   "and": 5024
+  },
+  "SquareF32_v2{N=8}": {
+   "and": 15824
   },
   "TanhBf16_v2": {
    "and": 391
