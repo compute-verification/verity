@@ -137,3 +137,62 @@ def test_gemm_batches_the_coordinate() -> None:
     assert len(y) == N
     for i in range(N):
         assert y[i] == _ev(bind(G.GemmCoordinate, K=K, DOT=P.AmpereBF16TcDot16), x, w[i])[0]
+
+
+# ---- the sm_120 FP8 / FP4 coordinates -----------------------------------------------------------------------------------
+
+def _fp4_operands(rng, K: int, block: int, lo: int, hi: int):
+    return ([rng.getrandbits(4) for _ in range(K)], [rng.getrandbits(4) for _ in range(K)],
+            [rng.randrange(lo, hi) for _ in range(K // block)], [rng.randrange(lo, hi) for _ in range(K // block)])
+
+
+def test_sm120_coordinates_are_the_direct_chain() -> None:
+    """Each sm_120 coordinate is its pinned model folded over K in ascending k from +0, then `cvt.rn.bf16.f32`."""
+    import random
+
+    from verity.ml.tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
+    from verity.ml.tc.total_fp8 import tc_dot_total_e4m3
+
+    rng = random.Random(4)
+    for _ in range(5):
+        K = 128
+        x, w = [rng.getrandbits(8) & 0x7E for _ in range(K)], [rng.getrandbits(8) & 0xFE for _ in range(K)]
+        acc = 0
+        for s in range(K // 32):
+            acc = tc_dot_total_e4m3(BLACKWELL_SM120_E4M3_M16N8K32, acc, x[32 * s:32 * s + 32], w[32 * s:32 * s + 32])
+        assert _ev(bind(G.GemmCoordinateE4m3, K=K, **G.GEMM_SM120_E4M3), x, w) == (f32_to_bf16_hw_word(acc),)
+        for coord, binding, model, lo, hi in ((G.GemmCoordinateNvf4, G.GEMM_SM120_NVF4, BLACKWELL_SM120_NVF4, 0x20, 0x48),
+                                              (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, BLACKWELL_SM120_MXF4, 110, 140)):
+            ops = _fp4_operands(rng, 256, model.block, lo, hi)
+            assert _ev(bind(coord, K=256, **binding), *ops) == (f32_to_bf16_hw_word(model.chain(0, *ops)),)
+
+
+def test_sm120_coordinate_circuit_shapes() -> None:
+    """One proof unit = K/k step gates + one cast gate (+ the zero constant), each step reading the previous accumulator."""
+    for coord, binding, K, k, width in ((G.GemmCoordinateE4m3, G.GEMM_SM120_E4M3, 256, 32, 1 + 2 * 32),
+                                        (G.GemmCoordinateNvf4, G.GEMM_SM120_NVF4, 256, 64, 1 + 2 * 64 + 2 * 4),
+                                        (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, 256, 64, 1 + 2 * 64 + 2 * 2)):
+        prog, call = _standalone(bind(coord, K=K, **binding))
+        gates = prog.circuit[call.interval[0]:call.interval[1]]
+        ids: dict[str, int] = {}
+        for g in gates:
+            ids[g.prim.id] = ids.get(g.prim.id, 0) + 1
+        dot = binding["DOT"].id
+        assert ids == {"Const32[0x00000000]_v1": 1, dot: K // k, "F2fpBf16_v1": 1}, ids
+        steps = [g for g in gates if g.prim.id == dot]
+        assert all(len(g.operands) == width for g in steps)
+        for prev, g in zip(steps, steps[1:]):
+            assert g.operands[0] == prev.index
+        cast = next(g for g in gates if g.prim.id == "F2fpBf16_v1")
+        assert list(cast.operands) == [steps[-1].index] and call.returns == (cast.index,)
+
+
+def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
+    """The 1,601 autoproof dot statements (K = 64 / 128 / 256 from a zero accumulator), through the coordinate: the recorded
+    accumulator, then `cvt.rn.bf16.f32`."""
+    root = Path(__file__).resolve().parents[4]
+    cases = json.loads((root / "fixtures" / "tc" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
+    assert len(cases) == 1601
+    for c in cases[::40]:
+        ops = ([int(ch, 16) for ch in c["a"]], [int(ch, 16) for ch in c["b"]], list(bytes.fromhex(c["sa"])), list(bytes.fromhex(c["sb"])))
+        assert _ev(bind(G.GemmCoordinateNvf4, K=len(c["a"]), **G.GEMM_SM120_NVF4), *ops) == (f32_to_bf16_hw_word(int(c["d"], 16)),)

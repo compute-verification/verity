@@ -39,15 +39,31 @@ def _spec_histogram(program) -> dict[str, int]:
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
-def _instance_sequence(program) -> list[dict]:
-    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py)."""
-    from verity.ir.codec import _spec_id
+def _instance_rows(program):
+    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
+    from verity.ir.codec import descriptor_id
     from verity.ir.refs import runs
-    rows = []
     for k, n in enumerate(program.fn.body.nodes):
-        rows.append({"i": k, "spec": _spec_id(n.fn), "form": n.form, "name": n.name,
-                     "args": [[list(r) for r in runs(a.refs)] for a in n.args]})
-    return rows
+        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
+
+
+def _instance_sequence(program) -> list[dict]:
+    return list(_instance_rows(program))
+
+
+def _write_instances(f, head: dict, rows, chunk: int = 4096) -> None:
+    """`json.dump({**head, "rows": list(rows)}, f)`, the same text, written a chunk of rows at a time with `json.dumps` (its C encoder;
+    `json.dump` to a file always runs the Python one) and without the rows list."""
+    f.write(json.dumps(head)[:-1] + (', "rows": [' if head else '"rows": ['))
+    batch, first = [], True
+    for r in rows:
+        batch.append(r)
+        if len(batch) == chunk:
+            f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
+            batch, first = [], False
+    if batch:
+        f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
+    f.write("]}")
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
@@ -377,6 +393,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             res["unsupported"] = geo_refusal
             raise _Refused()
         res["sampling"] = sampling
+        if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
+            from verity_vllm.program.frontend.export_compat import select_cuda_platform
+            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch)
     except _Refused:
@@ -489,14 +508,13 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "export", "hint": "; ".join(bad)}
                 raise _Refused()
             res["declared_derived"] = declared_derived_accounting(target, applied)
-            del ep
-            # derive: the wrapper module IS the source (derive re-exports it identically: same module, same example input)
+            # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
             names = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{names[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None)
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep)
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
@@ -506,11 +524,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
             json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
         else:
-            from verity.ir.codec import descriptor_size, encode_program, program_digest
+            from verity.ir.codec import canonical_json, encode_program
             from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
             program = rep.program
-            desc = encode_program(program)
-            digest = program_digest(desc)
+            desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
+            digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
             # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
             corr_digest = correspondence_digest(desc)
             assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
@@ -519,7 +537,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 f.write(raw)
             corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
             res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
-                              "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": descriptor_size(desc),
+                              "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                               "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                               "correspondence_digest": corr_digest,
                               "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
@@ -538,9 +556,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
             json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
             with gzip.open(os.path.join(out, "instances.json.gz"), "wt") as f:
-                json.dump({"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None,
-                           "rows": _instance_sequence(program)}, f)
+                _write_instances(f, {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                                     "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None},
+                                 _instance_rows(program))
             # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
             art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                          applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)

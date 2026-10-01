@@ -1,6 +1,6 @@
 // Independent CPU model of vLLM's batch-invariant Triton ``_rms_norm_kernel`` (W11), as compiled for sm_89:
 // BLOCK_SIZE = 1024, HAS_WEIGHT = True, num_warps = 4, one CTA (128 threads, 8 columns per thread) per row.
-// Every rounding point below was read off the kernel's PTX and SASS (docs/vllm-poc/rmsnorm-model.md):
+// Every rounding point below was read off the kernel's PTX and SASS:
 //
 //   per thread (columns 8t .. 8t+7 of each 1024-column chunk, masked as a whole when 8t+off >= n_cols):
 //       acc = x1*x1 ; acc = fma(x0,x0,acc) ; acc = fma(x2,x2,acc) ; ... ; acc = fma(x7,x7,acc)     (FMUL/FFMA, RN, no ftz)
@@ -161,7 +161,7 @@ extern "C" void rms_triton_rows(const uint16_t* x, const uint16_t* w, long rows,
 }
 
 // ---- vllm::rms_norm_kernel<c10::BFloat16, VEC_SIZE=8, NUM_DIMS=2, HasWeight=true> (torch.ops._C.rms_norm) ----------
-// Read off the sm_89 SASS of _C_stable_libtorch.abi3.so (docs/vllm-poc/rmsnorm-model.md):
+// Read off the sm_89 SASS of _C_stable_libtorch.abi3.so:
 //   launch:  grid = rows, block = min(n_cols / 8, 1024) threads; thread t owns 8-vectors i = t, t + block, ...
 //   thread:  variance = 0 ; FFMA(x_j, x_j, variance) for j = 0..7 of each vector, vectors in order (no ftz)
 //   warp:    cub WarpReduce: SHFL.DOWN 1, 2, 4, 8, 16 with predicated FADD (lane i adds lane i+off when it is valid)

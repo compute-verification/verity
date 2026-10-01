@@ -37,17 +37,61 @@ _DEF = re.compile(r'\.def(?:_readonly|_readwrite|_property_readonly|_property|_s
 _CLASS = re.compile(r'py::class_<[^>]+>\(\s*m\s*,\s*"(\w+)"')
 
 
+_INCLUDE = re.compile(rb'^[ \t]*#[ \t]*include[ \t]*"([^"]+)"', re.M)
+
+
 def source_paths(here: str = HERE) -> list[str]:
     return [os.path.join(here, s) for s in SOURCES]
 
 
+def local_headers(sources: Sequence[str]) -> list[tuple[str, str]]:
+    """(path relative to the sources' directory, absolute path) of every header the sources include by a quoted path that exists beside
+    the including file, transitively, sorted.  A quoted include found nowhere beside it is the compiler's (-I) business and is skipped.
+    Refused: sources with one basename twice, sources in different directories that include headers, and a header outside the
+    sources' directory -- a staged copy (`<build_dir>/src/`) could not hold either faithfully."""
+    names = [os.path.basename(p) for p in sources]
+    dup = sorted({n for n in names if names.count(n) > 1})
+    if dup:
+        raise ValueError(f"JIT sources share basenames {dup}: their staged copies in one src/ would overwrite each other")
+    found: dict[str, str] = {}
+    todo = [os.path.abspath(p) for p in sources]
+    roots = {os.path.dirname(p) for p in todo}
+    seen: set[str] = set()
+    while todo:
+        p = todo.pop()
+        if p in seen:
+            continue
+        seen.add(p)
+        with open(p, "rb") as f:
+            body = f.read()
+        for inc in _INCLUDE.findall(body):
+            h = os.path.normpath(os.path.join(os.path.dirname(p), inc.decode()))
+            if not os.path.isfile(h):
+                continue
+            if len(roots) > 1:
+                raise ValueError(f"JIT sources in several directories {sorted(roots)} include local header {h}: cannot stage one src/ for them")
+            rel = os.path.relpath(h, next(iter(roots)))
+            if rel.startswith(os.pardir + os.sep):
+                raise ValueError(f"JIT source {p} includes {h}, outside the sources' directory: its staged copy could not resolve it")
+            found[rel] = h
+            todo.append(h)
+    return sorted(found.items())
+
+
 def source_set_digest(paths: list[str] | None = None, *, cflags=CFLAGS, cuda_cflags=CUDA_CFLAGS, torch_version: str = "",
                       cuda_version: str = "") -> str:
-    """sha256 of the source SET: each file's basename + bytes in the fixed SOURCES order, then the flags and the toolchain versions."""
+    """sha256 of the source SET: each file's basename + bytes in the fixed SOURCES order, then each local header's relative path + bytes
+    (`local_headers`; nothing when there is none, so a header-free set keeps its digest), then the flags and the toolchain versions."""
     h = hashlib.sha256()
-    for p in paths if paths is not None else source_paths():
+    paths = paths if paths is not None else source_paths()
+    for p in paths:
         h.update(os.path.basename(p).encode())
         h.update(b"\0")
+        with open(p, "rb") as f:
+            h.update(f.read())
+        h.update(b"\0")
+    for rel, p in local_headers(paths):
+        h.update(b"header:" + rel.encode() + b"\0")
         with open(p, "rb") as f:
             h.update(f.read())
         h.update(b"\0")
@@ -68,6 +112,35 @@ def default_parent(name: str) -> str:
     return _get_build_directory(name, verbose=False)
 
 
+def staged_sources(build_dir: str, sources: Sequence[str]) -> list[str]:
+    """The sources copied into `<build_dir>/src/` (rewritten only when their bytes differ), the paths torch compiles.  torch writes the
+    source paths into build.ninja and ninja rebuilds when that file changes, so compiling each tree's own copy rebuilt the shared,
+    digest-keyed dir for every job of another tree (~2 min of nvcc under the build lock per GPU job on Nebius, Sep 30).  A digest-keyed
+    dir holds one source set, so its staged copy is the same file for every tree.  The local headers they include (`local_headers`) are
+    staged at their relative paths beside them, so the copies compile as the originals do."""
+    sd = os.path.join(build_dir, "src")
+    os.makedirs(sd, exist_ok=True)
+    out = []
+    headers = local_headers(sources)
+    for rel, p in [(os.path.basename(s), s) for s in sources] + headers:
+        with open(p, "rb") as f:
+            body = f.read()
+        dst = os.path.join(sd, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        try:
+            with open(dst, "rb") as f:
+                same = f.read() == body
+        except FileNotFoundError:
+            same = False
+        if not same:
+            tmp = f"{dst}.{os.getpid()}.tmp"
+            with open(tmp, "wb") as f:
+                f.write(body)
+            os.replace(tmp, dst)
+        out.append(dst)
+    return out[:len(sources)]
+
+
 @contextlib.contextmanager
 def build_lock(build_dir: str):
     """Exclusive fcntl lock on `<build_dir>.build-lock`, beside the build dir: one builder at a time, released by the kernel when its holder
@@ -85,7 +158,8 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
              with_cuda: bool = True, verbose: bool = False, loader: Callable[..., Any] | None = None, torch_version: str | None = None,
              cuda_version: str | None = None) -> tuple[Any, str, str]:
     """torch's `cpp_extension.load` for one extension into `<parent>/<digest12>` (`parent`: the caller's, else torch's default for
-    `name`), under `build_lock`; a torch `lock` found in the dir while holding it is removed.  `loader` and the toolchain versions are
+    `name`), under `build_lock`, compiled from the dir's staged copy of `sources` (`staged_sources`); a torch `lock` found in the dir while
+    holding it is removed.  `loader` and the toolchain versions are
     torch's unless given (tests).  Returns (module, build dir, source-set digest)."""
     if loader is None or torch_version is None or cuda_version is None:
         import torch
@@ -104,7 +178,7 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
             print(f"[jit] removing {stale}: no live build holds {bd}.build-lock, so a killed build left it", file=sys.stderr, flush=True)
             with contextlib.suppress(FileNotFoundError):
                 os.remove(stale)
-        module = loader(name=name, sources=list(sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),
+        module = loader(name=name, sources=staged_sources(bd, sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),
                         with_cuda=with_cuda, build_directory=bd, verbose=verbose)
     return module, bd, digest
 

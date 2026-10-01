@@ -1,0 +1,84 @@
+# vy-nebius-1 and vy-nebius-2 as one cluster, as their owners describe them on 30 Sep 2026, with Daniel's defaults for the
+# cutover plan's decisions (research-notes lanes/infra/20260930T1858Z-handoff-from-pous-one-cluster-to-infra-cutover-plan).
+# Nothing on a node reads this yet; `cluster validate` checks it and the tests plan against it. GPU UUIDs stay out: each
+# lease records its own.
+#
+# Between the nodes only TCP 22 passes, inside the subnet too (the steward, 15:12Z): a node reaches the other's agent or
+# queue only over SSH. Sizes here are what jobs declare, and declarations don't match use today (the steward, 18:05Z: CPU
+# requests about 4x use; memory off both ways, a Commit asking 192 GB and using 6, a 4k Build asking 32-48 and using
+# 100-127), so the planner's memory and CPU checks are only as good as the requests until jobs declare measured sizes.
+
+[cluster]
+name = "nebius"
+drain_s = 7200  # admissions end 2 h before the stop, leaving the final backups (13:30Z) and custody before 14:55Z
+
+[priorities]
+service = 1000  # the node's own daemons: sampler, exporters, the node agent
+timed = 900     # quiet whole-node windows
+session = 700   # a lease taken by hand: a kernel inner loop, a debugger
+# capture > work > bench is kueue.yaml's order, which is policy (the steward, 30 Sep 19:40Z): capture 1100 > sweep-night
+# 1000 > a vLLM deployment's GPU work 600 > its CPU work 500 > prover-bench 300 > dev 100 > backfill 10
+capture = 600   # port captures
+work = 500      # a lane's queued work: vLLM deployments, sweep-night
+bench = 300     # M0's pinned prover benches
+dev = 100
+fill = 10       # backfill: sweeps, censuses, anything that resumes from checkpoints
+
+[nodes.vy-nebius-1]
+gpu_model = "rtx-pro-6000"
+owner = "verity"
+memory_gib = 1690
+stops_at = "2026-10-07T15:00:00Z"
+system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
+numa = { 0 = "0-95", 1 = "96-191" }
+# The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z).
+pools = { checks = "8-95" }
+gpus = [
+  { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
+  { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
+]
+
+# Kueue's GPU quotas on node 1 (kueue.yaml, infra/nebius 900ff195): what a workstream owns it gets back from any borrower.
+[[workstreams]]
+name = "provers"          # never borrows: a bench admitted on borrowed quota was evicted mid-run by a reclaim, twice
+node = "vy-nebius-1"
+gpus = 3
+borrow_gpus = 0
+
+[[workstreams]]
+name = "deployments-gpu"  # borrowable, and borrowed GPUs go back when its Commits arrive
+node = "vy-nebius-1"
+gpus = 5
+borrow_gpus = 2
+
+[nodes.vy-nebius-2]
+gpu_model = "rtx-pro-6000"
+owner = "pous"
+memory_gib = 1690
+stops_at = "2026-10-07T15:00:00Z"
+numa = { 0 = "0-95", 1 = "96-191" }
+# GPUs 0-3 on NUMA 0 and 4-7 on NUMA 1, no NVLink, the NIC on NUMA 1 (node2-ops read it at 19:09Z, 30 Sep).
+gpus = [
+  { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
+  { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
+]
+
+# Verity on node 2 (decision 1 at Daniel's default): idle capacity only, preemptible, never in a window, GPUs included.
+# CPUs, memory and job caps are pous infra's interim terms (research-notes, 20260930T1629Z).
+[[shares]]
+project = "verity"
+node = "vy-nebius-2"
+cpus = "48-95"
+max_memory_gib = 1024
+max_job_memory_gib = 256
+max_jobs = 6
+until = "2026-10-07T12:00:00Z"
+
+# PoUW on node 1 (decision 1's other half): overflow onto idle GPUs, preemptible, evicted first, off the reserved CPUs
+# 0-95, and only work that neither ranks nor times sm_120 kernels (such jobs pin node = "vy-nebius-2"). On node 1 it
+# enters through a Kueue LocalQueue on `backfill` that the steward owns; this share is the rule that queue keeps.
+[[shares]]
+project = "pous"
+node = "vy-nebius-1"
+cpus = "96-191"
+until = "2026-10-07T12:00:00Z"

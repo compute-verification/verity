@@ -5,7 +5,8 @@ The rows are each request's Program (the one request of a request manifest; `com
 Build dir whose program digest is the request's (under `--program-dir` / `--programs-root`), grouped by the population the manifest was
 built with, each identity checked against its Calls (rows, width, element range, dtype).  A row of module body M reads a Value of M's own
 body at the same step (evaluated here), a literal (evaluated once), a weight field (the model's parameter or buffer of that name, wrapper
-prefix stripped, in its own width) or a Value produced outside M.  The outside Values are M's forward arguments: the k-th distinct
+prefix stripped, in its own width), a Value of M's weight-only Calls of another step (a norm's `weight + 1` the Build made once: taken
+into the body and evaluated from the weights, its words the same at every step) or a Value produced outside M.  The outside Values are M's forward arguments: the k-th distinct
 (producer module, fx node, hint, port) M's rows at the step read, in Program order, is the k-th tensor among the arguments (positional,
 then keyword), holding the producer rows read in ascending order, as [rows, port elements] words of the port's width.  A body that reads
 anything else -- a Program input other than a weight, a Value of another step, a module under M, a slice across two ports or two fields --
@@ -133,6 +134,7 @@ class Plan:
     kernel_only: set[str] = field(default_factory=set)                    # Definitions over REFERENCE_LEAVES words per instance
     composition: dict[int, dict[str, int]] = field(default_factory=dict)  # engine step -> {request: token rows}: a global manifest's
     order: dict[str, str] = field(default_factory=dict)                   # workload request id -> `r<i>` (the binding map's)
+    by_index: dict[int, str] = field(default_factory=dict)               # workload index -> `r<i>` (a warm-up request stands in by index)
     identities: int = 0
     uncovered: list[str] = field(default_factory=list)
     bytes_per_token: int = 0
@@ -190,6 +192,7 @@ def plan(manifest: Mapping[str, Any], ids: Sequence[Mapping[str, Any]], *roots: 
     if steps and isinstance(steps[0], Mapping):
         p.composition = {int(e["engine_step"]): {str(m["request_id"]): int(m["rows"]) for m in e.get("members") or ()} for e in steps}
     p.order = {str(d["workload_request_id"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("workload_request_id")}
+    p.by_index = {int(d["index"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("index") is not None}
     why = (f"a manifest of {ranks} ranks (the source serves one rank)" if ranks > 1 else
            f"a manifest of {len(requests)} requests without per-request components and composition"
            if len(requests) > 1 and (len(progs) != len(requests) or not p.composition) else None)
@@ -372,11 +375,28 @@ class _Context:
             self.plan.literals[spec] = np.asarray(evaluate(self.plan.definitions[spec][0]), dtype=np.uint64)
         return spec
 
+    def weight_only(self, a: int, m: str, memo: dict[int, bool]) -> bool:
+        """Call `a` is of body M and reads only weight fields, literals and other such Calls: its words are the same at every step."""
+        if a not in memo:
+            memo[a] = False
+            r = self.raw.get(a)
+            memo[a] = r is not None and self.corr.module_of(a) == m and str(r.get("form") or "call") == "call" and all(
+                (kind == "p" and int(x) == self.weights) or int(x) in self.pop.literals or (kind == "n" and self.weight_only(int(x), m, memo))
+                for g in r.get("args") or () for kind, x, _lo, _hi in g)
+        return memo[a]
+
     def part(self, rid: str, m: str, s: int, calls: list[int], targets: list[tuple]) -> Part:
         pop, corr, lits = self.pop, self.corr, self.pop.literals
-        inside = set(calls)
+        inside, memo, stack = set(calls), {}, list(calls)
+        while stack:                                   # M's weight-only Calls of another step (a norm's `weight + 1`, made once): its own
+            for g in self.raw[stack.pop()].get("args") or ():
+                for kind, a, _lo, _hi in g:
+                    a = int(a)
+                    if kind == "n" and a not in inside and a not in lits and pop.step_of(a) != s and self.weight_only(a, m, memo):
+                        inside.add(a)
+                        stack.append(a)
         keys: dict[tuple[str, str, str, str], tuple[Any, set[int]]] = {}
-        for c in calls:
+        for c in sorted(inside):
             for g in self.raw[c].get("args") or ():
                 for kind, a, lo, hi in g:
                     a = int(a)

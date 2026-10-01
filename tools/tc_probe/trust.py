@@ -103,10 +103,11 @@ DOSSIER_SCHEMA = "verity/trust-dossier/v1"
 #: SKU string -> family (the same table as ``research.env.SKU_FAMILY``; the anchor is a *family*: any A100 is the A100 anchor).
 SKU_FAMILY: tuple[tuple[str, str], ...] = (
     (r"\bH100\b", "h100"), (r"\bB200\b", "b200"), (r"\bA100\b", "a100"), (r"\bL40S\b", "l40s"), (r"\bL40\b", "l40"),
-    (r"\bRTX\s*4090\b", "rtx4090"), (r"\bRTX\s*5090\b", "rtx5090"),
+    (r"\bRTX\s*4090\b", "rtx4090"), (r"\bRTX\s*5090\b", "rtx5090"), (r"\bRTX\s*PRO\s*6000\b", "rtxpro6000"),
 )
 
-#: The anchor SKU of an architecture when no Target names one (a Target's anchor is its ``anchor_device``).
+#: The anchor SKU of an architecture when neither a Target nor the instruction names one (a Target's anchor is its
+#: ``anchor_device``, then the registry instruction's ``anchor_device``).
 ANCHOR_SKU: dict[str, str] = {
     "sm_80": "NVIDIA A100 SXM4 80GB", "sm_89": "NVIDIA GeForce RTX 4090", "sm_90": "NVIDIA H100 SXM5 80GB",
     "sm_100": "NVIDIA B200", "sm_120": "NVIDIA GeForce RTX 5090",
@@ -395,7 +396,8 @@ def subjects(name: str) -> Subject:
         wrapped = [t for t in TARGETS.values() if t.instruction == name]
         if wrapped:
             return subjects(wrapped[0].name)
-        return Subject(name=ins.id, instruction=ins.id, model=ins.model, anchor_sku=ANCHOR_SKU.get(ins.sm, ins.sm), target=None)
+        return Subject(name=ins.id, instruction=ins.id, model=ins.model, anchor_sku=ins.anchor_device or ANCHOR_SKU.get(ins.sm, ins.sm),
+                       target=None)
     raise KeyError(f"unknown target or instruction {name!r}; targets: {sorted(TARGETS)}; instructions: {sorted(INSTRUCTIONS)}")
 
 
