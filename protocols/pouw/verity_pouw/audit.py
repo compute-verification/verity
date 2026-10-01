@@ -13,7 +13,10 @@
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.
 
 The protocol owns every outer coin (the salt and the draw).  A scheme's noise is its own derivation from the salt and the
-prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.commitments.merkle` trees.
+prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.commitments.merkle` trees, framed SHA-256 unless the
+scheme names another frame hash in ``commitment_hash`` (`commitment_hash`): ``"blake3"`` is ``frame-b3``, the tree mode whose
+row leaves stream through BLAKE3's chunk tree, for schemes whose rows must be committed within a decode step, and
+``"blake3-s256"`` is ``frame-b3s``, ``frame-b3`` with each leaf a tree over its value's 256-byte segments (a shallower leaf).
 """
 
 from __future__ import annotations
@@ -36,8 +39,13 @@ ROW_SCHEMA = "verity/pouw/row/v1"
 TILE_SCHEMA = "verity/pouw/tile/v1"
 
 
-def rows_domain(binding: bytes, owner: int, count: int) -> CommitmentDomain:
-    return CommitmentDomain(binding, owner, RangeIndexedDomain(count))
+def commitment_hash(scheme: PoUWScheme) -> str:
+    """The frame hash of a scheme's row and tile trees: its ``commitment_hash``, SHA-256 by default."""
+    return getattr(scheme, "commitment_hash", "sha256")
+
+
+def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256") -> CommitmentDomain:
+    return CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
 
 
 def weight_binding(weight: int) -> bytes:
@@ -48,8 +56,8 @@ def activation_binding(salt: bytes, index: int) -> bytes:
     return tagged("verity/pouw/activation-rows/v1", salt, index)
 
 
-def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes]) -> MerkleTree:
-    return MerkleTree(rows_domain(binding, owner, len(rows)), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
+def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256") -> MerkleTree:
+    return MerkleTree(rows_domain(binding, owner, len(rows), hash), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
@@ -111,8 +119,8 @@ def tile_refs(scheme: PoUWScheme, workload: Workload) -> list[TileRef]:
     return out
 
 
-def transcript_domain(epoch: Epoch, count: int) -> CommitmentDomain:
-    return rows_domain(tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root), -1, count)
+def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
+    return rows_domain(tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root), -1, count, hash)
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +162,8 @@ class Prover:
                  kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel):
         self.scheme, self.kernel = scheme, kernel
         self.weights = {w: list(rows) for w, rows in weights.items()}
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows) for w, rows in self.weights.items()}
+        self.hash = commitment_hash(scheme)
+        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash) for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
         self._tree: MerkleTree | None = None
@@ -174,7 +183,7 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows)
+            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -186,7 +195,7 @@ class Prover:
                     for bj, j in enumerate(t.cols):
                         out[i][j] = block[bi][bj]
             outputs.append(out)
-        self._tree = MerkleTree(transcript_domain(epoch, len(leaves)), dict(enumerate(leaves)), lambda _: TILE_SCHEMA)
+        self._tree = MerkleTree(transcript_domain(epoch, len(leaves), self.hash), dict(enumerate(leaves)), lambda _: TILE_SCHEMA)
         return Transcript(tuple(t.commitment.root for t in self._act_trees), self._tree.commitment, tuple(outputs))
 
     def digest(self, tile_id: int) -> bytes:
@@ -300,15 +309,16 @@ class Verifier:
             return Verdict(ref.id, False, "tile does not match the verifier's own enumeration")
         u = ep.workload.matmuls[ref.matmul]
         root_a, root_b = transcript.activation_roots[ref.matmul], ep.weight_roots[u.weight]
-        da = rows_domain(activation_binding(ep.salt, u.index), u.index, u.shape.m)
-        db = rows_domain(weight_binding(u.weight), -2, u.shape.n)
+        h = commitment_hash(scheme)
+        da = rows_domain(activation_binding(ep.salt, u.index), u.index, u.shape.m, h)
+        db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
         if [o.position for o in opening.a] != list(ref.tile.rows) or [o.position for o in opening.b] != list(ref.tile.cols):
             return Verdict(ref.id, False, "openings do not cover the tile")
         if not all(verify_opening(da, Commitment(root_a, u.shape.m), o, ROW_SCHEMA, self.limits) for o in opening.a):
             return Verdict(ref.id, False, "activation opening")
         if not all(verify_opening(db, Commitment(root_b, u.shape.n), o, ROW_SCHEMA, self.limits) for o in opening.b):
             return Verdict(ref.id, False, "weight opening")
-        if opening.leaf.position != ref.id or not verify_opening(transcript_domain(ep, len(self.refs)), transcript.commitment,
+        if opening.leaf.position != ref.id or not verify_opening(transcript_domain(ep, len(self.refs), h), transcript.commitment,
                                                                  opening.leaf, TILE_SCHEMA, self.limits):
             return Verdict(ref.id, False, "transcript opening")
         ctx = Context(ep.salt, u, root_a, root_b)
@@ -332,4 +342,5 @@ class Verifier:
 
 
 __all__ = ["AUDIT_DOMAIN", "SALT_DOMAIN", "Audit", "Epoch", "Lottery", "Prover", "Sampled", "TileOpening", "TileRef", "Transcript",
-           "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "reference_kernel", "tickets", "tile_refs"]
+           "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "reference_kernel", "tickets",
+           "tile_refs"]

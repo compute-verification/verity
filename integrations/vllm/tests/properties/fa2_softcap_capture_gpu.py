@@ -60,9 +60,9 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml import mufu
 
-    (s,) = P._tanh_shards()
+    (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
     sha = hashlib.sha256(words.tobytes()).hexdigest()
     return words, s.lo, {"lo": f"0x{s.lo:08X}", "hi": f"0x{s.hi:08X}", "words": int(words.size), "sha256_words": sha,
@@ -70,9 +70,9 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity_vllm.program.registry import prims as P
+    from verity.ml import mufu
 
-    R = P.MUFU_TANH_RULES
+    R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"
     b = C._run([C._cuda_tool("nvcc"), "-O2", "-gencode", "arch=compute_80,code=compute_80", "-o", str(exe), str(TANH_SRC)])
     if b.returncode:

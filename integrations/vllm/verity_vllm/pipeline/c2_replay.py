@@ -66,6 +66,7 @@ class Site:
     weights_check: Callable[[], dict[str, Any]]
     tl: Any
     after_replay: Callable | None = None
+    protocols: Any = None
 
 
 def live_weights(model: Any, prefix: str) -> Callable:
@@ -275,6 +276,14 @@ def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -
     return _sr_kw, _ep_facts
 
 
+def live_only(s: Site) -> str | None:
+    """The protocol entry whose replay reads the live run (`pouw_circuit.around`): such a run's C2 cannot be deferred to a bundle."""
+    from verity_vllm.check.replay import pouw_circuit as PWC
+
+    return next((e for e in (getattr(s.protocols, "entries", None) or ()) if e.split(":", 1)[0] == PWC.pouw.NAME
+                 and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
+
+
 def plan(s: Site) -> dict[str, Any]:
     """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
     hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`."""
@@ -332,7 +341,9 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
     lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=_pi0.embed_op_path(), splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
-    sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
+    from verity_vllm.check.replay import pouw_circuit as PWC
+
+    sr = (lambda f: f() if plan else PWC.replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                            seed_challenge=_seed_chal,
                            max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
                            workers=getattr(args, "replay_workers", None), retention=_retention,
@@ -340,7 +351,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
                            # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                            manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                            program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
-                           plan=plan, **_sr_kw)
+                           plan=plan, **_sr_kw))
     if plan:
         return sr, lk
     sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
