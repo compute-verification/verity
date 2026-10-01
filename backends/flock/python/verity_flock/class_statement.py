@@ -878,7 +878,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         program = getattr(m, fn)()
     else:
         program = PU._program(a)
-    cache_slot_circuits()
     units = PU.partition_units(program, a.partition)
     classes = units.classes()
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": PO.program_sha512(program)[:32], "seed": a.seed})
@@ -916,6 +915,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
                 out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_sha512=PO.program_sha512(program))
     partition_binding(units, a.partition)
+    # a shape taken from FLOCK_STAGE_CACHE composes nothing; built before _staged, so forked stagers share them
+    if any(not ((c := _stage_cache(s)) and (c / "rec.json").exists()) for s in jobs):
+        cache_slot_circuits()
     serving: list[tuple[dict, dict]] = []
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
