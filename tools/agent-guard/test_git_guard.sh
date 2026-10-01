@@ -13,7 +13,7 @@ g() { bash "$G" "$@"; }
 g remote add a "http://u:pw@127.0.0.1:9/x.git" 2>"$t/err"; rc=$?
 check "remote add with a password is refused" '[ $rc = 2 ] && ! "$REAL" config --get remote.a.url >/dev/null'
 check "the refusal never prints the password" '! grep -q pw "$t/err"'
-g clone -q "http://ghp_abcdefghijklmnopqrstuvwxyz0123456789@127.0.0.1:9/x.git" "$t/c" 2>"$t/err"; rc=$?
+g clone -q "http://ghp_FAKEnotarealtoken000000000000000000@127.0.0.1:9/x.git" "$t/c" 2>"$t/err"; rc=$?
 check "clone with a token as user name is refused" '[ $rc = 2 ] && [ ! -e "$t/c" ] && ! grep -q ghp_ "$t/err"'
 g remote set-url a "http://u:pw@127.0.0.1:9/x.git" 2>/dev/null; rc=$?
 check "set-url with a password is refused" '[ $rc = 2 ]'
