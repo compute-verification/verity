@@ -1714,7 +1714,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     cmd("handles", "the registry").add_argument("--json", action="store_true")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True, url=True)
-    p.add_argument("--to", nargs="+", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
+    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
                    help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
@@ -1741,7 +1741,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
-    p.add_argument("--to", nargs="+", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
+    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
