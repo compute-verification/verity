@@ -142,7 +142,7 @@ def _traced(name: str, version: int, statics: tuple[str, ...], signature, build,
 
     def body(B, S, *colls):
         ps, ret = types(S)
-        return TR._body(TR.trace(lambda C, *e: build(C, S, *e), ps, ret), ps, ret, B, *colls)
+        return TR.emit(TR.trace(lambda C, *e: build(C, S, *e), ps, ret), ps, ret, B, *colls)
 
     d = CompositeDefinition(name, version, statics, signature, body, doc=doc, conformance="exact-model-tested")
     d.build = build  # type: ignore[attr-defined]
