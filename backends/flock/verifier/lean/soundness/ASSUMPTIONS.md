@@ -18,15 +18,17 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 ## Soundness's assumptions (taken without proof)
 
-Soundness rests on three, each a `Prop` in `FlockSoundness/Assumptions.lean` taken as a hypothesis: SHA-512's collision
-resistance in two forms, and the verifier's randomness (Daniel, Sep 30). The development declares no `axiom`. So a
-mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
+Soundness rests on four. Three are `Prop`s in `FlockSoundness/Assumptions.lean`, taken as hypotheses: SHA-512's
+collision resistance in two forms, and the Lean verifier's randomness for the unit draw (Daniel, Sep 30). The fourth, A6,
+is the coin server's randomness for the round coins, which the model embodies (A6, below). The development declares no
+`axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
 | `Prop` | Claim id | Bound | Taken for |
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, and `δ_tree` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline) |
+| none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message | the round coins |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
 evaluations, since collisions exist, so neither is stated for all finders: each theorem takes it for the finders it builds
@@ -84,6 +86,21 @@ unit draw.
   as their probability space, the same assumption.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
+**A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
+coins.
+
+- **Statement.** Each round's coins are uniform field elements, independent of every earlier round's and drawn after the
+  prover's message of that round. The model's session draws its coins exactly so (the games' coin nodes), so A6 is what
+  makes the model's coins the run's.
+- **Why it is not a `Prop`.** The session game draws its own coins: no theorem reads a coin source it could be a
+  hypothesis about, as A3 is about the unit draw's byte source. Stating it as a `Prop` would need the session played on
+  a byte source, which the model doesn't have.
+- **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
+  coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
+- **Seed coins are outside it.** M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
+  `live/src/coin_seed.rs`, through `verity.randomness.derive`). Those sessions also rest on `prf/sha-256` (A4's claim)
+  and on the seed commitment's hiding, and no headline covers them (The headline, its coins).
+
 ## What is restated over the two forms
 
 Each term of the audit's bound is under one form, at the finders built from the prover it bounds
@@ -129,11 +146,11 @@ Once every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane pr
 Boolean-semantics lemma replaces the per-template `RowsCert`.
 
 **Its coins.** The statement is for live uniform OS coins drawn each round: the model's proof coins are uniform and
-drawn after the prover's message, as the verifier's `os` coins are (Cryptographic assumptions and coins, below). M0 does
-not use them today: the non-ZK session derives every coin from one OS seed through a SHA-256 PRF
-(`live/src/bin/flock-circuit.rs`, `config_with` sets `cfg.coin_seed = true`; `live/src/coin_seed.rs`). That rests on
-one more assumption, the PRF, which the headline doesn't take. Moving M0 to per-round OS coins is lane proofs-verify-overlap's. Until then the
-headline is cited only for runs that use per-round OS coins.
+drawn after the prover's message, as the coin server's `os` coins are under A6. M0 does not use them today: the non-ZK
+session derives every coin from one OS seed through a SHA-256 PRF (`live/src/bin/flock-circuit.rs`, `config_with` sets
+`cfg.coin_seed = true`; `live/src/coin_seed.rs`), which rests on `prf/sha-256` and the seed commitment's hiding, and the
+headline takes neither. Moving M0 to per-round OS coins is lane proofs-verify-overlap's. Until then the headline is cited
+only for runs that use per-round OS coins.
 
 ## Other named assumptions
 
