@@ -85,10 +85,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
- pinned vectors, and `circuit`, `ncp-v2` as a Program that sampled proofs verifies; see
- its `PROTOCOL.md`. `protocols/network_warden` (`verity_network_warden`) is network
- transparency's timing channel: the warden, its audit and calibration, and its Lean package
- (`lean/`). Applications (vLLM) compose protocols.
+ pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
+ package (`lean/`, whose `Pouw.Proofs.endToEnd` is the guarantee); see its `PROTOCOL.md`.
+ `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
+ channel: the warden, its audit and calibration, and its Lean package (`lean/`).
+ Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -165,7 +166,8 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), `protocols/network_warden/lean/` (the network
+  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
+  named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
   warden's timing-channel statements and proofs, Mathlib), and `packages/verity/lean/` (core's own
   proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation, no dependencies). New Lean goes into the
   package whose dependencies it needs, in a subdirectory and namespace of its own; a core-only proof goes into core's
