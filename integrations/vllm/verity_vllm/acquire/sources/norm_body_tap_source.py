@@ -227,10 +227,9 @@ class NormBodyTapSource(ST.ServedTap):
         return {"per_token_bytes": max((-(-b // max(1, rows)) for b, rows, _n in per), default=0), "per_seq_bytes": 0,
                 "tensors_per_step": max((n for _b, _r, n in per), default=0)}
 
-    def declaration_classes(self) -> list[dict]:
-        return self.declaration(f"norm body tap: the served values of {len(self._names)} call boundaries of {len(self.modules)} "
-                                "norm bodies (weight + 1, the residual sum, its square, their mean, + eps, rsqrt, the normalised row, "
-                                "the output)")
+    def served(self) -> dict[str, Any]:
+        return self.summary(f"norm body tap: the served values of {len(self._names)} call boundaries of {len(self.modules)} norm bodies "
+                            "(weight + 1, the residual sum, its square, their mean, + eps, rsqrt, the normalised row, the output)")
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,

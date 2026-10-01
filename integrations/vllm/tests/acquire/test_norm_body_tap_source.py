@@ -16,9 +16,11 @@ import types
 import numpy as np
 import pytest
 
+from tests.acquire import test_logits_tap_source as LTT
 from tests.acquire.call_boundary_programs import EPS, H, IL, PF, T
 from tests.acquire.test_call_boundary_source import Probe, Recorder, _tensor, dense, pair, runtime  # noqa: F401  -- fixtures
 from verity_vllm.acquire import gate as G
+from verity_vllm.check import commit_rules as CR
 from verity_vllm.commit import binding as B
 
 torch = pytest.importorskip("torch")
@@ -91,7 +93,8 @@ def norm_weight(world, m):
     return _tensor(world.fields[f"model.{m}.weight"], torch.bfloat16)
 
 
-def _commit(world, monkeypatch, *, norm=True, forms=None, eps=EPSILON, man=None, programs=None, plan=None, probes=()):
+def _commit(world, monkeypatch, *, norm=True, logits=False, forms=None, eps=EPSILON, man=None, programs=None, plan=None, probes=()):
+    """`logits`: the logits tap claims the soft-capped logits too, served by Gemma-2's LogitsProcessor (`test_logits_tap_source`)."""
     monkeypatch.setattr(CB, "CLAIMS", [])
     model = runtime(["model.embed_tokens", "logits_processor", *probes],
                     {n[len("model."):]: _tensor(w, torch.bfloat16) for n, w in world.fields.items() if "layernorm" not in n})
@@ -99,8 +102,10 @@ def _commit(world, monkeypatch, *, norm=True, forms=None, eps=EPSILON, man=None,
         if m not in probes:
             put(model, m, GemmaRMSNorm(norm_weight(world, m), eps, (forms or {}).get(m)))
     com = Recorder(model)
-    taps.attach(com, man or world.man, ("instance_outputs",), taps.TapSources(norm_body_tap=int(norm)), programs=programs or (world.pdir,),
-                call_boundary_plan=plan)
+    if logits:
+        model.add_module("logits_processor", LTT.Softcap(lambda h: LTT.served_gemm(world, com._cur.step)))
+    taps.attach(com, man or world.man, ("instance_outputs",), taps.TapSources(norm_body_tap=int(norm), logits_tap=int(logits)),
+                programs=programs or (world.pdir,), call_boundary_plan=plan)
     for s in com.sources:
         s.install()
     return com
@@ -169,9 +174,29 @@ def test_an_honest_forward_commits_the_host_stream_with_the_forwards_words(dense
     assert cb.identity_sources() == {k: "tap" if k in tapped else "host" for k in ref}
     assert tap.stats["tensors"] == len(ids) and tap.stats["steps"] == 1 + T and tap.stats["errors"] == 0
     assert tap.stats["bytes"] == sum(int(t.numel()) * t.element_size() for k, t in got.items() if k in tapped)
-    d = tap.declaration_classes()[0]
-    assert (d["class"], d["how"], d["source"], d["tensors"]) == (CB.FAMILY, "bound-as-leaf", "tap", len(ids))
+    assert tap.declaration_classes() == []
+    (d,) = cb.declaration_classes()
+    assert (d["class"], d["how"], d["tensors"], d["host_tensors"]) == (CB.FAMILY, "bound-as-leaf", len(com.acquired), len(com.acquired) - len(ids))
+    assert [(s["source"], s["tensors"], s["errors"]) for s in d["served"]] == [("norm_body_tap", len(ids), 0)]
     assert tap.extra_step_bytes({}, None)["tensors_per_step"] == len(ids) // (1 + T)
+
+
+def test_with_every_call_boundary_tapped_the_call_boundary_source_declares_them_all(dense, monkeypatch):
+    """Both taps claim every identity: the call-boundary source evaluates nothing and commits the served words, and its declaration of
+    the class counts them (the Commit's omitted-producer check, R-14, reads one declaration per class)."""
+    host = _commit(dense, monkeypatch, norm=False)
+    _drive(dense, host)
+    com = _commit(dense, monkeypatch, logits=True)
+    *served, cb = com.sources
+    assert [s.short_name for s in com.sources] == ["logits_tap", "norm_body_tap", "call_boundary"] and not cb.plan.bodies
+    _drive(dense, com)
+    assert not com.errors, com.errors
+    assert _layout(com) == _layout(host) and set(cb.identity_sources().values()) == {"tap"}
+    classes = [c for s in com.sources for c in s.declaration_classes()]
+    assert [(c["class"], c["tensors"], c["host_tensors"]) for c in classes] == [(CB.FAMILY, len(com.acquired), 0)]
+    assert [s["source"] for s in classes[0]["served"]] == ["logits_tap", "norm_body_tap"]
+    assert CR.required_classes_check({"classes": classes}, (CB.FAMILY,)) == (True, "PASS")
+    assert not CR.required_classes_check({"classes": [{**classes[0], "tensors": 0}]}, (CB.FAMILY,))[0]
 
 
 def test_the_binding_map_records_each_identitys_source_inside_its_digest(dense, monkeypatch):

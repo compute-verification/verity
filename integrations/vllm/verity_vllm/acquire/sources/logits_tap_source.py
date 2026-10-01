@@ -167,9 +167,9 @@ class LogitsTapSource(ST.ServedTap):
         per = self.step_bytes().values()
         return {"per_token_bytes": 0, "per_seq_bytes": max((b for b, _r, _n in per), default=0), "tensors_per_step": max((n for _b, _r, n in per), default=0)}
 
-    def declaration_classes(self) -> list[dict]:
-        return self.declaration(f"logits tap: the served `<fx node>/out` of {len(self._names)} call boundaries of {MODULE} (the lm_head "
-                                "GEMM's output as the soft cap's division reads it, the quotient, its tanh)")
+    def served(self) -> dict[str, Any]:
+        return self.summary(f"logits tap: the served `<fx node>/out` of {len(self._names)} call boundaries of {MODULE} (the lm_head GEMM's "
+                            "output as the soft cap's division reads it, the quotient, its tanh)")
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,

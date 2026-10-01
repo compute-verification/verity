@@ -111,8 +111,10 @@ def test_an_honest_forward_commits_the_call_boundary_sources_step_stream(dense, 
     assert set(got) == set(ref) and set(ref.values()) == {"host"}
     assert {k for k, v in got.items() if v == "tap"} == {(int(r["engine_step"]), LT.name(r)) for r in ids}
     assert tap.extra_step_bytes({}, None) == {"per_token_bytes": 0, "per_seq_bytes": 3 * V * 2, "tensors_per_step": 3}
-    d = tap.declaration_classes()[0]
-    assert (d["class"], d["how"], d["tensors"]) == (CB.FAMILY, "bound-as-leaf", len(ids))
+    assert tap.declaration_classes() == []
+    (d,) = cb.declaration_classes()
+    assert (d["class"], d["how"], d["tensors"], d["host_tensors"]) == (CB.FAMILY, "bound-as-leaf", len(tapped.acquired), len(tapped.acquired) - len(ids))
+    assert [(s["source"], s["tensors"], s["errors"]) for s in d["served"]] == [("logits_tap", len(ids), 0)]
 
 
 def test_the_tap_commits_the_served_words_not_the_programs(dense, monkeypatch):
