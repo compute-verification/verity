@@ -1,8 +1,8 @@
 """verity.ml: exact, hardware-faithful semantics of ML primitives, and their registrations in the Verity IR.
 
     verity.ml.tc      the tensor-core accumulator step (stdlib only; no IR dependency)
-    verity.ml.prims   IR primitives: AmpereBF16TcDot16, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32, Bf16ToF32, F32ToBf16Rn,
-                      F2fpBf16, F32ToE4m3Sat, const
+    verity.ml.prims   IR primitives: AmpereBF16TcDot16, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32, BlackwellE4m3QmmaDot32,
+                      Bf16ToF32, F32ToBf16Rn, F2fpBf16, F32ToE4m3Sat, const
     verity.ml.scalar  IR primitives: integer, bit, select and comparison operations; FP32 abs / neg / max / min / cvt.sat
     verity.ml.fp32    IR primitives: FP32 add / mul / fma / div (RN-even), the FTZ family, FA2 max and -inf guard, BF16
                       element-wise add / mul

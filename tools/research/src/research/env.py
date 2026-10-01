@@ -48,6 +48,7 @@ SKU_FAMILY: list[tuple[str, str]] = [
     (r"\bL40\b", "l40"),
     (r"\bRTX\s*4090\b", "rtx4090"),
     (r"\bRTX\s*5090\b", "rtx5090"),
+    (r"\bRTX\s*PRO\s*6000\b", "rtxpro6000"),
     (r"\bA10G?\b", "a10"),
     (r"\bT4\b", "t4"),
 ]
