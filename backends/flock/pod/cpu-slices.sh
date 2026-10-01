@@ -1,7 +1,7 @@
-# Sourced by 74-gemm-hill.sh. Node 1 runs every provers task under one cpuset (128-175), so jobs pinned side by side need
+# Sourced by 74-gemm-hill.sh. Node 1 starts every `provers` job on the same cores (128-175), so jobs pinned side by side need
 # cores of their own. hold_slices splits the job's cores into slices of SLICE_SIZE (16) and takes a lock (flock, under
 # SLICE_LOCKS) on every slice the job will pin, held by the job's open descriptors until its last process exits; another
-# job waits for them.
+# job waits for them. In a Kubernetes container it then pins every process of the container (the harness included) to them.
 #   hold_slices CPUSET N: the slices CPUSET touches, taken in order (blocking), pinning CPUSET;
 #   hold_slices "" N:     any ceil(N / SLICE_SIZE) free slices, pinning the first N of their cores.
 # Sets SLICE_CPUS (the cores to pin), SLICES (the slices held) and SLICE_WAIT_S. Must run in the job's own shell: a subshell
@@ -46,4 +46,14 @@ hold_slices() {
   SLICES=$(IFS=,; echo "${held[*]}")
   SLICE_WAIT_S=$(python3 -c "import sys, time; print(round(time.time() - float(sys.argv[1]), 1))" "$t0")
   export SLICE_CPUS SLICES SLICE_WAIT_S
+  # In a Kubernetes container every process is the job's, but the research run harness, its telemetry sampler and uv start on
+  # the pod's whole affinity (node 1's provers range, 128-175) and would load another job's slice: pin them to this one too
+  if [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+    local cg p
+    cg=$(cat /proc/self/cgroup)
+    for p in /proc/[0-9]*; do
+      [ "$(cat "$p/cgroup" 2>/dev/null)" = "$cg" ] && taskset -a -p -c "$SLICE_CPUS" "${p#/proc/}" > /dev/null 2>&1
+    done
+  fi
+  return 0
 }
