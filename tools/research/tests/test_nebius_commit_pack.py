@@ -304,6 +304,9 @@ def test_a_client_exiting_is_no_mps_fault_but_a_server_fault_is(pilot, tmp_path)
     with open(mps.logs / "server.log", "a") as f:
         f.write("[2026-10-01 00:02:00.000 Server   805] Client {PID: 815, Context ID: 0} encountered a fatal GPU fault\n")
     assert "fatal GPU fault" in mps.log_fault()
+    with open(mps.logs / "control.log", "a") as f:
+        f.write("[2026-10-01 00:02:01.000 Control   790] Server 805 hit a fatal exception, shutting down\n")
+    assert "fatal exception" in mps.log_fault()
 
 
 def test_claim_has_one_winner(pilot, tmp_path):
