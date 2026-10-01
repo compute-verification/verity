@@ -7,8 +7,7 @@ Spec: ``PROTOCOL.md`` beside this file (the leaf layouts and the row-leaf schema
 A configuration maps each committed port to its :class:`~verity.commitments.merkle.CommitmentDomain` and leaf kind:
 :class:`WordLeaf` (the value is the leaf's own bytes, hashed by the frame-v3 leaf rule itself), :class:`RowLeaf` (the
 value is a row, the proven digest is its SHA-256 or keyed-BLAKE3 row digest, and the frame-v3 leaf over that digest is
-computed natively by the verifier), :class:`BitRowLeaf` (the same for a row of bits under ``sha512/row/v2``, in
-``frame-v3-sha512``) or :class:`ElementRowLeaf` (the same for a row of an element format's codes and scales, under
+computed natively by the verifier) or :class:`BitRowLeaf` (the same for a row of bits under ``sha512/row/v2``, in
 ``frame-v3-sha512``).
 """
 
@@ -18,12 +17,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from ..merkle import CommitmentDomain, merkle_depth, tree_levels
-from ..rowleaf import (ELEMENT_FORMATS, SCHEMA_BLAKE3_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_SHA256_ROW, SCHEMA_SHA512_ROW,
-                       SCHEMA_SHA512_ROW_V2, blake3_row_layout, sha256_row_layout, sha512_element_row_layout, sha512_row_layout,
-                       sha512_row_v2_layout)
+from ..rowleaf import (SCHEMA_BLAKE3_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_SHA256_ROW, SCHEMA_SHA512_ROW, SCHEMA_SHA512_ROW_V2,
+                       blake3_row_layout, sha256_row_layout, sha512_row_layout, sha512_row_v2_layout)
 from ..scheme import DIGEST_BYTES, LeafLayout
 
-__all__ = ["NAME", "NAME_SHA512", "BitRowLeaf", "ElementRowLeaf", "FrameV3", "Port", "RowLeaf", "WordLeaf"]
+__all__ = ["NAME", "NAME_SHA512", "BitRowLeaf", "FrameV3", "Port", "RowLeaf", "WordLeaf"]
 
 NAME = "frame-v3"
 NAME_SHA512 = "frame-v3-sha512"
@@ -65,33 +63,6 @@ class RowLeaf:
 
 
 @dataclass(frozen=True, slots=True)
-class ElementRowLeaf:
-    """A leaf whose value is one row of ``k`` elements of ``format`` (``rowleaf.ELEMENT_FORMATS``: its codes, then its scales),
-    under ``sha512/row-<format>/v1``; a hiding row's leaf binds ``hiding_schema`` (``hm96-sha512/row-<format>/v1``)."""
-
-    format: str
-    role: int
-    k: int
-    hash = "sha512"
-
-    def __post_init__(self) -> None:
-        if self.format not in ELEMENT_FORMATS:
-            raise ValueError(f"element row format must be one of {sorted(ELEMENT_FORMATS)}, not {self.format!r}")
-        self.layout()
-
-    @property
-    def schema(self) -> str:
-        return ELEMENT_FORMATS[self.format].schema
-
-    @property
-    def hiding_schema(self) -> str:
-        return ELEMENT_FORMATS[self.format].hiding_schema
-
-    def layout(self) -> LeafLayout:
-        return sha512_element_row_layout(self.format, self.role, self.k)
-
-
-@dataclass(frozen=True, slots=True)
 class BitRowLeaf:
     """A leaf whose value is one row of ``n_bits`` bits under ``sha512/row/v2`` (``rowleaf.bit_row``: each element least
     significant bit first, elements in order); a hiding row's leaf binds ``hiding_schema`` (``hm96-sha512/row/v2``)."""
@@ -108,19 +79,19 @@ class BitRowLeaf:
         return sha512_row_v2_layout(self.n_bits)
 
 
-_ROWS = (RowLeaf, BitRowLeaf, ElementRowLeaf)
+_ROWS = (RowLeaf, BitRowLeaf)
 
 
 @dataclass(frozen=True, slots=True)
 class Port:
     domain: CommitmentDomain
-    leaf: WordLeaf | RowLeaf | BitRowLeaf | ElementRowLeaf
+    leaf: WordLeaf | RowLeaf | BitRowLeaf
 
 
 class FrameV3:
     """frame-v3 over a statement's ports; nodes are bound to the port's domain, level and index.  Every port's domain has one
-    hash: ``sha256`` configures ``frame-v3``, ``sha512`` configures ``frame-v3-sha512`` (whose row leaves are ``sha512/row/v1``,
-    ``sha512/row/v2`` and the element rows ``sha512/row-<format>/v1``)."""
+    hash: ``sha256`` configures ``frame-v3``, ``sha512`` configures ``frame-v3-sha512`` (whose row leaves are ``sha512/row/v1``
+    and ``sha512/row/v2``)."""
 
     def __init__(self, ports: Mapping[str, Port]) -> None:
         self.ports = dict(ports)

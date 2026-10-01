@@ -46,10 +46,9 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
 
 - **The inner layout** is any `LeafLayout` with hash H that the verifier derives for the position: a fixed prefix, suffix and value
   length. The host committer's opt-in uses vllm-v1's position leaf (`pos_leaf_layout`, or `pos_leaf_layout(n, "sha512")`). A circuit
-  prefers a block-aligned prefix such as `sha256/row/v1`'s, `sha512/row/v1`'s, a bit row's (`sha512/row/v2`) or an element row's
-  (`sha512/row-nvfp4/v1`, `sha512/row-mxfp4/v1`, `sha512/row-e4m3/v1`), since its midstate is a constant. Under frame-v3 the tree
-  leaf's schema names the inner one: `hm96-sha512/row/v1`, `hm96-sha512/row/v2` over a bit row, or `hm96-sha512/row-<format>/v1` over
-  an element row (`frame_v3/PROTOCOL.md` §6).
+  prefers a block-aligned prefix such as `sha256/row/v1`'s, `sha512/row/v1`'s or a bit row's (`sha512/row/v2`), since its midstate
+  is a constant. Under frame-v3 the tree leaf's schema names the inner one: `hm96-sha512/row/v1`, or `hm96-sha512/row/v2` over a bit
+  row (`frame_v3/PROTOCOL.md` §6).
 - **`b ‖ c` is the commit string.** A backend proves it and publishes it, and the verifier computes the tree leaf natively.
 - **An opening** is `(value, y)`. The verifier recomputes `x`, `c`, `b` and the leaf, and checks the path with the base scheme's tree
   (`vllm-v1`'s or `vllm-v1-sha512`'s node and lift rule and root bindings).
@@ -176,8 +175,8 @@ leaf with the key the circuit used.
 
 These are analytic, one row of R bytes per leaf, against today's keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`):
 - *stored* is the salt bytes kept beside the row;
-- the *ANDs* are in-circuit, over the block-aligned row digest (`sha256/row/v1` or `sha512/row/v1`; a bit row or an element row of
-  R bytes costs the same).
+- the *ANDs* are in-circuit, over the block-aligned row digest (`sha256/row/v1` or `sha512/row/v1`; a bit row of R bytes costs the
+  same).
 
 | R | stored, sha256 | stored, sha512 | ANDs, keyed-BLAKE3 row | ANDs, hm96-sha256 | ANDs, hm96-sha512 | sha512 ÷ BLAKE3 row | sha512 ÷ sha256 |
 |---:|---:|---:|---:|---:|---:|---:|---:|

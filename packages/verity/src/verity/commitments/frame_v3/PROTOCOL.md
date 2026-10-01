@@ -1,4 +1,4 @@
-# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512`, its bit rows and element rows; `frame-b3`
+# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512` and its bit rows; `frame-b3`
 
 frame-v3 is SHA-256 indexed trees over verifier-derived domains. The framing itself (frame
 `veritor/protocol/merkle/frame/v3\0`, the `leaf`, `pad`, `node` and `empty` tags, and domain ids) is in
@@ -117,8 +117,8 @@ outlive: a header, a replay phase or a weights tag. It is an identity from the p
 It moves to SHA-512 with the other identity digests at the re-baseline, which Daniel's rule of 2026-09-26 extends E4 to. That makes
 it a fixed-width change to this section, with new vectors.
 
-**Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows, the bit rows and the element rows below, and no other row kind. `FrameV3`
-refuses SHA-256 and BLAKE3 rows under it, and SHA-512 rows under a SHA-256 frame.
+**Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows and the bit rows below, and no other row kind. `FrameV3` refuses SHA-256
+and BLAKE3 rows under it, and SHA-512 rows under a SHA-256 frame.
 
 ~~~text
 prefix = ( "verity/sha512-row/v1\0" ‖ u8 role ‖ u8 word_bits ‖ u32be n_words )  zero-padded to 128 bytes
@@ -158,37 +158,6 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   needs another block), then NVFP4 (k = 32), MXFP4 (k = 64), E4M3 (k = 5), BF16 (k = 3) and three-E2M1 rows with their elements.
   `test_rowleaf_bits.py` checks them.
 
-**Element rows.** A row of `k` low-precision elements hashes the bytes the tensor holds, as §4a's NVFP4 rows do: its codes, then its
-scales, with nothing between or after them. The format is a core constant (`rowleaf.ELEMENT_FORMATS`), and `ElementRowLeaf(format,
-role, k)` is its leaf:
-
-| schema | tag | codes | scales |
-|---|---|---|---|
-| `sha512/row-nvfp4/v1` | `verity/sha512-row-nvfp4/v1\0` | E2M1, 4 bits; k a multiple of 16 | UE4M3, one per 16 codes |
-| `sha512/row-mxfp4/v1` | `verity/sha512-row-mxfp4/v1\0` | E2M1, 4 bits; k a multiple of 32 | UE8M0, one per 32 codes |
-| `sha512/row-e4m3/v1` | `verity/sha512-row-e4m3/v1\0` | E4M3, 8 bits; k ≥ 1 | none |
-
-~~~text
-element_row_bytes = the k codes in row order: 4-bit codes two per byte (code 2i in the low nibble, 2i+1 in the high),
-                    8-bit codes one per byte                                                       (k·code_bits/8 bytes)
-                  ‖ the n_scales scale bytes in row order                         (n_scales = k/16, k/32 or 0)
-prefix = ( tag ‖ u8 role ‖ u8 code_bits ‖ u32be k ‖ u32be n_scales )  zero-padded to 128 bytes
-digest = SHA-512( prefix ‖ element_row_bytes )
-~~~
-
-- **The bytes.** NVFP4's are `nvfp4_row_bytes`, §4a's bytes. A code is any `code_bits`-bit value and a scale any byte: the row is the
-  tensor's memory, not a checked encoding. There is no padding to whole blocks; SHA-512's own padding ends the message.
-- **What the prefix binds.** The tag names the schema and its version, and so the code and scale encodings, the scale group and the
-  byte order. Each tag has one zero byte, its last, and no tag is another's prefix, so the bytes before the first zero name the schema.
-  Role, code width, `k` and the scale count sit at fixed offsets after it. One prefix is therefore one (schema, role, k), and it
-  differs from every `sha512/row/v1` prefix. The prefix is one SHA-512 block, so a gadget starts from a constant midstate per
-  (schema, role, k).
-- **What the digest fixes.** Under `cr/sha-512`, the digest fixes the schema, role and `k`, and with them the row's length and the
-  values of its codes and scales: two rows with equal digests have equal formats, roles, `k` and bytes.
-- **Reference and conformance.** `verity.commitments.rowleaf` (`element_row_bytes`, `sha512_element_row_prefix`, `_layout` and
-  `_digest`, with the range checks); the element-row vectors in `vectors_sha512.json` (`element_row_leaves`, `element_row_trees`,
-  `element_hiding_leaves`); `test_rowleaf_elements.py`.
-
 **Hiding rows.** A hiding row wraps its row digest in `hm96-sha512/v1` (`hm96/PROTOCOL.md`):
 
 ~~~text
@@ -196,9 +165,7 @@ tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_
 ~~~
 
 The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over a bit row's digest it is
-`hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`); over an element row's digest it is
-`hm96-sha512/row-nvfp4/v1`, `hm96-sha512/row-mxfp4/v1` or `hm96-sha512/row-e4m3/v1` (`ElementRowLeaf.hiding_schema`). The SHA-256
-frame's counterpart is `hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b ‖ c)`. `rowleaf.row_leaf` accepts each at its width.
+`hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). The SHA-256 frame's counterpart is `hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b ‖ c)`. `rowleaf.row_leaf` accepts each at its width.
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.
@@ -206,8 +173,8 @@ frame's counterpart is `hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b 
 - `multiproof(tree, ranks)` reads the hash from the tree's domain, and `verify_multiproof(…, hash="sha512")` checks one.
 
 **Vectors.** `vectors_sha512.json`, written by `python -m verity.commitments.frame_v3.vectors_sha512`, covers SHA-512 row digests,
-bit-row and element-row digests and their hiding leaves, trees with their pads and paths, word leaves and an empty root.
-`test_sha512_framings.py`, `test_rowleaf_bits.py` and `test_rowleaf_elements.py` check them.
+bit-row digests and their hiding leaves, trees with their pads and paths, word leaves and an empty root. `test_sha512_framings.py`
+and `test_rowleaf_bits.py` check them.
 
 **Cost.** Native compressions per message:
 

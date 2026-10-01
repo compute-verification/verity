@@ -21,30 +21,24 @@ Five schemas:
                              with a 128-byte constant first block (``frame-v3-sha512`` rows and ``hm96-sha512/v1``'s inner digest).
 ``sha512/row/v2``            ``SHA-512(sha512_row_v2_prefix(n_bits) || row)``: a row is a bit string (:func:`bit_row`), the
                              128-byte constant first block only its tag and length in bits; no format, role or word width.
-``sha512/row-nvfp4/v1``, ``sha512/row-mxfp4/v1``, ``sha512/row-e4m3/v1``
-                             ``SHA-512(sha512_element_row_prefix(format, role, k) || element_row_bytes)``: a row of ``k`` elements of
-                             an :class:`ElementFormat` (its codes, then its scales, as the tensor holds them), the format, role, code
-                             width, ``k`` and scale count in a 128-byte constant first block.
 ``hm96-sha256/row/v1``       the schema a frame-v3 leaf binds over a hiding row's leaf digest: ``hm96.SHA256.tree_leaf(key, b || c)``
                              over ``sha256/row/v1`` (32 bytes).
 ``hm96-sha512/row/v1``       the same under a ``frame-v3-sha512`` domain: ``hm96.SHA512.tree_leaf(key, b || c)`` over
-                             ``sha512/row/v1`` (64 bytes); ``hm96-sha512/row/v2`` over ``sha512/row/v2``;
-                             ``hm96-sha512/row-<format>/v1`` over an element row's digest.
+                             ``sha512/row/v1`` (64 bytes); ``hm96-sha512/row/v2`` over ``sha512/row/v2``.
 ``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
                              but algebraic: its results are reported and flagged as algebraic in the security section,
                              and never count toward a standard-hash claim (Daniel's standing decision).
 
 ``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  ``nvfp4_row_bytes``
 are the codes packed two per byte (code ``2i`` in the low nibble), then the scale bytes: the code buffer and the scale
-buffer as NVFP4 tensors hold them, so a serving-side committer hashes rows without repacking.  ``element_row_bytes`` is
-the same rule for every :class:`ElementFormat` (``nvfp4_row_bytes`` is its NVFP4 case; one E4M3 element a byte, no scales).
-Roles are :data:`ROLE_X` (1, an x row) and :data:`ROLE_W` (2, a W column).  Unsalted: a low-entropy row is preimage-searchable.
+buffer as NVFP4 tensors hold them, so a serving-side committer hashes rows without repacking (``bit_row`` gives the same
+bytes).  Roles are :data:`ROLE_X` (1, an x row) and :data:`ROLE_W` (2, a W column).  Unsalted: a low-entropy row is
+preimage-searchable.
 """
 from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 from . import blake3 as _blake3
 from . import poseidon2_babybear as h2
@@ -52,10 +46,6 @@ from .merkle import CommitmentDomain
 from .scheme import LeafLayout
 
 __all__ = [
-    "E4M3",
-    "ELEMENT_FORMATS",
-    "MXFP4",
-    "NVFP4",
     "ROLE_W",
     "ROLE_X",
     "SCHEMA_BLAKE3_ROW",
@@ -68,14 +58,12 @@ __all__ = [
     "SCHEMA_SHA256_ROW_NVFP4",
     "SCHEMA_SHA512_ROW",
     "SCHEMA_SHA512_ROW_V2",
-    "ElementFormat",
     "bit_row",
     "blake3_row_digest",
     "blake3_row_key",
     "blake3_row_layout",
     "blake3_row_nvfp4_digest",
     "blake3_row_nvfp4_layout",
-    "element_row_bytes",
     "nvfp4_row_bytes",
     "row_bytes",
     "row_digest",
@@ -87,9 +75,6 @@ __all__ = [
     "sha256_row_nvfp4_layout",
     "sha256_row_nvfp4_prefix",
     "sha256_row_prefix",
-    "sha512_element_row_digest",
-    "sha512_element_row_layout",
-    "sha512_element_row_prefix",
     "sha512_row_digest",
     "sha512_row_layout",
     "sha512_row_prefix",
@@ -108,54 +93,8 @@ SCHEMA_HM96_SHA256_ROW = "hm96-sha256/row/v1"
 SCHEMA_HM96_SHA512_ROW = "hm96-sha512/row/v1"
 SCHEMA_SHA512_ROW_V2 = "sha512/row/v2"
 SCHEMA_HM96_SHA512_ROW_V2 = "hm96-sha512/row/v2"
-
-
-@dataclass(frozen=True, slots=True)
-class ElementFormat:
-    """A row of ``k`` codes of ``code_bits`` bits (``code``: their encoding) and, when ``scale_group``, one ``scale`` byte per
-    ``scale_group`` codes: an element row, hashed as the tensor holds it (frame_v3/PROTOCOL.md §6, element rows)."""
-
-    name: str
-    code: str
-    code_bits: int
-    scale: str | None = None
-    scale_group: int = 0
-
-    @property
-    def schema(self) -> str:
-        return f"sha512/row-{self.name}/v1"
-
-    @property
-    def hiding_schema(self) -> str:
-        return f"hm96-sha512/row-{self.name}/v1"
-
-    @property
-    def tag(self) -> bytes:
-        return f"verity/sha512-row-{self.name}/v1\0".encode()
-
-    def check_k(self, k: int) -> int:
-        group = self.scale_group or (8 // self.code_bits)
-        if not 0 < k < 1 << 32 or k % group:
-            many = f"a positive multiple of {group}" if group > 1 else "a positive number of"
-            raise ValueError(f"an {self.name} row is {many} codes (u32), not {k!r}")
-        return k
-
-    def n_scales(self, k: int) -> int:
-        return self.check_k(k) // self.scale_group if self.scale_group else 0
-
-    def row_len(self, k: int) -> int:
-        """The row's bytes: ``k * code_bits / 8`` code bytes, then the scale bytes (no padding)."""
-        return self.check_k(k) * self.code_bits // 8 + self.n_scales(k)
-
-
-NVFP4 = ElementFormat("nvfp4", "e2m1", 4, "ue4m3", 16)
-MXFP4 = ElementFormat("mxfp4", "e2m1", 4, "ue8m0", 32)
-E4M3 = ElementFormat("e4m3", "e4m3", 8)
-ELEMENT_FORMATS = {f.name: f for f in (NVFP4, MXFP4, E4M3)}
-
 _DIGEST_SCHEMAS = {SCHEMA_SHA256_ROW: 32, SCHEMA_BLAKE3_ROW: 32, SCHEMA_SHA256_ROW_NVFP4: 32, SCHEMA_BLAKE3_ROW_NVFP4: 32, SCHEMA_SHA512_ROW: 64,
-                   SCHEMA_HM96_SHA256_ROW: 32, SCHEMA_HM96_SHA512_ROW: 64, SCHEMA_SHA512_ROW_V2: 64, SCHEMA_HM96_SHA512_ROW_V2: 64,
-                   **{s: 64 for f in ELEMENT_FORMATS.values() for s in (f.schema, f.hiding_schema)}}
+                   SCHEMA_HM96_SHA256_ROW: 32, SCHEMA_HM96_SHA512_ROW: 64, SCHEMA_SHA512_ROW_V2: 64, SCHEMA_HM96_SHA512_ROW_V2: 64}
 
 ROLE_X, ROLE_W = h2.ROLE_X, h2.ROLE_W
 _ROLE_KEY_NAME = {ROLE_X: b"x", ROLE_W: b"w"}
@@ -310,43 +249,29 @@ def blake3_row_digest(words: Sequence[int], word_bits: int, role: int) -> bytes:
 
 
 def _nvfp4_k(k: int) -> int:
-    return NVFP4.check_k(k)
-
-
-def _format(fmt: ElementFormat | str) -> ElementFormat:
-    f = ELEMENT_FORMATS.get(fmt) if isinstance(fmt, str) else fmt
-    if f not in ELEMENT_FORMATS.values():
-        raise ValueError(f"element formats are {sorted(ELEMENT_FORMATS)}, not {fmt!r}")
-    return f
-
-
-def element_row_bytes(fmt: ElementFormat | str, codes: Sequence[int], scales: Sequence[int] = ()) -> bytes:
-    """An element row's bytes: the ``k`` codes in row order (4-bit codes two per byte, code ``2i`` in the low nibble and
-    ``2i+1`` in the high; 8-bit codes one per byte), then the ``k / scale_group`` scale bytes in row order."""
-
-    f = _format(fmt)
-    k = f.check_k(len(codes))
-    if len(scales) != f.n_scales(k):
-        raise ValueError(f"{k} codes take {f.n_scales(k)} scale bytes, not {len(scales)}")
-    c = [int(x) for x in codes]
-    if any(not 0 <= x < 1 << f.code_bits for x in c):
-        raise ValueError(f"an {f.code.upper()} code is {f.code_bits} bits")
-    s = [int(x) for x in scales]
-    if any(not 0 <= x < 256 for x in s):
-        raise ValueError(f"a {(f.scale or '').upper()} scale is one byte")
-    body = bytes(c[2 * i] | (c[2 * i + 1] << 4) for i in range(k // 2)) if f.code_bits == 4 else bytes(c)
-    return body + bytes(s)
+    if not 0 < k < 1 << 32 or k % NVFP4_SCALE_GROUP:
+        raise ValueError(f"an NVFP4 row is a positive multiple of {NVFP4_SCALE_GROUP} codes (u32), not {k!r}")
+    return k
 
 
 def nvfp4_row_bytes(codes: Sequence[int], scales: Sequence[int]) -> bytes:
     """``k`` E2M1 codes packed two per byte (code ``2i`` in the low nibble, ``2i+1`` in the high), then the ``k/16`` UE4M3
     scale bytes, both in row order: ``k/2 + k/16`` bytes (864 at k = 1536)."""
 
-    return element_row_bytes(NVFP4, codes, scales)
+    k = _nvfp4_k(len(codes))
+    if len(scales) != k // NVFP4_SCALE_GROUP:
+        raise ValueError(f"{k} codes take {k // NVFP4_SCALE_GROUP} scale bytes, not {len(scales)}")
+    c = [int(x) for x in codes]
+    if any(not 0 <= x < 16 for x in c):
+        raise ValueError("an E2M1 code is 4 bits")
+    s = [int(x) for x in scales]
+    if any(not 0 <= x < 256 for x in s):
+        raise ValueError("a UE4M3 scale is one byte")
+    return bytes(c[2 * i] | (c[2 * i + 1] << 4) for i in range(k // 2)) + bytes(s)
 
 
 def _nvfp4_len(k: int) -> int:
-    return NVFP4.row_len(k)
+    return k // 2 + k // NVFP4_SCALE_GROUP
 
 
 def sha256_row_nvfp4_prefix(role: int, k: int) -> bytes:
@@ -373,27 +298,6 @@ def blake3_row_nvfp4_digest(codes: Sequence[int], scales: Sequence[int], role: i
     return blake3_row_nvfp4_layout(role, len(codes)).digest(nvfp4_row_bytes(codes, scales))
 
 
-# --- element rows: sha512/row-nvfp4/v1, sha512/row-mxfp4/v1, sha512/row-e4m3/v1 ----------------------------------
-
-
-def sha512_element_row_prefix(fmt: ElementFormat | str, role: int, k: int) -> bytes:
-    """The 128-byte first block: ``"verity/sha512-row-<format>/v1\\0" || u8 role || u8 code_bits || u32be k || u32be n_scales``,
-    zero padded."""
-
-    f = _format(fmt)
-    head = f.tag + bytes([_role(role), f.code_bits]) + f.check_k(k).to_bytes(4, "big") + f.n_scales(k).to_bytes(4, "big")
-    return head.ljust(128, b"\0")
-
-
-def sha512_element_row_layout(fmt: ElementFormat | str, role: int, k: int) -> LeafLayout:
-    f = _format(fmt)
-    return LeafLayout("sha512", sha512_element_row_prefix(f, role, k), f.row_len(k))
-
-
-def sha512_element_row_digest(fmt: ElementFormat | str, codes: Sequence[int], scales: Sequence[int], role: int) -> bytes:
-    return sha512_element_row_layout(fmt, role, len(codes)).digest(element_row_bytes(fmt, codes, scales))
-
-
 # --- poseidon2-babybear-w24/row/v2h ------------------------------------------------------------------------------
 
 
@@ -414,9 +318,9 @@ def row_leaf(domain: CommitmentDomain, rank: int, digest, schema: str = SCHEMA_R
     """The frame-v3 leaf of the row at ``rank`` (rank == position in a range domain).
 
     ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default), the 32-byte SHA-256 / BLAKE3 row digest (four digest
-    schemas, NVFP4 rows included), the 64-byte ``sha512/row/v1``, ``sha512/row/v2`` or ``sha512/row-<format>/v1`` digest
-    (under a ``frame-v3-sha512`` domain), or a hiding row's hm96 leaf digest under ``hm96-sha256/row/v1`` (32 bytes),
-    ``hm96-sha512/row/v1``, ``hm96-sha512/row/v2`` or ``hm96-sha512/row-<format>/v1`` (64 bytes).
+    schemas, NVFP4 rows included), the 64-byte ``sha512/row/v1`` or ``sha512/row/v2`` digest (under a ``frame-v3-sha512``
+    domain), or a hiding row's hm96 leaf digest under ``hm96-sha256/row/v1`` (32 bytes), ``hm96-sha512/row/v1`` or
+    ``hm96-sha512/row/v2`` (64 bytes).
     """
     value = row_leaf_value(digest) if schema == SCHEMA_ROW else bytes(digest)
     if schema != SCHEMA_ROW and len(value) != _DIGEST_SCHEMAS.get(schema, -1):
