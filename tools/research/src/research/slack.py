@@ -116,6 +116,7 @@ ROUTES_DIR = "routes.d"                                          # in the notes:
 ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
 ROUTE_SCHEMA = "verity/slack-route/v1"
 LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
+BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
 QUIET = "(quiet)"                                                # in a post: ring no doorbell
@@ -521,8 +522,11 @@ def poster(msg: dict | None, reg: dict) -> str | None:
 
 
 def lead_names(text: str, reg: dict) -> list[str]:
-    """The names a post addresses: the `@name`s and user-group mentions at its very start, before any other word."""
+    """The names a post addresses: the `@name`s and user-group mentions at its very start, before any other word, or a
+    handle written bare as the first word with a colon (`lean: ...`)."""
     m = LEAD_RE.match(text or "")
+    if not m and (bare := BARE_LEAD_RE.match(text or "")) and any(h["handle"] == bare[1] for h in reg["handles"]):
+        return [bare[1]]
     names: list[str] = []
     for at, gid, label in NAME_TOKEN_RE.findall(m.group(1) if m else ""):
         n = at.rstrip("._-") if at else (label or "").lstrip("@") or next((h["handle"] for h in reg["handles"] if h.get("usergroup") == gid), "")
@@ -541,8 +545,8 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; a quiet post wakes no one; otherwise the names at the start, an announcement's audience (every
-    handle when it names none), and on a reply the root's poster or, when the poster replies, the names the root addressed.
-    The author is never a target."""
+    handle when it names none), and on a reply that names no one the root's poster or, when the poster replies, the names
+    the root addressed.  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or QUIET in text or text.startswith(INBOX_HEAD) or \
@@ -557,7 +561,9 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         out = lead_names(text, reg)
         if not reply and is_announcement(msg):
             out += header_names(text, reg) or [h["handle"] for h in reg["handles"]]
-        if reply and by and by != author:
+        if reply and out:
+            pass                                                     # a reply that names someone is for them alone
+        elif reply and by and by != author:
             out.append(by)
         elif reply and by:
             rt = (root or {}).get("text") or ""

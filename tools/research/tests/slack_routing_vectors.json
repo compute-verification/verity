@@ -201,7 +201,7 @@
       ]
     },
     {
-      "name": "a reply that names someone wakes them and the root's poster",
+      "name": "a reply that names someone wakes only them, not the root's poster",
       "msg": {
         "ts": "1700000013.000002",
         "thread_ts": "1700000013.000001",
@@ -216,7 +216,44 @@
         "text": "@circuits the panel is stale"
       },
       "targets": [
-        "console",
+        "console"
+      ]
+    },
+    {
+      "name": "a handle written bare with a colon addresses it (`console: ...`)",
+      "msg": {
+        "ts": "1700000013.000002",
+        "thread_ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "console: can you check the panel?"
+      },
+      "root": {
+        "ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits the panel is stale"
+      },
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "a bare word with a colon that isn't a handle addresses no one, so the reply rings the root's poster",
+      "msg": {
+        "ts": "1700000013.000002",
+        "thread_ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "note: the panel is stale since 9"
+      },
+      "root": {
+        "ts": "1700000013.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits the panel is stale"
+      },
+      "targets": [
         "infra"
       ]
     },
