@@ -107,9 +107,11 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 2, borrowingLimit: "1"}
-      - {name: cpu, nominalQuota: 64, borrowingLimit: "96"}
-      - {name: memory, nominalQuota: 384Gi, borrowingLimit: "416Gi"}
+      # Proofs borrows every idle GPU, and the cohort's whole CPU and memory to go with them; Commits (600) reclaim from it (300)
+      # (Daniel, 10:58 PM PDT 30 Sep).
+      - {name: nvidia.com/gpu, nominalQuota: 2, borrowingLimit: "6"}
+      - {name: cpu, nominalQuota: 64, borrowingLimit: "124"}
+      - {name: memory, nominalQuota: 384Gi, borrowingLimit: "1280Gi"}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue

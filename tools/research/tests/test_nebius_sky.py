@@ -56,8 +56,9 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     for d in (gpuq, cpuq):
         assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in d and "reclaimWithinCohort: LowerPriority" in d
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
-    assert ('{name: nvidia.com/gpu, nominalQuota: 2, borrowingLimit: "1"}' in provers                 # one pool (Daniel 19:12Z): provers
-            and 'borrowingLimit: "96"' in provers and 'borrowingLimit: "416Gi"' in provers)          # borrows idle GPUs, CPU, memory
+    borrow = {r: usage_report().quantity(v) for r, v in re.findall(r"\{name: (\S+), nominalQuota: [^,]+, borrowingLimit: \"([^\"]+)\"\}", provers)}
+    others = {res: sum(x[res] for name, x in q.items() if name != "provers") for res in ("nvidia.com/gpu", "cpu", "memory")}
+    assert borrow == others                    # proofs borrows every idle GPU, with the CPU and memory to run them (Daniel 10:58 PM PDT)
     assert text.count("    withinClusterQueue: Never") == 5 and text.count("policy: LowerPriority") == 2   # never evict a running Build
     assert text.count("cohortName: nebius") == 5 and text.count("    reclaimWithinCohort: Any") == 1
     backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
