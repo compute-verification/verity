@@ -3,7 +3,8 @@
 For every row of an inventory (`inventory.py`), φ is read from the row's DECLARED inputs only (`phi_of`: the row id, its workload
 manifest, the declared target `target_family.declared_profile`, the pinned checkpoint's `config.json`); the Program is predicted at
 the granularity each Build dir stores (`build_step`: one engine step; `build_request*`: one request shape (LP, T); `build_workload`:
-the GP-01 composition of the request components over the manifest) and compared with what the Build traced:
+the GP-01 composition of the request components over the manifest; a tensor-parallel row's `rank<r>/build_*`, each at its rank) and
+compared with what the Build traced:
 
     exact        the predicted Program digest equals the traced one
     equivalence  `program.descriptor_equivalence.compare` on the two Programs (only run when the digests differ and the traced
@@ -101,6 +102,14 @@ def phi_key(phi: Phi) -> str:
     k = {"model": {k: v for k, v in phi.model.items()}, "target": phi.target, "tp": phi.tp, "sampling": phi.sampling,
          "execution": phi.execution, "profile": phi.profile}
     return hashlib.sha256(json.dumps(k, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def _of_rank(phi: Phi | None, pk: str | None, rank: int | None) -> tuple:
+    """(φ, its key) of a unit traced at `rank` (a tensor-parallel row's `rank<r>/` dirs); the row's own for any other unit."""
+    if phi is None or rank is None or rank == int(phi.tp.get("rank", 0)):
+        return phi, pk
+    p = Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
+    return p, phi_key(p)
 
 
 # ------------------------------------------------------------------------------------------------------------------- units
@@ -407,8 +416,9 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
         row["context_error"] = pre if phi is None else None
         traced_req = set()
         for name, b in sorted(rec["builds"].items()):
-            if name == "build_workload":
+            if INV.unit_kind(name) == "build_workload":
                 continue
+            uphi, upk = _of_rank(phi, pk, INV.unit_rank(name))
             shape = unit_shape(b)
             u = {"unit": name, "shape": list(shape), "rows": unit_rows(shape) if shape[0] else None, "traced_digest": (b.get("program") or {}).get("digest"),
                  "traced_function": (b.get("program") or {}).get("function"), "traced_n_root_nodes": (b.get("program") or {}).get("n_root_nodes"),
@@ -424,18 +434,20 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
             elif max_mem_mb is not None and (mem := mem_estimate_mb(C, [u["rows"]])) > max_mem_mb:
                 u.update(status="over_budget", reason=f"estimated peak {mem} MB > max_mem_mb {max_mem_mb}")
             else:
-                key = f"{pk}:{':'.join(str(x) for x in shape)}"
+                key = f"{upk}:{':'.join(str(x) for x in shape)}"
                 u["key"] = key
-                tasks.setdefault(key, {"key": key, "phi": phi.to_json(), "shape": list(shape), "rows": u["rows"],
+                tasks.setdefault(key, {"key": key, "phi": uphi.to_json(), "shape": list(shape), "rows": u["rows"],
                                        "mem_mb": mem_estimate_mb(C, [u["rows"]])})
             row["units"].append(u)
         if phi is not None:
             pred_req = set(phi.request_shapes())
             row["request_shapes"] = {"traced": sorted(traced_req), "predicted": sorted(pred_req), "equal": traced_req >= pred_req,
                                      "traced_only": sorted(traced_req - pred_req), "predicted_only": sorted(pred_req - traced_req)}
-        wb = rec["builds"].get("build_workload")
-        if wb is not None:
-            u = {"unit": "build_workload", "traced_digest": wb.get("workload_digest"), "traced_lag": wb.get("lag"), "n_requests": wb.get("n_requests")}
+        for name, wb in sorted(rec["builds"].items()):
+            if INV.unit_kind(name) != "build_workload":
+                continue
+            uphi, _ = _of_rank(phi, pk, INV.unit_rank(name))
+            u = {"unit": name, "traced_digest": wb.get("workload_digest"), "traced_lag": wb.get("lag"), "n_requests": wb.get("n_requests")}
             total = sum(int(lp) + int(t) for lp, t in phi.request_shapes()) if phi is not None else None
             u["rows"] = total
             if wb.get("ok") is not True or not wb.get("workload_digest"):
@@ -447,9 +459,9 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
             elif max_mem_mb is not None and (mem := mem_estimate_mb(C, [int(lp) + int(t) for lp, t in phi.request_shapes()])) > max_mem_mb:
                 u.update(status="over_budget", reason=f"estimated peak {mem} MB > max_mem_mb {max_mem_mb}")
             else:
-                key = f"W:{row['context_digest'][:16]}"
+                key = f"W:{uphi.digest()[:16]}"
                 u["key"] = key
-                wtasks.setdefault(key, {"key": key, "phi": phi.to_json(), "rows": total,
+                wtasks.setdefault(key, {"key": key, "phi": uphi.to_json(), "rows": total,
                                         "mem_mb": mem_estimate_mb(C, [int(lp) + int(t) for lp, t in phi.request_shapes()])})
             row["units"].append(u)
         rows.append(row)
@@ -475,11 +487,11 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
     dtasks = {}
     for row in P["rows"]:
         for u in row["units"]:
-            p = (wpred if u["unit"] == "build_workload" else pred).get(u.get("key")) if u.get("key") else None
+            p = (wpred if INV.unit_kind(u["unit"]) == "build_workload" else pred).get(u.get("key")) if u.get("key") else None
             if p is None:
                 if u.get("key"):
                     u.update(status="not_run", reason="not in the cache (cached_only)" if cached_only else
-                             "workload prediction skipped" if u["unit"] == "build_workload" else "no prediction result")
+                             "workload prediction skipped" if INV.unit_kind(u["unit"]) == "build_workload" else "no prediction result")
                 continue
             u["predict_secs"] = p.get("secs")
             if p["status"] != "predicted":
@@ -492,7 +504,7 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
             u["status"] = "exact" if u["exact"] else "differs"
             if u["exact"]:
                 u["equivalence"] = {"verdict": "equivalent", "by": "equal digest"}
-            elif u["unit"] != "build_workload":
+            elif INV.unit_kind(u["unit"]) != "build_workload":
                 desc = _map_path(u.get("descriptor"), path_map or [])
                 u["divergence_key"] = f"D:{u['key']}:{u['traced_digest'][:16]}"
                 if diverge and desc and os.path.exists(desc):
@@ -508,7 +520,7 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
             if d is not None:
                 u["first_divergence"] = d.get("divergence")
                 u["equivalence"] = d.get("equivalence")
-            elif u.get("status") == "differs" and u["unit"] != "build_workload":
+            elif u.get("status") == "differs" and INV.unit_kind(u["unit"]) != "build_workload":
                 u["first_divergence"] = {"where": "not located", "reason": "traced descriptor not at hand or over the divergence budget"}
     res = {"schema": SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "inventory_root": inv.get("root"), "max_rows": max_rows,
            "rows": P["rows"], "n_prediction_tasks": len(tasks), "n_workload_tasks": len(P["wtasks"]), "n_divergence_tasks": len(dt),
@@ -543,7 +555,8 @@ def summarize(res: dict) -> dict:
     for row in res["rows"]:
         sts = []
         for u in row["units"]:
-            g = "workload" if u["unit"] == "build_workload" else ("step" if u["unit"] == "build_step" else "request")
+            k = INV.unit_kind(u["unit"])
+            g = "workload" if k == "build_workload" else ("step" if k == "build_step" else "request")
             by[u.get("status")] += 1
             by_gran[(g, u.get("status"))] += 1
             if u.get("status") in ("exact", "differs"):
@@ -580,10 +593,10 @@ def table_md(res: dict) -> str:
     lines += ["", "| row | step | request (exact/compared) | workload |", "|---|---|---|---|"]
     for row in res["rows"]:
         us = row["units"]
-        st = next((u.get("status") for u in us if u["unit"] == "build_step"), "-")
-        rq = [u for u in us if u["unit"].startswith("build_request")]
+        st = "/".join(str(u.get("status")) for u in us if INV.unit_kind(u["unit"]) == "build_step") or "-"
+        rq = [u for u in us if INV.unit_kind(u["unit"]).startswith("build_request")]
         rc = [u for u in rq if u.get("status") in ("exact", "differs")]
-        wk = next((u.get("status") for u in us if u["unit"] == "build_workload"), "-")
+        wk = "/".join(str(u.get("status")) for u in us if INV.unit_kind(u["unit"]) == "build_workload") or "-"
         rs = f"{sum(u.get('status') == 'exact' for u in rc)}/{len(rc)} of {len(rq)}" if rc else (rq[0].get("status") if rq else "-")
         lines.append(f"| {row['job']}/{row['row']} | {st} | {rs} | {wk} |")
     return "\n".join(lines) + "\n"

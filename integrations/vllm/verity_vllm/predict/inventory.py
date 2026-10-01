@@ -2,7 +2,8 @@
 
     verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz      # read-only; the module itself is stdlib only
 
-A row is `<ROWS_ROOT>/<job>/<row id>/` holding `build_summary.json`.  Per row: the Build summary's verdicts, per `build_*` dir the
+A row is `<ROWS_ROOT>/<job>/<row id>/` holding `build_summary.json`.  Per row: the Build summary's verdicts, per `build_*` dir (a
+tensor-parallel row's `build/rank<r>/build_*`, named `rank<r>/build_*`) the
 shape it derived (`result.json`: wrapper, M, pos0, LP, T, sampling, declared target) and its Program (digest, function, node count,
 descriptor size), the workload Program's digest, and the row's declared workload manifest (`workloads/<row>.json` in the source tree
 the row ran from, `source_identity.json` `requested_root`) without its prompt text.  Nothing is written beside the rows.
@@ -35,8 +36,9 @@ def _build_dir(bd: str) -> dict:
     r = _j(os.path.join(bd, "result.json"))
     prog = r.get("program") or {}
     desc = os.path.join(bd, "descriptor.json.gz")
-    out = {k: _short(r.get(k)) for k in ("wrapper", "M", "pos0", "LP", "T", "profile", "tp", "ok", "model_class", "_error", "unsupported",
+    out = {k: _short(r.get(k)) for k in ("wrapper", "M", "pos0", "LP", "T", "profile", "ok", "model_class", "_error", "unsupported",
                                           "exception", "message", "refusal", "error")}
+    out["tp"] = {k: r["tp"].get(k) for k in ("world", "rank")} if isinstance(r.get("tp"), dict) else r.get("tp")
     out["sampling"] = {k: (r.get("sampling") or {}).get(k) for k in ("kind", "label", "temperature", "top_p", "top_k", "seeded")}
     out["target_declared"] = (r.get("target") or {}).get("declared")
     out["model_pin"] = r.get("model_pin")
@@ -44,6 +46,17 @@ def _build_dir(bd: str) -> dict:
     out["descriptor"] = desc if os.path.exists(desc) else None
     out["descriptor_gz_bytes"] = os.path.getsize(desc) if out["descriptor"] else None
     return out
+
+
+def unit_kind(name: str) -> str:
+    """A unit's Build dir name without its rank: `build_step` for `build_step` and `rank1/build_step`."""
+    return name.rsplit("/", 1)[-1]
+
+
+def unit_rank(name: str) -> int | None:
+    """The tensor-parallel rank of a unit (`rank<r>/build_*`, a TP row's `build/rank<r>/` dirs), None for a TP1 row's."""
+    head = name.split("/", 1)[0] if "/" in name else ""
+    return int(head[4:]) if head.startswith("rank") and head[4:].isdigit() else None
 
 
 def _workload_dir(bd: str) -> dict:
@@ -62,9 +75,9 @@ def row_record(rd: str) -> dict:
                                                                              "workload_digest", "reason")} if isinstance(v, dict) else _short(v))
                       for k, v in s.items()}
     rec["builds"] = {}
-    for bd in sorted(glob.glob(os.path.join(rd, "build_*", ""))):
-        name = os.path.basename(bd.rstrip("/"))
-        rec["builds"][name] = _workload_dir(bd) if name == "build_workload" else _build_dir(bd)
+    for bd in sorted(glob.glob(os.path.join(rd, "build_*", "")) + glob.glob(os.path.join(rd, "build", "rank*", "build_*", ""))):
+        name = os.path.relpath(bd, rd).rstrip("/").removeprefix("build/")
+        rec["builds"][name] = _workload_dir(bd) if unit_kind(name) == "build_workload" else _build_dir(bd)
     src = _j(os.path.join(rd, "source_identity.json")).get("requested_root")
     rec["source_root"] = src
     wp = os.path.join(src, "integrations", "vllm", "workloads", f"{row}.json") if src else None

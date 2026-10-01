@@ -30,7 +30,7 @@ from __future__ import annotations
 import hashlib
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from verity.ir.codec import canonical_json, encode_program, program_digest
@@ -186,6 +186,35 @@ def model_shape(hf: dict) -> ModelShape:
                       extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1])
 
 
+#: vLLM's `DEFAULT_VOCAB_PADDING_SIZE`: the vocabulary-parallel embedding and LM head pad the vocabulary to a multiple of it
+VOCAB_PADDING = 64
+
+
+def rank_shape(C: ModelShape, world: int) -> ModelShape:
+    """One rank's slice of C under vLLM's tensor parallelism: the query and key/value heads and the MLP width split `world` ways
+    (`QKVParallelLinear`, `MergedColumnParallelLinear` then `RowParallelLinear`), the hidden size, the norms and the rotary table
+    whole.  V stays the full vocabulary: the embedding and the LM head take V / world rows each (`VocabParallelEmbedding`,
+    `ParallelLMHead`) and the token select reads the gathered row.  A split vLLM pads or replicates is `Unexpressible`."""
+    if world == 1:
+        return C
+    facts = []
+    if C.NH % world or C.KVH % world:
+        facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, no replicated key/value heads)")
+    if C.I % world:
+        facts.append(f"an MLP width of {C.I} over {world} ranks")
+    if C.V % VOCAB_PADDING or C.V % world:
+        facts.append(f"a vocabulary of {C.V} over {world} ranks (padded to a multiple of {VOCAB_PADDING}: the padding rows' trim)")
+    if C.E:
+        facts.append("the fused-MoE block under tensor parallelism")
+    if C.qk_norm == "all":
+        facts.append("a q/k norm over all heads under tensor parallelism (its all-gather)")
+    if C.norm_chain or C.embed_scale or C.attn_cap is not None or C.final_cap is not None:
+        facts.append("the embedding normalizer, the unfused norm chain or a logit soft-cap under tensor parallelism")
+    if facts:
+        raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
+    return replace(C, NH=C.NH // world, KVH=C.KVH // world, I=C.I // world)
+
+
 def _arr(shape: tuple[int, ...], w: int) -> Type:
     t: Type = Value(w)
     for n in reversed(shape):
@@ -201,13 +230,15 @@ def _arr_shape(t: Type) -> tuple[int, ...]:
     return tuple(shape)
 
 
-def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
+def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
     family scales it, the one shared rotary `cos_sin_cache` [max_pos, rot] bf16, each attention layer's four f32 scalar scales).  The
-    field names are informational: the descriptor carries types only."""
+    field names are informational: the descriptor carries types only.  Under `world` ranks each is one rank's shard (`rank_shape`)."""
     bf = lambda *s: _arr(s, 16)  # noqa: E731
-    out: list[tuple[str, Type]] = [("model.model.embed_tokens.weight", bf(C.V, C.H))]
+    V = C.V // world
+    C = rank_shape(C, world)
+    out: list[tuple[str, Type]] = [("model.model.embed_tokens.weight", bf(V, C.H))]
     for L in range(C.NL):
         p = f"model.model.layers.{L}."
         out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
@@ -228,7 +259,7 @@ def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
             out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]
     out.append(("model.model.norm.weight", bf(C.H)))
     if not C.tie:
-        out.append(("model.lm_head.weight", bf(C.V, C.H)))
+        out.append(("model.lm_head.weight", bf(V, C.H)))
     if C.embed_scale:
         out.append(("model.model.normalizer", bf(1)))
     out.append(("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
@@ -245,13 +276,19 @@ def _ptypes(spec) -> tuple:
 class _Specs:
     """The vocabulary's kinds for C on the declared target, bound once each (the same objects the rules' `ctx.kind` returns)."""
 
-    def __init__(self, C: ModelShape, target) -> None:
+    def __init__(self, C: ModelShape, target, world: int = 1, rank: int = 0) -> None:
         from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOC
         from verity_vllm.program.registry import targets as TG
+        VS, C = C.V // world, rank_shape(C, world)
         self.C, self.tp, self.TG, self.voc = C, target, TG, VOC
         self.accepted = TG.uses_accepted_kinds(target)
         self.dot = TG.tensor_core_dot(target)
-        self.embedding = self.kind("embedding", V=C.V, H=C.H)
+        if world == 1:
+            self.embedding = self.kind("embedding", V=C.V, H=C.H)
+            self.all_reduce = self.all_gather = None
+        else:
+            self.embedding = self.kind("embedding_shard", VS=VS, H=C.H, START=rank * VS)
+            self.all_reduce, self.all_gather = self.kind("all_reduce2", N=C.H), self.kind("all_gather2", N=VS)
         self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS)
         self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
@@ -265,7 +302,7 @@ class _Specs:
         self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm == "head" else None
         if C.qk_norm == "all":
             self.q_norm, self.k_norm = self.kind("rmsnorm", N=C.NH * C.D, EPS=C.EPS), self.kind("rmsnorm", N=C.KVH * C.D, EPS=C.EPS)
-        self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, C.V)
+        self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
@@ -382,10 +419,12 @@ class BuildResult:
 
 class _Model:
     """The forward of the model class over one call's rows, emitted into `B` with the per-layer K/V history carried across calls
-    (the implicit KV cache the attention rule makes explicit)."""
+    (the implicit KV cache the attention rule makes explicit).  C is one rank's shape (`rank_shape`); a tensor-parallel rank's
+    collectives read `peers`, the other rank's partials, one Input per collective in call order."""
 
-    def __init__(self, B: Builder, specs: _Specs, W: Coll, C: ModelShape) -> None:
+    def __init__(self, B: Builder, specs: _Specs, W: Coll, C: ModelShape, peers: list[Coll] = (), rank: int = 0) -> None:
         self.B, self.S, self.W, self.C = B, specs, W, C
+        self.peers, self.rank, self.n_peer = list(peers), rank, 0
         n = 0
         self.embed = W[n]
         n += 1
@@ -410,6 +449,17 @@ class _Model:
     def call(self, fn, *args) -> Coll:
         return self.B.call(fn, *args)
 
+    def collective(self, fn, own: list[Coll]) -> list[Coll]:
+        """`fn` (`AllReduce2` / `AllGather2`) per row over this rank's partial and the next peer Input's row, in rank order
+        (`rules.vllm_bindings.collectives`), or the rows themselves on one rank."""
+        if not self.peers:
+            return own
+        peer, n = self.peers[self.n_peer], own[0].type.leaves
+        self.n_peer += 1
+        p = _ptypes(fn)[0]
+        parts = [(x.refs, peer.refs.slice(i * n, (i + 1) * n)) for i, x in enumerate(own)]
+        return [self.call(fn, Coll(p, concat(list(a if self.rank == 0 else a[::-1])))) for a in parts]
+
     def forward(self, toks: list[Coll], pos0: int) -> list[Coll]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
         S, C, M = self.S, self.C, len(toks)
@@ -417,7 +467,7 @@ class _Model:
         pq, po, pgu, pd = _ptypes(S.qkv), _ptypes(S.o), _ptypes(S.gate_up), _ptypes(S.down)
         prq, prk, ps = _ptypes(S.rope_q), _ptypes(S.rope_k), _ptypes(S.silu)
         q_w, k_w, v_w = C.NH * C.D, C.KVH * C.D, C.KVH * C.D
-        h = [self.call(S.embedding, Coll(pe[0], t.refs), Coll(pe[1], self.embed.refs)) for t in toks]
+        h = self.collective(S.all_reduce, [self.call(S.embedding, Coll(pe[0], t.refs), Coll(pe[1], self.embed.refs)) for t in toks])
         if C.embed_scale:
             pz = _ptypes(S.embed_scale)
             h = [self.call(S.embed_scale, Coll(pz[0], h[i].refs), Coll(pz[1], self.normalizer.refs)) for i in range(M)]
@@ -461,7 +511,7 @@ class _Model:
                 fn = S.attention(P, i if P0 == 0 else 0, own_rows, launch_sq)
                 pa = _ptypes(fn)
                 attn.append(self.call(fn, Coll(pa[0], q[i].refs), Coll(pa[1], concat(kh[:P])), Coll(pa[2], concat(vh[:P]))))
-            o = [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)]
+            o = self.collective(S.all_reduce, [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)])
             if C.extra_norms:
                 o, _ = self.rms(o, lw["ln2"])
                 x, res = self.rms(o, lw["pre_ff"], res)
@@ -472,7 +522,7 @@ class _Model:
             else:
                 gu = [self.call(S.gate_up, Coll(pgu[0], x[i].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
                 a = [self.call(S.silu, Coll(ps[0], gu[i].refs)) for i in range(M)]
-                d = [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)]
+                d = self.collective(S.all_reduce, [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)])
             if C.extra_norms:
                 d, _ = self.rms(d, lw["post_ff"])
         return self.rms(d, self.norm, res)[0]
@@ -539,7 +589,7 @@ class _Model:
         temperature + top-p select with its per-row constants in operand order (top_p, pos, temperature[, S])."""
         S = self.S
         pl = _ptypes(S.logits)
-        lg = self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))
+        lg = self.collective(S.all_gather, [self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))])[0]
         for fn in S.cap if self.C.final_cap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
         if policy is None:
@@ -575,8 +625,11 @@ def _check_phi(phi: Phi) -> None:
             facts.append(f"stochastic sampling without a split count (splits {s.get('splits')!r})")
     elif s.get("kind", "greedy") != "greedy":
         facts.append(f"sampling {s.get('kind')!r} (greedy or seeded top-p)")
-    if int((phi.tp or {}).get("world", 1)) != 1:
-        facts.append(f"tensor parallel world {phi.tp.get('world')} (TP1 only)")
+    world = int((phi.tp or {}).get("world", 1))
+    if world not in (1, 2):
+        facts.append(f"tensor parallel world {world} (TP1 and TP2, the worlds a Build has traced)")
+    elif world == 2 and s.get("kind", "greedy") != "greedy":
+        facts.append("stochastic sampling under tensor parallelism (the with-peers wrapper takes the prompt and the peers only)")
     if phi.profile != "b1-eager-v3":
         facts.append(f"numerics profile {phi.profile!r}")
     if phi.execution != "bi-eager":
@@ -601,28 +654,37 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if C.window is not None and history > C.window:
         raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
     target = phi.target_profile()
-    specs = _Specs(C, target)
-    leaves = weight_leaves(C)
+    world, rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
+    specs = _Specs(C, target, world, rank)
+    leaves = weight_leaves(C, world)
     wrec = Record(*leaves)
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
-    params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" else "prompt", Array(n, I32))]
+    params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
+    n_user = len(params)
+    if world > 1:
+        # `vllm_meta.WithPeers`: per forward pass the embedding's and each layer's o / down all-reduces over its rows, then the
+        # sampled row's logits all-gather
+        passes = [n] + [1] * (events - 1)
+        shapes = [s for r in passes for s in [(r, C.H)] * (2 * C.NL + 1) + [(1, C.V // world)]]
+        params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     params.append(("weights", wrec))
     params = tuple(params)
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
     W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
+    peers = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)]
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    model = _Model(B, specs, W, C)
+    model = _Model(B, specs, W, specs.C, peers, rank)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     if wrapper == "step":
         hid = model.forward(rows, pos0)
@@ -635,10 +697,14 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
             hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
             toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
         out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
+    if model.n_peer != len(peers):
+        raise AssertionError(f"{model.n_peer} collectives read {len(peers)} peer Inputs")
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
     src_class, derive_name = WRAPPERS[(wrapper, kind)]
+    if world > 1:
+        src_class = f"verity-vllm/with-peers/v1[{src_class}]"
     name = f"{derive_name}[{C.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}

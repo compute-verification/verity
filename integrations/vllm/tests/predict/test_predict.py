@@ -2,7 +2,8 @@
 
 The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
 (`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7, Qwen2.5-0.5B from
-cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5.  A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
+cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5, Llama-3.2-1B's TP2 ranks from cov-p000.
+A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 """
 
@@ -63,6 +64,25 @@ def test_request_and_workload_programs_equal_the_traced_build():
     assert S.predict_workload(phi)["digest"] == "393e9228260663df610abdd41960ee1c861d2e9cec50d9184494b939a489e4e1"
 
 
+@pytest.mark.parametrize("rank,digest", [(0, "d29ee587b4f288e8bed1f24c92b7c0d1247054662de61d0e0f50a70ae09730c8"),
+                                         (1, "c3765e958ca00e3838c30f4b744670d28833fcab785450ef2f88fac7ae177b62")])
+def test_tensor_parallel_rank_step_equals_the_traced_build(rank, digest):
+    """Llama-3.2-1B at TP2 (cov-p000): each rank's step over its shards, with a peer Input per collective in call order (the
+    embedding's and each layer's o / down all-reduces, the logits all-gather) and the two partials in rank order."""
+    r = build_program(_phi(json.loads((FIX / "llama32-1b.config.json").read_text()), tp={"world": 2, "rank": rank}), "step", M=1, pos0=8)
+    assert r.function == "Derived[vLLMStep[LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}"
+    assert r.digest == digest
+
+
+@pytest.mark.slow
+def test_tensor_parallel_rank_workload_equals_the_traced_build():
+    """cov-p000's rank-1 workload Program (B1 256/32 at TP2): the only test that composes a rank's request component, whose
+    `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
+    phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
+               [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
+    assert S.predict_workload(phi)["digest"] == "6ceecbaf0ec167ccf519b23f3b2645e7f9b107dbd0a80a88289a5567df23d286"
+
+
 @pytest.mark.parametrize("sampling,M,digest", [
     ({**STOCH}, 8, "a97e89213fd137f36028291e2c50f2f5f4695fd2799a3777525d8f69a7839e2a"),
     ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "e07dc1b25bbe401a4f1aaadbfc50a60b9515f8d5188abed7dc1e2ca7d77bb45f"),
@@ -91,6 +111,10 @@ def test_weights_record_follows_the_module_order():
                          "model.model.layers.0.self_attn.o_proj.weight"]
     assert "model.lm_head.weight" not in names  # tied: the embedding's leaf
     assert len(names) == 1 + 6 * 2 + 1 + 1 + 4 * 2
+    shards = [(n.split("layers.0.")[-1], t) for n, t in weight_leaves(C, 2)[:7]]
+    assert [(n, t.leaves) for n, t in shards] == [
+        ("model.model.embed_tokens.weight", 128 * 64), ("self_attn.qkv_proj.weight", (2 + 2 * 1) * 16 * 64), ("self_attn.o_proj.weight", 64 * 32),
+        ("mlp.gate_up_proj.weight", 128 * 64), ("mlp.down_proj.weight", 64 * 64), ("input_layernorm.weight", 64), ("post_attention_layernorm.weight", 64)]
     untied = [n for n, _ in weight_leaves(model_shape({**TINY, "tie_word_embeddings": False}))]
     assert untied.index("model.lm_head.weight") == untied.index("model.model.norm.weight") + 1
     biased = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen2", "use_sliding_window": False, "sliding_window": 32}))]
@@ -135,7 +159,11 @@ def test_the_biased_linear_follows_the_targets_rule(target, fused):
     (TINY, {"sampling": {**STOCH, "top_k": 50}}, "top_k 50"),
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
-    (TINY, {"tp": {"world": 2, "rank": 0}}, "tensor parallel world 2"),
+    (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
+    ({**TINY, "num_key_value_heads": 1}, {"tp": {"world": 2, "rank": 0}}, "4 query and 1 key/value heads over 2 ranks"),
+    ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
+    (json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), {"tp": {"world": 2, "rank": 0}}, "the fused-MoE block under tensor parallelism"),
+    (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
@@ -171,6 +199,10 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     topk = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o4__mixed__stoch-t0.8-p0.95__bi-eager"
     sweep = {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]}
     sstep = build_program(_phi(TINY, sampling={**STOCH, "splits": 32}), "step", M=1, pos0=8)
+    tp2 = "smollm2-135m__bf16__rtxpro6000__tp2__b1__i8__o3__mixed__greedy__bi-eager"
+    rank_step = {r: build_program(_phi(TINY, tp={"world": 2, "rank": r}), "step", M=1, pos0=8).digest for r in (0, 1)}
+    rank1_wl = S.predict_workload(_phi(TINY, phi.requests, tp={"world": 2, "rank": 1}))["digest"]
+    assert len({rank_step[0], rank_step[1], step.digest}) == 3
     prog = lambda d: {"digest": d, "function": None, "n_root_nodes": None}  # noqa: E731
     inv = {"schema": "verity-predict/inventory/v1", "root": str(tmp_path / "rows"), "rows": [
         _row(tmp_path, greedy, {
@@ -181,6 +213,8 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
         _row(tmp_path, stoch, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(sstep.digest)}}, sweep),
         _row(tmp_path, topk, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}},
              {**sweep, "sampling_params": {**sweep["sampling_params"], "top_k": 50}}),
+        _row(tmp_path, tp2, {f"rank{r}/build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(rank_step[r])} for r in (0, 1)}
+             | {"rank1/build_workload": {"ok": True, "workload_digest": rank1_wl, "lag": 1, "n_requests": 1}}),
     ]}
     cache = str(tmp_path / "cache.jsonl")
     res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache)
@@ -188,9 +222,9 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True, max_diverge=0)["summary"] == \
         res["summary"], "a divergence in the cache is reported whatever the budget for new ones"
     cold = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=str(tmp_path / "empty.jsonl"), cached_only=True)
-    assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 4
+    assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 7
     tight = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, max_mem_mb=1, cache=cache, cached_only=True)
-    assert tight["summary"]["units_by_status"]["over_budget"] == 4
+    assert tight["summary"]["units_by_status"]["over_budget"] == 7
     units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
     assert units[(greedy, "build_step")]["status"] == "exact"
     assert units[(greedy, "build_workload")]["status"] == "exact"
@@ -201,8 +235,10 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     assert units[(greedy, "build_request_LP9_T2")]["status"] == "no_trace"
     assert units[(stoch, "build_step")]["status"] == "exact"
     assert units[(topk, "build_step")]["status"] == "unexpressible" and "top_k = 50" in units[(topk, "build_step")]["reason"]
+    assert all(units[(tp2, n)]["status"] == "exact" for n in ("rank0/build_step", "rank1/build_step", "rank1/build_workload"))
     s = res["summary"]
-    assert (s["units_compared"], s["units_exact"]) == (4, 3)
+    assert (s["units_compared"], s["units_exact"]) == (7, 6)
+    assert s["units_by_granularity"]["step:exact"] == 4
     assert "| first divergence | units |" in S.table_md(res)
 
 
