@@ -349,12 +349,14 @@ extern "C" __global__ void __launch_bounds__(32) commit_rows(const Args a) {
 // p9 seed or null; i0 rows, i1 k, i2 eoff, i3 negate Ẽ, i4 E's role
 // NVFP4's block step, V (the same bytes out; handoffs/ue4m3-scale-lut.md): 0 the amax as an integer max over |D|'s bits,
 // ue4m3 then the floor as an integer max, r_b from a 128-entry table; 1 the amax by FMNMX on |D|, the floor in FP32 and one
-// packed e4m3x2 encode of the thread's two blocks; 2 as 1, with r_b from lut256 (FORM_LUT_BYTES of dynamic shared memory:
-// per byte b, 32 lane copies of RN(1/s_b) at a 256-byte stride, one PRMT and one conflict-free LDS per scale)
-constexpr int FORM_LUT_BYTES = 128 * 256;
+// packed e4m3x2 encode of the thread's two blocks; 2 (form_nv, the priced path) as 1, with r_b from lut256: one PRMT and
+// one conflict-free LDS per scale.  Its table (FORM_LUT_BYTES of dynamic shared memory) holds, per byte b, 32 lane copies of
+// RN(1/s_b) at a 256-byte stride from tab − 256: b is 0x01 ... 0x7E (the floor 2^-9 is 0x01, SATFINITE stops at 0x7E), and
+// the last row is half used, so three CTAs fit an SM's 100 KB.
+constexpr int FORM_LUT_BYTES = 125 * 256 + 128;
 DEV float lut256(const float* tab, uint32_t pair, int k, uint32_t lane4) {
   const uint32_t addr = __byte_perm(pair, lane4, 0x5504u | ((uint32_t)k << 4));
-  return *reinterpret_cast<const float*>(reinterpret_cast<const char*>(tab) + addr);
+  return *reinterpret_cast<const float*>(reinterpret_cast<const char*>(tab) + addr - 256);
 }
 template <int FMT, int V = 0> DEV void form_body(const Args& a) {
   constexpr int BLK = Fmt<FMT>::BLK;
@@ -373,9 +375,16 @@ template <int FMT, int V = 0> DEV void form_body(const Args& a) {
   const int r0 = blockIdx.x * 16, warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   const bool lead = blockIdx.y == 0;
 
-  if constexpr (V == 2)
-    for (int i = threadIdx.x; i < 128 * 32; i += blockDim.x) tab[(i >> 5) * 64 + (i & 31)] = i >> 5 ? div_rn(1.0f, ue4m3f(i >> 5)) : 512.0f;
-  else if constexpr (FMT == NVFP4)
+  if constexpr (V == 2) {
+    // warp w: bytes 16w + 1 ... 16w + 16, one divide per lane, then four rows' lane copies per STS.128
+    const float r = div_rn(1.0f, ue4m3f(min(16 * warp + 1 + (lane & 15), 126)));
+#pragma unroll
+    for (int it = 0; it < 4; it++) {
+      const int j = 4 * it + (lane >> 3), b = 16 * warp + 1 + j;
+      const float v = __shfl_sync(FULL, r, j);
+      if (b <= 126) reinterpret_cast<float4*>(tab)[(b - 1) * 16 + (lane & 7)] = make_float4(v, v, v, v);
+    }
+  } else if constexpr (FMT == NVFP4)
     for (int c = threadIdx.x; c < 128; c += blockDim.x) s_rcp[c] = div_rn(1.0f, ue4m3f(c));
   if (threadIdx.x < 16) {
     ulonglong2* eg = reinterpret_cast<ulonglong2*>(a.p[1]) + r0 + threadIdx.x;
@@ -527,11 +536,12 @@ template <int FMT, int V = 0> DEV void form_body(const Args& a) {
     }
   }
 }
-extern "C" __global__ void __launch_bounds__(256) form_nv(const Args a) { form_body<NVFP4>(a); }
+extern "C" __global__ void __launch_bounds__(256) form_nv(const Args a) { form_body<NVFP4, 2>(a); }
 extern "C" __global__ void __launch_bounds__(256) form_mx(const Args a) { form_body<MXFP4>(a); }
+extern "C" __global__ void __launch_bounds__(256) form_nv_v0(const Args a) { form_body<NVFP4, 0>(a); }
 extern "C" __global__ void __launch_bounds__(256) form_nv_v1(const Args a) { form_body<NVFP4, 1>(a); }
-extern "C" __global__ void __launch_bounds__(256) form_nv_v2(const Args a) { form_body<NVFP4, 2>(a); }
-extern "C" __global__ void form_nv_v2_smem(int* out) { *out = FORM_LUT_BYTES; }
+extern "C" __global__ void form_nv_smem(int* out) { *out = FORM_LUT_BYTES; }
+extern "C" __global__ void form_mx_smem(int* out) { *out = 0; }
 
 // ---------------------------------------------------------------- the fused products: rows x 32 chains against F
 // out[row][q] = the atom chained from +0 over k/64 steps of codes[row] . ft[q] (ft at scale 1.0).  One CTA per 16·RB rows,

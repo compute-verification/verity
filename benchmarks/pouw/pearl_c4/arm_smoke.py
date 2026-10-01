@@ -2,13 +2,14 @@
 """Pearl-C4's arms through the harness's arm contract without the harness (no cuBLASLt library): `check_arm`, then per
 shape and arm, each flag set prepared on BF16 operands of the fixture's kind, launched, gated (`check_gate`), its first
 ``all`` output's middle byte flipped and the gate rerun (it must refuse), and `known_bad` gated (it must refuse).  With
---run-dir, the build gets ``transcripts_dir`` (RUN_DIR/transcripts), so the hash call dumps its transcript when freed
-(relaunched over poisoned outputs), its no-write negative control goes beside it (<arm>-<shape>-nowrite: the same buffers
-poisoned and read back without a launch), and each arm's ``verifier`` (arm interface v0.4, `check_verifier` when the
-harness has it) goes to RUN_DIR/verifiers.json with the shapes and controls dumped.  --verify-run RUN_DIR, on the CPU
-alone, runs them per shape as the harness's verify.py does: the commands in order, a transcript accepted only by a line
-starting ACCEPT that names its sha256, with no REJECT naming it and every command exiting 0, and a control passing only by
-a REJECT naming its sha256.  One JSON object per line; exit 4 when any gate, control, check or verification fails.
+--run-dir, the hash call dumps its transcript as the harness would (`_Call.dump`: its ``transcript_buffers`` poisoned,
+the weight side and the call relaunched) into RUN_DIR/transcripts/<arm>/<shape>, its no-write negative control beside it
+(<shape>-nowrite: the same buffers poisoned and read back without a launch), and each arm's ``verifier`` (arm interface
+v0.5, `check_verifier` when the harness has it) goes to RUN_DIR/verifiers.json with the shapes and controls dumped.
+--verify-run RUN_DIR, on the CPU alone, runs them per shape as the harness's verify.py does: the commands in order, a
+transcript accepted only by a line starting ACCEPT that names its sha256, with no REJECT naming it and every command
+exiting 0, and a control passing only by a REJECT naming its sha256.  One JSON object per line; exit 4 when any gate,
+control, check or verification fails.
 
   python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--roles hash ...] [--run-dir D]
   python3 arm_smoke.py --verify-run D --run-id ID --commit SHA
@@ -145,7 +146,9 @@ def main(argv: list[str]) -> int:
                 flipped = arm.gate(None, call, shape, flags)
                 emit({"arm": arm.name, "shape": shape.label, "role": role, "control": f"flip {out}", "ok": not flipped.ok})
                 if a.run_dir and role == "hash":
-                    call.dump(Path(ctx["transcripts_dir"]) / f"{arm.name}-{shape.label}-nowrite", write=False)
+                    dumps = Path(ctx["transcripts_dir"]) / arm.name
+                    call.dump(dumps / shape.label)
+                    call.dump(dumps / f"{shape.label}-nowrite", write=False)
                     recorded[arm.name]["controls"].append(f"{shape.label}-nowrite")
                 call.free()
             bad = arm.known_bad(None, shape, ops)

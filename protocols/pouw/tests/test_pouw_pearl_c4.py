@@ -12,6 +12,7 @@ import math
 import pickle
 import random
 import types
+from collections import Counter
 from fractions import Fraction
 
 import pytest
@@ -176,6 +177,53 @@ def test_domain_and_registry():
             s.check(Matmul(0, bad, 0))
     assert s.n_min == F.B_OVF_MIN_N == 128 and ("n_min", 128) in s.certificate.parameters
     V.scheme("nvfp4", True).check(Matmul(0, Shape(16, 128, 16), 0))
+
+
+def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_only():
+    """Daniel's 5:52 PM PDT ruling: the keyed V/O rotation plus the head interleave register inside the keyed 8-block
+    rotation, and the same transforms on an unrotated checkpoint are refused, curated or not."""
+    s = get("pearl-c-nvfp4-v0")
+    vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
+    for curated in (False, True):
+        s.check_registration((F.ROTATION_8, *vo), curated)
+        for unrotated in (vo, vo[:1], vo[1:]):
+            with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+                s.check_registration(unrotated, curated)
+
+
+def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
+    """The keyed 8-block rotation is the registered-weights rule, and an unrotated checkpoint registers only from the curated
+    list (Daniel, 1:36 PM PDT).  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
+    s = get("pearl-c-nvfp4-v0")
+    s.check_registration((F.ROTATION_8,))
+    s.check_registration((), curated=True)
+    with pytest.raises(DomainError, match="curated list"):
+        s.check_registration(())
+    for bad in ((F.ROTATION_8, F.VO_ROTATION), (F.ROTATION_8, F.HEAD_INTERLEAVE),
+                (F.ROTATION_8, F.HEAD_INTERLEAVE, F.VO_ROTATION), (F.VO_ROTATION, F.ROTATION_8, F.HEAD_INTERLEAVE),
+                (F.ROTATION_8, F.ROTATION_8), (F.ROTATION_8, "an-unnamed-transform"), (F.GAMMA_FOLD, F.ROTATION_8),
+                (F.ROTATION_8, F.GAMMA_FOLD), (F.GAMMA_FOLD, F.GAMMA_FOLD), ("an-unnamed-transform",)):
+        with pytest.raises(DomainError, match="not an adopted stack"):
+            s.check_registration(bad, curated=True)
+
+
+def test_a_checkpoint_that_needs_gamma_folded_registers_only_with_it():
+    """70B registrations fold γ (research store docs/pouw/keyed-transforms.md §14: the cast moves Llama-3.1-70B's layer 0
+    update by 158% unfolded).  The rotation folds γ, so its stacks pass as they are; an unrotated checkpoint declares
+    `GAMMA_FOLD`, and is still curated only.  A folded but unrotated checkpoint takes no V/O or interleave."""
+    s = get("pearl-c-nvfp4-v0")
+    vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
+    for stack in F.REGISTRATION_STACKS:
+        s.check_registration(stack, needs_gamma_fold=True)
+    s.check_registration((F.GAMMA_FOLD,), curated=True, needs_gamma_fold=True)
+    s.check_registration((F.GAMMA_FOLD,), curated=True)
+    with pytest.raises(DomainError, match="only with γ folded"):
+        s.check_registration((), curated=True, needs_gamma_fold=True)
+    with pytest.raises(DomainError, match="curated list"):
+        s.check_registration((F.GAMMA_FOLD,), needs_gamma_fold=True)
+    for curated in (False, True):
+        with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+            s.check_registration((F.GAMMA_FOLD, *vo), curated, needs_gamma_fold=True)
 
 
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
@@ -525,6 +573,59 @@ def test_f1_prime_reads_the_exact_noise_law():
     assert var == pytest.approx(8.5625 * sum(float(F.e2m1_value(c)) ** 2 for c in e))
     lo, pmf = F.noise_law((0x7,) + (0,) * 31)
     assert lo == -144 and pmf[0] == pytest.approx(1 / 16) and pmf[144] == pytest.approx(2 / 16)
+
+
+def two_draw_row(k: int = 128) -> tuple[list[int], tuple[int, ...], list[int]]:
+    """A row, an E line with codes at two positions and 0 elsewhere (so an element's noise takes one of 256 equally likely
+    values, by its F line's codes there), and those positions."""
+    x = F.parse_row(V.rows("law", "A", 1, k)[0], k)
+    e = [0] * F.R
+    e[3], e[17] = 0x6, 0xB
+    return x, tuple(e), [3, 17]
+
+
+def atom_words(c: int, e, ae: int, at) -> list[int]:
+    """The noise atom's D on each of the 256 pairs of F codes at `at`, every other F code 0."""
+    out = []
+    for f1 in range(16):
+        for f2 in range(16):
+            f = [0] * F.R
+            f[at[0]], f[at[1]] = f1, f2
+            out.append(F.noise_atom(c, e, ae, f))
+    return out
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
+    """The law against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
+    words, so its p_t is enumerable.  `change_probabilities_exact`' p_t at the block's modal byte is 1 − the most common
+    code value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no
+    word across a cell edge here), and 0 on salt-dead codes."""
+    f = F.FORMATS[fmt]
+    x, e, at = two_draw_row()
+    _, _, alpha, _, ae = F.stats(f, x)
+    dead = F.salt_dead(f, x, alpha, ae)
+    p, modes = F.change_probabilities_exact(f, x, alpha, e, ae, dead)
+    for t in range(0, len(x), 3):
+        byte = modes[t // f.block]
+        r = fp32.div(F.ONE, F.ue4m3_word(byte)) if f is F.NVFP4 else F.pow2_word(127 - byte)
+        codes = Counter(F.e2m1_value(F.e2m1(fp32.mul(d, r))) for d in atom_words(fp32.mul(alpha, x[t]), e, ae, at))
+        assert p[t] == (0.0 if dead[t] else pytest.approx(1 - max(codes.values()) / 256, abs=1e-12))
+
+
+def test_the_modal_byte_is_the_realised_bytes_mode():
+    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line drawn afresh: the
+    most frequent realised byte."""
+    f, rng = F.NVFP4, random.Random(3)
+    x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
+    _, _, alpha, _, ae = F.stats(f, x)
+    e = tuple(F.line(b"mode" * 8, F.ROLE_EA, 0))
+    cdf, sigma = F._below_law(e, F._scale_value(F.NVFP4, ae) / 64), F.noise_sigma(e, ae)
+    for b0 in (0, 16 * 9):
+        cs = [fp32.mul(alpha, w) for w in x[b0:b0 + 16]]
+        seen = Counter(F.block_scale(f, max(F.noise_atom(c, e, ae, [rng.randrange(16) for _ in range(F.R)]) & 0x7FFFFFFF
+                                            for c in cs))[0] for _ in range(600))
+        assert seen.most_common(1)[0][0] == F.modal_byte(f, [F.P.f32_of_bits(c) for c in cs], cdf, sigma)
 
 
 def r1_tile():
