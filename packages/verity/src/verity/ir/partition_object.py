@@ -17,6 +17,10 @@
   Call, then within the Call's cut; the input unit is not a unit (always checked, never drawn).  The width rule's X and W are the
   query's parameters (EXTRAS = 0), integers in 1..2^16.  It applies to a program whose root Calls are `call` or `primitive` nodes
   (`cut`'s step 0); otherwise `evaluate` raises `QueryInapplicable` and `verify` refuses (`query-inapplicable`).
+* **Q_word v2**, the same parameters: v1's evaluation exactly (the same Calls, units, owners and committed sets, so the same
+  `owners_digest`; the object's digest differs by its version), and `verify` checks every Call's cut as v1 does but for one rule: a
+  value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's units
+  may compute a common value, so a count of them bounds wrong work but is not distinct work; a consumer that credits work takes v1.
 * **Q_template_instance v0**, `params = {"template": <descriptor id>}` (`TemplatePartition`).  The root body's nodes other than its
   Input nodes must each be a `call` or a `batch` whose callee's descriptor id (`codec.descriptor_id`, the `callees` entry) is the
   template.  Each call is one unit and each batch member one unit, numbered in canonical order (node order, then member); the input
@@ -46,7 +50,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .codec import canonical_json, descriptor_id, encode_program
 from .codec import SCHEMA_V1
-from .cut import WIRING, CallGraph, DefinitionCut, QueryInapplicable, check_cut, derived_committed, evaluate_definition, member_refs
+from .cut import RECOMPUTE, WIRING, CallGraph, DefinitionCut, QueryInapplicable, check_cut, derived_committed, evaluate_definition, member_refs
 from .layout import resolve
 from .partition import CutVerdict
 from .program import is_input
@@ -71,9 +75,14 @@ def _templates_ok(t: Any) -> bool:
 Q_TEMPLATE_INSTANCE = ("Q_template_instance", 0)
 Q_TEMPLATE_INSTANCES = ("Q_template_instances", 0)
 
+def _word_params_ok(p: Mapping[str, Any]) -> bool:
+    return all(_is_int(v) and 0 < v <= PARAM_MAX for v in p.values())
+
+
 #: the queries a partition may name: (name, version) -> (its parameter names, the check its parameters pass)
 QUERIES: dict[tuple[str, int], tuple[tuple[str, ...], Callable[[Mapping[str, Any]], bool]]] = {
-    ("Q_word", 1): (("X", "W"), lambda p: all(_is_int(v) and 0 < v <= PARAM_MAX for v in p.values())),
+    ("Q_word", 1): (("X", "W"), _word_params_ok),
+    ("Q_word", 2): (("X", "W"), _word_params_ok),
     Q_TEMPLATE_INSTANCE: (("template",), lambda p: isinstance(p["template"], str)),
     Q_TEMPLATE_INSTANCES: (("templates",), lambda p: _templates_ok(p["templates"])),
 }
@@ -90,10 +99,13 @@ def program_sha512(program_or_desc: Any) -> str:
     return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
 
 
-def query(X: int = 16, W: int = 32) -> dict[str, Any]:
+def query(X: int = 16, W: int = 32, version: int = 1) -> dict[str, Any]:
+    """`Q_word{X, W}`, v1 unless `version` names v2 (`cut.RECOMPUTE`)."""
     if not all(_is_int(v) and 0 < v <= PARAM_MAX for v in (X, W)):
         raise ValueError(f"Q_word's X and W are integers in 1..{PARAM_MAX}, not {X!r}, {W!r}")
-    return {"name": "Q_word", "version": 1, "params": {"X": X, "W": W}}
+    if ("Q_word", version) not in QUERIES:
+        raise ValueError(f"Q_word has versions 1 and 2, not {version!r}")
+    return {"name": "Q_word", "version": version, "params": {"X": X, "W": W}}
 
 
 def template_id(t: Any) -> str:
@@ -172,13 +184,14 @@ class Partition:
             raise ValueError(f"unknown query {q.get('name')!r} v{q.get('version')!r}")
         self.query = dict(q)
         self.X, self.W = int(q["params"]["X"]), int(q["params"]["W"])
+        self.recompute = RECOMPUTE[q["version"]]
         self._memo = {} if memo is None else memo
         self._wiring = wiring
         self.calls: list[tuple[int, DefinitionCut]] = []
         for k, fn in calls(program):
             form = program.root.body.nodes[k].form
             if form not in ("call", "primitive"):
-                raise QueryInapplicable(f"root node {k} has form {form!r}: Q_word v1's Calls are call or primitive nodes",
+                raise QueryInapplicable(f"root node {k} has form {form!r}: Q_word v{q['version']}'s Calls are call or primitive nodes",
                                         {"call": k, "form": form, "definition": fn.id})
             self.calls.append((k, evaluate_definition(fn, self.X, self._memo, wiring)))
         self._start: list[int] = []
@@ -349,11 +362,15 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     Call whose derived committed set is not empty (`served-missing`: such a Call not given; `served-unknown`: a key that is no Call;
     `served-malformed`: a Call's entry that is not a list of distinct non-negative integers);
     each given Call is held to its derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`, under `cut`).  A template
-    query commits whole instances' inputs and results; `served` with one is refused (`served-unsupported`)."""
+    query commits whole instances' inputs and results; `served` with one is refused (`served-unsupported`).
+
+    Under `Q_word` v2 a value computed in two units is no failure; the verdict's detail reports it, never as a code, under
+    `recomputed_across`: {"n": the pairs over every Call, "gates": per Call with any, {"call", "n", "gates": its first pairs}}."""
     v = validate(obj)
     if not v.ok:
         return v
     bad: dict[str, list] = {}
+    report: list[dict] = []
     if obj["program"] != program_sha512(program):
         bad["program"] = [obj["program"]]
     template = (obj["query"]["name"], obj["query"]["version"]) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
@@ -362,13 +379,16 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     try:
         part = evaluate(program, obj["query"])
         if not template:
-            _verify_calls(part, served, bad)
+            _verify_calls(part, served, bad, report)
     except QueryInapplicable as e:
         bad["query-inapplicable"] = [e.detail]
-    return _verdict(bad)
+    verdict = _verdict(bad)
+    if not template and RECOMPUTE.get(obj["query"]["version"]) == "report":
+        verdict.detail["recomputed_across"] = {"n": sum(r["n"] for r in report), "gates": report[:64]}
+    return verdict
 
 
-def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, bad: dict[str, list]) -> None:
+def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, bad: dict[str, list], report: list[dict]) -> None:
     if served is not None:
         known = {k for k, _c in part.calls}
         unknown = sorted((k for k in served if k not in known), key=repr)
@@ -381,15 +401,18 @@ def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, b
     checked: dict[str, CutVerdict] = {}
     for p, (k, c) in enumerate(part.calls):
         if served is not None and k in served:
-            r = check_cut(part.graph(p), part.owner(p), served[k], (part.X, part.W, 0))
+            r = check_cut(part.graph(p), part.owner(p), served[k], (part.X, part.W, 0), part.recompute)
         else:
             if served is not None and part.committed(p):
                 bad.setdefault("served-missing", []).append(k)
             r = checked.get(c.fn.id)
             if r is None:
-                r = checked[c.fn.id] = check_cut(part.graph(p), part.owner(p), None, (part.X, part.W, 0))
+                r = checked[c.fn.id] = check_cut(part.graph(p), part.owner(p), None, (part.X, part.W, 0), part.recompute)
         if not r.ok:
             bad.setdefault("cut", []).append({"call": k, "codes": list(r.codes), "detail": r.detail})
+        across = r.detail.get("recomputed_across")
+        if across and across["n"]:
+            report.append({"call": k, **across})
 
 
 def _gate_list(v: Any) -> bool:

@@ -19,7 +19,7 @@ To verify *inference-only*, it checks that the developer's committed circuits ex
 
 ## How an audit works
 
-Sampled proofs run today as the [one-stage audit](protocols/one_stage/PROTOCOL.md). Both parties hold the circuit and the query that partitions it into proof units, and one round goes like this:
+Sampled proofs run today as the [one-stage audit](protocols/sampled_proofs/README.md). Both parties hold the circuit and the query that partitions it into proof units, and one round goes like this:
 
 ~~~text
 developer                                          auditor
@@ -42,9 +42,8 @@ Each layer may depend on the layers below it:
 integrations/vllm, benchmarks/
 ---------------------------------------------------------------------------
 protocols/                    backends/
-  one_stage                     flock                    C-Flock and its Lean verifier
-  sampled_proofs                gkr, direct, sp1, vole   frozen
-  pous
+  sampled_proofs                flock                    C-Flock and its Lean verifier
+  pous                          gkr, direct, sp1, vole   frozen
   pouw
   network_warden
 ---------------------------------------------------------------------------
@@ -93,7 +92,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - `verity.commitments` and `verity.proofs`, also in [`packages/verity/`](packages/verity/README.md): commitments to the records, the statements a backend proves, and the integrity profile an audit returns
 - [`backends/flock/`](backends/flock/README.md): C-Flock, the proof backend in active development; the frozen backends are listed in [`backends/`](backends/README.md)
 - [`backends/flock/verifier/`](backends/flock/verifier/README.md): the verifier of record, written in Lean
-- [`protocols/one_stage/`](protocols/one_stage/README.md) and [`protocols/sampled_proofs/`](protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
+- [`protocols/sampled_proofs/`](protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`protocols/pous/`](protocols/pous/README.md): proofs of useful space
 - [`protocols/pouw/`](protocols/pouw/PROTOCOL.md): proofs of useful work
 - [`protocols/network_warden/`](protocols/network_warden/README.md): the network warden, network transparency's timing channel
@@ -155,7 +154,7 @@ There is no GitHub Actions CI. `check` is the one check, and a merge into `main`
 
 ## Documentation
 
-- Specifications: the [program format](packages/verity/src/verity/ir/PROTOCOL.md), the commitment schemes ([frame-v3](packages/verity/src/verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md)), the protocols ([one-stage](protocols/one_stage/PROTOCOL.md), [two-stage](protocols/sampled_proofs/PROTOCOL.md), [proofs of useful space](protocols/pous/PROTOCOL.md), [proofs of useful work](protocols/pouw/PROTOCOL.md), [the network warden](protocols/network_warden/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
+- Specifications: the [program format](packages/verity/src/verity/ir/PROTOCOL.md), the commitment schemes ([frame-v3](packages/verity/src/verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md)), the protocols ([sampled proofs](protocols/sampled_proofs/README.md), stated in Lean, [proofs of useful space](protocols/pous/PROTOCOL.md), [proofs of useful work](protocols/pouw/PROTOCOL.md), [the network warden](protocols/network_warden/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
 - Each component's README, linked under Repository structure
 - [AGENTS.md](AGENTS.md) for contributors and agents, and the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
 
@@ -166,11 +165,13 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Developer** and **auditor**: the protocol's two parties. The developer runs computations in its datacenters, keeps private records of them and proves properties of those records; the auditor checks the proofs, acting as the verifier.
 - **Program**: the computation a proof claims something about (`verity.ir.Program`): one circuit, stored compressed as Definitions called from a root body, with the same interface at every level. The proof system is generic, so "model" never names it.
 - **Circuit**: gates and the wires between them. A program is a compressed circuit; an *expanded* circuit is written out gate by gate, like the files C-Flock's circuit prover proves. A backend's lowering of a statement is also a circuit, as in A-GKR's pinned circuits or "SHA-256 in circuit".
-- **Gate**: a node of a circuit: an input gate, the constant 0 or 1, AND, XOR or NOT. Each gate outputs one bit.
+- **Gate**: a node of a circuit: an input gate, the constant 0 or 1, the AND or XOR of two or more bits, or NOT. Each gate outputs one bit (`verity.ir.boolean`).
 - **Wire**: an edge from a gate to a gate that reads it. A wire carries its source gate's value and has none of its own.
 - **Port**: a named array of fixed-width elements on the boundary of a circuit definition; each call binds it to gates of the caller.
 - **Element**: one fixed-width member of a port, such as 16 bits. A format labels elements, a leaf serializes whole elements, and no proof unit splits one.
 - **Format**: a label on a port's elements, such as BF16, FP32, E4M3, int32 or token id, saying how an element's bits encode a number or symbol. Formats are metadata, outside the content digest (`verity.ir.annotations`).
+- **Boolean Definition**: a Definition whose gates are only gates in the sense above (`verity.ir.boolean.is_boolean`); its meaning is its gates. A *word Definition* has gates that output a w-bit word, whose meaning is registry code; the word library migrates to Boolean Definitions under new versions of the same names.
+- **Word view**: a Boolean Definition read with each element's bits packed into one integer (`verity.ir.boolean.word_type`); under it, `GemmCoordinate_v3` takes and returns exactly what the word Definition `GemmCoordinate_v2` does.
 - **Value**: the bit a gate takes in one run. The transcript is all of them (`verity.ir.evaluate.ExecutionTranscript`), and the value of an element or port is the transcript read at its gates, in order. Gates, wires, ports and elements are structure, the same in every run; values are one run's data. The messages between prover and verifier are the *proof transcript*.
 - **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity.ml.tc.instructions.INSTRUCTIONS`.
 - **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. A backend proves subcircuits, and a benchmark cell measures one.
@@ -184,9 +185,9 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Cell**: one benchmark result, a backend × statement × input set × prover hardware.
 - **Partition**: a division of a program's gates into proof units, each gate in exactly one (`verity/partition/v1`, `verity.ir.partition_object`). It is a named query on the program: the object holds the program's digest and the query's name, version and parameters, such as `Q_word` v1 `{X: 16, W: 32}`, and a verifier evaluates the query itself. The committed set, every gate read across a unit boundary plus the program's outputs, follows from the partition and is never stored.
 - **Proof unit**: one part of a partition, proved on its own. A unit is incorrect when its committed outputs differ from its gates applied to its committed inputs. An audit's verifier draws the proof units to prove.
-- **Replay unit (RU)**: in sampled proofs' two-stage law (`protocols/sampled_proofs/PROTOCOL.md`), a part of a Program that the prover replays to build the witness; the verifier draws replay units, then proof units inside each drawn one. "Unit" never names a subcircuit.
+- **Replay unit (RU)**: in sampled proofs' two-stage law (`protocols/sampled_proofs/README.md`), a part of a Program that the prover replays to build the witness; the verifier draws replay units, then proof units inside each drawn one. "Unit" never names a subcircuit.
 - **Instrumented program**: the program plus what serving adds to measure it: a tap on every committed element, and the leaf and tree hashing whose outputs are the roots. It is derived from the program, the partition and the commitment scheme, never authored, and no proof claims anything about it.
-- **Integrity profile**: the audit's output, an object of its own (`verity.proofs.profile.IntegrityProfile`): per-stratum bounds on how many proof units of a partition are faulty (a unit is faulty when its committed outputs differ from its gates applied to its committed inputs), from the facts checked exhaustively, the verifier's draw law and its failure probability δ. Applications consume it with their own weights (`verity_one_stage.consumers`): exfiltration security weights faulty units by their output bits and adds which units are faulty, compute security weights them by their work.
+- **Integrity profile**: the audit's output, an object of its own (`verity.proofs.profile.IntegrityProfile`): per-stratum bounds on how many proof units of a partition are faulty (a unit is faulty when its committed outputs differ from its gates applied to its committed inputs), from the facts checked exhaustively, the verifier's draw law and its failure probability δ. Applications consume it with their own weights (`verity_sampled_proofs.one_stage.consumers`): exfiltration security weights faulty units by their output bits and adds which units are faulty, compute security weights them by their work.
 - **Verifier**: the party that checks proofs. It issues each session's coins and draws the proof units to prove, in the one-stage audit from its own randomness; the coin server that hands out coins is part of it, not a separate party. C-Flock's verifier of record is written in Lean (`backends/flock/verifier/`), and upstream Flock's Rust verifier is a cross-check.
 - **Frontend**: translates a source representation such as PyTorch, JAX or ONNX into Verity IR. The vLLM integration's `verity_vllm.program.frontend` is an embedded Torch→IR frontend, the seed of `frontends/torch` once a second consumer needs it.
 - **Integration**: makes Verity work end to end with a real system or runtime, composing Verity's components around it. vLLM is an integration (`integrations/vllm`), an application of Verity, not a frontend.

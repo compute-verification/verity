@@ -35,6 +35,8 @@ structure Cut where
   committed : Array Nat
   inputGates : Array Nat
   recomputed : Array (Nat × Nat)
+  /-- `Q_word` v2's rule (`recompute="report"`): a value computed in two units is reported, not refused (`gate-recomputed`) -/
+  reportRecompute : Bool := false
   deriving Inhabited
 
 /-- The failure codes, in the reference's order. -/
@@ -58,6 +60,13 @@ private def arrOf (j : Json) (k : String) : V (Array Json) :=
     | .error _ => throw s!"cut: {k} is not a list"
   | .error _ => pure #[]
 
+/-- A case's `recompute` (the reference's argument): `"refuse"` (or absent) or `"report"`; whether it is `"report"`. -/
+def reportOfJson (j : Json) : V Bool :=
+  match j.getObjVal? "recompute" with
+  | .error _ | .ok (.str "refuse") => pure false
+  | .ok (.str "report") => pure true
+  | .ok _ => throw "cut: recompute is not refuse or report"
+
 def Cut.ofJson (j : Json) : V Cut := do
   let nat := fun (k : String) => do
     let .ok v := j.getObjVal? k | throw s!"cut: {k} missing"
@@ -69,10 +78,17 @@ def Cut.ofJson (j : Json) : V Cut := do
     outputs := ← (← arrOf j "outputs").mapM (natOf · "an output"),
     committed := ← (← arrOf j "committed").mapM (natOf · "a committed gate"),
     inputGates := ← (← arrOf j "input_gates").mapM (natOf · "an input gate"),
-    recomputed := ← (← arrOf j "recomputed").mapM (pairOf · "a recomputed pair") }
+    recomputed := ← (← arrOf j "recomputed").mapM (pairOf · "a recomputed pair"),
+    reportRecompute := ← reportOfJson j }
   -- the reference reads `owner[p]` of every read: a read outside the circuit is malformed there too
   if c.reads.any (fun (p, q) => p ≥ c.owner.size || q ≥ c.owner.size) then throw "cut: a read outside the circuit"
   return c
+
+/-- The recomputed pairs whose gates two units compute (or that lie outside the circuit): `gate-recomputed` unless the cut
+reports them (`reportRecompute`, `Q_word` v2). -/
+def Cut.recomputedAcross (c : Cut) : Array (Nat × Nat) :=
+  let own := fun (g : Nat) => c.owner.getD g default
+  c.recomputed.filter fun (a, b) => !(a < c.owner.size && b < c.owner.size) || own a != own b
 
 /-- The failing codes of `validate_unit_cut` (empty: the invariant holds). -/
 def validate (c : Cut) : List String := Id.run do
@@ -87,7 +103,7 @@ def validate (c : Cut) : List String := Id.run do
   let crossing := c.reads.filter fun (p, q) => own p != own q
   let boundary : Std.HashSet Nat := (crossing.map (·.1)).foldl (fun s p => s.insert p) outs
   let certified := ((List.range n).filter fun g => !ins.contains g && isUnit (own g)).length
-  let across := c.recomputed.any fun (a, b) => !(a < n && b < n) || own a != own b
+  let across := !c.reportRecompute && !c.recomputedAcross.isEmpty
   let problem : List Bool := [outside, uncertified, across, certified + ins.size + c.structureGates != c.totalGates,
     crossing.any (fun (p, _) => !com.contains p), outs.toList.any (fun g => !com.contains g),
     com.toList.any (fun g => !boundary.contains g || !(g < n))]
@@ -139,22 +155,26 @@ def derivedCommitted (g : CallGraph) (owner : Array Nat) : Array Nat :=
     (Std.HashSet.ofArray g.outputs)
   s.toArray.qsort (· < ·)
 
-/-- `check_cut`: the invariant on the Call's cut (its parameters standing for the input unit), then, unless `limits` is none,
-the width rule. The failing codes, and the too-wide units as `(unit, ob, og)`. -/
-def checkCut (g : CallGraph) (owner : Array Nat) (committed : Option (Array Nat)) (limits : Option (Nat × Nat × Nat)) :
-    List String × Array (Nat × Nat × Nat) :=
-  if owner.size != g.n then (["owner-length"], #[]) else
+/-- The Call's cut as `check_cut` hands it to the invariant: its parameters standing for the input unit, the committed set
+given or derived, and the rule for a value computed in two units (`report`: `Q_word` v2's). -/
+def CallGraph.cut (g : CallGraph) (owner : Array Nat) (committed : Option (Array Nat)) (report : Bool := false) : Cut :=
   let k := g.inputs
   let com := (committed.getD (derivedCommitted g owner)).foldl (fun (s : Std.HashSet Nat) x => s.insert x) {}
-  let cut : Cut := {
-    totalGates := g.total + k, structureGates := g.free,
+  { totalGates := g.total + k, structureGates := g.free,
     owner := owner.map Owner.unit ++ Array.replicate k Owner.input,
     reads := g.reads ++ g.inputReads.map fun (i, q) => (g.n + i, q),
     outputs := g.outputs ++ g.returnedInputs.map (g.n + ·),
     committed := com.toArray.qsort (· < ·) ++ (Array.range k).map (g.n + ·),
     inputGates := (Array.range k).map (g.n + ·),
-    recomputed := g.recomputed }
-  let codes := validate cut
+    recomputed := g.recomputed, reportRecompute := report }
+
+/-- `check_cut`: the invariant on the Call's cut (its parameters standing for the input unit), then, unless `limits` is none,
+the width rule. The failing codes, and the too-wide units as `(unit, ob, og)`. `report`: `Q_word` v2's rule, a value computed
+in two units reported, not refused; v1's refusal otherwise. -/
+def checkCut (g : CallGraph) (owner : Array Nat) (committed : Option (Array Nat)) (limits : Option (Nat × Nat × Nat))
+    (report : Bool := false) : List String × Array (Nat × Nat × Nat) :=
+  if owner.size != g.n then (["owner-length"], #[]) else
+  let codes := validate (g.cut owner committed report)
   match limits with
   | none => (codes, #[])
   | some (X, W, E) =>
@@ -166,7 +186,8 @@ private def natsOf (j : Json) (k : String) : V (Array Nat) := do
   (← arrOf j k).mapM (natOf · k)
 
 /-- A `check_cut` case: `{"graph": {n, src, dst, width, outputs, inputs, input_reads, returned_inputs, total, free,
-recomputed}, "owner", "committed" (or null), "limits" ([X, W, E], or null)}`. -/
+recomputed}, "owner", "committed" (or null), "limits" ([X, W, E], or null)}`, and `"recompute"` (`reportOfJson`), read
+apart. -/
 def checkCutOfJson (j : Json) : V (CallGraph × Array Nat × Option (Array Nat) × Option (Nat × Nat × Nat)) := do
   let .ok gj := j.getObjVal? "graph" | throw "cut: graph missing"
   let nat := fun (o : Json) (k : String) => do

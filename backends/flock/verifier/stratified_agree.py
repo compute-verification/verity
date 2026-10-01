@@ -1,4 +1,4 @@
-"""The Lean verifier's stratified draw against core's (PR #164's `verity_one_stage.draw`, PR #161's `Stratified`).
+"""The Lean verifier's stratified draw against core's (PR #164's `verity_sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
 
 For each program (A4 P6's six-template population, as #164's test builds it, and small and random programs):
 
@@ -11,7 +11,7 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
 - on a small program, each unit's inclusion frequency over OS draws against `k_s / n_s`;
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
-Needs core with #164 on PYTHONPATH (`packages/verity/src` and `protocols/one_stage`). Prints one JSON line; exit 0 iff
+Needs core with #164 on PYTHONPATH (`packages/verity/src` and `protocols/sampled_proofs`). Prints one JSON line; exit 0 iff
 everything agrees.
 """
 from __future__ import annotations
@@ -141,7 +141,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=20260927)
     a = ap.parse_args()
     from verity.ir.codec import canonical_json, encode_program
-    from verity_one_stage import audit, draw as D, partition as P
+    from verity_sampled_proofs.one_stage import audit, draw as D, partition as P
 
     rng = random.Random(a.seed)
     out = a.out or Path(tempfile.mkdtemp(prefix="stratified-agree-"))

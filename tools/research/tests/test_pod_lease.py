@@ -79,7 +79,7 @@ def test_the_loop_ends_the_pod_only_after_the_expiry_and_its_grace(tmp_path):
 def test_a_deadline_clamps_every_extension_and_ends_the_machine_without_grace(tmp_path):
     env = lease_env(tmp_path, LEASE_NOW=str(NOW), LEASE_ONCE="1")
     deadline = NOW + 10_000
-    (tmp_path / "deadline").write_text(f"{deadline} 2026-10-02T05:02:26Z launch\n")
+    (tmp_path / "deadline").write_text(f"{deadline} 2026-10-07T15:00:00Z launch\n")
     cap = deadline - 300
     out = lease_sh(env, "extend", "86400", "run-r1").stdout.split()
     assert out[0] == str(cap) and out[2] == "run-r1(clamped-to-deadline)"
@@ -167,7 +167,7 @@ def _kill(*pids):
                 pass
 
 
-def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp_path):
+def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp_path, reap):
     first = _arm_locally(tmp_path)
     try:
         assert first["lease_alive"] and first["guard_alive"] and first["expires_epoch"]
@@ -181,7 +181,7 @@ def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp
         _kill(first["lease_pid"], first["guard_pid"])
 
 
-def test_idle_min_zero_arms_the_lease_and_no_idle_guard(tmp_path, monkeypatch):
+def test_idle_min_zero_arms_the_lease_and_no_idle_guard(tmp_path, monkeypatch, reap):
     real = L.arm_script
     monkeypatch.setattr(L, "arm_script", lambda seconds, **kw: real(seconds, **{**kw, "idle_min": 0}))
     rep = _arm_locally(tmp_path)

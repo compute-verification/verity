@@ -327,7 +327,7 @@ The draw is the object
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
-the same as `protocols/one_stage/PROTOCOL.md`'s):
+the same as `verity_sampled_proofs.one_stage`'s, in `protocols/sampled_proofs/README.md`):
 - **Strata.** The verifier derives them from its own program and partition object, never from anyone else
   (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
   units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
@@ -403,7 +403,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's law must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
-`stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):
+`stratified_agree.py` checks the Lean verifier against core's (#164's `verity_sampled_proofs.one_stage.draw`, #161's `Stratified`):
 - the derived law and population, against `draw.derive` and `partition.units`;
 - the units drawn on given bytes, against the sampler written out in Python;
 - every draw, from given bytes or the operating system's, accepted by `check_draw`;
@@ -1132,8 +1132,9 @@ gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_
 | `committed-unread` | a committed value is read across units or returned |
 
 With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
-circuit is malformed. `unit_cut_agree.py` checks the codes against the reference on random cuts (5000 agree, every code
-exercised).
+circuit is malformed. Under `Q_word` v2 (a cut's `"recompute": "report"`, the reference's `recompute="report"`) a recomputed
+pair across units is no failure: it is counted (`recomputed_across`), and every other code is v1's. `unit_cut_agree.py`
+checks the codes against the reference on random cuts (5000 agree, every code exercised), each cut under both rules.
 
 **One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`,
 PR #111). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
@@ -1151,6 +1152,8 @@ or the Call returns) is at most `X + EXTRAS` bits, or one value of at most `W + 
   edge crosses units that head nothing, and a separable body is its members' cuts;
 - `Extract.checkCalls` checks each Definition's cut once, on its Call's whole graph with the derived committed set, for the
   partition invariant and the width rule `(X, W, 0)`, as `partition_object.verify` does.
+- `Q_word` v2 (`qword-program --query-version 2`) has v1's units; its cut check reports a value computed in two units (each
+  Definition's `recomputed_across`) instead of refusing it with `gate-recomputed`.
 
 The algorithm step by step and the agreement evidence (`cut_check_agree.py`, `qword_agree.py`, `qword_program_agree.py`:
 every pinned vector, all of #101's Definitions, the LM-head `Gemm` in 100 s at 9 GB) are in
@@ -1280,8 +1283,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   program_digests) ‖ "\n" ‖ the file after its META line)`. For a `verity/partition/v1` binding the verifier needs its own copy
   of the partition object (`--partition`, by path or archive digest). Its form is #111's canonical one with open query names:
   exactly `format`, `program`, `query`; a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a
-  natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1: exactly
-  `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
+  natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1 and v2:
+  exactly `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
   `program` must be META's `program_sha512`. The provisional unit cover takes no object.
 - **Tail outputs, packed ranges and leaf cuts (from PR #83 `15260468`, GEMM).** META may name `out_net`, the circuit whose
   output group holds the returned outputs (default `unit`), with `out_net_ports`, and `leaf_cuts`, `[unit, u, port, leaf]`.
@@ -1306,7 +1309,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   the refusals word for word, the malformed parameters).
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
   `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
-  queries (above), and for `Q_word` v1 (§16.7) when the program is the object's, the query applies, every claimed unit is
+  queries (above), and for `Q_word` v1 and v2 (§16.7) when the program is the object's, the query applies, every claimed unit is
   one whole activation of the circuit's template (the innermost Definition on its `locate` path, whose cut is one unit),
   and every Call's cut holds the invariant and the width rule. A failing cut refuses the partition, naming the Call and
   its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`

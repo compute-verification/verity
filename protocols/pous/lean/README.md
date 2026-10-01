@@ -18,7 +18,8 @@ Pous/Model/{P3Chain,BandChain,PubEncoder}.lean
 Pous/Accounting/{Params,LemmaA,PubMeets}.lean  trusted: ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder
 Pous/Assumptions.lean               trusted: named hypotheses (Lemma A, Conjecture B1′)
-Pous/Pinned.lean                    trusted: the 46 statements grade.sh grades against
+Pous/Pinned.lean                    trusted: 48 statements, the 47 grade.sh grades against and
+                                    `InvExPostFactoTwoLayer`, which `N10Refuted` negates
 Pous/Sanity.lean, Pous/Accounting/Numbers.lean   proved: the definitions are not vacuous; certified numbers
 PousProofs/                         proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
 PousProofs/Chain/Flat.lean          proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and

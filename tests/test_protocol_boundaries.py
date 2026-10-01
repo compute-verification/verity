@@ -28,11 +28,18 @@ def test_every_protocol_is_checked():
 
 
 def _sources(name: str) -> list[Path]:
-    """A protocol's own Python files: not its tests, and nothing under a dot-directory (a Lean package's `.lake`, a
-    `.venv`), where only build outputs and fetched dependencies live."""
+    """A protocol's own Python files: not its tests, not a Lean package's tooling (the scripts beside a lakefile write
+    the package's data, as tests do), and nothing under a dot-directory (a Lean package's `.lake`, a `.venv`), where only
+    build outputs and fetched dependencies live."""
     base = ROOT / name
     return [p for p in sorted(base.rglob("*.py"))
-            if "tests" not in (parts := p.relative_to(base).parts) and not any(x.startswith(".") for x in parts)]
+            if "tests" not in (parts := p.relative_to(base).parts) and not any(x.startswith(".") for x in parts)
+            and not any((base.joinpath(*parts[:i]) / "lakefile.toml").exists() for i in range(1, len(parts)))]
+
+
+def test_a_lean_packages_tooling_is_not_the_protocols_code():
+    assert ROOT / "pouw" / "verity_pouw" / "protocol.py" in _sources("pouw")
+    assert not [p for p in _sources("pouw") if (ROOT / "pouw" / "lean") in p.parents]
 
 
 @pytest.mark.parametrize("name", PROTOCOLS)

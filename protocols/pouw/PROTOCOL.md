@@ -2,7 +2,8 @@
 
 Certifies that a declared workload of integer or FP8 matmuls was computed with at least a stated fraction of the honest
 work, by sampled recomputation of committed checked values. The setting and the cost model (W1 on an RTX 4090) are the
-PoUW problem statement's; the guarantee is Lean's `Pouw.Proofs.endToEnd` instantiated with a scheme's conjecture.
+PoUW problem statement's; the guarantee is Lean's `Pouw.Proofs.endToEnd` instantiated with a scheme's conjecture. The
+Lean package is `lean/`, and every theorem this document cites is pinned in its `lean-audit.json`.
 
 ## The interface
 
