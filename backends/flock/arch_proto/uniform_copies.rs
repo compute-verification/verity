@@ -2,7 +2,10 @@
 //! `arch_proto/export_template.py`) chained into one 2^k block, k = 13 + log2 N, n_log = 0.
 //!
 //! One block matrix `A_0 = I_N ⊗ T_A + Δ_A`, `B_0 = I_N ⊗ T_B + Δ_B` (Δ: each copy's accumulator from the previous copy's
-//! outputs, its 672 operand bits from pseudo-random columns, its constant from the pin), described five ways:
+//! outputs, its 672 operand bits from pseudo-random columns, its constant from the pin). The copies are the soundness
+//! package's `Rows.stack` (`soundness/FlockSoundness/ExecRows.lean`) placed by `stackPlace` with `base u = u·2^13`: copy u's
+//! column c at `base u + c`, its constant at `base u + nIn + nComp`, the constant's row reading the pin (`placement_stack`'s
+//! `hconstA`/`hconstB`), the pin at 2^k − 1. Described five ways:
 //!
 //! - `flat`: one sparse 2^k matrix (upstream's default `SparseMatrixCircuit`), k ≤ `--flat-max`;
 //! - `cflock-unit`: C-Flock's `BlockCircuit` fold today (one type folded once, ratio-filled over every slot, then Δ) with the
@@ -12,6 +15,16 @@
 //!   `comb_partial[i] = Σ_c [c mod 64 = i] eq(r, c >> 6) comb[c]` as (slot factor) × (one template fold) + Δ + pin.
 //!
 //! The first three run upstream's `lincheck::verify`; all five must return the same claim on upstream's proof.
+//!
+//! Build and run from a flock b684b12 checkout, with this file as `crates/flock-core/examples/uniform_copies.rs`:
+//!
+//!   cargo build --release -p flock-core --example uniform_copies
+//!   RAYON_NUM_THREADS=1 target/release/examples/uniform_copies TEMPLATE kmin kmax flat_max unit_log [timing]
+//!
+//! TEMPLATE is `export_template.py`'s output. The default mode proves with upstream's `lincheck::prove` (both descriptions
+//! must give byte-identical proofs), checks every verifier's claim against the prover's and that a tampered proof or Δ is
+//! refused, and prints JSON lines. `timing` skips the prover (k = 26 does not fit beside it in 16 GB): each verifier on a
+//! random well-shaped proof, three times, plus `cflock-unit-scattered`, the unit type under a random relabeling.
 use std::{env, fs, time::Instant};
 
 use flock_core::{
@@ -35,6 +48,8 @@ struct Tmpl {
     acc: Vec<u32>,
     ops: Vec<u32>,
     outs: Vec<u32>,
+    /// The copy's constant column, `nIn + nComp` (`Rows.stack`'s order): the last used row.
+    konst: u32,
 }
 
 fn load(path: &str) -> Tmpl {
@@ -57,7 +72,7 @@ fn load(path: &str) -> Tmpl {
     let ops = w[p + 32..p + 32 + 672].to_vec();
     let outs = w[p + 704..p + 736].to_vec();
     assert_eq!(p + 736, w.len());
-    Tmpl { a, b, acc, ops, outs }
+    Tmpl { a, b, acc, ops, outs, konst: w[2] - 1 }
 }
 
 /// The block: N = 2^(k−13) copies, the pin, and Δ split by whether an entry crosses a `tl`-slot boundary.
@@ -77,8 +92,9 @@ fn block(t: &Tmpl, k: usize, per_unit: usize, rng: &mut Rng) -> Block {
     let mut db = Vec::with_capacity(n);
     for s in 0..n {
         let base = s << SL;
-        da.push((base as u32, pin as u32, false));
-        db.push((base as u32, pin as u32));
+        let konst = base + t.konst as usize;
+        da.push((konst as u32, pin as u32, false));
+        db.push((konst as u32, pin as u32));
         let prev = (s + n - 1) % n;
         let inside = s % per_unit != 0;
         for j in 0..32 {
