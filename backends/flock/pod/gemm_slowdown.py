@@ -34,7 +34,7 @@ LAYER = [("qkv", 3072, 2048), ("o", 2048, 2048), ("gate_up", 16384, 2048), ("dow
 LM_HEAD = ("lm_head", 128256, 2048)
 PREFILL_M = 256
 DECODE_M = (1, 2, 4, 8)
-GATE_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu")
+GATE_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial")
 
 
 CONFIGS = {"llama32-1b.prefill.M256": ("prefill", None), "256x16384x2048": ("prefill", (256, 16384, 2048)),

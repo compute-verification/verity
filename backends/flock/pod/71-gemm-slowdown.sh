@@ -62,7 +62,7 @@ SAMPLER=$!
 trap 'kill $SAMPLER 2>/dev/null' EXIT
 if [ "${GATE:-1}" = 1 ]; then
   OUT=$R/out/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
-    SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu || exit 1
+    SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial || exit 1
 fi
 # NSYS=1: a profile, not an attempt: the m = 34 prove sessions under Nsight Systems' CUDA trace (unpacked like CUDA 13.3), each
 # process's kernel, memcpy and API summaries in out/nsys; no native GEMMs, no result.json

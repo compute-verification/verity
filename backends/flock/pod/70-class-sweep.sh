@@ -8,11 +8,14 @@
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json  SHAPES=path/to/shapes.txt  SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
+#      SELFTEST_JOBS=1 (case processes run at once, each its own process; each parses the circuit, so memory grows with it)
 #      FLOCK_WORK=/workspace (the builds, venvs and cached binaries under it)  PROTOCOL=sweep-v0  OUT=$RESEARCH_RUN_DIR/out  RESUME=path/to/results.jsonl (an earlier run's records: those shapes are skipped)
 #      SELFTEST_LARGEST=0 (selftest every SELFTEST-th shape only, not also each Definition's largest)
 #      BATCH_ANDS= MAX_STATEMENT_BITS= (larger statements: --batch auto's AND budget and the witness-bit cap per statement)
 #      N= with BATCH=fixed (instances per statement, the bit cap still applies)
 #      STAGE_ONLY=1 (no GPU: build, stage the shapes into FLOCK_STAGE_CACHE and prove nothing; give SM, nvidia-smi is absent)
+#      SERVE_ONLY=DIR (no GPU: stage the shapes and serve their WARM + RUNS sessions on this pod's address, published under DIR
+#      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
@@ -66,6 +69,8 @@ SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS")
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST:-1}" = 0 ] && SEL+=(--no-selftest-largest)
 [ -n "${BATCH_ANDS:-}" ] && SEL+=(--batch-ands "$BATCH_ANDS"); [ -n "${MAX_STATEMENT_BITS:-}" ] && SEL+=(--max-statement-bits "$MAX_STATEMENT_BITS"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
+[ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY")
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
-  --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} $G_
+  --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \
+  ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} $G_

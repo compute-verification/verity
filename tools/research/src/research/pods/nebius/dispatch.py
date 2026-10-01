@@ -29,14 +29,24 @@ first; within a rank the workstreams take turns, each oldest file first. A queue
 pending workloads (anyone's; VY_DISPATCH_DEPTH, default circuits=4,provers=2,backfill=4). A chain's next task is submitted
 regardless of depth.
 
+**GPU leases.** An item with `"lease": "wrap"` (or whose `workstream/template` is in VY_LEASE_CLASSES, comma-separated) leases its
+GPUs per process instead of binding them to its pod (n1_lease.py): the pod requests no `nvidia.com/gpu`, so Kueue books only its CPU
+and memory, and runs with hostPID, runtime class nvidia, `NVIDIA_VISIBLE_DEVICES=all` and `/run/gpu-lease` mounted; the task's
+`setup` runs first, then its `run` under `gpu-lease N --wait --max-min M --mem-gb 0` (M: the item's `lease_max_min`, else
+VY_LEASE_MAX_MIN, 120), which sets CUDA_VISIBLE_DEVICES. `"lease": "self"` sets the pod up the same way and leaves the leasing to
+the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can release the GPU for a CPU phase and lease one again.
+At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
+
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
 Inside the Job, the template's own `research run` writes the Attempt.
 
 **Packing (PACK_COMMITS=1; default 0).** config-run's gpu task of an eligible item (`packable`: TP1, a model of <= 4B on
 PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Pythia or 7B+) is spooled, rendered as its Job would
 be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
-off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (2) `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml,
-its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its one GPU under MPS. Their `results/` come back into the
+off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 during node 1's storage emergency; infra 3:36 PM PDT)
+`commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml, its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its
+one GPU under MPS. With /workspace at PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
+out as a normal Job), and the pilot claims nothing. Their `results/` come back into the
 chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
 resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
 Entries claimed by a pod that is gone count as a fault. Rollback: PACK_COMMITS=0, then let the pods finish or delete them.
@@ -49,6 +59,8 @@ import hashlib
 import json
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -70,14 +82,17 @@ DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
 DEFAULT_PRIORITY = {"backfill": "backfill"}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
+LEASE_DIR = "/run/gpu-lease"
+LEASE_BIN = os.environ.get("VY_GPU_LEASE", "/workspace/verity-guest/bin/gpu-lease")
 PACK_COMMITS = os.environ.get("PACK_COMMITS", "0") == "1"
 PACK_ADOPT = os.environ.get("PACK_ADOPT", "1") == "1"
 PACK = Path(os.environ.get("PACK_SPOOL", str(ROOT / "pack")))
-PACK_PODS = int(os.environ.get("PACK_PODS", "2"))
+PACK_PODS = int(os.environ.get("PACK_PODS", "1"))
 PACK_SLOTS = 3
 PACK_TEMPLATE = "commit-pack"
 PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b")
 PACK_MAX_BATCH = 8
+PACK_DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
 QUIET = ((12, 30), (13, 30))
 
 
@@ -128,13 +143,14 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
     cls = item.get("class")
     if cls:
         table = classes()
-        if cls not in table or ntasks != 2:
-            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a two-task template")
+        if cls not in table or ntasks not in (2, 3):
+            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a pipeline template (build, gpu, and config-run's replay)")
         build, gpu, n = table[cls]
         if idx == 0:
             mem = build
-        else:
+        elif idx == 1:
             mem, gpus, cpus = gpu, n, 4 * n          # submit.sh: the GPU queue's fixed 4 vCPU per GPU
+        # config-run's replay task (idx 2) keeps its template resources, as submit.sh does without VY_REPLAY_MEMORY
     o = (item.get("resources") or {}).get(task.get("name") or str(idx)) or {}
     return int(o.get("cpus", cpus)), int(o.get("memory", mem)), int(o.get("gpus", gpus))
 
@@ -170,8 +186,20 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
     ours = {LABEL: "node1", "verity.dev/key": khash, "verity.dev/task": str(idx), "verity.dev/try": str(tries),
             "verity.dev/workstream": dns(key.split("/")[0], 63)}
     labels = {**pod_labels, **ours}
+    lease = lease_mode(item, key) if gpus else None
+    run = task["run"]
+    if lease:
+        labels["verity.dev/lease"] = lease
+        envs.update({"NVIDIA_VISIBLE_DEVICES": "all", "NVIDIA_DRIVER_CAPABILITIES": "compute,utility", "GPU_LEASE_DIR": LEASE_DIR,
+                     "GPU_LEASE_ALLOWED_FILE": f"{LEASE_DIR}/pool.gpus", "GPU_LEASE_WHO": dns(key.split("/")[0], 63),
+                     "GPU_LEASE_N": str(gpus), "GPU_LEASE": LEASE_BIN})
+        if lease == "wrap":
+            m = int(item.get("lease_max_min") or os.environ.get("VY_LEASE_MAX_MIN", "120"))
+            run = f'"$GPU_LEASE" {gpus} --wait --max-min {m} --mem-gb 0 -- bash -c {shlex.quote("set -euo pipefail; " + run)}'
+        run = "umask 000\n" + run
+        gpus = 0
     script = "set -euo pipefail\nexport HOME=/tmp/home && mkdir -p $HOME\n" \
-             f"( {task.get('setup') or 'true'}\n)\n{task['run']}"
+             f"( {task.get('setup') or 'true'}\n)\n{run}"
     requests = {"cpu": str(cpus), "memory": f"{mem}G"}
     limits = {}
     if gpus:
@@ -194,8 +222,12 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
         "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}},
                     {"name": "dshm", "emptyDir": {"medium": "Memory"}}],
     }
-    if gpus:
+    if gpus or lease:
         pod_spec["runtimeClassName"] = "nvidia"
+    if lease:
+        pod_spec["hostPID"] = True
+        pod_spec["volumes"].append({"name": "gpu-lease", "hostPath": {"path": LEASE_DIR, "type": "Directory"}})
+        pod_spec["containers"][0]["volumeMounts"].append({"name": "gpu-lease", "mountPath": LEASE_DIR})
     return {
         "apiVersion": "batch/v1", "kind": "Job",
         "metadata": {"name": name, "labels": labels,
@@ -206,6 +238,16 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
                  "template": {"metadata": {"labels": {k: v for k, v in labels.items() if not k.startswith("kueue.x-k8s.io/")}},
                               "spec": pod_spec}},
     }
+
+
+def lease_mode(item: dict, key: str) -> str | None:
+    """"wrap", "self" or None: the item's `lease`, else wrap when its workstream/template is in VY_LEASE_CLASSES."""
+    if item.get("lease"):
+        if item["lease"] not in ("wrap", "self"):
+            raise ValueError(f"lease {item['lease']!r}: wrap or self")
+        return item["lease"]
+    classes = {c.strip() for c in os.environ.get("VY_LEASE_CLASSES", "").split(",") if c.strip()}
+    return "wrap" if f"{key.split('/')[0]}/{item['template']}" in classes else None
 
 
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
@@ -230,10 +272,12 @@ def quiet(t: float | None = None) -> bool:
     return QUIET[0] <= (g.tm_hour, g.tm_min) < QUIET[1]
 
 
-def packable(item: dict, idx: int) -> str | None:
+def packable(item: dict, key: str, idx: int) -> str | None:
     """Why task `idx` of the item isn't packed, or None when it is (the cutover plan's eligibility)."""
     if item.get("template") != "config-run":
         return "not a config-run"
+    if lease_mode(item, key):
+        return "leased (its GPU comes from gpu-lease)"
     tasks, _ = load_template(item["template"])
     if (tasks[idx].get("name") or "") != "gpu":
         return "not the gpu task"
@@ -272,8 +316,8 @@ def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> 
     if dry:
         print(json.dumps(entry, indent=1))
         return name
+    pack_tree()
     q = PACK / "queue"
-    q.mkdir(parents=True, exist_ok=True)
     tmp = q / f".{name}.tmp"
     tmp.write_text(json.dumps(entry, sort_keys=True))
     tmp.rename(q / f"{name}.json")
@@ -283,8 +327,22 @@ def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> 
     return name
 
 
+def pack_tree() -> None:
+    """The spool's directories, writable by the pack pods (uid 1000) as well as this dispatcher."""
+    for d in ("queue", "claimed", "results/done", "logs", "stats"):
+        (PACK / d).mkdir(parents=True, exist_ok=True)
+    for d in (PACK, *(PACK / d for d in ("queue", "claimed", "results", "results/done", "logs", "stats"))):
+        if d.stat().st_uid == os.getuid():
+            d.chmod(0o777)
+
+
+def disk_full() -> bool:
+    u = shutil.disk_usage(os.environ.get("PACK_DISK_PATH", "/workspace"))
+    return u.used / u.total >= PACK_DISK_PAUSE
+
+
 def route(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
-    if PACK_COMMITS and packable(item, idx) is None:
+    if PACK_COMMITS and packable(item, key, idx) is None and not disk_full():
         return spool(item, key, idx, tries, dry)
     return submit(item, key, idx, tries, dry)
 
@@ -349,6 +407,8 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
 
 def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
     """Move still-suspended gpu Jobs of eligible items into the spool, keeping it at most two pods' slots deep."""
+    if disk_full():
+        return
     room = 2 * PACK_PODS * PACK_SLOTS - len(list(PACK.glob("queue/*.json")))
     for j in sorted(jobs, key=lambda j: j["metadata"].get("creationTimestamp", "")):
         if room <= 0:
@@ -357,9 +417,9 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
             continue
         item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
-        if packable(item, idx) is not None:
-            continue
         name, key = j["metadata"]["name"], j["metadata"]["annotations"]["verity.dev/item"]
+        if packable(item, key, idx) is not None:
+            continue
         if dry:
             print(f"would adopt {name} ({key})")
             room -= 1
@@ -375,7 +435,7 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
 
 def pack_pods(jobs: list[dict], dry: bool = False) -> None:
     """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots."""
-    if quiet():
+    if quiet() or disk_full():
         return
     active = [j for j in jobs if j["metadata"]["annotations"].get("verity.dev/template", "").startswith(PACK_TEMPLATE + "@")
               and not (j.get("status") or {}).get("succeeded") and not (j.get("status") or {}).get("failed")]
@@ -390,6 +450,8 @@ def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
     if priority:
         item["priority"] = priority
     key = f"{PACK_TEMPLATE}/p{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}{os.getpid() % 100:02d}"
+    if not dry:
+        pack_tree()
     return submit(item, key, dry=dry)
 
 
@@ -458,9 +520,13 @@ def tick(dry: bool = False) -> None:
     pack_results(pod_list, dry)
     done = done_keys()
     inflight: set[str] = pack_keys()
+    leased: dict[str, int] = {}
     for j in jobs:
         key = j["metadata"]["annotations"]["verity.dev/item"]
         state, rc = job_state(j, pods)
+        if state in ("pending", "running") and j["metadata"]["labels"].get("verity.dev/lease"):
+            q = j["metadata"]["labels"].get("kueue.x-k8s.io/queue-name", "")
+            leased[q] = leased.get(q, 0) + 1
         if state in ("pending", "running") or j["metadata"]["labels"].get("verity.dev/seen") != "1":
             inflight.add(key)
         if state not in ("succeeded", "failed") or j["metadata"]["labels"].get("verity.dev/seen") == "1":
@@ -503,7 +569,8 @@ def tick(dry: bool = False) -> None:
                 raise ValueError("duplicate id: this item was already submitted (a changed item needs a new id)")
             if "_error" in item:
                 raise ValueError(item["_error"])
-            q = render(item, key, 0, 0)["metadata"]["labels"]["kueue.x-k8s.io/queue-name"]
+            job0 = render(item, key, 0, 0)
+            q = job0["metadata"]["labels"]["kueue.x-k8s.io/queue-name"]
             if not Path(item["tree"]).is_dir():
                 raise ValueError(f"no tree {item['tree']}")
         except (ValueError, KeyError, OSError, IndexError) as e:
@@ -517,6 +584,9 @@ def tick(dry: bool = False) -> None:
             continue
         if pending.get(q, 0) >= int(depth.get(q, 0)):
             continue
+        is_leased = bool(job0["metadata"]["labels"].get("verity.dev/lease"))
+        if is_leased and leased.get(q, 0) >= int(os.environ.get("VY_LEASE_DEPTH", "5")):
+            continue
         try:
             submit(item, key, dry=dry)
         except RuntimeError as e:
@@ -528,6 +598,8 @@ def tick(dry: bool = False) -> None:
         if not dry:
             set_aside(f, key, "taken")
         pending[q] = pending.get(q, 0) + 1
+        if is_leased:
+            leased[q] = leased.get(q, 0) + 1
         inflight.add(key)
     if PACK_COMMITS:
         pack_pods(json.loads(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-o", "json"))["items"], dry)
@@ -599,7 +671,7 @@ def main(argv: list[str]) -> int:
     elif ns.cmd == "spool":
         item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
                 "env": dict(e.split("=", 1) for e in ns.env), **({"priority": ns.priority} if ns.priority else {})}
-        why = packable(item, ns.task)
+        why = packable(item, ns.key, ns.task)
         if why:
             raise SystemExit(f"not packable: {why}")
         spool(item, ns.key, ns.task, dry=ns.dry_run)

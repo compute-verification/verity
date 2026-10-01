@@ -8,6 +8,10 @@ The dispatcher (dispatch.py, PACK_COMMITS=1) spools each eligible Commit, config
 `results/<name>.json` when it ends; the dispatcher reads that back into the item's chain. It takes the next entry as each one
 finishes, and stops claiming at PACK_CLAIM_UNTIL_S, in the quiet hour (12:30-13:30Z), or after an MPS fault; it exits once
 nothing runs and the queue has been empty for PACK_IDLE_S, or at PACK_MAX_WALL_S, when whatever still runs is stopped.
+Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
+and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (150): the bundles waiting,
+plus an estimate for each Commit running here and for the candidate (PACK_BUNDLE_EST_GB, 120, for B8 with 1,024 + 128 tokens,
+scaled by batch and tokens; phi3-mini's was 113 GB, SmolLM2's B16 256-token one 3 GB).
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
@@ -49,6 +53,14 @@ CLIENT_ENV = {
     "GPU_UTIL": os.environ.get("PACK_GPU_UTIL", "0.28"),
     "REPLAY_DEFERRED": "1",
 }
+DISK = os.environ.get("PACK_DISK_PATH", "/workspace")
+DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
+BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/commit/replay_bundle_p*,"
+                              "/workspace/cp/sweep/*/commit/replay_bundle_p*,"
+                              "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*").split(",")
+BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "150")) * 1e9
+BUNDLE_BATCH = 8
+BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "120")) * 1e9
 FAULT_EXIT = 87
 QUIET = ((12, 30), (13, 30))
 CLIENT_FAULT = re.compile(r"illegal memory access|unspecified launch failure|CUDA_ERROR_MPS|cudaErrorMps|MPS server|"
@@ -72,8 +84,46 @@ def write_json(path: Path, obj: dict) -> None:
     tmp.rename(path)
 
 
-def claim(spool: Path, pod: str) -> tuple[str, dict] | None:
-    """The oldest queued entry, renamed into claimed/<pod>/, or None when the queue is empty."""
+def batch(entry: dict) -> int:
+    parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
+    return next((int(p[1:]) for p in parts if re.fullmatch(r"b\d+", p)), 0)
+
+
+def bundle_est(entry: dict) -> float:
+    """Bytes the Commit's sealed replay bundle may take: BUNDLE_EST for B8 with 1,024 + 128 tokens, scaled by batch and tokens."""
+    parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
+    tokens = sum(int(p[1:]) for p in parts if re.fullmatch(r"[io]\d+", p)) or 1152
+    return BUNDLE_EST * max(batch(entry), 1) / 8 * tokens / 1152
+
+
+def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
+    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the cap."""
+    return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_CAP
+
+
+def bundle_bytes(globs: list[str]) -> int:
+    """Bytes of the sealed replay bundles waiting on the node (a Commit's replay deletes its own)."""
+    total = 0
+    for g in globs:
+        for d in Path("/").glob(g.lstrip("/")):
+            for root, _, files in os.walk(d):
+                for name in files:
+                    try:
+                        total += os.lstat(os.path.join(root, name)).st_size
+                    except OSError:
+                        continue
+    return total
+
+
+def _accepts(f: Path, accept) -> bool:
+    try:
+        return bool(accept(json.loads(f.read_text())))
+    except (OSError, ValueError):
+        return False
+
+
+def claim(spool: Path, pod: str, accept=lambda entry: True) -> tuple[str, dict] | None:
+    """The oldest queued entry that `accept`s, renamed into claimed/<pod>/, or None when there is none."""
     mine = spool / "claimed" / pod
     mine.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -83,6 +133,8 @@ def claim(spool: Path, pod: str) -> tuple[str, dict] | None:
         except OSError:
             continue
     for _, f in sorted(entries):
+        if not _accepts(f, accept):
+            continue
         dst = mine / f.name
         try:
             f.rename(dst)
@@ -202,6 +254,7 @@ def _terminate(signum, frame):
 
 def main() -> int:
     signal.signal(signal.SIGTERM, _terminate)   # the pilot is the container's PID 1: without a handler it ignores SIGTERM
+    os.umask(0)   # the dispatcher (another uid) moves and deletes what the pilot writes in the spool; the Commits keep 022
     t0 = time.time()
     scratch = Path(os.environ.get("TMPDIR") or "/tmp") / f"commit-pack-{POD}"
     logs = SPOOL / "logs" / POD
@@ -213,6 +266,7 @@ def main() -> int:
     finished: list[str] = []
     fault: str | None = None
     idle_since, last_stats = time.time(), 0.0
+    gates_at, disk_ok, waiting = 0.0, True, 0
     print(f"{now_utc()} commit-pack {POD}: slots {SLOTS}, max wall {MAX_WALL_S}s, client env {CLIENT_ENV}", flush=True)
 
     def report(c: Client, rc: int | None, fault_: bool, reason: str) -> None:
@@ -263,8 +317,18 @@ def main() -> int:
                     report(c, None, True, f"stopped: max wall {MAX_WALL_S}s")
                 running.clear()
                 break
-            while (len(running) < SLOTS and age < CLAIM_UNTIL_S and not quiet(time.time())
-                   and (got := claim(SPOOL, POD))):
+            if len(running) < SLOTS and time.time() - gates_at >= 60:
+                gates_at = time.time()
+                u = shutil.disk_usage(DISK)
+                disk_ok = u.used / u.total < DISK_PAUSE
+                waiting = bundle_bytes(BUNDLE_GLOBS)
+                if not disk_ok:
+                    print(f"{now_utc()} holding claims: disk {u.used / u.total:.1%} (pause at {DISK_PAUSE:.0%})", flush=True)
+
+            def accept(e: dict, waiting: int = waiting) -> bool:
+                return bundle_ok(e, waiting, [c.entry for c in running.values()])
+            while (len(running) < SLOTS and age < CLAIM_UNTIL_S and disk_ok and not quiet(time.time())
+                   and (got := claim(SPOOL, POD, accept))):
                 name, entry = got
                 slot = min(set(range(SLOTS)) - {c.slot for c in running.values()})
                 log = logs / f"{name}.log"
@@ -272,10 +336,10 @@ def main() -> int:
                        "OV_PACKED": POD}
                 with open(log, "ab") as out:
                     proc = subprocess.Popen(["bash", "-c", entry["script"]], env=env, stdout=out, stderr=subprocess.STDOUT,
-                                            start_new_session=True)
+                                            start_new_session=True, umask=0o022)
                 running[name] = Client(name, entry, proc, log, slot)
                 print(f"{now_utc()} started {name} ({entry['key']}) in slot {slot}, pid {proc.pid}", flush=True)
-            if running or any((SPOOL / "queue").glob("*.json")):
+            if running or (disk_ok and any(_accepts(f, accept) for f in (SPOOL / "queue").glob("*.json"))):
                 idle_since = time.time()
             elif time.time() - idle_since >= IDLE_S:
                 break

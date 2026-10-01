@@ -226,7 +226,7 @@ grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && for what in hold:12:30 
   at=${what#*:}
   if [ ! -f "/etc/systemd/system/vy-quiet-$verb.timer" ]; then
     if [ "$mode" = --apply ]; then
-      printf '[Unit]\nDescription=quiet hour: %s the vLLM deployments queues' admissions\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
+      printf '[Unit]\nDescription=quiet hour: %s admissions to the vLLM deployments queues\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
         | sudo tee "/etc/systemd/system/vy-quiet-$verb.service" > /dev/null
       printf '[Unit]\nDescription=quiet hour %s at %sZ\n\n[Timer]\nOnCalendar=*-*-* %s:00 UTC\n\n[Install]\nWantedBy=timers.target\n' "$verb" "$at" "$at" \
         | sudo tee "/etc/systemd/system/vy-quiet-$verb.timer" > /dev/null
@@ -237,6 +237,20 @@ grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && for what in hold:12:30 
 done
 run sudo systemctl daemon-reload
 grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
+# the disk guard: every minute, hold every queue's admissions while /workspace is 90% full, release its own holds under 85%
+run sudo install -m 755 "$SRC/disk_guard.sh" /usr/local/bin/vy-disk-guard
+if [ ! -f /etc/systemd/system/vy-disk-guard.timer ]; then
+  if [ "$mode" = --apply ]; then
+    printf '[Unit]\nDescription=disk guard: hold Kueue admissions while /workspace is 90%% full\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-disk-guard check\n' \
+      | sudo tee /etc/systemd/system/vy-disk-guard.service > /dev/null
+    printf '[Unit]\nDescription=disk guard every minute\n\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=1min\n\n[Install]\nWantedBy=timers.target\n' \
+      | sudo tee /etc/systemd/system/vy-disk-guard.timer > /dev/null
+  else
+    echo "   would write vy-disk-guard.service and vy-disk-guard.timer (every minute)"
+  fi
+fi
+run sudo systemctl daemon-reload
+run sudo systemctl enable --now vy-disk-guard.timer
 
 step "5. the host's CUDA driver library for GPU-less pods (/workspace/jobs/cuda-driver)"
 # A coverage cell's Build task has no GPU, and so no driver libraries in its pod, but importing vLLM's CUDA platform (#536) loads
