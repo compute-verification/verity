@@ -12,6 +12,7 @@ weight arrays O(1) in the descriptor.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from typing import Iterator
 
 from .types import Array, Record, Tuple, Type, Value, remove_axis
@@ -58,8 +59,11 @@ class Affine(Refs):
         return (self.space, self.idx, self.base + j)
 
     def slice(self, lo: int, hi: int) -> Refs:
-        lo, hi = max(lo, 0), min(hi, self.count)
-        return Affine(self.space, self.idx, self.base + lo, max(hi - lo, 0))
+        if lo < 0:
+            lo = 0
+        if hi > self.count:
+            hi = self.count
+        return Affine(self.space, self.idx, self.base + lo, hi - lo if hi > lo else 0)
 
     def to_json(self):
         return {"affine": [self.space, self.idx, self.base, self.count]}
@@ -149,14 +153,19 @@ class Concat(Refs):
             j += self.count
         if not (0 <= j < self.count):
             raise IndexError(j)
-        import bisect
-        k = bisect.bisect_right(self.starts, j) - 1
+        k = bisect_right(self.starts, j) - 1
         return self.parts[k][j - self.starts[k]]
 
     def slice(self, lo: int, hi: int) -> Refs:
         lo, hi = max(lo, 0), min(hi, self.count)
         out: list[Refs] = []
-        for st, p in zip(self.starts, self.parts):
+        starts, parts = self.starts, self.parts
+        # the parts before the one holding `lo` end at or before it, and those from `hi` on start at or after it
+        for k in range(max(bisect_right(starts, lo) - 1, 0), len(parts)):
+            st = starts[k]
+            if st >= hi:
+                break
+            p = parts[k]
             a, b = max(lo, st) - st, min(hi, st + p.count) - st
             if b > a:
                 out.append(p.slice(a, b))
