@@ -40,7 +40,7 @@ def fs_remote(env):
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
                "lane", "question", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
-               "pipeline")
+               "pipeline", "kernel_outcome", "kernel_reason")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "commit_map")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",

@@ -518,16 +518,22 @@ useful    U/(α_A·α_B), glue
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
   §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
-  - β = 3.42 / 2.00 / 1.11 / 0.49 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
+  - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
   - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
     fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
   - β is measured, not derived. It is the worst net saving that annealing plus exact block optimisation found over the
     families R1 admits at 10×, after A0's gather and ρ, with a 1.5× margin on the gain, made non-increasing in n.
-    The evidence is research store `cheap-binding/pearlc4-fix/beta_table.py --mu 1.5` on `strong.jsonl` and
-    `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256 and 512 (`exact256.jsonl`).
+  - It is measured on each bucket's own R1 admission boundary at k = 1,024, where the cap is largest, and at 0.005,
+    0.01 and 0.015 inside it, since the worst family can sit there (at n = 256 and 2,048 it does). The need is
+    1.5× the mean over 8 draws of the best search. Each bucket takes the largest of that need, the assessor's
+    boundary check (2.23% at n = 256) and the earlier grid table (0.17% stands at n = 2,048).
+  - The evidence is `art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e` (`beta_final.py`, the
+    boundary run and its sources). The grid before it is research store `cheap-binding/pearlc4-fix/beta_table.py
+    --mu 1.5` on `strong.jsonl` and `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256
+    and 512 (`exact256.jsonl`).
   - R1's per-row bound and the tile cap read `credit_of`, so both tighten with it. The fork (`tt-out-aw`) takes the same
     discount.
-  - Honest cost, from shapes alone: 0.50% of credit on Qwen2.5-0.5B, 0.23% on 1.5B, about 0.1% on 3B, 7B and
+  - Honest cost, from shapes alone: 0.54% of credit on Qwen2.5-0.5B, 0.24% on 1.5B, about 0.1% on 3B, 7B and
     Llama-3.2-1B/3B, and at most 0.019% from 8B up.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte with its sign; these
@@ -583,9 +589,11 @@ useful    U/(α_A·α_B), glue
      position is zero), f_s·|cols|/n;
   5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
      adds exactly 0), one block of MACs;
-  - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC
-    on every word it feeds. It is charged per row window rather than per 16-row span, since a cheaper computation may
-    gather any 16 such rows; the literal spans are counted.
+  - and D-24: per row and aligned 128 of k whose every aligned 8-chunk has at most 2 of its 4 pairs (2j, 2j + 1)
+    holding a nonzero code ((code & 7) ≠ 0), 0.5 per MAC on every word it feeds. That is the pair rule of sm_120's NVFP4
+    sparse MMA (`mma.sp…kind::mxf4nvf4…m16n8k128`, 2 of each 8-chunk's 4 pairs kept); `kind::f8f6f4`'s element-wise
+    2:4 has no UE4M3 16-block scales and runs at the FP8 rate, so it saves nothing. It is charged per row window rather
+    than per 16-row span, since a cheaper computation may gather any 16 such rows; the literal spans are counted.
   - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
     F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
     high.
@@ -610,6 +618,22 @@ useful    U/(α_A·α_B), glue
     the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
     ρ's accumulate, 2);
   - the weight side is `job_cost`.
+- **Registered weights (`check_registration`):**
+  - **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep). An unrotated checkpoint
+    registers only from the curated list, the fallback.
+  - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
+    5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
+    heads. They are never applied on an unrotated checkpoint, curated or not.
+  - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
+    V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
+    because the two were measured only together, after the rotation (research store `internal/pouw/keyed-transforms/`).
+  - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
+    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded (research store
+    `docs/pouw/keyed-transforms.md` §14). The rotation folds γ, so its stacks pass as they are. An unrotated, curated
+    checkpoint declares `gamma-fold` (every RMSNorm scale folded into the linears it feeds), and takes no V/O or
+    interleave.
+  - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
+    registration's own.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
   row needs:
@@ -619,13 +643,17 @@ useful    U/(α_A·α_B), glue
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
-  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192. Its shortcuts are in every report: the draws' beacon is
-  Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label, and the transcript tree and the records
-  are built on the host after timing.
+  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
+  once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
+  sharing, at twice that). Its shortcuts
+  are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
+  the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
+  not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
-  and one 64 × 1,024 × 64 NVFP4 tile.
+  and one 64 × 1,024 × 64 NVFP4 tile, each with its replayed debit and cap, and A row 0's F1′ inputs (the noise law's
+  digest, the modal bytes, p_t) and charge.
 
 ## Not here yet
 
