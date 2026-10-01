@@ -50,6 +50,8 @@ SMALL = ("unit.json", "H.npy", "okA.npy", "okB.npy")
 LEAD_S = 30 * 60
 BATCH = 32
 CHUNK = 64 << 20
+DEFER_S = 20 * 60
+DEFER_GRACE_MIN = 40
 LANE = "pouw-fp8-security"
 REBUILD = '''"""Rebuild <chain>.cols.u32 from <chain>.rows.u32.zst in this directory and check it against checks.json's sha256.
 python3 rebuild_cols.py hot|zero [--out DIR]   (needs numpy and the zstd CLI)"""
@@ -350,11 +352,13 @@ class Store:
         return run(gate, [sys.executable, "-m", "research", "data", *args], timeout=timeout,
                    env={**self.env, "RESEARCH_STORE": str(store)})
 
-    def preserved(self, gate: Gate, store: Path, art: str, nbytes: int = 0) -> tuple[bool, str]:
+    def preserved(self, gate: Gate, store: Path, art: str, nbytes: int = 0, tries: int = 4) -> tuple[bool, str]:
         """`research data preserved`, retried in a fresh process: a read-back over one connection can trickle at tens of KB/s
-        for hours (the store's GET deadline allows it), while a new connection reads the same object at tens of MB/s."""
+        for hours (the store's GET deadline allows it), while a new connection reads the same object at tens of MB/s.  A newly
+        put object can also read back that slowly on every connection for an hour or more and then normally, so `main` defers a
+        unit that fails `tries` read-backs and checks it again at the end of the run."""
         why = ""
-        for attempt in range(1, 5):
+        for attempt in range(1, tries + 1):
             r = self(gate, store, "preserved", art, timeout=180 + nbytes / 4e6)
             why = (r.stdout + r.stderr).strip()[-600:]
             if r.returncode == 0:
@@ -442,6 +446,7 @@ def main() -> int:
         f"{zver}; manifest {mpath}; key expires {store.expires if store else '-'}; df {disk()['pct']}%")
     summary = {"done": [], "failed": [], "skipped": [], "level": a.level, "zstd": zver, "kept_raw": sorted(keep), "symlinks": links}
     est = 15 * 60.0
+    deferred: list[tuple[str, dict, float]] = []
     with Pool(a.workers) as pool:
         for rel in todo:
             if a.limit and len(summary["done"]) + len(summary["failed"]) >= a.limit:
@@ -462,6 +467,10 @@ def main() -> int:
                     man.add({"unit": rel, "status": "deleted", "art": st["art"], "df_after": disk(),
                              "note": "the directory was already gone at restart (a delete interrupted after rm)"})
                     summary["done"].append(rel)
+                    continue
+                if st.get("status") == "put" and ud.exists() and not a.dry_run:
+                    deferred.append((rel, st, time.time() - DEFER_S))
+                    log(f"{rel}: {st['art']} was put but not yet read back; checking it at the end of this run")
                     continue
                 if st.get("status") == "preserved" and ud.exists() and not a.dry_run:
                     ok, why = store.preserved(gate, scratch / "store", st["art"], int(st.get("tree_bytes", 2 << 30)))
@@ -525,9 +534,13 @@ def main() -> int:
                 if r.returncode or not arts:
                     raise RuntimeError(f"{rel}: research data put exit {r.returncode}: {(r.stdout + r.stderr).strip()[-600:]}")
                 art = arts[-1]
-                ok, why = store.preserved(gate, scratch / "store", art, tree_bytes)
+                ok, why = store.preserved(gate, scratch / "store", art, tree_bytes, tries=2)
                 if not ok:
-                    raise RuntimeError(f"{rel}: {art} not preserved: {why}")
+                    put = {**rec, "status": "put", "art": art, "why": why[-400:]}
+                    man.add(put)
+                    deferred.append((rel, put, time.time()))
+                    log(f"{rel}: {art} put but not read back yet; raw kept, checking it again at the end of this run")
+                    continue
                 man.add({**rec, "status": "preserved", "art": art})
                 log(f"{rel}: {art} preserved: zst {zst_bytes / 2**20:.1f} MiB of {raw_bytes / 2**30:.2f} GiB")
                 if not ck["transpose_ok"]:
@@ -545,6 +558,35 @@ def main() -> int:
             finally:
                 shutil.rmtree(scratch, ignore_errors=True)
             est = max(est * 0.5, (time.time() - t1) * 1.5, 5 * 60.0)
+    for rel, put, t_put in sorted(deferred, key=lambda d: d[2]):
+        wait = t_put + DEFER_S - time.time()
+        if (time.time() + max(wait, 0) - t0) / 60 > a.budget_min + DEFER_GRACE_MIN:
+            log(f"budget spent: {rel} stays put-not-verified, raw kept (a relaunch checks it)")
+            continue
+        if wait > 0:
+            log(f"{rel}: waiting {wait / 60:.0f} min before reading {put['art']} back again")
+            time.sleep(wait)
+        gate.clear_for(10 * 60.0)
+        scratch = Path(tempfile.mkdtemp(prefix="bitsets-zst-"))
+        try:
+            ok, why = store.preserved(gate, scratch / "store", put["art"], int(put.get("tree_bytes", 2 << 30)))
+            if not ok:
+                raise RuntimeError(f"{rel}: {put['art']} still not preserved after deferral: {why}")
+            man.add({**{k: v for k, v in put.items() if k != "why"}, "status": "preserved"})
+            log(f"{rel}: {put['art']} preserved on the deferred check")
+            if not put.get("transpose_ok", True):
+                summary["failed"].append({"unit": rel, "why": "cols not the transpose of rows; raw kept", "art": put["art"]})
+                continue
+            d = delete_unit(gate, root, root / rel)
+            man.add({"unit": rel, "status": "deleted", "art": put["art"], **d})
+            summary["done"].append(rel)
+            log(f"{rel}: deleted {d['raw_bytes_deleted'] / 2**30:.2f} GiB; df {d['df_before']['pct']}% -> {d['df_after']['pct']}%")
+        except Exception as e:  # noqa: BLE001
+            summary["failed"].append({"unit": rel, "why": str(e)[:800]})
+            man.add({"unit": rel, "status": "failed", "why": str(e)[:800]})
+            log(f"{rel}: FAILED, raw kept: {e}")
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
     remaining = [u for u in todo if man.state.get(u, {}).get("status") != ("dry-run" if a.dry_run else "deleted")]
     summary.update(remaining=remaining, df=disk(), minutes=round((time.time() - t0) / 60, 1))
     if store is not None and mpath.exists():
