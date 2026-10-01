@@ -346,7 +346,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                            seed_challenge=_seed_chal,
                            max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
-                           workers=getattr(args, "replay_workers", None), retention=_retention,
+                           replay_draw=getattr(args, "replay_draw", "uniform"), workers=getattr(args, "replay_workers", None), retention=_retention,
                            ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                            # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                            manifest=(s.manifest if isinstance(s.manifest, dict) else None),

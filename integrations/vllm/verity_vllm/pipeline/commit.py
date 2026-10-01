@@ -1022,7 +1022,8 @@ class Options:
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
-    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all, stratified by family (one stratum per family, round-robin, at least one each) in place of the row's per-stratum sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
+    replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
@@ -1047,8 +1048,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
         from verity_vllm.pipeline import hot as _HC
         sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")),
-                            idle_s=float(os.environ.get("HOT_IDLE", "900")),
-                            timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
+                            idle_s=float(os.environ.get("HOT_IDLE", "900")), timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
     TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
     if os.environ.get("VERITY_TRACEDUMP"):
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)

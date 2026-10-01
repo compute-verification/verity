@@ -37,7 +37,7 @@ SCHEMA = "verity-vllm/replay-bundle/v1"
 MANIFEST = "MANIFEST.json"
 #: the context's (unwritten) key for the sha256 of the files `write_store` hashed as it wrote them
 HASHED = "_hashed"
-ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
+ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k", "replay_draw",
         "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
 
