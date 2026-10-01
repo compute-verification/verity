@@ -1,6 +1,7 @@
 """`verity.ml.boolean.scalar`: the bf16 comparator and the selects agree with their word primitives on every input (the
-comparator on all 2^32 pairs of words, each select over its whole truth table), carry exactly their builders' live ANDs, and
-are pinned by gate count and program digest."""
+comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 arithmetic, max / min and casts agree with
+theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 cast on every word, the E4M3 cast on every
+exponent around its range); each carries exactly its builder's live ANDs and is pinned by gate count and program digest."""
 from __future__ import annotations
 
 import itertools
@@ -22,13 +23,23 @@ from verity.ml.boolean import scalar as BSC
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import Circuit
 
-DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32]
+DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
+        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "Bf16GtStrict_v2": (56, 133, 19, "66dfd1ed5bdc1d5f62e045bd5dceff8fe7a3ade2c0dae39ee9983db1c6416ab2"),
     "SelectBf16_v2": (16, 32, 0, "5690d8726cc1a582f29c4a6083a8f74ec97a5e13efa5b908390f465f3cd41d37"),
     "SelectI32_v2": (32, 64, 0, "693785819c9067e60513aa3f943f86f1b1799853944003afad7ace49d5155530"),
+    "F32Add_v3": (812, 1395, 115, "9fdc2e8807fce92fa895519eb1ee942b7b2b46f4971122495fe2a6282c9aaec0"),
+    "F32Mul_v3": (2430, 4650, 110, "61f93e5519c55cf5ded0dcb0d867979431bcd5508839842ec8832bcd86755311"),
+    "F32Fma_v3": (4485, 7863, 267, "fd402c079584408027c10870dbba98867e7ba3088dd798c48b0b5289c7474667"),
+    "F32Div_v3": (2517, 5592, 252, "13f6fbbdffbcb6506ae3fa9555bffb62376ec4827a74ef6303f528abe6365d93"),
+    "F32Fabs_v2": (0, 0, 0, "e6928242db378dd9949140e955abe855dcd29469cb514a0d203e98b7fca39460"),
+    "F32Fmaxf_v2": (314, 573, 102, "98062192009fa6ad5c43fc1a55a0d6b4e170a5597e1a8bf28a7cf4ffc647631f"),
+    "F32Fminf_v2": (314, 574, 102, "eba9c1ccaeefcadc6d6567e7d8903e70b4831d6dcdc66d4302cb3378a148bde8"),
+    "Bf16ToF32_v2": (0, 0, 0, "39168eff727f5ef51d263a418e3473c7037d1f03e3c93afc8d9a219958f21eaf"),
+    "F32ToE4m3Sat_v2": (231, 376, 34, "e397be3ee5361aec4f561816c731220bfa101b1d777d0797731abcba3afbc361"),
 }
 
 #: signed zeros, the smallest subnormals, the largest finite values, the smallest normals, ones, infinities and NaNs (quiet,
@@ -36,17 +47,48 @@ PINS = {
 BF16_SPECIALS = np.array([m | s for m in (0x0000, 0x0001, 0x007F, 0x0080, 0x3F80, 0x7F7F, 0x7F80, 0x7F81, 0x7FC0, 0x7FFF)
                           for s in (0, 0x8000)], np.uint16)
 
+#: signed zeros, subnormals, the normal range's ends, ones, infinities, NaNs of both signs and kinds, and the FP8 linear's
+#: constants and boundaries (448, 1 / (448 * 512), the E4M3 grid's ends and rounding midpoints)
+_MAGNITUDES = [0x00000000, 0x00000001, 0x00400000, 0x007FFFFF, 0x00800000, 0x00800001, 0x3F7FFFFF, 0x3F800000, 0x3F800001,
+               0x4B000000, 0x7E800000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF, 0x43E00000, 0x43E80000,
+               0x43F00000, 0x3A124925, 0x3C800000, 0x3B000000, 0x3A800000, 0x3A000000]
+F32_SPECIALS = np.array([m | s for m in _MAGNITUDES for s in (0, 0x80000000)], np.uint32)
+
 
 def _words(w: int, n: int, rng) -> np.ndarray:
     return rng.integers(0, 1 << w, n, dtype=np.uint64).astype(np.uint16 if w == 16 else np.uint32)
+
+
+def _f32_inputs(n_params: int, rng) -> list[np.ndarray]:
+    grid = np.array(list(itertools.product(range(len(F32_SPECIALS)), repeat=n_params)), np.int64).T
+    rand = rng.integers(0, 1 << 32, (n_params, 60_000), dtype=np.uint64).astype(np.uint32)
+    near = (rng.integers(0x3C000000, 0x44000000, (n_params, 20_000), dtype=np.uint64)
+            | (rng.integers(0, 2, (n_params, 20_000), dtype=np.uint64) << np.uint64(31))).astype(np.uint32)
+    return [np.concatenate([F32_SPECIALS[g], r, x]) for g, r, x in zip(grid, rand, near)]
+
+
+def _e4m3_range(rng) -> np.ndarray:
+    """Every exponent from 2^-20 to past 448 (fields 107..140), each with its mantissa's low 8 bits exhausted under 64 random high
+    parts (the rounding position is at or above bit 20), both signs."""
+    e = np.arange(107, 141, dtype=np.uint32)
+    hi = rng.integers(0, 1 << 15, 64, dtype=np.uint64).astype(np.uint32) << np.uint32(8)
+    lo = np.arange(256, dtype=np.uint32)
+    m = (hi[:, None] | lo[None, :]).reshape(-1)
+    w = (e[:, None] << np.uint32(23) | m[None, :]).reshape(-1)
+    return np.concatenate([w, w | np.uint32(0x80000000)])
 
 
 def _inputs(d, rng) -> list[np.ndarray]:
     if d is BSC.Bf16GtStrict:
         grid = np.array(list(itertools.product(range(len(BF16_SPECIALS)), repeat=2)), np.int64).T
         return [np.concatenate([BF16_SPECIALS[g], _words(16, 60_000, rng)]) for g in grid]
-    w = 16 if d is BSC.SelectBf16 else 32
-    return [rng.integers(0, 2, 60_000, dtype=np.uint8), _words(w, 60_000, rng), _words(w, 60_000, rng)]
+    if d in (BSC.SelectBf16, BSC.SelectI32):
+        w = 16 if d is BSC.SelectBf16 else 32
+        return [rng.integers(0, 2, 60_000, dtype=np.uint8), _words(w, 60_000, rng), _words(w, 60_000, rng)]
+    if d is BSC.Bf16ToF32:
+        return [np.arange(1 << 16, dtype=np.uint16)]
+    inputs = _f32_inputs(len(d.signature(None)[0]), rng)
+    return [np.concatenate([inputs[0], _e4m3_range(rng)])] if d is BSC.F32ToE4m3Sat else inputs
 
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)

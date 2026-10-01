@@ -1,5 +1,6 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
-f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
+f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
+`verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
 numerator scaling) and the sampler lane's compare, selects and integer add. Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
@@ -11,6 +12,7 @@ FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
 
+from verity.ml.boolean.scalar import f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
                                        f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
 
@@ -460,40 +462,11 @@ def bf16_gt(C, a, b):
     return [C.AND(C.AND(gt, NOT(nan_a)), NOT(nan_b))]
 
 
-def _fmaxmin(C, a, b, want_max: bool):
-    """PTX ``max.f32`` / ``min.f32``: a NaN operand yields the other, two NaNs 0x7FFFFFFF; ``max(+0, -0) = +0``,
-    ``min(+0, -0) = -0``."""
-    na, nb = _is_nan(C, a), _is_nan(C, b)
-    r = mux(C, f32_gt(C, b, a)[0] if want_max else f32_gt(C, a, b)[0], b, a)
-    both_zero = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
-    zs = C.AND(a[31], b[31]) if want_max else OR(C, a[31], b[31])
-    r = mux(C, both_zero, [ZERO] * 31 + [zs], r)
-    r = mux(C, na, b, mux(C, nb, a, r))
-    return mux(C, C.AND(na, nb), _c32(0x7FFFFFFF), r)
-
-
 def f32_sat(C, a):
     """``F32Sat_v1`` (``cvt.sat.f32.f32``): clamp to [+0, 1]; NaN and every negative word (-0 included) give +0."""
     r = mux(C, NOT(_ult_const(C, a[:31], ONE_F)), _c32(ONE_F), a)
     keep = NOT(OR(C, a[31], _is_nan(C, a)))
     return [C.AND(keep, x) for x in r[:31]] + [ZERO]
-
-
-def f32_to_e4m3_sat(C, x):
-    """``F32ToE4m3Sat_v1`` (``cvt.rn.satfinite.e4m3x2.f32``): RN-even onto the E4M3 grid (three fraction bits from 2^-6, steps of
-    2^-9 below), ±448 (0x7E) past it and for the infinities, 0x7F for NaN."""
-    s, e, m, e_max, e_zero, m_nz = _fields(C, x)
-    sig = m + [NOT(e_zero)]
-    normal = NOT(_ult_const(C, e, 121))                       # |x| >= 2^-6
-    amt = mux(C, normal, const_bits(19, 5),
-              mux(C, _ult_const(C, e, 116), const_bits(24, 5), sub(C, const_bits(140, 8), e, 8)[0][:5]))
-    y, sticky = fp.shr_sticky(C, sig, amt)                    # the kept bits and a guard bit
-    n = add(C, y[1:5] + [ZERO], [C.AND(y[0], OR(C, sticky, y[1]))], width=5)
-    base = [C.AND(normal, b) for b in sub(C, e, const_bits(121, 8), 8)[0][:4]]
-    enc = add(C, [ZERO] * 3 + base, n, width=8)
-    sat = OR(C, NOT(_ult_const(C, e, 136)), NOT(_ult_const(C, enc, 0x7F)))
-    out = mux(C, sat, const_bits(0x7E, 7), enc[:7]) + [s]
-    return mux(C, C.AND(e_max, m_nz), const_bits(0x7F, 8), out)
 
 
 def i32_le(C, a, b):

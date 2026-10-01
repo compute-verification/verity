@@ -217,19 +217,20 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, `silu_and_mul`'s row at I = 8
+    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
+    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s row at I = 8
     (`verity_vllm.program.registry.boolean_silu`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
     (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
-    operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator and selects
-    (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are static-free. vLLM's
-    Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which reaches its head and
-    halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its tree, which reach
-    every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served norms on bits
-    (`boolean_norms`) at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the switch's binding,
-    `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word Definitions of its constant
-    steps."""
+    operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator, selects, max /
+    min and E4M3 cast (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
+    static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
+    reaches its head and halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its
+    tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served
+    norms on bits (`boolean_norms`) at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the switch's
+    binding, `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word Definitions of its
+    constant steps."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.boolean import mufu as BM
@@ -246,7 +247,11 @@ def _boolean_roots() -> list[Any]:
     rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
              bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8)]
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
-            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8),
+            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
+            bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
+            bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
+            bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
+            bind(BSL.SiluMul, I=8),
             bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
             bind(SB.TokenSelect, V=4161),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
@@ -279,6 +284,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
     from verity.ir.defs import bind
     from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import boolean_attention
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -294,6 +300,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Prefill_v1", lambda: bind(lifted.Prefill, C=TINY, LP=3, **lifted_profile)),
         ("StepBody_v1", lambda: bind(lifted.StepBody, C=TINY, T=4, **lifted_profile)),
         ("AttentionN_v1", lambda: bind(spec.AttentionN, T=5, NH=2, KVH=1, D=16, BN=16)),
+        # about 7 minutes a target: the smallest Boolean chain whose second block rescales (T = BN + 1)
+        ("Attention_v6", lambda: bind(boolean_attention.AttentionV6, T=17, NH=1, KVH=1, D=16, BN=16)),
+        ("Attention_v7", lambda: bind(boolean_attention.AttentionV7, T=5, NH=1, KVH=1, D=16, BN=16, **boolean_attention.ATTENTION_FA3)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
