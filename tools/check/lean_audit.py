@@ -14,7 +14,10 @@ A package's verdict is reused while everything its audit reads is unchanged. Its
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, the controls first. Each pass is
-stored under its key, and a failure is never stored.
+stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
+in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record, which
+the key covers, holds for it, so it cannot pass a test on other data. The package's own Python tests check that the generator
+still writes that data.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place

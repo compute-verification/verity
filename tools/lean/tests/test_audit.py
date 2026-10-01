@@ -341,7 +341,7 @@ def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_r
     started = {p.name: threading.Event() for p in (a, b, c)}
     events = []
 
-    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None):
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None, **_):
         events.append(("start", pkg.name))
         started[pkg.name].set()
         if pkg.name == "a":
@@ -359,6 +359,60 @@ def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_r
     assert events.index(("built", "a")) < events.index(("start", "b"))
     doc = json.loads((out / "audit.json").read_text())
     assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
+
+
+def _runs(tmp_path, monkeypatch, entry, exit=0):
+    """A package whose exempt module `T` is a test under `runs`, the commands it would run (`lake` faked to exit ``exit``; a
+    `generate` runs for real), and a function auditing it: (failures, the `runs` section as found)."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "T.lean").write_text("")
+    ran = []
+
+    def run(argv, cwd, log=None, timeout=0):
+        ran.append(argv)
+        if argv[0] == "lake":
+            return exit, "lake's output"
+        r = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    monkeypatch.setattr(A, "run", run)
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    policy = {"roots": ["P"], "exempt": {"T": "a test"}, "runs": {"T": entry}}
+    files = {"T": "T.lean"}
+    return pkg, ran, lambda update=False, policy=policy: A.tests(pkg, policy, files, tmp_path / "work", tmp_path, update)
+
+
+def test_a_run_reads_its_data_only_with_the_recorded_sha256(tmp_path, monkeypatch):
+    import gzip
+
+    entry = {"args": ["{d/v.txt}", "7"], "data": {"d/v.txt": sha("12\n")}}
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, entry)
+    (pkg / "d").mkdir()
+    (pkg / "d" / "v.txt.gz").write_bytes(gzip.compress(b"12\n"))
+    assert tests() == ([], {"T": entry})
+    unpacked = pkg / ".lake" / "runs" / "T" / "data" / "d" / "v.txt"
+    assert ran == [["lake", "env", "lean", "--run", "T.lean", str(unpacked), "7"]] and unpacked.read_text() == "12\n"
+    (pkg / "d" / "v.txt.gz").write_bytes(gzip.compress(b"13\n"))
+    fails, _ = tests()
+    assert [f.split(" has ")[0] for f in fails] == ["runs: T's data d/v.txt"] and len(ran) == 1      # failed unrun
+    assert tests(update=True) == ([], {"T": entry | {"data": {"d/v.txt": sha("13\n")}}}) and len(ran) == 2
+    (pkg / "d" / "v.txt.gz").unlink()
+    assert tests()[0] == [f"runs: T's data d/v.txt is missing from {pkg}"]
+
+
+def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
+    gen = "import pathlib, sys; pathlib.Path(sys.argv[2], 'v.txt').write_text(pathlib.Path(sys.argv[1]).name + '\\n')"
+    entry = {"args": ["{v.txt}"], "data": {"v.txt": sha(f"{tmp_path.name}\n")}, "generate": ["python3", "-c", gen, "{repo}", "{out}"]}
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, entry, exit=1)
+    out = pkg / ".lake" / "runs" / "T" / "generated"
+    assert tests()[0] == ["runs: T exited 1:\nlake's output"]
+    assert ran[0] == [A.sys.executable, "-c", gen, str(tmp_path), str(out)] and ran[1][-1] == str(out / "v.txt")
+    bad = {"T": entry | {"generate": ["python3", "-c", "raise SystemExit(4)"]}}
+    assert tests(policy={"exempt": {"T": "a test"}, "runs": bad})[0][0].startswith("runs: T's `generate` exited 4")
+    assert tests(policy={"exempt": {}, "runs": {"T": entry}})[0] == [
+        "runs: T is not under `exempt`: a run is a test, not a proof the audit reads"]
+    assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
