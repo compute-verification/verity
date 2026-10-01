@@ -33,8 +33,8 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
-- one stand-alone question, through the channel you already use to reach your coordinator (a lane: a handoff to
-  `lanes/coordinator/`; a Project worker: its report). The coordinator answers from the rulings when one applies, and
+- one stand-alone question to your coordinator (a handle holder: on Slack, `research slack ask`; a worker: its report or
+  reply to the coordinator that launched it). The coordinator answers from the rulings when one applies, and
   otherwise puts the question to Daniel as written;
 - the case, the change, and your recommendation, in a few lines;
 - meanwhile, prepare the change on your branch, and land it only after the ruling.
@@ -59,8 +59,8 @@ Write a friction note when the fix isn't yours or can't happen now, and the fric
 about half an hour, or the second time you hit it. Not for what you fixed, and not for one-off slips. Search the notes first:
 if one covers it, write a two-line note naming it under `recurs:`, because repeats are what get fixed.
 
-A note is a file, never a message, so it pings nobody. A blocker still goes to your coordinator as a handoff (lane contract
-§3a); the note is its record.
+A note is a file, never a message, so it pings nobody. A blocker still goes to your coordinator as a message (Slack, or
+your report to it); the note is its record.
 
 ~~~markdown
 ---
@@ -89,8 +89,15 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
+  A handoff, an order or an ask goes on Slack (`research slack`), or to your own Cursor workers as a follow-up; a note
+  written as a message reaches nobody.
 - 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
   message, counts as the named statement reviewer's sign-off for `research merge`.
+- 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
+  needs no Slack admin. Comms owns the routing (`@<lane>` at the start of a post wakes that lane's agent); until it
+  lands, workers still reach other agents through their coordinator.
+
 - 2026-10-01 (12:05 AM PDT): a protocol's README is an outline, signposts and its core API, and Lean is the source of
   truth for a mature protocol. A protocol keeps a `PROTOCOL.md` only while it is experimental (Python is the truth until
   the Lean catches up), and the PR whose Lean covers it deletes the file.

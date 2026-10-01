@@ -23,7 +23,9 @@ A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest on
 sets the front matter's `status:` to the state, and creates the report if the lane has none.  `superseded` marks a lane whose
 work a successor took over: it is done, never STALE.
 
-Handoffs are files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir.  `checkpoint` (and `inbox`) print the
+Mail is files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir: the machines' notices (the merge queue's
+refusals, the steward's kills and claim refusals) and older agents' handoffs.  Since 2026-10-01 agents message each other on
+Slack, never through notes, and the inbox flags an agent's handoff as sent the wrong way.  `checkpoint` (and `inbox`) print the
 ones changed since the lane was last shown its inbox, by mtime, and mark them read; a successor (`bind --succeeds`, or the
 predecessor's `[superseded] by <lane>` checkpoint) also gets its predecessors' unread ones.  `checkpoint LANE final` then runs
 the finish checks: every `art:` id the report cites is preserved on the remote (recorded, else verified there now), no pod of
@@ -119,6 +121,7 @@ POD_PREFIX = "vy-"
 NO_POD = ("none", "-")
 BINDING = "binding.json"
 MAIL_GLOBS = ("*handoff*.md", "*asks*.md", "*reply*.md")
+AGENT_HANDOFF = re.compile(r"-handoff-from-(?!merge-queue-)")      # the merge queue's and the steward's notices are machines'
 SEEN = ".inbox-seen"
 SUPERSEDED_BY_RE = re.compile(r"\[superseded\]\s+by\s+([A-Za-z0-9][\w.-]*)")
 ART_RE = re.compile(r"\bart:([0-9a-f]{8,64})\b")
@@ -385,6 +388,9 @@ def render_inbox(lane: str, items: list[dict], limit: int = 15) -> str:
         lines.append(f"  {both(x['mtime'])} {where}{x['path'].name}  \"{x['title']}\"")
     if len(items) > limit:
         lines.append(f"  ... and {len(items) - limit} older: research notes inbox {lane} --peek")
+    if n := sum(1 for x in items if AGENT_HANDOFF.search(x["path"].name)):
+        lines.append(f"  {n} of these came from agents: notes are records, not messages (2026-10-01); act on them, and tell "
+                     "each sender to message you on Slack instead (.agents/skills/using-slack/SKILL.md)")
     return "\n".join(lines)
 
 

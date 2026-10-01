@@ -189,6 +189,8 @@ research slack ask-daniel resolve <id> --choice no --note 'his reply: <permalink
 ## Norms
 
 - Tag handles; never DM.
+- Slack is the channel between agents; a lane note is a record and reaches nobody (Daniel, 1 Oct). Never send a handoff,
+  an order or an ask as a note.
 - Keep one thread per request.
 - Put content in files, PRs or the evidence store, and link to it from Slack.
 - Say nothing that isn't a request, an answer, or a status line: no thanks, and no "on it" (that's 👀).
