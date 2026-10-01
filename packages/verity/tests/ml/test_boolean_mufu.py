@@ -3,6 +3,7 @@ words and, through every table index, on whole binades; each table's interpolato
 Definition is pinned by gate count and program digest."""
 from __future__ import annotations
 
+import copy
 import itertools
 import json
 import zlib
@@ -21,7 +22,7 @@ from verity.ml.boolean import mufu as BM
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import Circuit
 
-DEFS = [BM.MufuEx2Ftz, BM.MufuRcpFtz, BM.MufuSqrtFtz, BM.RsqrtApprox, BM.DivFullRcp, BM.DivFullScaleA]
+DEFS = [BM.MufuEx2Ftz, BM.MufuRcpFtz, BM.MufuSqrtFtz, BM.RsqrtApprox, BM.DivFullRcp, BM.DivFullScaleA, BM.MufuTanh]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -31,17 +32,19 @@ PINS = {
     "RsqrtApprox_v2": (1134, 5269, 163, "fc0129fdb4f24b3fcb4f5a3027f2c73a1c0400c7345796b81846046941b477b8"),
     "DivFullRcp_v2": (1152, 5172, 144, "d33728134af0e8dca11368ddd08662b86c14849e89be2d9fc5794161109f7e0a"),
     "DivFullScaleA_v3": (531, 860, 94, "f8d0f52de422db61c053accdf13643773dc9b93ff29f099428f3299b70572011"),
+    "MufuTanh_v2": (1049, 5408, 77, "73a9a9f64a3a013e633d4821380727ffde81a5a16d3c07217f9e9c6ec6eac6f3"),
 }
 
 #: each table's words that are not its interpolant: (index, word - interpolant)
 OVERRIDES = {"ex2": (), "rcp": (), "rsq": ((0, 1),), "sqrt": ()}
 
 #: signed zeros, subnormals (the FTZ boundary), the normal range's ends, ones, the range-scaling thresholds 2^-126 and 2^126,
-#: infinities, NaNs of both signs and kinds, ex2's saturation points, and words just past a binade's ends
+#: infinities, NaNs of both signs and kinds, ex2's saturation points, words just past a binade's ends, and the ends of tanh's
+#: identity (|x| <= 2^-8) and saturation (|x| >= 8)
 _MAGNITUDES = [0x00000000, 0x00000001, 0x00400000, 0x007FFFFF, 0x00800000, 0x00800001, 0x3F7FFFFF, 0x3F800000, 0x3F800001,
                0x3FFFFFFF, 0x40000000, 0x407FFFFF, 0x3E800000, 0x4B800000, 0x7E7FFFFF, 0x7E800000, 0x7E800001, 0x7F000000,
                0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF, 0x43000000, 0x42FE0000, 0x43160000, 0x33800000,
-               0x34000000, 0x0C000000]
+               0x34000000, 0x0C000000, 0x3B7FFFFF, 0x3B800000, 0x3B800001, 0x3BFFFFFF, 0x40FFFFFF, 0x41000000]
 SPECIALS = np.array([m | s for m in _MAGNITUDES for s in (0, 0x80000000)], np.uint32)
 
 
@@ -50,7 +53,9 @@ def _inputs(n_params: int, rng) -> list[np.ndarray]:
     rand = rng.integers(0, 1 << 32, (n_params, 60_000), dtype=np.uint64).astype(np.uint32)
     near = (rng.integers(0x30000000, 0x50000000, (n_params, 20_000), dtype=np.uint64)
             | (rng.integers(0, 2, (n_params, 20_000), dtype=np.uint64) << np.uint64(31))).astype(np.uint32)
-    return [np.concatenate([SPECIALS[g], r, x]) for g, r, x in zip(grid, rand, near)]
+    out = [np.concatenate([SPECIALS[g], r, x]) for g, r, x in zip(grid, rand, near)]
+    # MufuTanh_v1 has no batch kernel and decodes a table block at each word it misses: sorted, it decodes each block once
+    return [np.sort(out[0])] if n_params == 1 else out
 
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)
@@ -115,6 +120,46 @@ def test_the_circuit_square_is_the_fit_square(name) -> None:
     assert (q == f.square(x)).all()
 
 
+def _tanh_words(w: np.ndarray) -> np.ndarray:
+    """``MufuTanh_v1`` on a word array as its evaluator answers: the rules (`M.MUFU_TANH_RULES`), else the measured table (a
+    negative word by its odd symmetry), each block decoded once."""
+    (s,) = M.mufu_tanh_shards()
+    R = M.MUFU_TANH_RULES
+    w = np.asarray(w, np.uint32)
+    a, sign = w & 0x7FFFFFFF, w & 0x80000000
+    out = np.where(a >= R["saturate_from"], 0x3F800000 | sign, w).astype(np.uint32)
+    tab = np.flatnonzero((a >= R["identity_below"]) & (a < R["saturate_from"]))
+    i = a[tab].astype(np.int64) - s.lo
+    for k in np.unique(i // s.block_words):
+        at = i // s.block_words == k
+        out[tab[at]] = s.block(int(k))[i[at] % s.block_words] | sign[tab[at]]
+    out[a > 0x7F800000] = R["nan_out"]
+    return out
+
+
+def test_the_tanh_reference_is_the_evaluator() -> None:
+    w = _inputs(1, np.random.default_rng(zlib.crc32(b"MufuTanh/reference")))[0]
+    assert (_tanh_words(w) == E.evaluate_batch(M.MufuTanh, w).astype(np.uint32).reshape(-1)).all()
+
+
+@pytest.mark.slow
+def test_the_tanh_interpolator_is_every_table_word() -> None:
+    """Every word of the binades (about 10 s): the check the build makes (`_tanh_measured`), here against `_tanh_words`, the
+    reference that agrees with the evaluator, rather than the blocks as the build reads them."""
+    f = BM.tanh_fit()
+    m = np.arange(1 << 23, dtype=np.int64)
+    for e, _ in f.binades:
+        assert (f.words(e, m) == _tanh_words(((e << 23) + m).astype(np.uint32))).all(), f"binade {e}"
+
+
+def test_a_tanh_fit_that_is_not_the_table_fails_the_build(monkeypatch) -> None:
+    f = copy.deepcopy(BM.tanh_fit())
+    f.C0[0] += 1 << f.shift
+    monkeypatch.setattr(BM, "tanh_fit", lambda: f)
+    with pytest.raises(ValueError, match=f"binade {f.binades[0][0]} are not MufuTanh_v1's"):
+        BM._tanh_measured.__wrapped__()
+
+
 def _agree(target, *words) -> None:
     got = BS.evaluate_words(target, *words).astype(np.uint64).reshape(-1)
     ref = E.evaluate_batch(TR.word_of(target), *words).astype(np.uint64).reshape(-1)
@@ -154,3 +199,15 @@ def test_div_full_scale_a_where_it_rounds_or_normalizes(b, end) -> None:
     normalizes a subnormal (2^23 words, about 10 s); random words reach a few thousand of them."""
     a = _span((0x00000000, end))
     _agree(bind(BM.DivFullScaleA), a, np.full(len(a), b, np.uint32))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("e", [e for e, _ in BM.tanh_fit().binades], ids=lambda e: f"2^{e - 127}")
+def test_every_word_of_a_tanh_binade(e) -> None:
+    """Every positive word of one of MUFU.TANH's binades (2^23 words, about 8 s each; eleven binades): every segment and offset
+    of the table read, through the offset's shifter and the straddling segments' exponents. The random words reach about
+    0.05 % of them. Against `_tanh_words`, since the word primitive evaluates one word at a time."""
+    w = _span((e << 23, (e + 1) << 23))
+    got = BS.evaluate_words(bind(BM.MufuTanh), w).astype(np.uint32).reshape(-1)
+    bad = np.flatnonzero(got != _tanh_words(w))
+    assert not bad.size, f"MufuTanh_v2: {bad.size} of {len(w)} differ, first {[hex(int(w[i])) for i in bad[:5]]}"

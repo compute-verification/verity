@@ -241,8 +241,11 @@ def _boolean_roots() -> list[Any]:
     N = 16 and at N = 1030 (two chunks, one element per thread), the narrowing at N = 16, and the rsqrt with its MUFU at the word
     id and at mufu's `RsqrtApprox_v2`. The Gumbel select (`gumbel_boolean.GumbelSelectF32_v2`) at two lanes (its family's smallest, and the noisy row's:
     about 600,000 gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and
-    their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes."""
+    their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes. FA2 with logit
+    soft-capping on bits (`boolean_softcap`) at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf in
+    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
     from verity.ir.defs import bind
+    from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
     from verity.ml.boolean import mufu as BM
     from verity_vllm.program.registry import boolean_activation as BA
@@ -252,6 +255,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_norms as BN
     from verity_vllm.program.registry import boolean_rope
     from verity_vllm.program.registry import boolean_silu as BSL
+    from verity_vllm.program.registry import boolean_softcap as BSC
     from verity_vllm.program.registry import gumbel_boolean as GB
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
@@ -277,6 +281,8 @@ def _boolean_roots() -> list[Any]:
             bind(DN.MeanTriton, N=16), bind(DN.MeanTriton, N=1030), bind(DN.NarrowF32ToBf16, N=16),
             bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox), bind(DN.RsqrtF32, N=1, RSQRT=bind(BM.RsqrtApprox)),
             bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8),
+            bind(BSC.AttentionSoftcap, T=17, NH=1, KVH=1, D=16, BN=16, CAP=50.0, DOT=BG.HopperBF16WgmmaDot16, INV=BAT.Fa2InvSum,
+                 MASKED_FROM=0, TANH=BM.MufuTanh, EX2=BM.MufuEx2Ftz),
             bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
             *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
 
