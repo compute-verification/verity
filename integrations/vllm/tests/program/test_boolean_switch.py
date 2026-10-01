@@ -111,6 +111,17 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     assert list(e.value.missing) == ["Twice_v1{N=4}"]
 
 
+def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
+    from verity.ml.boolean import mufu as BM
+    from verity_vllm.program.registry import b1, boolean_norms as BN
+    cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
+    triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
+    assert _spec_id(cuda) == _spec_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
+    assert _spec_id(triton) == _spec_id(bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz),
+                                             SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)))
+    assert BL.is_boolean(cuda) and BL.is_boolean(triton)
+
+
 def test_lift_computes_the_word_function_on_bits():
     word = _derived()
     bits = BB.lift(word)

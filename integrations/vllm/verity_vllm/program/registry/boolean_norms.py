@@ -499,11 +499,7 @@ def rmsnorm_cuda_calls(B, N: int, EPS: float, RSQRT, x: Coll, res: Coll, w: Coll
     return tuple_of(out, lanes[0])
 
 
-@composite("RMSNormFusedCuda", 3, ["N", "EPS", "RSQRT"],
-           lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
-                      Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-           conformance="exact-model-tested")
-def RMSNormFusedCuda(B, S, x, res, w):
+def _rmsnorm_fused_cuda(B, S, x, res, w):
     """`RMSNormFusedCuda_v2` on bits (`rmsnorm_cuda_calls`): vLLM's generic `fused_add_rms_norm_kernel<bf16, 0, true>`,
     `s = rsqrtf(variance / N + eps)` with ``RSQRT`` computing `RsqrtApprox_v1`. Returns (normed, res')."""
     return rmsnorm_cuda_calls(B, S.N, S.EPS, S.RSQRT, x, res, w)
@@ -514,7 +510,13 @@ def _cuda_word(b: dict):
     return bind(b1.RMSNormFusedCuda, N=b["N"], EPS=b["EPS"])
 
 
+RMSNormFusedCuda = CompositeDefinition("RMSNormFusedCuda", 3, ("N", "EPS", "RSQRT"),
+                                       lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
+                                                  Tuple(Array(S.N, BF16), Array(S.N, BF16))),
+                                       _rmsnorm_fused_cuda, doc=_rmsnorm_fused_cuda.__doc__, conformance="exact-model-tested")
 RMSNormFusedCuda.word = _cuda_word  # type: ignore[attr-defined]
+# the switch (`verity_vllm.program.boolean`) binds RSQRT to the Boolean version of the word Definition named here
+RMSNormFusedCuda.word_statics = CUDA_WORD  # type: ignore[attr-defined]
 
 
 # --- the Triton norm (vLLM's batch-invariant _rms_norm_kernel) ------------------------------------------------------------------
@@ -599,10 +601,7 @@ def rmsnorm_triton_calls(B, N: int, EPS: float, SQRT, SCALEA, RCP, x: Coll, w: C
     return B.call(bind(RMSNormOutRowTriton, N=N), inv, B.call(RMSNormInvTriton, inv), x, th[1], w)
 
 
-@composite("RMSNormTriton", 2, ["N", "EPS", "SQRT", "SCALEA", "RCP"],
-           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
-           conformance="exact-model-tested")
-def RMSNormTriton(B, S, x, w):
+def _rmsnorm_triton(B, S, x, w):
     """`RMSNormTriton_v1` on bits (`rmsnorm_triton_calls`): vLLM's batch-invariant Triton `_rms_norm_kernel`,
     `inv = div.full(1, sqrt.approx.ftz(fma(rcp(N), sum, eps)))` with ``SQRT``, ``SCALEA`` and ``RCP`` computing `MufuSqrtFtz_v1`,
     `DivFullScaleA_v1` and `DivFullRcp_v1`."""
@@ -614,4 +613,8 @@ def _triton_word(b: dict):
     return bind(b1.RMSNormTriton, N=b["N"], EPS=b["EPS"])
 
 
+RMSNormTriton = CompositeDefinition("RMSNormTriton", 2, ("N", "EPS", "SQRT", "SCALEA", "RCP"),
+                                    lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
+                                    _rmsnorm_triton, doc=_rmsnorm_triton.__doc__, conformance="exact-model-tested")
 RMSNormTriton.word = _triton_word  # type: ignore[attr-defined]
+RMSNormTriton.word_statics = TRITON_WORD  # type: ignore[attr-defined]
