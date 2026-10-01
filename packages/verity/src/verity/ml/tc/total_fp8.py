@@ -30,6 +30,12 @@ exercises) are what the campaign under ``gpu/tc-fp8/`` measured on the device (r
 
 Promoted verbatim from ``veritor`` ``src/veritor/core/silicon_total_fp8.py`` (commit 0903f60d6, release
 ``r18-int-3``); only the import paths changed.
+
+E5M2 (:func:`tc_dot_total_e5m2`) differs only in its operand classes: it is IEEE-like, so exponent field 31 is an
+infinity (fraction 0) or a NaN, and the product rules are BF16's (:func:`~verity.ml.tc.total.bf16_product_total`):
+NaN if either operand is a NaN or an infinity meets a zero, else an infinity of the sign XOR if either is one, else
+the exact finite product.  An infinite product enters :func:`~verity.ml.tc.total.group_step_total` like an infinite
+accumulator, so infinities of both signs in one group are a NaN.
 """
 
 from __future__ import annotations
@@ -38,14 +44,18 @@ from collections.abc import Sequence
 
 from .errors import InvalidArtifact
 from .silicon import HOPPER_E4M3_K32, Pipeline, e4m3_product
-from .total import NAN, Value, fp32_value, group_step_total, pack_value
+from .term import e5m2_product
+from .total import NAN, Inf, Value, fp32_value, group_step_total, pack_value
 
 __all__ = [
     "HOPPER_E4M3_WGMMA_K32",
     "HOPPER_E4M3_FAMILY_VERSION",
     "e4m3_class",
     "e4m3_product_total",
+    "e5m2_class",
+    "e5m2_product_total",
     "tc_dot_total_e4m3",
+    "tc_dot_total_e5m2",
 ]
 
 
@@ -78,6 +88,46 @@ def tc_dot_total_e4m3(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Se
     start = 0
     for size in pipeline.groups:
         products = [e4m3_product_total(a[i], b[i]) for i in range(start, start + size)]
+        acc = group_step_total(acc, products, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
+        start += size
+    return pack_value(acc)
+
+
+def e5m2_class(byte: int) -> str:
+    """``"nan"``, ``"inf"``, ``"zero"`` or ``"finite"`` (subnormals included)."""
+
+    if not 0 <= byte < 1 << 8:
+        raise InvalidArtifact("E5M2 operand outside 8 bits")
+    exponent, mantissa = (byte >> 2) & 0x1F, byte & 0x3
+    if exponent == 0x1F:
+        return "nan" if mantissa else "inf"
+    return "zero" if exponent == 0 and mantissa == 0 else "finite"
+
+
+def e5m2_product_total(a: int, b: int) -> Value:
+    """The product of two E5M2 bytes as a :data:`~verity.ml.tc.total.Value`."""
+
+    ca, cb = e5m2_class(a), e5m2_class(b)
+    if ca == "nan" or cb == "nan":
+        return NAN
+    if ca == "inf" or cb == "inf":
+        if ca == "zero" or cb == "zero":
+            return NAN
+        return Inf(((a ^ b) >> 7) & 1 == 1)
+    return e5m2_product(a, b)
+
+
+def tc_dot_total_e5m2(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
+    """``D = acc + sum_k a[k] * b[k]`` on every encoding, as ``pipeline``'s E5M2 silicon computes it."""
+
+    if pipeline.dtype != "e5m2":
+        raise InvalidArtifact("tc_dot_total_e5m2 takes an E5M2 pipeline")
+    if len(a) != pipeline.k or len(b) != pipeline.k:
+        raise InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
+    acc: Value = fp32_value(acc_bits)
+    start = 0
+    for size in pipeline.groups:
+        products = [e5m2_product_total(a[i], b[i]) for i in range(start, start + size)]
         acc = group_step_total(acc, products, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
         start += size
     return pack_value(acc)

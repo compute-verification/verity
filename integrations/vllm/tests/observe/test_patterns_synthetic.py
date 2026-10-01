@@ -11,6 +11,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
 from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
 from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)
 from verity_vllm.observe.fold.tree import step_events
@@ -662,11 +663,18 @@ def test_gumbel_two_stage_sampler_is_one_token_select():
     assert isinstance(by_op["aten.gather.default"], Compute)
     stages = [r for r in res if getattr(r, "pattern", None) == "sample.gumbel_two_stage"]
     assert len(stages) == 3
-    # a non-greedy header makes the sampler Unsupported (the kernel's temperature branch is a workload fact)
-    res2 = resolve_step(step_events(events), context(start, None, sampling={"greedy": False, "temperature": 0.7}))
+    # a non-greedy header makes the sampler Unsupported (the kernel's temperature branch is a workload fact).  The stochastic pattern owns
+    # the kernel under it (the profile lists it first) and refuses the greedy chain's bf16 logits, which no float32 widening precedes; the
+    # greedy pattern refuses the header by itself
+    stochastic = {"greedy": False, "temperature": 0.7}
+    se2 = step_events(events)
+    res2 = resolve_step(se2, context(start, None, sampling=stochastic))
     uns = [r for r in res2 if isinstance(r, Unsupported)]
-    assert uns and uns[0].op.endswith("_gumbel_sample_kernel") and "greedy" in uns[0].reason
+    assert uns and uns[0].op.endswith("_gumbel_sample_kernel") and uns[0].reason == "sampler logits are not a row-contiguous float32 [R,V] view"
     assert "TokenSelect_v1{V=49152}" not in by_spec(res2)
+    kernel = next(n for n in se2.roots if n.op.endswith("_gumbel_sample_kernel"))
+    alone = TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, context(start, None, sampling=stochastic))
+    assert isinstance(alone, Unsupported) and "outside greedy sampling" in alone.reason
 
 
 def test_integer_metadata_triton_kernel_is_noop():

@@ -117,6 +117,17 @@
         "legacy_target": "fp8-ada-mma-draft/2026-09-22"
       },
       {
+        "id": "gemm-coordinate/k1536/sm120-mma-e4m3",
+        "display": "GemmCoordinate<1536> · sm120 mma · FP8 (E4M3)",
+        "parameters": {
+          "K": 1536,
+          "datatype": "e4m3",
+          "semantics": "sm120.mma.m16n8k32.e4m3"
+        },
+        "fidelity_notes": [],
+        "legacy_target": "fp8-sm120-mma-draft/2026-09-30"
+      },
+      {
         "id": "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4",
         "display": "GemmCoordinate<1536> · sm120 mma · FP4 (NVFP4, E2M1)",
         "parameters": {

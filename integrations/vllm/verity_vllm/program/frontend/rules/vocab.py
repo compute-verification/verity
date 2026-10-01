@@ -17,6 +17,7 @@ from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
+from verity_vllm.program.registry import pouw_rows as _pouw_rows
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
@@ -60,6 +61,8 @@ PROFILE_B1_EAGER = Vocabulary(
     "b1-eager", "profile", "b1-eager",
     kinds={
         "gemm": lambda K, N: ir_bind(b1.Gemm, K=K, N=N),
+        "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
+        "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
@@ -73,6 +76,8 @@ PROFILE_B1_EAGER = Vocabulary(
     },
     notes={
         "gemm": "Gemm_v1{K,N}: vLLM batch-invariant Triton matmul (AmpereBF16TcDot16 chains), bf16 in/out",
+        "pouw_linear_row": "NcpLinearRow_v1{K,N}: one row of a pouw:ncp-v2 linear's served y (quantize, exact int7 dot, NcpDequant)",
+        "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
         "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
         "rmsnorm": "RMSNormTriton_v1{N,EPS}: vLLM batch-invariant Triton _rms_norm_kernel",
@@ -152,6 +157,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
         "gemm": lambda K, N: ir_bind(b1.GemmV2, K=K, N=N, DOT=b1.GEMM_AMPERE["DOT"]),
+        "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
+        "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "rmsnorm": _norm_v2("L0"),
         "rmsnorm_fused": _norm_v2("FUSED"),
@@ -171,6 +178,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
     },
     notes={
         "gemm": "Gemm_v2{K,N,DOT=AmpereBF16TcDot16_v2}: batch(GemmCoordinate_v2) — Serve_v2/v3's linear",
+        "pouw_linear_row": "NcpLinearRow_v1{K,N}: one row of a pouw:ncp-v2 linear's served y (quantize, exact int7 dot, NcpDequant)",
+        "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}", "rmsnorm": "norm_bundle(C)['L0'] = RMSNormTriton_v1{N,EPS}",
         "rmsnorm_fused": "norm_bundle(C)['FUSED'] = RMSNormFusedCuda (b1's default fused norm){N,EPS}",
         "rope": "RoPE_v1{NHEADS,D}", "attention": "Attention_v2{T,NH,KVH,D,BN=64,DOT=AmpereBF16TcDot16_v2,INV=Fa2InvSum_v1} (FA2)",
