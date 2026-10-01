@@ -18,7 +18,9 @@
   research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
   research notes claim | approach | approaches ...            # approaches.py: the approach registry (check, then claim)
 
-A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
+A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several; else, in a lane that names it
+otherwise, its newest `<stamp>-report-<slug>.md`), never a report another agent sent the lane (`<stamp>-report-from-<x>-<slug>.md`)
+or a note of another kind whose slug says report (`<stamp>-handoff-from-<x>-report-for.md`).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
 sets the front matter's `status:` to the state, and creates the report if the lane has none.  `superseded` marks a lane whose
 work a successor took over: it is done, never STALE.
@@ -167,8 +169,13 @@ def refresh_times() -> None:
 
 
 def report_for(root: Path, lane: str) -> Path | None:
-    reports = sorted((root / "lanes" / lane).glob("*report*.md"), key=lambda p: file_time(root, p))
-    return reports[-1] if reports else None
+    """The lane's report (the module docstring's rule)."""
+    d = root / "lanes" / lane
+    for pattern in (f"????????T????Z-report-{lane}.md", "????????T????Z-report-*.md"):
+        reports = sorted((p for p in d.glob(pattern) if "-report-from-" not in p.name), key=lambda p: file_time(root, p))
+        if reports:
+            return reports[-1]
+    return None
 
 
 def _split_front_matter(text: str) -> tuple[str, str]:

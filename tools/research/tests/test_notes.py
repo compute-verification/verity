@@ -77,6 +77,41 @@ def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
         notes.checkpoint(tmp_path, "fresh", "done", "x")
 
 
+def _note(root: Path, lane: str, name: str, minutes_ago: float) -> Path:
+    p = root / "lanes" / lane / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("---\nkind: handoff\n---\n\nanother agent's note\n")
+    t = (NOW - dt.timedelta(minutes=minutes_ago)).timestamp()
+    os.utime(p, (t, t))
+    return p
+
+
+def test_checkpoint_lands_in_the_lanes_own_report_never_a_newer_note_sent_to_it(tmp_path):
+    own = _report(tmp_path, "boss", "# boss\n", 60)
+    sent = [_note(tmp_path, "boss", "20260923T2030Z-report-from-worker-1-findings.md", 30),
+            _note(tmp_path, "boss", "20260923T2040Z-handoff-from-root-friction-report-for.md", 20)]
+    assert notes.report_for(tmp_path, "boss") == own
+    assert notes.checkpoint(tmp_path, "boss", "open", "mine", commit="abc1234", now=NOW) == own
+    assert "CHECKPOINT abc1234 (21:00Z) [open] mine" in own.read_text()
+    assert all(p.read_text() == "---\nkind: handoff\n---\n\nanother agent's note\n" for p in sent)
+
+
+def test_a_lane_with_only_notes_sent_to_it_gets_a_report_of_its_own(tmp_path):
+    sent = [_note(tmp_path, "new", "20260923T2030Z-report-from-worker-1-findings.md", 30),
+            _note(tmp_path, "new", "20260923T2040Z-handoff-from-circuits-you-report-to-circuits.md", 20)]
+    assert notes.report_for(tmp_path, "new") is None
+    assert notes.checkpoint(tmp_path, "new", "open", "started", commit="none", now=NOW).name == "20260923T2100Z-report-new.md"
+    assert all("CHECKPOINT" not in p.read_text() for p in sent)
+
+
+def test_a_lane_that_names_its_report_otherwise_keeps_it(tmp_path):
+    named = tmp_path / "lanes" / "b-encode" / "20260922T0625Z-report-roofline.md"
+    named.parent.mkdir(parents=True)
+    named.write_text(FRONT.format(lane="b-encode", status="open"))
+    _note(tmp_path, "b-encode", "20260923T2030Z-report-from-red-team-review.md", 30)
+    assert notes.report_for(tmp_path, "b-encode") == named
+
+
 @pytest.mark.parametrize("line,commit,at,text", [
     ("CHECKPOINT fc49219 (18:50Z) Rust verifier verifies the pair", "fc49219", "18:50Z", "Rust verifier verifies the pair"),
     ("CHECKPOINT none (17:10Z) — brief + code read", "none", "17:10Z", "brief + code read"),
