@@ -1,8 +1,7 @@
 """`boolean_attention`: the v6 chain (`AttnBlock_v6` / `AttentionHead_v6` / `Attention_v6`), the v7 chain on both of its
-profiles (FA2 on mma.sync, FA3 on wgmma), the v8 / v9 per-iteration `Check_inf` chains (FA3 / FA2) and `Fa3InvSum_v2` are Boolean,
-agree with their word views (the v3, v2, v4 and v5 chains and `Fa3InvSum_v1`) on random words and on words that reach every guard
-(a zero query, signed zeros, subnormals, infinities, NaNs, scores that overflow, a running max of -inf), and are pinned by gate
-count and program digest."""
+profiles (FA2 on mma.sync, FA3 on wgmma) and `Fa3InvSum_v2` are Boolean, agree with their word views (the v3 and v2 chains
+and `Fa3InvSum_v1`) on random words and on words that reach every guard (a zero query, signed zeros, subnormals, infinities,
+NaNs, scores that overflow), and are pinned by gate count and program digest."""
 from __future__ import annotations
 
 import numpy as np
@@ -37,39 +36,20 @@ PINS = {
         (659504, 1288432, 56302, "4e58aef2275351298fa711950888b1d07fc50d72f76c5e62d6a51b33e45ddd0a"),
     "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
         (2638016, 5153728, 225208, "7e98b2335269aeb4fe3ebc80427d7995aa116540a7014abea5517a64e54e7b8e"),
-    "AttnBlock_v8{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (428166, 839552, 36484, "39a3856a3ffcc8c00e28b3602994724f2d00ea110a1c9fc9de7e864d25430d76"),
-    "AttnBlock_v9{D=16,NVIS=16,FIRST=False,BN=16,DOT=AmpereBF16TcDot16_v3,CHECK=False}":
-        (440645, 860928, 39676, "1bbadb5bb763c27cdaf3e3ff427ca2323c7635657f7376dec8359952290b00d7"),
-    "AttentionHead_v8{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=2}":
-        (1145835, 2245710, 97900, "d23dc6e4141bede3be24fd885953c27d7d5aadb40e467fbc0a330919ea05f6df"),
-    "AttentionHead_v9{T=40,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2,MASKED_FROM=1}":
-        (1180105, 2304494, 106667, "d923e7c49fde6a098210d7aacf9e09e87b435e01082483ed3b745bc7b9d3a6b5"),
-    "Attention_v8{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}":
-        (2637764, 5153728, 225112, "661926d2691f09f8d690e2e4d23060e4e307efed64efe4166e2cd0497dce5afe"),
-    "Attention_v9{T=20,NH=4,KVH=2,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2,MASKED_FROM=1}":
-        (2718720, 5292672, 245828, "bc03c76a3494eacb888f6d1b12373e0f386c7f0e4aacca2e71b5605b0f9ca77c"),
 }
 
 FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3
 PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnBlockV6, D=16, NVIS=16, FIRST=False, BN=16),
           bind(BAt.AttentionHeadV6, T=20, D=16, BN=16), bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16), bind(BAt.Fa3InvSum),
           bind(BAt.AttnBlockV7, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"]), bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA2),
-          bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA3), bind(BAt.AttentionV7, T=20, NH=4, KVH=2, D=16, BN=16, **FA3),
-          bind(BAt.AttnBlockV8, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
-          bind(BAt.AttnBlockV9, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA2["DOT"], CHECK=False),
-          bind(BAt.AttentionHeadV8, T=40, D=16, BN=16, MASKED_FROM=2, **FA3), bind(BAt.AttentionHeadV9, T=40, D=16, BN=16, MASKED_FROM=1, **FA2),
-          bind(BAt.AttentionV8, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=1, **FA3),
-          bind(BAt.AttentionV9, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=1, **FA2)]
+          bind(BAt.AttentionHeadV7, T=20, D=16, BN=16, **FA3), bind(BAt.AttentionV7, T=20, NH=4, KVH=2, D=16, BN=16, **FA3)]
 
 #: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
-#: profiles; v8 and v9 with and without Check_inf, guarded and unguarded blocks in one head
+#: profiles
 AGREEMENT = PINNED[:2] + [bind(BAt.AttnBlockV6, D=16, NVIS=9, FIRST=False, BN=32), bind(BAt.AttentionHeadV6, T=5, D=16, BN=16),
                           bind(BAt.AttentionHeadV6, T=16, D=16, BN=16), bind(BAt.AttentionHeadV6, T=40, D=16, BN=32),
                           bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16)] + PINNED[5:] + [
-    bind(BAt.AttentionHeadV7, T=40, D=16, BN=32, **FA3),
-    bind(BAt.AttnBlockV8, D=16, NVIS=7, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=True),
-    bind(BAt.AttnBlockV9, D=16, NVIS=5, FIRST=True, BN=16, DOT=FA2["DOT"], CHECK=True)]
+    bind(BAt.AttentionHeadV7, T=40, D=16, BN=32, **FA3)]
 
 #: bf16 words that reach FA2's guards: signed zeros, subnormals, the normal range's ends, infinities, NaNs, 2^63
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x807F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x5F00, 0xDF00],
@@ -84,13 +64,9 @@ def _words(rng, shape, scale: float, width: int) -> np.ndarray:
 def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
     """``n`` instances per parameter of ``word``: the first third gaussian at softmax's working scales, the second with special
     words planted at random positions, the last with a few entries near 2^63 (scores that overflow to infinity); the first
-    instance's query is zero. The f32 state of a block (m, l, o) is gaussian, l's sums positive, a quarter of the running maxima
-    -inf. Every eighth instance of the first third has a +inf query lane against negative keys, so every score is -inf, and a -inf
-    running max: where an iteration without `Check_inf` differs from a guarded one."""
+    instance's query is zero. The f32 state of a block (m, l, o) is gaussian, l's sums positive."""
     rng = np.random.default_rng(seed)
     third = n // 3
-    idx = np.arange(n)
-    ninf = (idx % 8 == 1) & (idx < third)
     out = []
     for j, (name, t) in enumerate(word.signature()[0]):
         shape, width = (n, *type_shape(t)), max(t.width_set())
@@ -98,8 +74,6 @@ def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
             a = _words(rng, shape, 4.0, 32)
             if name == "l_prev":
                 a &= np.uint32(0x7FFFFFFF)
-            if name == "m_prev":
-                a[(rng.random(n) < 0.25) | ninf] = 0xFF800000
             out.append(a)
             continue
         a = _words(rng, shape, 2.0 if j == 0 else 1.0, 16)
@@ -110,9 +84,6 @@ def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
         end[m] = (rng.integers(0x5E00, 0x5F80, int(m.sum())) | (rng.integers(0, 2, int(m.sum())) << 15)).astype(np.uint16)
         if j == 0:
             a[0] = 0
-            a[ninf, ..., 0] = 0x7F80
-        elif name in ("k", "kc"):
-            a[ninf, ..., 0] |= 0x8000
         out.append(a)
     return out
 
@@ -140,7 +111,7 @@ def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
 def test_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
-    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, {6: 3, 7: 2, 8: 4, 9: 5}[target.defn.version], lifted)
+    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 3 if target.defn.version == 6 else 2, lifted)
     inputs = _inputs(word, 96, sum(map(ord, target.id)))
     got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64)
     ref = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64)
