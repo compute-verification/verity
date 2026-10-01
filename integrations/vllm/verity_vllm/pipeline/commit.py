@@ -1734,15 +1734,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # [R17 fp8] bounded staging: the warm-up is also the LEARN-ONLY pass -- every shape class of the workload (same lengths, same schedule
         # as the record runs: throwaway_requests) gets its plan here; a learning step over the transient budget records its plan and
         # discards its windows (placeholder root: this run is never a record).  The record runs then hit every plan and stage bounded.
+        # Its call boundaries are placeholder words of their shapes (TAPS.warmup): the record pass evaluates its own.
         TL.start("prep.warmup_instrumented", kind=kind)
-        if getattr(com, "bounded", False):
-            com.learn_only = True
+        TAPS.warmup(com, True)
         com.install()
         r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
         rc = com.finalize()
         com.uninstall()
+        TAPS.warmup(com, False)
         if getattr(com, "bounded", False):
-            com.learn_only = False
             _bs = rc.extra.get("bounded_staging") or {}
             print(f"[delta] bounded staging warm-up ({kind}): learned-only steps {_bs.get('learned_only_steps')} ({(_bs.get('learned_only_bytes') or 0) >> 20} MiB "
                   f"discarded), transient peak {(_bs.get('transient_peak_bytes') or 0) >> 20} MiB (budget {(_bs.get('learn_budget_bytes') or 0) >> 20} MiB), "

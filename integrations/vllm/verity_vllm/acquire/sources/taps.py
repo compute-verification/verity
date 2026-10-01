@@ -65,6 +65,16 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
     return required_classes
 
 
+def warmup(com: Any, on: bool) -> None:
+    """Around the Commit's warm-up instrumented run, which is never a record (its root is discarded): bounded staging learns only
+    (`learn_only`) and every source with placeholder words (the call-boundary source's `placeholder`) commits them instead of evaluating."""
+    if getattr(com, "bounded", False):
+        com.learn_only = on
+    for src in getattr(com, "sources", None) or ():
+        if hasattr(src, "placeholder"):
+            src.placeholder = on
+
+
 def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     """The `short_name`s of the sources a row's Commit attaches through `attach` for its manifest of record, constructing none: each tap
     whose family the manifest names (the row passes a tap's option exactly then, `pipeline.row_records.applicable_taps`, and rebuilds a
@@ -117,4 +127,4 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
