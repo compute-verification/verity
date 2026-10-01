@@ -14,7 +14,7 @@ Per word, over the whole chain (all k / 32 atoms), this reports:
 - `error`: U = C - H against the exact product, rms over the words, beside the exact product's own BF16 rounding; and the
   same with the floor's mean bias (1.5 g per atom, toward zero) folded into H.
 Three starts: `p`, r1_census's separable H = fl(P_i Q_j) with keyed mantissas in [1, 1.5) each (so H's in [1, 2.25));
-`c`, the centred separable start P_i = s_i 2^e_i, Q_j = t_j 1.5 2^f_j: H = +-1.5 2^E exactly, 25% of |H| from either edge;
+`c`, the centred separable start P_i = s_i 2^e_i, Q_j = t_j 1.5 2^f_j: H = +-1.5 2^E exactly, |H| / 3 from either edge;
 and `cs`, the centred start at |H| >= 6 |a_i| |b_j|, in its binade for every word by Cauchy-Schwarz.
 
   python r1_binade.py --synthetic --out DIR [--adv flat]
