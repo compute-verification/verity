@@ -8,6 +8,13 @@ all constant, are evaluated by the primitive's own evaluator and become constant
 graph (with the input leaves) must all compute the same function of their inputs; the unit is one component, and the
 arrangement lists which input and output leaves of the instance each unit takes. :func:`netlist` lays a unit circuit out as
 ``flock-ir-unit/v2`` (see its docstring), the format the block statement ``verity/flock-ir-block/v1`` reads.
+
+A program's own constants (a norm's eps, the attention scale: the template's ``values``) are values, not gates: a lowering
+given them lifts every constant gate that is one of them out of the netlist. Each value is a word of the instance's
+``values`` row (:data:`VALUES_PORT`, after the Definition's inputs, 16-bit words, zero-padded to a whole SHA-512 block), every
+unit reads its words as cut-group ports (``("value", q)``: a leaf cut of the row's word q), and when the tail reads a value
+every unit also returns it as a cut word, which the tail reads. So the netlist is the same for every value, and the value is
+committed like any input row.
 """
 from __future__ import annotations
 
@@ -26,6 +33,12 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
+#: the instance input row that holds a lowering's values, after the Definition's inputs
+VALUES_PORT = "values"
+#: bits per word of the values row (a row's words are u16)
+VALUE_PIECE = 16
+#: the values row's words come in whole SHA-512 blocks (a row port is whole blocks of u16 words)
+VALUE_BLOCK = 64
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
 
@@ -234,10 +247,23 @@ class Units:
     #: per output leaf, the tail gate that computes it (the verifier's own), when the units return none
     tail_rets: list = field(default_factory=list)
     builder: Callable | None = field(default=None, repr=False)
+    #: the Definition's input leaves (a unit's ``("value", q)`` port reads instance leaf ``n_args + q``)
+    n_args: int = 0
+    #: every lifted constant gate -> its value (an index into ``value_widths``)
+    value_gates: dict = field(default_factory=dict, repr=False)
+    value_widths: list = field(default_factory=list)
+    #: value -> the cut word every unit returns it as, for the values the tail reads
+    relay: dict = field(default_factory=dict)
 
     @property
     def n(self) -> int:
         return len(self.in_src)
+
+    def value_words(self, ports: Sequence) -> list:
+        """Each value's word from the unit's ``("value", q)`` input ports (``ports[j]`` is input port j's word)."""
+        pieces = [ports[j] for j, (kind, _) in enumerate(self.in_src[0]) if kind == "value"]
+        return [[b for q in range(lo, lo + -(-w // VALUE_PIECE)) for b in pieces[q]][:w]
+                for w, lo in zip(self.value_widths, value_offsets(self.value_widths))]
 
     def circuit(self) -> Circuit:
         """The unit circuit: inputs ``in0 .. in{k-1}``, outputs ``out0 ..`` (one word per port)."""
@@ -245,11 +271,66 @@ class Units:
             return self.builder()
         C = Circuit(cse=True)
         ins = [C.input(f"in{j}", w) for j, w in enumerate(self.in_widths)]
-        wires = dict(zip(self.arg_gates, ins))
+        wires = {g: w for g, w in zip(self.arg_gates, ins) if g is not None}
+        words = self.value_words(ins) if self.value_widths else []
+        wires.update((g, words[v]) for g, v in self.value_gates.items())
         lower_gates(C, self.gates, wires)
         for j, g in enumerate(self.ret_gates):
             C.output(f"out{j}", wires[g])
         return C
+
+
+def value_offsets(widths: Sequence[int]) -> list[int]:
+    """Each value's first word in the values row."""
+    out, at = [], 0
+    for w in widths:
+        out.append(at)
+        at += -(-w // VALUE_PIECE)
+    return out
+
+
+def value_row(widths: Sequence[int], values: Sequence[int]) -> list[int]:
+    """The values row: each value's 16-bit words, low first, in order, zero-padded to whole :data:`VALUE_BLOCK` words."""
+    row = [(int(v) >> (VALUE_PIECE * i)) & 0xFFFF for w, v in zip(widths, values) for i in range(-(-w // VALUE_PIECE))]
+    return row + [0] * (-len(row) % VALUE_BLOCK)
+
+
+def _value_gates(gates, values: Sequence[tuple[int, int]]) -> dict[int, int]:
+    """Gate index -> value index for every constant gate that is one of ``values`` (``(width, value)`` each); a value no
+    constant gate holds is an error (a template that names a constant its Definition does not have)."""
+    want = {(int(w), int(v)): i for i, (w, v) in enumerate(values)}
+    if len(want) != len(values):
+        raise ValueError("two values are the same constant")
+    out = {g.index: want[(g.prim.ret.w, int(g.prim.evaluate()))] for g in gates
+           if getattr(g.prim, "family", None) == "Const" and (g.prim.ret.w, int(g.prim.evaluate())) in want}
+    missing = [values[i] for i in range(len(values)) if i not in set(out.values())]
+    if missing:
+        raise ValueError(f"no live constant gate holds the value(s) {[(w, hex(v)) for w, v in missing]}")
+    return out
+
+
+def _with_values(U: Units, vg: dict[int, int], values: Sequence[tuple[int, int]], tail_reads: set[int]) -> Units:
+    """``U`` with the lifted constants ``vg`` as values: every unit reads every value's words (``("value", q)`` ports, after
+    its cut inputs) and, for each value the tail reads (``tail_reads``), returns it as a cut word (after its cut outputs)."""
+    if not vg:
+        return U
+    widths = [int(w) for w, _ in values]
+    Q = sum(-(-w // VALUE_PIECE) for w in widths)
+    relay = {}
+    for v in sorted(tail_reads):
+        relay[v] = len(U.cut)
+        U.cut.append(min(g for g, i in vg.items() if i == v))
+    for src in U.in_src:
+        src += [("value", q) for q in range(Q)]
+    for src in U.out_src:
+        src += [("cut", relay[v]) for v in sorted(relay)]
+    U.in_widths += [VALUE_PIECE] * Q
+    U.out_widths += [widths[v] for v in sorted(relay)]
+    if U.builder is None:
+        U.arg_gates += [None] * Q
+        U.ret_gates += [U.cut[relay[v]] for v in sorted(relay)]
+    U.value_gates, U.value_widths, U.relay = dict(vg), widths, relay
+    return U
 
 
 def live_gates(call) -> list:
@@ -297,17 +378,22 @@ def reduction_cut(width: int) -> Callable:
     return cut
 
 
-def units(target, cut: Callable | None = None, group: int = 1) -> Units:
+def units(target, cut: Callable | None = None, group: int = 1, values: Sequence[tuple[int, int]] = ()) -> Units:
     """Split ``target``'s one-call Program (its live gates) into the connected components of its gate graph, input leaves
     included and edges out of cut gates removed (``cut(gates, args, returns)`` returns the cut gate indices; default none).
     ``group`` consecutive components that read input leaves form one unit. Every unit must have the same signature
     (primitive ids and operand wiring relative to the unit, cut words as ports), else ValueError; the components that read
-    no input leaf form the native tail."""
+    no input leaf form the native tail. The constant gates that are one of ``values`` (``(width, value)``) are lifted out as
+    the instance's values (:func:`_with_values`): no edge runs through them."""
     _prog, call = standalone(target)
     args = list(call.args)
     rets = list(call.returns)
     gates = live_gates(call)
-    K = sorted(cut(gates, args, rets)) if cut else []
+    vg = _value_gates(gates, values)
+    gates_all, gates = gates, [g for g in gates if g.index not in vg]
+    K = sorted(cut(gates_all, args, rets)) if cut else []
+    if vg.keys() & set(K):
+        raise ValueError("a value is a cut word")
     kset = set(K)
     kpos = {g: k for k, g in enumerate(K)}
     arg_pos = {g: i for i, g in enumerate(args)}
@@ -325,7 +411,7 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     for g in gates:
         find(g.index)
         for o in g.operands:
-            if o not in kset:
+            if o not in kset and o not in vg:
                 parent[find(o)] = find(g.index)
     comps: dict[int, list] = {}
     for g in gates:
@@ -346,7 +432,8 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
             continue
         cuts_in = sorted({o for g in gs for o in g.operands if o in kset and o not in local})
         port = {o: j for j, o in enumerate(leaves + cuts_in)}
-        sig = tuple((g.prim.id, tuple(("g", local[o]) if o in local else ("in", port[o]) for o in g.operands)) for g in gs)
+        sig = tuple((g.prim.id, tuple(("g", local[o]) if o in local else ("v", vg[o]) if o in vg else ("in", port[o])
+                                      for o in g.operands)) for g in gs)
         r = sorted((p, local[g.index]) for g in gs for p in ret_pos.get(g.index, []))
         kout = [g.index for g in gs if g.index in kset]
         sigs.append((sig, tuple(k for _, k in r), tuple(local[g] for g in kout)))
@@ -371,7 +458,9 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     arg_gates = [src_gate(k, p) for k, p in ins[0]]
     in_widths = [_leaf_width(target, p) if k == "leaf" else width[K[p]] for k, p in ins[0]]
     ret_gates = [rets[p] if k == "ret" else K[p] for k, p in outs[0]]
-    return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
+    U = Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail,
+              n_args=len(args))
+    return _with_values(U, vg, values, {vg[o] for g in tail for o in g.operands if o in vg})
 
 
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
@@ -382,14 +471,18 @@ TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": 
 TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139), "BlackwellE4m3QmmaDot32_v1": ((32,), 26, -133)}
 
 
-def tc_units(target, prim: str | None = None) -> Units:
+def tc_units(target, prim: str | None = None, values: Sequence[tuple[int, int]] = ()) -> Units:
     """``target`` as tensor-core k-steps: every ``AmpereBF16TcDot16`` gate is one unit, ports in operand order: its 16 ``b``
     operands from input leaves (``("leaf", p)``), or ``("zero", 0)`` where the IR pads with a constant zero word; its 16 ``a``
     operands and its accumulator as cut words; its result a cut word. Input leaves read as ``a`` operands (the query) are public
-    words (:attr:`Units.public`); every other gate is the native tail, which computes the outputs (:attr:`Units.tail_rets`)."""
+    words (:attr:`Units.public`); every other gate is the native tail, which computes the outputs (:attr:`Units.tail_rets`).
+    The constant gates that are one of ``values`` are lifted out as the instance's values (:func:`_with_values`), which every
+    step returns for the tail."""
     _prog, call = standalone(target)
     args, rets = list(call.args), list(call.returns)
     gates = live_gates(call)
+    vg = _value_gates(gates, values)
+    gates = [g for g in gates if g.index not in vg]
     by = {g.index: g for g in gates}
     arg_pos = {g: i for i, g in enumerate(args)}
     tcs = [g for g in gates if (g.prim.id == prim if prim else g.prim.id in TC_STEPS)]
@@ -407,6 +500,8 @@ def tc_units(target, prim: str | None = None) -> Units:
     cut_set: set[int] = set()
     for g in tcs:
         acc, a, b = g.operands[0], g.operands[1:17], g.operands[17:33]
+        if any(o in vg for o in g.operands):
+            raise ValueError(f"tensor-core gate {g.index} reads a value")
         if any(o not in arg_pos and not zero_word(o) for o in b):
             raise ValueError(f"tensor-core gate {g.index}: a b operand that is neither an input leaf nor a zero word")
         for o in (acc, *a):
@@ -431,11 +526,16 @@ def tc_units(target, prim: str | None = None) -> Units:
         acc = C.input("in32", 32)
         groups, W, F = TC_STEPS[prim]
         C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
+        if U.value_widths:
+            words = U.value_words([None] * 33 + [C.input(f"in{j}", 16) for j in range(33, len(U.in_widths))])
+            for i, v in enumerate(sorted(U.relay)):
+                C.output(f"out{1 + i}", words[v])
         return C
 
-    return Units(target, [16] * 32 + [32], [32], ins, outs, (prim,), [tcs[0]], [], [], K, tail,
-                 public=[(kpos[o], arg_pos[o]) for o in sorted(public_args, key=arg_pos.__getitem__)],
-                 tail_rets=list(rets), builder=builder)
+    U = Units(target, [16] * 32 + [32], [32], ins, outs, (prim,), [tcs[0]], [], [], K, tail,
+              public=[(kpos[o], arg_pos[o]) for o in sorted(public_args, key=arg_pos.__getitem__)],
+              tail_rets=list(rets), builder=builder, n_args=len(args))
+    return _with_values(U, vg, values, {vg[o] for g in tail for o in g.operands if o in vg})
 
 
 def _leaf_width(target, pos: int) -> int:
@@ -822,13 +922,29 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
 class Lowering:
     """A template instance lowered to identical units: the IR Definition, its :class:`Units`, the unit circuit and its
     ``flock-ir-unit/v2`` layout. ``evaluate`` runs the laid-out unit rows (what Flock proves) over every unit of every
-    instance and assembles the instances' outputs and cut words."""
+    instance and assembles the instances' outputs and cut words. ``values`` are the program's values the units read (the
+    honest values row's content, :func:`value_row`); nothing the netlist holds depends on them."""
 
     name: str
     definition: object
     units: Units
     circuit: Circuit
     layout: Layout
+    values: tuple = ()
+
+    @property
+    def value_row(self) -> list[int]:
+        """The instance's values row (:data:`VALUES_PORT`): empty when the lowering lifts no value."""
+        return value_row(self.units.value_widths, self.values) if self.units.value_widths else []
+
+    def _with_value_row(self, flat_inputs: np.ndarray) -> np.ndarray:
+        """``flat_inputs`` with every instance's values row appended, unless it already holds one (the Definition's leaves
+        only: the honest :attr:`values`)."""
+        flat_inputs = np.asarray(flat_inputs, dtype=np.uint64)
+        if not self.units.value_widths or flat_inputs.shape[1] != self.units.n_args:
+            return flat_inputs
+        row = np.asarray(self.value_row, dtype=np.uint64)
+        return np.concatenate([flat_inputs, np.broadcast_to(row, (flat_inputs.shape[0], len(row)))], axis=1)
 
     @property
     def domain(self) -> str:
@@ -859,12 +975,18 @@ class Lowering:
     def leaves(self) -> dict:
         """The units' leaf maps: per instance-local unit, ``in`` its leaf input ports' and ``out`` its returned-output ports'
         instance leaves (flat positions in parameter / return order), and ``in_ports`` / ``out_ports`` each parameter's and
-        return's ``[leaves, bits]``: what places every unit on its instance's rows and outputs."""
+        return's ``[leaves, bits]``: what places every unit on its instance's rows and outputs. A lowering with values also
+        has the values row as its last input port and, per unit, ``values`` its value ports as ``[input port, instance
+        leaf]``."""
         params, ret = self.definition.signature()
         U = self.units
-        return {"in": [[p if k == "leaf" else -1 for k, p in s if k in ("leaf", "zero")] for s in U.in_src],
-                "out": [[p for k, p in s if k == "ret"] for s in U.out_src],
-                "in_ports": [x for _, t in params for x in _flat_ports(t)], "out_ports": _flat_ports(ret)}
+        out = {"in": [[p if k == "leaf" else -1 for k, p in s if k in ("leaf", "zero")] for s in U.in_src],
+               "out": [[p for k, p in s if k == "ret"] for s in U.out_src],
+               "in_ports": [x for _, t in params for x in _flat_ports(t)], "out_ports": _flat_ports(ret)}
+        if U.value_widths:
+            out["in_ports"].append([len(self.value_row), VALUE_PIECE])
+            out["values"] = [[[j, U.n_args + q] for j, (k, q) in enumerate(s) if k == "value"] for s in U.in_src]
+        return out
 
     @property
     def text(self) -> str:
@@ -875,14 +997,18 @@ class Lowering:
         return digest(self.text)
 
     def _index(self, src: list[list[tuple]], n_leaf: int) -> np.ndarray:
-        """``(U, ports)`` column indices into ``[leaves | cut words | 0]`` (a zero leaf reads the last, all-zero column)."""
+        """``(U, ports)`` column indices into ``[leaves | cut words | 0]`` (a zero leaf reads the last, all-zero column; a value
+        port its word of the values row, the leaves after the Definition's)."""
         zero = n_leaf + len(self.units.cut)
-        return np.asarray([[p if k in ("leaf", "ret") else zero if k == "zero" else n_leaf + p for k, p in u] for u in src], dtype=np.int64)
+        n_args = self.units.n_args
+        return np.asarray([[p if k in ("leaf", "ret") else zero if k == "zero" else n_args + p if k == "value" else n_leaf + p
+                            for k, p in u] for u in src], dtype=np.int64)
 
     def unit_inputs(self, flat_inputs: np.ndarray, cuts: np.ndarray | None = None) -> list[np.ndarray]:
         """Per unit port, the lane-major words of every (instance, unit) lane, instance-major: ``flat_inputs[i]`` is instance i's
-        input leaves in parameter order, ``cuts[i]`` its cut words (``cut_words``)."""
-        flat_inputs = np.asarray(flat_inputs, dtype=np.uint64)
+        input leaves in parameter order (then its values row; without one, the honest :attr:`values`), ``cuts[i]`` its cut
+        words (``cut_words``)."""
+        flat_inputs = self._with_value_row(flat_inputs)
         n = flat_inputs.shape[0]
         cuts = np.zeros((n, len(self.units.cut)), dtype=np.uint64) if cuts is None else np.asarray(cuts, dtype=np.uint64)
         both = np.concatenate([flat_inputs, cuts, np.zeros((n, 1), dtype=np.uint64)], axis=1)
@@ -915,31 +1041,67 @@ class Lowering:
         return res, cut_out, ok
 
 
-def lowering(definition, name: str, cut: Callable | None = None, group: int = 1, unit_fn: Callable | None = None) -> Lowering:
+def lowering(definition, name: str, cut: Callable | None = None, group: int = 1, unit_fn: Callable | None = None,
+             values: Sequence[tuple[int, int]] = ()) -> Lowering:
     """The template's units (``units``, or ``unit_fn(definition)``), their circuit and layout; cut words form their own port
     groups (after the leaf inputs and after the returned outputs), so private inputs, public outputs and cut words are separate
-    aligned regions."""
-    U = unit_fn(definition) if unit_fn else units(definition, cut, group)
+    aligned regions. ``values``: the program's constants (``(width, value)``) the units take as values instead of gates
+    (``unit_fn`` then takes them as ``values=``)."""
+    if unit_fn:
+        U = unit_fn(definition, values=values) if values else unit_fn(definition)
+    else:
+        U = units(definition, cut, group, values)
     C = U.circuit()
     n_leaf = sum(1 for k, _ in U.in_src[0] if k in ("leaf", "zero"))
     n_ret = sum(1 for k, _ in U.out_src[0] if k == "ret")
     lay = layout(C, [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))],
                  [n_leaf] if n_leaf < len(U.in_widths) else None, [n_ret] if n_ret < len(U.out_widths) else None)
-    return Lowering(name, definition, U, C, lay)
+    return Lowering(name, definition, U, C, lay, tuple(int(v) for _, v in values))
+
+
+def _transcripts(low: Lowering, flat_inputs: np.ndarray):
+    """Every instance's IR transcript (gate -> encoding): the Definition's leaves bound, and, for a lowering with values,
+    each lifted constant gate fixed to the instance's value from its values row (the honest :attr:`Lowering.values` without
+    one), so the tail is evaluated on the committed values."""
+    from verity.ir.evaluate import evaluate_call
+
+    prog, call = standalone(low.definition)
+    U = low.units
+    rows = low._with_value_row(flat_inputs)
+    for row in rows:
+        row = [int(v) for v in row]
+        if not U.value_widths:
+            t: dict[int, int] = {}
+            evaluate_call(prog.circuit, call, row, t)
+            yield t
+            continue
+        vals = [sum(row[U.n_args + lo + i] << (VALUE_PIECE * i) for i in range(-(-w // VALUE_PIECE))) & ((1 << w) - 1)
+                for w, lo in zip(U.value_widths, value_offsets(U.value_widths))]
+        t = dict(zip(call.args, row[:U.n_args]))
+        fixed = {g: vals[v] for g, v in U.value_gates.items()}
+        t.update(fixed)
+        for gv in call:
+            if gv.index in fixed or getattr(gv.prim, "family", None) == "Input":
+                continue
+            lazy = getattr(gv.prim, "evaluate_lazy", None)
+            t[gv.index] = lazy(lambda j, _s=gv.operands: t[_s[j]]) if lazy is not None else gv.prim.evaluate(*[t[o] for o in gv.operands])
+        yield t
 
 
 def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
     """``(n, len(cut))``: every instance's cut words by the IR reference evaluator (the verifier's own computation; the
-    native tail's values included)."""
-    from verity.ir.evaluate import evaluate_call
-
-    prog, call = standalone(low.definition)
+    native tail's values included). ``flat_inputs`` may end with each instance's values row (:meth:`Lowering.unit_inputs`)."""
     out = np.zeros((len(flat_inputs), len(low.units.cut)), dtype=np.uint64)
-    for i, row in enumerate(np.asarray(flat_inputs, dtype=np.uint64)):
-        t: dict[int, int] = {}
-        evaluate_call(prog.circuit, call, [int(v) for v in row], t)
+    for i, t in enumerate(_transcripts(low, flat_inputs)):
         out[i] = [t[g] for g in low.units.cut]
     return out
+
+
+def reference_outputs(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
+    """``(n, output leaves)``: every instance's outputs by the IR reference evaluator, on its values row as
+    :func:`cut_words` reads it."""
+    _prog, call = standalone(low.definition)
+    return np.asarray([[t[g] for g in call.returns] for t in _transcripts(low, flat_inputs)], dtype=np.uint64)
 
 
 # --- the native tail, as the verifier evaluates it --------------------------------------------------------------------------
@@ -966,10 +1128,11 @@ def tail_program(low: Lowering) -> list[list]:
 def _tail(low: Lowering) -> tuple[list[list], dict[int, int]]:
     U = low.units
     slot = {g: k for k, g in enumerate(U.cut)}
-    prog = []
+    slot.update((g, U.relay[v]) for g, v in U.value_gates.items() if v in U.relay)
+    prog, fresh = [], len(U.cut)
     for g in U.tail:
         if g.index not in slot:
-            slot[g.index] = len(slot)
+            slot[g.index], fresh = fresh, fresh + 1
         if getattr(g.prim, "family", None) == "Const":
             prog.append([slot[g.index], "Const", int(g.prim.evaluate())])
         elif g.prim.id in TAIL_PRIMS:

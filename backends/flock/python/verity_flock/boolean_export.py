@@ -1094,13 +1094,14 @@ def _params(tname: str, tp: dict) -> dict:
     return out
 
 
-def _constants(call) -> dict[int, int]:
+def _constants(call, values=()) -> dict[int, int]:
     """The gates of ``call`` whose value is a constant: its Const gates, and every one-word gate whose operands all are (a
-    constant sub-circuit, folded before the partition: constant-api §1.3)."""
+    constant sub-circuit, folded before the partition: constant-api §1.3); ``values``: the constant gates a lowering lifted
+    as the program's values, which are not."""
     cval: dict[int, int] = {}
     for g in call:
         fam = getattr(g.prim, "family", None)
-        if fam == "Const":
+        if fam == "Const" and g.index not in values:
             cval[g.index] = int(g.prim.evaluate())
         elif fam != "Input" and g.operands and all(o in cval for o in g.operands) and len(g.prim.ret.leaf_widths()) == 1:
             try:
@@ -1115,7 +1116,7 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
     ``ir_lower`` piece where one exists, else marked not yet lowered."""
     _prog, call = IL.standalone(target)
     by = {g.index: g for g in call}
-    cval = _constants(call)
+    cval = _constants(call, units.value_gates)
     groups: dict = {}
     for g in units.tail:
         fam = getattr(g.prim, "family", None)
