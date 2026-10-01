@@ -214,23 +214,49 @@ def set_kernels(flags: dict[str, Any]) -> dict[str, Any]:
     return {key: getattr(mods[mod], switch)[0] for key, (mod, switch, _) in SWITCHES.items()}
 
 
-def gpu_facts() -> dict[str, Any]:
-    q = ("name,driver_version,clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem,clocks.applications.graphics,"
-         "clocks_throttle_reasons.active,temperature.gpu,power.draw,power.limit,pstate,persistence_mode")
+def cuda_uuid(index: int) -> str | None:
+    """CUDA device `index`'s UUID as nvidia-smi writes it (`GPU-…`); `None` without a CUDA device."""
     try:
-        out = subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader,nounits"], capture_output=True, text=True,
-                             check=True).stdout
+        import torch
+        u = str(torch.cuda.get_device_properties(index).uuid)
+    except (ImportError, AssertionError, AttributeError, RuntimeError):
+        return None
+    return u if u.startswith(("GPU-", "MIG-")) else f"GPU-{u}"
+
+
+def device_uuid(index: int) -> str | None:
+    """The id nvidia-smi is asked about the run's GPU by (`--id`): the lease's (`GPU_LEASE_UUID`), else CUDA device `index`'s
+    UUID; never nvidia-smi's GPU 0 by default (on a multi-GPU node, with `CUDA_VISIBLE_DEVICES`, that is another GPU)."""
+    return os.environ.get("GPU_LEASE_UUID", "").split(",")[0].strip() or cuda_uuid(index)
+
+
+def gpu_facts(index: int) -> dict[str, Any]:
+    """CUDA device `index`'s facts from nvidia-smi, beside the id they were queried by and the CUDA device's own index and
+    UUID; no query without an id."""
+    q = ("index,uuid,pci.bus_id,name,driver_version,clocks.sm,clocks.mem,clocks.max.sm,clocks.max.mem,"
+         "clocks.applications.graphics,clocks_throttle_reasons.active,temperature.gpu,power.draw,power.limit,pstate,"
+         "persistence_mode")
+    smi_id = device_uuid(index)
+    ids = {"nvidia_smi_id": smi_id, "cuda_device": index, "cuda_uuid": cuda_uuid(index),
+           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+    if not smi_id:
+        return {"nvidia_smi": None, **ids}
+    try:
+        out = subprocess.run(["nvidia-smi", f"--id={smi_id}", f"--query-gpu={q}", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
-        return {"nvidia_smi": None}
-    return dict(zip(q.split(","), (x.strip() for x in out.splitlines()[0].split(","))))
+        return {"nvidia_smi": None, **ids}
+    return {**ids, **dict(zip(q.split(","), (x.strip() for x in out.splitlines()[0].split(","))))}
 
 
-def _sm_clock_mhz() -> float | None:
+def _sm_clock_mhz(smi_id: str | None) -> float | None:
+    if not smi_id:
+        return None
     try:
-        out = subprocess.run(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits"], capture_output=True,
-                             text=True, check=True).stdout
+        out = subprocess.run(["nvidia-smi", f"--id={smi_id}", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, check=True).stdout
         return float(out.splitlines()[0].strip())
-    except (OSError, subprocess.CalledProcessError, ValueError):
+    except (OSError, subprocess.CalledProcessError, ValueError, IndexError):
         return None
 
 
@@ -302,12 +328,13 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
 
     def facts() -> dict[str, Any]:
         props = torch.cuda.get_device_properties(device)
-        return {**gpu_facts(), "sms": props.multi_processor_count, "torch": torch.__version__, "cuda": torch.version.cuda,
-                "nvcc": _nvcc_version()}
+        return {**gpu_facts(device.index), "sms": props.multi_processor_count, "torch": torch.__version__,
+                "cuda": torch.version.cuda, "nvcc": _nvcc_version()}
 
+    smi_id = device_uuid(device.index)
     return Backend(device, lambda w, t: dense.encode(w, t, window), lambda c, t: dense.decode_segments(c, t, window),
-                   codec.segment_tags, tag_bytes, responder, timer, graphed, copy_bw, _sm_clock_mhz, step, keccak_latency,
-                   recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)))
+                   codec.segment_tags, tag_bytes, responder, timer, graphed, copy_bw, lambda: _sm_clock_mhz(smi_id), step,
+                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)))
 
 
 def _nvcc_version() -> str | None:
@@ -618,7 +645,8 @@ def step_floor(backend: Backend, reps: int, call_ns: int | None, facts: dict[str
     keccak = backend.keccak_latency(reps) if backend.keccak_latency is not None else None
     return {"variants": variants, "fastest": fastest, "min_s": floor,
             "label": "fastest honest kernel (an upper bound on the adversary's floor)",
-            "sampled_sm_mhz": sampled, "at_max_clock_s": scaled, "at_plus15pct_overclock_s": scaled / 1.15 if scaled else None,
+            "sampled_sm_mhz": sampled, "sampled_nvidia_smi_id": facts.get("before", {}).get("nvidia_smi_id"),
+            "at_max_clock_s": scaled, "at_plus15pct_overclock_s": scaled / 1.15 if scaled else None,
             "keccak_f_s": keccak, "certificate_call_ns": call_ns,
             "below_certificate": call_ns is not None and floor * 1e9 < call_ns}
 

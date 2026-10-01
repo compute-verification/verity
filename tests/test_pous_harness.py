@@ -8,8 +8,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import socket
 import struct
+import subprocess
 import sys
 import threading
 import types
@@ -420,13 +422,110 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
         return [4e-4] if settings.get("pair") else times[0]
 
     fake = harness.Backend("cpu", None, None, None, None, None, None, step=step, clock_mhz=lambda: 2000.0)
-    facts = {"before": {"clocks.max.sm": "2500"}}
+    facts = {"before": {"clocks.max.sm": "2500", "nvidia_smi_id": "GPU-b"}}
     got = harness.step_floor(fake, 2, 483_000, facts)
     assert got["fastest"] == "pair" and got["min_s"] == 4e-4 and got["below_certificate"]
     assert set(got["variants"]) == set(harness.STEP_VARIANTS) and "upper bound" in got["label"]
     assert got["sampled_sm_mhz"] == 2000.0 and got["at_max_clock_s"] == 4e-4 * 2000 / 2500                  # scaled to max
+    assert got["sampled_nvidia_smi_id"] == "GPU-b"
     assert got["at_plus15pct_overclock_s"] == got["at_max_clock_s"] / 1.15
     assert not harness.step_floor(fake, 2, 300_000, facts)["below_certificate"]
+
+
+SMI_STUB = """\
+import os, sys
+args = sys.argv[1:]
+with open(os.environ["SMI_LOG"], "a") as f:
+    f.write(" ".join(args) + "\\n")
+gpus = os.environ["SMI_GPUS"].split()
+if "-L" in args:
+    for i, u in enumerate(gpus):
+        print(f"GPU {i}: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: {u})")
+    sys.exit(0)
+ids = [a[len("--id="):] for a in args if a.startswith("--id=")]
+which = [gpus.index(ids[0]) if ids[0] in gpus else int(ids[0])] if ids else range(len(gpus))   # no --id: every GPU, GPU 0 first
+query = next((a.split("=", 1)[1] for a in args if a.startswith("--query-gpu=")), None)
+for i in which:
+    vals = {"index": str(i), "uuid": gpus[i], "pci.bus_id": f"00000000:{i + 1:02X}:00.0", "compute_cap": "12.0",
+            "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "driver_version": "580.173.02", "clocks.sm": str(2000 + i)}
+    print(", ".join(vals.get(q, "1") for q in query.split(",")) if query else f"GPU {vals['pci.bus_id']}\\n    SM : 2000 MHz")
+"""
+
+
+def _smi_stub(tmp_path, gpus: str):
+    """A stub nvidia-smi in `tmp_path/bin` on a node with `gpus` (UUIDs, nvidia-smi's index order): it logs every call."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    smi = bin_dir / "nvidia-smi"
+    smi.write_text(f"#!{sys.executable}\n{SMI_STUB}")
+    smi.chmod(0o755)
+    log = tmp_path / "smi.log"
+    return bin_dir, log, {"SMI_LOG": str(log), "SMI_GPUS": gpus}
+
+
+def _queries(log) -> list[str]:
+    return [line for line in log.read_text().splitlines() if line != "-L"] if log.exists() else []
+
+
+def test_the_harness_asks_nvidia_smi_about_the_leased_or_cuda_device_never_gpu_0(tmp_path, monkeypatch):
+    harness = _harness()
+    bin_dir, log, env = _smi_stub(tmp_path, "GPU-a GPU-b GPU-c")
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-b")
+    facts = harness.gpu_facts(0)
+    assert facts["nvidia_smi_id"] == "GPU-b" and facts["uuid"] == "GPU-b" and facts["index"] == "1"
+    assert facts["clocks.sm"] == "2001" and harness._sm_clock_mhz(harness.device_uuid(0)) == 2001.0
+    monkeypatch.delenv("GPU_LEASE_UUID")
+    monkeypatch.setattr(harness, "cuda_uuid", lambda index: {0: "GPU-c"}.get(index))       # CUDA's device 0 is GPU 2
+    facts = harness.gpu_facts(0)
+    assert facts["nvidia_smi_id"] == facts["uuid"] == facts["cuda_uuid"] == "GPU-c" and facts["index"] == "2"
+    assert harness.gpu_facts(1) == {"nvidia_smi": None, "nvidia_smi_id": None, "cuda_device": 1, "cuda_uuid": None,
+                                    "cuda_visible_devices": None}                            # no id: no query at all
+    assert harness._sm_clock_mhz(None) is None
+    assert [c.split()[0] for c in _queries(log)] == ["--id=GPU-b", "--id=GPU-b", "--id=GPU-c"]
+    monkeypatch.undo()
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda index: types.SimpleNamespace(uuid="1cd543c7-ad34"))
+    assert harness.cuda_uuid(0) == "GPU-1cd543c7-ad34"                                       # torch's UUID, as nvidia-smi writes it
+
+
+def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_path):
+    def run(case: str, gpus: str, **env: str):
+        d = tmp_path / case
+        d.mkdir()
+        bin_dir, log, smi_env = _smi_stub(d, gpus)
+        for name, body in (("uv", "exit 0"), ("lscpu", "exit 0")):
+            (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
+            (bin_dir / name).chmod(0o755)
+        nvcc = d / "cuda" / "bin" / "nvcc"
+        nvcc.parent.mkdir(parents=True)
+        nvcc.write_text("#!/bin/sh\necho 'Cuda compilation tools, release 13.0, V13.0.88'\n")
+        nvcc.chmod(0o755)
+        py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
+        py.parent.mkdir(parents=True)
+        py.write_text("#!/bin/sh\nexit 0\n")
+        py.chmod(0o755)
+        (d / "run").mkdir()
+        base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
+                "CUDA_HOME": str(d / "cuda")}
+        rc = subprocess.run(["bash", str(BENCH / "pod.sh"), "IMPL=band-gpu", "AUDITS=0"], cwd=ROOT, capture_output=True, text=True,
+                            env={**base, **smi_env, **env})
+        return rc, _queries(log), d / "run"
+
+    rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1")
+    assert rc.returncode == 0, rc.stdout[-2000:]
+    assert calls and all(c.startswith("--id=GPU-b ") for c in calls)
+    for name in ("before", "after"):
+        assert (out / f"clocks-{name}.txt").read_text().startswith("nvidia-smi --id=GPU-b: 1, GPU-b, 00000000:02:00.0\n")
+    rc, calls, _ = run("visible", "GPU-a GPU-b GPU-c", CUDA_VISIBLE_DEVICES="2")
+    assert rc.returncode == 0 and calls[0] == "--id=2 --query-gpu=uuid --format=csv,noheader"
+    assert calls[1:] and all(c.startswith("--id=GPU-c ") for c in calls[1:])
+    rc, calls, _ = run("only", "GPU-only")
+    assert rc.returncode == 0 and calls and all(c.startswith("--id=GPU-only ") for c in calls)
+    rc, calls, _ = run("several", "GPU-a GPU-b GPU-c")
+    assert rc.returncode == 2 and "name the run's GPU" in rc.stdout and calls == []
 
 
 def test_the_kernel_settings_and_the_loop_layout():

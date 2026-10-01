@@ -106,11 +106,12 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
 
     def facts() -> dict[str, Any]:
         props = torch.cuda.get_device_properties(device)
-        return {**H.gpu_facts(), "sms": props.multi_processor_count, "torch": torch.__version__, "cuda": torch.version.cuda,
-                "nvcc": H._nvcc_version()}
+        return {**H.gpu_facts(device.index), "sms": props.multi_processor_count, "torch": torch.__version__,
+                "cuda": torch.version.cuda, "nvcc": H._nvcc_version()}
 
+    smi_id = H.device_uuid(device.index)
     return Backend(device, lambda params, salt, model: Kernels(lib_dir, build_dir, params, salt, model), responder, timer,
-                   graphed, copy_bw, H._sm_clock_mhz, facts)
+                   graphed, copy_bw, lambda: H._sm_clock_mhz(smi_id), facts)
 
 
 def rows(values: list[int], width: int, device: Any) -> Any:
