@@ -1,3 +1,5 @@
+import Verity.Guarantees.TC
+
 /-!
 # Core's guarantees
 

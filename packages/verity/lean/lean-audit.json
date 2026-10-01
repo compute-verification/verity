@@ -1,331 +1,129 @@
 {
  "roots": ["Verity"],
  "assumptions": ["Verity.Assumptions"],
- "meaning": ["Verity.TC.Pipeline", "Verity.TC.Spec", "Verity.TC.Relation", "Verity.Assumptions", "Verity.TC.Gadgets"],
+ "meaning": ["Verity.Protocol", "Verity.Assumptions", "Verity.Guarantees"],
  "layers": {
-  "Verity.TC.Pipeline": {
+  "Verity.Protocol": {
+   "imports": ["Mathlib", "Verity.Protocol"],
+   "except": [],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Verity.Protocol.TC.Pipeline": {
    "imports": [],
    "except": [],
    "why": "the pipeline parameters both transcriptions read import nothing"
   },
-  "Verity.TC.Spec": {
-   "imports": ["Verity.TC.Pipeline", "Verity.TC.Spec"],
+  "Verity.Protocol.TC.Spec": {
+   "imports": ["Verity.Protocol.TC.Pipeline", "Verity.Protocol.TC.Spec"],
    "except": [],
    "why": "the semantics (total.py, models.py, term.py) import no proofs and nothing of the relation"
   },
-  "Verity.TC.Relation": {
-   "imports": ["Verity.TC.Pipeline", "Verity.TC.Relation"],
+  "Verity.Protocol.TC.Relation": {
+   "imports": ["Verity.Protocol.TC.Pipeline", "Verity.Protocol.TC.Relation"],
    "except": [],
    "why": "the relation (relation.py) imports no proofs and nothing of the semantics: the two transcriptions are independent"
   },
   "Verity.Assumptions": {
-   "imports": ["Verity.TC.Pipeline", "Verity.TC.Spec", "Verity.Assumptions"],
+   "imports": ["Mathlib", "Verity.Protocol", "Verity.Assumptions"],
    "except": [],
-   "why": "a named assumption reads the semantics, never a proof"
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
+  },
+  "Verity.Guarantees": {
+   "imports": ["Mathlib", "Verity.Protocol", "Verity.Assumptions", "Verity.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   }
  },
  "pins": {
-  "Verity.TC.Gadgets.iszero_gadget": {
-   "signature": [
-    "Verity.TC.Gadgets.iszero_gadget (x z : Int) (bits : Nat) :",
-    "  Iff (Verity.TC.Gadgets.ZeroChunks (Verity.TC.Gadgets.isZeroWidths bits) x z) (Verity.TC.Relation.ISZERO x bits z)"
-   ],
+  "Verity.SecurityProofs.AdaEqAmpere": {
+   "signature": ["Verity.SecurityProofs.AdaEqAmpere : Verity.Guarantees.AdaEqAmpere"],
    "assumptions": [],
-   "type_hash": "f562a21be2ba94c1d9e6d3380ba1b7539da29a708ff975ce67d3506ac1ebc0e6"
+   "type_hash": "4ef7acbed8eccd0f5171a7763ffc7cbff36880f51912d34b3bfe1659ff7ab177"
   },
-  "Verity.TC.Gadgets.range_gadget": {
-   "signature": [
-    "Verity.TC.Gadgets.range_gadget (x : Int) (bits : Nat) :",
-    "  Iff (Verity.TC.Gadgets.Chunks (Verity.TC.Gadgets.rangeWidths bits) x) (Verity.TC.Relation.RANGE x bits)"
-   ],
+  "Verity.SecurityProofs.AmpereStepComplete": {
+   "signature": ["Verity.SecurityProofs.AmpereStepComplete : Verity.Guarantees.AmpereStepComplete"],
    "assumptions": [],
-   "type_hash": "4aac4ba910330b4d20855c17d4780b52293c858c74fc14f41f3a7429575e1f4b"
+   "type_hash": "4faf8d07c32dd325668f647d2117ee51e6798de430cf86a272451f996839e028"
   },
-  "Verity.TC.ada_eq_ampere": {
-   "signature": ["Verity.TC.ada_eq_ampere : Eq Verity.TC.ADA_BF16_M16N8K16 Verity.TC.AMPERE_BF16_M16N8K16"],
+  "Verity.SecurityProofs.AmpereStepHw": {
+   "signature": ["Verity.SecurityProofs.AmpereStepHw : Verity.Guarantees.AmpereStepHw"],
    "assumptions": [],
-   "type_hash": "194fe384c0f52dc0acf760e17c1cd5220275ca66c5021769f508cddfd62717a5"
+   "type_hash": "5266aec3cc904fefc52e1f1798f6d95b43817da9faecf1e2a7bd07bfdc8f0624"
   },
-  "Verity.TC.ampere_step_complete": {
-   "signature": [
-    "Verity.TC.ampere_step_complete (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.AMPERE_BF16_M16N8K16 acc a b) :",
-    "  Exists fun w =>",
-    "    Verity.TC.Relation.StepHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) a b w"
-   ],
+  "Verity.SecurityProofs.AmpereStepIff": {
+   "signature": ["Verity.SecurityProofs.AmpereStepIff : Verity.Guarantees.AmpereStepIff"],
    "assumptions": [],
-   "type_hash": "184aa5ca24ba7d2c3e2861ac91137971e1e6acce48487b8a7fbbf6a70253f535"
+   "type_hash": "f7bf3bc7345da650b05e97c0aba43be11680cbba65c1e0c3376cd6b21cfed7ab"
   },
-  "Verity.TC.ampere_step_hw": {
-   "signature": [
-    "Verity.TC.ampere_step_hw (step : Nat → List Nat → List Nat → Nat) (hstep : Verity.Assumptions.GemmAmpereStep step)",
-    "  (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.AMPERE_BF16_M16N8K16 acc a b) (w : Verity.TC.Relation.Witness)",
-    "  (h :",
-    "    Verity.TC.Relation.StepHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) a b w) :",
-    "  Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) w.groups)",
-    "    (Verity.TC.Relation.decodeState (step acc a b) Verity.TC.AMPERE_BF16_M16N8K16)"
-   ],
+  "Verity.SecurityProofs.AmpereStepSound": {
+   "signature": ["Verity.SecurityProofs.AmpereStepSound : Verity.Guarantees.AmpereStepSound"],
    "assumptions": [],
-   "type_hash": "dfb9653d189f54fbc035d3e51237f07f05d79b0a84985d5fde47f900ff8281d4"
+   "type_hash": "0192fd75b60eaebfc2a12b03b5a6bc38bcae9adb7f495e7f039f9781bb18b9e2"
   },
-  "Verity.TC.ampere_step_iff": {
-   "signature": [
-    "Verity.TC.ampere_step_iff (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.AMPERE_BF16_M16N8K16 acc a b) (out : Verity.TC.Relation.State) :",
-    "  Iff",
-    "    (Exists fun w =>",
-    "      And",
-    "        (Verity.TC.Relation.StepHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "          (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) a b w)",
-    "        (Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) w.groups)",
-    "          out))",
-    "    (Eq out",
-    "      (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.AMPERE_BF16_M16N8K16 acc a b)",
-    "        Verity.TC.AMPERE_BF16_M16N8K16))"
-   ],
+  "Verity.SecurityProofs.AmpereUnitBf16": {
+   "signature": ["Verity.SecurityProofs.AmpereUnitBf16 : Verity.Guarantees.AmpereUnitBf16"],
    "assumptions": [],
-   "type_hash": "85ec80eaaa76646acd7307ea0cc4e9a66603b23692af6eee77f0bb7193887c8e"
+   "type_hash": "b358390ebc06a84715ef19d9b9a70ae7717e7f5cea1d794e2c2ced0265f674a3"
   },
-  "Verity.TC.ampere_step_sound": {
-   "signature": [
-    "Verity.TC.ampere_step_sound (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.AMPERE_BF16_M16N8K16 acc a b) (w : Verity.TC.Relation.Witness)",
-    "  (h :",
-    "    Verity.TC.Relation.StepHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) a b w) :",
-    "  Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) w.groups)",
-    "    (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.AMPERE_BF16_M16N8K16 acc a b)",
-    "      Verity.TC.AMPERE_BF16_M16N8K16)"
-   ],
+  "Verity.SecurityProofs.AmpereUnitSound": {
+   "signature": ["Verity.SecurityProofs.AmpereUnitSound : Verity.Guarantees.AmpereUnitSound"],
    "assumptions": [],
-   "type_hash": "c5e53aa7a02e01bcec6b56bb806b0575eb01c0401d98fac8c1598448f7362eac"
+   "type_hash": "ae5939be57fde5a396f851a991509c3d86cdd02853fa4bdd2e29f38fb9a2eb4d"
   },
-  "Verity.TC.ampere_unit_bf16": {
-   "signature": [
-    "Verity.TC.ampere_unit_bf16 (align : Verity.TC.Relation.Align)",
-    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
-    "  (hin :",
-    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
-    "      List.instMembership.mem steps s →",
-    "        And (Eq s.fst.length 16)",
-    "          (And (Eq s.snd.fst.length 16)",
-    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
-    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
-    "  (out : Verity.TC.Relation.State)",
-    "  (h :",
-    "    Verity.TC.Relation.ChainHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "      (Verity.TC.Relation.zeroState Verity.TC.AMPERE_BF16_M16N8K16) steps out)",
-    "  (c : Verity.TC.Relation.PackCols) (hc : Verity.TC.Relation.packHolds out c) :",
-    "  And",
-    "    (Eq c.word",
-    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.AMPERE_BF16_M16N8K16 0",
-    "          (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps)).cast)",
-    "    (Eq c.bf16",
-    "      (Verity.TC.Spec.cvtRnBf16F32",
-    "          (Verity.TC.Spec.tcDotChainTotal Verity.TC.AMPERE_BF16_M16N8K16 0",
-    "            (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))).cast)"
-   ],
+  "Verity.SecurityProofs.AmpereUnitSoundZero": {
+   "signature": ["Verity.SecurityProofs.AmpereUnitSoundZero : Verity.Guarantees.AmpereUnitSoundZero"],
    "assumptions": [],
-   "type_hash": "2a59af350750a522ab6a727b2069c40b7717af8d6e3787ee2beb1bfb09ba4070"
+   "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
   },
-  "Verity.TC.ampere_unit_sound": {
-   "signature": [
-    "Verity.TC.ampere_unit_sound (align : Verity.TC.Relation.Align) (acc : Nat)",
-    "  (hacc : instLTNat.lt acc (instHPow.hPow 2 32))",
-    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
-    "  (hin :",
-    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
-    "      List.instMembership.mem steps s →",
-    "        And (Eq s.fst.length 16)",
-    "          (And (Eq s.snd.fst.length 16)",
-    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
-    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
-    "  (out : Verity.TC.Relation.State)",
-    "  (h :",
-    "    Verity.TC.Relation.ChainHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.AMPERE_BF16_M16N8K16) steps out) :",
-    "  Eq out",
-    "    (Verity.TC.Relation.decodeState",
-    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.AMPERE_BF16_M16N8K16 acc",
-    "        (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))",
-    "      Verity.TC.AMPERE_BF16_M16N8K16)"
-   ],
+  "Verity.SecurityProofs.HopperStepComplete": {
+   "signature": ["Verity.SecurityProofs.HopperStepComplete : Verity.Guarantees.HopperStepComplete"],
    "assumptions": [],
-   "type_hash": "81e7621246bcb4e3cc31442053fb6be6c9b17ce1e16e66a9adeaab693f864881"
+   "type_hash": "fe2fae45be22b37a93be72003ffbbf012d3fd12e40a55b50728c78645e1c931c"
   },
-  "Verity.TC.ampere_unit_sound_zero": {
-   "signature": [
-    "Verity.TC.ampere_unit_sound_zero (align : Verity.TC.Relation.Align)",
-    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
-    "  (hin :",
-    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
-    "      List.instMembership.mem steps s →",
-    "        And (Eq s.fst.length 16)",
-    "          (And (Eq s.snd.fst.length 16)",
-    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
-    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
-    "  (out : Verity.TC.Relation.State)",
-    "  (h :",
-    "    Verity.TC.Relation.ChainHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
-    "      (Verity.TC.Relation.zeroState Verity.TC.AMPERE_BF16_M16N8K16) steps out) :",
-    "  Eq out",
-    "    (Verity.TC.Relation.decodeState",
-    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.AMPERE_BF16_M16N8K16 0",
-    "        (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))",
-    "      Verity.TC.AMPERE_BF16_M16N8K16)"
-   ],
+  "Verity.SecurityProofs.HopperStepHw": {
+   "signature": ["Verity.SecurityProofs.HopperStepHw : Verity.Guarantees.HopperStepHw"],
    "assumptions": [],
-   "type_hash": "2b5f61c5cd113dca657eb2668d68513f169ff7c18fb45d3c789acf4a47cb201a"
+   "type_hash": "cb161164edc01610f469f2d6476ff00b379a3e8409fbace7d8ec575c96e50bf2"
   },
-  "Verity.TC.hopper_step_complete": {
-   "signature": [
-    "Verity.TC.hopper_step_complete (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b) :",
-    "  Exists fun w =>",
-    "    Verity.TC.Relation.StepHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) a b w"
-   ],
+  "Verity.SecurityProofs.HopperStepIff": {
+   "signature": ["Verity.SecurityProofs.HopperStepIff : Verity.Guarantees.HopperStepIff"],
    "assumptions": [],
-   "type_hash": "00b7faf9009a934edbedcbe8d8f137c3dcabea28ab50a9bce3dbf99f6ce96c26"
+   "type_hash": "2b26f76665dd6b3d22c0baa9455693f096b3e0ef592712d5349089e08ac3b8bf"
   },
-  "Verity.TC.hopper_step_hw": {
-   "signature": [
-    "Verity.TC.hopper_step_hw (step : Nat → List Nat → List Nat → Nat) (hstep : Verity.Assumptions.GemmHopperStep step)",
-    "  (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b) (w : Verity.TC.Relation.Witness)",
-    "  (h :",
-    "    Verity.TC.Relation.StepHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) a b w) :",
-    "  Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) w.groups)",
-    "    (Verity.TC.Relation.decodeState (step acc a b) Verity.TC.HOPPER_BF16_WGMMA_K16)"
-   ],
+  "Verity.SecurityProofs.HopperStepSound": {
+   "signature": ["Verity.SecurityProofs.HopperStepSound : Verity.Guarantees.HopperStepSound"],
    "assumptions": [],
-   "type_hash": "f4de3678d5260fd7064b73c991ba1d6895ac2ecb4b1b4b30d8536c862013a623"
+   "type_hash": "e7dc0feb2531a118d4b15b496514252f78f99499197f4b0e150bf4de46b4816b"
   },
-  "Verity.TC.hopper_step_iff": {
-   "signature": [
-    "Verity.TC.hopper_step_iff (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b) (out : Verity.TC.Relation.State) :",
-    "  Iff",
-    "    (Exists fun w =>",
-    "      And",
-    "        (Verity.TC.Relation.StepHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "          (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) a b w)",
-    "        (Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) w.groups)",
-    "          out))",
-    "    (Eq out",
-    "      (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b)",
-    "        Verity.TC.HOPPER_BF16_WGMMA_K16))"
-   ],
+  "Verity.SecurityProofs.HopperUnitBf16": {
+   "signature": ["Verity.SecurityProofs.HopperUnitBf16 : Verity.Guarantees.HopperUnitBf16"],
    "assumptions": [],
-   "type_hash": "494a04598f85ef53df775ea5c6636648edb675ac031537b1e0c2e65b0ef3d8c4"
+   "type_hash": "bd4150b936a955da951c9e9e5383d3cbf12c48a5ae5c03661e5bdbc7b5261e32"
   },
-  "Verity.TC.hopper_step_sound": {
-   "signature": [
-    "Verity.TC.hopper_step_sound (align : Verity.TC.Relation.Align) (acc : Nat) (a b : List Nat)",
-    "  (hin : Verity.Assumptions.StepInputs Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b) (w : Verity.TC.Relation.Witness)",
-    "  (h :",
-    "    Verity.TC.Relation.StepHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) a b w) :",
-    "  Eq (Verity.TC.Relation.stepOut (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) w.groups)",
-    "    (Verity.TC.Relation.decodeState (Verity.TC.Spec.tcDotTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b)",
-    "      Verity.TC.HOPPER_BF16_WGMMA_K16)"
-   ],
+  "Verity.SecurityProofs.HopperUnitSound": {
+   "signature": ["Verity.SecurityProofs.HopperUnitSound : Verity.Guarantees.HopperUnitSound"],
    "assumptions": [],
-   "type_hash": "e5edef2e6a0ce986000364a29e5ae3f31816d8b5613092af4fe69ca172a9a92c"
+   "type_hash": "05cf0649042eb55dbe2001339ac9d71132bb96e734c2f95169e3def1a4d1ffed"
   },
-  "Verity.TC.hopper_unit_bf16": {
-   "signature": [
-    "Verity.TC.hopper_unit_bf16 (align : Verity.TC.Relation.Align)",
-    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
-    "  (hin :",
-    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
-    "      List.instMembership.mem steps s →",
-    "        And (Eq s.fst.length 16)",
-    "          (And (Eq s.snd.fst.length 16)",
-    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
-    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
-    "  (out : Verity.TC.Relation.State)",
-    "  (h :",
-    "    Verity.TC.Relation.ChainHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "      (Verity.TC.Relation.zeroState Verity.TC.HOPPER_BF16_WGMMA_K16) steps out)",
-    "  (c : Verity.TC.Relation.PackCols) (hc : Verity.TC.Relation.packHolds out c) :",
-    "  And",
-    "    (Eq c.word",
-    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 0",
-    "          (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps)).cast)",
-    "    (Eq c.bf16",
-    "      (Verity.TC.Spec.cvtRnBf16F32",
-    "          (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 0",
-    "            (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))).cast)"
-   ],
+  "Verity.SecurityProofs.HopperUnitSoundZero": {
+   "signature": ["Verity.SecurityProofs.HopperUnitSoundZero : Verity.Guarantees.HopperUnitSoundZero"],
    "assumptions": [],
-   "type_hash": "c1bb530b5e9f83e150d4a04927fbbeae6426ed923d46d032eb1709ed2db669ea"
+   "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
   },
-  "Verity.TC.hopper_unit_sound": {
-   "signature": [
-    "Verity.TC.hopper_unit_sound (align : Verity.TC.Relation.Align) (acc : Nat)",
-    "  (hacc : instLTNat.lt acc (instHPow.hPow 2 32))",
-    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
-    "  (hin :",
-    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
-    "      List.instMembership.mem steps s →",
-    "        And (Eq s.fst.length 16)",
-    "          (And (Eq s.snd.fst.length 16)",
-    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
-    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
-    "  (out : Verity.TC.Relation.State)",
-    "  (h :",
-    "    Verity.TC.Relation.ChainHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "      (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) steps out) :",
-    "  Eq out",
-    "    (Verity.TC.Relation.decodeState",
-    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc",
-    "        (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))",
-    "      Verity.TC.HOPPER_BF16_WGMMA_K16)"
-   ],
+  "Verity.SecurityProofs.IsZeroGadget": {
+   "signature": ["Verity.SecurityProofs.IsZeroGadget : Verity.Guarantees.IsZeroGadget"],
    "assumptions": [],
-   "type_hash": "419dd181290b5a8b9bcbc5f73b5840db3a5c1392ff923b7a4f9b2bd07935c2b4"
+   "type_hash": "4712837458217893fee3236ecf7855de0efd4d66a8b99532fddbcfb670bdb42b"
   },
-  "Verity.TC.hopper_unit_sound_zero": {
-   "signature": [
-    "Verity.TC.hopper_unit_sound_zero (align : Verity.TC.Relation.Align)",
-    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
-    "  (hin :",
-    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
-    "      List.instMembership.mem steps s →",
-    "        And (Eq s.fst.length 16)",
-    "          (And (Eq s.snd.fst.length 16)",
-    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
-    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
-    "  (out : Verity.TC.Relation.State)",
-    "  (h :",
-    "    Verity.TC.Relation.ChainHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
-    "      (Verity.TC.Relation.zeroState Verity.TC.HOPPER_BF16_WGMMA_K16) steps out) :",
-    "  Eq out",
-    "    (Verity.TC.Relation.decodeState",
-    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 0",
-    "        (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))",
-    "      Verity.TC.HOPPER_BF16_WGMMA_K16)"
-   ],
+  "Verity.SecurityProofs.PackSoundComplete": {
+   "signature": ["Verity.SecurityProofs.PackSoundComplete : Verity.Guarantees.PackSoundComplete"],
    "assumptions": [],
-   "type_hash": "5746d0d0cf29d23a9b0b133b65576529292aa5917c96c8eb8a5582a6bfe52894"
+   "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
   },
-  "Verity.TC.pack_sound_complete": {
-   "signature": [
-    "Verity.TC.pack_sound_complete (Z : Int) (V : Verity.TC.Spec.Value) (hV : Verity.TC.Proofs.Admissible V) :",
-    "  And",
-    "    (∀ (c : Verity.TC.Relation.PackCols),",
-    "      Verity.TC.Relation.packHolds (Verity.TC.Proofs.stateOf Z V) c →",
-    "        And (Eq c.word (Verity.TC.Spec.packValue V).cast)",
-    "          (Eq c.bf16 (Verity.TC.Spec.cvtRnBf16F32 (Verity.TC.Spec.packValue V)).cast))",
-    "    (Exists fun c => Verity.TC.Relation.packHolds (Verity.TC.Proofs.stateOf Z V) c)"
-   ],
+  "Verity.SecurityProofs.RangeGadget": {
+   "signature": ["Verity.SecurityProofs.RangeGadget : Verity.Guarantees.RangeGadget"],
    "assumptions": [],
-   "type_hash": "9b357ce37eb093da3677870f727c259fd78f42903c5202ea171ece2e46d09a7c"
+   "type_hash": "f7ed21cd74c37de74d55e3d3d2ff32de391af49d7eb759acfd46292de7e2acea"
   }
  },
  "reads": {
@@ -337,17 +135,68 @@
     "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
    },
    "pins": [
-    "Verity.TC.ampere_step_complete",
-    "Verity.TC.ampere_step_hw",
-    "Verity.TC.ampere_step_iff",
-    "Verity.TC.ampere_step_sound",
-    "Verity.TC.hopper_step_complete",
-    "Verity.TC.hopper_step_hw",
-    "Verity.TC.hopper_step_iff",
-    "Verity.TC.hopper_step_sound"
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound"
    ]
   },
-  "Verity.TC.Gadgets": {
+  "Verity.Guarantees.TC": {
+   "digest": "482236f9d4e61b61c0d296fbfa35abc0416ab6b54467ff2a9f9f47ad914101fa",
+   "definitions": {
+    "Verity.Guarantees.AdaEqAmpere": "4dce5ce4517529b252795318ea90409c325c67d28139691a2460d39ce7ad089e",
+    "Verity.Guarantees.AmpereStepComplete": "5c6c4d3158286ee53137cb8dd3c66b2e272bbfc22732345f61713fbbd2eaaffb",
+    "Verity.Guarantees.AmpereStepHw": "6e64fd8e4d76b80afa400eb4238007492a1df8322541955a1ac668472de64a37",
+    "Verity.Guarantees.AmpereStepIff": "e252d939e1bfc509ca004d74bf89f74765722f0786e18498dc3641ebe8d0a9af",
+    "Verity.Guarantees.AmpereStepSound": "97544bac65b908a4e026735e9ad434f53793271085f669c1d94fd2fbb2555e4c",
+    "Verity.Guarantees.AmpereUnitBf16": "d9069901287c8ec95f08c12d3dc0602771617bc617e8503086d2a869c568ce20",
+    "Verity.Guarantees.AmpereUnitSound": "a441669d836675d242de13345dde3017973d1329627c7679d67b88c20175d003",
+    "Verity.Guarantees.AmpereUnitSoundZero": "61b52f2e67a332f0aae6132005447f08b2f6abc57a2270271214820b83c3a17c",
+    "Verity.Guarantees.HopperStepComplete": "409e8ffbde2f8b28506287555632fe42b2a0e53c2617faf9bb6ad4404d78bd42",
+    "Verity.Guarantees.HopperStepHw": "02cd430489f71fb17040226af54bf58c3d8c1772e5818099e53696b1eb99bdd3",
+    "Verity.Guarantees.HopperStepIff": "e4d776487928e611503023ce084633a9457673592718a9dd591aca3649629558",
+    "Verity.Guarantees.HopperStepSound": "231299eef1350986de3df8c9466ac44ac8e811e21717eb73de3de6bb16c6d0f4",
+    "Verity.Guarantees.HopperUnitBf16": "846a602cadcdbb4fe14baf591da3414b9e8b5270b2e3fd387f7efa269e6ae3f1",
+    "Verity.Guarantees.HopperUnitSound": "b17ce02e244f1f28175a0b78391062658b1d6ab6020e816a89a87509b8c29433",
+    "Verity.Guarantees.HopperUnitSoundZero": "d37826555cb0a963e78448c1683ca74202f5db8d838cd175ee42bacadd001613",
+    "Verity.Guarantees.IsZeroGadget": "e909b78204ab7a448af5d1ff7753e7d4e433f30940f636e444456e61813d8e59",
+    "Verity.Guarantees.PackSoundComplete": "95e287c6c5b67e69c4cca2ba0e7de569f217442359cffe9a4a3943dbbd31695c",
+    "Verity.Guarantees.RangeGadget": "276657bf0d6d4e6da870b4002959224bf0bfffe7843d048573a6139168bf9d13"
+   },
+   "pins": [
+    "Verity.SecurityProofs.AdaEqAmpere",
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero",
+    "Verity.SecurityProofs.IsZeroGadget",
+    "Verity.SecurityProofs.PackSoundComplete",
+    "Verity.SecurityProofs.RangeGadget"
+   ]
+  },
+  "Verity.Protocol.TC.Bridge": {
+   "digest": "9e882f7874a9190468531a509a633d565dfd63d44e7d6e27a135641bcc06b825",
+   "definitions": {
+    "Verity.TC.Proofs.Admissible": "c56ebb69cf9ebbd664b0ae72ccb5b21dc3fe2761f4cc8e64e7f663b6e71ca25e",
+    "Verity.TC.Proofs.stateOf": "f7ef12fd0fd00f94be4bea32348cdfa796fc51941d5a628987e2187c11ec1177"
+   },
+   "pins": ["Verity.SecurityProofs.PackSoundComplete"]
+  },
+  "Verity.Protocol.TC.Gadgets": {
    "digest": "2c13e0555fc412274d2d0ab43e78262600d61d148e82207bee614f7e4a9727c1",
    "definitions": {
     "Verity.TC.Gadgets.Chunks": "1225e390d1c8aacfa814a2badc8fe1439607e75d534dbb55868fb41b0912d43f",
@@ -355,9 +204,9 @@
     "Verity.TC.Gadgets.isZeroWidths": "51b86a56686596236cdebb9470177a8b3e1ed79f42ecb6ce7cd7ec20409a575d",
     "Verity.TC.Gadgets.rangeWidths": "915f7c5c531a47ce9790cc92ec02be1f06103cf94596144c6fef95e8352c01f9"
    },
-   "pins": ["Verity.TC.Gadgets.iszero_gadget", "Verity.TC.Gadgets.range_gadget"]
+   "pins": ["Verity.SecurityProofs.IsZeroGadget", "Verity.SecurityProofs.RangeGadget"]
   },
-  "Verity.TC.Pipeline": {
+  "Verity.Protocol.TC.Pipeline": {
    "digest": "ac541b047f90ce7cf9efd3f8d0d55ee156cf5796062c2d01baa3d11730190b4e",
    "definitions": {
     "Verity.TC.ADA_BF16_M16N8K16": "28afdcda7b8ff437bf550072da0c4b9cc359460d0b13a74daeb82f196c5a701b",
@@ -371,24 +220,24 @@
     "Verity.TC.bitLength": "ccbed7043eb20211951e7bec1eed8b5bb0e5627b258ee4d913d1737c2fbf4162"
    },
    "pins": [
-    "Verity.TC.ada_eq_ampere",
-    "Verity.TC.ampere_step_complete",
-    "Verity.TC.ampere_step_hw",
-    "Verity.TC.ampere_step_iff",
-    "Verity.TC.ampere_step_sound",
-    "Verity.TC.ampere_unit_bf16",
-    "Verity.TC.ampere_unit_sound",
-    "Verity.TC.ampere_unit_sound_zero",
-    "Verity.TC.hopper_step_complete",
-    "Verity.TC.hopper_step_hw",
-    "Verity.TC.hopper_step_iff",
-    "Verity.TC.hopper_step_sound",
-    "Verity.TC.hopper_unit_bf16",
-    "Verity.TC.hopper_unit_sound",
-    "Verity.TC.hopper_unit_sound_zero"
+    "Verity.SecurityProofs.AdaEqAmpere",
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero"
    ]
   },
-  "Verity.TC.Relation": {
+  "Verity.Protocol.TC.Relation": {
    "digest": "90d242aafda6ababbb43bd0ad8be3df35846991619c96de19f75cc343be530a6",
    "definitions": {
     "Verity.TC.Relation.Align": "bd927acbef0f1cebcf242d571b3d07a0ee22ea66a5cfe1edfddfd480b1370818",
@@ -534,26 +383,26 @@
     "Verity.TC.Relation.zeroState": "76f5f56483cad8dcffb6d6f0e63076b8477410fb251112e4da877e10771f2af4"
    },
    "pins": [
-    "Verity.TC.Gadgets.iszero_gadget",
-    "Verity.TC.Gadgets.range_gadget",
-    "Verity.TC.ampere_step_complete",
-    "Verity.TC.ampere_step_hw",
-    "Verity.TC.ampere_step_iff",
-    "Verity.TC.ampere_step_sound",
-    "Verity.TC.ampere_unit_bf16",
-    "Verity.TC.ampere_unit_sound",
-    "Verity.TC.ampere_unit_sound_zero",
-    "Verity.TC.hopper_step_complete",
-    "Verity.TC.hopper_step_hw",
-    "Verity.TC.hopper_step_iff",
-    "Verity.TC.hopper_step_sound",
-    "Verity.TC.hopper_unit_bf16",
-    "Verity.TC.hopper_unit_sound",
-    "Verity.TC.hopper_unit_sound_zero",
-    "Verity.TC.pack_sound_complete"
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero",
+    "Verity.SecurityProofs.IsZeroGadget",
+    "Verity.SecurityProofs.PackSoundComplete",
+    "Verity.SecurityProofs.RangeGadget"
    ]
   },
-  "Verity.TC.Spec": {
+  "Verity.Protocol.TC.Spec": {
    "digest": "b26904f29563f400126ead4d2daaaeec7e7a763d1e62634080913ffb06d93c0f",
    "definitions": {
     "Verity.TC.Spec.Cls": "32a69efb9d8f020818f79ecf7874331b6da9974ae1cfd4bd9cef974e02a3e602",
@@ -593,19 +442,19 @@
     "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
    },
    "pins": [
-    "Verity.TC.ampere_step_hw",
-    "Verity.TC.ampere_step_iff",
-    "Verity.TC.ampere_step_sound",
-    "Verity.TC.ampere_unit_bf16",
-    "Verity.TC.ampere_unit_sound",
-    "Verity.TC.ampere_unit_sound_zero",
-    "Verity.TC.hopper_step_hw",
-    "Verity.TC.hopper_step_iff",
-    "Verity.TC.hopper_step_sound",
-    "Verity.TC.hopper_unit_bf16",
-    "Verity.TC.hopper_unit_sound",
-    "Verity.TC.hopper_unit_sound_zero",
-    "Verity.TC.pack_sound_complete"
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero",
+    "Verity.SecurityProofs.PackSoundComplete"
    ]
   }
  },

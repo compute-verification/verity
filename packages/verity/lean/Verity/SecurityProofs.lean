@@ -1,3 +1,5 @@
+import Verity.SecurityProofs.TC
+
 /-!
 # Proofs of core's guarantees
 

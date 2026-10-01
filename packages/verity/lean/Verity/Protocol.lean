@@ -1,3 +1,5 @@
+import Verity.Protocol.TC
+
 /-!
 # Core's protocol: the model every protocol states its guarantees in
 
