@@ -89,6 +89,10 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (3:32 PM PDT): no protocol deals with public values, so none gets an exemption; PoUW's tile check moves into
+  a proof. During development a proof may be replaced by replay, or verification skipped, for research velocity: that's
+  a shortcut, never the protocol. Shapes such as batch size and sequence length may stay public for now: the first
+  protocol decouples values from circuits, and private-circuit protocols come later.
 - 2026-10-01 (1:14 PM PDT; this wording 3:06 PM): the circuit holds only gates, and values are always hidden, the core
   guarantee of even the most basic protocol. An operation's own definition is gates: the floating-point formats'
   constants, SHA-512's, the measured GPU tables for exp2, rcp and tanh. Everything a program or a request brings is a value:
