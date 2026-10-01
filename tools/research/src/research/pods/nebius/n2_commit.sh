@@ -30,7 +30,8 @@
 # to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
 # run dir is under 64 MiB, else from a pod on node 1 with the Secret research-r2), and queues the replay on node 2. replay runs
 # config-run.yaml's replay task there and custodies it the same way. A Commit or replay that fails on node 2 goes back to node 1's
-# dispatcher (`dispatch.py submit config-run COMMIT_KEY --task 1|2`) with the whole row; VY_N2_REPLAY=n1 sends every replay there.
+# dispatcher (`dispatch.py submit config-run COMMIT_KEY --task 1|2`) with the whole row, and offload never moves a Commit that
+# went back to node 2 again; VY_N2_REPLAY=n1 sends every replay there.
 # A rerun after a stage finished (the .n2-commit / .n2-replay marker) only redoes the return.
 set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
@@ -320,6 +321,9 @@ home() {  # home RUN_ID [RSYNC-ARG...]
 
 dispatch_n1() {  # dispatch_n1 TASK: node 1's dispatcher takes the item from TASK on
   [ -z "${PROOF:-}" ] || { echo "a proof Commit: nothing goes to node 1's dispatcher"; return 0; }
+  # a Commit handed back goes into node 1's reclaimed.txt first, or offload moves it here again once it has waited there
+  [ "$1" != 1 ] || ssh -n "$N1" "echo $(printf %q "$COMMIT_KEY") >> $GUEST/reclaimed.txt" \
+    || echo "$COMMIT_KEY isn't in node 1's reclaimed.txt; offload may move it here again" >&2
   ssh "$N1" "$KUBE_DISPATCH /workspace/jobs/venv312/bin/python $DISPATCH submit config-run $COMMIT_KEY --tree $TREE --task $1 \
     $(printf '%q ' "${ITEM_ARGS[@]}")"
 }
