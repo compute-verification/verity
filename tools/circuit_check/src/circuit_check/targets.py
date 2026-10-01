@@ -227,10 +227,12 @@ def _boolean_roots() -> list[Any]:
     Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which reaches its head and
     halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its tree, which reach
     every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served norms on bits
-    (`boolean_norms`) at N = 16 with their MUFU statics at the word ids, the fused norm's lanes at two elements per thread, and
-    the word Definitions of its constant steps."""
+    (`boolean_norms`) at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the switch's binding,
+    `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word Definitions of its constant
+    steps."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
+    from verity.ml.boolean import mufu as BM
     from verity_vllm.program.registry import boolean_activation as BA
     from verity_vllm.program.registry import boolean_dense as BDN
     from verity_vllm.program.registry import boolean_moe as BMOE
@@ -249,7 +251,10 @@ def _boolean_roots() -> list[Any]:
             bind(SB.TokenSelect, V=4161),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
             bind(BN.RMSNormLanesCuda, N=40, BLOCK=32), bind(BN.RMSNormVarEpsCudaWord, N=16, EPS=1e-5),
-            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5), bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8)] + rows
+            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5),
+            bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)),
+            bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz), SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)),
+            bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
