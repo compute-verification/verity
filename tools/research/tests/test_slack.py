@@ -214,14 +214,14 @@ def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     assert rc == 2 and "id not recorded" in out
 
 
-def test_ask_tags_one_owner_with_its_user_group_and_links_the_agent(fake, registry, capsys):
+def test_ask_tags_one_owner_with_its_user_group_and_carries_no_footer(fake, registry, capsys):
     rc, out, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "4 GPUs on node 2 for 6 h, by 20:00Z. Spec: notes/x.md")
     assert rc == 0
     ts, link = out.split()
     m = fake.messages[COORD][0]
     assert m["ts"] == ts and m["username"] == "compute-accounting" and link.endswith(ts.replace(".", ""))
     assert m["text"].startswith("<!subteam^SINFRA|@infra> 4 GPUs")
-    assert "<https://cursor.com/agents/bc-test|@compute-accounting's agent>" in m["text"]
+    assert m["text"].endswith("Spec: notes/x.md") and "cursor.com/agents" not in m["text"]   # its name is its author
     assert TOKEN not in out + err
     assert run(capsys, "ask", "--as", "compute-accounting", "--to", "@compute-accounting", "--text", "x")[0] == 2
     assert run(capsys, "ask", "--as", "pous-worker-3", "--to", "@infra", "--text", "x")[0] == 2      # workers aren't on Slack
@@ -587,7 +587,7 @@ def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, regist
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 1:30 AM PST (09:30Z) @infra: @console freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 @infra: @console freeze 1:30 AM PST (09:30Z), see note:")
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
@@ -864,13 +864,30 @@ def inbox(fake, routes_dirs, name, where="local"):
     return root["ts"]
 
 
+def test_a_doorbell_carries_the_post_so_its_reader_needs_no_second_read(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    root = fake.add(COORD, text="@infra a question", username="circuits", bot_id=BOT)
+    body = "node 2 is free &lt;from 3 PM&gt;, see <https://x/y|the plan> and <https://x/z>\n\n\n" + "a" * 700
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", body)[0] == 0
+    (bell,) = bells(fake, box)
+    reply = next(m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"])
+    head = f"from infra, thread {root['ts']}, reply {reply['ts']}: node 2 is free <from 3 PM>, see the plan (https://x/y) and https://x/z\n\naaa"
+    assert bell["text"].startswith(head) and bell["text"].endswith(f"\u2026 (the rest: `research msg read --thread {root['ts']}`)")
+    assert len(bell["text"]) < len(head) + slack.DOORBELL_MAX
+    old = "from infra: https://x/p1700000001000001 @circuits hi\n\n_posted by <https://cursor.com/agents/bc-x|@infra's agent> \u00b7 ask_"
+    assert slack._rang(old, "1700000001.000001", "https://x/p1700000001000001") and slack.tags_of(old) == ["ask"]
+    assert slack.plain(old) == "from infra: https://x/p1700000001000001 @circuits hi"
+    rc, out, _ = run(capsys, "read", "--as", "circuits")
+    assert rc == 0 and out.split("\n", 1)[1].strip() == "- " + slack.plain(bell["text"])
+
+
 def test_an_ask_rings_the_owners_doorbell_once_and_the_doorbell_cannot_route(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     rc, out, err = run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "can node 2 take a job?")
     assert rc == 0 and "route @circuits: rang" in err
     (bell,) = bells(fake, box)
     ts, link = out.split()
-    assert bell["username"] == "router" and bell["text"].startswith(f"from infra: {link} @circuits can node 2 take a job?")
+    assert bell["username"] == "router" and bell["text"] == f"from infra, thread {ts}: @circuits can node 2 take a job?"
     assert slack.route_targets(bell, fake.messages[COORD][0], json.loads(registry.read_text()), {box}) == []
     reg = json.loads(registry.read_text())
     slack.deliver(slack.client(argparse_ns()), reg, slack.Routes(), COORD, next(m for m in fake.messages[COORD] if m["ts"] == ts), link,
@@ -894,7 +911,7 @@ def test_a_worker_with_a_published_inbox_can_post_and_be_addressed(fake, registr
     box = inbox(fake, routes_dirs, "vllm-epoch-run", where="published")               # registered after this clone was pulled
     rc, _, err = run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--urgent", "--text", "stop using node 2")
     assert rc == 0 and "route @vllm-epoch-run: rang" in err
-    assert bells(fake, box)[0]["text"].startswith("from circuits (URGENT): ")
+    assert bells(fake, box)[0]["text"].startswith(f"from circuits (URGENT), thread {fake.messages[COORD][1]['ts']}: @vllm-epoch-run stop using node 2")
     rc, out, err = run(capsys, "reply", "--as", "vllm-epoch-run", "--thread", fake.messages[COORD][1]["ts"], "--text", "stopped")
     assert rc == 0 and "route @circuits: no inbox" in err
 
@@ -920,7 +937,7 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_six_times_an_hour_then
     for i in range(8):
         assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", f"point {i}")[0] == 0
     rung = bells(fake, box)
-    assert sum(m["text"].startswith("from infra:") for m in rung) == 6 and sum("paused" in m["text"] for m in rung) == 1
+    assert sum(m["text"].startswith("from infra,") for m in rung) == 6 and sum("paused" in m["text"] for m in rung) == 1
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
