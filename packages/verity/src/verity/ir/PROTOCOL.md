@@ -6,7 +6,7 @@ implementation (the Lean port of `Q_word` first). It describes the bytes the cod
 
 - Reference: `verity.ir.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
-  `parts.n_members` and, for §8, `cut`.
+  `parts.n_members`, for §8 `cut`, and for §9 `boolean`.
 - Vectors: `packages/verity/tests/ir/format_vectors.json`, written by
   `python packages/verity/tests/ir/test_format_spec.py --write`.
 - Conformance: `packages/verity/tests/ir/test_format_spec.py` checks the reference against every vector, and restates
@@ -345,7 +345,38 @@ Call whose gate reads a later gate of the Call decodes, and `evaluate` and the `
 beside the same Call over a 4-leaf primitive (the narrow Call has the recompute pair `[2, 1]` and 5 inputs; the wide one has
 none and 1).
 
-## 9. `Q_word` v2
+## 9. The Boolean profile
+
+A *Boolean* Definition has only `Value<1>` leaves in its signature, and every primitive it reaches is one of these
+(`verity.ir.boolean`, `is_boolean`); a Boolean program is a program whose function is Boolean. It needs no
+new syntax: §1–§8 apply unchanged, and its digests are computed the same way.
+
+| id | parameters | returns | value |
+|---|---|---|---|
+| `And<n>_v1`, n ≥ 2 | `x: Array<n, Value<1>>` | `Value<1>` | x[0] AND … AND x[n−1] |
+| `Xor<n>_v1`, n ≥ 2 | `x: Array<n, Value<1>>` | `Value<1>` | x[0] XOR … XOR x[n−1] |
+| `Not_v1` | `a: Value<1>` | `Value<1>` | NOT a |
+| `Const1[0x0]_v1`, `Const1[0x1]_v1` | none | `Value<1>` | 0, 1 |
+| `Input1_v1` | none | `Value<1>` | prescribed (§5.2) |
+
+The three gates are fixed by this format: a registry holds exactly these definitions under these ids and refuses another under
+the same id. AND and XOR are one family each, with a member per number of inputs n (decimal, no leading zeros), which a decoder
+materialises from its id like the constant family; `And2_v1` and `Xor2_v1` are the two-input gates. A gate with more than
+`WIDE_FAN_IN` inputs is a wide gate under `Q_word` v1 (§8). The constant bits are the 1-bit members of the constant family (`Const<w>[0x<hex>]_v1`): primitives without
+parameters, so structure under `Q_word` v1 (§8), computed in no unit.
+
+**Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least
+significant first), or a `Value<1>` that is not inside one. `elements(T)` lists the element widths in leaf order;
+`word_type(T)` replaces every element by `Value<w>`. The *word view* of a Boolean Definition is its signature under
+`word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
+the word view does not read it.
+
+Vectors (`tests/ir/boolean_vectors.json`, written by `python packages/verity/tests/ir/test_boolean.py --write`): `gates` (id,
+kind, parameters, return type, truth table), `constants`, `word_view` (type, element widths, word type), and `program`: a 2-bit
+adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
+descriptor, digest, gate table and truth table on words.
+
+## 10. `Q_word` v2
 
 `Q_word` v2 (`partition_object.QUERIES`, the parameters `X` and `W` checked as v1's) reads a Program as v1 does, with §8's
 conventions and v1's Calls, units, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
