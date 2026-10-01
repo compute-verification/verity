@@ -462,6 +462,8 @@ class PearlCDeviceRun(GraphCalls):
     def _ring(self, sh: _Shape) -> _Shape:
         """`sh` with the schedule's ring of per-call buffers: set 0 is its own; each further set holds the buffers the side lane
         touches (`rotated`), made when a schedule first needs them, from poisoned bytes inside a poisoned pass."""
+        if len(sh.sets) >= self.schedule.ring and len(sh.done) == len(sh.sets):
+            return sh
         names = rotated(self.schedule)
         while len(sh.sets) < self.schedule.ring:
             extra = {x: _zeros(sh.size[x], self.device) for x in names}
@@ -531,6 +533,8 @@ class PearlCDeviceRun(GraphCalls):
         """One call, under inference mode as vLLM runs it: a call's buffers may be inference tensors made during a forward,
         which torch writes only there, and a caller outside a forward (the e2e's gate) runs the same code."""
         import torch
+        if torch.is_inference_mode_enabled():            # a vLLM forward: entering the mode again costs a call's microseconds
+            return self._gemm(w, x, weight, bias)
         with torch.inference_mode():
             return self._gemm(w, x, weight, bias)
 
