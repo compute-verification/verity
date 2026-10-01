@@ -50,12 +50,14 @@ PINS = {
     "BlackwellE4m3QmmaDot32_v2": (9128, 17402, 1025, "833e9ca76a0e842775c1be9c31025d2ebf23760835c302cfa2d3c36b5a05a524"),
     FP8_COORDS[0].id: (13664, 24500, 2051, "503acd555cbc8477ad837275b04c6e4e17647a5d15f596dd99685c7403432618"),
     FP8_COORDS[1].id: (18322, 34902, 2065, "812ec8f6cc84a2ec16067426bc53c502ba3000a68ecd12b08cc2aa5a340a5f0c"),
+    "BlackwellE5m2QmmaDot32_v2": (8931, 17231, 1251, "49e17b9ba15290f61ec48cf93281331c9848c752e877a1b79f330790a649052a"),
     "BlackwellNvf4OmmaDot64_v2": (6864, 13949, 616, "8c4b251d24cf87a9d5dec18c7a8212f6db2be096878f1eed71fdc6b67deff1ef"),
     "BlackwellMxf4OmmaDot64_v2": (5917, 12058, 605, "a2c3c1d8f2e0d31ac32461458d84877b7d57d2e384e68ac3989ac03d41bedfd6"),
     FP4[2][0].id: (13794, 27996, 1247, "ef4ba719d62b94aacad91b282c0137c2d4f15bad679a34365fff10a8fa7cc4c4"),
     FP4[3][0].id: (11900, 24214, 1225, "e75d20526b7ada2debc472d65568267d9a42e9f1f5d55b86cdf54c8344b4f7d4"),
 }
-TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, *(t for t, _ in FP4)]
+TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
+           *(t for t, _ in FP4)]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -71,7 +73,8 @@ def test_pinned_counts_and_digests(target) -> None:
 
 
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,
-                               BG.BlackwellE4m3QmmaDot32, BG.BlackwellNvf4OmmaDot64, BG.BlackwellMxf4OmmaDot64], ids=lambda d: d.name)
+                               BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
+                               BG.BlackwellMxf4OmmaDot64], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`)."""
     T = d.traced()
@@ -122,6 +125,18 @@ def test_the_fp8_steps_and_coordinates_agree_with_their_word_definitions(target)
     sampled = K.sample_tc(rng, 20_000, params)
     _agree(target, sampled)
     _agree(target, _finite_e4m3(rng, sampled))
+
+
+def test_the_e5m2_step_agrees_with_its_word_step() -> None:
+    """On `sample_tc_e5m2`'s instances, on uniform words, and on uniform finite E5M2 operands (exponent field not all ones)."""
+    rng = np.random.default_rng(19)
+    target = bind(BG.BlackwellE5m2QmmaDot32)
+    params, _ = E.batch.signature_of(TR.word_of(target))
+    sampled = K.sample_tc_e5m2(rng, 20_000, params)
+    _agree(target, sampled)
+    uniform = [rng.integers(0, 1 << (32 if a.dtype == np.uint32 else 8), a.shape, dtype=np.uint64).astype(a.dtype) for a in sampled]
+    _agree(target, uniform)
+    _agree(target, [a if a.dtype == np.uint32 else np.where((a & 0x7C) == 0x7C, a & 0xFB, a).astype(np.uint8) for a in uniform])
 
 
 @pytest.mark.parametrize("target,model", FP4, ids=[t.id for t, _ in FP4])

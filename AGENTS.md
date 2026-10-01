@@ -49,7 +49,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     the word library as Boolean Definitions: C-Flock's linear-form builder and
     pieces (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), `trace.definition` (a builder
     traced into And/Xor/Not gates, with `word_of` its word Definition), the BF16
-    dot, coordinate and GEMM and the E4M3, NVFP4 and MXFP4 steps and
+    dot, coordinate and GEMM and the E4M3, E5M2, NVFP4 and MXFP4 steps and
     coordinates on bits (`gemm`: `DotBf16_v3`, `GemmCoordinate_v3`, `Gemm_v3`,
     `GemmCoordinateE4m3_v2`, `GemmCoordinateNvf4_v2`, `GemmCoordinateMxf4_v2`) and
     attention's softmax operations and inverse sum on bits (`attention`).
