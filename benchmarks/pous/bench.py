@@ -100,7 +100,7 @@ def conformance_gate(name: str) -> dict[str, Any]:
 
 
 TAG_SEGMENTS = 448
-"""Segment tags are gated over at least this many segments (`band_meets_14`'s 14 GB store)."""
+"""Segment tags are gated over at least this many segments (the 14 GB store of `Pous.Pinned.BandMultiMeets14`)."""
 
 
 def tags_gate(tags: list[bytes], segments: int) -> dict[str, Any]:

@@ -375,8 +375,8 @@ def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any]
 
 
 MIN_BAND_D = 5
-"""The least in-degree with a certificate: `band_meets_64` and `band_meets_14` hold for every `d ≥ 5` at `D = 5`, `k = 111`,
-483 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
+"""The least in-degree with a certificate: `Pous.Pinned.BandMultiMeetsFamily` holds for every `d ≥ 5` and every segment
+count from 1 to 2^64 at `D = 5`, `k = 111`, 483 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
 
 
 def with_in_degree(base: Any, d: int) -> Any:
@@ -386,8 +386,8 @@ def with_in_degree(base: Any, d: int) -> Any:
     if not isinstance(base, BandParams):
         raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
     if d < MIN_BAND_D:
-        raise ValueError(f"band in-degree d = {d} is refused: the band's certificates (band_meets_64, band_meets_14) hold for "
-                         f"d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d")
+        raise ValueError(f"band in-degree d = {d} is refused: the band's certificate (Pous.Pinned.BandMultiMeetsFamily) holds "
+                         f"for d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d")
     return BandParams(base.blocks_per_segment, base.m, d, base.segments)
 
 
