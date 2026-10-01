@@ -22,10 +22,11 @@ band row (a sign and an exponent pair e, e + 1) to one minterm; each output bit 
 a fixed XOR of low minterms (or its complement, whichever has fewer terms). `SiluMul_v3{I}` is `SiluMul_v1`'s body on bits: a
 batch of I `SiluMulBf16_v3` Calls over (gu[i], gu[I + i]), so each member's 16 output bits are one unit under `Q_word_v1`.
 
-The v4 pair computes the quarantined `SiluMulBf16_v2` / `SiluMul_v2{I}` (`quarantine.act`, vLLM `_C.silu_and_mul` on the
-red-team's sm_120 edge words) the same way: `silu_bf16_v2` sends NaN and -inf to 0x7FFF, keeps -0, and reads `band_table_v2`,
-where the gates whose ``expf(-g)`` overflows (g <= -89) are -0; the up word passes ``+ 0.0f`` (-0 to +0), and every NaN result
-is 0x7FFF.  No sub-Call is a word Definition.
+The v4 pair (`SiluMulBf16Expf`, `SiluMulExpf`) computes the quarantined `SiluMulBf16_v2` / `SiluMul_v2{I}` (`quarantine.act`,
+vLLM `_C.silu_and_mul` on the red-team's sm_120 edge words: ``f / (1 + expf(-f))`` with expf's overflow) the same way:
+`silu_bf16_expf` sends NaN and -inf to 0x7FFF, keeps -0, and reads `expf_band_table`, where the gates whose ``expf(-g)``
+overflows (g <= -89) are -0; the up word passes ``+ 0.0f`` (-0 to +0), and every NaN result is 0x7FFF.  No sub-Call is a word
+Definition.
 """
 from __future__ import annotations
 
@@ -43,8 +44,8 @@ from verity_vllm.program.registry.boolean_activation import band
 from verity_vllm.program.registry.quarantine.act import silu_mul as QS
 from verity_vllm.program.registry.quarantine.act import silu_mul_bf16 as QB
 
-__all__ = ["BAND_HI", "BAND_LO", "SiluMul", "SiluMulBf16", "SiluMulBf16V4", "SiluMulV4", "band_table", "band_table_v2",
-           "silu_bf16", "silu_bf16_v2", "silu_mul", "silu_mul_v2"]
+__all__ = ["BAND_HI", "BAND_LO", "SiluMul", "SiluMulBf16", "SiluMulBf16Expf", "SiluMulExpf", "band_table", "expf_band_table",
+           "silu_bf16", "silu_bf16_expf", "silu_mul", "silu_mul_expf"]
 
 BF16 = Array(16, BL.BIT)
 NAN_TORCH = P.BF16_NAN_TORCH
@@ -100,7 +101,7 @@ def silu_mul(C, g, u):
 
 
 @lru_cache(maxsize=None)
-def band_table_v2() -> tuple[int, ...]:
+def expf_band_table() -> tuple[int, ...]:
     """`band_table` of `SiluMulBf16_v2`: on the band only the gates whose ``expf(-g)`` overflows differ, each 0 (``g / inf``)."""
     out = [0] * (1 << 12)
     for sign in (0, 1):
@@ -110,9 +111,9 @@ def band_table_v2() -> tuple[int, ...]:
     return tuple(out)
 
 
-def silu_bf16_v2(C, g):
+def silu_bf16_expf(C, g):
     """``bf16_rn(silu_f32(f32(g)))``, the silu half of `SiluMulBf16_v2`: `silu_bf16` with -inf and NaN to 0x7FFF, -0 kept, and
-    `band_table_v2` on the band."""
+    `expf_band_table` on the band."""
     m, e, s = list(g[:7]), list(g[7:15]), g[15]
     nan = C.AND(and_reduce(C, e), OR(C, or_reduce(C, m), s))               # NaN, and -inf / (1 + inf)
     _, below = sub(C, e, const_bits(BAND_LO, 8), 8)
@@ -123,16 +124,16 @@ def silu_bf16_v2(C, g):
     high = below ^ low
     half_low = add(C, m[1:] + [e[0]], [C.AND(m[0], m[1])], width=8)
     half_high = m + sub(C, e, [ONE], 8)[0]
-    band_v2 = band(C, g, band_table_v2(), [(sign, e0) for sign in (0, 1) for e0 in range(BAND_LO, BAND_HI[sign] + 1, 2)])
+    on_band = band(C, g, expf_band_table(), [(sign, e0) for sign in (0, 1) for e0 in range(BAND_LO, BAND_HI[sign] + 1, 2)])
     mag = [x ^ C.AND(low, y) ^ C.AND(high, z) ^ C.AND(keep, w)
-           for x, y, z, w in zip(band_v2, half_low + [ZERO] * 7, half_high, g[:15])]
+           for x, y, z, w in zip(on_band, half_low + [ZERO] * 7, half_high, g[:15])]
     mag = [x ^ nan if NAN_F2FP >> j & 1 else x for j, x in enumerate(mag)]
     return mag + [C.AND(s, NOT(nan))]
 
 
-def silu_mul_v2(C, g, u):
-    """`SiluMulBf16_v2`: ``bf16_rn(f32(silu_bf16_v2(g)) * (f32(u) + 0.0f))``, every NaN 0x7FFF; ``+ 0.0f`` sends -0 to +0."""
-    s = silu_bf16_v2(C, g)
+def silu_mul_expf(C, g, u):
+    """`SiluMulBf16_v2`: ``bf16_rn(f32(silu_bf16_expf(g)) * (f32(u) + 0.0f))``, every NaN 0x7FFF; ``+ 0.0f`` sends -0 to +0."""
+    s = silu_bf16_expf(C, g)
     up = list(u[:15]) + [C.AND(u[15], or_reduce(C, u[:15]))]
     return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(s), fp.bf16_to_f32(up)), NAN_F2FP)
 
@@ -150,16 +151,16 @@ SiluMul = CompositeDefinition("SiluMul", 3, ("I",), lambda S: ((("gu", Array(2 *
                               _silu_mul_rows, doc=_silu_mul_rows.__doc__, conformance="exact-model-tested")
 SiluMul.word = lambda b: bind(b1.SiluMul, I=b["I"])  # type: ignore[attr-defined]
 
-SiluMulBf16V4 = definition("SiluMulBf16", 4, silu_mul_v2, (("g", BF16), ("u", BF16)), BF16, word=QB.SiluMulBf16,
-                           doc="vLLM _C.silu_and_mul's element on bits: SiluMulBf16_v2, "
-                               "bf16(f32(bf16(silu_f32(g))) * (f32(u) + 0.0f)), NaN 0x7FFF")
+SiluMulBf16Expf = definition("SiluMulBf16", 4, silu_mul_expf, (("g", BF16), ("u", BF16)), BF16, word=QB.SiluMulBf16,
+                             doc="vLLM _C.silu_and_mul's element on bits: SiluMulBf16_v2, "
+                                 "bf16(f32(bf16(silu_f32(g))) * (f32(u) + 0.0f)), NaN 0x7FFF")
 
 
-def _silu_mul_rows_v4(B, S, gu):
+def _silu_mul_expf_rows(B, S, gu):
     """vLLM `_C.silu_and_mul` on bits: `out[i] = SiluMulBf16_v4(gu[i], gu[I + i])`."""
-    return B.batch(SiluMulBf16V4, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
+    return B.batch(SiluMulBf16Expf, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
 
 
-SiluMulV4 = CompositeDefinition("SiluMul", 4, ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
-                                _silu_mul_rows_v4, doc=_silu_mul_rows_v4.__doc__, conformance="exact-model-tested")
-SiluMulV4.word = lambda b: bind(QS.SiluMul, I=b["I"])  # type: ignore[attr-defined]
+SiluMulExpf = CompositeDefinition("SiluMul", 4, ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
+                                  _silu_mul_expf_rows, doc=_silu_mul_expf_rows.__doc__, conformance="exact-model-tested")
+SiluMulExpf.word = lambda b: bind(QS.SiluMul, I=b["I"])  # type: ignore[attr-defined]

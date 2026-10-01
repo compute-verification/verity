@@ -272,7 +272,7 @@ def _boolean_roots() -> list[Any]:
             bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
             bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
             bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
-            bind(BSL.SiluMul, I=8), bind(BSL.SiluMulV4, I=8), bind(QS.SiluMul, I=8),
+            bind(BSL.SiluMul, I=8), bind(BSL.SiluMulExpf, I=8), bind(QS.SiluMul, I=8),
             bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
             bind(SB.TokenSelect, V=4161),
             bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
