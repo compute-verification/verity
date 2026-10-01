@@ -24,6 +24,7 @@ from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import PrimitiveDefinition, bind
 from verity.ir.parts import n_members
+from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
 from verity.ml.boolean import trace as TR
 from verity_vllm.program.registry import b1
@@ -424,6 +425,12 @@ def test_only_the_mufu_sub_calls_are_word_ids(which) -> None:
     assert calls == want[which]
     for k, d in (BN.CUDA_WORD if which == "cuda" else BN.TRITON_WORD).items():
         assert BN._mufu_word(d).id in BN._MUFU_WORDS[k]
+
+
+def test_a_mufu_static_on_bits_is_told_from_a_word_id_bound_or_not() -> None:
+    """proofs' Boolean MUFU Definitions are composites without statics, like `F32Mul_v3`, so they arrive unbound."""
+    assert BN._on_word(BN.MUFU_WORD["RSQRT"])
+    assert not BN._on_word(EW.F32Mul) and not BN._on_word(bind(EW.F32Mul))
 
 
 def test_packing_is_the_identity_on_every_special_word_and_on_random_ones() -> None:
