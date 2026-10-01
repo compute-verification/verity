@@ -13,6 +13,7 @@ import time
 from verity.ir.codec import canonical_json, program_digest
 from verity.ir.defs import REGISTRY
 from verity_vllm.pipeline import gc_tuning
+from verity_vllm.pipeline import global_program  # noqa: F401  (registers the catalog's primitives, as GP-01 does)
 from verity_vllm.pipeline.components import wrapper_params
 from verity_vllm.program import workload as W
 
