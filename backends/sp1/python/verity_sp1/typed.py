@@ -4,7 +4,7 @@ The object (:class:`verity.proofs.typed_obligation.TypedObligationSet`) is the b
 statement of what must hold: which exact relations, over which committed words, under which roots.  This module
 lowers it to the statement bytes the guest reads (``verity.proofs.lowering``), hands the host the witness
 (the openings, format 3 for packed leaves) and the object digest ``h_O``, and judges the outcome the way the
-protocol requires (README "First vertical slice"): a proof is *accepted* only when
+protocol requires (README "Proofs"): a proof is *accepted* only when
 
 1. it verifies under the **approved** verifying key (:data:`verity_sp1.host.APPROVED`), not merely the one the
    host reports;

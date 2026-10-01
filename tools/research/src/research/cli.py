@@ -2,7 +2,7 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
-  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
+  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
@@ -157,6 +157,9 @@ def cmd_run(argv: list[str]) -> int:
     q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K",
                    help="what the job is: a kind in tools/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
     q.add_argument("--question", default=None, metavar="Q", help="the research question it answers, recorded (default: its kind's)")
+    q.add_argument("--disk-gb", type=float, default=None, metavar="N",
+                   help="the disk it will write: held on the machine while N more GB would fill the disk past 80%% (released at "
+                        "75%%); default its kind's disk_gb, else 20")
     q.add_argument("--phase", dest="queue_phase", choices=("cpu", "gpu"), default=None,
                    help="the phase this run is (default: gpu with --gpus, else cpu); a GPU is booked only for a gpu phase, and only "
                         "around the workload, so the runner's custody runs in the CPU allocation")
@@ -202,7 +205,8 @@ def cmd_run(argv: list[str]) -> int:
                                            ("--gpu-model", ns.gpu_model), ("--max-min", ns.max_min is not None),
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
-                                           ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids))
+                                           ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids),
+                                           ("--disk-gb", ns.disk_gb is not None))
                   if given]
     if queue_only:
         print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue", file=sys.stderr)
@@ -597,6 +601,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             "class": ns.queue_class, "kind": ns.queue_kind, "question": ns.question or None, "gpus": ns.gpus,
             "gpu-model": ns.gpu_model, "cpus": ns.cpus, "mem-gb": math.ceil(ns.mem_gb) if ns.mem_gb is not None else None,
             "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
+            "disk-gb": ns.disk_gb,
             "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids}
     try:
         placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
@@ -612,6 +617,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if timeout is None:
         harness_opts = [*harness_opts, "--timeout", str(int(placed.get("max_s") or given_max) + (GPU_WAIT_MIN * 60 if gpus else 0))]
     placed.update(phase=phase)
+    placed.setdefault("disk_gb", ns.disk_gb if ns.disk_gb is not None else 20)
     placed.setdefault("kind", ns.queue_kind)
     print(f"research: the queue places run {run_id} ({placed['kind']}, {phase} phase) on {placed['machine']} ({placed['why']})",
           file=sys.stderr)
@@ -941,6 +947,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "disk-hold":
+        from .disk import main as disk_main
+
+        return disk_main(rest)
     if cmd == "mem":
         from .mem import main as mem_main
 

@@ -1,17 +1,40 @@
 """`native_jit.jit_load`: the torch JIT extensions of the Commit, safe for several jobs on one host.  The build dir is keyed by the source
 set, one builder at a time holds the dir's fcntl build lock (released by the kernel however its holder exits), and a torch `lock` left in
-the dir by a killed build is removed under it.  Torch-free: a stand-in loader, FIFOs and process exits instead of clocks."""
+the dir by a killed build is removed under it.  Torch-free: a stand-in loader, FIFOs and process exits instead of clocks.
+
+Every test that loads, forks, signals or locks runs in a fresh interpreter (`_isolated`): run in the pytest worker, they leave it in a
+state that breaks later tests in the same worker (`test_native_jit_isolation.py`)."""
 from __future__ import annotations
 
 import errno
 import fcntl
+import functools
 import multiprocessing
 import os
 import signal
+import subprocess
+import sys
 
 import pytest
 
 from verity_vllm.commit.committer import native_jit as nj
+
+_RUN = ("import pathlib, sys, types\n"
+        "path, name, tmp = sys.argv[1:4]\n"
+        "cases = sys.modules['native_jit_cases'] = types.ModuleType('native_jit_cases')\n"
+        "cases.__file__ = path\n"
+        "exec(compile(open(path).read(), path, 'exec'), cases.__dict__)\n"
+        "getattr(cases, name).__wrapped__(pathlib.Path(tmp))\n")
+
+
+def _isolated(case):
+    """The test, run as `case(tmp_path)` in a fresh interpreter of this module; its failure is reported with the child's output.  The
+    child compiles this file from source, never from a cached `.pyc`, whose mtime check a same-size edit within a second passes."""
+    @functools.wraps(case)
+    def test(tmp_path):
+        r = subprocess.run([sys.executable, "-c", _RUN, __file__, case.__name__, str(tmp_path)], capture_output=True, text=True)
+        assert r.returncode == 0, f"{case.__name__} in a fresh interpreter:\n{r.stdout}{r.stderr}"
+    return test
 
 VERSIONS = {"torch_version": "2.8.0", "cuda_version": "12.9"}
 
@@ -58,6 +81,7 @@ def _hold_lock_until_killed(build_dir, started):
         signal.pause()
 
 
+@_isolated
 def test_the_build_dir_is_the_source_set_s_child_of_the_parent(tmp_path):
     mod, bd, digest = nj.jit_load("ext", _sources(tmp_path), parent=str(tmp_path / "jit"), cuda_cflags=("-O3",), loader=_loader, **VERSIONS)
     assert bd == os.path.join(str(tmp_path / "jit"), digest[:12]) and os.path.isdir(bd)
@@ -67,6 +91,7 @@ def test_the_build_dir_is_the_source_set_s_child_of_the_parent(tmp_path):
     assert other != bd, "another source set never shares the dir"
 
 
+@_isolated
 def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
     parent, seen = str(tmp_path / "jit"), []
 
@@ -80,6 +105,7 @@ def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
     assert seen[0][0][0] == os.path.join(bd, "src", "ext.cu") and seen[0][0][2] == b"__global__ void k(){}"
 
 
+@_isolated
 def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
     src, parent = _sources(tmp_path), str(tmp_path / "jit")
     bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
@@ -89,6 +115,7 @@ def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
     assert open(os.path.join(bd, "src", "ext.cu"), "rb").read() == b"__global__ void k(){}"
 
 
+@_isolated
 def test_sources_with_one_basename_twice_are_refused(tmp_path):
     a, b = tmp_path / "a" / "ext.cu", tmp_path / "b" / "ext.cu"
     for p in (a, b):
@@ -98,6 +125,7 @@ def test_sources_with_one_basename_twice_are_refused(tmp_path):
         nj.jit_load("ext", [str(a), str(b)], parent=str(tmp_path / "jit"), loader=_loader, **VERSIONS)
 
 
+@_isolated
 def test_local_headers_are_staged_beside_the_sources_and_key_the_digest(tmp_path):
     src = tmp_path / "src"
     (src / "sub").mkdir(parents=True)
@@ -130,6 +158,7 @@ def test_a_header_outside_the_sources_directory_is_refused(tmp_path):
         nj.local_headers([str(tmp_path / "src" / "ext.cu")])
 
 
+@_isolated
 def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp_path):
     src, parent = _sources(tmp_path), str(tmp_path / "jit")
     bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
@@ -146,6 +175,7 @@ def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp
     assert seen == {"lock_present": False, "held": True}
 
 
+@_isolated
 def test_a_second_job_cannot_build_while_the_first_holds_the_lock(tmp_path):
     src, parent = _sources(tmp_path), str(tmp_path / "jit")
     started, go = str(tmp_path / "started"), str(tmp_path / "go")
@@ -168,6 +198,7 @@ def test_a_second_job_cannot_build_while_the_first_holds_the_lock(tmp_path):
     assert p.exitcode == 0 and not _held(bd)
 
 
+@_isolated
 def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
     bd = str(tmp_path / "jit" / "abcdef012345")
     os.makedirs(bd)

@@ -9,6 +9,7 @@ kernel for itself.  So the words are the Definition's, NaN payloads included, wi
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Sequence
 
 import numpy as np
@@ -34,15 +35,25 @@ FAMILIES = ("SquareBf16_v1", "SquareF32_v1", "MeanTriton_v1", "AddScalarF32_v1",
             "Bf16MulScalar_v1")
 
 
+def f64_statics(statics: dict[str, Any]) -> dict[str, Any]:
+    """`statics` with every f64 literal the spec text spells `{"f64":"<hex>"}` (as `manifest.format.spec_statics` keeps it) as its float."""
+    def one(v: Any) -> Any:
+        if isinstance(v, str) and v.startswith("{"):
+            v = json.loads(v)
+        return float.fromhex(str(v["f64"])) if isinstance(v, dict) and set(v) == {"f64"} else v
+    return {k: one(v) for k, v in statics.items()}
+
+
 def ir_row(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """One ROW of `family{statics}`: arg g = the instance's parameter g, as words.  Returns {"out": words}."""
+    """One ROW of `family{statics}`: arg g = the instance's parameter g, as words.  Returns {"0": words, "out": words} (a module's
+    output is spelt `0` when the row is the module's return, `out` inside its body)."""
     from verity.evaluation import evaluate_batch, kernels
     from verity.evaluation.batch import type_dtype
     from verity.evaluation.reference import signature_of
     from verity.ir.defs import bind
     from verity_vllm.program.kernels.dense_rows import KERNEL as DENSE
 
-    d = bind(_definitions()[family], **statics)
+    d = bind(_definitions()[family], **f64_statics(statics))
     params, ret = signature_of(d)
     if len(ops) != len(params):
         raise Declined(f"{family}: the row wires {len(ops)} args, the Definition takes {len(params)}")
@@ -53,7 +64,8 @@ def ir_row(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> d
         raise Declined(f"{family}: {sum(pt.leaves for pt in params)} argument words per instance, past {MAX_WORDS}")
     kernel = DENSE if DENSE in kernels(d) else "reference"
     out = evaluate_batch(d, *(a.astype(type_dtype(pt), copy=False) for a, pt in zip(arrays, params)), kernel=kernel).reshape(-1)
-    return {"out": out.astype(_WORD.get(int(ret.homogeneous_width() or 64), np.uint64))}
+    out = out.astype(_WORD.get(int(ret.homogeneous_width() or 64), np.uint64))
+    return {"0": out, "out": out}
 
 
 def check_targets(family: str) -> list:
@@ -63,4 +75,4 @@ def check_targets(family: str) -> list:
     return [bind(d, **{k: v for k, v in (("N", 16), ("I", 16), ("C", 1.0)) if k in d.statics})]
 
 
-__all__ = ["EVALUATOR", "FAMILIES", "MAX_WORDS", "check_targets", "ir_row"]
+__all__ = ["EVALUATOR", "FAMILIES", "MAX_WORDS", "check_targets", "f64_statics", "ir_row"]
