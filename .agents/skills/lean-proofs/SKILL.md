@@ -21,13 +21,16 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
 - **Pick the package by its dependencies.** Code the verifier runs, and anything the V[B] generator or a reference
   prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
   `level3/` (Mathlib). Protocol theorems (soundness, knowledge soundness, zero knowledge, audits): `soundness/` (ArkLib).
-  Proofs about core's own definitions (`verity.ml.tc` and the like): `packages/verity/lean/` (no dependencies), since
-  core depends on no backend. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
+  Proofs about core's own definitions (`verity.ml.tc` and the like), and the model every protocol states its guarantees
+  in (circuits, partitions, declarations, games): `packages/verity/lean/` (Mathlib only), since core depends on no
+  backend. A protocol's statements: its own package under `protocols/<name>/lean/`, which may require core's and other
+  protocols' packages. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
 - **Own a subdirectory and namespace** (`FlockSoundness/Knowledge/`, `FlockSoundness.Knowledge`), with one aggregator
   module that imports its files. The package root imports the aggregator once, when the area is created, so parallel
   lanes don't edit the same root file.
-- **Definitions a pinned statement reads go in definition files** (`Model/`, `Accounting/`, `Assumptions.lean`), not in a
-  proof file. The audit lists where they are (`reads` in `lean-audit.json`); keep that list short.
+- **Definitions a pinned statement reads go in definition files** (`Protocol/`, `Assumptions`, `Guarantees/` in the
+  packages laid out under the four names, see `AGENTS.md`; `Model/`, `Accounting/`, `Assumptions.lean` elsewhere), not in
+  a proof file. The audit lists where they are (`reads` in `lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
   `.olean` files, and an audit then reads what another agent's build left. A second Lean task on the same machine gets
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
