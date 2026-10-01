@@ -321,8 +321,7 @@ RMSNormThreadTriton = _traced("RMSNormThreadTriton", 1, (), _thread_sig,
 # --- the constant steps: variance / N + EPS, fma(rcp(N), sum, EPS), the constants folded --------------------------------------
 
 def _var_eps_cuda_word(B, S, var):
-    c = _Consts(B)
-    return B.call(P.F32Add, B.call(P.F32Div, var, c(_f32(float(S.N)))), c(_f32(S.EPS)))
+    return B.call(P.F32Add, B.call(P.F32Div, var, B.call(const(32, _f32(float(S.N))))), B.call(const(32, _f32(S.EPS))))
 
 
 def _rcp_n(N: int) -> int:
@@ -331,8 +330,7 @@ def _rcp_n(N: int) -> int:
 
 
 def _var_eps_triton_word(B, S, total):
-    c = _Consts(B)
-    return B.call(P.F32Fma, c(_rcp_n(S.N)), total, c(_f32(S.EPS)))
+    return B.call(P.F32Fma, B.call(const(32, _rcp_n(S.N))), total, B.call(const(32, _f32(S.EPS))))
 
 
 RMSNormVarEpsCudaWord = CompositeDefinition("RMSNormVarEpsCuda", 1, ("N", "EPS"), lambda S: ((("var", F32W),), F32W),
