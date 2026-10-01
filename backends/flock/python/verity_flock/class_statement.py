@@ -831,6 +831,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-gpu", action="store_true", help="run the selftests on the GPU (selftest --gpu; a read-bearing class's "
                     "subset adds GPU_CASES)")
     ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
+    ap.add_argument("--selftest-jobs", type=int, default=1, help="case processes run at once (a read-bearing circuit's or "
+                    "--selftest-cases'; each still its own process, the records in case order); each parses the circuit itself")
     ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
                     help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
@@ -935,7 +937,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
-                        runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
+                        if a.selftest_jobs <= 1:
+                            runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
+                        else:
+                            from concurrent.futures import ThreadPoolExecutor
+                            with ThreadPoolExecutor(min(a.selftest_jobs, len(cases))) as ex:
+                                runs = list(ex.map(lambda c: prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g), cases))
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
                                            "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)} | \
                             ({"gpu_cases": gc} if (gc := [c for x in runs for c in x.get("gpu_cases", [])]) else {})
