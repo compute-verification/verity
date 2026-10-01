@@ -121,11 +121,11 @@ def _sub(T: TR.Traced, keep: list[int], inputs: list[int], outputs: list[int]) -
     return TR.Traced(len(inputs), gates, [new[o] for o in outputs], counts)
 
 
-def _split(T: TR.Traced, widths: list[int], shared: int, own: int) -> tuple[TR.Traced, TR.Traced, TR.Traced]:
+def _split(T: TR.Traced, widths: list[int], shared: int, own: int | None) -> tuple[TR.Traced, TR.Traced, TR.Traced]:
     """``T``'s gates by the parameters they read (``widths``: bits per parameter): those reading only parameter ``shared``, those
-    reading only parameter ``own``, the rest. Returns the first two as circuits from their parameter's bits to their frontier
-    (their gates the rest read), and the rest as a circuit from the parameters, each of the two followed by its frontier, to
-    ``T``'s outputs."""
+    reading only parameter ``own`` (none when ``own`` is None), the rest. Returns the first two as circuits from their
+    parameter's bits to their frontier (their gates the rest read), and the rest as a circuit from the parameters, each of the
+    two followed by its frontier, to ``T``'s outputs."""
     starts = [2 + sum(widths[:p]) for p in range(len(widths))]
     wires = [list(range(s, s + n)) for s, n in zip(starts, widths)]
     sup = [0, 0] + [1 << p for p, n in enumerate(widths) for _ in range(n)]
@@ -142,11 +142,11 @@ def _split(T: TR.Traced, widths: list[int], shared: int, own: int) -> tuple[TR.T
         read = {o for i, (_, ops) in enumerate(T.gates) if sup[first + i] != 1 << p for o in ops if o in mine}
         return keep, sorted(read | (mine & set(T.outputs)))
 
-    (ks, fs), (ko, fo) = part(shared), part(own)
+    (ks, fs), (ko, fo) = part(shared), part(own) if own is not None else ([], [])
     inputs = [w for p in range(len(widths)) for w in wires[p] + (fs if p == shared else fo if p == own else [])]
     drop = set(ks) | set(ko)
     rest = _sub(T, [i for i in range(n) if i not in drop], inputs, T.outputs)
-    return _sub(T, ks, wires[shared], fs), _sub(T, ko, wires[own], fo), rest
+    return _sub(T, ks, wires[shared], fs), _sub(T, ko, wires[own] if own is not None else [], fo), rest
 
 
 def _replay(T: TR.Traced, C, bits: list) -> list:
