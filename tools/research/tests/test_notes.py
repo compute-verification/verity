@@ -313,6 +313,21 @@ def test_cli_checkpoint_prints_the_inbox_once_and_superseded_leaves_it_for_the_s
     assert [x["path"].name for x in notes.inbox(tmp_path, "b2")] == ["20260923T2055Z-handoff-coordinator.md"]
 
 
+def test_cli_inbox_urgent_exits_0_only_on_an_unread_urgent_handoff_and_marks_nothing_read(tmp_path, capsys):
+    _report(tmp_path, "w", "", 60)
+    d = tmp_path / "lanes" / "w"
+    _touch(d / "20260923T2050Z-handoff-from-c-routine.md", 10, "# routine\n")
+    args = ["inbox", "w", "--urgent", "--root", str(tmp_path)]
+    assert notes.main(args) == 1 and "INBOX w: nothing new" in capsys.readouterr().out
+    _touch(d / "20260923T2055Z-handoff-from-c-URGENT-stop-the-sweep.md", 5, "# stop the sweep\n")
+    assert notes.main(args) == 0
+    out = capsys.readouterr().out
+    assert "INBOX w: 1 new" in out and "URGENT-stop-the-sweep" in out and "routine" not in out
+    assert notes.main(args) == 0 and len(notes.inbox(tmp_path, "w")) == 2
+    assert notes.main(["inbox", "w", "--root", str(tmp_path)]) == 0
+    assert notes.main(args) == 1
+
+
 def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, repo):
     root = tmp_path / "notes"
     _git(repo, "checkout", "-qb", "lane/fin")
