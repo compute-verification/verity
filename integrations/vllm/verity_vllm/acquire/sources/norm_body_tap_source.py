@@ -6,12 +6,12 @@ step stream its host words have.  An identity's role is its fx node's kind and t
 of another spec is not claimed and stays the host's.  The replay's openings of the producing Calls check the served words against the
 Program; nothing here evaluates the Program.
 
-A forward pre-hook on each claimed module enters a TorchFunctionMode that keeps every tensor the forward computes, with its version; the
-first forward hook leaves it, and the roles are found by dataflow from the forward's one `rsqrt` (`served_roles`): its argument is the sum
+A forward pre-hook on each claimed module enters a TorchFunctionMode that keeps every tensor the forward computes and every storage it
+writes in place (`served_tap.note_writes`); the first forward hook leaves it, and the roles are found by dataflow from the forward's one `rsqrt` (`served_roles`): its argument is the sum
 of a mean and a number (`variance + eps`), the mean is of a square, the square's base is the normalised input -- the residual sum when it
 is an addition of two tensors -- the product of that input and the rsqrt is the normalised row, and its product with the module weight's
-`.float() + 1.0` is the output.  A forward of another form (fused, compiled, a second rsqrt) is a collector error naming the module and
-step, and nothing of that module at that step is committed.  A claimed module the model lacks or without a `weight` parameter, a
+`.float() + 1.0` is the output.  A forward of another form (fused, compiled, a second rsqrt), or one that writes a served tensor in place
+after computing it, is a collector error naming the module and step, and nothing of that module at that step is committed.  A claimed module the model lacks or without a `weight` parameter, a
 manifest of several ranks or requests, and a step naming one role of a module twice are refused (exit 3).  The Build's call-boundary check and plan and the Commit take
 the option, VERITY_NORM_BODY_TAP in the row's environment by default."""
 from __future__ import annotations
@@ -109,9 +109,9 @@ def model_refusal(model: Any, modules: Sequence[str]) -> str | None:
 
 
 def served_roles(ops: Sequence[tuple[str, tuple, Any, int]], weight: Any, Tensor: Any) -> tuple[dict[str, tuple[Any, int]] | None, str | None]:
-    """The served tensor and its version of every role of one GemmaRMSNorm forward from its recorded ops [(function name, args, output,
-    output version)], or (None, why) for a forward of another form.  A tensor's op is the first that output it (a no-op `.to` or an
-    in-place write returns its input; the version check catches the write, `served_tap.ServedTap.words`)."""
+    """The served tensor of every role of one GemmaRMSNorm forward, with its mark, from its recorded ops [(function name, args, output,
+    mark: the forward's in-place writes before it)], or (None, why) for a forward of another form.  A tensor's op is the first that
+    output it (a no-op `.to` or an in-place write returns its input; `served_tap.ServedTap.hold` refuses the write)."""
     by: dict[int, tuple] = {}
     for o in ops:
         by.setdefault(id(o[2]), o)
@@ -163,16 +163,18 @@ class NormBodyTapSource(ST.ServedTap):
         Tensor = self.torch.Tensor
 
         class Capture(TorchFunctionMode):
-            """Every tensor the forward computes: (function name, args, output, its version then)."""
+            """Every tensor the forward computes, (function name, args, output, the in-place writes before it), and every write."""
 
             def __init__(self) -> None:
                 super().__init__()
                 self.ops: list[tuple[str, tuple, Any, int]] = []
+                self.writes: list[tuple[int, str]] = []
 
             def __torch_function__(self, func: Any, types: Any, args: tuple = (), kwargs: dict | None = None) -> Any:
                 out = func(*args, **(kwargs or {}))
+                ST.note_writes(self.writes, func, args, kwargs, Tensor)
                 if isinstance(out, Tensor):
-                    self.ops.append((getattr(func, "__name__", ""), tuple(args), out, out._version))
+                    self.ops.append((getattr(func, "__name__", ""), tuple(args), out, len(self.writes)))
                 return out
 
         self._Capture = Capture
@@ -215,7 +217,7 @@ class NormBodyTapSource(ST.ServedTap):
             if why:
                 self.error(f"norm body tap: {m} at engine step {e}: {why}; nothing of it is committed")
                 return None
-            self._served[(e, m)] = {name(r): roles[role(r)] for r in self.ids_at(e)[m] if role(r) in roles}
+            self.hold(e, m, {name(r): roles[role(r)] for r in self.ids_at(e)[m] if role(r) in roles}, mode.writes)
             return None
 
         return post

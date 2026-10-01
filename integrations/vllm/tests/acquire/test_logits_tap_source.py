@@ -2,8 +2,9 @@
 Gemma-2-style dense Program.  With `--logits-tap 1` it claims the soft-capped logits' call boundaries and holds the served GEMM output,
 quotient and tanh, which the call-boundary source commits in their place: an honest forward commits the step stream the call-boundary
 source alone commits, name for name, word for word and in the same order, each identity's source recorded; a dishonest one commits what it
-served; a forward without the chain is a collector error that commits nothing of the step; a manifest it cannot commit is refused, and the
-gate names it first; and a call-boundary plan derived without the claim refuses the Commit."""
+served; a forward without the chain, or one that writes a served tensor in place, is a collector error that commits nothing of the step;
+a manifest it cannot commit is refused, and the gate names it first; and a call-boundary plan derived without the claim refuses the
+Commit.  Every forward runs under `torch.inference_mode`, as the Commit's do."""
 from __future__ import annotations
 
 import os
@@ -26,18 +27,18 @@ CAP = 30.0
 
 
 class Softcap(torch.nn.Module):
-    """Gemma-2's LogitsProcessor: the lm_head GEMM (`gemm(hidden)`, the served words), `/ cap`, tanh, `* cap`."""
+    """Gemma-2's LogitsProcessor: the lm_head GEMM (`gemm(hidden)`, the served words), `/ cap`, tanh, `* cap` (in place: `inplace`)."""
 
-    def __init__(self, gemm, tanh=True):
+    def __init__(self, gemm, tanh=True, inplace=False):
         super().__init__()
-        self.gemm, self.tanh = gemm, tanh
+        self.gemm, self.tanh, self.inplace = gemm, tanh, inplace
 
     def forward(self, lm_head, hidden):
         logits = self.gemm(hidden)
         logits = logits / CAP
         if self.tanh:
             logits = torch.tanh(logits)
-        return logits * CAP
+        return logits.mul_(CAP) if self.inplace else logits * CAP
 
 
 def served_gemm(world, step):
@@ -61,6 +62,11 @@ def _commit(world, monkeypatch, tap, *, gemm=None, softcap=Softcap, man=None, pr
 
 
 def _drive(world, com, steps=range(1 + T), logits=lambda s: True):
+    with torch.inference_mode():
+        _steps(world, com, steps, logits)
+
+
+def _steps(world, com, steps, logits):
     mods = dict(com.model.named_modules())
     rows = lambda calls: _tensor(np.array([world.vals[c][:H] for c in calls], dtype=np.uint16), torch.bfloat16)  # noqa: E731
     for s in steps:
@@ -135,6 +141,11 @@ def test_a_forward_without_the_chain_is_a_collector_error_that_commits_nothing_o
     com, _ = _commit(dense, monkeypatch, True, softcap=lambda g: Softcap(g, tanh=False))
     _drive(dense, com, steps=[0])
     assert com.errors == ["logits tap: logits_processor at engine step 0 ran 1 divisions and 0 tanh, not one tanh of a quotient"]
+    assert not any(n.startswith("logits_processor/") for _s, n, _t in com.acquired)
+    com, _ = _commit(dense, monkeypatch, True, softcap=lambda g: Softcap(g, inplace=True))
+    _drive(dense, com, steps=[0])
+    assert com.errors == ["logits tap: logits_processor/tanh_0/out was written in place (mul_) after the forward computed it: nothing of "
+                          "logits_processor at engine step 0 is committed"]
     assert not any(n.startswith("logits_processor/") for _s, n, _t in com.acquired)
     com, _ = _commit(dense, monkeypatch, True)
     _drive(dense, com, steps=[0, 1, 2], logits=lambda s: {0: 0, 1: 2, 2: 1}[s])

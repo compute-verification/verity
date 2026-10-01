@@ -8,7 +8,8 @@ producing Calls (the GEMM, the division, tanh) check them against the Program; n
 A forward pre-hook on `logits_processor` enters a TorchFunctionMode that keeps references to each division's dividend and quotient and to
 the one tanh; the forward hook leaves it.  A step whose claimed identities are not one each of the three, a manifest of several ranks or
 requests, is refused (exit 3; `taps.attached` leaves the tap out, so the CPU gate names them first).  A forward that ran no tanh of a
-quotient, ran twice, or served another shape or dtype is a collector error naming it, and nothing of the step is committed.  The Build's
+quotient, ran twice, wrote a served tensor in place after computing it, or served another shape or dtype is a collector error naming it,
+and nothing of the step is committed.  The Build's
 call-boundary check and plan (`boundary-plan`, `gate call-boundaries`) and the Commit take the option, VERITY_LOGITS_TAP in the row's
 environment by default, and the Commit derives again a plan made under another claim (`pipeline.boundary_plan.use`)."""
 from __future__ import annotations
@@ -103,22 +104,25 @@ class LogitsTapSource(ST.ServedTap):
         Tensor = self.torch.Tensor
 
         class Chain(TorchFunctionMode):
-            """The forward's divisions (dividend, quotient) and its tanh of one of their quotients, as references with their versions."""
+            """The forward's divisions (dividend, quotient) and its tanh of one of their quotients, each with the forward's in-place
+            writes before it, and every write (`served_tap.note_writes`)."""
 
             def __init__(self) -> None:
                 super().__init__()
                 self.divs: list[tuple[tuple[Any, int], tuple[Any, int]]] = []
                 self.tanhs = 0
                 self.got: tuple[tuple[Any, int], ...] | None = None
+                self.writes: list[tuple[int, str]] = []
 
             def __torch_function__(self, func: Any, types: Any, args: tuple = (), kwargs: dict | None = None) -> Any:
                 out = func(*args, **(kwargs or {}))
-                fn = getattr(func, "__name__", "")
+                ST.note_writes(self.writes, func, args, kwargs, Tensor)
+                fn, w = getattr(func, "__name__", ""), len(self.writes)
                 if fn in DIVS and args and isinstance(args[0], Tensor) and isinstance(out, Tensor):
-                    self.divs.append(((args[0], args[0]._version), (out, out._version)))
+                    self.divs.append(((args[0], w), (out, w)))
                 elif fn == "tanh" and args:
                     self.tanhs += 1
-                    self.got = next(((a, q, (out, out._version)) for a, q in self.divs if q[0] is args[0]), None)
+                    self.got = next(((a, q, (out, w)) for a, q in self.divs if q[0] is args[0]), None)
                 return out
 
         self._Chain = Chain
@@ -156,7 +160,7 @@ class LogitsTapSource(ST.ServedTap):
                        "of a quotient")
             return None
         got = dict(zip(KINDS, mode.got))
-        self._served[(self._step, MODULE)] = {name(r): got[kind(r)] for r in self.ids_at(self._step)[MODULE]}
+        self.hold(self._step, MODULE, {name(r): got[kind(r)] for r in self.ids_at(self._step)[MODULE]}, mode.writes)
         return None
 
     def extra_step_bytes(self, envelope: Mapping[str, Any], model: Any) -> dict[str, int]:
