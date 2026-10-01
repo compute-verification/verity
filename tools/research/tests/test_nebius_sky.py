@@ -122,7 +122,7 @@ def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
     bench = (SKY / "jobs" / "prover-bench.yaml").read_text()
     assert 'ov.noisy: "true"' in bench and 'OV_NOISY: "true"' in bench and "podAntiAffinity" not in bench
     quiet = (SKY / "quiet_hour.sh").read_text()
-    assert "QUEUES=${VY_QUIET_QUEUES:-deployments-cpu deployments-gpu circuits}" in quiet and '"stopPolicy\\":\\"$policy' in quiet
+    assert "QUEUES=${VY_QUIET_QUEUES:-deployments-cpu deployments-gpu circuits}" in quiet and '"stopPolicy\\":\\"$2' in quiet
     up = (SKY / "cluster_up.sh").read_text()
     assert "hold:12:30 release:13:30" in up and "quiet_hour.sh" in up
 
@@ -135,14 +135,14 @@ def test_every_server_script_parses():
         assert r.returncode == 0, f"{f.name}: {r.stderr}"
 
 
-def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(tmp_path):
-    """vy-disk-guard: at 80% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
-    re-holds a queue someone released; under 75% it releases only its own holds, and not inside the quiet hour. `df`, `date` and
-    `kubectl` are fakes (the policy of each queue is a file)."""
+QUEUES = ["deployments-cpu", "deployments-gpu", "provers", "backfill", "circuits"]
+
+
+def stop_policy_node(tmp_path: Path, start: dict[str, str]):
+    """vy-nebius-1's stopPolicy writers (disk_guard.sh, quiet_hour.sh) run against fakes of `df`, `date` and `kubectl`, the policy
+    of each queue a file. Returns run(script, verb, used %, HHMM) -> stdout, and policies() -> {queue: stopPolicy}."""
     import subprocess
-    up = (SKY / "cluster_up.sh").read_text()
-    assert "disk_guard.sh\" /usr/local/bin/vy-disk-guard" in up and "vy-disk-guard.timer" in up and "OnUnitActiveSec=1min" in up
-    bin_dir, kq, outbox = tmp_path / "bin", tmp_path / "cq", tmp_path / "outbox"
+    bin_dir, kq = tmp_path / "bin", tmp_path / "cq"
     for d in (bin_dir, kq):
         d.mkdir()
     (bin_dir / "df").write_text('#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted"\n'
@@ -152,19 +152,31 @@ def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(
                                      '  patch) echo "$6" | sed \'s/.*stopPolicy":"\\([A-Za-z]*\\)".*/\\1/\' > "$KQ/$3" ;;\nesac\n')
     for f in bin_dir.iterdir():
         f.chmod(0o755)
-    queues = ["deployments-cpu", "deployments-gpu", "provers", "backfill", "circuits"]
-    for q in queues:
-        (kq / q).write_text("Hold" if q == "circuits" else "None")     # circuits is in its quiet hour
+    for q, p in start.items():
+        (kq / q).write_text(p)
 
-    def tick(used: int, hm: str = "1400") -> str:
+    def run(script: str, verb: str, used: int = 70, hm: str = "1400") -> str:
         env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "KQ": str(kq), "DF_USED": str(used), "HM": hm, "VY_KUBECTL": str(bin_dir / "kubectl"),
-               "VY_DISK_STATE": str(tmp_path / "held"), "VY_DISK_OUTBOX": str(outbox)}
-        r = subprocess.run(["sh", str(SKY / "disk_guard.sh"), "check"], env=env, capture_output=True, text=True)
+               "VY_DISK_STATE": str(tmp_path / "disk-held"), "VY_DISK_OUTBOX": str(tmp_path / "outbox"),
+               "VY_QUIET_STATE": str(tmp_path / "quiet-held")}
+        r = subprocess.run(["sh", str(SKY / script), verb], env=env, capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
         return r.stdout
 
-    def policies() -> dict:
-        return {q: (kq / q).read_text().strip() for q in queues}
+    return run, lambda: {q: (kq / q).read_text().strip() for q in start}
+
+
+def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(tmp_path):
+    """vy-disk-guard: at 80% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
+    re-holds a queue someone released; under 75% it releases only its own holds, and not inside the quiet hour."""
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "disk_guard.sh\" /usr/local/bin/vy-disk-guard" in up and "vy-disk-guard.timer" in up and "OnUnitActiveSec=1min" in up
+    outbox, queues = tmp_path / "outbox", QUEUES
+    run, policies = stop_policy_node(tmp_path, {q: "Hold" if q == "circuits" else "None" for q in queues})  # circuits is in its quiet hour
+    kq = tmp_path / "cq"
+
+    def tick(used: int, hm: str = "1400") -> str:
+        return run("disk_guard.sh", "check", used, hm)
 
     assert tick(79) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
     assert "held deployments-cpu deployments-gpu provers backfill" in tick(80)
@@ -177,6 +189,36 @@ def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(
     assert tick(70, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
     assert "released deployments-cpu deployments-gpu provers backfill" in tick(70)
     assert policies() == {**{q: "None" for q in queues}, "circuits": "Hold"} and len(list(outbox.iterdir())) == 2
+
+
+def test_the_quiet_hour_releases_only_the_holds_it_set(tmp_path):
+    """vy-quiet-hour's 13:30Z release used to set None on all three of its queues, so it cleared the disk guard's hold and a lane's
+    hold by hand. Now its 12:30 hold takes only the queues nobody holds, and its release frees only those, and none the disk guard
+    has since taken as its own."""
+    run, policies = stop_policy_node(tmp_path, {q: "Hold" if q == "deployments-gpu" else "None" for q in QUEUES})  # a lane's hold
+    kq = tmp_path / "cq"
+    out = run("quiet_hour.sh", "hold")
+    assert "deployments-gpu stopPolicy=Hold, held by someone else: left alone" in out
+    assert set(policies().values()) == {"None", "Hold"} and policies()["circuits"] == policies()["deployments-cpu"] == "Hold"
+    run("quiet_hour.sh", "hold")
+    assert (tmp_path / "quiet-held").read_text().split() == ["deployments-cpu", "circuits"]
+    (kq / "circuits").write_text("None")                                 # released by hand inside the hour, and then the disk fills
+    assert "held provers backfill circuits" in run("disk_guard.sh", "check", 82, "1241")
+    out = run("quiet_hour.sh", "release")
+    assert "deployments-cpu stopPolicy=None" in out and "circuits stopPolicy=Hold, held by the disk guard: left alone" in out
+    assert policies() == {**{q: "Hold" for q in QUEUES}, "deployments-cpu": "None"}
+    assert (tmp_path / "quiet-held").read_text() == ""
+    assert "released provers backfill circuits" in run("disk_guard.sh", "check", 70, "1331")
+    assert policies() == {**{q: "None" for q in QUEUES}, "deployments-gpu": "Hold"}
+
+    assert "held deployments-cpu provers backfill circuits" in run("disk_guard.sh", "check", 81, "1210")    # the next day
+    assert "held by someone else" in run("quiet_hour.sh", "hold") and (tmp_path / "quiet-held").read_text() == ""
+    run("quiet_hour.sh", "release")
+    assert set(policies().values()) == {"Hold"}
+    run("disk_guard.sh", "check", 70, "1245")
+    assert set(policies().values()) == {"Hold"}                         # the guard keeps its holds through the hour
+    run("disk_guard.sh", "check", 70, "1330")
+    assert policies() == {**{q: "None" for q in QUEUES}, "deployments-gpu": "Hold"}
 
 
 def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
