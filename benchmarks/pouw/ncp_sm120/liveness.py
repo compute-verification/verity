@@ -18,12 +18,16 @@ family and S:
   and `exact_cell_share` over cells and salts).  `credited` repeats the shares over the other cells only (the exact-chain
   debit), with `live_gap`: the share of their bound words that are frozen or salt-independent.
 
+With EPOCH_W=1, W's rows are formed once, under the first salt, and only X_q's under each salt: the weights formed per
+epoch rather than per unit (#295's X-D3-3 has r = 1).
+
 `fresh_by_S` repeats every share for the other binding: each S-atom segment chained from zero, its partial bound (S = 1 is
 D-3s's fresh atom words), so a bound word carries its own segment's MACs and none of the accumulator before it.
 
   uv run python benchmarks/pouw/ncp_sm120/liveness.py OUT [PR295]
       (env: CENSUS=/tmp/pearlc_census.py, K=8192, ROWS=6, COLS=6, SALTS=12, STRIDES="1 4 8", FAMILIES: all 26,
-       REUSE_FROM: an earlier OUT whose formed rows (form/liveness-*.ref.pkl) are reused where its request is identical)
+       REUSE_FROM: an earlier OUT whose formed rows (form/liveness-*.ref.pkl) are reused where its request is identical,
+       EPOCH_W)
 """
 
 from __future__ import annotations
@@ -93,8 +97,9 @@ def family_census(name: str, census, ck, cf, out: str, pr295: str, k: int, rows:
                   strides: list[int], context: dict) -> dict:
     XA, XB, _, _ = census.family_rows(name, k, 1.0, rows, cols, 0)
     qa, qb = quantize(census, XA), quantize(census, XB)
+    epoch = os.environ.get("EPOCH_W") == "1"
     jobs = [("shake", True, k, i, qa[i].tobytes(), s) for s in salts for i in range(rows)]
-    jobs += [("shake", False, k, j, qb[j].tobytes(), s) for s in salts for j in range(cols)]
+    jobs += [("shake", False, k, j, qb[j].tobytes(), s) for s in (salts[:1] if epoch else salts) for j in range(cols)]
     got, reuse = None, os.environ.get("REUSE_FROM")
     if reuse:
         req, ref = (os.path.join(reuse, "form", f"liveness-{name}.{x}.pkl") for x in ("req", "ref"))
@@ -104,7 +109,8 @@ def family_census(name: str, census, ck, cf, out: str, pr295: str, k: int, rows:
         got = cf.run_reference(out, pr295, context, jobs, f"liveness-{name}")
     formed = np.frombuffer(b"".join(g[0] for g in got), np.uint8).reshape(len(jobs), 3 * k)
     fa = formed[:len(salts) * rows].reshape(len(salts), rows, 3 * k)
-    fb = formed[len(salts) * rows:].reshape(len(salts), cols, 3 * k)
+    fb = formed[len(salts) * rows:].reshape(-1, cols, 3 * k)
+    fb = np.broadcast_to(fb, (len(salts), cols, 3 * k))
     ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
     A = fa[:, ii.ravel()].reshape(-1, 3 * k)
     B = fb[:, jj.ravel()].reshape(-1, 3 * k)
@@ -114,7 +120,7 @@ def family_census(name: str, census, ck, cf, out: str, pr295: str, k: int, rows:
     exact = Q.view(np.float32).astype(np.float64) * 2.0 ** 18 == P.astype(np.float64)
     n = rows * cols
     Q, exact = Q.reshape(len(salts), n, T), exact.reshape(len(salts), n, T)
-    res = {"family": name, "k": k, "cells": n, "salts": len(salts), "atoms": T,
+    res = {"family": name, "k": k, "cells": n, "salts": len(salts), "atoms": T, "epoch_w": epoch,
            "zero_rows": [int((qa == 0).all(1).sum()), int((qb == 0).all(1).sum())],
            "frozen_atoms": round(float((Q[:, :, 1:] == Q[:, :, :-1]).mean()), 6), "by_S": {}, "fresh_by_S": {}}
     for S in strides:
