@@ -25,7 +25,8 @@ Implementations:
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
-  harness `band_gpu/harness.py` (steps and metrics in its docstring):
+  harness `band_gpu/harness.py` (steps and metrics in its docstring). Its whole-chain decode runs on lane pairs
+  (`harness.KERNELS`, `dense.CHAIN_PAIRS`); `pod.sh KERNELS='{"chain_pairs": false}'` runs the run of record's kernels:
   - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity_pous`'s
     encoding, and the round trip. A failed gate stops the run: nothing is timed and no measurement is published;
   - encode GB/s, with `C` then resident;
