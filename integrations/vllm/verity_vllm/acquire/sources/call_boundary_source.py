@@ -298,16 +298,17 @@ class CallBoundarySource:
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,
-           model: Any = None, programs: Sequence[str | None] = ()) -> tuple[tuple[str, ...], CallBoundarySource | None]:
+           model: Any = None, programs: Sequence[str | None] = (), plan: Plan | None = None) -> tuple[tuple[str, ...], CallBoundarySource | None]:
     """Attach the source to `com` when `enabled`; the required manifest must name `call_boundaries` identities, `programs` (the Build dir,
-    the programs root) must hold each request's Program and every identity must be covered, else the Commit is refused (exit 3).  Returns
-    the required classes with `call_boundaries` added unless they were given explicitly."""
+    the programs root) must hold each request's Program and every identity must be covered, else the Commit is refused (exit 3).  `plan`:
+    `plan_of` the manifest over `programs`, derived already (the Commit's call-boundary plan), else derived here.  Returns the required
+    classes with `call_boundaries` added unless they were given explicitly."""
     if not enabled:
         return required_classes, None
     if not manifest_sites(manifest):
         print("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity", flush=True)
         raise SystemExit(3)
-    plan = plan_of(manifest or {}, *programs)
+    plan = plan if plan is not None else plan_of(manifest or {}, *programs)
     if plan.uncovered or not plan.bodies:
         print(f"[delta] REFUSE: call boundaries: {len(plan.uncovered)} of {plan.identities} identities have no host evaluation "
               f"(--program-dir / --programs-root {list(programs)}): {plan.uncovered[:4]}", flush=True)
