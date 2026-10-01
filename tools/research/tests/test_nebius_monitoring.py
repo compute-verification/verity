@@ -177,6 +177,30 @@ def test_a_firing_notification_becomes_markdown_notes_naming_the_job_and_its_lan
     assert len(sink.notes({"alerts": [alert("x-1-abcdef12-head", "0", "f9")]}, 0)) == 1          # no context: one plain note
 
 
+def test_a_stalled_job_is_noted_for_its_owners_lane_one_note_per_lane():
+    sink = load("alert_sink")
+    stalled = lambda key, owner, lane, handle, fp, **extra: {  # noqa: E731
+        "status": "firing", "fingerprint": fp, "startsAt": "2026-10-01T02:30:00.000Z",
+        "labels": {"alertname": "Job stalled", "server": "vy-nebius-1", "node": "vy-nebius-2", "key": key, "owner": owner,
+                   "lane": lane, "handle": handle, "usergroup": "S0", "run": extra.get("run", "-"), "goal": extra.get("goal", "-")},
+        "annotations": {"description": f"{key} made no progress for 30m"}}
+    payload = {"commonLabels": {"alertname": "Job stalled"},
+               "alerts": [stalled("gl-1", "fill:bc-2aa33ad8", "compute-accounting", "compute-accounting", "f1"),
+                          stalled("cov-g217", "verity:bc-698052e1-cov-g217-proof", "circuits", "circuits", "f2",
+                                  run="r20261001-020000-ab12", goal="cov-g217"),
+                          stalled("cov-g218", "vllm-epoch-run", "vllm-epoch-run", "circuits", "f3")]}
+    called = []
+    notes = sink.notes(payload, 1790820000, lambda pod: called.append(pod) or {})
+    assert called == [] and len(notes) == 3, "no pod, so no SkyPilot lookup; one note per lane"
+    by_lane = {re.search(r"\nlane: (\S+)\n", text).group(1): text for _, text in notes}
+    assert sorted(by_lane) == ["circuits", "compute-accounting", "vllm-epoch-run"]
+    assert "# Job stalled: 1 firing on vy-nebius-1 for @circuits\n" in by_lane["circuits"]
+    assert ("- **node vy-nebius-2, key cov-g217** (owner verity:bc-698052e1-cov-g217-proof; run r20261001-020000-ab12; goal "
+            "cov-g217), since 2026-10-01T02:30:00Z: cov-g217 made no progress for 30m") in by_lane["circuits"]
+    assert "goal" not in by_lane["compute-accounting"].split("---")[2] and "cov-g218" in by_lane["vllm-epoch-run"]
+    assert len({name for name, _ in notes}) == 3
+
+
 def test_the_idle_rules_deliver_to_the_markdown_sink_and_mute_the_quiet_hour():
     a = (MON / "alerting.yaml").read_text()
     assert "url: http://127.0.0.1:9403/grafana" in a and "type: webhook" in a

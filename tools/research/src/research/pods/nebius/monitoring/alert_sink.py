@@ -7,8 +7,9 @@ Grafana's contact point `markdown-files` (alerting.yaml) POSTs each notification
 (`lane: infra`; the steward's alert_pull.sh also copies each to node1-dispatcher, which owns utilization). Each alert names the pod's SkyPilot job
 and, from the job name's prefix (lanes.tsv), its owning lane. A Commit whose timeline shows `validate.sampled_replay` open is running
 its CPU replay while holding the GPU, by design until Daniel rules on moving replay off the GPU: those alerts go in a separate note
-tagged `replay-on-gpu`, apart from real stalls (they still count as idle in every busy % number). Every notification, resolved ones
-included, is also a line of <dir>/alerts.jsonl. Stdlib only.
+tagged `replay-on-gpu`, apart from real stalls (they still count as idle in every busy % number). An alert from `cluster watch`
+(a `handle` label: a stalled job, or the watch itself not running) is noted for the lane its `lane` label names, the job owner's,
+one note per lane. Every notification, resolved ones included, is also a line of <dir>/alerts.jsonl. Stdlib only.
 """
 from __future__ import annotations
 
@@ -141,16 +142,22 @@ def notes(payload: dict[str, Any], now: float, ctx: Context | None = None) -> li
     stamp = time.strftime("%Y%m%dT%H%MZ", time.gmtime(now))
     rule = (payload.get("commonLabels") or {}).get("alertname") or (alerts[0].get("labels") or {}).get("alertname", "alert")
     info = {id(a): (ctx((a.get("labels") or {})["pod"]) if ctx and (a.get("labels") or {}).get("pod") else {}) for a in alerts}
-    replay = [a for a in alerts if REPLAY in (info[id(a)].get("open") or ())]
-    stalls = [a for a in alerts if a not in replay]
+    watched = [a for a in alerts if (a.get("labels") or {}).get("handle")]
+    replay = [a for a in alerts if a not in watched and REPLAY in (info[id(a)].get("open") or ())]
+    stalls = [a for a in alerts if a not in replay and a not in watched]
+    lanes = sorted({(a.get("labels") or {}).get("lane") or LANE for a in watched})
+    groups = [(stalls, None, LANE), (replay, "replay-on-gpu", LANE),
+              *(([a for a in watched if ((a.get("labels") or {}).get("lane") or LANE) == lane], None, lane) for lane in lanes)]
     out = []
-    for group, tag in ((stalls, None), (replay, "replay-on-gpu")):
+    for group, tag, lane in groups:
         if not group:
             continue
         ident = hashlib.sha256(json.dumps(sorted(a.get("fingerprint", "") for a in group)).encode()).hexdigest()[:8]
         name = f"{stamp}-alert-{_slug(tag or rule)}-{ident}.md"
-        head = f"# {rule}{' [replay-on-gpu]' if tag else ''}: {len(group)} firing on vy-nebius-1"
-        lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", f"lane: {LANE}", "kind: finding", "status: open",
+        handles = sorted({h for a in group if (h := (a.get("labels") or {}).get("handle"))})
+        head = (f"# {rule}{' [replay-on-gpu]' if tag else ''}: {len(group)} firing on vy-nebius-1"
+                + (f" for {', '.join('@' + h for h in handles)}" if handles else ""))
+        lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", f"lane: {lane}", "kind: finding", "status: open",
                  *([f"tags: [{tag}]"] if tag else []), "repo: danielreuter/verity",
                  "origin: grafana on vy-nebius-1 (alert_sink.py; rules in pods/nebius/monitoring/alerting.yaml)", "---", "", head, ""]
         if tag:
@@ -158,9 +165,11 @@ def notes(payload: dict[str, Any], now: float, ctx: Context | None = None) -> li
                       "on moving replay off the GPU. Not a stall, but the GPU counts as idle.", ""]
         for a in group:
             lab, ann, c = a.get("labels") or {}, a.get("annotations") or {}, info[id(a)]
-            where = ", ".join(f"{k} {lab[k]}" for k in ("gpu", "pod", "namespace", "queue") if lab.get(k))
+            where = ", ".join(f"{k} {lab[k]}" for k in ("gpu", "pod", "namespace", "queue", "node", "key") if lab.get(k))
             owner = "; ".join(x for x in (f"job {c['job']}" if c.get("job") else "", f"lane {c['lane']}" if c.get("lane") else "",
-                                          f"row {c['row']}" if c.get("row") else "") if x)
+                                          f"row {c['row']}" if c.get("row") else "",
+                                          *(f"{k} {lab[k]}" for k in ("owner", "run", "goal") if lab.get(k) not in (None, "", "-")))
+                             if x)
             text = ann.get("description") or ann.get("summary") or ""
             lines.append(f"- **{where or lab.get('alertname', rule)}**{f' ({owner})' if owner else ''}, since "
                          f"{a.get('startsAt', '?')[:19]}Z: {text}".rstrip(": "))
