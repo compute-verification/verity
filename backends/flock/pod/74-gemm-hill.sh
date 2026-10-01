@@ -70,6 +70,8 @@ python3 backends/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr 
 SAMPLER=$!
 python3 backends/flock/pod/gemm_hill.py cores --cpus $HILL_PINNED --out $R/out/slice_cores.tsv --every 5 &
 SLICE=$!
+python3 backends/flock/pod/gemm_hill.py vmstat --out $R/out/vmstat.tsv &
+VMSTAT=$!
 # the phase's records and logs into the run dir: not its circuits, instance files or proofs (listed with their sizes instead)
 keep() {
   [ -d $S/$1 ] || return 0
@@ -77,7 +79,7 @@ keep() {
   (cd $S/$1 && find . -type f ! -name '*.bin' ! -name circuit.txt -size -8M -print0 | xargs -0 -r cp --parents -t $R/out/$1/)
   (cd $S/$1 && find . -type f \( -name '*.bin' -o -name circuit.txt -o -size +8M \) -printf '%p\t%s\n') > $R/out/$1/not-kept.tsv
 }
-done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null; rm -rf $S; }
+done_() { kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
 # the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, under 5 GB of the GPU's)
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial SELFTEST_JOBS=3"
@@ -109,16 +111,36 @@ if [ "${GATE:-1}" = 1 ]; then
   keep gate
   cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
 fi
+# NSYS=1: a profile, not a point: the step's prove process under Nsight Systems' CUDA trace (out/nsys/prove-<pid>.nsys-rep, and
+# its kernel, memcpy and API summaries beside it), unpacked into NSYS_ROOT (default FLOCK_WORK/nsys-root) as 71-gemm-slowdown.sh
+# does; no metrics, result.json or hillclimb.json, since the trace slows the prove. Pass GATE=0: the gate proves nothing it needs
+NSW=
+if [ "${NSYS:-0}" = 1 ]; then
+  NR=${NSYS_ROOT:-$FLOCK_WORK/nsys-root}; NS=$NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
+  if [ ! -x $NS ]; then
+    mkdir -p $NR/debs && (cd $NR/debs && { apt-get download nsight-systems-2026.1.3 2>/dev/null || curl -fsSLO \
+      https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/nsight-systems-2026.1.3_2026.1.3.425-1_amd64.deb; }) || exit 1
+    for d in $NR/debs/*.deb; do dpkg-deb -x $d $NR; done
+  fi
+  mkdir -p $R/out/nsys; NSW="$NS profile -t cuda,nvtx --sample=none --cpuctxsw=none -o $R/out/nsys/prove-%p"
+fi
 if [ $ok = 1 ]; then
   ph sweep start
-  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps.tsv --" \
+  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps.tsv -- $NSW" \
     bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
     WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/sweep.log 2>&1 || ok=0
   ph sweep end
   keep m35
   cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
 fi
-kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
+kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null
+if [ -n "$NSW" ]; then
+  for f in $R/out/nsys/*.nsys-rep; do
+    [ -f "$f" ] && $NS stats -q -r cuda_gpu_kern_sum,cuda_gpu_mem_time_sum,cuda_gpu_mem_size_sum,cuda_api_sum -f csv -o ${f%.nsys-rep} $f \
+      >> $R/out/nsys/stats.log 2>&1
+  done
+  [ $ok = 1 ] && ls $R/out/nsys/*.nsys-rep > /dev/null; exit
+fi
 if [ "${STAGE_ONLY:-0}" = 1 ]; then
   cp $S/gate/classes/staged.jsonl $R/out/gate-staged.jsonl; cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
   [ $ok = 1 ] && grep -q '"stage"' $R/out/staged.jsonl; exit
@@ -128,6 +150,7 @@ PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
   $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
   --stamps $R/out/stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
+  --vmstat $R/out/vmstat.tsv \
   --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
