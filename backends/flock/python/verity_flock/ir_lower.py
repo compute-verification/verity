@@ -94,6 +94,9 @@ PIECES: dict[str, Callable] = {
 }
 PIECES.update(tail_pieces.PIECES)
 PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.ml.prims) for the same total function
+# the Boolean core's gates (verity.ir.boolean): an And is one AND, Xor and Not are free
+PIECES.update({"And_v1": lambda C, a, b: [C.AND(a[0], b[0])], "Xor_v1": lambda C, a, b: [a[0] ^ b[0]],
+               "Not_v1": lambda C, a: [a[0].inv()]})
 
 
 class _Pieces(dict):
