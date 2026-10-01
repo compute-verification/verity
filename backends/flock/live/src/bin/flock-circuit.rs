@@ -93,6 +93,12 @@ fn is_zk(st: &Stmt) -> bool {
     st.identity["hooks"]["zk"] == true
 }
 
+/// Where M1's replays keep `c0_is_identity()`: the statement's cell, or with FC_ZK_C0_EACH a fresh one per replay (the
+/// same-build control: every replay computes it).
+fn zk_c0(st: &Stmt) -> std::borrow::Cow<'_, std::sync::OnceLock<bool>> {
+    if std::env::var_os("FC_ZK_C0_EACH").is_some() { std::borrow::Cow::Owned(std::sync::OnceLock::new()) } else { std::borrow::Cow::Borrowed(&st.c0_identity) }
+}
+
 /// A non-ZK session's coins: M0's step-0 seed by default (`coin_seed`: the verifier's OS-random seed under a SHA-512
 /// commitment sent at Hello and opened in the verdict, every round's coins its SHA-256 counter-mode PRF), or under
 /// `FC_COINS=os` every round's coins drawn from the OS, so soundness rests on SHA-512 collision resistance alone. The Hello and
@@ -459,7 +465,7 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let t = Instant::now();
     let mode = zkv::ZkLincheck::get();
     let structured = (mode != zkv::ZkLincheck::Flat).then_some((&st.circuit, mode == zkv::ZkLincheck::Both));
-    let rp = zkv::replay_with(&st.r1cs, &proof.zerocheck, &proof.lincheck, &st.circuit, structured, &lay, root, None, ch)?;
+    let rp = zkv::replay_with(&st.r1cs, &zk_c0(st), &proof.zerocheck, &proof.lincheck, &st.circuit, structured, &lay, root, None, ch)?;
     zkv::vtime("replay", t);
     let t = Instant::now();
     let extra = st.extra_claims(points, inst);
@@ -1126,7 +1132,8 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     let (mut inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
     let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
-    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &zk.ic.root(), Some(&proof.lincheck.comb_partial), &mut zkv::Tape::new(&coins))
+    let rp = zkv::replay(&st.r1cs, &zk_c0(st), &zc, &lc, &st.circuit, &zk.lay, &zk.ic.root(), Some(&proof.lincheck.comb_partial),
+                         &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
     let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
