@@ -14,17 +14,18 @@ exactly), every NaN result 0x7FFFFFFF as `NvLogf_v2`'s: the noise never reaches 
 
 A product by a constant is linear in its operand's bits, so through Philox's rounds every bit's form (`forms.L`) grows: one
 trace of ten rounds holds gigabytes of them. The stream key and the lane are therefore Calls of pieces traced on their own,
-cut where the next piece reads every output, so no gate one trace would prune is kept: the key's rounds 0-4 with every
-round key, and rounds 5-9 (`GumbelStreamKeyHead_v1`, `GumbelStreamKeyTail_v1`), and the lane's rounds 0-2, 3-7, and 8-9
-with the uniform, the logs and the add (`GumbelLaneHead_v1`, `GumbelLaneRounds_v1`, `GumbelLaneTail_v1`).
+cut where the next piece reads every output, so no gate one trace would prune is kept: the key's rounds 0-4 with the key
+words rounds 5-9 read, and rounds 5-9 (`GumbelStreamKeyHead_v1`, `GumbelStreamKeyTail_v1`), and the lane's rounds 0-2, 3-7
+(the counter words round 9's word 0 reads), and 8-9 with the uniform, the logs and the add (`GumbelLaneHead_v1`,
+`GumbelLaneRounds_v1`, `GumbelLaneTail_v1`).
 
 `GumbelSelectF32_v2{V}` is `GumbelSelectF32_v1{V}` (the first index of the maximum of ``logits[v] + g(key)[v]``, or of the
 logits when ``temp`` is zero; NaN never taken, index 0 when lane 0 is a NaN) as a chain of Calls a partition query cuts at any
 vocabulary size:
 
     GumbelStreamKey_v2             (seed, pos) -> the row's stream key
-    GumbelSetup_v1                 (key, temp) -> the key's lane values (`lane_keys`, `round2_lows`) and ``temp != 0``: every
-                                   value the lanes share, so no two lanes compute one
+    GumbelSetup_v1{N}              (key, temp) -> the key's lane values (`lane_keys`, `round2_lows` for N = min(V, 64)
+                                   offsets) and ``temp != 0``: every value the lanes share, so no two lanes compute one
     GumbelNoise_v1{V}              the noisy row: lanes in groups of G = 64 (`GumbelNoiseGroup_v1{G}`), each lane one member Call
                                    (`GumbelLane_v1`); every level's nodes read only its parameters (`verity.ir.cut.separable`)
     F32ArgmaxStage_v1{V,L}         the first maximum of the noisy row (`sampling_boolean`'s tree over f32 keys)
@@ -50,9 +51,9 @@ from verity.ml.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
 from verity.ml.boolean.trace import definition
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import topp_word_gates as TG
-from verity_vllm.program.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls
+from verity_vllm.program.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls, traced_family
 
-__all__ = ["GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup", "GumbelSelectF32",
+__all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup", "GumbelSelectF32",
            "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail", "NvLogf", "gumbel_noise",
            "gumbel_select_calls", "lane_keys", "lane_products", "lane_rounds", "nv_log1pf", "nv_logf", "philox_round",
            "round2_lows", "stream_keys", "tl_rand"]
@@ -62,12 +63,16 @@ U32 = Array(32, BIT)
 F32 = U32
 I32 = U32
 I64 = Array(64, BIT)
-#: Philox's counter (four words)
+#: Philox's counter (four words), and its words 0, 2 and 3
 C4 = Array(4, U32)
-#: the lane values `lane_keys` returns: the ten round keys and round 1's product (low word, high word)
-KS = Array(10, U32)
+C3 = Array(3, U32)
+#: the rounds whose low key word a lane reads (`lane_keys`): round 0's is the key, which reaches only round 1's product, and
+#: round 8's reaches only its word 0, which round 9's word 0 does not read
+LANE_ROUNDS = (1, 2, 3, 4, 5, 6, 7, 9)
+#: the lane values `lane_keys` returns: those rounds' key words and round 1's product (low word, high word)
+KS = Array(len(LANE_ROUNDS), U32)
 KA = Array(2, U32)
-K2, K3, K5 = Array(2, U32), Array(3, U32), Array(5, U32)
+K2, K4, K5 = Array(2, U32), Array(4, U32), Array(5, U32)
 #: a lane index is ``v = lo + 64 hi``; a lane reads ``v * PHILOX_ROUND_A`` as ``lo_a + 2^6 hi_a`` (`lane_products`), ``lo_a`` LOB
 #: bits and ``hi_a`` (mod 2^58) HAB bits
 LOB = 32 + GB
@@ -117,34 +122,37 @@ def stream_keys(C, seed):
 
 
 def stream_key_head(C, seed, pos):
-    """Rounds 0-4 on the counter (pos_lo, pos_hi, 0, 0), and the keys of rounds 5-9 (round 9's high word no output reads)."""
+    """Rounds 0-4 on the counter (pos_lo, pos_hi, 0, 0), and the key words of rounds 5-9 that word 0 reads: the low ones of
+    rounds 5, 6, 7 and 9 and the high ones of rounds 5-8."""
     keys = stream_keys(C, seed)
     c = [list(pos[:32]), list(pos[32:]), Z32, Z32]
     for k in keys[:5]:
         c = philox_round(C, c, *k)
-    return c + [k[0] for k in keys[5:]] + [k[1] for k in keys[5:9]]
+    return c + [keys[r][0] for r in (5, 6, 7, 9)] + [keys[r][1] for r in (5, 6, 7, 8)]
 
 
 def stream_key_tail(C, c0, c1, c2, c3, *k):
-    """Rounds 5-9: word 0 (round 9's high key word reaches only its word 2)."""
+    """Rounds 5-9: word 0. Round 8's low key word reaches only its word 0, and round 9's high one only its word 2, neither of
+    which round 9's word 0 reads, so zeros stand in for them."""
     c = [c0, c1, c2, c3]
-    for k0, k1 in zip(k[:5], k[5:] + (Z32,)):
+    for k0, k1 in zip(k[:3] + (Z32,) + k[3:4], k[4:] + (Z32,)):
         c = philox_round(C, c, k0, k1)
     return c[0]
 
 
 def lane_keys(C, key):
-    """What every lane of the stream ``key`` computes from the key alone: the round keys ``key + r * PHILOX_KEY_A`` (r = 0..9)
-    and ``key * PHILOX_ROUND_A``, round 1's product (its counter word 0 is the key)."""
-    ks = [list(key)] + [add(C, key, _c(r * SM.PHILOX_KEY_A), width=32) for r in range(1, 10)]
+    """What every lane of the stream ``key`` computes from the key alone: the round keys ``key + r * PHILOX_KEY_A`` (r in
+    `LANE_ROUNDS`) and ``key * PHILOX_ROUND_A``, round 1's product (its counter word 0 is the key)."""
+    ks = [add(C, key, _c(r * SM.PHILOX_KEY_A), width=32) for r in LANE_ROUNDS]
     return ks, _times(C, key, SM.PHILOX_ROUND_A)
 
 
-def round2_lows(C, ka):
-    """For each offset ``lo`` in a group, ``c2[0:6] * PHILOX_ROUND_B`` (38 bits), where ``c2`` is round 2's counter word 2:
-    ``ka_hi ^ (v * PHILOX_ROUND_A mod 2^32) ^ PHILOX_KEY_B``, whose low six bits read only ``ka`` and ``lo`` (``v = lo + 64 hi``)."""
+def round2_lows(C, ka, n: int = G):
+    """For each offset ``lo`` < ``n`` in a group, ``c2[0:6] * PHILOX_ROUND_B`` (38 bits), where ``c2`` is round 2's counter
+    word 2: ``ka_hi ^ (v * PHILOX_ROUND_A mod 2^32) ^ PHILOX_KEY_B``, whose low six bits read only ``ka`` and ``lo`` (``v = lo +
+    64 hi``)."""
     out = []
-    for lo in range(G):
+    for lo in range(n):
         c = (lo * SM.PHILOX_ROUND_A) ^ SM.PHILOX_KEY_B
         out.append(_times(C, [NOT(ka[32 + i]) if c >> i & 1 else ka[32 + i] for i in range(GB)], SM.PHILOX_ROUND_B))
     return out
@@ -240,12 +248,12 @@ def gumbel_noise(C, u):
 NvLogf = definition("NvLogf", 3, nv_logf, (("a", F32),), F32, word=TG.NvLogfV2,
                     doc="libdevice __nv_logf (FTZ) on bits: NvLogf_v2 (every NaN result 0x7FFFFFFF)")
 
-K4 = Array(4, U32)
-GumbelStreamKeyHead = definition("GumbelStreamKeyHead", 1, stream_key_head, (("seed", I64), ("pos", I64)), Tuple(C4, K5, K4),
+GumbelStreamKeyHead = definition("GumbelStreamKeyHead", 1, stream_key_head, (("seed", I64), ("pos", I64)), Tuple(C4, K4, K4),
                                  doc="Rounds 0-4 of the stream key's Philox4x32-10 (counter (pos, 0, 0), key seed): the counter, "
-                                     "and the low key words of rounds 5-9 and the high ones of rounds 5-8")
-GumbelStreamKeyTail = definition("GumbelStreamKeyTail", 1, stream_key_tail, (("c", C4), ("k0", K5), ("k1", K4)), U32,
-                                 doc="Rounds 5-9 of the stream key's Philox4x32-10 from round 5's counter and keys: word 0")
+                                     "the low key words of rounds 5, 6, 7 and 9 and the high ones of rounds 5-8")
+GumbelStreamKeyTail = definition("GumbelStreamKeyTail", 1, stream_key_tail, (("c", C4), ("k0", K4), ("k1", K4)), U32,
+                                 doc="Rounds 5-9 of the stream key's Philox4x32-10 from round 5's counter and the key words "
+                                     "word 0 reads: word 0")
 
 
 def _stream_key(B, S, seed, pos):
@@ -261,46 +269,55 @@ GumbelStreamKey.word = SM.GumbelStreamKey  # type: ignore[attr-defined]
 
 # --- GumbelSelectF32_v2{V} as separable stages -------------------------------------------------------------------------------
 
-def gumbel_setup(C, key, temp):
+def gumbel_setup(C, S, key, temp):
     """The values every lane of a row shares: the stream key's `lane_keys`, ``noisy`` = ``temp != 0`` (`F32Eq_v1`: +0 and -0
-    are zero, a NaN is not), and the key's `round2_lows`, one per offset in a group."""
+    are zero, a NaN is not), and the key's `round2_lows` for the first ``S.N`` offsets in a group."""
     ks, ka = lane_keys(C, key)
-    return ks + [ka[:32], ka[32:], [or_reduce(C, temp[:31])]] + round2_lows(C, ka)
+    return ks + [ka[:32], ka[32:], [or_reduce(C, temp[:31])]] + round2_lows(C, ka, S.N)
 
 
-def lane_head(C, hi_a, lo_a, lb, k0, k1, k2, ka_lo, ka_hi):
-    """Rounds 0-2 of lane ``v = lo + 64 hi``, given as ``v * PHILOX_ROUND_A = lo_a + 2^6 hi_a`` (`lane_products`)."""
+def _setup_sig(S):
+    if not 1 <= S.N <= G:
+        raise ValueError(f"a group has 1..{G} offsets, not {S.N}")
+    return (("key", U32), ("temp", F32)), Tuple(KS, KA, BIT, Array(S.N, LB))
+
+
+def lane_head(C, hi_a, lo_a, lb, k1, k2, ka_lo, ka_hi):
+    """Rounds 0-2 of lane ``v = lo + 64 hi``, given as ``v * PHILOX_ROUND_A = lo_a + 2^6 hi_a`` (`lane_products`). Round 0's low
+    key word, the key, reaches only round 1's product ``ka``, so zeros stand in for it."""
     va = add(C, list(lo_a) + [ZERO] * (64 - LOB), [ZERO] * GB + list(hi_a), width=64)
-    return lane_rounds(C, [Z32] * 4, [k0, k1, k2], 0, va=va, ka=ka_lo + ka_hi, lb=lb)
+    return lane_rounds(C, [Z32] * 4, [Z32, k1, k2], 0, va=va, ka=ka_lo + ka_hi, lb=lb)
 
 
 def lane_mid(C, c0, c1, c2, c3, *k0s):
-    return lane_rounds(C, [c0, c1, c2, c3], k0s, 3)
+    """Rounds 3-7: counter words 0, 2 and 3 (word 1 reaches only round 8's word 0, which round 9's word 0 does not read)."""
+    c = lane_rounds(C, [c0, c1, c2, c3], k0s, 3)
+    return [c[0], c[2], c[3]]
 
 
-def lane_tail(C, c0, c1, c2, c3, k8, k9, x, noisy):
+def lane_tail(C, c0, c2, c3, k9, x, noisy):
     """Rounds 8-9, the uniform and the noise ``g``, then one lane of `GumbelSelectStep_v1`: ``x + g`` (`F32AddFtz_v1`) when
-    noisy, else ``x``."""
-    g = gumbel_noise(C, tl_rand(C, lane_rounds(C, [c0, c1, c2, c3], [k8, k9], 8)[0]))
+    noisy, else ``x``. Round 8's word 1 and low key word reach only its word 0, so zeros stand in for them."""
+    g = gumbel_noise(C, tl_rand(C, lane_rounds(C, [c0, Z32, c2, c3], [Z32, k9], 8)[0]))
     return select(C, noisy[0], f32_add_ftz(C, x, g), x)
 
 
-SETUP = Tuple(KS, KA, BIT, Array(G, LB))
-GumbelSetup = definition("GumbelSetup", 1, gumbel_setup, (("key", U32), ("temp", F32)), SETUP,
-                         doc="The Gumbel select's shared values: the stream key's round keys and round-1 product, temp != 0, "
-                             "and round 2's low partial products per offset in a group")
-GumbelLaneHead = definition("GumbelLaneHead", 1, lane_head, (("hi_a", HA), ("lo_a", LA), ("lb", LB), ("k", K3), ("ka", KA)), C4,
+GumbelSetup = traced_family("GumbelSetup", 1, ("N",), _setup_sig, gumbel_setup,
+                            "The Gumbel select's shared values: the stream key's round keys a lane reads and its round-1 "
+                            "product, temp != 0, and round 2's low partial products for the first N offsets in a group")
+GumbelLaneHead = definition("GumbelLaneHead", 1, lane_head, (("hi_a", HA), ("lo_a", LA), ("lb", LB), ("k", K2), ("ka", KA)), C4,
                             doc="Rounds 0-2 of a lane's Philox4x32-10 (counter (lo + 64 hi, 0, 0, 0), key (key, 0)): the counter")
-GumbelLaneRounds = definition("GumbelLaneRounds", 1, lane_mid, (("c", C4), ("k", K5)), C4,
-                              doc="Rounds 3-7 of a lane's Philox4x32-10, round r's key (k[r - 3], r * PHILOX_KEY_B): the counter")
-GumbelLaneTail = definition("GumbelLaneTail", 1, lane_tail, (("c", C4), ("k", K2), ("x", F32), ("noisy", BIT)), F32,
-                            doc="Rounds 8-9 of a lane's Philox4x32-10, tl.rand and the noise g = -logf(-log1pf(-u)), then "
-                                "x + g (add.ftz) when noisy, else x")
+GumbelLaneRounds = definition("GumbelLaneRounds", 1, lane_mid, (("c", C4), ("k", K5)), C3,
+                              doc="Rounds 3-7 of a lane's Philox4x32-10, round r's key (k[r - 3], r * PHILOX_KEY_B): counter "
+                                  "words 0, 2 and 3")
+GumbelLaneTail = definition("GumbelLaneTail", 1, lane_tail, (("c", C3), ("k", U32), ("x", F32), ("noisy", BIT)), F32,
+                            doc="Rounds 8-9 of a lane's Philox4x32-10 from round 8's counter words 0, 2 and 3 and round 9's low "
+                                "key word, tl.rand and the noise g = -logf(-log1pf(-u)), then x + g (add.ftz) when noisy, else x")
 
 
 def _lane(B, S, x, hi_a, lo_a, lb, ks, ka, noisy):
-    c = B.call(GumbelLaneRounds, B.call(GumbelLaneHead, hi_a, lo_a, lb, ks[0:3], ka), ks[3:8])
-    return B.call(GumbelLaneTail, c, ks[8:10], x, noisy)
+    c = B.call(GumbelLaneRounds, B.call(GumbelLaneHead, hi_a, lo_a, lb, ks[0:2], ka), ks[2:7])
+    return B.call(GumbelLaneTail, c, ks[7], x, noisy)
 
 
 GumbelLane = CompositeDefinition(
@@ -329,7 +346,7 @@ GumbelNoiseGroup = CompositeDefinition("GumbelNoiseGroup", 1, ("G",), _group_sig
 def _noise_sig(S):
     if S.V < 1:
         raise ValueError(f"a logits row has V >= 1 entries, not {S.V}")
-    return ((("x", Array(S.V, F32)), ("hi_a", Array(-(-S.V // G), HA)), ("lo_a", Array(G, LA)), ("lb", Array(G, LB)),
+    return ((("x", Array(S.V, F32)), ("hi_a", Array(-(-S.V // G), HA)), ("lo_a", Array(G, LA)), ("lb", Array(min(S.V, G), LB)),
              ("ks", KS), ("ka", KA), ("noisy", BIT)), Array(S.V, F32))
 
 
@@ -363,7 +380,7 @@ def lane_products(call, V: int) -> tuple[Coll, Coll]:
 def gumbel_select_calls(call, logits: Coll, seed: Coll, pos: Coll, temp: Coll, V: int) -> Coll:
     """``GumbelSelectF32_v2{V}`` as Calls of its stages (``call(fn, *args)``, as `sampling_boolean.token_select_calls`): the
     stream key, the setup, the noisy row, the argmax tree's levels; returns the i32 token's bits."""
-    setup = call(GumbelSetup, call(GumbelStreamKey, seed, pos), temp)
+    setup = call(bind(GumbelSetup, N=min(V, G)), call(GumbelStreamKey, seed, pos), temp)
     hi_a, lo_a = lane_products(call, V)
     y = call(bind(GumbelNoise, V=V), logits, hi_a, lo_a, setup[3], setup[0], setup[1], setup[2])
     return argmax_calls(call, y, V, F32ArgmaxStage)
