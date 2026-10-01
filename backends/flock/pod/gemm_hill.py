@@ -2,7 +2,8 @@
 throughput and its GPU utilization.
 
 An attempt (74-gemm-hill.sh, DTYPE=bf16|e4m3|nvf4|mxf4) gates the prover's byte identity at B = 16 (the GPU's proofs and transcripts
-equal the CPU prover's, and the device paths agree), then proves one m = 35 statement of the dtype's coordinate (DTYPES: BF16's
+equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving equal those verified one at
+a time), then proves one m = 35 statement of the dtype's coordinate (DTYPES: BF16's
 `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`, the BF16 dot of 16 that sm_90's wgmma and sm_120's mma.m16n8k16 run;
 `GemmCoordinate{E4m3,Nvf4,Mxf4}_v1{K, DOT}` over sm_120's FP8 dot of 32 and block-scaled FP4 dots of 64) untiled, warm once and
 timed three times, with nvidia-smi sampling the GPU every second from the job's start. Per coordinate (one FP32 output word of a
@@ -13,7 +14,8 @@ K-long dot product):
   session's verdict to the last timed one's, over their coordinates (staging is setup_s, beside it); T_native = 2 K FLOP / P_peak,
   P_peak the census line's dense tensor-core peak at FP32 accumulate (--peak-id, the dtype's by default). Beside it, prove-only:
   M0's T_prove (gemm_slowdown.statement_seconds, the median timed statement's witness wait plus both reps) over T_native.
-- throughput: coordinates per second, 1 / T_session, with 1 / T_prove beside it.
+- throughput: coordinates per second, 1 / T_session, with 1 / T_prove beside it (with FC_VERIFY_AHEAD the prover proves the
+  next sessions while earlier ones are verified).
 - GPU utilization: nvidia-smi dmon's sm% (the fraction of each second some kernel ran, so an upper bound on DCGM's SM-active)
   averaged over the timed sessions (steady) and over the job's whole GPU-held wall time (the seconds before the sampler started
   count as idle); and the timed sessions' GPU-held seconds per coordinate (T_session).

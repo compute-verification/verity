@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # GemmCoordinate hillclimb, one step at one K and dtype (gemm_hill.py): the gate (byte identity at B = 16: the GPU's proofs and
-# transcripts equal the CPU prover's, and the device paths agree), then one m = 35 statement of the dtype's coordinate (BF16's
+# transcripts equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving equal those
+# verified one at a time), then one m = 35 statement of the dtype's coordinate (BF16's
 # GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}, or gemm_fp.py's sm_120 FP8 / FP4 row, its instances filling m = 35 from the
 # gate's staging) proved warm once and timed three times, nvidia-smi dmon sampling the GPU's utilization and memory every second
 # from the start, and the job's own cores sampled every 5 s (out/slice_cores.tsv: another job pinned to them flags the point
@@ -76,7 +77,7 @@ keep() {
 }
 done_() { kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
-GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu"
+GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
 ok=1
 if [ "${GATE:-1}" = 1 ]; then
   ph gate start

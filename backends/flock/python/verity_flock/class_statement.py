@@ -56,8 +56,9 @@ from . import partition_units as PU
 BLOCK_WORDS = 64
 #: the selftest cases run on a read-bearing class (each re-parses its 1-3 GB circuit): the honest session, and the two witness tamperings
 READ_CASES = ("honest", "unit_internal_bit_flipped", "unit_input_differs_from_its_message_bits")
-#: and with --selftest-gpu, the GPU prover's paths against each other and against the CPU prover (byte-identical proofs)
-GPU_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu")
+#: and with --selftest-gpu, the GPU prover's paths against each other and against the CPU prover, and its sessions verified
+#: beside the next ones' proving against one at a time (byte-identical proofs)
+GPU_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial")
 EXPERIMENTAL = "verity/flock/experimental-owners"
 
 
@@ -504,8 +505,10 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         return {"all_pass": all_pass, "cases": len(neg), "failed": failed} | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
     pin = FC.digest(circ.read_text())
+    # the prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once
+    concurrency = 1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)
     srv = subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(d / "sessions"), "--instances", str(pub),
-                            "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress"],
+                            "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress", "--concurrency", str(concurrency)],
                            stdout=open(d / "serve.log", "w"), stderr=subprocess.STDOUT)
     try:
         for _ in range(600):
