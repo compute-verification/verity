@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
@@ -229,6 +230,18 @@ def test_the_report_marks_an_invalid_sidecar_and_keeps_it_out_of_unowned(tmp_pat
     (d / R.SIDECAR).write_text(json.dumps({**R.load(d), "priority": "urgent"}))
     (row,) = [r for r in R.report(tmp_path, now=clock, usage=lambda _p: (10, 5, 5))["rows"] if r["path"] == "pouw/bad"]
     assert row["state"] == "invalid" and "priority must be one of" in row["error"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
+def test_a_directory_the_report_cannot_read_is_unknown_not_a_record_to_rewrite(tmp_path):
+    """Node 2's root-only lost+found (1 Oct): the report told the user to rewrite a record that doesn't exist."""
+    locked = data(tmp_path, "lost+found")
+    locked.chmod(0)
+    try:
+        (row,) = [r for r in R.report(tmp_path, now=clock, usage=lambda _p: (10, 5, 5))["rows"] if r["path"] == "lost+found"]
+    finally:
+        locked.chmod(0o755)
+    assert row["state"] == "invalid" and "whether it has a record is unknown" in row["error"] and "research keep" not in row["error"]
 
 
 # ---- gc: what it never deletes --------------------------------------------------------------------------------------------------------

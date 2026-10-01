@@ -161,6 +161,8 @@ def load(path: Path) -> dict | None:
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as e:
+        if isinstance(e, PermissionError) and not os.access(sc.parent, os.R_OK | os.X_OK):
+            raise RecordError(f"{sc.parent} can't be read, so whether it has a record is unknown") from None
         raise RecordError(f"{sc}: unreadable ({e}): rewrite it with `research keep`") from None
     try:
         return check(doc)
