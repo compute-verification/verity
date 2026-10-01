@@ -23,7 +23,7 @@ in the cast's 0x7FFF). `GeluTanhMul_v2{I}` is `GeluTanhMul_v1`'s body on bits: a
 from __future__ import annotations
 
 from verity.ir import boolean as BL
-from verity.ir.defs import bind, composite
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.types import Array
 from verity.ml.boolean import fp
 from verity.ml.boolean.elementwise import bf16_band
@@ -76,11 +76,17 @@ GeluTanhMulBf16 = definition("GeluTanhMulBf16", 2, gelu_tanh_mul, (("g", BF16), 
                                  "bf16(f32(bf16(gelu_tanh(g))) * (f32(u) + 0.0f)), NaN 0x7FFF")
 
 
-@composite("GeluTanhMul", 2, ["I"], lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
-           conformance="exact-model-tested")
-def GeluTanhMul(B, S, gu):
+def _on_bits(name: str, statics: tuple[str, ...], signature, body, word) -> CompositeDefinition:
+    """The Boolean composite ``name_v2`` with body ``body``, whose word view is ``word`` at the same statics."""
+    d = CompositeDefinition(name, 2, statics, signature, body, doc=body.__doc__ or "", conformance="exact-model-tested")
+    d.word = lambda b: bind(word, **{k: b[k] for k in statics})  # type: ignore[attr-defined]
+    return d
+
+
+def _gelu_tanh_mul(B, S, gu):
     """vLLM `gelu_tanh_and_mul` on bits: `out[i] = GeluTanhMulBf16_v2(gu[i], gu[I + i])`."""
     return B.batch(GeluTanhMulBf16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
 
 
-GeluTanhMul.word = lambda b: bind(D.GeluTanhMul, I=b["I"])  # type: ignore[attr-defined]
+GeluTanhMul = _on_bits("GeluTanhMul", ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
+                       _gelu_tanh_mul, D.GeluTanhMul)
