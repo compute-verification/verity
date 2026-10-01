@@ -114,12 +114,13 @@ n2_question() {  # n2_question ROW: node 2's question for a Commit of ROW (the A
   printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit, as node 1's Commits of its Build do?" "$1"
 }
 
-place() {  # place KIND KEY GPUS MAX_MIN QUESTION: the queue's placement on node 2 as one placed.jsonl line (none when it gives no
-  # answer); exit 3 when it refuses the job
-  local src=${VY_QUEUE_SRC:-$GUEST/cluster-src} out
+place() {  # place KIND KEY GPUS MAX_MIN QUESTION [CPUS [MEM_GB [SUBMITTER]]]: the queue's placement on node 2 as one placed.jsonl
+  # line (none when it gives no answer); exit 3 when it refuses the job. n2_build.sh's submit calls it too.
+  local src=${VY_QUEUE_SRC:-$GUEST/cluster-src} out mem=()
+  [ -z "${7:-}" ] || mem=(--mem-gb "$7")
   out=$(PYTHONPATH=$src/src python3 -m cluster submit "$src/descriptions/nebius.toml" --run-id "n2-$1-$2" --now "$(date +%s)" \
-    --project verity --submitter "$OWNER" --question "$5" --gpus "$3" --cpus 8 --max-s $(($4 * 60)) --preempt requeue \
-    --node vy-nebius-2 2> /dev/null | tail -1) || true
+    --project verity --submitter "${8:-$OWNER}" --question "$5" --gpus "$3" --cpus "${6:-8}" "${mem[@]}" --max-s $(($4 * 60)) \
+    --preempt requeue --node vy-nebius-2 2> /dev/null | tail -1) || true
   python3 - "$1" "$2" "$5" "$out" << 'EOF'
 import json, sys, time
 kind, key, question, out = sys.argv[1:]
