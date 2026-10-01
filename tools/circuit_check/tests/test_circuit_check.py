@@ -202,26 +202,29 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
-def _boolean_recompute(name):
-    """A Boolean Definition whose two output bits are the same And of its inputs, each returned by its own unit."""
-    from verity.ir import boolean as BL
-    from verity.ir.refs import array_of
-    from verity.ir.types import Array, Value
+#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two units
+BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
-    return _composite(name, ((("x", Array(2, Value(1))),), Array(2, Value(1))),
-                      lambda B, S, x: array_of([B.call(BL.AND, x), B.call(BL.AND, x)]))
+
+def _partition(fn, q_word):
+    F = CK.Findings()
+    rec, _rule = CK.partition(fn, OPTS, F, {}, applies=True, q_word=q_word)
+    rec.pop("_graph", None)
+    return rec, [f["name"] for f in F.failures if f["check"] == "partition"]
 
 
 def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
-    """A Boolean Call is judged by `Q_word` v2: the value two units compute is recorded, in the entry and the summary, not failed."""
+    """A Boolean Call is judged by `Q_word` v2: the values two units compute are recorded, in the entry and the summary, not
+    failed; under v1 the same cut fails by name."""
     from verity.ir import boolean as BL
 
-    fn = _boolean_recompute("CircuitCheckBoolRecompute")
-    assert BL.is_boolean(fn)
-    e = CK.check_definition(fn, OPTS, as_call=True)
-    assert not [f for f in e["failures"] if f["check"] == "partition"], e["failures"]
-    assert e["partition"]["q_word"] == 2 and e["partition"]["recomputed_across"] == 1
-    assert CK.summarize([e])["recomputed_across"] == {fn.id: 1}
+    fn = TG.definition(BOOL_RECOMPUTE)
+    assert BL.is_boolean(fn) and TG.family(fn) in TG.call_families()
+    rec, failed = _partition(fn, 2)
+    assert not failed and rec["q_word"] == 2 and rec["recomputed_across"] == 1120
+    assert CK.summarize([{"definition": fn.id, "partition": rec, "failures": [], "warnings": []}])["recomputed_across"] == {fn.id: 1120}
+    _rec, failed = _partition(fn, 1)
+    assert failed == [f"partition/gate-recomputed {fn.id} (1120 gate(s))"]
 
 
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
@@ -234,15 +237,14 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     def wide(G, *a, **k):
         R = real(G, *a, **k)
         c = R["cut"]
-        detail = {**c.detail, "unit-too-wide": {"n": 1, "gates": [[0, 2, 2]], "limits": [16, 32, 0]}}
+        detail = {**c.detail, "unit-too-wide": {"n": 1, "gates": [[0, 17, 2]], "limits": [16, 32, 0]}}
         return {**R, "cut": CutVerdict(False, tuple(c.codes) + ("unit-too-wide",), detail)}
 
     monkeypatch.setattr(W, "units", wide)
-    fn = _boolean_recompute("CircuitCheckBoolWide")
-    e = CK.check_definition(fn, OPTS, as_call=True)
-    names = [f["name"] for f in e["failures"] if f["check"] == "partition"]
-    assert names == ["partition/unit-too-wide CircuitCheckBoolWide_v1 (1 gate(s))"], names
-    assert e["partition"]["recomputed_across"] == 1
+    fn = TG.definition(BOOL_RECOMPUTE)
+    rec, failed = _partition(fn, 2)
+    assert failed == [f"partition/unit-too-wide {fn.id} (1 gate(s))"], failed
+    assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
 
 
 def test_the_boolean_versions_of_the_served_calls_are_calls():
