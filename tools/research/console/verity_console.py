@@ -635,7 +635,8 @@ def goal_notes(errors: list) -> tuple[list[dict], str | None]:
 
 def overnight_panels(errors: list) -> list[dict]:
     """One table per owner: a row per number, filed under the goal's key, which the site's Overnight view reads. A goal's status
-    note from docs/goals.md stands in for the owner's rows under that key unless the owner's file is at least as new as the note."""
+    note from docs/goals.md stands in for the owner's rows under that key unless the owner's file is at least as new as the note.
+    A file's optional "title" names its panel."""
     owners: dict[str, dict] = {}
     for f in sorted(OVERNIGHT.glob("*.json")) if OVERNIGHT.is_dir() else []:
         try:
@@ -653,7 +654,10 @@ def overnight_panels(errors: list) -> list[dict]:
                 rows.append([n["goal"], n["metric"][:200], (v if isinstance(v, int) else sig(v, 6)) if isinstance(v, (int, float)) else (v[:200] if v else None),
                              (str(n["unit"])[:20] if n.get("unit") else None), isoz(n.get("as_of")), (str(n["source"])[:200] if n.get("source") else None)])
             when = isoz(doc.get("updated_utc")) or iso(datetime.fromtimestamp(f.stat().st_mtime, timezone.utc))
-            owners[owner] = {"rows": rows, "when": when, "source": f"{owner}'s {f} on vy-nebius-1"}
+            title = doc.get("title")
+            if title is not None and not (isinstance(title, str) and 0 < len(title) <= 120):
+                raise ValueError("title must be a string of 1 to 120 characters")
+            owners[owner] = {"rows": rows, "when": when, "source": f"{owner}'s {f} on vy-nebius-1", "title": title}
         except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
             errors.append(f"overnight {f.name}: {type(e).__name__}: {e}")
     notes, notes_when = goal_notes(errors)
@@ -668,7 +672,7 @@ def overnight_panels(errors: list) -> list[dict]:
     for owner, o in sorted(owners.items()):
         when = max((w for w in (o["when"], notes_when if o.get("notes") else None) if w), default=iso(datetime.now(timezone.utc)))
         source = " and ".join(s for s in (o["source"], f"{NOTES_SOURCE}s ({GOAL_NOTES} on vy-nebius-1)" if o.get("notes") else None) if s)
-        out.append(fit(panel(f"overnight-{owner}", f"{owner}: overnight goal numbers", "table",
+        out.append(fit(panel(f"overnight-{owner}", o.get("title") or f"{owner}: overnight goal numbers", "table",
                              ["Goal", "Metric", "Value", "Unit", "As of (UTC)", "Source"], o["rows"], updated_at=when, source=source,
                              note="Numbers for the overnight set (Project store docs/goals.md), one row per number, filed under the goal's "
                                   "key: the owner's file, or the goal's docs/goals.md status note and checked state where that is newer.")))
