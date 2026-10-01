@@ -23,14 +23,19 @@ MODELS = {"qwen2.5-7b": QWEN25_7B, "llama3.1-70b": LLAMA31_70B}
 #: row: q and o, k and v, gate and up, down. Prefill at m = 8,192; decode at m = 32 and at m = 64, Pearl-C4's smallest m.
 LLAMA31_8B = {"q_o": (4096, 4096), "k_v": (1024, 4096), "gate_up": (14336, 4096), "down": (4096, 14336)}
 LLAMA31_8B_M = {"prefill": (8192,), "decode": (32, 64)}
+#: The narrow k/v linears in Pearl-C4's widened B-OVF buckets (n < 1,024) that are in PearlC4Nv's domain (k ≥ 1,024):
+#: Qwen2.5-1.5B and 3B (2 KV heads of 128), Llama-3.2-1B (8 of 64) and Qwen2.5-7B (4 of 128). Prefill m 8,192, decode m 64.
+NARROW_KV = {"qwen2.5-1.5b": (256, 1536), "qwen2.5-3b": (256, 2048), "llama3.2-1b": (512, 2048), "qwen2.5-7b": (512, 3584)}
+NARROW_KV_M = {"prefill": (8192,), "decode": (64,)}
 
 
 def key(m: int, k: int, n: int) -> str:
     return f"m{m}-n{n}-k{k}"
 
 
-#: Llama-3.1-8B's panel rows' phases, by label
-LLAMA31_8B_PANEL = {key(m, k, n): phase for phase, ms in LLAMA31_8B_M.items() for m in ms for n, k in LLAMA31_8B.values()}
+#: Llama-3.1-8B's and the narrow k/v linears' panel rows' phases, by label
+LLAMA31_8B_PANEL = {key(m, k, n): phase for linears, phases in ((LLAMA31_8B, LLAMA31_8B_M), (NARROW_KV, NARROW_KV_M))
+                    for phase, ms in phases.items() for m in ms for n, k in linears.values()}
 
 
 def _shapes() -> tuple[list[Shape], dict[str, str]]:

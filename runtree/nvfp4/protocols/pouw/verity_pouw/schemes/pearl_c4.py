@@ -61,7 +61,7 @@ over its credited words (`tile_debit`):
 3  dead pairs    per word and position t whose A code and B code are both salt-dead (`salt_dead`, each side): 1
 4  forming       per salt-dead (the reference's witness, `salt_dead`) or unneeded A element: f_s · |cols|/n
 5  sub-grid      per (word, block) with 2304·m_a·m_b·2^(e_a+e_b−2) below its step's grid (it adds exactly 0): `block`
-D-24 windows     per row and aligned 128 of k whose every 4-group has ≤ 2 nonzero codes: 0.5 per MAC, on every word it feeds
+D-24 windows     per row and aligned 128 of k whose every 8-chunk has ≤ 2 of 4 pairs nonzero: 0.5 per MAC, on every word it feeds
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
 ~~~
 
@@ -660,11 +660,13 @@ F1_B_OVERFIT = 10
 #: B-OVF, measured, not derived (theory-pearl-c4-domain.md §6.12b; the assessor's B, ratings.md 18:45Z): a unit's
 #: creditOf is discounted by β(n_b)·mnk, n_b the largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout
 #: annealed and block-optimised after the salt, over the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ,
-#: with a 1.5× margin on the measured gain and made non-increasing in n (research store cheap-binding/pearlc4-fix/
-#: beta_table.py --mu 1.5 on strong.jsonl, strong_ext.jsonl; exact block optimisation within 1.02× of annealing at
-#: n = 256 and 512, exact256.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
-B_OVF = ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
-         (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+#: with a 1.5× margin on the measured gain and made non-increasing in n.  It is taken on each bucket's own R1 admission
+#: boundary at k = 1,024 (``k_min``), where the cap is largest, and just inside it (the worst family can sit there): the larger of
+#: that need, the assessor's boundary check and the earlier grid's cells under the same cap, never below the grid's
+#: table (condition 7; research store art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca,
+#: beta_final.py; the grid's beta_table.py on strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
+         (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
 #: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
 B_OVF_MIN_N = B_OVF[0][0]
 
@@ -919,8 +921,12 @@ def int8_saving(fmt: Fmt, a_scales: Sequence[Sequence[int]], b_scales: Sequence[
 
 
 def two_four_windows(codes: Sequence[int]) -> list[bool]:
-    """D-24, per aligned 128 of k: every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0)."""
-    return [all(sum(1 for c in codes[q:q + 4] if c & 7) <= 2 for q in range(w, w + SPAN_K, 4))
+    """D-24, per aligned 128 of k: every aligned 8-chunk has at most 2 of its 4 pairs (2j, 2j + 1) holding a nonzero code
+    ((code & 7) ≠ 0).  That is the pair rule of sm_120's NVFP4 sparse MMA (`mma.sp…kind::mxf4nvf4…m16n8k128`), whose A
+    keeps 2 of each 8-chunk's 4 pairs (4 metadata bits a chunk); the element-wise 2:4 of `kind::f8f6f4` carries no UE4M3
+    16-block scales and runs at the FP8 rate, so it saves nothing over dense NVFP4."""
+    return [all(sum(1 for p in range(q, q + 8, 2) if any(c & 7 for c in codes[p:p + 2])) <= 2
+                for q in range(w, w + SPAN_K, 8))
             for w in range(0, len(codes), SPAN_K)]
 
 
