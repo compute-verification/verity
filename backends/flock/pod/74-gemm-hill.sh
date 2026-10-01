@@ -14,7 +14,8 @@
 #      cores to pin to, e.g. 96-111)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices). Node 1's dispatched
 #      jobs all share 96-159, so a job holds a lock on every slice it pins (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and
 #      waits for slices another job holds  GATE=1  WARM=1  RUNS=3  PEAK_ID= (default the dtype's)
-#      STEP=0 LABEL=baseline (the hillclimb step and what changed)  HILL_NODE=vy-nebius-1
+#      STEP=0 LABEL=baseline (the hillclimb step and what changed)  QUESTION= (the question the job answers; default the step's)
+#      HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
 #      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the gate's and the step's statements into FLOCK_STAGE_CACHE,
@@ -85,7 +86,8 @@ if [ "${GATE:-1}" = 1 ]; then
   keep gate
   cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
   if [ $ok = 1 ] && [ -z "$SRC" ]; then
-    INST=$(python3 backends/flock/pod/gemm_hill.py fill --dtype $DTYPE --K $K --gate $R/out/gate/classes/results.jsonl) && S0=$(src $INST) \
+    GREC=results.jsonl; [ "${STAGE_ONLY:-0}" = 1 ] && GREC=staged.jsonl
+    INST=$(python3 backends/flock/pod/gemm_hill.py fill --dtype $DTYPE --K $K --gate $R/out/gate/classes/$GREC) && S0=$(src $INST) \
       && SRC=${S0#* } && echo "instances=$INST (m = 35 from the gate's staging)" >> $R/out/host.txt || ok=0
   fi
 fi
@@ -109,6 +111,6 @@ PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backe
   $PYBIN backends/flock/pod/gemm_hill.py metrics --dtype $DTYPE --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
   --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
   --gpu-csv $R/out/gpu.csv --census census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
-  --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
+  --label "${LABEL:-baseline}" ${QUESTION:+--question "$QUESTION"} --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
 [ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json

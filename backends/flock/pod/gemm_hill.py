@@ -525,7 +525,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "session": (out.get("session") or {}).get("label"), "scheme": SCHEMES.get(out.get("coins")),
             # flock-circuit is both the prover (`prove`) and the verifier (`serve`)
             "impl": {"commit": out["commit"]["commit"], "prover_sha256": _read(a.binary_sha), "verifier_sha256": _read(a.binary_sha)},
-            "flags": flags, "question": question(a.dtype, a.K),
+            "flags": flags, "question": a.question or question(a.dtype, a.K),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
             "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others")}
@@ -694,6 +694,7 @@ def main() -> None:
     m.add_argument("--binary-sha", default=None)
     m.add_argument("--step", type=int, default=0)
     m.add_argument("--label", default="baseline")
+    m.add_argument("--question", default=None, help="the research question the job answers (default: the step's, question())")
     m.add_argument("--node", default="vy-nebius-1")
     m.add_argument("--out", required=True)
     m.add_argument("--result", required=True)
