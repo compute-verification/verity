@@ -165,7 +165,7 @@ sys.stdout.write(s.replace("integrations:\n  frameworks:\n", "integrations:\n  f
     echo "   would add the plain-pod framework (\"pod\") to kueue-manager-config and restart Kueue"
   fi
 fi
-# kueue.yaml holds the target split (provers 4 GPUs); provers gives up one GPU per GPU held for direct runs.
+# kueue.yaml holds the target split (provers 2 GPUs); provers gives up one GPU per GPU held for direct runs.
 direct=$([ "$VY_DIRECT_GPUS" = none ] && echo 0 || echo "$VY_DIRECT_GPUS" | tr ',' '\n' | grep -c .)
 python3 - "$QUEUES" "$direct" > /tmp/kueue-rendered.yaml <<'PY'
 import re, sys

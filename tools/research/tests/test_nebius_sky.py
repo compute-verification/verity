@@ -42,7 +42,7 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"deployments-gpu", "deployments-cpu", "circuits", "provers", "backfill"}
     assert set(q["backfill"].values()) == set(q["circuits"].values()) == {0}                          # backfill borrows; circuits drains
-    assert (q["deployments-gpu"]["nvidia.com/gpu"], q["deployments-cpu"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 0, 3)
+    assert (q["deployments-gpu"]["nvidia.com/gpu"], q["deployments-cpu"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (6, 0, 2)
     assert q["deployments-gpu"]["cpu"] == 4 * q["deployments-gpu"]["nvidia.com/gpu"]                   # 4 vCPU per GPU: never waits on CPU
     assert (q["deployments-cpu"]["cpu"], q["provers"]["cpu"]) == (100, 64)
     assert sum(x["cpu"] for x in q.values()) + CONTROLLER["cpu"] <= NODE["cpu"]              # every admitted pod can be placed           # checks and pinned benches run outside Kueue
@@ -52,11 +52,11 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     text = (SKY / "kueue.yaml").read_text()
     gpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-gpu}" in d and "ClusterQueue" in d)
     cpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-cpu}" in d and "ClusterQueue" in d)
-    assert '{name: nvidia.com/gpu, nominalQuota: "5", borrowingLimit: "2"}' in gpuq and '{name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}' in cpuq
+    assert '{name: nvidia.com/gpu, nominalQuota: "6", borrowingLimit: "2"}' in gpuq and '{name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}' in cpuq
     for d in (gpuq, cpuq):
         assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in d and "reclaimWithinCohort: LowerPriority" in d
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
-    assert ('{name: nvidia.com/gpu, nominalQuota: 3, borrowingLimit: "5"}' in provers                 # one pool (Daniel 19:12Z): provers
+    assert ('{name: nvidia.com/gpu, nominalQuota: 2, borrowingLimit: "1"}' in provers                 # one pool (Daniel 19:12Z): provers
             and 'borrowingLimit: "96"' in provers and 'borrowingLimit: "416Gi"' in provers)          # borrows idle GPUs, CPU, memory
     assert text.count("    withinClusterQueue: Never") == 5 and text.count("policy: LowerPriority") == 2   # never evict a running Build
     assert text.count("cohortName: nebius") == 5 and text.count("    reclaimWithinCohort: Any") == 1
@@ -287,7 +287,7 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
     up = (SKY / "cluster_up.sh").read_text()
     render = up[up.index("<<'PY'\n") + len("<<'PY'\n"):up.index("\nPY\n")]
     (tmp_path / "render.py").write_text(render)
-    for direct, want in ((4, 0), (0, 3), (2, 1)):
+    for direct, want in ((4, 0), (0, 2), (1, 1)):
         out = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue.yaml"), str(direct)], capture_output=True, text=True, check=True).stdout
         provers = out.split("metadata: {name: provers}")[1]
         assert re.search(r"\{name: nvidia.com/gpu, nominalQuota: (\d+)", provers).group(1) == str(want)
