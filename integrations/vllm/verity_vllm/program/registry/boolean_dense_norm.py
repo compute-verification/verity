@@ -58,8 +58,6 @@ def _one(name: str, params, build, doc: str):
 
 F32AddZero = _one("F32AddZero", (("x", F32),), lambda C, x: fp.f32_add(C, x, fp.f32_const(0), ir_nan=True),
                   "F32Add_v1(x, +0), which is F32Add_v1(+0, x): the mean's add of a masked register, idle lane or idle warp")
-# not `verity.ml.boolean.gemm`'s `F2fpBf16_v2`: `catalog.load` imports this module, and importing `gemm` registers
-# `AmpereBF16TcDot16_v3` beside `_v2`, which leaves the torch frontend's unversioned `AmpereBF16TcDot16` ambiguous
 NarrowF32ToBf16El = _traced("NarrowF32ToBf16El", 1, (), lambda S: ((("x", F32),), BF16),
                             lambda S: TR.trace(lambda C, x: fp.f32_to_bf16(C, x, W.BF16_NAN_F2FP), [F32], BF16),
                             "cvt.rn.bf16.f32(x), NaN -> 0x7FFF (F2fpBf16_v1): one element of NarrowF32ToBf16_v1")
