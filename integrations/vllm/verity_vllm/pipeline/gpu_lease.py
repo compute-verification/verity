@@ -3,8 +3,9 @@ node's lease tool (``gpu-lease``), and only its GPU phase holds a GPU.
 
 The row's processes see no CUDA device (``CUDA_VISIBLE_DEVICES`` empty), so nothing outside the lease can open a context on any GPU
 of the node. The Commit process starts without a GPU too: its imports, the manifest, the producer facts and the boundary plan run on
-the CPU, and only right before the engine build does it take the lease (``acquire``): ``"$GPU_LEASE" N --wait --max-min M --mem-gb 0
--- holder``, a child of the Commit that hands it the lease's lock descriptors and the leased ``CUDA_VISIBLE_DEVICES``. The GPUs stay
+the CPU, and only right before the engine (its target reads the device, then the build) does it take the lease (``acquire``):
+``"$GPU_LEASE" N --wait --max-min M --mem-gb 0 -- holder``, a child of the Commit that hands it the lease's lock descriptors and the
+leased ``CUDA_VISIBLE_DEVICES``. The GPUs stay
 locked until the Commit process exits, the only point vLLM's in-process engine lets go of its CUDA context. The lease tool ending the
 holder (M minutes, the Commit's timeout) ends the Commit. Prechecks, manifest and weights of record come before the Commit process;
 the verdict, the row's records and the research run's publish after it. Without ``GPU_LEASE`` nothing changes.
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import atexit
 import calendar
+import ctypes
 import json
 import math
 import os
@@ -85,6 +87,16 @@ def holder_argv(environ: MutableMapping[str, str], sock: int) -> list[str]:
             "--", sys.executable, "-c", _HOLDER, environ[STARTED], str(sock)]
 
 
+def cuda_initialised() -> bool:
+    """Whether this process has initialised the CUDA driver (``cuDeviceGetCount`` answers only after ``cuInit``): one initialised
+    before the lease keeps the empty device list it saw."""
+    try:
+        cuda = ctypes.CDLL("libcuda.so.1")
+    except OSError:
+        return False
+    return cuda.cuDeviceGetCount(ctypes.byref(ctypes.c_int())) == 0
+
+
 def tool_env(environ: MutableMapping[str, str]) -> dict[str, str]:
     """The lease tool's environment: the Commit's, less the tool's start-time override (a stale one dates the lease to 1970 and
     the pool ends it as expired)."""
@@ -106,6 +118,9 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> 
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
         return
+    if cuda_initialised():
+        raise SystemExit("GPU lease: CUDA was initialised before the lease (with no device visible); nothing may touch CUDA before "
+                         "gpu_lease.acquire, so no lease is taken")
     with open(_requested(environ[STARTED]), "w") as f:
         f.write(_utc(time.time()) + "\n")
     ours, theirs = socket.socketpair()
