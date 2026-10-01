@@ -29,6 +29,7 @@ from pathlib import Path
 a = sys.argv[1:]
 root, out = Path(a[a.index("--root") + 1]), Path(a[a.index("--out") + 1])
 out.mkdir(parents=True, exist_ok=True)
+(out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
 for pol in sorted(root.rglob("lean-audit.json")):
     pkg = pol.parent
@@ -111,6 +112,14 @@ def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypa
     assert rc == 0 and doc["failed"] == [] and sorted(r["package"] for r in doc["packages"]) == ["pkg/a", "pkg/b"]
 
 
+def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tree(tmp_path, monkeypatch):
+    """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `fixtures/tc/vectors`), so the
+    audit, run from the scratch tree, is told where the checkout is."""
+    root = _tree(tmp_path, monkeypatch)
+    _run(tmp_path, 1)
+    assert (tmp_path / "out1" / "repo.txt").read_text() == str(root)
+
+
 def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_machine(tmp_path, monkeypatch):
     """`check.py` only launches the audit step, so an edit to it alone keeps every package's key: a pack exported on one machine
     and imported on another through `check.py --verdicts-in` answers for both packages, and nothing is audited again. An edit
@@ -182,6 +191,25 @@ def test_the_dependencies_are_kept_by_manifest_and_toolchain(tmp_path, monkeypat
     assert rc == 1 and "pkg/a warm" in ran and not (tmp_path / "cache" / "lean-deps" / k).exists()   # dropped, not kept
     (root / "pkg/a/lean-toolchain").write_text("v2\n")
     assert LA.deps_key(root / "pkg/a") != k
+
+
+def test_packages_of_one_manifest_and_toolchain_both_build_warm(tmp_path, monkeypatch):
+    """POUS and PoUW pin one Mathlib on one toolchain. A run that audits both moves the kept tree into one and a copy of it
+    into the other, which would otherwise clone its dependencies from GitHub."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    tracked, twin = LA.COMMON.tracked_files(), ["lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json"]
+    (root / "pkg/c").mkdir()
+    for f in twin:
+        (root / "pkg/c" / f).write_bytes((root / "pkg/a" / f).read_bytes())
+    monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: sorted([*tracked, *(f"pkg/c/{f}" for f in twin)]))
+    assert LA.deps_key(root / "pkg/c") == LA.deps_key(root / "pkg/a")
+    rc, ran, _doc = _run(tmp_path, 1)
+    assert rc == 0 and sorted(ran) == ["pkg/a cold", "pkg/b cold", "pkg/c cold"]
+    (root / "tools/lean/audit.py").write_text(FAKE_AUDIT + "\n# the auditor changed: every package runs again\n")
+    rc, ran, _doc = _run(tmp_path, 2)
+    assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold", "pkg/c warm"]
+    assert (tmp_path / "cache" / "lean-deps" / LA.deps_key(root / "pkg/a") / "dep" / "built").exists()
 
 
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
