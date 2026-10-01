@@ -1,13 +1,15 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, building and auditing it with
+  How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
+  scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
   tools/lean/audit.py, stating assumptions as named Props, freezing and pinning the theorems a ledger or PR
   cites in lean-audit.json, watching ArkLib and other dependencies for proofs of what we assume
-  (tools/lean/upstream.py), and keeping parallel Lean lanes out of each other's files and build directories.
-  Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
-  soundness), editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing
-  a Lean PR.
+  (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build directories, and Daniel's
+  Lean rulings (working theorems, Lean as the source of truth for assumptions). Use when adding or changing Lean
+  proofs, definitions or packages (backends/flock/verifier/lean, level3, soundness, packages/verity/lean,
+  protocols/pous/lean, protocols/network_warden/lean), when a Lean build or proof is slow, editing a lean-audit.json
+  or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
 # Lean proofs
@@ -28,18 +30,50 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
   proof file. The audit lists where they are (`reads` in `lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
   `.olean` files, and an audit then reads what another agent's build left. A second Lean task on the same machine gets
-  its own worktree.
+  its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
+  `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
+  rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
 
-## Build and audit
+## Build, iterate, audit
 
 ~~~text
-bash tools/lean/setup.sh PKG                       once per machine: elan, the toolchain, Mathlib's cache
-cd PKG && lake build
-python tools/lean/audit.py PKG                     what check runs, for one package (seconds; level3's replay takes ~3 min)
+bash tools/lean/setup.sh PKG                  once per machine: elan, the toolchain, Mathlib's cache
+cd PKG && lake build                          once per checkout; incremental from then on
+lake env lean Pkg/Area/File.lean              each edit: elaborate one file against the built imports
+lake build Pkg.Area.File                      after editing a file others import, so they see the change
+python tools/lean/audit.py PKG                once, before pushing (seconds; level3's replay takes ~3 min)
 ~~~
 
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
+
+While proving, check one file at a time, and leave the whole package and the audit for the end:
+
+- **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
+  this way. A file that imports what you changed sees the change only after `lake build` of the changed module.
+- **Ask Lean in a scratch file** outside the repository, run from the package directory with `lake env lean
+  /tmp/scratch/Probe.lean`. It takes well under a second against built imports:
+
+  ~~~lean
+  import Verity.TC.AmpereSound
+  #print axioms Verity.TC.ampere_step_hw     -- a sorry shows as sorryAx, long before the audit runs
+  example (a b : Nat) : a + b = b + a := by exact?
+  ~~~
+
+- **See a goal** by putting `trace_state` before a `sorry`: the goal prints with the file's output. The editor's language
+  server shows it too.
+- **Search before you prove:** `exact?` or `apply?` on a scratch `example` (both work without Mathlib), then `rg` for the
+  name or shape across every package's `.lean` files, then [Loogle](https://loogle.lean-lang.org) for Mathlib by type.
+  A lemma another package already proves is imported or moved to a shared place, not proved again.
+- **When a declaration is slow,** find out where the time goes before raising `maxHeartbeats`:
+  - `set_option profiler true in` before the declaration prints its elaboration times;
+  - in a Mathlib package, `#count_heartbeats in` (from `import Mathlib.Util.CountHeartbeats`) prints the heartbeats it
+    used.
+
+  Then fix the proof: use `simp only [...]` outside terminal calls, split out a lemma, or shrink a `decide`. If an override
+  stays, give its reason beside it. Keep files to a few hundred declarations, so that Lake builds them in parallel and an
+  edit re-elaborates little.
+- **Push after every commit.** Work that lives only in a VM's worktree is lost when the VM is suspended.
 
 The replay refuses `X.congr_simp is declared by a replayed module and by one it imports`. `simp` realizes a structure
 constructor's congruence lemma (`ZeroHom.mk.congr_simp`) in your module when it rewrites under an unfolded bundled map,
@@ -49,8 +83,9 @@ simp with that.
 ## Assumptions and pins
 
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
-  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`), and stated in the ledger
-  (`ASSUMPTIONS.md`). Never an `axiom`, never a `sorry` on `main`, never `native_decide`, never an option that skips
+  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`). Its docstring opens with its
+  claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
+  what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on `main`, never `native_decide`, never an option that skips
   the kernel. A statement you can't prove yet is a hypothesis, or a theorem in a lane branch, not on `main`.
 - **Freeze the statement, then prove it.** In your lane branch, state the theorem on a `sorry` stub, check it against the
   paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
@@ -82,3 +117,15 @@ simp with that.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
   rebuild, and only a conflict it refuses needs `audit.py --update` on the merged tree.
+
+## Rulings so far
+
+These are Daniel's rulings, newest first.
+
+- 2026-09-30: a theorem whose statement takes an obligation we haven't proved yet (`HmRowComputes`, an audit-layer `Prop`)
+  is a **working theorem**, not a proved one. A table, a ledger or a PR calls it a working theorem and names its open
+  obligations. "Proved" means its hypotheses are named assumptions and nothing else.
+- 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
+  derived from Lean and the audit's output, and no hand-kept ledger is generated alongside.
+- 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
+  VCVio's `OracleComp`; soundness bridges to VCVio where it needs it.
