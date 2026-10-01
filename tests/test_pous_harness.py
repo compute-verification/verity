@@ -533,7 +533,9 @@ def test_the_kernel_settings_and_the_loop_layout():
     before = harness.set_kernels({})
     try:
         now = harness.set_kernels(harness.FROZEN_KERNELS)
-        assert now["thread_rows"] == 500 and now["whole_chain"] is True
+        assert now["thread_rows"] == 500 and now["whole_chain"] is True and now["chain_pairs"] is False
+        assert harness.set_kernels(harness.KERNELS) == {**now, "chain_pairs": True}       # the record's, the chain on lane pairs
+        assert harness.set_kernels({"chain_pairs": False}) == now                         # selects the record's again
         with pytest.raises(ValueError, match="unknown kernel settings"):
             harness.set_kernels({"turbo": 1})
     finally:

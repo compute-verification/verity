@@ -97,6 +97,13 @@ CHUNKED_WHOLE = [False]
 unsplit launch (`band_chain_kernel`), writing `W` straight to its place: no per-step launches and no key extraction.  Smaller
 decodes keep the per-step split launches, which are faster there."""
 
+CHAIN_PAIRS = [False]
+"""The whole-chain decode runs on lane pairs in one persistent launch (`band_chain_pairs_kernel`): one Keccak state per lane,
+the squeezing and absorbing sponges of a row on two lanes, a warp per scheduler taking (rows, call) tasks, the lanes
+bit-interleaved, and `X` read from an interleaved copy of `C` (1 GB more device memory for the 0.5B weight set's 30
+segments).  `band_chain_kernel`'s 15,360 threads fill 480 of the RTX PRO 6000's 752 schedulers; this fills them all, and
+decodes at 2.80 against 1.60 GB/s there (untimed screens)."""
+
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
 scheduler (18k rows on the L40S) a launch's per-row rate collapses (23,744 rows: 93.6 ms at once, 84.7 ms in two)."""
@@ -219,6 +226,11 @@ def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.
     st.put(1, width, slice(None), dom)
     out = torch.empty(r, width, dtype=torch.uint8, device=c_flat.device)
     base, blk, ln, dest = base.contiguous(), blk.contiguous(), ln.contiguous(), order.contiguous()
+    if CHAIN_PAIRS[0]:
+        # The two puts above are the state's only nonzero bytes, all from chunk (width - 32) // CHUNK of half 1 on.
+        native.ext().band_chain_pairs(st.words, 0, r, codec.PI_DOMAIN, int(ln.max()) + 1, c_flat, base, blk, ln, dest, out,
+                                      (width - 32) // CHUNK)
+        return out
     for start, n, _ in st.launches(0, allow_split=False):
         native.ext().band_chain(st.words, start, n, codec.PI_DOMAIN, CHUNKED_THREADS[0], c_flat, base, blk, ln, dest, out)
     return out
