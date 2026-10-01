@@ -16,6 +16,7 @@ from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import bind
 from verity.ml.boolean import trace as TR
+from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -126,6 +127,13 @@ def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
                             np.arange(1 << 23, dtype=np.uint32) | np.uint32(0x3F800000)])
     got = np.asarray(BS.evaluate_words(target, words)).astype(np.uint64)
     assert np.array_equal(got, np.asarray(E.evaluate_batch(TR.word_of(target), words)).astype(np.uint64))
+
+
+@pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
+def test_the_switch_maps_its_word_view_to_it(target) -> None:
+    """`boolean_version` of each word chain is the Boolean chain whose word view it is: `Attention_v4` (FA3's per-iteration
+    `Check_inf`) to v9, `Attention_v5` (FA2's) to v8, v2 and v3 to v7 and v6."""
+    assert SW.boolean_version(TR.word_of(target)).id == target.id
 
 
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
