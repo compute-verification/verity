@@ -26,7 +26,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from verity.ir import boolean as BL
-from verity.ir.defs import bind, composite
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.types import Array
 from verity.ml.boolean import fp
 from verity.ml.boolean.forms import NOT, ONE, ZERO, L, OR, add, and_reduce, const_bits, or_reduce, sub
@@ -130,11 +130,11 @@ SiluMulBf16 = definition("SiluMulBf16", 3, silu_mul, (("g", BF16), ("u", BF16)),
                          doc="vLLM act_and_mul_kernel<silu> on bits: SiluMulBf16_v1, bf16(f32(bf16(silu_f32(g))) * f32(u))")
 
 
-@composite("SiluMul", 3, ["I"], lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
-           conformance="exact-model-tested")
-def SiluMul(B, S, gu):
+def _silu_mul_rows(B, S, gu):
     """vLLM `silu_and_mul` on bits: `out[i] = SiluMulBf16_v3(gu[i], gu[I + i])`."""
     return B.batch(SiluMulBf16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
 
 
+SiluMul = CompositeDefinition("SiluMul", 3, ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
+                              _silu_mul_rows, doc=_silu_mul_rows.__doc__, conformance="exact-model-tested")
 SiluMul.word = lambda b: bind(b1.SiluMul, I=b["I"])  # type: ignore[attr-defined]
