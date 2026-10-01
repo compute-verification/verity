@@ -19,7 +19,8 @@ from verity.evaluation import bits as BS
 from verity.evaluation.reference import standalone_call
 from verity.ir import boolean as BL
 from verity.ir import codec
-from verity.ir.defs import REGISTRY, bind
+from verity.ir.defs import REGISTRY, CompositeDefinition, bind
+from verity.ir.types import Array
 from verity.ml import fp32 as W
 from verity.ml import kernels as K
 from verity.ml.boolean import elementwise as EW
@@ -203,6 +204,27 @@ def test_a_specialized_constant_is_folded() -> None:
         assert T.counts["and"] < PINS["Bf16MulF32_v2"][0]
         got = np.asarray(BS.evaluate_words(target, every)).reshape(-1)
         assert np.array_equal(got, np.asarray(E.evaluate_batch(W.Bf16MulF32, every, np.full(every.shape, K, np.uint32))).reshape(-1))
+
+
+def test_a_composite_on_bits_has_the_word_composite_as_its_word_view() -> None:
+    """`on_bits` over a row of `Bf16Add_v2` takes its doc from the body and its word view from the word composite bound at the same
+    N, whose signature it has on words and whose values it has on random rows."""
+    def row(B, S, a, b):
+        """a row of sums"""
+        return B.batch(EW.Bf16Add, a, b, axes=(0, 0))
+
+    def word_row(B, S, a, b):
+        return B.batch(W.Bf16Add, a, b, axes=(0, 0))
+
+    sig = lambda T: lambda S: ((("a", Array(S.N, T)), ("b", Array(S.N, T))), Array(S.N, T))  # noqa: E731
+    word = CompositeDefinition("OnBitsWordCheck", 1, ("N",), sig(W.BF16), word_row, register=False)
+    d = EW.on_bits("OnBitsCheck", 2, ("N",), sig(EW.BF16), row, word, register=False)
+    target = bind(d, N=5)
+    assert d.doc == "a row of sums" and TR.word_of(target).id == bind(word, N=5).id
+    (params, ret), (word_params, word_ret) = E.batch.signature_of(target), E.batch.signature_of(TR.word_of(target))
+    assert [BL.word_type(t) for t in params] == list(word_params) and BL.word_type(ret) == word_ret
+    rng = np.random.default_rng(26)
+    _agree(target, [rng.integers(0, 1 << 16, (2_000, 5)).astype(np.uint16) for _ in range(2)])
 
 
 _I32_SPECIALS = np.array([0, 1, 2, 0x7FFFFFFE, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFE, 0xFFFFFFFF, 0x0000FFFF, 0x00010000,
