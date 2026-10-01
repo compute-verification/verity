@@ -101,6 +101,10 @@ _CONSTS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 def const(w: int, bits: int) -> PrimitiveDefinition:
     """`Const<w>[0x..] : () -> Value<w>`: a gate with a fixed correct output (a constant of the program)."""
+    if w == 1 and bits in (0, 1):
+        from verity.ir.boolean import constant
+
+        return constant(bits)
     key = (w, bits)
     p = _CONSTS.get(key)
     if p is None:
