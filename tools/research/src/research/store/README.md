@@ -441,7 +441,6 @@ prints the table; the groups are:
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
   `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
-  on a `kernel-attempt/v1` record, `kernel_outcome` (enum: screened | frontier | kept | dropped | voided | superseded) and `kernel_reason`;
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
   stay valid when the file moves into a month folder).
@@ -452,6 +451,7 @@ prints the table; the groups are:
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
+- **approach** — the registry's labels on `approach/v1` records (`research/approaches.py`; `tools/research/README.md`).
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
 `"true"` are one word and `"True"` is another. `research data label` writes the canonical spelling of an old key or value
@@ -537,8 +537,8 @@ the launcher mints an action-scoped temporary key
 (§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
-attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of every file in the run dir (stdout.log, stderr.log,
-launcher.log, job.json, status.json, outputs; markers excluded), pushes and verifies it (`preserved.check`, head; retried), deletes
+attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims
+(listed in `meta.trimmed`, no bytes; .agents/skills/writing-runs/SKILL.md), pushes and verifies it (`preserved.check`, head; retried), deletes
 the key, and writes `<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256).
 The marker is written only when every file now in the run dir is in the record by content; from the record on, the runner's own
 output goes to `<root>/requests/<run id>/custody/publish.log`, not launcher.log, so nothing it prints can make the run dir differ
@@ -570,9 +570,6 @@ run-files/v1             the files a result.json pointed at, as one tree
 run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
-kernel-attempt/v1        one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py): meta = variant, parent, tier,
-                         harness and gates, metrics, steps, gamma at both FP32 prices, verify, hypothesis; refs.parent; payload null;
-                         labels kernel_outcome, kernel_reason
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
 trust-dossier/v1         the computed trust level of one numerical target (`python tools/tc_probe/trust.py --publish`): meta =

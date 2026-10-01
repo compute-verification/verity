@@ -921,6 +921,104 @@ def test_a_slice_of_the_enumeration_takes_its_range_and_keeps_enough_to_reach_it
             H.lt_range(bad)
 
 
+class FakeLtLib:
+    """lt.cu's plan, heuristic and enumeration calls: the enumeration accepts `accepted` configurations (algo 67, tile i) and
+    writes the first `want` of them, as ph_lt_enumerate does."""
+
+    def __init__(self, accepted):
+        self.accepted = accepted
+
+    def ph_lt_plan_create_ld(self, kind, m, n, k, ld, ws, swap, plan):
+        plan._obj.value = 0x100 + swap
+        return 0
+
+    def ph_lt_plan_destroy(self, plan):
+        pass
+
+    def ph_lt_candidates(self, plan, sa, sb, want, arr, got):
+        got._obj.value = 0
+        return 0
+
+    def ph_lt_enumerate(self, plan, sa, sb, ks, nks, want, arr, got, checked):
+        for i in range(min(want, self.accepted)):
+            arr[i].algo_id, arr[i].tile, arr[i].stages, arr[i].splitk = 67, i, 37, 1
+        got._obj.value = checked._obj.value = self.accepted
+        return 0
+
+    def ph_last_error(self):
+        return b""
+
+
+def test_a_named_configuration_past_the_enumerations_cap_stops_the_run(tmp_path, monkeypatch):
+    import native as N
+
+    monkeypatch.setattr(B, "cutlass_candidates", lambda *a, **k: ([], []))
+    monkeypatch.setattr(B, "BaselineCall", lambda *a: argparse.Namespace(free=lambda: None))
+    monkeypatch.setattr(B, "gate", lambda *a, **k: {"ok": True})
+    lt = N.LtLib(FakeLtLib(accepted=20000), "lt13", 130101, "fake")
+    dev = argparse.Namespace(lts=[lt], info={"sms": 188}, has_cutlass_sched=True)
+    so = argparse.Namespace(ops=lambda fam, s: argparse.Namespace(sa=None, sb=None))
+    decode = A.Shape("m32-n8192-k8192", 32, 8192, 8192)
+    names = tmp_path / "best.txt"
+    names.write_text("lt13_fp8-e4m3_0_algo67_tile10_st37\nlt13_fp8-e4m3_0_algo67_tile15000_st37\n")
+    a = argparse.Namespace
+
+    def gate(limit):
+        b, _ = bench()
+        return H.gate_baselines(b, dev, decode, [B.FAMILIES["fp8-e4m3"]], so, [], None, False, 8, 0,
+                                frozenset({"fp8-e4m3"}), H.lt_pick(a(lt_enumerate_names=names, lt_enumerate_max=limit)))
+
+    with pytest.raises(H.NamesNotTaken, match=r"1 of the fp8-e4m3 .*_tile15000_st37\): .*lt13 accepted 20000: pass "
+                                              r"--lt-enumerate-max 20000"):
+        gate(B.LT_ENUMERATED_MAX)
+    got = gate(20000)["fp8-e4m3"]
+    assert [c.name for c in got["gated"]] == ["lt13_fp8-e4m3_0_algo67_tile10_st37", "lt13_fp8-e4m3_0_algo67_tile15000_st37"]
+    assert got["cublaslt_enumeration"]["lt13"]["named"] == [c.name for c in got["gated"]] and not got[
+        "cublaslt_enumeration_missing"]
+    names.write_text("lt13_fp8-e4m3_0_algo67_tile10_st38\n")
+    with pytest.raises(H.NamesNotTaken, match="no cuBLASLt loaded accepts them"):
+        gate(20000)
+
+
+def test_each_librarys_fastest_is_a_finalist_beside_the_fastest_few(monkeypatch):
+    ms = {"cutlass3x_a": 1.0, "cutlass3x_b": 1.01, "cutlass3x_c": 1.02, "cutlass3x_d": 1.03, "lt_x": 1.05, "lt_y": 1.06,
+          "lt13_z": 1.08}
+    cands = [B.Candidate("fp8-e4m3", "cutlass", n, {"swap": 0}) for n in ms if n.startswith("cutlass")]
+    cands += [B.Candidate("fp8-e4m3", "cublaslt", n, {"library": n.split("_")[0]}) for n in ms if n.startswith("lt")]
+    b, dev = bench()
+    made = []
+
+    def call(d, c, *a):
+        made.append((c.name, FakeCall(dev, ms[c.name])))
+        return made[-1][1]
+    monkeypatch.setattr(B, "BaselineCall", call)
+    for c in cands:
+        b.gate(("baseline", SHAPE.label, "fp8-e4m3", c.name), lambda: (True, {}))
+    gated = {"fp8-e4m3": {"gated": cands}}
+    so = argparse.Namespace(sets=3, ops=lambda fam, s: None)
+    got = H.tune_baselines(b, dev, SHAPE, [B.FAMILIES["fp8-e4m3"]], so, gated, None, 2, 1, 3)
+    final = ["cutlass3x_a", "cutlass3x_b", "cutlass3x_c", "lt_x", "lt13_z"]
+    assert [e.key[-1] for e in got] == gated["fp8-e4m3"]["finalists"] == final
+    assert [e.meta["library"] for e in got] == ["cutlass"] * 3 + ["lt", "lt13"]
+    assert len(made) == 3 * len(ms) and all(fc.freed == (n not in final) for n, fc in made)
+    assert [e.key[-1] for e in H.finalists_of(got, 1)] == ["cutlass3x_a", "lt_x", "lt13_z"]
+
+
+def test_a_names_file_must_name_configurations_of_the_enumerated_families(tmp_path, capsys):
+    names = tmp_path / "best.txt"
+    base = ["--gpu", "0", "--out", str(tmp_path / "o.json"), "--lt-enumerate-names", str(names)]
+    names.write_text("lt13_fp8-e4m3_0_algo67_tile10_st37\n")
+    for extra, why in (([], "doesn't enumerate"), (["--lt-enumerate", "nvfp4"], "doesn't enumerate")):
+        with pytest.raises(SystemExit) as ex:
+            H.parse(base + extra)
+        assert ex.value.code == 2 and why in capsys.readouterr().err
+    assert H.parse(base + ["--lt-enumerate", "fp8-e4m3"]).lt_enumerate == ["fp8-e4m3"]
+    names.write_text("\n")
+    with pytest.raises(SystemExit):
+        H.parse(base + ["--lt-enumerate", "fp8-e4m3"])
+    assert "names no configuration" in capsys.readouterr().err
+
+
 def test_set_count_bounds():
     assert S.set_count(1, 128 << 20) == S.MAX_SETS
     assert S.set_count(1 << 40, 128 << 20) == S.MIN_SETS

@@ -7,7 +7,7 @@
 # ship time) so no later ship without the variable rebuilds the tap back to three head dims (a build-config difference triggers a REBUILD
 # both ways).
 #
-#   cd /workspace/cp/veritor && bash verity_vllm/ops/pod_fa2_tap.sh                # ~10-15 min first time (nvcc), seconds after
+#   cd <tree>/integrations/vllm && bash verity_vllm/ops/pod_fa2_tap.sh                # ~10-15 min first time (nvcc), seconds after
 #   -> prints  FA2-TAP-OK <sha256 of verity_fa2_matReq.so> hdims=<mask> <path>          (or FA2-TAP-FAIL <reason>, exit 1)
 #
 # What it does: (1) clones vllm-project/flash-attention at the pinned 506341a1 (+ cutlass submodule) into /workspace/cp/vllm-flash-attn
