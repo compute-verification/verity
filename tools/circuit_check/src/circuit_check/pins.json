@@ -3,11 +3,20 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "Bf16ToF32_v2": {
+   "and": 0
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
   "DotBf16_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 31220
+  },
+  "Embedding_v2{V=1100,H=2}": {
+   "and": 36032
+  },
+  "Embedding_v2{V=64,H=16}": {
+   "and": 22784
   },
   "F2fpBf16_v2": {
    "and": 66
@@ -29,6 +38,21 @@
   },
   "F32SubFtz_v3": {
    "and": 952
+  },
+  "GatherBf16x1024u10_v1": {
+   "and": 16368
+  },
+  "GatherBf16x1100_v2": {
+   "and": 18016
+  },
+  "GatherBf16x2u22_v1": {
+   "and": 352
+  },
+  "GatherBf16x64_v2": {
+   "and": 1424
+  },
+  "GatherBf16x76u10_v1": {
+   "and": 1296
   },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
