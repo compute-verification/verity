@@ -64,10 +64,10 @@ ALLOWLIST = {
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
-    "integrations/vllm/verity_vllm/program/registry/quarantine/dense/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
+    "packages/verity/src/verity/ml/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is

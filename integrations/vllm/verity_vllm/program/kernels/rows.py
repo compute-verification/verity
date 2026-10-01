@@ -289,7 +289,11 @@ def gemm_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np
         dot = D.dot_bf16_for(dot_id)
     except KeyError:
         raise Declined(f"no registered evaluator for Gemm_v2 with DOT={dot_id} (k16 step twins: {sorted(D.TC_DOT16_BY_PRIM)})") from None
-    out, nonfin = _gemm(dot, statics, ops)
+    K, N = int(statics["K"]), int(statics["N"])
+    if K * N >= dense_rows.FAST_GEMM_WORDS and dot_id in dense_rows.STEPS:
+        out, nonfin = dense_rows.gemm_row(np.asarray(ops[0], dtype=np.uint16).reshape(K), np.asarray(ops[1], dtype=np.uint16).reshape(N, K), dot_id)
+    else:
+        out, nonfin = _gemm(dot, statics, ops)
     if nonfin.any():
         # the vectorised twins flag a non-finite operand / accumulator lane instead of modelling the total semantics (tc_dot16 docstring):
         # such a coordinate is outside the twin's domain -> unresolved by name (the ScaledMmFp8Block convention), never a silent word
@@ -781,3 +785,22 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+from verity_vllm.program.kernels import softcap_rows  # noqa: E402  -- AttentionSoftcap_v2's head twin
+
+
+def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    from verity_vllm.program.kernels.ir_rows import f64_statics
+    f = softcap_rows.FAMILY
+    return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
+
+
+EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
+_k = ROWS[softcap_rows.FAMILY] = RowKernel(softcap_rows.FAMILY, attention_softcap, ("out",))
+register(softcap_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=softcap_rows.check_targets)
+
+from verity_vllm.program.kernels import ir_rows  # noqa: E402
+
+for _f in ir_rows.FAMILIES:
+    EVALUATORS[_f] = ir_rows.EVALUATOR
+    _k = ROWS[_f] = RowKernel(_f, partial(ir_rows.ir_row, _f), ("out",))
+    register(_f, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=lambda rng, f=_f: ir_rows.check_targets(f))

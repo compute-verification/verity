@@ -88,7 +88,7 @@ SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "AttentionSoftcap_v1", "AttentionN_v1", "AttentionTP2_v1"})
+FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
 
 
 def collective_kind(family: str) -> str | None:
@@ -127,6 +127,8 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("BiasAdd_v1", "out", "0", _LINEAR_WHY + " (the biased linear's epilogue is the returned tensor)", condition="own_parameter"),
     Residual("ScaledMmFp8Block_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
+    Residual("NcpLinearRow_v1", "out", "0", _LINEAR_WHY + " (the `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
+    Residual("NcpLinearRowBias_v1", "out", "0", _LINEAR_WHY + " (the fused-bias `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "
              "world takes the slot of its rank-local operand when that operand is a Linear's reading its own weight)", condition="operand_own_parameter"),
     Residual("RoPE_v1", "query", "0", "the Build records RoPE's return slots by keyword (`query` / `key`); v1 spells them as the tuple index of "

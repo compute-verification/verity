@@ -93,6 +93,38 @@ def test_stale_lock_from_vanished_holder_is_reclaimed(tmp_path):
     _wait_terminal(runs_root / "live")
 
 
+def test_a_queued_run_holds_its_cpu_allocation_through_custody_and_its_gpu_lease_around_the_workload_alone(tmp_path):
+    """--queue: the runner runs inside the job's CPU allocation (a systemd scope on vy-nebius-2), which the stand-in wrapper
+    holds until the runner exits: the run's status is already terminal then. A gpu phase's lease (gpu-lease) wraps the
+    workload alone, so the GPU is not held through custody."""
+    wrap = [PY, "-c", "import json, os, subprocess, sys; rc = subprocess.call(sys.argv[2:], env={**os.environ, 'HELD': 'yes'}); "
+            "open(sys.argv[1] + '.at-release', 'w').write(json.load(open(sys.argv[1]))['state']); sys.exit(rc)",
+            str(tmp_path / "root" / "runs" / "q1" / "status.json")]
+    lease = [PY, "-c", "import os, subprocess, sys; sys.exit(subprocess.call(sys.argv[1:], env={**os.environ, 'LEASED': 'yes'}))"]
+    req, runs_root = _request(tmp_path, "q1", [PY, "-c", "import os; print(os.environ['HELD'], os.environ['LEASED'])"])
+    doc = json.loads(req.read_text())
+    doc[remote.QUEUE_WRAP], doc[remote.QUEUE_WORKLOAD_WRAP] = wrap, lease
+    req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    s = _wait_terminal(runs_root / "q1")
+    assert out["started"] and s["state"] == "done" and (runs_root / "q1" / "stdout.log").read_text().strip() == "yes yes"
+    assert (runs_root / "q1" / "status.json.at-release").read_text() == "done"
+    argv = json.loads((runs_root / "q1" / "launch.json").read_text())["argv"]
+    assert argv[: len(wrap)] == wrap and argv[len(wrap):][1:3] == ["-m", "research"]
+    assert argv[argv.index("--", len(wrap)) + 1:][: len(lease)] == lease
+
+
+def test_a_queued_run_with_a_disk_request_is_admitted_on_the_machine_ahead_of_its_allocation(tmp_path):
+    req, runs_root = _request(tmp_path, "d1", [PY, "-c", "print('ok')"])
+    doc = json.loads(req.read_text())
+    doc["queue"] = {"disk_gb": 0.001}
+    req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    assert out["started"] and _wait_terminal(runs_root / "d1")["state"] == "done"
+    argv = json.loads((runs_root / "d1" / "launch.json").read_text())["argv"]
+    assert argv[1:5] == ["-m", "research", "disk-hold", "--gb"] and argv[argv.index("--") + 1:][1:4] == ["-m", "research", "run"]
+
+
 def test_bad_schema_is_refused_without_side_effects(tmp_path):
     req, runs_root = _request(tmp_path, "bad", ["true"])
     doc = json.loads(req.read_text()); doc["schema"] = "nope"; req.write_text(json.dumps(doc))
