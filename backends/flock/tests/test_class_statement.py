@@ -134,6 +134,34 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert "--gpu" not in seen[1]
 
 
+def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0(monkeypatch, tmp_path: Path):
+    (tmp_path / "circuit.txt").write_text("circuit")
+    st: dict = {}
+
+    class Prove:
+        def __init__(self, cmd, stdout, stderr):
+            if "-o" in cmd:
+                Path(cmd[cmd.index("-o") + 1]).write_text("1024\n")
+            stdout.write("".join(f"LIVE\t{json.dumps({'run': i, 'warm': i == 0, 'accepted': v, 'prove_total_s': 1.0 + i})}\n"
+                                 for i, v in enumerate(st["verdicts"])))
+            self.returncode = st["rc"]
+
+        def wait(self):
+            return self.returncode
+
+    monkeypatch.delenv("FC_VERIFIERS", raising=False)
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"]))
+    monkeypatch.setattr(CS.subprocess, "Popen", Prove)
+    cases = [([True] * 4, 0, True, None), ([True] * 3, 0, False, "3 LIVE records, not warm + runs = 4"),
+             ([False, True, True, True], 0, False, "sessions [0] not accepted"), ([True, True, False, True], 0, False, "sessions [2] not accepted"),
+             ([True] * 4, 1, False, "prove exited 1")]
+    for verdicts, rc, accepted, why in cases:
+        st.update(verdicts=verdicts, rc=rc)
+        live = CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=3)
+        assert (live["accepted"], live["why"]) == (accepted, why), (verdicts, rc)
+        assert live["timed_runs"] == len(verdicts) - 1
+
+
 def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Path):
     class Exited:
         pid = 0
