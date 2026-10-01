@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
 
 __constant__ uint64_t KECCAK_RC[24] = {
     0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL, 0x8000000080008000ULL,
@@ -807,6 +808,442 @@ void band_chain(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain,
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
+// ---- the band chain on lane pairs, persistent ----------------------------------------------------------------------------
+__device__ __forceinline__ uint32_t xor3_32(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t d;
+  asm("lop3.b32 %0, %1, %2, %3, 0x96;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  return d;
+}
+
+__device__ __forceinline__ uint64_t xor3_64(uint64_t a, uint64_t b, uint64_t c) {
+  return ((uint64_t)xor3_32((uint32_t)(a >> 32), (uint32_t)(b >> 32), (uint32_t)(c >> 32)) << 32) |
+         xor3_32((uint32_t)a, (uint32_t)b, (uint32_t)c);
+}
+
+// The bit-interleaved form of a lane: its even bits in the low word, its odd bits in the high word.  A rotation by 2s rotates
+// both words by s, one by 2s + 1 swaps them and rotates them by s + 1 and s: theta's five rotations by one and lane 1's cost
+// one funnel shift each instead of two.  XOR, AND and NOT act on it as on the lane; a left shift by 16 shifts each word by 8.
+__host__ __device__ constexpr uint64_t il_const(uint64_t x) {
+  uint64_t e = 0, o = 0;
+  for (int i = 0; i < 32; ++i) {
+    e |= ((x >> (2 * i)) & 1) << i;
+    o |= ((x >> (2 * i + 1)) & 1) << i;
+  }
+  return e | (o << 32);
+}
+
+__constant__ uint64_t KECCAK_RC_IL[24] = {
+    il_const(0x0000000000000001ULL), il_const(0x0000000000008082ULL), il_const(0x800000000000808aULL),
+    il_const(0x8000000080008000ULL), il_const(0x000000000000808bULL), il_const(0x0000000080000001ULL),
+    il_const(0x8000000080008081ULL), il_const(0x8000000000008009ULL), il_const(0x000000000000008aULL),
+    il_const(0x0000000000000088ULL), il_const(0x0000000080008009ULL), il_const(0x000000008000000aULL),
+    il_const(0x000000008000808bULL), il_const(0x800000000000008bULL), il_const(0x8000000000008089ULL),
+    il_const(0x8000000000008003ULL), il_const(0x8000000000008002ULL), il_const(0x8000000000000080ULL),
+    il_const(0x000000000000800aULL), il_const(0x800000008000000aULL), il_const(0x8000000080008081ULL),
+    il_const(0x8000000000008080ULL), il_const(0x0000000080000001ULL), il_const(0x8000000080008008ULL)};
+
+// keccak_f⁻¹(0), the state that one Keccak-f[1600] takes to zero, in the bit-interleaved form.
+__constant__ uint64_t KECCAK_INV0_IL[25] = {
+    il_const(0xcc4d1e7d1c79203eULL), il_const(0x6b32368d50535f93ULL), il_const(0x9713d1ce0a8fb28dULL),
+    il_const(0x0470b04a7b61e14dULL), il_const(0x21552170c52cedceULL), il_const(0x5be4fcc94142d55eULL),
+    il_const(0xd9b9a48a12a1eaf5ULL), il_const(0x1f8a488af9cbdda6ULL), il_const(0x365393602d8722f6ULL),
+    il_const(0x01af24a3911bd988ULL), il_const(0x3b5553a4e4b740b6ULL), il_const(0x3afb57db8e1af00eULL),
+    il_const(0x9cd16a0661b88bebULL), il_const(0x65615c31cd1edfbcULL), il_const(0xf6afd3425b23d04bULL),
+    il_const(0x3d193dc58305b252ULL), il_const(0xb0eb3fb00ce6f58aULL), il_const(0xf8d1cc14b89e3232ULL),
+    il_const(0x0c9b488cd8d6e9f9ULL), il_const(0x4e7bee29a28abfeaULL), il_const(0x6b46aa8373a02557ULL),
+    il_const(0x4248f34262c5c631ULL), il_const(0xc77e49e623b73192ULL), il_const(0x999d4f988449fae6ULL),
+    il_const(0x798babf6870ad180ULL)};
+
+__device__ __forceinline__ uint32_t delta_swap32(uint32_t x, uint32_t m, int s) {
+  const uint32_t t = ((x >> s) ^ x) & m;
+  return x ^ t ^ (t << s);
+}
+
+// A word's even bits to its low half, its odd bits to its high half (and back).
+__device__ __forceinline__ uint32_t unshuffle32(uint32_t x) {
+  x = delta_swap32(x, 0x22222222u, 1);
+  x = delta_swap32(x, 0x0c0c0c0cu, 2);
+  x = delta_swap32(x, 0x00f000f0u, 4);
+  return delta_swap32(x, 0x0000ff00u, 8);
+}
+
+__device__ __forceinline__ uint32_t shuffle32(uint32_t x) {
+  x = delta_swap32(x, 0x0000ff00u, 8);
+  x = delta_swap32(x, 0x00f000f0u, 4);
+  x = delta_swap32(x, 0x0c0c0c0cu, 2);
+  return delta_swap32(x, 0x22222222u, 1);
+}
+
+__device__ __forceinline__ uint64_t il64(uint64_t x) {
+  const uint32_t a = unshuffle32((uint32_t)x), b = unshuffle32((uint32_t)(x >> 32));
+  return ((uint64_t)__byte_perm(a, b, 0x7632) << 32) | __byte_perm(a, b, 0x5410);
+}
+
+__device__ __forceinline__ uint64_t de_il64(uint64_t v) {
+  const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
+  return ((uint64_t)shuffle32(__byte_perm(e, o, 0x7632)) << 32) | shuffle32(__byte_perm(e, o, 0x5410));
+}
+
+__device__ __forceinline__ uint32_t rotl32(uint32_t x, int n) { return n ? __funnelshift_l(x, x, n) : x; }
+
+__device__ __forceinline__ uint64_t il_rotl(uint64_t v, int r) {
+  const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
+  return (r & 1) ? ((uint64_t)rotl32(e, r >> 1) << 32) | rotl32(o, (r + 1) >> 1)
+                 : ((uint64_t)rotl32(o, r >> 1) << 32) | rotl32(e, r >> 1);
+}
+
+// keccak_f_thread's round on the bit-interleaved form, theta's D folded into each lane's column update: one 3-input XOR
+// (LOP3) per 32-bit half.
+__device__ __forceinline__ void keccak_round_il(uint64_t st[25], uint64_t rc) {
+  constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
+  constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
+  uint64_t bc[5];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) {
+    const uint64_t r1 = il_rotl(bc[(i + 1) % 5], 1);
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
+  }
+  uint64_t b[25];
+#pragma unroll
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = il_rotl(st[s], RHO[s]);
+#pragma unroll
+  for (int j = 0; j < 25; j += 5) {
+#pragma unroll
+    for (int i = 0; i < 5; ++i) st[j + i] = b[j + i] ^ ((~b[j + (i + 1) % 5]) & b[j + (i + 2) % 5]);
+  }
+  st[0] ^= rc;
+}
+
+// Rounds per iteration of keccak_f_il's round loop.
+constexpr int PAIRS_UNROLL = 8;
+
+__device__ __forceinline__ void keccak_f_il(uint64_t st[25]) {
+  static_assert(24 % PAIRS_UNROLL == 0, "PAIRS_UNROLL divides 24");
+#pragma unroll 1
+  for (int r = 0; r < 24; r += PAIRS_UNROLL) {
+#pragma unroll
+    for (int u = 0; u < PAIRS_UNROLL; ++u) keccak_round_il(st, KECCAK_RC_IL[r + u]);
+  }
+}
+
+__device__ __forceinline__ int ld_acquire_gpu(const int* p) {
+  int v;
+  asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  return v;
+}
+
+__device__ __forceinline__ void st_release_gpu(int* p, int v) {
+  asm volatile("st.release.gpu.global.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
+}
+
+// A chunk as the SLOT_WORDS / 2 16-byte vectors of its slot (word w is v[w / 2].x or .y; word 17 is the slot's padding),
+// loaded in 128-bit loads.
+constexpr int SLOT_VECS = SLOT_WORDS / 2;
+
+__device__ __forceinline__ unsigned long long& chunk_word(ulonglong2 v[SLOT_VECS], int w) {
+  return (w & 1) ? v[w >> 1].y : v[w >> 1].x;
+}
+
+// slot loads and stores through L2 only: a slot another SM wrote is never read from a stale L1 line.
+__device__ __forceinline__ void slot_load_cg(const uint64_t* p, ulonglong2 v[SLOT_VECS]) {
+  const ulonglong2* q = reinterpret_cast<const ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_VECS; ++k) v[k] = __ldcg(q + k);
+}
+
+// In 64-bit stores (the padding word is not written): a 128-bit store would need each pair of words in four aligned
+// registers, which ptxas buys with a MOV per register.
+__device__ __forceinline__ void slot_store_cg(uint64_t* p, ulonglong2 v[SLOT_VECS]) {
+  unsigned long long* q = reinterpret_cast<unsigned long long*>(p);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) __stcg(q + w, chunk_word(v, w));
+}
+
+// slot_store_cg on the lanes where `on` holds, in predicated stores: a branch around them would put a convergence barrier
+// in the chunk loop.
+__device__ __forceinline__ void slot_store_cg_if(uint64_t* p, ulonglong2 v[SLOT_VECS], bool on) {
+  unsigned long long* q = reinterpret_cast<unsigned long long*>(p);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w)
+    asm volatile("{\n\t.reg .pred q;\n\tsetp.ne.u32 q, %2, 0;\n\t@q st.global.cg.u64 [%0], %1;\n\t}" ::"l"(q + w),
+                 "l"(chunk_word(v, w)), "r"((unsigned)on)
+                 : "memory");
+}
+
+// t ^ (s & m), one LOP3 per half (ptxas otherwise turns a mask it can prove all-or-nothing into a SEL before the XOR).
+__device__ __forceinline__ uint64_t xor_and(uint64_t t, uint64_t s, uint64_t m) {
+  uint32_t lo, hi;
+  asm("lop3.b32 %0, %1, %2, %3, 0x78;" : "=r"(lo) : "r"((uint32_t)t), "r"((uint32_t)s), "r"((uint32_t)m));
+  asm("lop3.b32 %0, %1, %2, %3, 0x78;" : "=r"(hi) : "r"((uint32_t)(t >> 32)), "r"((uint32_t)(s >> 32)), "r"((uint32_t)(m >> 32)));
+  return ((uint64_t)hi << 32) | lo;
+}
+
+// absorb_chunk for the Π₂ half of band_chain_pairs_kernel (hw = 8196: chunks 0 .. 481 hold 17 message words each, the last
+// chunk two, then the carry and the pad), in the bit-interleaved form (il_const) throughout, every word's contribution ANDed
+// with m (all ones, or zero on a lane that must not absorb), so both roles of a warp run the same instructions.
+template <bool LAST>
+__device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_VECS], uint64_t& carry, uint64_t m) {
+  constexpr int words = LAST ? 2 : RATE_WORDS, tail = 18;
+  auto shifted = [](uint64_t val, uint64_t c) -> uint64_t {  // (val << 16) | (c >> 48)
+    return ((uint64_t)__funnelshift_l((uint32_t)(c >> 32), (uint32_t)(val >> 32), 8) << 32) |
+           __funnelshift_l((uint32_t)c, (uint32_t)val, 8);
+  };
+#pragma unroll
+  for (int w = 0; w < words; ++w) {
+    const uint64_t val = chunk_word(v, w);
+    t[w] = xor_and(t[w], shifted(val, carry), m);
+    carry = val;
+  }
+  if (LAST) {
+    t[words] = xor_and(t[words], shifted(0, carry), m);
+    constexpr uint64_t pad = il_const((uint64_t)0x1F << (8 * (tail % 8))), end = il_const((uint64_t)0x80 << 56);
+    t[tail / 8] = xor_and(t[tail / 8], pad, m);
+    t[RATE_WORDS - 1] = xor_and(t[RATE_WORDS - 1], end, m);
+  }
+}
+
+// band_chain_kernel's chains on lane pairs: a warp holds PAIR_ROWS rows, lane l row l % 16's sponge of role l / 16, one
+// Keccak state per lane where band_chain_kernel's thread permutes two.  In a Feistel round one role squeezes (its sponge
+// absorbed the round's source half) while the other absorbs the half being written (the next round's source); role 0
+// squeezes the odd rounds.  Round 10's absorber takes half 1 under the next call's first prefix, so every call after the first
+// starts squeezing at once.  A row's final call writes W = A ^ C_blk in round 9 and has no round 10 (only half 0 is the key).
+// Persistent: the grid's warps take tasks (group g of PAIR_ROWS rows, step s) in step-major order from `next`, each waiting
+// for `done[g] >= s`.  Step 0 is the first call's first absorb; step 2j - 1 is call j's rounds 1 .. 5 and step 2j its rounds
+// 6 .. 10, so that the last tasks to run are a fifth of a call each.  Between steps the one live sponge (the last round's
+// absorber's) goes through `sponge`.  Same output as band_chain.
+// Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
+// nothing on the squeezer.  The absorber takes each chunk one chunk late, reading back the slot the squeezer wrote a Keccak-f
+// earlier (in the same load instructions as the squeezer's next chunk), so the pair exchanges no shuffles.  The state, the
+// slots and the sponges are in the bit-interleaved form (il_const): X is read from `cx`, the caller's interleaved copy of `c`,
+// W is converted as it is written, and the slots' initial contents are the caller's to convert (chunked_interleave_kernel).
+constexpr int PAIR_ROWS = 16;
+constexpr int PAIRS_WARPS_PER_BLOCK = 4;
+
+__global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
+    uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
+    const uint64_t* __restrict__ cx, const int64_t* __restrict__ base, const int64_t* __restrict__ blk,
+    const int64_t* __restrict__ len, const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next,
+    int64_t groups, int calls) {
+  constexpr int64_t hw = 8196, xwords = 8192, nch = (hw + RATE_WORDS - 1) / RATE_WORDS, msg = 8 * hw + 2;
+  constexpr int64_t full = msg / RATE, xch = xwords / RATE_WORDS;
+  static_assert(nch == full + 1 && hw - full * RATE_WORDS == 2 && msg - full * RATE == 18,
+                "absorb_masked's layout: the last chunk holds two words, the carry, and the pad");
+  constexpr unsigned ALL = 0xffffffffu;
+  const int lane = threadIdx.x & 31, rl = lane & 15, role = lane >> 4;
+  const int64_t steps = 2 * (int64_t)calls + 1, tasks = groups * steps, cstride = pitch * SLOT_WORDS;
+  for (;;) {
+    int k = 0;
+    if (lane == 0) k = atomicAdd(next, 1);
+    k = __shfl_sync(ALL, k, 0);
+    if (k >= tasks) break;
+    const int s = (int)(k / groups), j = s == 0 ? 1 : (s + 1) / 2, part = s == 0 ? 0 : (s - 1) & 1;
+    const int64_t g = k % groups, n = g * PAIR_ROWS + rl, r = row0 + n;
+    const int64_t L = n < rows ? len[r] : -1;
+    const bool act = j <= L + 1, fin = j == L + 1, more = j <= L;
+    if (!__any_sync(ALL, act)) continue;
+    // The chunk loop's loads run on every lane, a lane past the last row reading its group's first row's slots (and never
+    // writing).
+    const int64_t ra = n < rows ? r : row0 + g * PAIR_ROWS;
+    const bool any_more = __any_sync(ALL, more), any_fin = __any_sync(ALL, fin);
+    if (s > 0) {
+      if (lane == 0)
+        while (ld_acquire_gpu(done + g) < s) __nanosleep(64);
+      __syncwarp();
+    }
+#define SLOT_AT(h, cc, row) (st_words + (((int64_t)(h) * nch + (cc)) * pitch + (row)) * SLOT_WORDS)
+    // v: a chunk's source, loaded a Keccak-f ahead of its use (after the previous chunk's absorb), and the chunk written,
+    // computed in place.
+    uint64_t x[25];
+    ulonglong2 v[SLOT_VECS];
+#pragma unroll
+    for (int w = 0; w < 25; ++w) x[w] = 0;
+#pragma unroll
+    for (int k2 = 0; k2 < SLOT_VECS; ++k2) v[k2] = make_ulonglong2(0, 0);
+    uint64_t* sp = sponge + (g * PAIR_ROWS + rl) * 25;
+    // keep: this step's last absorber's sponge, which the next step's first squeezer loads.
+    int keeper = 0;
+    if (s == 0) {  // the first call's first absorb (half 1 under prefix 1), on role 0 alone
+      const uint64_t m = role == 0 ? ~0ull : 0;
+      uint64_t carry = il64(((uint64_t)(uint8_t)domain | (1ull << 8)) << 48);
+      const uint64_t* p = SLOT_AT(1, 0, r);
+      if (role == 0 && act) slot_load_cg(p, v);
+      for (int64_t cc = 0; cc < nch; ++cc) {
+        if (cc < full) absorb_masked<false>(x, v, carry, m);
+        else absorb_masked<true>(x, v, carry, m);
+        p += cstride;
+        if (role == 0 && act && cc + 1 < nch) slot_load_cg(p, v);
+        keccak_f_il(x);
+      }
+    }
+    const int rounds = s == 0 ? 0 : any_more ? 10 : 9, i0 = part ? 6 : 1, i1 = s == 0 ? 0 : part ? rounds : 5;
+    if (s > 0 && role == ((i0 & 1) ? 0 : 1) && act) {
+#pragma unroll
+      for (int w = 0; w < 25; ++w) x[w] = __ldcg(sp + w);
+    }
+    if (s > 0) keeper = (i1 & 1) ? 1 : 0;
+    const uint64_t* xrow = more ? cx + (base[r] + blk[r] - j) * xwords : nullptr;
+    const uint64_t* crow = fin ? c + (base[r] + blk[r]) * xwords : nullptr;
+    uint64_t* orow = fin ? out + dest[r] * xwords : nullptr;
+    for (int i = i0; i <= i1; ++i) {
+      const int h = (i & 1) ? 0 : 1;
+      const bool sq = role == ((i & 1) ? 0 : 1), x_in = i == 1, to_out = fin && i == 9, st = act && (i <= 8 || more);
+      const uint64_t m = sq ? 0 : ~0ull;
+      uint64_t carry = il64(((uint64_t)(uint8_t)domain | ((uint64_t)(i == 10 ? 1 : i + 1) << 8)) << 48);
+      // X as read (interleaved); the pad's words are their own interleaved forms.
+      auto xword = [&](int64_t jj) -> uint64_t {
+        return xrow ? __ldg(xrow + jj) : jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull);
+      };
+      auto src = [&](int64_t cc, const uint64_t* p, ulonglong2 d[SLOT_VECS]) {
+        if (x_in && cc < xch) {
+#pragma unroll
+          for (int k2 = 0; k2 < SLOT_VECS; ++k2) {
+            const int64_t jj = cc * RATE_WORDS + 2 * k2;
+            d[k2] = make_ulonglong2(xword(jj), 2 * k2 + 1 < RATE_WORDS ? xword(jj + 1) : 0);
+          }
+        } else {
+          slot_load_cg(p, d);
+          if (x_in && cc == xch) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) {
+              const int64_t jj = cc * RATE_WORDS + w;
+              if (jj < xwords) chunk_word(d, w) = xword(jj);
+            }
+          }
+        }
+      };
+      uint64_t* p = SLOT_AT(h, 0, ra);  // chunk cc's slot, then (once stored) cc + 1's
+      if (sq && act) src(0, p, v);
+      auto produce = [&](int64_t cc) {  // the squeezer's chunk cc, written
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
+        if (sq && act) {
+          if (to_out) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) {
+              const int64_t jj = cc * RATE_WORDS + w;
+              if (jj < xwords) orow[jj] = de_il64(chunk_word(v, w)) ^ __ldg(crow + jj);
+            }
+          } else if (st) {
+            slot_store_cg(p, v);
+          }
+        }
+      };
+      // The absorber takes chunk cc - 1 in step cc, so a round is nch + 1 steps.  Its sponge starts as keccak_f⁻¹(0), which
+      // step 0 (absorbing nothing) takes to zero, so that only the last step differs from the rest: the rounds that read X
+      // or may write W run `produce`'s branches, the others predicated stores and no branch.
+#pragma unroll
+      for (int w = 0; w < 25; ++w) x[w] = sq ? x[w] : KECCAK_INV0_IL[w];
+      const uint64_t carry0 = carry;
+      auto chunk_steps = [&](auto plain) {
+        constexpr bool PLAIN = decltype(plain)::value;
+#pragma unroll 1
+        for (int64_t cc = 0; cc < nch; ++cc) {
+          absorb_masked<false>(x, v, carry, cc > 0 ? m : 0);
+          carry = cc > 0 ? carry : carry0;
+          if constexpr (PLAIN) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
+            slot_store_cg_if(p, v, sq && st);
+          } else {
+            produce(cc);
+          }
+          __syncwarp();
+          if (!PLAIN && x_in && cc + 1 <= xch) {
+            if (sq) src(cc + 1, p + cstride, v);
+            else slot_load_cg(p, v);
+          } else {
+            slot_load_cg(sq && cc + 1 < nch ? p + cstride : p, v);
+          }
+          p += cstride;
+          keccak_f_il(x);
+        }
+      };
+      if (x_in || (i == 9 && any_fin)) chunk_steps(std::false_type{});
+      else chunk_steps(std::true_type{});
+      absorb_masked<true>(x, v, carry, m);
+      keccak_f_il(x);
+    }
+#undef SLOT_AT
+    if (s == 0 || part == 0 || any_more) {
+      if (role == keeper && (s == 0 || part == 0 ? act : more)) {
+#pragma unroll
+        for (int w = 0; w < 25; ++w) __stcg(sp + w, x[w]);
+      }
+      __threadfence();
+      __syncwarp();
+      if (lane == 0) st_release_gpu(done + g, s + 1);
+    }
+  }
+}
+
+// Words 0 .. 16 of chunks c0 .. nch - 1 of both halves of rows row0 .. row0 + rows - 1 into the bit-interleaved form, in place.
+__global__ void chunked_interleave_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t nch,
+                                          int64_t c0) {
+  const int64_t per_chunk = rows * RATE_WORDS, per_half = (nch - c0) * per_chunk;
+  for (int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x; t < 2 * per_half; t += (int64_t)gridDim.x * blockDim.x) {
+    const int64_t h = t / per_half, cc = c0 + t % per_half / per_chunk, n = t % per_chunk / RATE_WORDS, w = t % RATE_WORDS;
+    uint64_t* q = st_words + ((h * nch + cc) * pitch + row0 + n) * SLOT_WORDS + w;
+    *q = il64(*q);
+  }
+}
+
+// dst = the bit-interleaved form of src, word by word (n16 16-byte pairs of words).
+__global__ void il64_copy_kernel(const ulonglong2* __restrict__ src, ulonglong2* __restrict__ dst, int64_t n16) {
+  for (int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x; t < n16; t += (int64_t)gridDim.x * blockDim.x) {
+    const ulonglong2 v = __ldcs(src + t);
+    __stcs(dst + t, make_ulonglong2(il64(v.x), il64(v.y)));
+  }
+}
+
+// band_chain in one persistent launch of band_chain_pairs_kernel, one block of PAIRS_WARPS_PER_BLOCK warps per SM (a warp per
+// scheduler).  Chunks interleave_from .. 482 of both halves are converted to the bit-interleaved form first: every word of
+// the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.  X is read from an interleaved
+// copy of c, made first (c.numel() more bytes of device memory), so that each C row is converted once rather than once for
+// every row whose chain absorbs it.
+void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t calls, torch::Tensor c,
+                      torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest, torch::Tensor out,
+                      int64_t interleave_from) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
+              "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
+  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2 && c.size(1) == 65536,
+              "c must be contiguous uint8 [rows, 65536]");
+  TORCH_CHECK(reinterpret_cast<uintptr_t>(c.data_ptr()) % 16 == 0, "c must be 16-byte aligned");
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kUInt8 && out.is_contiguous() && out.size(0) == state.size(2) &&
+              out.size(1) == 65536, "out must be contiguous uint8 [pitch, 65536]");
+  for (auto* t : {&base, &blk, &len, &dest})
+    TORCH_CHECK(t->is_cuda() && t->scalar_type() == torch::kInt64 && t->is_contiguous() && t->numel() == state.size(2),
+                "base, blk, len must be int64 with one entry per state row");
+  TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
+  TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
+  TORCH_CHECK(interleave_from >= 0 && interleave_from <= state.size(1), "interleave_from: a chunk index");
+  if (rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  int sms = 0;
+  C10_CUDA_CHECK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, state.get_device()));
+  const int64_t groups = (rows + PAIR_ROWS - 1) / PAIR_ROWS;
+  TORCH_CHECK(groups * (2 * calls + 1) < (1ll << 30), "too many tasks");
+  auto ctl = torch::zeros({groups + 1}, state.options().dtype(torch::kInt32));
+  auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
+  auto cx = torch::empty_like(c);
+  il64_copy_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<const ulonglong2*>(c.data_ptr<uint8_t>()),
+                                                         reinterpret_cast<ulonglong2*>(cx.data_ptr<uint8_t>()), c.numel() / 16);
+  if (interleave_from < state.size(1))
+    chunked_interleave_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()),
+                                                                    state.size(2), row0, rows, state.size(1), interleave_from);
+  band_chain_pairs_kernel<<<(unsigned)sms, 32u * PAIRS_WARPS_PER_BLOCK, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
+      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), reinterpret_cast<const uint64_t*>(cx.data_ptr<uint8_t>()),
+      base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(), len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(),
+      reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()), reinterpret_cast<uint64_t*>(sponge.data_ptr<int64_t>()),
+      ctl.data_ptr<int>(), ctl.data_ptr<int>() + groups, groups, (int)calls);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
 // A Keccak-f[1600] state split across a lane pair: lane parity h holds bits 32h .. 32h + 31 of every 64-bit word.  A 64-bit
 // rotation is one shuffle for the partner's half and one funnel shift, written the same on both lanes, so the pair never
 // diverges; XOR, AND and NOT act on the halves alone.  `half_rot` is rotl64 of (mine, other) restricted to this lane's half.
@@ -1366,6 +1803,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("band_chain", &band_chain, "every step of the rows' chains in one launch, writing W", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("threads"), pybind11::arg("c"),
         pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"));
+  m.def("band_chain_pairs", &band_chain_pairs, "band_chain on lane pairs, in a persistent launch", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("calls"), pybind11::arg("c"),
+        pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"),
+        pybind11::arg("interleave_from"));
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),

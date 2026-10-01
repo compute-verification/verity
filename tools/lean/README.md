@@ -50,11 +50,12 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - the pinned theorems say what their records say (below);
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
-- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
-  that skipped the kernel shows no axiom, and only the replay catches it. The replay also walks the environment it
-  checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
-  No `#print axioms` output is parsed anywhere. A replay killed by a signal (out of memory) is reported as a kill, not
-  as a verdict;
+- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
+  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS`, checked against the import and the
+  declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
+  The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
+  from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
+  (out of memory) is reported as a kill, not as a verdict;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below);
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
@@ -69,7 +70,8 @@ through the kernel into an empty environment. It needs one module per root and a
 every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
 ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
-`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain (`--build`
+`--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/lean` suite runs them, only
+when `tools/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
 installs it first, so a machine without elan works), must pass clean and fail once for each violation in
 `tests/fixtures/violations.json`. Among them:
 
@@ -139,7 +141,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
 a Merkle binding theorem vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
 change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
-pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The merge handoff
+pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The PR description
 names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
 and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
 reviewer.
@@ -164,9 +166,10 @@ side's new pin reads it) fails there. `merge.py --normalize FILE` recomputes a r
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
-A named assumption, or a lemma we prove by hand, may be proved upstream one day, and the proof may arrive as a different
-theorem, with a different constant, under a name nobody watches. So the watch list names what a statement is about, and
-the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
+A named assumption, or a lemma we prove by hand, may be proved upstream one day if its statement can be written in a
+dependency's constants, and the proof may arrive as a different theorem, with a different constant, under a name nobody
+watches. One stated over the package's own definitions has no entry, since no upstream theorem can mention them. So the
+watch list names what a statement is about, and the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
 
 ~~~json
 "upstream": {

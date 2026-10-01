@@ -35,11 +35,11 @@ Implementations (`IMPLS`), each adding one class:
   (decode with v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
   at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): P2 v1 is not a
   `verity_pous` registered scheme, whose P2 is the MVP's `p2-16448/v2`.
-* `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only harness
-  (`band_gpu/harness.py`): kernel gates that stop the run when they fail, encode GB/s, `C` resident, decode overhead on a
-  synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable), the limit fixed before any load, timed audits
-  under that loop with value, late and recompute controls, the `Π₂` step floor (an upper bound on an attacker's), and
-  optionally one block's read latency from NVMe.
+* `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
+  (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
+  encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
+  the limit fixed before any load, timed audits under that loop with value, late and recompute controls, the `Π₂` step
+  floor (an upper bound on an attacker's), and optionally one block's read latency from NVMe.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def conformance_gate(name: str) -> dict[str, Any]:
 
 
 TAG_SEGMENTS = 448
-"""Segment tags are gated over at least this many segments (`band_meets_14`'s 14 GB store)."""
+"""Segment tags are gated over at least this many segments (the 14 GB store of `Pous.Pinned.BandMultiMeets14`)."""
 
 
 def tags_gate(tags: list[bytes], segments: int) -> dict[str, Any]:
@@ -483,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")
     ap.add_argument("--p2-bin", default=str(HERE / "p2_gpu" / "bin"), help="p2-gpu: the directory of the built kernels")
     ap.add_argument("--scratch", default="/tmp/pous-bench", help="large inputs (C, keys), kept out of the run directory")
-    ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over the run of record's, as JSON (harness.SWITCHES)")
+    ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over harness.KERNELS, as JSON (harness.SWITCHES)")
     ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v1-gpu: the synthetic loop's token counts T")
     ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v1-gpu: timed repetitions after one warm-up; every rep is recorded")
     ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity_pous")

@@ -25,7 +25,8 @@ Implementations:
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
-  harness `band_gpu/harness.py` (steps and metrics in its docstring):
+  harness `band_gpu/harness.py` (steps and metrics in its docstring). Its whole-chain decode runs on lane pairs
+  (`harness.KERNELS`, `dense.CHAIN_PAIRS`); `pod.sh KERNELS='{"chain_pairs": false}'` runs the run of record's kernels:
   - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity_pous`'s
     encoding, and the round trip. A failed gate stops the run: nothing is timed and no measurement is published;
   - encode GB/s, with `C` then resident;
@@ -41,7 +42,10 @@ Implementations:
     bound on attacker latency, from the honest kernel with per-step launches and a host sync, so it overstates the margin; the
     gate fails when no challenge hit a dropped block);
   - the `Π₂` step floor, the fastest honest kernel (an upper bound on an attacker's), with the SM clock sampled while it
-    runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it;
+    runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the
+    certificate's `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the
+    rounds' absorbs stream behind the squeezes; `protocols/pous/PROTOCOL.md`), so `D = 5` covers `Δ + RTT < 1.449` ms
+    and the band's cliff at `d = 12` is about 3.14 ms;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
@@ -95,7 +99,7 @@ research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --
 
 `BAND_D=N` (`bench.py --band-d N`, band-gpu and side-by-side's band arm) runs the band at in-degree `d = N`, as
 `band-chain/dN/v1`, with no byte-format name registered for it. It is refused for `d < 5`, which has no certificate. For
-`d >= 5`, the certificate gate checks `band_meets_64` (or `band_meets_14` at 448 segments) with the cliff at `d`. The pinned
+`d >= 5`, the certificate gate checks `Pous.Pinned.BandMultiMeetsFamily`, for any segment count, with the cliff at `d`. The pinned
 vector is still checked at the registered `d = 12`, and the reference gate checks the run's own `d`. `bench-result.json` records
 the run's `d` in `scheme` and `scheme_params`.
 
