@@ -56,8 +56,9 @@ from . import partition_units as PU
 BLOCK_WORDS = 64
 #: the selftest cases run on a read-bearing class (each re-parses its 1-3 GB circuit): the honest session, and the two witness tamperings
 READ_CASES = ("honest", "unit_internal_bit_flipped", "unit_input_differs_from_its_message_bits")
-#: and with --selftest-gpu, the GPU prover's paths against each other and against the CPU prover (byte-identical proofs)
-GPU_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu")
+#: and with --selftest-gpu, the GPU prover's paths against each other and against the CPU prover, and its sessions verified
+#: beside the next ones' proving against one at a time (byte-identical proofs)
+GPU_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial")
 EXPERIMENTAL = "verity/flock/experimental-owners"
 
 
@@ -313,6 +314,22 @@ def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
     return out
 
 
+#: evaluations of flat Definitions this large are kept for the next shape of the same Definition (the sampler's keep word is one flat
+#: Definition of about 10^8 gates, and all of its ~86 shapes read the same evaluations)
+KEEP_EVALUATIONS_ABOVE = 1 << 20
+_EVALUATIONS: dict = {}
+
+
+def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]:
+    if act.fn.gates <= KEEP_EVALUATIONS_ABOVE:
+        return PU.evaluate(act, words)
+    if key not in _EVALUATIONS:
+        if len(_EVALUATIONS) >= 2:
+            _EVALUATIONS.pop(next(iter(_EVALUATIONS)))
+        _EVALUATIONS[key] = PU.evaluate(act, words)
+    return _EVALUATIONS[key]
+
+
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
     evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
@@ -338,7 +355,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
         raw = PU.synthetic_words(key, f"{act.fn.id}#{t}", widths, 1)[0]
         grp = PU.synthetic_words(key, f"{act.fn.id}#call{call}", widths, 1)[0]
         words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
-        run = PU.evaluate(act, words)
+        run = _evaluation(act, (act.fn.id, t, call), words)
         for uc, per in zip(mine, reads):
             if have >= n:
                 break
@@ -373,6 +390,14 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
+    cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
+    if n * per_instance > cap_bits:                     # a unit whose rows are long pays for their hashing in every instance
+        n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
+        rows, outs = rows[:n], outs[:n]
+        per_port = {k: v[:n] for k, v in per_port.items()}
+        idents = [ids[:n] for ids in idents] if idents is not None else None
     tables = refs = None
     if idents is not None:
         if len(idents) != len(groups):
@@ -391,10 +416,77 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
                     share_rows=True, tables=tables, refs=refs)
-    meta = json.loads(text.split("\n", 2)[1][5:])
     return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
+            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+
+
+#: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
+#: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
+#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
+
+
+def tile_lowering(low1: IL.Lowering, P: int, C: int, name: str) -> IL.Lowering:
+    """A two-port class lowering as a P x C tile: the same unit circuit and layout, P * C units over C + P row ports."""
+    pw, w1 = low1.definition.port_words, low1.definition.w_out
+    ports = (pw[0],) * C + (pw[1],) * P
+    off = [sum(ports[:i]) for i in range(len(ports))]
+    in_src = [[("leaf", off[b] + j) for j in range(pw[0])] + [("leaf", off[C + a] + j) for j in range(pw[1])] for a in range(P) for b in range(C)]
+    out_src = [[("ret", u * w1 + j) for j in range(w1)] for u in range(P * C)]
+    U1 = low1.units
+    U = IL.Units(target=None, in_widths=U1.in_widths, out_widths=U1.out_widths, in_src=in_src, out_src=out_src, signature=U1.signature,
+                 gates=[], arg_gates=[], ret_gates=[])
+    return IL.Lowering(name, ClassDefinition(name, ports, w1 * P * C), U, low1.circuit, low1.layout)
+
+
+def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes, P: int, C: int,
+                n: int) -> dict:
+    """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
+    vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
+    tile's leaf maps."""
+    act = units.activation(cl.definition)
+    uc = cl.representative
+    name = shape[:16]
+    ins, want = lanes_[0], lanes_[1]
+    partition, program = partition_binding(units, spec)
+    groups = sources(act, uc, owners_of(units, cl.definition.id))
+    low1 = class_lowering(act, uc, f"unit-class/{name}", groups)
+    pw, w1 = low1.definition.port_words, low1.definition.w_out
+    if len(pw) != 2 or pw[0] != pw[1]:
+        raise ValueError(f"class {name}: a tile needs two row ports of one width, not {pw}")
+    w = pw[0]
+    _rows1, _outs1, per1 = pack(uc, ins, want, low1.definition.w_in, w1, groups, pw)
+    if len(per1["p0"]) < n * (P + C):
+        raise ValueError(f"class {name}: {n} tiles need {n * (P + C)} lanes, not {len(per1['p0'])}")
+    R = np.ascontiguousarray(per1["p0"][:n * (P + C)]).reshape(n, P + C, w)
+    R0, R1 = R[:, :C], R[:, C:]
+    pairs = np.concatenate([np.broadcast_to(R0[:, None, :, :], (n, P, C, w)), np.broadcast_to(R1[:, :, None, :], (n, P, C, w))], axis=3)
+    got, _cut, ok = low1.evaluate(pairs.reshape(n * P * C, 2 * w).astype(np.uint64))
+    if not int(ok) == (1 << (n * P * C)) - 1:
+        raise AssertionError(f"class {name}: a tile's unit is unsatisfied on its rows")
+    outs = got.astype(np.uint16).reshape(n, P * C * w1)
+    low = tile_lowering(low1, P, C, f"unit-class/{name}-tile{P}x{C}")
+    per_port = {f"p{b}": np.ascontiguousarray(R0[:, b]) for b in range(C)} | {f"p{C + a}": np.ascontiguousarray(R1[:, a]) for a in range(P)}
+    got_t, _c, ok_t = low.evaluate(np.concatenate([per_port[f"p{i}"] for i in range(P + C)], axis=1).astype(np.uint64))
+    if not int(ok_t) == (1 << (n * P * C)) - 1 or not np.array_equal(got_t.astype(np.uint16), outs):
+        raise AssertionError(f"class {name}: the tile's leaf maps disagree with its units")
+    sub, iset = _shims(f"{name}-t{P}x{C}", uc.form.encode() + f"/tile{P}x{C}".encode(), P + C)
+    text = FC.compose(low, sub, partition=partition, program=program)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "circuit.txt").write_text(text)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
+    cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
+    if n * per_instance > cap_bits:
+        n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
+        outs, per_port = outs[:n], {k: v[:n] for k, v in per_port.items()}
+    FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
+             share_rows=True)
+    return {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
+            "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
+            "ports": list(low.definition.port_words), "ands": low.layout.counts["ands"] * P * C, "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
@@ -413,8 +505,10 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         return {"all_pass": all_pass, "cases": len(neg), "failed": failed} | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
     pin = FC.digest(circ.read_text())
+    # the prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once
+    concurrency = 1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)
     srv = subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(d / "sessions"), "--instances", str(pub),
-                            "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress"],
+                            "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress", "--concurrency", str(concurrency)],
                            stdout=open(d / "serve.log", "w"), stderr=subprocess.STDOUT)
     try:
         for _ in range(600):
@@ -438,11 +532,22 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     timed = [x for x in live if not x.get("warm")] or live
     v = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2]      # the median timed run
     return {k: v.get(k) for k in ("accepted", "why", "prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
-                                  "witness_s", "prove_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "statement_digest",
-                                  "buckets")} | \
+                                  "witness_s", "witness_prebuilt_s", "pipeline_depth", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
+                                  "wire_recv", "statement_digest", "buckets")} | \
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb,
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
-         "prove_total_s_runs": [x.get("prove_total_s") for x in timed]}
+         "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
+         # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
+         # ring switch, Ligerito; t.total on the device), and host_s = the rep's wall time less t.total (host work and idle)
+         "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
+
+
+def _buckets(live: dict) -> list[dict] | None:
+    reps = live.get("buckets")
+    if not reps:
+        return None
+    walls = live.get("prove_s") or []
+    return [dict(b, host_s=round(walls[i] - b.get("t.total", 0), 6) if i < len(walls) else None) for i, b in enumerate(reps)]
 
 
 def _vm_hwm(pid: int) -> float | None:
@@ -460,15 +565,86 @@ def _vm_hwm(pid: int) -> float | None:
 _CTX: dict = {}
 #: AND-instances per prove under ``--batch auto``
 BATCH_ANDS = 1 << 29
+#: witness bits per statement (instances x the block bits each takes, row hashing included); an 80 GB GPU proves 2^32
+MAX_STATEMENT_BITS = 1 << 32
 
 
 def auto_batch(ands: int, row_units: int) -> int:
-    cap = min(1024, row_units, BATCH_ANDS // max(1, ands))
+    cap = min(1024, row_units, _CTX.get("batch_ands", BATCH_ANDS) // max(1, ands))
     return max(16, 1 << max(0, cap.bit_length() - 1))
 
 
+def _tile_fits(cc, P: int, C: int) -> bool:
+    """Whether a P x C tile of this class's unit fits the largest block (K = 2048 at 4 x 4; K = 8192 needs 2^27)."""
+    return cc.counts["ands"] * P * C <= 1 << 25
+
+
+def _source_digest() -> str:
+    """The staging code's digest: every Python file of the packages a staged statement is a function of (with the program, the
+    shape, the batch parameters and the seed)."""
+    import importlib.util
+    h = hashlib.sha256()
+    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity_pouw"):
+        spec = importlib.util.find_spec(name)
+        for root in (spec.submodule_search_locations or []) if spec else []:
+            for f in sorted(Path(root).rglob("*.py")):
+                h.update(f"{name}/{f.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
+    return h.hexdigest()
+
+
+def _stage_cache(s: str) -> Path | None:
+    """FLOCK_STAGE_CACHE: where a staged shape is kept for the next run of the same code, program, shape, batch and seed."""
+    root, c = os.environ.get("FLOCK_STAGE_CACHE"), _CTX
+    if not root:
+        return None
+    if "source_digest" not in c:
+        c["source_digest"] = _source_digest()
+    a = c["a"]
+    ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
+             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE]
+    return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
+
+
 def _stage_job(s: str) -> dict:
-    """Lower, lift the lanes of and stage one shape: its record, with ``stage`` when it staged, else ``broke``."""
+    """Lower, lift the lanes of and stage one shape: its record, with ``stage`` when it staged, else ``broke`` (a shape staged
+    before by the same code, program, batch and seed is taken from FLOCK_STAGE_CACHE)."""
+    c = _CTX
+    units, cl, a = c["units"], c["classes"][s], c["a"]
+    cache = _stage_cache(s)
+    if cache is not None and (cache / "rec.json").exists():
+        t0 = time.time()
+        d = c["out"] / s[:16]
+        d.mkdir(parents=True, exist_ok=True)
+        for f in cache.iterdir():
+            if f.name != "rec.json":
+                (d / f.name).unlink(missing_ok=True)
+                try:
+                    os.link(f, d / f.name)
+                except OSError:
+                    import shutil
+                    shutil.copyfile(f, d / f.name)
+        rec = json.loads((cache / "rec.json").read_text())
+        rec["stage_cached"] = cache.name
+        rec["stage_s"] = rec["stage_wall_s"] = round(time.time() - t0, 3)
+        return rec
+    rec = _stage_job_fresh(s)
+    if cache is not None and "stage" in rec:
+        import shutil
+        tmp = cache.with_name(f"{cache.name}.tmp{os.getpid()}")
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        for f in (c["out"] / s[:16]).iterdir():
+            if f.is_file():
+                shutil.copyfile(f, tmp / f.name)
+        (tmp / "rec.json").write_text(json.dumps(rec, default=str))
+        try:
+            os.rename(tmp, cache)
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return rec
+
+
+def _stage_job_fresh(s: str) -> dict:
     c = _CTX
     units, cl, a = c["units"], c["classes"][s], c["a"]
     uc = cl.representative
@@ -488,10 +664,19 @@ def _stage_job(s: str) -> dict:
     else:
         try:
             rec["ands"] = cc.counts["ands"]
+            rec["domain"] = "finite-only" if cc.circuit.asserts else "total"
             rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
-            n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
-            lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
-            rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
+            tile = GEMM_TILE if GEMM_TILE and str(uc.definition).startswith("GemmCoordinate") and _tile_fits(cc, *GEMM_TILE) else None
+            if tile:
+                P, C = tile
+                n = (auto_batch(P * C * cc.counts["ands"], max(1, (c["row_units"].get(s) or cl.units) // (P * C)))
+                     if a.batch == "auto" else a.n)
+                lanes_ = class_lanes(units, cl, c["key"], n * (P + C), c["shared"])
+                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n)
+            else:
+                n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
+                lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
+                rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
             rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
             rec.pop("stage", None)
@@ -501,31 +686,32 @@ def _stage_job(s: str) -> dict:
 
 
 def _staged(jobs: list[str], workers: int):
-    """`_stage_job` over ``jobs``, records in order: in this process, or in ``workers`` forked processes at most two shapes each
-    ahead of the prover. A worker that dies (the OOM killer) breaks the pool: the shapes in flight are staged again in a new one,
-    and a shape lost twice is recorded as broken."""
+    """`_stage_job` over ``jobs``: in this process, in order, or in ``workers`` forked processes at most two shapes each ahead of
+    the prover, each record as soon as its shape is staged (a long shape doesn't hold the GPU up). A worker that dies (the OOM
+    killer) breaks the pool: the shapes in flight are staged again in a new one, and a shape lost twice is recorded as broken."""
     if workers <= 1:
         yield from map(_stage_job, jobs)
         return
     import multiprocessing as mp
-    from collections import deque
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
     from concurrent.futures.process import BrokenProcessPool
 
     queue, lost = list(reversed(jobs)), Counter()
     while queue:
-        live: deque = deque()
+        live: dict = {}
         with ProcessPoolExecutor(workers, mp_context=mp.get_context("fork")) as ex:
             try:
                 while queue or live:
                     while queue and len(live) < 2 * workers:
                         s = queue.pop()
-                        live.append((s, ex.submit(_stage_job, s)))
-                    rec = live[0][1].result()
-                    live.popleft()
-                    yield rec
+                        live[ex.submit(_stage_job, s)] = s
+                    done, _ = wait(live, return_when=FIRST_COMPLETED)      # the first staged shape proves first
+                    for f in done:
+                        rec = f.result()
+                        del live[f]
+                        yield rec
             except BrokenProcessPool:
-                for s, _f in reversed(live):
+                for _f, s in live.items():
                     lost[s] += 1
                     if lost[s] < 2:
                         queue.append(s)
@@ -556,6 +742,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-gpu", action="store_true", help="run the selftests on the GPU (selftest --gpu; a read-bearing class's "
                     "subset adds GPU_CASES)")
     ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
+    ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
+                    help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
@@ -567,10 +755,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--shapes", default=None, help="a file of shape digests (or prefixes), one per line: prove only these")
     ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
                     "ANDs, as a power of two >= 16 (overrides --n)")
+    ap.add_argument("--batch-ands", type=int, default=BATCH_ANDS, help="--batch auto's AND-instances per prove (default 2^29)")
+    ap.add_argument("--max-statement-bits", type=int, default=MAX_STATEMENT_BITS, help="witness bits per statement (default 2^32)")
     ap.add_argument("--jobs", type=int, default=1, help="shapes staged in parallel (forked workers); proving stays one at a time")
     ap.add_argument("--select", choices=["table-free", "reads", "units"], default=None,
                     help="leave out the token-select Calls, and prove only the shapes whose unit reads no pinned table (table-free), "
                     "reads one (reads), or either (units); the others are recorded as skipped, unstaged")
+    ap.add_argument("--counts-only", action="store_true", help="write counts.json (every shape's row units and each Call Definition's "
+                    "units per shape) and stage nothing: what `class_sweep rollup --counts` reads")
     ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
                     "table cell)")
     a = ap.parse_args(argv)
@@ -602,11 +794,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     results = out / ("selftests.jsonl" if a.selftest_only else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
+    per_definition: dict[str, dict[str, int]] = {}
     if calls is not None:
         from verity.ir.codec import descriptor_id
         for _k, _m, fn, cut in units._calls():
-            for sh, c in units._count(cut, fn).items():
+            per_definition[descriptor_id(fn)] = dict(units._count(cut, fn))
+            for sh, c in per_definition[descriptor_id(fn)].items():
                 row_units[sh] = row_units.get(sh, 0) + c * calls[descriptor_id(fn)]
+    if a.counts_only:
+        (out / "counts.json").write_text(json.dumps({
+            "calls": calls, "per_definition": per_definition,
+            "shapes": {s: {"definition": cl.representative.definition, "units": cl.units, "row_units": row_units.get(s),
+                           "word_gates": len(cl.representative.gates)} for s, cl in classes.items()}}, sort_keys=True))
+        print(f"counts: {len(classes)} shapes over {len(per_definition)} Call Definitions -> {out / 'counts.json'}")
+        return 0
     order = sorted(classes.items(), key=lambda kv: len(kv[1].representative.gates))
     wanted = [ln.strip() for ln in Path(a.shapes).read_text().split() if ln.strip()] if a.shapes else None
     if a.sample:
@@ -618,7 +819,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
-                out=out, a=a)
+                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_sha512=PO.program_sha512(program))
     partition_binding(units, a.partition)
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
@@ -628,7 +829,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 if not a.selftest_only:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
-                if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
+                if a.selftest and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
@@ -643,8 +844,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rec["broke"] = {"at": "prover", "why": f"{type(e).__name__}: {e}"[:400]}
             for f in d.glob("*.bin"):
                 f.unlink()
-            if (d / "circuit.txt").exists() and (d / "circuit.txt").stat().st_size > 1 << 28:
-                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte
+            if (d / "circuit.txt").exists():
+                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte, and
+                                                                # the run's custody stays the proofs and records (a list's circuits are tens of GB)
         rec["seconds"] = round(time.time() - t0, 3)
         with results.open("a") as f:
             f.write(json.dumps(rec, sort_keys=True) + "\n")
@@ -684,7 +886,8 @@ def write_result(results: Path, a) -> None:
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
                                     "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu), "shapes": sorted(r["shape"] for r in recs)},
+                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu),
+                                    "batch_ands": a.batch_ands, "max_statement_bits": a.max_statement_bits, "shapes": sorted(r["shape"] for r in recs)},
            "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
                           "checker": "flock-circuit loopback verifier (live coins) and selftest",
                           "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
