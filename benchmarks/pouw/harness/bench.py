@@ -638,11 +638,27 @@ def screen(bench: Bench, dev, shape, fam, so, cands: list, lt_ws, burst: int) ->
     return out
 
 
+def library(c: B.Candidate) -> str:
+    """The library a baseline candidate comes from: each cuBLASLt loaded on its own (`lt`, `lt13`), else its source."""
+    return (c.config.get("library") or c.source) if c.source == "cublaslt" else c.source
+
+
+def finalists_of(ranked: list[Entry], n: int) -> list[Entry]:
+    """The `n` fastest of a family's tuned entries and each library's fastest, in tuned order: the divisor is the fastest
+    plain GEMM of all, so every library's best is timed beside it, the same way (at decode, as a chain), never by its tune
+    alone."""
+    best = {}
+    for e in ranked:
+        best.setdefault(e.meta.get("library"), e)
+    return [e for i, e in enumerate(ranked) if i < n or any(e is b for b in best.values())]
+
+
 def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst: int, reps: int, finalists: int,
                    screen_keep: int = SCREEN_KEEP) -> list[Entry]:
-    """Each family's gated candidates on every timing set, a short graph sweep, and the fastest `finalists` per family. The
-    wide search's candidates (enumerated cuBLASLt configurations, CUTLASS kernels in a tile order of their own) are screened
-    first (`screen`), and only the `screen_keep` fastest are tuned."""
+    """Each family's gated candidates on every timing set, a short graph sweep, and the finalists per family: the fastest
+    `finalists` and each library's fastest (`finalists_of`). The wide search's candidates (enumerated cuBLASLt
+    configurations, CUTLASS kernels in a tile order of their own) are screened first (`screen`), and only the `screen_keep`
+    fastest are tuned."""
     keep = []
     for fam in fams:
         entries = []
@@ -660,13 +676,16 @@ def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst
             except Exception as ex:  # noqa: BLE001 - recorded; not timed
                 bench.dropped.append({"key": list(key), "why": f"prepare: {type(ex).__name__}: {ex}"})
                 continue
-            entries.append(Entry(key, "baseline", calls, meta={"source": c.source, "config": c.config}))
+            entries.append(Entry(key, "baseline", calls, meta={"source": c.source, "config": c.config,
+                                                               "library": library(c)}))
         entries = bench.capture(entries, burst)
         tuned = bench.tune(entries, burst, reps)
         ranked = sorted(entries, key=lambda e: tuned[e.key])
         gated[fam.name]["tuned_ms"] = {e.key[-1]: tuned[e.key] for e in ranked}
-        keep += ranked[:finalists]
-        free_entries(bench, ranked[finalists:])
+        final = finalists_of(ranked, finalists)
+        gated[fam.name]["finalists"] = [e.key[-1] for e in final]
+        keep += final
+        free_entries(bench, [e for e in ranked if all(e is not f for f in final)])
     return keep
 
 
@@ -1018,7 +1037,9 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                         "no timing. For a slice of a search too big for one run, whose best a later run times "
                         "(--lt-enumerate-names)")
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
-    p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
+    p.add_argument("--finalists", type=int, default=FINALISTS,
+                   help="the fastest kernels per family in the interleaved timing (by the tune), beside which each "
+                        "library's fastest (cuBLASLt per version, CUTLASS, any other source) is timed too")
     p.add_argument("--warmup-s", type=float, default=WARMUP_MS / 1e3,
                    help="per shape, before its reps: rounds of the timed schedule for at least this much device time, and "
                         f"until a round's median SM clock is within {STEADY * 100:.1f}%% of the round before")

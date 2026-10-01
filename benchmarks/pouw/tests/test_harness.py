@@ -895,6 +895,30 @@ def test_a_named_configuration_past_the_enumerations_cap_stops_the_run(tmp_path,
         gate(20000)
 
 
+def test_each_librarys_fastest_is_a_finalist_beside_the_fastest_few(monkeypatch):
+    ms = {"cutlass3x_a": 1.0, "cutlass3x_b": 1.01, "cutlass3x_c": 1.02, "cutlass3x_d": 1.03, "lt_x": 1.05, "lt_y": 1.06,
+          "lt13_z": 1.08}
+    cands = [B.Candidate("fp8-e4m3", "cutlass", n, {"swap": 0}) for n in ms if n.startswith("cutlass")]
+    cands += [B.Candidate("fp8-e4m3", "cublaslt", n, {"library": n.split("_")[0]}) for n in ms if n.startswith("lt")]
+    b, dev = bench()
+    made = []
+
+    def call(d, c, *a):
+        made.append((c.name, FakeCall(dev, ms[c.name])))
+        return made[-1][1]
+    monkeypatch.setattr(B, "BaselineCall", call)
+    for c in cands:
+        b.gate(("baseline", SHAPE.label, "fp8-e4m3", c.name), lambda: (True, {}))
+    gated = {"fp8-e4m3": {"gated": cands}}
+    so = argparse.Namespace(sets=3, ops=lambda fam, s: None)
+    got = H.tune_baselines(b, dev, SHAPE, [B.FAMILIES["fp8-e4m3"]], so, gated, None, 2, 1, 3)
+    final = ["cutlass3x_a", "cutlass3x_b", "cutlass3x_c", "lt_x", "lt13_z"]
+    assert [e.key[-1] for e in got] == gated["fp8-e4m3"]["finalists"] == final
+    assert [e.meta["library"] for e in got] == ["cutlass"] * 3 + ["lt", "lt13"]
+    assert len(made) == 3 * len(ms) and all(fc.freed == (n not in final) for n, fc in made)
+    assert [e.key[-1] for e in H.finalists_of(got, 1)] == ["cutlass3x_a", "lt_x", "lt13_z"]
+
+
 def test_a_names_file_must_name_configurations_of_the_enumerated_families(tmp_path, capsys):
     names = tmp_path / "best.txt"
     base = ["--gpu", "0", "--out", str(tmp_path / "o.json"), "--lt-enumerate-names", str(names)]
