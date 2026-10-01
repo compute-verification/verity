@@ -27,7 +27,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "old-accounting", "old-circuits-and-proofs"]
+           "pr-captain", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -950,22 +950,24 @@ def notes_clone(tmp_path) -> Path:
 def test_inbox_open_posts_the_root_publishes_the_route_and_guards_it(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     clone = notes_clone(tmp_path)
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
-    rc, out, err = run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-11111111", "--remit", "the  vLLM epoch run")
+    rc, _, err = run(capsys, "names", "open", "--as", "vllm-epoch-run", "--holder", "bc-11111111")
+    assert rc == 2 and "only leads get names" in err and not (clone / slack.ROUTES_DIR / "vllm-epoch-run.json").exists()
+    rc, out, err = run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-11111111", "--remit", "the  vLLM epoch run")
     assert rc == 0, err
-    r = json.loads((clone / slack.ROUTES_DIR / "vllm-epoch-run.json").read_text())
+    r = json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())
     root = fake.messages[COORD][-1]
     assert r["remit"] == "the vLLM epoch run" and "\n  the vLLM epoch run" in run(capsys, "names", "list")[1]
-    assert r["holder"] == "bc-11111111" and r["inbox_ts"] == root["ts"] and root["text"].startswith("Inbox for @vllm-epoch-run.")
+    assert r["holder"] == "bc-11111111" and r["inbox_ts"] == root["ts"] and root["text"].startswith("Inbox for @circuits.")
     assert "pushed" in out and f'threadTs="{root["ts"]}"' in out
-    assert run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-11111111")[1].startswith("@vllm-epoch-run is open already")
-    rc, _, err = run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-22222222")
+    assert run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-11111111")[1].startswith("@circuits is open already")
+    rc, _, err = run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-22222222")
     assert rc == 2 and "held by bc-11111111; a successor passes --succeeds" in err
-    assert run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-22222222", "--succeeds")[0] == 0
-    r = json.loads((clone / slack.ROUTES_DIR / "vllm-epoch-run.json").read_text())
+    assert run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-22222222", "--succeeds")[0] == 0
+    r = json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())
     assert (r["holder"], r["inbox_ts"], r["succeeds"], r["remit"]) == ("bc-22222222", root["ts"], "bc-11111111", "the vLLM epoch run")
     assert sum(m["text"].startswith("Inbox for") for m in fake.messages[COORD]) == 1
-    assert run(capsys, "inbox", "close", "--as", "vllm-epoch-run", "--forward-to", "@circuits")[0] == 0
-    assert json.loads((clone / slack.ROUTES_DIR / "vllm-epoch-run.json").read_text())["forward_to"] == "circuits"
+    assert run(capsys, "inbox", "close", "--as", "circuits", "--forward-to", "@circuits")[0] == 0
+    assert json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())["forward_to"] == "circuits"
 
 
 def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake, registry, routes_dirs, capsys):
@@ -1105,14 +1107,3 @@ def test_research_msg_is_the_front_door(registry, capsys):
     assert cli.main(["msg", "send", "--as", "infra", "--text", "x", "--to", "@infra"]) == 2
     assert capsys.readouterr().err.startswith("research msg: ")
 
-
-def test_a_checkpoint_shows_a_named_lane_its_unread_messages_and_never_fails_on_slack(fake, registry, routes_dirs, capsys, monkeypatch):
-    from research import notes
-    root = routes_dirs[0].parent
-    assert notes.slack_unread(root, "circuits-w3") is None                              # no name: nothing to read
-    inbox(fake, routes_dirs, "circuits-w3")
-    run(capsys, "send", "--as", "circuits", "--to", "@circuits-w3", "--text", "stop after the next tree")
-    assert notes.slack_unread(root, "circuits-w3").startswith("SLACK @circuits-w3: 1 new")
-    assert notes.slack_unread(root, "circuits-w3") == "SLACK @circuits-w3: nothing new"
-    monkeypatch.setenv("SLACK_API_URL", "http://127.0.0.1:9/api/")
-    assert notes.slack_unread(root, "circuits-w3").startswith("SLACK @circuits-w3: not checked (")

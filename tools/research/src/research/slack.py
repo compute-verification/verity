@@ -1,8 +1,8 @@
 """`research msg` (also `research slack`): messages between agents, on Slack (the conventions are
 `.agents/skills/using-slack/SKILL.md`).
 
-A message is a post in #agent-coordination, sent by a name: a registry handle (@infra, @proofs, ...) or any name with an inbox
-(`names open`: a worker, a lane). A thread is a conversation. Who a message reaches is one rule (`deliveries`): the names that
+A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
+`names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`deliveries`): the names that
 lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, and every name
 whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
 or a `digest` (in that name's next `read --as`). The footer carries the post's kind and flags, which subscriptions filter on.
@@ -833,7 +833,8 @@ def routes_of(ns: argparse.Namespace) -> Routes:
 
 
 def name_entry(ns: argparse.Namespace, reg: dict, name: str) -> dict:
-    """A registry handle, or any name with an inbox (a worker, a lane): who may post (`--as`) and be addressed (`--to`)."""
+    """A registry handle, or a name with an inbox that this checkout's registry predates: who may post (`--as`) and be
+    addressed (`--to`)."""
     try:
         return entry(reg, name)
     except SlackError:
@@ -1139,6 +1140,9 @@ def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
     if not NAME_RE.match(name):
         raise SlackError(f"--as {ns.handle!r}: a name is lower case letters, digits, '.', '_' and '-'")
     if ns.verb == "open":
+        if not any(h["handle"] == name for h in reg["handles"]):
+            raise SlackError(f"@{name} is not a lead's handle: only leads get names, and workers are reached through their lead "
+                             f"(Daniel, 2026-10-01); a new lead is added to {REGISTRY_REL} first")
         return inbox_open(ns, reg, routes, name)
     r = routes.get_route(name, fresh=name not in routes.local)
     if not r:
@@ -1639,9 +1643,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True, url=True)
     p.add_argument("--quiet", action="store_true", help="ring no doorbell (an acknowledgment nobody must act on)")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
-    p = cmd("names", "names you can be addressed by (each an inbox thread): open, read, close, list", url=True, aliases=("inbox",))
+    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list", url=True, aliases=("inbox",))
     p.add_argument("verb", choices=("open", "read", "close", "list"))
-    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle or lane")
+    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")
     p.add_argument("--holder", default=None, metavar="BC_ID", help="open: the agent that holds it (default: this agent)")
     p.add_argument("--succeeds", action="store_true", help="open: take over an inbox another agent holds (a successor)")
     p.add_argument("--remit", default=None, metavar="TEXT", help="open: what the name is for, one line (a successor keeps it)")

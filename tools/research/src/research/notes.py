@@ -27,8 +27,7 @@ Mail is files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane d
 refusals, the steward's kills and claim refusals) and older agents' handoffs.  Since 2026-10-01 agents message each other on
 Slack, never through notes, and the inbox flags an agent's handoff as sent the wrong way.  `checkpoint` (and `inbox`) print the
 ones changed since the lane was last shown its inbox, by mtime, and mark them read; a successor (`bind --succeeds`, or the
-predecessor's `[superseded] by <lane>` checkpoint) also gets its predecessors' unread ones.  A lane with a name to be messaged
-by (`routes.d/<lane>.json`) also gets its unread Slack doorbells there: the mid-run path to a worker nobody can wake.  `checkpoint LANE final` then runs
+predecessor's `[superseded] by <lane>` checkpoint) also gets its predecessors' unread ones.  `checkpoint LANE final` then runs
 the finish checks: every `art:` id the report cites is preserved on the remote (recorded, else verified there now), no pod of
 the lane is still running (`--keep-pod WHY` when one should), the worktree is clean at the branch tip, and every handoff is
 named in the report.
@@ -393,27 +392,6 @@ def render_inbox(lane: str, items: list[dict], limit: int = 15) -> str:
         lines.append(f"  {n} of these came from agents: notes are records, not messages (2026-10-01); act on them, and tell "
                      "each sender to message you on Slack instead (.agents/skills/using-slack/SKILL.md)")
     return "\n".join(lines)
-
-
-def slack_unread(root: Path, lane: str) -> str | None:
-    """The lane's unread messages, when it has a name to be messaged by (`routes.d/<lane>.json`, `research msg names open`):
-    how a worker that nobody can wake mid-run (a Task-tool worker) hears from its coordinator at each checkpoint.  Never fails
-    the checkpoint: a Slack it can't reach is one line saying so."""
-    try:
-        from . import slack  # noqa: PLC0415
-    except ImportError:
-        return None
-    r = slack.Routes(root=root).local.get(lane)
-    if not r or r.get("closed"):
-        return None
-    try:
-        reg = slack.load_registry(slack.registry_path())
-        r = {**r, "channel": r.get("channel") or slack.channel_id_for(reg, slack.FRONT_DOOR)}
-        msgs = slack.unread(slack.Slack(os.environ.get("SLACK_BOT_TOKEN")), r)
-    except (slack.SlackError, OSError, ValueError) as e:
-        return f"SLACK @{lane}: not checked ({str(e)[:200]}); read them with `research msg read --as {lane}`"
-    slack.mark_read(lane, msgs)
-    return slack.render_unread(lane, msgs)
 
 
 def _checkpoint_time(hh: str | None, mm: str | None, mtime: dt.datetime) -> dt.datetime | None:
@@ -2058,8 +2036,6 @@ def _main(argv: list[str]) -> int:
         print(render_inbox(ns.lane, items))
         if not getattr(ns, "peek", False):
             mark_seen(root, ns.lane, items)
-            if line := slack_unread(root, ns.lane):
-                print(line)
         if ns.cmd == "checkpoint" and ns.state == "final":
             text, rc = finish(root, ns.lane, ns.repo or repo_default(), keep_pod=ns.keep_pod, require_pushed=ns.require_pushed)
             print(text)
