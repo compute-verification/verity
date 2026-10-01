@@ -6,6 +6,12 @@
   "BlackwellE4m3QmmaDot32_v2": {
    "and": 9128
   },
+  "BlackwellMxf4OmmaDot64_v2": {
+   "and": 5917
+  },
+  "BlackwellNvf4OmmaDot64_v2": {
+   "and": 6864
+  },
   "DivFullRcp_v2": {
    "and": 4508
   },
@@ -47,6 +53,12 @@
   },
   "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3QgmmaDot32_v2}": {
    "and": 13445
+  },
+  "GemmCoordinateMxf4_v2{K=128,DOT=BlackwellMxf4OmmaDot64_v2}": {
+   "and": 11511
+  },
+  "GemmCoordinateNvf4_v2{K=128,DOT=BlackwellNvf4OmmaDot64_v2}": {
+   "and": 13401
   },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842

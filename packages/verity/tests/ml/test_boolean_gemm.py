@@ -31,6 +31,9 @@ STEPS = [bind(BG.AmpereBF16TcDot16), bind(BG.HopperBF16WgmmaDot16)]
 GEMMS = [bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER)]
 FP8_STEPS = [bind(BG.HopperE4m3QgmmaDot32), bind(BG.BlackwellE4m3QmmaDot32)]
 FP8_COORDS = [bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3)]
+FP4 = [(bind(BG.BlackwellNvf4OmmaDot64), K.BLACKWELL_SM120_NVF4), (bind(BG.BlackwellMxf4OmmaDot64), K.BLACKWELL_SM120_MXF4),
+       (bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), K.BLACKWELL_SM120_NVF4),
+       (bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4), K.BLACKWELL_SM120_MXF4)]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -47,8 +50,12 @@ PINS = {
     "BlackwellE4m3QmmaDot32_v2": (9128, 17402, 1025, "833e9ca76a0e842775c1be9c31025d2ebf23760835c302cfa2d3c36b5a05a524"),
     FP8_COORDS[0].id: (13664, 24500, 2051, "503acd555cbc8477ad837275b04c6e4e17647a5d15f596dd99685c7403432618"),
     FP8_COORDS[1].id: (18322, 34902, 2065, "812ec8f6cc84a2ec16067426bc53c502ba3000a68ecd12b08cc2aa5a340a5f0c"),
+    "BlackwellNvf4OmmaDot64_v2": (6864, 13949, 616, "8c4b251d24cf87a9d5dec18c7a8212f6db2be096878f1eed71fdc6b67deff1ef"),
+    "BlackwellMxf4OmmaDot64_v2": (5917, 12058, 605, "a2c3c1d8f2e0d31ac32461458d84877b7d57d2e384e68ac3989ac03d41bedfd6"),
+    FP4[2][0].id: (13794, 27996, 1247, "ef4ba719d62b94aacad91b282c0137c2d4f15bad679a34365fff10a8fa7cc4c4"),
+    FP4[3][0].id: (11900, 24214, 1225, "e75d20526b7ada2debc472d65568267d9a42e9f1f5d55b86cdf54c8344b4f7d4"),
 }
-TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS]
+TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, *(t for t, _ in FP4)]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -64,7 +71,7 @@ def test_pinned_counts_and_digests(target) -> None:
 
 
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,
-                               BG.BlackwellE4m3QmmaDot32], ids=lambda d: d.name)
+                               BG.BlackwellE4m3QmmaDot32, BG.BlackwellNvf4OmmaDot64, BG.BlackwellMxf4OmmaDot64], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`)."""
     T = d.traced()
@@ -115,6 +122,19 @@ def test_the_fp8_steps_and_coordinates_agree_with_their_word_definitions(target)
     sampled = K.sample_tc(rng, 20_000, params)
     _agree(target, sampled)
     _agree(target, _finite_e4m3(rng, sampled))
+
+
+@pytest.mark.parametrize("target,model", FP4, ids=[t.id for t, _ in FP4])
+def test_the_fp4_steps_and_coordinates_agree_with_their_word_definitions(target, model) -> None:
+    """On the block-scaled sampler's instances (valid, zero, extreme and invalid scale bytes) and on uniform codes and bytes."""
+    rng = np.random.default_rng(18)
+    params, _ = E.batch.signature_of(TR.word_of(target))
+    sampled = K._sample_block_scaled(model)(rng, 20_000, params)
+    _agree(target, sampled)
+    n_scales = 2
+    _agree(target, [rng.integers(0, 1 << 32, a.shape, dtype=np.uint64).astype(np.uint32) if a.dtype == np.uint32 else
+                    rng.integers(0, 256 if j >= len(sampled) - n_scales else 16, a.shape, dtype=np.uint64).astype(np.uint8)
+                    for j, a in enumerate(sampled)])
 
 
 @pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id)

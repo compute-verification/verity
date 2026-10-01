@@ -215,7 +215,7 @@ def _core_roots() -> list[Any]:
 
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, and
-    the E4M3 coordinate on both FP8 steps at K = 64; the steps, the cast,
+    the E4M3 coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; the steps, the cast,
     attention's softmax operations (`verity.ml.boolean.attention`) and the MUFU operations (`verity.ml.boolean.mufu`) are
     static-free."""
     from verity.ir.defs import bind
@@ -224,7 +224,8 @@ def _boolean_roots() -> list[Any]:
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
             bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
-            bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3)]
+            bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
+            bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4)]
 
 
 def _kernel_roots() -> list[Any]:
