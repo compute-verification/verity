@@ -87,13 +87,13 @@ STORED = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-ea
           "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
           "art:82931d609f9f8df3df847190a4e63de2302dc1c2b12c3d722a227e79dc527d37"}
 #: the sha256 of the manifest.json each row's `build-global` writes: main 33828711's, built in one process (2026-09-29), with
-#: the query's named residuals (`query.required.NAMED_RESIDUALS`, which the manifest records) naming pouw:ncp-v2's linears too.
-#: The parallel build (`--jobs`: the word check's cuts prefetched, the components built in forked processes) writes the same
-#: bytes; a change to what the manifest says re-pins them (the failure prints the new digest)
+#: the query's named residuals (`query.required.NAMED_RESIDUALS`, which the manifest records) naming pouw:ncp-v2's linears and
+#: GemmBias_v1/v2 too.  The parallel build (`--jobs`: the word check's cuts prefetched, the components built in forked processes)
+#: writes the same bytes; a change to what the manifest says re-pins them (the failure prints the new digest)
 MANIFEST_SHA256 = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
-                   "e6c92ee61ae04a611038c5548258f6a4a4a81c69e5110816ac9c41a93bf0382e",
+                   "3713766e1ab07452753b89198b3dbf6c824a4747039e4b8f7cca50c87a55651e",
                    "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
-                   "cb3db31181d4ac3e4af181f6e179c6f04315677db5e193cac1635ec652bffd4f"}
+                   "1e0ac00b1aa797a00024a059cb741e58fa7053960d7a3115f07a95dda9fd362e"}
 
 
 @pytest.mark.parametrize("row", sorted(STORED))
