@@ -17,9 +17,10 @@ products (E4M3 values are integers in units of 2^-9, so every sum is an exact in
 
 Rows are quantized per row (absmax to 448, E4M3 round-to-nearest-even), A's tokens and B's weight rows both.  Starts: `zero`
 (+0), and `h<H>`: word (i, j) starts at H_ij = s_ij 2^(round(log2 r_ij) + H) (1 + u_ij / 2), r_ij = sqrt(32) |a_i| |b_j| / k
-(the atom sum's rms), s and u keyed per word; the output is fl(C - H), whose error against the exact product is reported.
+(the atom sum's rms), s and u keyed per word; the output is fl(C - H), whose error against the exact product is reported
+(over all of k, on the first --err-rows x --err-cols words).
 
-Per (layer, class, start): the exact share per atom, the exact prefix from the start (mean = an upper bound on the atoms a
+Per (layer, class, start), over the first --atoms atoms: the exact share per atom, the exact prefix from the start (mean = an upper bound on the atoms a
 verifier must uncredit per word, a share 32 * mean / k of the credit), and for the prefix windows [0, t) and for 32-atom
 windows every 8 atoms the share of words exact over the window and a greedy biclique (rows by exact count, columns
 intersected, both orientations); `lemma` is whether it found the v2 lemma's density (1,024 x 512 of an 8,192^2 unit: 1/8 of
@@ -244,33 +245,43 @@ def census(flags: np.ndarray, rows: int, cols: int) -> dict:
     return out
 
 
+def start_words(start: str, av: np.ndarray, bv: np.ndarray, g: np.random.Generator) -> np.ndarray:
+    if start == "zero":
+        return np.zeros(len(av) * len(bv), np.uint32)
+    return hot_start(av, bv, int(start[1:]), g)
+
+
+def error(ac: np.ndarray, bc: np.ndarray, start: str, g: np.random.Generator) -> dict:
+    """fl(C - H) over all of k against the exact product, beside the exact product's own BF16 rounding (rms, relative)."""
+    s0 = start_words(start, values(ac), values(bc), g)
+    _, acc, exact = chain(ac, bc, s0)
+    y, truth = (acc.view(np.float32) - s0.view(np.float32)).astype(np.float64), exact / UNIT
+    y_bf16 = (f32_to_bf16_rn_batch(truth.astype(np.float32).view(np.uint32))[0].astype(np.uint32) << 16).view(np.float32)
+    rms = np.sqrt(np.mean(truth ** 2))
+    return {"rel_err_rms": float(np.sqrt(np.mean((y - truth) ** 2)) / rms),
+            "bf16_rel_err_rms": float(np.sqrt(np.mean((y_bf16 - truth) ** 2)) / rms), "words": len(y)}
+
+
 def job(layer: int, cls: str, args, key: str, out: Path) -> str:
     t0 = time.monotonic()
     a, b = operands(cls, layer, args, key)
     ac, bc = quantize(a), quantize(b)
     av, bv = values(ac), values(bc)
     rows, cols, k = len(ac), len(bc), ac.shape[1]
-    y_true = (av @ bv.T).ravel()
-    res = {"layer": layer, "class": cls, "rows": rows, "cols": cols, "k": k, "key": key,
+    span = min(k, 32 * args.atoms)
+    res = {"layer": layer, "class": cls, "rows": rows, "cols": cols, "k": k, "census_atoms": span // 32, "key": key,
            "zero_codes": {"a": float(((ac & 0x7F) == 0).mean()), "b": float(((bc & 0x7F) == 0).mean())},
            "subnormal_codes": {"a": float(((ac & 0x78) == 0).mean()), "b": float(((bc & 0x78) == 0).mean())},
            "starts": {}}
     path = out / f"L{layer:03d}-{cls}.json"
+    y_true = (av[:, :span] @ bv[:, :span].T).ravel()
     for start in args.starts:
         t1 = time.monotonic()
-        if start == "zero":
-            s0, hv = np.zeros(rows * cols, np.uint32), np.zeros(rows * cols, np.float32)
-        else:
-            s0 = hot_start(av, bv, int(start[1:]), rng(key, "hot", layer, cls, start))
-            hv = s0.view(np.float32)
-        flags, acc, exact = chain(ac, bc, s0)
+        g = rng(key, "hot", layer, cls, start)
+        flags, _, exact = chain(ac[:, :span], bc[:, :span], start_words(start, av, bv, g))
         assert np.allclose(exact / UNIT, y_true, rtol=0, atol=1e-6 * np.abs(y_true).max())
-        y, truth = (acc.view(np.float32) - hv).astype(np.float64), exact / UNIT
-        y_bf16 = (f32_to_bf16_rn_batch(truth.astype(np.float32).view(np.uint32))[0].astype(np.uint32) << 16).view(np.float32)
-        rms = np.sqrt(np.mean(truth ** 2))
         res["starts"][start] = {**census(flags, rows, cols),
-                                "rel_err_rms": float(np.sqrt(np.mean((y - truth) ** 2)) / rms),
-                                "bf16_rel_err_rms": float(np.sqrt(np.mean((y_bf16 - truth) ** 2)) / rms),
+                                **error(ac[:args.err_rows], bc[:args.err_cols], start, rng(key, "err", layer, cls, start)),
                                 "seconds": round(time.monotonic() - t1, 1)}
         path.write_text(json.dumps(res, indent=1))
     res["seconds"] = round(time.monotonic() - t0, 1)
@@ -290,8 +301,11 @@ def main() -> int:
     ap.add_argument("--layers", default="0,8,16,28")
     ap.add_argument("--classes", default=",".join(CLASSES))
     ap.add_argument("--starts", default=",".join(STARTS))
-    ap.add_argument("--rows", type=int, default=1024)
-    ap.add_argument("--cols", type=int, default=512)
+    ap.add_argument("--rows", type=int, default=512)
+    ap.add_argument("--cols", type=int, default=256)
+    ap.add_argument("--atoms", type=int, default=128, help="the census's first atoms (the error runs over all of k)")
+    ap.add_argument("--err-rows", type=int, default=64)
+    ap.add_argument("--err-cols", type=int, default=32)
     ap.add_argument("--key", default="r1-census/v0")
     ap.add_argument("--workers", type=int, default=os.cpu_count())
     ap.add_argument("--out", required=True)
