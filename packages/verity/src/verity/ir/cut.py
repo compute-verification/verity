@@ -722,12 +722,17 @@ def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut
         raise QueryInapplicable(f"{fn.id}: gate {j} ({G.prim[j]}) is {G.width[j]} bits, wider than Q_call's X = {X}",
                                 {"definition": fn.id, "gate": j, "primitive": G.prim[j], "width": G.width[j], "X": X, "why": "gate-too-wide"})
     units = call_units(G, X)
-    owner = [0] * G.nc
+    owner = [-1] * G.nc
     for u, (lo, hi, _path) in enumerate(units):
         for g in range(lo, hi):
             i = G.idx[g]
             if i >= 0:
+                if owner[i] >= 0:
+                    raise ValueError(f"{fn.id}: computing gate {g} is in units {owner[i]} and {u}")
                 owner[i] = u
+    gaps = [G.keep[i] for i, u in enumerate(owner) if u < 0]
+    if gaps:
+        raise ValueError(f"{fn.id}: computing gates {gaps[:8]} are in no unit ({len(gaps)} in all)")
     r = memo[key] = CallCut(fn, units, owner)
     return r
 

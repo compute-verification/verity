@@ -426,7 +426,8 @@ What carries over from §8 and §10:
 - **Calls.** §8's Calls (the root's non-input nodes, in body order). Each is cut as its Definition's activation in a one-Call
   Program, every returned leaf a designated output, so activations of one Definition share their cut.
 - **Recomputes.** §10's report: a value computed in two units is `verify`'s `detail["recomputed_across"]`, never a code. The
-  §10 caveat holds: a count of units bounds wrong work but is not distinct work.
+  §10 caveat holds: a count of units bounds wrong work but is not distinct work, so a consumer that credits work (PoUW) does
+  not take `Q_call` v1.
 
 What changes:
 
