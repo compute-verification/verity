@@ -50,6 +50,8 @@ KINDS: dict[str, str] = {
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
                                  "{arts}, pinned by backends/flock/verifier/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
+    "approach/v1": "one approach of the registry (research.approaches): meta {campaign, slug} and nothing else, so the id is a function of "
+                   "the name <campaign>/<slug>; payload null; title, hypothesis, owner, status, reason and evidence are labels on it",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
     "trust-dossier/v1": "the computed trust level of one numerical target (tools/tc_probe/trust.py): meta = the TrustReport "

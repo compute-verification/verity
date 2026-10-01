@@ -398,7 +398,7 @@ def knows_queue(pkg: Path | None) -> bool:
     if pkg is None:
         return True
     try:
-        return "QUEUE_WORKLOAD_WRAP" in (Path(pkg) / "remote.py").read_text()
+        return "QUEUE_WORKLOAD_WRAP" in (Path(pkg) / "remote.py").read_text() and (Path(pkg) / "disk.py").is_file()
     except OSError:
         return False
 
@@ -1205,6 +1205,9 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
+    if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
+        argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
+                "--path", str(runs_root), "--", *argv]
     log = open(run_dir / "launcher.log", "ab")
     try:
         proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
