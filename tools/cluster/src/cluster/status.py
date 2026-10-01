@@ -23,7 +23,8 @@ doesn't count them.
 **Node 2** is its agent's ledger state (`state.json`, `ledger.state`): leases are running jobs and waiters queued, owned by
 their submitter and keyed by their run (else the lease's job id). A job's length is the model's (`Job.length_s`: its
 `max_s`, else a session's `expected_s`). `gpu-lease` doesn't manage CPUs, so a lease's CPUs are 0. Node 2 has no Kueue,
-so no holds.
+so no holds. The agent writes no state during a timed window (`agent.py`), so the state is stale only when it is older
+than `STALE_S` outside one, or than the window's end plus `STALE_S`.
 """
 from __future__ import annotations
 
@@ -213,9 +214,12 @@ def node2(snap: dict[str, Any], now: int, owner: str | None = None) -> dict[str,
         rows.append(_row(j.submitter, j.run or j.id, state="queued", cls=j.priority, gpus=j.gpus, cpus=j.cpus,
                          memory_gib=j.memory_gib, since=q.since, name=q.handle or j.id, **length(j)))
     rep = _report(snap, now, owner, rows, [], [], None)
-    rep["ledger"] = {"path": snap.get("state_path"), "seq": st.seq, "t": st.t,
-                     "age_s": now - st.t if st.t is not None else None,
-                     "stale": st.t is None or now - st.t > STALE_S}
+    window = [a for a in allocs if a.job.quiet]
+    ends = [a.ends_by for a in window]
+    age = now - st.t if st.t is not None else None
+    held_back = bool(window) and (None in ends or now <= max(ends) + STALE_S)
+    rep["ledger"] = {"path": snap.get("state_path"), "seq": st.seq, "t": st.t, "age_s": age, "window": bool(window),
+                     "stale": age is None or (age > STALE_S and not held_back)}
     return rep
 
 
@@ -277,8 +281,9 @@ def render(reports: list[dict[str, Any]]) -> str:
                        f"{', '.join(p.removeprefix('/workspace/') for p in b['roots'])})")
         if "ledger" in rep:
             lg = rep["ledger"]
-            stale = " (STALE: is the agent running?)" if lg["stale"] else ""
-            out.append(f"  ledger state: seq {lg['seq']}, {span(lg['age_s'])} old{stale} ({lg['path']})")
+            note = (" (STALE: is the agent running?)" if lg["stale"]
+                    else " (a timed window: the agent writes no state until it ends)" if lg["window"] else "")
+            out.append(f"  ledger state: seq {lg['seq']}, {span(lg['age_s'])} old{note} ({lg['path']})")
         rd = rep["ready"]
         gh = ("" if not rd["gpu_jobs"] else f"; {rd['gpu_h']:.2f} GPU-h" if rd["known"] == rd["gpu_jobs"]
               else f"; GPU-h unknown (none of {rd['gpu_jobs']} GPU jobs declares a length)" if not rd["known"]

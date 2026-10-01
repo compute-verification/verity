@@ -203,9 +203,21 @@ def test_node2_rows_are_the_ledgers_leases_and_waiters_by_submitter_and_run():
     assert rep["ready"] == {"jobs": 2, "gpus": 2, "gpu_jobs": 1, "known": 1, "gpu_h": 0.5}
     assert rep["holds"] == {"queues": [], "workloads": []} and "bundles" not in rep and rep["disk"]["use_pct"] == 41
     assert rep["ledger"] == {"path": "/workspace/pouw/infra/cluster/live/20260930T2320Z/state.json", "seq": 479, "t": T - 2,
-                             "age_s": 2, "stale": False}
+                             "age_s": 2, "window": False, "stale": False}
     assert status.node2(node2_snapshot(), T + status.STALE_S + 10)["ledger"]["stale"]
     assert [r["owner"] for r in status.node2(node2_snapshot(), T, owner="circuits")["jobs"]] == ["circuits"]
+
+
+def test_node2_state_held_back_by_a_timed_window_is_stale_only_after_the_window_should_have_ended():
+    timed = job("gl-314342", "pous", submitter="bc-dd22acf8", priority="timed", quiet=True, gpus=8, cpus=0, max_s=1200,
+                node=nebius2.NODE, run="r20260930-221231-3dd1")
+    a = model.Allocation(id=f"gl-314342@{T}", job=timed, node=nebius2.NODE, gpus=tuple(range(8)), cpus=frozenset(),
+                         memory_gib=1544, started=T)
+    snap = {**node2_snapshot(), "state": ledger.state_to_dict(ledger.State({a.id: a}, {}, seq=522, head="h", t=T))}
+    during = status.node2(snap, T + 900)["ledger"]
+    assert (during["window"], during["stale"], during["age_s"]) == (True, False, 900)
+    assert status.node2(snap, T + 1200 + status.STALE_S + 1)["ledger"]["stale"]
+    assert "seq 522, 15m old (a timed window: the agent writes no state until it ends)" in status.render([status.node2(snap, T + 900)])
 
 
 def test_render_prints_each_nodes_header_then_its_jobs_and_held_workloads_by_owner():
