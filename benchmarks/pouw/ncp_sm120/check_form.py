@@ -1,7 +1,8 @@
 """Off the card: form.py's outputs against #295's own D-3s forming, and the bound unit's words against NCP's chain on them.
 
 - The check runs (OUT/form/check/): every formed row, whole, against #295's `D3Family("d3s", "xq", "round11", "f16").side`
-  with its own `ncp_perm` and its own stream (`D3Family.stream`: SHAKE256), or BLAKE3's XOF of the same message; and the
+  with its own `ncp_perm` and its own stream (`D3Family.stream`: SHAKE256, under either of form.py's SHAKE kernels, shake
+  and shake2), or BLAKE3's XOF of the same message; and the
   first four rows' raw streams against the same streams (BLAKE3's also against the `blake3` package).
 - The unit (OUT/form/arms.json): check.py's `check_arms`, with every sampled lane's operand rows formed by #295 from
   gen_any's X_q and W, in place of check.py's stand-ins; the negative control must fail every comparison.
@@ -74,7 +75,7 @@ def _b3_xof(data: bytes, n: int) -> bytes:
 def _stream(xof: str, left: bool, k: int, line: int) -> bytes:
     fam, c = _REF["fam"], _REF["context"]
     name = "E1" if left else "F1"
-    if xof == "shake":
+    if xof in ("shake", "shake2"):
         ctx = _REF["Context"](c["salt"], _REF["Matmul"](c["index"], _REF["Shape"](1, k, 1), c["weight"]), c["root_a"], b"")
         return fam.stream(name, ctx, line)
     frame = _REF["frame"]

@@ -4,12 +4,14 @@
 0. Build: form_sm120.cu and run.py's GEMM (ncp_sm120.cu) with the node's nvcc into OUT, each refused on a spill, a stack
    frame or local memory (run.py's SASS gate for the GEMM).
 1. The check (OUT/form/check/): at k = 1,024 and 8,192, eight A rows and eight B rows (rows 1-4 all zero, all 448, all the
-   least subnormal, +-448 alternating; the rest gen_any's full finite range) formed under each XOF, whole, and the first
-   four rows' raw streams.  check_form.py holds them to #295's `D3Family.side` and `xof` (SHAKE256), or BLAKE3's XOF.
+   least subnormal, +-448 alternating; the rest gen_any's full finite range) formed under each XOF (SHAKE256 by both its
+   kernels, shake and shake2, and BLAKE3), whole, and the first four rows' raw streams.  check_form.py holds them to #295's
+   `D3Family.side` and `xof` (SHAKE256), or BLAKE3's XOF.
 2. The unit at each SHAPES entry (p: m = n = k = 8,192; d: m = 32): X_q (m x k) and W (n x k) from gen_any (seeds 3, 4),
    formed by each XOF of XOFS into run.py's X~ and Y~.  Arms, each REPS pairs interleaved with the plain GEMM at K = k (the
    baseline), each a dependent chain of CHAIN_P / CHAIN_D: the stages (SHAKE's a_stream, b_stream and streams, both
-   sides' in one launch, its own kernel; BLAKE3's streams are inside the rows kernel; a_rows, b_rows), form (the streams,
+   sides' in one launch, its own kernel: form_c_shake, a thread a row, or for shake2 form_c_shake2, two; BLAKE3's streams
+   are inside the rows kernel; a_rows, b_rows), form (the streams,
    then A's rows and B's), and unit (form, then the GEMM arm of each UNIT_ARMS entry arm:S).  After each unit arm, one more call after C and the digests are poisoned, and its
    sampled lanes go to OUT/form/arms.json in check.py's format (a shape entry per XOF, its `xof` named), then a
    negative control (poisoned, nothing launched).
@@ -47,6 +49,7 @@ SEED_A, SEED_B = 3, 4
 CHECK_K = (1024, 8192)
 CHECK_ROWS = 8
 SPECIAL = {1: b"\x00", 2: b"\x7e", 3: b"\x01", 4: b"\x7e\xfe"}
+SHAKE = ("shake", "shake2")   # one XOF, SHAKE256: its stream from one thread a row, or two (bit-interleaved)
 
 _spec = importlib.util.spec_from_file_location("ncp_sm120_run", os.path.join(HERE, "run.py"))
 ncp = importlib.util.module_from_spec(_spec)
@@ -206,7 +209,7 @@ class Side:
         self.d, self.rows, self.k, self.left, self.xof = d, rows, k, left, xof
         self.codes, self.out, self.pitch = codes, out, pitch
         msgs = [message("E1" if left else "F1", line) for line in range(rows)]
-        if xof == "shake":
+        if xof in SHAKE:
             blob = [shake_blocks(m) for m in msgs]
             self.nb = len(blob[0]) // 136
             if any(len(b) != 136 * self.nb for b in blob):
@@ -224,12 +227,12 @@ class Side:
         pw, pinv = perm_words(k)
         self.pw, self.pinv = d.put(pw), d.put(pinv)
         self.smem = 3 * k + 256
-        self.kernel = "form_rows_g" if xof == "shake" else "form_rows_b3"
+        self.kernel = "form_rows_g" if xof in SHAKE else "form_rows_b3"
         d.ck("cuFuncSetAttribute", d.fn(self.kernel), pc.MAX_DYN, self.smem)
 
     def stream(self) -> None:
-        if self.xof == "shake":
-            self.d.launch("form_c_shake", -(-self.rows // 32), 32, 0, p=(self.lanes, self.c), i=(self.rows, self.k, self.nb))
+        if self.xof in SHAKE:
+            shake_stream(self.d, self.xof, self.rows, self.k, self.nb, self.lanes, self.c)
 
     def form_rows(self) -> None:
         self.d.launch(self.kernel, self.rows, FORM_THREADS, self.smem,
@@ -242,7 +245,12 @@ class Side:
 
     def raw(self, rows: int, n: int) -> bytes:
         out = self.d.alloc(rows * n)
-        self.d.launch("xof_raw", 1, rows, 0, p=(self.lanes, self.roots, out), i=(rows, n, self.nb, int(self.xof == "b3")))
+        if self.xof == "shake2":
+            if n != 2 * self.k:
+                raise ValueError("shake2's raw stream is the row's 2k bytes")
+            shake_stream(self.d, self.xof, rows, self.k, self.nb, self.lanes, out, raw=True)
+        else:
+            self.d.launch("xof_raw", 1, rows, 0, p=(self.lanes, self.roots, out), i=(rows, n, self.nb, int(self.xof == "b3")))
         self.d.sync()
         got = self.d.read(out, rows * n)
         self.d.free(out)
@@ -258,7 +266,7 @@ class Unit:
         m, n, k = x.rows, x.n, x.k
         self.d, self.rows, self.k, self.xof = d, m + n, k, xof
         self.nb, self.lanes, self.c, at_a, at_b = 0, 0, 0, None, None
-        if xof == "shake":
+        if xof in SHAKE:
             self.nb = len(shake_blocks(message("E1", 0))) // 136
             self.lanes, self.c = d.alloc((m + n) * self.nb * 136), d.alloc((m + n) * k * 2)
             at_a, at_b = (self.lanes, self.c), (self.lanes + m * self.nb * 136, self.c + m * k * 2)
@@ -266,13 +274,21 @@ class Unit:
         self.B = Side(d, n, k, False, xof, cb, x.y, x.K, at_b)
 
     def streams(self) -> None:
-        if self.xof == "shake":
-            self.d.launch("form_c_shake", -(-self.rows // 32), 32, 0, p=(self.lanes, self.c), i=(self.rows, self.k, self.nb))
+        if self.xof in SHAKE:
+            shake_stream(self.d, self.xof, self.rows, self.k, self.nb, self.lanes, self.c)
 
     def run(self) -> None:
         self.streams()
         self.A.form_rows()
         self.B.form_rows()
+
+
+def shake_stream(d: Dev, xof: str, rows: int, k: int, nb: int, lanes: int, c: int, raw: bool = False) -> None:
+    """The rows' SHAKE256 streams into c: shake one thread a row (centred values), shake2 two (or, `raw`, the stream)."""
+    if xof == "shake":
+        d.launch("form_c_shake", -(-rows // 32), 32, 0, p=(lanes, c), i=(rows, k, nb))
+    else:
+        d.launch("form_c_shake2", -(-rows // 16), 32, 0, p=(lanes, c), i=(rows, k, nb, int(raw)))
 
 
 def gen_any(d: Dev, ptr: int, count: int, seed: int) -> None:
@@ -293,7 +309,7 @@ def check(d: Dev, out: str) -> None:
                 row = (pat * k)[:k]
                 d.ck("cuMemcpyHtoD_v2", pc.u64(codes + r * k), C.c_char_p(row), k)
             side_codes = d.read(codes, CHECK_ROWS * k)
-            for xof in ("shake", "b3"):
+            for xof in (*SHAKE, "b3"):
                 formed = d.alloc(CHECK_ROWS * 3 * k)
                 s = Side(d, CHECK_ROWS, k, left, xof, codes, formed, 3 * k)
                 s.run()
@@ -336,7 +352,7 @@ def shape(d: Dev, nv, kind: str, xofs: list[str], reps: int) -> list[dict]:
                "context": {key: v.hex() if isinstance(v, bytes) else v for key, v in CONTEXT.items()},
                "layout": ncp.layout(kind), "arms": [], "timing": []}
         stages = [("a_rows", A.form_rows), ("b_rows", B.form_rows), ("form", U.run)]
-        if xof == "shake":
+        if xof in SHAKE:
             stages = [("a_stream", A.stream), ("b_stream", B.stream), ("streams", U.streams)] + stages
         for name, body in stages:
             before = nv.read()

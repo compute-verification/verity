@@ -22,6 +22,7 @@
 //
 // Args (pearl_c_sm120's: p[16], i[16]):
 //   form_c_shake  p0 the rows' padded message lanes (u64, rows x nb x 17), p1 c (u16, rows x k); i0 rows, i1 k, i2 nb
+//   form_c_shake2 form_c_shake's, and i3 1 to write the raw stream (2k bytes a row) into p1 instead of c
 //   form_rows_*   p0 codes (u8, rows x k), p1 c (u16, rows x k; read by _g), p2 B3 roots (u32, rows x 32: cv[8], block[16],
 //                 len, flags; read by _b3), p3 pi's words (u16, k / 4), p4 pi^-1's words, p5 out (u8, rows x pitch); i0
 //                 rows, i1 k, i2 left, i3 pitch.  One CTA a row, FORM_THREADS threads, dynamic shared memory 3k + 256 bytes.
@@ -176,6 +177,108 @@ extern "C" __global__ void form_c_shake(const Args a) {
       if (L + i < lanes) c[L + i] = make_uint2(centre2((uint32_t)s[i]), centre2((uint32_t)(s[i] >> 32)));
     if (L + SHAKE_RATE >= lanes) break;
     ph::keccak_p<24>(s);
+  }
+}
+
+// SHAKE256 with a row's state over two threads in Keccak's bit-interleaved form: thread 2r + h holds bits h, h + 2, ... of
+// each of row r's 25 lanes in one word.  A 64-bit rotation by 2q rotates each half by q; by 2q + 1 it swaps them (the even
+// half becomes the odd one rotated by q + 1, the odd half the even one rotated by q), the swap a shuffle with the other
+// thread.  Each thread runs half of each round's instructions, so a row's squeeze, sequential and latency-bound in one
+// thread, takes about half as long.
+DEV uint32_t rot32(uint32_t x, int n) { return __funnelshift_l(x, x, n); }
+DEV uint32_t other(uint32_t x) { return __shfl_xor_sync(0xFFFFFFFFu, x, 1); }
+// the perfect shuffle of a word's halves (bit i of the low half to bit 2i, of the high half to 2i + 1), and its inverse
+DEV uint32_t zip32(uint32_t x) {
+  uint32_t t;
+  t = (x ^ (x >> 8)) & 0x0000FF00u, x ^= t ^ (t << 8);
+  t = (x ^ (x >> 4)) & 0x00F000F0u, x ^= t ^ (t << 4);
+  t = (x ^ (x >> 2)) & 0x0C0C0C0Cu, x ^= t ^ (t << 2);
+  t = (x ^ (x >> 1)) & 0x22222222u, x ^= t ^ (t << 1);
+  return x;
+}
+DEV uint32_t unzip32(uint32_t x) {
+  uint32_t t;
+  t = (x ^ (x >> 1)) & 0x22222222u, x ^= t ^ (t << 1);
+  t = (x ^ (x >> 2)) & 0x0C0C0C0Cu, x ^= t ^ (t << 2);
+  t = (x ^ (x >> 4)) & 0x00F000F0u, x ^= t ^ (t << 4);
+  t = (x ^ (x >> 8)) & 0x0000FF00u, x ^= t ^ (t << 8);
+  return x;
+}
+
+// Keccak-f[1600] on half h of the state; both threads of the pair call it together
+DEV void keccak_f2(uint32_t s[25], int h) {
+  const uint32_t RCE[24] = {1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0};
+  const uint32_t RCO[24] = {0x00000000u, 0x00000089u, 0x8000008bu, 0x80008080u, 0x0000008bu, 0x00008000u,
+                            0x80008088u, 0x80000082u, 0x0000000bu, 0x0000000au, 0x00008082u, 0x00008003u,
+                            0x0000808bu, 0x8000000bu, 0x8000008au, 0x80000081u, 0x80000081u, 0x80000008u,
+                            0x00000083u, 0x80008003u, 0x80008088u, 0x80000088u, 0x00008000u, 0x80008082u};
+  const int ROT[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int PI[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+  const int nh = 1 - h;
+#pragma unroll
+  for (int r = 0; r < 24; ++r) {
+    uint32_t c[5], cp[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) c[i] = ph::lop3<0x96>(ph::lop3<0x96>(s[i], s[i + 5], s[i + 10]), s[i + 15], s[i + 20]);
+#pragma unroll
+    for (int i = 0; i < 5; ++i) cp[i] = other(c[i]);
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint32_t p = c[(i + 4) % 5], q = rot32(cp[(i + 1) % 5], nh);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) s[j + i] = ph::lop3<0x96>(s[j + i], p, q);
+    }
+    uint32_t t = s[1];
+#pragma unroll
+    for (int i = 0; i < 24; ++i) {
+      const int j = PI[i], R = ROT[i];
+      const uint32_t x = s[j];
+      s[j] = R & 1 ? rot32(other(t), (R >> 1) + nh) : rot32(t, R >> 1);
+      t = x;
+    }
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) {
+      const uint32_t b0 = s[j], b1 = s[j + 1], b2 = s[j + 2], b3 = s[j + 3], b4 = s[j + 4];
+      s[j] = ph::lop3<0xD2>(b0, b1, b2);
+      s[j + 1] = ph::lop3<0xD2>(b1, b2, b3);
+      s[j + 2] = ph::lop3<0xD2>(b2, b3, b4);
+      s[j + 3] = ph::lop3<0xD2>(b3, b4, b0);
+      s[j + 4] = ph::lop3<0xD2>(b4, b0, b1);
+    }
+    s[0] ^= h ? RCO[r] : RCE[r];
+  }
+}
+
+// form_c_shake's output from two threads a row (blocks of 32 threads, 16 rows); i3 = 1 writes the raw stream instead of c
+extern "C" __global__ void __launch_bounds__(32) form_c_shake2(const Args a) {
+  const int rows = a.i[0], k = a.i[1], nb = a.i[2], raw = a.i[3];
+  const int t = blockIdx.x * blockDim.x + threadIdx.x, h = t & 1;
+  const bool live = (t >> 1) < rows;
+  const int r = live ? t >> 1 : rows - 1;   // every thread runs to the end: the pair shuffles with the whole warp's mask
+  const uint64_t* lanes = reinterpret_cast<const uint64_t*>(a.p[0]) + (size_t)r * nb * SHAKE_RATE;
+  uint32_t s[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) s[i] = 0;
+  for (int b = 0; b < nb; ++b) {
+#pragma unroll
+    for (int w = 0; w < SHAKE_RATE; ++w) {
+      const uint64_t v = lanes[SHAKE_RATE * b + w];
+      s[w] ^= __byte_perm(unzip32((uint32_t)v), unzip32((uint32_t)(v >> 32)), h ? 0x7632 : 0x5410);
+    }
+    keccak_f2(s, h);
+  }
+  uint32_t* c = reinterpret_cast<uint32_t*>(a.p[1]) + (size_t)r * (k / 2);
+  const int nlanes = k / 4;
+  for (int L = 0;; L += SHAKE_RATE) {
+#pragma unroll
+    for (int i = 0; i < SHAKE_RATE; ++i) {
+      const uint32_t w = s[i], pw = other(w);
+      // the lane's low word (stream words 4L, 4L + 1) from thread 0, its high word from thread 1
+      const uint32_t x = zip32(h ? __byte_perm(pw, w, 0x7632) : __byte_perm(w, pw, 0x5410));
+      if (live && L + i < nlanes) c[2 * (L + i) + h] = raw ? x : centre2(x);
+    }
+    if (L + SHAKE_RATE >= nlanes) break;
+    keccak_f2(s, h);
   }
 }
 
