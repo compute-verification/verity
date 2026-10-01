@@ -49,13 +49,13 @@ from functools import reduce
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.ir import partition_object as PO
-from verity.proofs.query import Policy, RequiredValues, ValueRef, boundary, partition_by, required_values
+from verity.proofs.query import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
 from verity_vllm.query import word as word_query
-from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary,
-                                           without_literals)
+from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
+                                           module_body_boundary)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "collective_kind",
@@ -347,7 +347,7 @@ class Population:
         self.B_module = B_module = module_body_boundary(P, corr, literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
-            self.B = B = without_literals(boundary(P, self.Q), literals)
+            self.B = B = boundary_without_literals(P, self.Q, literals)
         else:
             self.Q = Q_module_body_v1(P, corr)
             self.B = B = B_module
