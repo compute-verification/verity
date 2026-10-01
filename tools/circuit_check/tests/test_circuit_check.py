@@ -256,6 +256,17 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
+def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding():
+    """The suite keeps a family's smallest specialization over `MAX_GATES`; a Boolean norm's smallest binds the word MUFU, so its
+    smallest Boolean binding (the one the Program on bits calls) is checked too."""
+    from verity.ir import boolean as BL
+    for word, bits in [("RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v1}", "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v2}"),
+                       ("RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v1,SCALEA=DivFullScaleA_v1,RCP=DivFullRcp_v1}",
+                        "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v2,SCALEA=DivFullScaleA_v3,RCP=DivFullRcp_v2}")]:
+        assert {word, bits} <= set(SUITE) and SUITE[bits].gates > TG.MAX_GATES
+        assert BL.is_boolean(SUITE[bits]) and not BL.is_boolean(SUITE[word])
+
+
 def test_a_gate_no_output_reads_is_a_dead_gate():
     from verity.ir.types import Value
     from verity_vllm.program.registry import prims as P

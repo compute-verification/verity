@@ -488,14 +488,22 @@ def family(fn: Any) -> str:
 
 
 def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
-    """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise."""
+    """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
+    smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
+    the Program on bits calls)."""
+    from verity.ir import boolean as BL
+
     by: dict[str, list[Any]] = {}
     for fn in found.values():
         by.setdefault(family(fn), []).append(fn)
     out = {}
     for fns in by.values():
-        small = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
-        for f in small or [min(fns, key=lambda f: f.gates)]:
+        keep = [f for f in fns if getattr(f, "gates", 1) <= max_gates]
+        if not keep:
+            keep = [min(fns, key=lambda f: f.gates)]
+            if not BL.is_boolean(keep[0]) and (bits := [f for f in fns if BL.is_boolean(f)]):
+                keep.append(min(bits, key=lambda f: f.gates))
+        for f in keep:
             out[f.id] = f
     return dict(sorted(out.items()))
 
