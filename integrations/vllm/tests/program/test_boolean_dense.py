@@ -1,9 +1,8 @@
 """`verity_vllm.program.registry.boolean_dense`: the Boolean versions of `registry.dense`'s Definitions agree with their word
 Definitions (`trace.word_of`): GeGLU on every activation word, every pair of special words and random and edge-product pairs;
-the element-wise rows whose element reads one bf16 word (the logit softcap's tanh included) on every word at Gemma-2's
-constants, the others on every pair of special words, on random words and on products and sums at f32's subnormal and overflow
-ends. They carry exactly their builders' live ANDs, are pinned by gate count and program digest, and pass
-`Q_word_v1{X=16, W=32}`'s cut check."""
+the element-wise rows whose element reads one bf16 word on every word at Gemma-2's constants, the others on every pair of
+special words, on random words and on products and sums at f32's subnormal and overflow ends. They carry exactly their
+builders' live ANDs, are pinned by gate count and program digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
 import itertools
@@ -44,7 +43,6 @@ PINS = {
     "Bf16DivScalar_v2{N=8,C=30.0}": (6920, 10264, 936, "982d287bbe9222390180e5b1209885098de4ead065d831d984c953979871f1be"),
     "Bf16MulScalar_v2{N=8,C=30.0}": (5032, 6672, 752, "ee0789d1c10184d60b73c50092e9c23a7fa81a11293d214a9f6ca3db50efe5a6"),
     "Bf16MulScalarTensor_v2{N=8}": (6266, 9030, 778, "364c1357d18a6a3609442540fb32a291e48b6a14507bf95817db2b98cea86bcf"),
-    "Bf16Tanh_v2{N=8}": (3544, 12096, 264, "d4a7c9b8f365efb97443e04df71e1429ecc2e0585aced4136a91df1459b430ce"),
 }
 
 _EXP = [0, 1, 2, 116, 117, 118, 119, 120, 126, 127, 128, 129, 130, 131, 133, 134, 135, 254, 255]
@@ -85,7 +83,7 @@ GEMMA = {BD.AddScalarF32: {"C": 1e-6}, BD.AddScalarBf16: {"C": 1.0}, BD.Bf16DivS
 ROW_WORDS = {BD.SquareBf16: D.SquareBf16, BD.SquareF32: D.SquareF32, BD.AddScalarF32: D.AddScalarF32, BD.AddScalarBf16: D.AddScalarBf16,
              BD.AddWidenedBf16: D.AddWidenedBf16, BD.ScaleRowBf16: D.ScaleRowBf16, BD.ScaleRowF32: D.ScaleRowF32,
              BD.MulVecF32: D.MulVecF32, BD.Bf16DivScalar: D.Bf16DivScalar, BD.Bf16MulScalar: D.Bf16MulScalar,
-             BD.Bf16MulScalarTensor: b1.Bf16MulScalarTensor, BD.Bf16Tanh: D.Bf16Tanh}
+             BD.Bf16MulScalarTensor: b1.Bf16MulScalarTensor}
 
 
 def _row(d, N: int):
@@ -146,25 +144,6 @@ def test_the_gelu_band_is_where_the_closed_forms_fail() -> None:
         assert any(act[g] != _half(g) for g in lo)
         top = range(sign << 15 | BD.GELU_BAND_HI[sign] << 7, sign << 15 | (BD.GELU_BAND_HI[sign] + 1) << 7)
         assert any(act[g] != (0x8000 if sign else g) for g in top)
-
-
-def test_the_tanh_band_is_where_the_closed_forms_fail() -> None:
-    """Every softcap tanh word off the band is one of the module docstring's closed forms, and on the band its sign is x's; the
-    band's lowest exponent and its highest, per sign, are each needed (a closed form fails on some word there)."""
-    th = [BD.tanh_bf16_bits(x) for x in range(1 << 16)]
-    for x, t in enumerate(th):
-        sign, e, m = x >> 15, (x >> 7) & 0xFF, x & 0x7F
-        if e == 255 and m:
-            assert t == P.BF16_NAN_F2FP
-        elif BD.TANH_BAND_LO <= e <= BD.TANH_BAND_HI[sign]:
-            assert t >> 15 == sign
-        else:
-            assert t == (x if e < BD.TANH_BAND_LO else sign << 15 | 0x3F80)
-    for sign in (0, 1):
-        lo = range(sign << 15 | BD.TANH_BAND_LO << 7, sign << 15 | (BD.TANH_BAND_LO + 1) << 7)
-        assert any(th[x] != x for x in lo)
-        top = range(sign << 15 | BD.TANH_BAND_HI[sign] << 7, sign << 15 | (BD.TANH_BAND_HI[sign] + 1) << 7)
-        assert any(th[x] != sign << 15 | 0x3F80 for x in top)
 
 
 def test_the_activation_on_every_word() -> None:
@@ -272,7 +251,7 @@ def test_the_row_word_views() -> None:
         assert TR.word_of(t).id == bind(ROW_WORDS[t.defn], **t.bindings).id == t.id.replace("_v2{", "_v1{")
 
 
-@pytest.mark.parametrize("d", [BD.SquareBf16, BD.AddScalarBf16, BD.Bf16DivScalar, BD.Bf16MulScalar, BD.Bf16Tanh], ids=lambda d: d.name)
+@pytest.mark.parametrize("d", [BD.SquareBf16, BD.AddScalarBf16, BD.Bf16DivScalar, BD.Bf16MulScalar], ids=lambda d: d.name)
 def test_the_one_word_rows_on_every_word(d) -> None:
     """A row whose element reads one bf16 word, at Gemma-2's constant: all 65,536 words."""
     _agree(_row(d, 1), EVERY.reshape(-1, 1))
