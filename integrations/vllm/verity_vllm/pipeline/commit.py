@@ -73,7 +73,7 @@ from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
 from verity_vllm.commit import challenge as CH  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, c2_replay as C2, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -964,45 +964,6 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
     return why
 
 
-def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
-                               sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
-    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
-    manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
-    the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.query.manifest import format as MF
-    from verity_vllm.query.required import QUERIES
-    q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
-    if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
-        return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
-    t0 = time.monotonic()
-    labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-    if getattr(args, "programs_root", None):
-        fx = {"requests": [{"request_id": labels[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                            "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
-        loaded = MF.programs_for(fx, args.programs_root)
-    elif getattr(args, "program_dir", None):
-        one = MF.load_program(args.program_dir)
-        loaded = {labels[str(r.get("request_id"))]: one for r in reqs}
-    else:
-        return None, {"used": False, "why": "no --programs-root / --program-dir: producer facts not derivable"}
-    of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
-    of_record.update(str(x) for x in (required_manifest or {}).get("component_digests") or [])
-    of_record.update(str(c["program_digest"]) for c in ((required_manifest or {}).get("components") or {}).values()
-                     if isinstance(c, dict) and c.get("program_digest"))
-    digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
-    bad = sorted(k for k, d in digs.items() if d not in of_record)
-    if bad:
-        return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
-    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
-    del loaded
-    return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
-                   "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),
-                   "conflicts": sum(1 for f in facts.values() if f.get("conflict")), "wall_s": round(time.monotonic() - t0, 1),
-                   "method": "v1_bridge.population over the Programs of record: producing Call family, first-operand producer family, "
-                             "reading modules outside the producer's module (oracle_compare.producers_of_programs)"}
-
-
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
@@ -1064,6 +1025,7 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every RoPE head in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
+    plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -1320,12 +1282,20 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
     # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
     oracle_producers: tuple[dict | None, dict] | None = None
+    plan_rec: dict | None = None
     if required_manifest is not None and kinds:
         from verity_vllm.check import oracle_compare as _OCP
-        try:
-            oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
-        except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-            oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+        TL.start("prep.producer_facts")
+        if args.plan:
+            oracle_producers, plan_rec = CP.use(args.plan, args)
+            print(f"[delta] plan {args.plan}: " + (f"producer facts from the plan ({plan_rec['members']} members, planned {plan_rec.get('planned_utc')})"
+                                                   if plan_rec["used"] else f"plan_recomputed: {plan_rec['why']}"), flush=True)
+        if oracle_producers is None:
+            try:
+                oracle_producers = CP.oracle_producers_of_record(args, required_manifest, reqs, sampling)
+            except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
+                oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+        TL.end("prep.producer_facts", source="plan" if (plan_rec or {}).get("used") else "derived", members=len(oracle_producers[0] or {}))
         print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
         if oracle_producers[0]:
             _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
@@ -2220,7 +2190,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _prod = OC.producers_of(required_manifest)
                         if oracle_producers is None:
                             try:
-                                oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
+                                oracle_producers = CP.oracle_producers_of_record(args, required_manifest, reqs, sampling)
                             except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
                                 oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
                             print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
@@ -2459,6 +2429,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "moe_source": {"mode": args.moe_source, "attached": moe_attached},
                "negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None),        # NEGATIVE TEST flags armed on this run, by name
                "run_roots": [r["commit"]["run_root"] for r in rows if r["arm"] != "control" and r.get("commit")]}
+    if args.plan:
+        verdict["plan"] = plan_rec or {"path": args.plan, "used": False, "plan_recomputed": False, "why": "no producer facts read (no manifest or no committer)"}
     # [R16 sys / coord M-0090 (5)] replay cache of record: the ORIGINAL pair's artifact lists the pairs that share its replay (root equality
     # explicit); the verdict carries the evaluated-vs-reused count so a reader sees at once that C2 ran once per distinct root
     if getattr(args, "replay_cache", False):

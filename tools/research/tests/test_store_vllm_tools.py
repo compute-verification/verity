@@ -39,7 +39,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 # ---- Tool declarations -------------------------------------------------------------------------------------------------------------------------
 
 def test_vllm_tools_are_registered_and_loadable_by_name():
-    for stage in ("build", "match", "commit", "replay"):
+    for stage in ("build", "plan", "match", "commit", "replay"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
@@ -49,6 +49,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
     assert tools_registry.load("vllm.build", REPO).produces[0] == "vllm-build/v1"
+    assert tools_registry.load("vllm.plan", REPO).produces[0] == "vllm-commit-plan/v1"
     assert tools_registry.load("vllm.match", REPO).produces[0] == "vllm-match-record/v1"
     assert tools_registry.load("vllm.commit", REPO).produces[0] == "vllm-verdict/v1"
     assert tools_registry.load("vllm.replay", REPO).produces[0] == "vllm-verdict/v1"
