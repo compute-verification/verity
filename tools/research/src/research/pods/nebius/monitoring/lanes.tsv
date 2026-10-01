@@ -1,0 +1,9 @@
+# SkyPilot job-name prefix -> owning lane, for alert_sink.py (the longest matching prefix wins). A lane adds its prefix here.
+cov-	vllm-epoch-run
+vcd-	vllm-coverage-defs
+cfgtp2-	vllm-config-run-tp2
+m0-	flock-netlist (M0)
+fv2-	flock-v2-design
+as-	assumption-sweeps
+tcgemm-	vllm-sm120-tc-gemm
+attempt-test	nebius-infra

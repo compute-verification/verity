@@ -556,13 +556,20 @@ def _field(path: str, fn: Any) -> str:
 
 
 def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
-    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir."""
+    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir.
+
+    ``MNBT`` is at most ``B * MML``: no step can schedule more tokens than ``max_num_seqs`` requests of ``max_model_len``, so the cap
+    changes no schedule, but vLLM's warm-up forward (`kernel_warmup.flashinfer_autotune`'s dummy run) packs the full budget into
+    ``max_num_seqs`` requests, longer than ``max_model_len``, and FlashAttention's varlen kernel then faults (an illegal memory access
+    on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
+    vLLM does the same, and passes at 288)."""
     w = json.load(open(wl)); s = w["sweep"]
     req = w.get("engine_args_required") or {}
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
-    return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]),
+    batch = int(s["batch"])
+    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
             "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
-            "MML": mml, "MNBT": req.get("max_num_batched_tokens") or int(mml),
+            "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
             "ck": checkpoint_dir(w["model"], w["tokenizer_revision"], hf_home, checkpoints) or ""}
 
 

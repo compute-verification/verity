@@ -14,12 +14,25 @@ is not evaluated, named).
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
 Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's).
+
+Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
+later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, under other Definition bodies,
+without serving again (the sample is seeded from the run root, so it draws the same picks):
+
+    store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
+                      linkage opened, folding to the run root
+    weights/          the bundle's weights tree and the tensors it carries;  binding_map.json, context.json  the bundle's
+    slim.json         {schema, pair, run_root, program_digest, programs, binding_map_sha256, bundle_manifest_sha256, commit_pass, picked,
+                       picks_key, picks, touched_bytes, files: {path: {sha256, bytes}}, bytes, dump_sha256}, written last
+
+`dump_sha256` is the sha256 of the canonical JSON of `files`.  It is built under `replay_slim_p<pair>.partial/` and renamed into place.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import shutil
 import sys
 import time
 from collections.abc import Callable
@@ -36,12 +49,16 @@ from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.program.kernels.compiled_relations import warm_vml
 
 ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "
            "and the tensor roots fold to the committed weights root")
 #: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
 WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
          "uint8": (8, np.uint8), "int8": (8, np.uint8)}
+SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
+SLIM_DOC = "slim.json"
+PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -255,6 +272,47 @@ def record(out: Path, rows: list[dict[str, Any]], verdict: dict[str, Any], b: di
         _write(sp, json.dumps(summary, indent=1, default=str) + "\n")
 
 
+def slim_path(out: str | os.PathLike, pair: int) -> Path:
+    return Path(out) / f"replay_slim_p{pair}"
+
+
+def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched, plan: dict[str, Any], c: dict[str, Any]) -> dict[str, Any] | None:
+    """Writes the decided replay's slim keep (module docstring) and returns its `slim.json`; None, with nothing written, when the draw's
+    reads were not all made in this process (`plan` is not a plan of as many picks as the replay picked)."""
+    ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
+    sr = c.get("sampled_replay") or {}
+    picked = (sr.get("sample") or {}).get("picked")
+    if not plan.get("plan") or picked is None or plan.get("picked") != picked or len(plan.get("picks") or ()) != picked:
+        print(f"[replay] SLIM KEEP (pair {pair}): NOT WRITTEN -- the replay picked {picked}, its reads were re-made for {plan.get('picked')}",
+              flush=True)
+        return None
+    final = slim_path(out, pair)
+    p = final.with_name(final.name + ".partial")
+    shutil.rmtree(p, ignore_errors=True)
+    hashed: dict[str, str] = {}
+    SD.dump(store, run, p / "store", digests=hashed, touched=touched)
+    rels = ["binding_map.json", "context.json", *sorted(x.relative_to(bdir).as_posix() for x in (bdir / "weights").rglob("*") if x.is_file())]
+    for rel in rels:
+        (p / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(bdir / rel, p / rel)
+    names = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
+    with ThreadPoolExecutor(8) as pool:
+        sums = pool.map(lambda r: hashed.get(r.removeprefix("store/")) or RB._sha256(p / r), names)
+        files = {r: {"sha256": h, "bytes": (p / r).stat().st_size} for r, h in zip(names, sums)}
+    doc = {"schema": SLIM_SCHEMA, "pair": pair, "run_root": run.run_root.hex(), "program_digest": (ctx.get("args") or {}).get("program_digest"),
+           "programs": sr.get("programs"), "binding_map_sha256": b["manifest"]["files"]["binding_map.json"]["sha256"],
+           "bundle_manifest_sha256": b["manifest_sha256"], "commit_pass": c.get("commit_pass"), "picked": picked, "picks_key": PICKS_KEY,
+           "picks": plan["picks"], "touched_bytes": touched.nbytes(), "files": files, "bytes": sum(f["bytes"] for f in files.values()),
+           "dump_sha256": hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
+    (p / SLIM_DOC).write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+    if final.exists():
+        shutil.rmtree(final)
+    os.replace(p, final)
+    print(f"[replay] SLIM KEEP (pair {pair}): {final} -- {picked} picks, {doc['bytes'] >> 20} MiB in {len(files)} files, dump sha256 "
+          f"{doc['dump_sha256'][:16]}, run root {doc['run_root'][:16]}", flush=True)
+    return doc
+
+
 def replay(o: Options) -> bool | None:
     """The bundle's C2 replay and the run's verdict on the record; the verdict's commit_pass."""
     from verity_vllm.check import weights_of_record as WR
@@ -277,13 +335,16 @@ def replay(o: Options) -> bool | None:
     print(f"[replay] WEIGHTS (pair {pair}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered tensors against the committed "
           f"weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
-    vc, consumed = row["commit"]["value_correspondence"], set()
-    C2.run(C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
-                   manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
-                   components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
-                   weights_check=lambda: dict(wc), tl=tl), {})
+    vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
+    with SD.touched(store) as touched:
+        C2.run(C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
+                       manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
+                       components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
+                       weights_check=lambda: dict(wc), tl=tl, reads=reads), {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
     decide(row, ctx, wc, b, consumed, words, tree.get("extra") or {})
+    with tl.span("replay.slim_keep", pair=pair):
+        keep(out, b, store, run, touched, reads, row["commit"])
     record(out, rows, verdict, b, time.perf_counter() - t0)
     c = row["commit"]
     print(f"[replay] COMMIT {'PASS' if c['commit_pass'] else 'FAIL'} (pair {pair}): {c.get('commit_fail_reason') or 'every check on the record'}; "
@@ -292,6 +353,7 @@ def replay(o: Options) -> bool | None:
 
 
 def main(o: Options) -> int:
+    warm_vml()
     try:
         ok = replay(o)
     except Refused as e:

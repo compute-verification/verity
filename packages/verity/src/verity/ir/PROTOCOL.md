@@ -375,3 +375,15 @@ Vectors (`tests/ir/boolean_vectors.json`, written by `python packages/verity/tes
 kind, parameters, return type, truth table), `constants`, `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
 descriptor, digest, gate table and truth table on words.
+
+## 10. `Q_word` v2
+
+`Q_word` v2 (`partition_object.QUERIES`, the parameters `X` and `W` checked as v1's) reads a Program as v1 does, with §8's
+conventions and v1's Calls, units, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
+two units (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
+(`gate-recomputed`). Every other code and the width rule are v1's, and `validate_unit_cut` and `cut.check_cut` refuse by default.
+v2's units may compute a common value, so a count of v2 units or gates bounds wrong work from above but is not distinct work, and a
+consumer that credits work (PoUW) does not take `Q_word` v2.
+
+Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
+only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), which v2 accepts and reports.
