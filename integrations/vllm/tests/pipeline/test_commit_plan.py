@@ -91,17 +91,21 @@ def test_an_unreadable_plan_or_another_schema_is_recomputed(planned, tmp_path):
     assert CP.use(plan, args)[1]["why"] == "plan schema 'verity-vllm/commit-plan/v0' != verity-vllm/commit-plan/v1"
 
 
-def test_the_commit_s_producer_facts_are_the_plan_s_or_derived_with_the_reason(planned, monkeypatch):
+def test_the_commit_s_producer_facts_are_the_plan_s_or_derived_with_the_reason(planned, monkeypatch, tmp_path):
+    from verity_vllm.pipeline.timeline import Timeline
+    TL = Timeline(tmp_path / "timeline.jsonl")
     args, plan, facts = planned
     man = json.loads(Path(args.required_manifest).read_text())
-    (got, _), rec = CP.producer_facts(types.SimpleNamespace(**vars(args), plan=plan), man, [], {})
+    (got, _), rec = CP.producer_facts(types.SimpleNamespace(**vars(args), plan=plan), man, [], {}, tl=TL)
     assert got == facts and rec["used"] is True
     stale = types.SimpleNamespace(**{**vars(args), "program_digest": "q" * 64}, plan=plan)
     monkeypatch.setattr(CP, "oracle_producers_of_record", lambda *a: (None, {"used": False, "why": "derived here"}))
-    assert CP.producer_facts(stale, man, [], {}) == ((None, {"used": False, "why": "derived here"}), CP.use(plan, stale)[1])
+    assert CP.producer_facts(stale, man, [], {}, tl=TL) == ((None, {"used": False, "why": "derived here"}), CP.use(plan, stale)[1])
     monkeypatch.setattr(CP, "oracle_producers_of_record", lambda *a: 1 / 0)
-    (got, why), rec = CP.producer_facts(types.SimpleNamespace(**vars(args), plan=None), man, [], {})
+    (got, why), rec = CP.producer_facts(types.SimpleNamespace(**vars(args), plan=None), man, [], {}, tl=TL)
     assert got is None and rec is None and why == {"used": False, "why": "producer facts not derived: ZeroDivisionError('division by zero')"}
+    ends = [json.loads(ln) for ln in (tmp_path / "timeline.jsonl").read_text().splitlines()]
+    assert [(e["source"], e["members"]) for e in ends if e["ev"] == "end"] == [("plan", len(facts)), ("derived", 0), ("derived", 0)]
 
 
 def test_the_commit_s_parser_takes_the_plan(tmp_path):

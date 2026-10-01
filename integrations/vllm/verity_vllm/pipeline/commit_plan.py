@@ -160,15 +160,25 @@ def derived(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict
         return None, {"used": False, "why": f"producer facts not derived: {e!r}"[:300]}
 
 
-def producer_facts(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]], sampling: dict[str, Any]
+def producer_facts(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]], sampling: dict[str, Any], *, tl: Any
                    ) -> tuple[tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]], dict[str, Any] | None]:
     """The Commit's producer facts, from its plan (`--plan`) when `use` takes it, else `derived` here; and the plan's record (None
-    without a plan)."""
+    without a plan).  `tl` times them (`prep.producer_facts`, with their source)."""
+    tl.start("prep.producer_facts")
     got, rec = use(args.plan, args) if getattr(args, "plan", None) else (None, None)
     if rec is not None:
         print(f"[delta] plan {args.plan}: " + (f"producer facts from the plan ({rec['members']} members, planned {rec.get('planned_utc')})"
                                                if rec["used"] else f"plan_recomputed: {rec['why']}"), flush=True)
-    return got if got is not None else derived(args, required_manifest, reqs, sampling), rec
+    got = got if got is not None else derived(args, required_manifest, reqs, sampling)
+    tl.end("prep.producer_facts", source="plan" if (rec or {}).get("used") else "derived", members=len(got[0] or {}))
+    return got, rec
+
+
+def verdict_entry(args: Any, rec: dict[str, Any] | None) -> dict[str, Any]:
+    """The Commit verdict's `plan` when it was given one: the plan's record, or why no producer facts were read."""
+    if not getattr(args, "plan", None):
+        return {}
+    return {"plan": rec or {"path": args.plan, "used": False, "plan_recomputed": False, "why": "no producer facts read (no manifest or no committer)"}}
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
