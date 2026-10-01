@@ -12,7 +12,7 @@ from pathlib import Path
 
 from verity.ir.partition import Level
 from verity.proofs.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity_one_stage.consumers import compute_bound, exfiltration_bound, location_bits
+from verity_sampled_proofs.one_stage.consumers import compute_bound, exfiltration_bound, location_bits
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 units, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
@@ -125,13 +125,13 @@ def test_the_lean_vectors_were_generated_from_this_tree():
     Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
     soundness = "backends/flock/verifier/lean/soundness/"
-    assert set(recorded) == {"protocols/one_stage/tests/lean/ExfiltrationVectors.lean",
+    assert set(recorded) == {"protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean",
                              *(soundness + f for f in ("FlockSoundness/Audit/Influence.lean", "FlockSoundness/Audit/Law.lean",
                                                        "FlockSoundness/Audit/Stratified.lean",
                                                        "FlockSoundness/Audit/StratifiedMiss.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}
     stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
-    assert not stale, f"changed since the vectors were generated, rerun protocols/one_stage/tests/lean/generate.sh: {stale}"
+    assert not stale, f"changed since the vectors were generated, rerun protocols/sampled_proofs/tests/lean/generate.sh: {stale}"
 
 
 def test_compute_is_the_work_weighted_bound():

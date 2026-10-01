@@ -17,7 +17,7 @@ from verity.ir import codec, partition_object as PO
 from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ir.program import Program
 from verity.ir.types import Array, Value
-from verity_one_stage import audit, draw as D, partition as P, registration as R
+from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)

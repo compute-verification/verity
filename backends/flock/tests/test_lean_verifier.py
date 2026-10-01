@@ -542,7 +542,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
 
 def _one_stage_draw():
     try:
-        from verity_one_stage import draw
+        from verity_sampled_proofs.one_stage import draw
     except ImportError:
         return None
     return draw if hasattr(draw, "derive") else None
