@@ -12,6 +12,7 @@
 
 #include <chrono>
 #include "pure_sha256.cuh"
+#include "zerocheck_round1_alu.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
@@ -944,7 +945,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         build_eq_device(d_eq, &zc_r[13], m - 13);
         F128 round1_scale = ONE;
         for (int i = 6; i < 13; i++) round1_scale = MUL(round1_scale, ADD(ONE, zc_r[i]));
-        launch_zerocheck_first_round_cpu_structured((const uint8_t*)d_a, (const uint8_t*)d_b,
+        launch_zerocheck_first_round((const uint8_t*)d_a, (const uint8_t*)d_b,
                                    (const uint8_t*)df, d_eq, 1LL << (m - 13),
                                    round1_scale, d_r1ab, d_r1c);
         CK(cudaGetLastError()); CK(cudaStreamSynchronize(0));

@@ -126,7 +126,7 @@ def gate(path: Path | None, shapes_needed: int = 2) -> dict:
         cases = {c.get("case"): c for c in st.get("gpu_cases", [])}
         good = all((cases.get(c) or {}).get("pass") is True for c in GATE_CASES)
         shapes[r.get("definition")] = {"pass": good, "digest": ((r.get("live") or {}).get("statement_digest")),
-                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in GATE_CASES}}
+                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal", "proof_sha512")} for c in GATE_CASES}}
         ok &= good
     ok &= len(shapes) >= shapes_needed
     return {"status": "passed" if ok else "failed", "shapes": shapes}
