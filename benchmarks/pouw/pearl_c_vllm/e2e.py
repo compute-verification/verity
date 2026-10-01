@@ -333,7 +333,8 @@ def schedule_check(run, weights: dict) -> dict:
 def graphs_check(run, weights: dict) -> list[dict]:
     """With ``--graphs``, at every distinct (n, k): one m = 32 call made eagerly, then twice as a graph replay, each from a
     fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
-    of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
+    of an m = 8,192 call read from its BF16 x must give the flags it gives from their FP32 widening, A's words (which a
+    kernel with BF16 A rows reads from x in place, so its `xa` doesn't hold them)."""
     import torch
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     out, seen = [], set()
@@ -367,7 +368,7 @@ def graphs_check(run, weights: dict) -> list[dict]:
     sh = run.shapes[(PREFILL, W.shape[0], W.shape[1])]
     a, b = torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device), torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device)
     PPD.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
-    PPD.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPD.screen_into(b, x.float(), sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
     run.end()
     same = bool(torch.equal(a, b))
     out.append({"check": "screen_bf16", "rows": PREFILL, "k": W.shape[1], "flagged": int(a.sum()), "flags_equal": same, "ok": same})

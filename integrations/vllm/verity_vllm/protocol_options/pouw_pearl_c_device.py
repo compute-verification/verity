@@ -15,7 +15,9 @@ device's primary context:
   weight side keeps about a byte per weight (B̃) beside the model's own weight.
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
-    zero rows) and zero padding up to the kernels' tile;
+    zero rows) and zero padding up to the kernels' tile.  On a kernel with BF16 A rows (``run.A_BF16_KERNELS``, -h2), A's
+    rows stay BF16 and A's kernels widen them as they load them, so every byte committed is the same; a call whose x fills
+    the tile with nothing to pad, outside a graph and a retained pass, is read in place (`_direct`), with no copy;
   - ``commit``: A's pads and level keys (and -h2's segment level keys) under its domain, A's row tree, seed_A and E_A's
     line key;
   - ``forming``: E_A's lines, A's statistics and forming;

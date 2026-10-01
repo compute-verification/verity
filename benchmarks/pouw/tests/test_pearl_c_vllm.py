@@ -254,6 +254,30 @@ def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(devi
     assert "hash_leaf_p" not in [n for n, *_ in kernel.dev.log] and "hash_msg_v" in [n for n, *_ in kernel.dev.log]
 
 
+def test_bf16_a_rows_are_read_in_place_when_nothing_pads(tmp_path):
+    """On a kernel with BF16 A rows (`A_BF16_KERNELS`, -h2) A's kernels read x itself on an unretained call that fills its
+    tile (m = m_p = 64), and else the shape's BF16 xa, x's rows copied in and the filler zero: at m = 20, and at m = 64 in a
+    retained pass, which keeps A's rows from xa."""
+    scheme = "pearl-c-sm120-v1-h2"
+    rng = np.random.default_rng(7)
+    weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
+    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, scheme)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, bytes(32), BEACON, capacity=1 << 12)
+    assert run.a_bf16 and run.details["a_rows"] == "bf16"
+    for m, m16, retain, direct in ((64, 64, False, True), (20, 32, False, False), (64, 64, True, False)):
+        if retain:
+            run.begin(retain=str(tmp_path))
+        kernel.dev.log.clear()
+        x = torch.randn(m, 1024).to(torch.bfloat16)
+        run.gemm(0, x, weights[0], None)
+        sh = run.shapes[(m16, 128, 1024)]
+        reads = {n: p[0] for n, _, p, _ in kernel.dev.log if n in R.A_BF16_KERNELS.values()}
+        assert set(reads) == {"hash_rows_b3s_bf16", "stats_s5_bf16", "form_s5_bf16"} and sh.xa.dtype == torch.bfloat16
+        assert set(reads.values()) == {x.data_ptr() if direct else sh.xa.data_ptr()}, (m, retain)
+        assert torch.equal(sh.xa[:m], torch.zeros_like(x) if direct else x) and not sh.xa[m:].any()
+
+
 def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     """On the recording stand-in nothing is written, so every pass commits the poison: the repeat holds, and only the negative
     control (the call with its tile leaves omitted) can tell. It must, for every shape."""
@@ -338,9 +362,11 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "")] if hashing == "h2" else ["hash_rows_w"]
+        bf = "_bf16" if hashing == "h2" else ""
+        assert run.a_bf16 == (hashing == "h2")
+        want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "") + bf] if hashing == "h2" else ["hash_rows_w"]
         assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
-        assert ("stats_s5" in names) == (rows_form == "w")
+        assert ("stats_s5" + bf in names) == (rows_form == "w") and "form_s5" + bf in names
         if rows_form == "s":
             a = torch.zeros((32, 1024), dtype=torch.float32)
             a[:x.shape[0]] = x.float()
@@ -592,8 +618,9 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
 def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
     assert [PF.kernel_category(k) for k in ("gemm_pearlc_b", "gemm_pearlc_cu", "form_s5", "stats_s5", "gemm_words", "hash_rows_w",
-                                            "seed_line_a", "flash_fwd_kernel", "paged_attention")] == [
-        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "other", "other"]
+                                            "seed_line_a", "flash_fwd_kernel", "paged_attention", *R.A_BF16_KERNELS.values())] == [
+        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "other", "other", "hashing", "hashing", "forming",
+        "forming"]
     csvf = tmp_path / "k.csv"
     csvf.write_text('"Time (%)","Total Time (ns)","Instances","Avg (ns)","Name"\n'
                     '50,2000000,10,200000,"gemm_pearlc_b"\n30,1200000,40,30000,"hash_leaf_p"\n20,800000,5,160000,"flash_fwd"\n')
