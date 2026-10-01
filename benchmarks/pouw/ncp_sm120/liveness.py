@@ -8,7 +8,8 @@ by #295's own `D3Family("d3s", "xq", "round11", "f16").side` and SHAKE256 stream
 tree), every atom chained on verity's sm_120 atom (check.py's `chained`), the bound words every S-th accumulator.  Per
 family and S:
 
-- frozen atoms: Q_t = Q_(t-1); frozen segments: a bound word equal to the one before it (its S atoms left it unchanged)
+- frozen atoms: Q_t = Q_(t-1); frozen segments: a bound word equal to the one before it (its S atoms left it unchanged),
+  also per third of the chain (D-3s's three stacked k-blocks, `frozen_by_block`) and in the worst cell (`frozen_cell_max`)
 - salt-independent words: a bound word equal under every salt; the same for its low 16 bits; constant bits: of a bound
   word's 32, how many are equal under every salt (the mean)
 - repeated words: a cell under one salt whose bound words aren't pairwise distinct
@@ -73,6 +74,8 @@ def shares(W: np.ndarray, E: np.ndarray, cells: np.ndarray) -> dict:
     gap = frozen | indep[None]
     return {"cells": int(W.shape[1]), "bound_words": int(W.shape[2]),
             "frozen_segments": round(float(frozen.mean()), 6),
+            "frozen_by_block": [round(float(f.mean()), 6) for f in np.array_split(frozen, 3, axis=2)],
+            "frozen_cell_max": round(float(frozen.mean(axis=(0, 2)).max()), 6),
             "salt_independent_words": round(float(indep.mean()), 6),
             "salt_independent_low16": round(float(((W & 0xFFFF) == (W[:1] & 0xFFFF)).all(axis=0).mean()), 6),
             "constant_bits_mean": round(float(const_bits.mean()), 3),
@@ -139,7 +142,8 @@ def main(argv: list[str]) -> int:
                   f"{a['exact_words']:.4f}, frozen seg {a['frozen_segments']:.4f}, salt-indep words "
                   f"{a['salt_independent_words']:.4f}, low16 {a['salt_independent_low16']:.4f}, const bits "
                   f"{a['constant_bits_mean']:5.2f}, repeated {a['repeated_word_cells']:.3f}; credited: "
-                  f"{c['cells']} cells, gap {c.get('live_gap', float('nan')):.4f}", flush=True)
+                  f"{c['cells']} cells, gap {c.get('live_gap', float('nan')):.4f}, by block "
+                  f"{c.get('frozen_by_block')}, worst cell {c.get('frozen_cell_max')}", flush=True)
         with open(os.path.join(out, "liveness.json"), "w") as f:
             json.dump(result, f, indent=1)
     return 0
