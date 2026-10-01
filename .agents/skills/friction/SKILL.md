@@ -89,6 +89,13 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (1:14 PM PDT; this wording 3:06 PM): the circuit holds only gates, and values are always hidden, the core
+  guarantee of even the most basic protocol. An operation's own definition is gates: the floating-point formats'
+  constants, SHA-512's, the measured GPU tables for exp2, rcp and tanh. Everything a program or a request brings is a value:
+  the weights, a program's constants (eps, the attention scale, a softcap) and tables (`gelu_tanh_bf16`, `tanh_rn`), a
+  request's parameters (temperature, top-p, Philox positions), every intermediate and every output. A value is committed
+  under a hiding leaf and touched only inside a zero-knowledge proof, never framed as part of the program the verifier
+  already has. The hill-climb optimizes the hiding protocol (`--zk`), not the non-ZK circuit prover.
 - 2026-10-01 (12:37 PM PDT): lanes work around the clock, so timelines are planned in hours: a pilot, trial or rollout gets
   hours (about eight for a process pilot), not the days or weeks a human team would give it.
 - 2026-10-01 (10:56 AM PDT): only leads get handles (a name in `research msg`), never individual workers; a worker is
