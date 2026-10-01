@@ -1,0 +1,105 @@
+diff --git a/crates/flock-core/src/pcs.rs b/crates/flock-core/src/pcs.rs
+index 5281a68..092e073 100644
+--- a/crates/flock-core/src/pcs.rs
++++ b/crates/flock-core/src/pcs.rs
+@@ -1319,6 +1319,7 @@ pub fn verify_opening_batch_ligerito_mixed_with_grinding_zk<Ch: Challenger>(
+     //    length-128 `eq_r_dprime` instead of the dense `rs_eq_ind`. Saves
+     //    ~16 MB allocation at m=29.
+     let mut rs_outputs = Vec::with_capacity(n_rs);
++    let t_rs = Instant::now();
+     for i in 0..n_rs {
+         let out = verify_succinct_with_grinding(
+             claims[i],
+@@ -1331,6 +1332,7 @@ pub fn verify_opening_batch_ligerito_mixed_with_grinding_zk<Ch: Challenger>(
+         .map_err(PcsError::RingSwitch)?;
+         rs_outputs.push(out);
+     }
++    ligerito::add_verify_ns(ligerito::VERIFY_RING_SWITCH, t_rs);
+     // 2. Bind every PD value, then protect the whole mixed linear batching
+     // vector with one PoW. A discrepancy is total-degree one in this vector.
+     for pd in packed_direct {
+@@ -1361,7 +1363,7 @@ pub fn verify_opening_batch_ligerito_mixed_with_grinding_zk<Ch: Challenger>(
+     //    For PD claims, precompute eq prefix factors over ris and finish per y.
+     //    For BLAKE3 m=30: ris is 19 dims, yr is 4 dims → 19× prefix reuse.
+     let log_n = commitment.params.m - LOG_PACKING;
+-    let eval_b_residual = |ris: &[F256], yr_log_n: usize| -> Vec<F256> {
++    let eval_b_residual_untimed = |ris: &[F256], yr_log_n: usize| -> Vec<F256> {
+         let yr_len = 1usize << yr_log_n;
+         let prefix_len = ris.len();
+ 
+@@ -1444,6 +1446,12 @@ pub fn verify_opening_batch_ligerito_mixed_with_grinding_zk<Ch: Challenger>(
+             })
+             .collect()
+     };
++    let eval_b_residual = |ris: &[F256], yr_log_n: usize| -> Vec<F256> {
++        let t = Instant::now();
++        let v = eval_b_residual_untimed(ris, yr_log_n);
++        ligerito::add_verify_ns(ligerito::VERIFY_RESIDUAL, t);
++        v
++    };
+ 
+     // 5. Drive ligerito SUCCINCT verifier — eval_b_residual is called ONCE
+     //    at the residual check (returns all yr_len values in one batch).
+diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
+index a25080b..8e7ce17 100644
+--- a/crates/flock-core/src/pcs/ligerito.rs
++++ b/crates/flock-core/src/pcs/ligerito.rs
+@@ -5257,6 +5257,48 @@ fn recursive_prover_inner<Ch: Challenger>(
+     unreachable!("recursive loop should return on last iter")
+ }
+ 
++thread_local! {
++    static VERIFY_NS: std::cell::Cell<[u64; 3]> = const { std::cell::Cell::new([0; 3]) };
++}
++
++/// Nanoseconds this thread has spent in the opening verifier's phases, for verity's session verifier's phase timers (they
++/// change no check): `[VERIFY_LEVEL_OPENS]` in [`verify_level_opens`] (the opened rows' leaves and their Merkle paths),
++/// `[VERIFY_RING_SWITCH]` in the claims' ring-switch checks, `[VERIFY_RESIDUAL]` in the residual's basis evaluation.
++pub fn verify_phase_ns() -> [u64; 3] {
++    VERIFY_NS.with(|c| c.get())
++}
++
++pub const VERIFY_LEVEL_OPENS: usize = 0;
++pub const VERIFY_RING_SWITCH: usize = 1;
++pub const VERIFY_RESIDUAL: usize = 2;
++
++pub(crate) fn add_verify_ns(phase: usize, since: std::time::Instant) {
++    let ns = since.elapsed().as_nanos() as u64;
++    VERIFY_NS.with(|c| {
++        let mut v = c.get();
++        v[phase] += ns;
++        c.set(v);
++    });
++}
++
++#[allow(clippy::too_many_arguments)]
++fn verify_level_opens(
++    cap: &[Hash],
++    block_len: usize,
++    queries: &[usize],
++    opened_rows: &[Vec<F128>],
++    expected_num_interleaved: usize,
++    paths: &[Hash],
++    salts: &[flock_merkle::hm96::Salt],
++    kind: HashKind,
++    sched: &LevelSchedule,
++) -> bool {
++    let t = std::time::Instant::now();
++    let ok = verify_level_opens_untimed(cap, block_len, queries, opened_rows, expected_num_interleaved, paths, salts, kind, sched);
++    add_verify_ns(VERIFY_LEVEL_OPENS, t);
++    ok
++}
++
+ /// Check the level's opened rows against its CAP: one independent capped
+ /// Merkle path per slot, in sample order — no sorting, no dedup, and no
+ /// repeated-position consistency check. A duplicate query simply repeats
+@@ -5266,7 +5308,8 @@ fn recursive_prover_inner<Ch: Challenger>(
+ /// config-static (`cap_depth(queries.len(), d)` — `queries.len()` IS the
+ /// config count, the verifier sampled them itself), so a wrong-size cap or
+ /// a wrong-length flat path vector rejects on shape before any hashing.
+-fn verify_level_opens(
++#[allow(clippy::too_many_arguments)]
++fn verify_level_opens_untimed(
+     cap: &[Hash],
+     block_len: usize,
+     queries: &[usize],
