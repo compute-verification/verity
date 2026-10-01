@@ -186,6 +186,35 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
                 p.wait()
 
 
+def test_fill_runner_does_not_count_a_waiter_pinned_inside_keep_free(tmp_path, monkeypatch):
+    """Memory accounting's `gpu-lease 1 --on 7 --wait` requests, on node 2's kept-free GPU 7, stopped fill from starting on the
+    six free GPUs (pouw-node2, 1 Oct 13:05Z): fill never takes a kept-free GPU, so a waiter pinned inside keep-free holds none back.
+    A waiter pinned partly outside it, unpinned, or pinned by UUID still counts."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    gl.mkdir()
+    fill.mkdir()
+    (fill / "keep-free").write_text("6,7  # pous\n")
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_keep_free", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    locks = []
+    try:
+        for i, on in enumerate(["7", "6,7", "6-7", "5,7", None, "GPU-af0bf9e0"]):
+            f = gl / f"wait.{i}.{100 + i}"
+            f.write_text(f"pid={100 + i} n={i + 1}{f' on={on}' if on else ''} run=- who=w since=2026-10-01T13:00:00Z\n")
+            fd = os.open(f, os.O_RDONLY)
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            locks.append(fd)
+        assert fr.waiters() == [4, 5, 6]
+        (fill / "keep-free").unlink()
+        assert fr.waiters() == [1, 2, 3, 4, 5, 6]
+    finally:
+        for fd in locks:
+            os.close(fd)
+
+
 def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_path, monkeypatch):
     """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter, since the agent evicts; a waiting
     or running window still stops it (infra, 1 Oct 06:50Z: the agent's eviction signals gpu-lease's pid only, which leaves a
