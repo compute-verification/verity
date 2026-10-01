@@ -236,7 +236,7 @@ def mufu_ex2(C, x):
     """``MufuEx2Ftz_v1``: x as a signed fixed-point value with 23 fraction bits; the table at its fraction, the integer part
     added to the table word's exponent. A right shift past the mantissa is clamped (K = 0), so every |x| < 2^-23 reads the
     table's first word."""
-    s, e, _, e_max, e_zero, m_nz = _fields(C, x)
+    s, e, m, e_max, e_zero, m_nz = _fields(C, x)
     big = NOT(_ult_const(C, e, 157))                          # e - 127 >= 30
     neg = _ult_const(C, e, 127)
     d8 = sub(C, const_bits(127, 8), e, 8)[0]
