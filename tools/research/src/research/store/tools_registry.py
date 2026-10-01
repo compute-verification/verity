@@ -16,6 +16,7 @@ REGISTRY: dict[str, str] = {
     "tc_probe": "tools.tc_probe.tool:TC_PROBE",
     "instances_hw": "tools.tc_probe.tool:INSTANCES_HW",
     "tc_probe_fp4": "tools.tc_probe_fp4.tool:TC_PROBE_FP4",
+    "tc_price_fp4": "tools.tc_probe_fp4.tool:TC_PRICE_FP4",
     "bench_vu": "backends.direct.ligero.tool:BENCH_VU",
     "ligero_verify_batch": "backends.direct.ligero.tool:LIGERO_VERIFY_BATCH",
     "a_gpu_prove": "backends.gkr.gpu.tool:A_GPU_PROVE",
@@ -38,6 +39,7 @@ REGISTRY: dict[str, str] = {
     "lean_upstream": "tools.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
+    "vllm.plan": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
     "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
     "vllm.commit": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
     "vllm.replay": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",

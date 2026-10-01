@@ -32,6 +32,7 @@ All modes run eagerly (the wrapper is not graph-capturable yet), at the same mem
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import statistics
@@ -116,10 +117,44 @@ def ncp_y(Wq, pi, gen):
     return torch.cat([Wq + F1, Wq + F2, Wq + F1 + F2], dim=1).view(torch.uint8).contiguous()
 
 
-def install(model, mode: str, committer=None) -> dict:
-    """Wrap every LinearBase layer's quant_method.apply (found by type) for `mode`; returns the shared stats."""
+class ModeExecutor:
+    """One bench mode's GEMM at every linear site (`verity_vllm.linear.api.LinearExecutor`), over the operands `install`
+    prepared per weight: weight state kept across calls, no controls, serial only.  Its pass is itself, one for the engine's
+    life (`run_mode`)."""
+
+    keeps_weight_state = True
+    accepts = frozenset({"bf16", "fp16", "fp32"})
+    controls = frozenset()
+    schedules = frozenset({"serial"})
+
+    def __init__(self, mode: str, states: dict, compute, stats: dict) -> None:
+        from verity_vllm.linear.api import PassSpec
+        self.name, self.states, self.compute, self.stats, self.spec = f"bench:{mode}", states, compute, stats, PassSpec()
+
+    def refusals(self, sites) -> list[str]:
+        return [f"linear {s.weight_id} ({s.qualname}) has no prepared operands" for s in sites if s.weight_id not in self.states]
+
+    def begin(self, spec):
+        return self
+
+    def call(self, site, x, weight, bias):
+        return self.compute(self.states[site.weight_id], x, bias)
+
+    def end(self) -> dict:
+        return dict(self.stats)
+
+    def close(self) -> None:
+        pass
+
+
+def install(model, mode: str, committer=None):
+    """Every LinearBase layer (found by type, `verity_vllm.linear.vllm_site`) computed for `mode` by one `ModeExecutor` on a
+    `Stack` attached through `engine.hooks`; returns the shared stats, the stack (its arm active) and the hooks, which the
+    caller uninstalls so the patches don't keep the engine alive."""
     import torch
-    from vllm.model_executor.layers.linear import LinearBase
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.linear import vllm_site
+    from verity_vllm.linear.api import Arm, Stack
 
     stats = {"calls": 0, "macs": 0, "transcript_bytes": 0, "layers": 0, "y_formed_bytes": 0}
     count = {"forward": 0, "rows": 0}
@@ -127,8 +162,9 @@ def install(model, mode: str, committer=None) -> dict:
     if mode in ("ncp", "pearl"):
         from kernels import load
         ext = load()
-    layers = [m for m in model.modules() if isinstance(m, LinearBase)]
-    stats["layers"] = len(layers)
+    sites = vllm_site.discover(model)
+    stats["layers"] = len(sites)
+    states: dict[int, dict] = {}
     perms: dict[int, torch.Tensor] = {}
     gen = torch.Generator(device="cuda").manual_seed(20260928)
 
@@ -137,7 +173,8 @@ def install(model, mode: str, committer=None) -> dict:
         x = x * (torch.randint(0, 2, (rows, k), device="cuda", generator=gen) * 2 - 1)
         return (x * (256.0 / x.norm(dim=1, keepdim=True))).to(torch.float8_e4m3fn).to(torch.bfloat16)
 
-    for li, layer in enumerate(layers):
+    for site, layer in sites:
+        li = site.weight_id
         W = layer.weight.data
         n, k = W.shape
         st = {"n": n, "k": k}
@@ -169,80 +206,76 @@ def install(model, mode: str, committer=None) -> dict:
             Q = torch.cat([(EB.float() * b_w).T, a_w.T * (FA.T.float() @ Wf.T) + b_w.T * G], dim=0).to(torch.bfloat16)
             st.update(Bq=Bq, a_w=a_w.view(1, n), Q=Q, FB=FB, FA=FA)
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)
-        layer._pouw = st
+        states[li] = st
 
-    def make(original):
-        def apply(layer, x, bias=None):
-            st = getattr(layer, "_pouw", None)
-            if st is None:
-                return original(layer, x, bias)
-            n, k = st["n"], st["k"]
-            x2 = x.reshape(-1, k)
-            m = x2.shape[0]
-            stats["calls"] += 1
-            stats["macs"] += m * k * n
-            if mode in NCP2_MODES:
-                Aq, sx = int7(x2, 1)
-                mp, sf = (m + 15) // 16 * 16, sx.view(m).float()
-                if mp != m:
-                    Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
-                    sf = torch.cat([sf, torch.zeros(mp - m, dtype=torch.float32, device=sf.device)])
-                if st["index"] == 0:
-                    count["forward"] += 1
-                rowids = torch.arange(count["rows"], count["rows"] + mp, dtype=torch.int32, device=Aq.device)
-                count["rows"] += mp
-                b16 = st["zero_bias"] if bias is None else bias.to(torch.bfloat16).contiguous().view(torch.int16)
-                y16 = committer(Aq.contiguous(), sf.contiguous().view(torch.int32), st["B"], st["T"], b16, count["forward"],
-                                st["index"] << 32, st["index"], rowids, st["colids"])
-                stats["transcript_bytes"] += 4 * mp * n * (3 * k // 16)
-                return y16[:m].view(torch.bfloat16).reshape(*x.shape[:-1], n)
-            if mode == "w7a7":
-                Aq, sx = int7(x2, 1)
-                mp = max(32, (m + 7) // 8 * 8)
-                if mp != m:
-                    Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
-                C = torch._int_mm(Aq, st["Wt"].T)[:m]
-                y = (C.float() * sx * st["sw"]).to(x.dtype)
-            elif mode == "ncp":
-                Aq, sx = int7(x2, 1)
-                cfg = 1 if m <= 32 else 0
-                mp = (m + 15) // 16 * 16 if cfg else (m + 127) // 128 * 128
-                if mp != m:
-                    Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
-                Y = ncp_y(st["Wt"], st["pi"], gen)
-                C, _, _ = ext.ncp_gemm(ncp_x(Aq, st["pi"], gen), Y, 1, cfg)
-                del Y
-                stats["y_formed_bytes"] += 3 * n * k
-                stats["transcript_bytes"] += 4 * m * n * (3 * k // 16)
-                y = (C[:m].float() * sx * st["sw"]).to(x.dtype)
-            else:
-                xf = x2.float()
-                l2 = xf.pow(2).mean(dim=1, keepdim=True).sqrt().clamp_min(2 ** -32)
-                linf = xf.abs().amax(dim=1, keepdim=True).clamp_min(2 ** -32)
-                a = 448.0 / (R ** 0.5 * l2 + linf)
-                b = a * l2 * R ** 0.5 / 256.0 ** 2
-                mp = (m + 15) // 16 * 16 if m <= 32 else (m + 127) // 128 * 128
-                EA = lines(m, R)
-                Aq = torch.clamp(a * xf + b * (EA @ st["FA"].T).float(), -448, 448).to(torch.float8_e4m3fn).view(torch.uint8)
-                if mp != m:
-                    Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.uint8, device=Aq.device)])
-                cfg = 0 if mp >= 128 and n % 128 == 0 else 1
-                Ct = ext.fp8_gemm(Aq.contiguous(), st["Bq"], cfg)[:m]
-                P = torch.cat([(a * (x2 @ st["FB"]).float()), b * EA.float()], dim=1).to(torch.bfloat16)
-                y = ((Ct - (P @ st["Q"]).float()) / (a * st["a_w"])).to(x.dtype)
-            if bias is not None:
-                y = y + bias
-            return y.reshape(*x.shape[:-1], n)
-        return apply
+    def compute(st, x, bias=None):
+        n, k = st["n"], st["k"]
+        x2 = x.reshape(-1, k)
+        m = x2.shape[0]
+        stats["calls"] += 1
+        stats["macs"] += m * k * n
+        if mode in NCP2_MODES:
+            Aq, sx = int7(x2, 1)
+            mp, sf = (m + 15) // 16 * 16, sx.view(m).float()
+            if mp != m:
+                Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
+                sf = torch.cat([sf, torch.zeros(mp - m, dtype=torch.float32, device=sf.device)])
+            if st["index"] == 0:
+                count["forward"] += 1
+            rowids = torch.arange(count["rows"], count["rows"] + mp, dtype=torch.int32, device=Aq.device)
+            count["rows"] += mp
+            b16 = st["zero_bias"] if bias is None else bias.to(torch.bfloat16).contiguous().view(torch.int16)
+            y16 = committer(Aq.contiguous(), sf.contiguous().view(torch.int32), st["B"], st["T"], b16, count["forward"],
+                            st["index"] << 32, st["index"], rowids, st["colids"])
+            stats["transcript_bytes"] += 4 * mp * n * (3 * k // 16)
+            return y16[:m].view(torch.bfloat16).reshape(*x.shape[:-1], n)
+        if mode == "w7a7":
+            Aq, sx = int7(x2, 1)
+            mp = max(32, (m + 7) // 8 * 8)
+            if mp != m:
+                Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
+            C = torch._int_mm(Aq, st["Wt"].T)[:m]
+            y = (C.float() * sx * st["sw"]).to(x.dtype)
+        elif mode == "ncp":
+            Aq, sx = int7(x2, 1)
+            cfg = 1 if m <= 32 else 0
+            mp = (m + 15) // 16 * 16 if cfg else (m + 127) // 128 * 128
+            if mp != m:
+                Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
+            Y = ncp_y(st["Wt"], st["pi"], gen)
+            C, _, _ = ext.ncp_gemm(ncp_x(Aq, st["pi"], gen), Y, 1, cfg)
+            del Y
+            stats["y_formed_bytes"] += 3 * n * k
+            stats["transcript_bytes"] += 4 * m * n * (3 * k // 16)
+            y = (C[:m].float() * sx * st["sw"]).to(x.dtype)
+        else:
+            xf = x2.float()
+            l2 = xf.pow(2).mean(dim=1, keepdim=True).sqrt().clamp_min(2 ** -32)
+            linf = xf.abs().amax(dim=1, keepdim=True).clamp_min(2 ** -32)
+            a = 448.0 / (R ** 0.5 * l2 + linf)
+            b = a * l2 * R ** 0.5 / 256.0 ** 2
+            mp = (m + 15) // 16 * 16 if m <= 32 else (m + 127) // 128 * 128
+            EA = lines(m, R)
+            Aq = torch.clamp(a * xf + b * (EA @ st["FA"].T).float(), -448, 448).to(torch.float8_e4m3fn).view(torch.uint8)
+            if mp != m:
+                Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.uint8, device=Aq.device)])
+            cfg = 0 if mp >= 128 and n % 128 == 0 else 1
+            Ct = ext.fp8_gemm(Aq.contiguous(), st["Bq"], cfg)[:m]
+            P = torch.cat([(a * (x2 @ st["FB"]).float()), b * EA.float()], dim=1).to(torch.bfloat16)
+            y = ((Ct - (P @ st["Q"]).float()) / (a * st["a_w"])).to(x.dtype)
+        if bias is not None:
+            y = y + bias
+        return y.reshape(*x.shape[:-1], n)
 
-    wrapped = set()
-    for layer in layers:
-        qm = layer.quant_method
-        if id(qm) not in wrapped:
-            qm.apply = make(type(qm).apply.__get__(qm)) if "apply" not in vars(qm) else qm.apply
-            wrapped.add(id(qm))
+    stack = Stack([site for site, _ in sites], ModeExecutor(mode, states, compute, stats))
+    bad = stack.refusals()
+    if bad:
+        raise SystemExit(f"{mode} refuses the model: " + "; ".join(bad))
+    hooks = Hooks(tag=f"bench:{mode}")
+    vllm_site.attach(stack, sites, hooks)
+    stack.activate(Arm(mode, "bf16", f"bench:{mode}"))
     torch.cuda.empty_cache()
-    return stats
+    return stats, stack, hooks
 
 
 def engine(model_path: str, mode: str, max_seqs: int, max_len: int, revision: str | None = None):
@@ -271,12 +304,26 @@ def find_model(llm):
 
 def run_mode(args, mode: str) -> dict:
     import torch
-    from vllm import SamplingParams
 
     llm = engine(args.model, mode, 32, 4096, args.revision)
     committer = ncp2_committer(mode) if mode in NCP2_MODES else None
     check = ncp2_self_check(committer) if committer else None
-    stats = install(find_model(llm), mode, committer) if mode in ("w7a7", "ncp", "pearl", *NCP2_MODES) else {}
+    stats, stack, hooks = (install(find_model(llm), mode, committer) if mode in ("w7a7", "ncp", "pearl", *NCP2_MODES)
+                           else ({}, None, None))
+    try:
+        with stack.pass_() if stack is not None else contextlib.nullcontext():
+            result = _measure(args, llm, mode, committer, check, stats)
+    finally:
+        if hooks is not None:
+            hooks.uninstall()
+    del llm, stack, hooks
+    torch.cuda.empty_cache()
+    return result
+
+
+def _measure(args, llm, mode: str, committer, check, stats: dict) -> dict:
+    import torch
+    from vllm import SamplingParams
 
     def tiles(timing: dict, phase: str) -> None:
         if committer:
@@ -322,8 +369,6 @@ def run_mode(args, mode: str) -> dict:
     if stats:
         stats["shake_est_s"] = stats["transcript_bytes"] / (SHAKE_GBPS * 1e9)
         result["stats"] = stats
-    del llm
-    torch.cuda.empty_cache()
     return result
 
 

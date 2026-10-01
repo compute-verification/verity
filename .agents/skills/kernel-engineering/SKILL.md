@@ -22,7 +22,7 @@ found them.
 
 It points at the tools rather than repeating them: the harness's `README.md` (`benchmarks/pouw/harness/`, #491), the
 panel's `add-a-row.md`, and the vLLM integration API (#567). `store:pous/<path>` is the POUS Project store (a Project
-worker has it under `/cursor/stores/`); `kb/` is `~/.research/notes/kb/`, or a clone of `danielreuter/research-notes`. Parts
+worker has it under `/cursor/stores/`). Parts
 marked **(lands with …)** change when that work merges; [When the tooling lands](#when-the-tooling-lands) lists them.
 
 ## The objective
@@ -47,12 +47,14 @@ Ten minutes here saves a GPU window. For your line, version and mechanism:
    family (a new schedule, forming or mainloop, not a knob in your own kernel) with
    `research notes claim pouw/<slug> --lane <you> --hypothesis "..."`. `claim` refuses an approach that is live under
    another lane, or that was killed, unless you pass `--reopen WHY`. The CLI is on #240 until it merges.
-2. **Attempts:** the panel's rows for the line (`store:pous/docs/pouw/panel.md` and
-   `store:pous/internal/pouw/panel/attempts.jsonl`), and the keep-or-drop lines in the owning lane's status file
-   (`store:pous/internal/pouw/rtx-pro/workers/*.md`, its Checkpoints and Lessons). **(Lands with #491's
-   self-recording:** `research data select --kind kernel-attempt/v1` by mechanism, and a generated technique
-   catalog.**)**
-3. **Gotchas:** `kb/sm120-kernels.md`. Read your toolchain's and the node's sections before your first build.
+2. **Attempts:** search the technique catalog, `store:pous/docs/pouw/tried-techniques.md`, for your mechanism: one row
+   per technique tried on sm_120, with its kernel and head, its measured effect and runs, and kept, dropped, open or
+   superseded with the reason. Then the attempts since it was built: the harness's records
+   (`research data select --kind kernel-attempt/v1`, or `python benchmarks/pouw/harness/ledger.py rows --refresh`),
+   the panel's rows for the line (`store:pous/docs/pouw/panel.md`), and the owning lane's latest checkpoints
+   (`store:pous/internal/pouw/rtx-pro/workers/*.md`).
+3. **Gotchas:** `store:pous/docs/pouw/sm120-gotchas.md`, one line per fact with its source. Read your toolchain's and
+   the node's sections before your first build.
 4. **Owner:** every kernel directory, shared module and tool has one owner lane (the table in
    `store:pous/internal/pouw/rtx-pro/brief.md`). A change to someone else's code goes to them, as a PR against their
    branch or a handoff, never as an edit in their tree.
@@ -79,15 +81,22 @@ An attempt is one change to a variant, with a parent, taken up the ladder only a
 - **Parent:** the variant you start from: today its commit and kernel directory; once #567 lands, its `KernelVariant.id`
   (`<family>-<device>/<source digest>`).
 - **Mechanism:** what changes, in short tags (`pipeline:tma-ws`, `unroll:2`, `release:fence-proxy`,
-  `epilogue:wide-stores`); the catalog's tags once it exists.
+  `epilogue:wide-stores`); reuse the catalog's tag where one fits, so a search finds every attempt at it.
 - **Hypothesis:** the expected effect and why, in one line: "WIDE stores cut STG L1 tag requests from 16 to 4; expect the
   tail to shrink".
 - **The tier** that will decide it, usually 2a.
 
-Today these go in your status file's checkpoint and, for anything priced or timed, the panel row's `--description`.
-**(Lands with #491's self-recording:** the arm's build record carries a `lineage` block, and the harness copies it into
-the attempt's record.**)** A tuned or swept choice is part of the variant's sources: commit the winning knob, so its
-digest changes with it. Serving never tunes.
+In a harness arm, these go in its build record, and the harness copies them into the attempt's record:
+- `variant`: `ledger.variant_record(family=..., device=..., schemes=..., sources=..., binaries=..., prices=...)`. `prices`
+  is the priced path the kernel runs, such as `cast-8.72`, `cast-32.06` or `lut256`.
+- `lineage`: the parent, the mechanism tags and the panel line and version.
+- The hypothesis: `verify.py --hypothesis "..." --parent ART`.
+
+Outside the harness, they go in your status file's checkpoint and the panel row's `--description`.
+
+A tuned or swept choice is part of the variant's sources: commit the winning knob, so its digest changes with it. A knob
+that picks code at run time (`PEARLC_A_FORMS`) goes in `variant_record(..., config={...})`, or two forms share one id.
+Serving never tunes.
 
 ### 2. Climb the ladder
 
@@ -97,11 +106,11 @@ Stop at the lowest tier that decides the attempt. Only a candidate that beats it
 |---|---|---|---|
 | 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.ml.tc` on small tiles; the executor's step order on `RecordingDev` | the package's suite (`uv run tools/check/suites.py benchmarks/pouw`); `python benchmarks/pouw/harness/sass_gate.py K.cubin --json gate.json` |
 | 2a screen | one leased GPU, untimed | the device gates at the served shapes; a poisoned transcript that verifies and a no-write control that's rejected; a diagnostic interleaved time; the time split; ncu, compute-sanitizer, knob sweeps | `research run ... -- gpu-lease 1 --wait -- ...`, or fill chunks of at most 8 minutes |
-| 2b timed | the whole node, locked-2100 | the measured panel row | `bench.py` under `gpu-lease 8 --wait --timed`, then `verify.py` after the lease, in the same `research run` |
+| 2b timed | the whole node, locked-2100 | the measured panel row | `bench.py` under `research run --no-sampler` and `gpu-lease 8 --wait --timed`, then `verify.py --tier 2b` after the lease, in the same run |
 | 3 served | vLLM on the card | the served arms, the time split, the verify job, the served row | [Hooking a kernel into vLLM](#hooking-a-kernel-into-vllm) |
 
-The harness's `README.md` has the build, the untimed run and the timed run with its verify step: copy them, adding
-`--timed` to the timed run's `gpu-lease 8 --wait` (the README predates that rule).
+The harness's `README.md` has the build, the untimed run and the timed run with its verify step: copy them. They pass
+`--timed`, and #590 adds `--no-sampler`.
 
 Every GPU tier holds to these. Each came from a voided row, a lost window or GPUs held idle:
 
@@ -111,8 +120,13 @@ Every GPU tier holds to these. Each came from a voided row, a lost window or GPU
   new commitment path is verified at 2a, on a transcript your timed code wrote, before it is timed at all.
 - **Poison, then control.** Fill every buffer the transcript reads with 0xA5 just before the call you dump, including
   buffers a setup step wrote (`root_a`, `seed_a`, scales). A control arm writes nothing into them, and the verifier must
-  reject it. Give each arm its own inputs. Today your arm does this, as GPU 1's `run.py` and #540's `e2e.py` do.
-  **(Lands with #491:** the harness does it for every arm.**)**
+  reject it. Give each arm its own inputs.
+  - **In the harness:** implement `dump(dev, call, shape, dir)` and `call.transcript_buffers`. `bench.poison_dump` then
+    poisons, dumps the transcript and writes the no-write control under `negative/`, and `verify.py` judges both.
+  - **What to leave out:** tensor maps and a one-launch tree's `atomicInc` counters. A counter filled with 0xA5 never
+    reaches the last CTA.
+  - **What it refuses:** a transcript buffer that overlaps the call's operands.
+  - **Outside the harness:** your code does it, as #540's `e2e.py` does.
 - **Gates before timing, in the same run.** A shape and flag set is timed only after its gates passed on the device in
   that run, and a failed gate writes no measurement. The harness's order does this; a bench of your own must too.
 - **The baseline is the fastest plain GEMM, timed beside you:** same card, shape and die, interleaved rep by rep after a
@@ -136,8 +150,11 @@ Every GPU tier holds to these. Each came from a voided row, a lost window or GPU
 (1047/125 = 8.376), publish the larger, and say which won.
 - The prices come from the Lean pins (`store:pous/internal/pouw/price-twins-lean/`), not from a device record or a
   diagnostic.
+- In the harness you don't compute or type γ. The attempt record looks it up in `price_twins.json`, the Lean pins'
+  twins, on the variant's `prices` path, at both prices. A result that types γ in gets no record.
 - The path you price is the path you run. A kernel that casts with 64-bit stores at a 160-byte stride is priced at that
-  cast's 8.72 per code; if the block scale is priced on `lut256` (8.55), forming runs `lut256`.
+  cast's 8.72 per code; if the block scale is priced on `lut256` (8.55), forming runs `lut256`. Name the path from the
+  kernel your forming step launches at the run's commit, not the one you plan to reach.
 - A kernel change that moves the priced path (another cast, store width or scale path) moves γ: re-derive it, and say so
   in the row. Changing a price is a statement change, for the coordinator.
 
@@ -146,21 +163,26 @@ Every GPU tier holds to these. Each came from a voided row, a lost window or GPU
 Every attempt that ran is recorded, screens, failures and drops included: a negative result nobody wrote down gets tried
 again.
 
-Today:
 - **The run** is in the store because it went through `research run`; a fill chunk's through `research data put`.
-- **Anything priced or timed is a panel row:** `panel.py append`, with every field described in
-  `store:pous/internal/pouw/panel/add-a-row.md`. A measured row needs the verifier's commit, its accept line, the
-  transcript naming the run, the control's reject line and both sides' per-rep clocks; `verify.py` prints them ready to
-  paste, and `panel.py` refuses the row without them. Add `--noisy` when anything shared the GPU or the node. After a
-  store `EAGAIN`, run `panel.py render`; never append again.
+- **A harness run records itself.**
+  - `verify.py` writes one `kernel-attempt/v1` record per (arm, shape) under the run's `ledger/`, verified or not. It holds
+    the variant and parent, the tier, the gates' version, the metrics, the time split, γ at both prices and the
+    verifier's lines.
+  - It also declares the records in the run's `outputs.json`. Under `research run --on`, the runner publishes them with
+    the Attempt (#590); the workload has no store key, so `verify.py --publish` can't.
+  - Elsewhere, `verify.py --publish --push` publishes them, or `ledger.py publish RUN_DIR --by <you>` does it later.
+  - `panel.py render` shows them beside `attempts.jsonl`. A 2a screen is logged there and never plotted.
+- **Your judgment is a label on the record:**
+  `ledger.py outcome ART <outcome> --reason "..." --ref <run> --by <you> --push`. Numbers go in records and judgments
+  in labels; `research data label` refuses a measurement.
+- **Anything priced or timed outside the harness is a panel row:** `panel.py append`, with every field described in
+  `store:pous/internal/pouw/panel/add-a-row.md`.
+  - A measured row needs the verifier's commit, its accept line, the transcript naming the run, the control's reject
+    line and both sides' per-rep clocks; `panel.py` refuses the row without them.
+  - Add `--noisy` when anything shared the GPU or the node.
+  - After a store `EAGAIN`, run `panel.py render`; never append again.
+  - Hand appends stop once 90% of tier-2 runs record themselves.
 - **The keep-or-drop line,** with its reason and run id, goes in your status file.
-
-**(Lands with #491's self-recording:** every run at every tier writes a `kernel-attempt/v1` record per (variant, shape):
-the parent, the gates' versions, the metrics, the time split, γ at both prices and the verifier's lines. You add two
-labels: the hypothesis (from the build record) and, afterwards, an `outcome` with a one-line `reason`, through
-`research data label` (the vocabulary's `kernel` group comes with it). Hand appends to `attempts.jsonl` stop once 90% of
-tier-2 runs record themselves.**)** Numbers go in records and judgments in labels: `research data label` refuses a
-measurement.
 
 ### 4. Decide, and write down why
 
@@ -232,9 +254,9 @@ finish a session:
 - **Tripped over a tool, a command or a doc?** Fix it at the source if it's yours or plainly broken, in a small PR of its
   own (`.agents/skills/friction/SKILL.md`, §1). Otherwise write a friction note, or two lines naming the earlier one under
   `recurs:`.
-- **Learned a fact** about the toolchain, the card, a library or the node? Add one line to `kb/sm120-kernels.md` with its
-  source (a run id, a commit, a status file and time), in its section. When a line is wrong, correct it; don't add a
-  contradiction.
+- **Learned a fact** about the toolchain, the card, a library or the node? Add one line to
+  `store:pous/docs/pouw/sm120-gotchas.md` with its source (a run id, a commit, a status file and time), in its section.
+  When a line is wrong, correct it; don't add a contradiction.
 - **Checked a rule by hand that code could check?** It belongs in the tool, with the fix in its failure message: propose it
   to the tool's owner, pricing it with `.agents/skills/process-design/SKILL.md` if it gates other lanes.
   [What enforces what](#what-enforces-what) lists the known gaps.
@@ -251,14 +273,14 @@ until it lands, you are the check.
 | Rule | Checked today by | To be checked by |
 |---|---|---|
 | The timed code emits the transcript the verifier checks | `verify.py` (#491) accepts only an `ACCEPT` line naming the transcript's sha256; `panel.py` refuses a measured row whose transcript doesn't name the run | the harness timing through the served `KernelPackage` (#567 with #491) |
-| Poisoned buffers, and a no-write control rejected | the arm; `panel.py` refuses a measured row without the control's reject line naming the run | the harness, for every arm (#491); `GateRecord.poisoned_accepted` and `controls_rejected` (#567) |
+| Poisoned buffers, and a no-write control rejected | the harness for an arm with `dump` (#491 `80bff34cc`), the arm otherwise; `verify.py` rejects a row whose control is accepted; `panel.py` refuses a measured row without the control's reject line naming the run | every arm on `dump` (GPU 1, GPU 5 and #588 still to take it, server.md 18:18Z); `GateRecord.poisoned_accepted` and `controls_rejected` (#567) |
 | No `.FTZ`, and no FP32 `MUFU` outside the pinned IEEE sequences; a pinned toolkit and flags | `sass_gate.py` (#491), exit 7; an unpinned toolkit or ptxas flag, `-lineinfo` included, fails closed | also `GateRecord.sass_ok` (#567) |
 | Gates before timing, in the same run | `bench.py`'s order (#491): exit 5 when a known-bad variant passes, 6 on the consistency gate | — |
 | An interleaved same-die baseline, with per-rep clocks | `bench.py`'s warm-up, equal-time items and per-item NVML; `panel.py` requires both sides' clocks and tags a gap over 0.5% | — |
 | Decode as a dependent chain | `bench.py`'s default; `panel.py` keeps other measured decode rows off the plots | — |
 | A timed run holds a `--timed` lease | `gpu-lease --timed` pauses the fill queue; nothing checks that a row's run had one | the attempt record naming its lease (to propose with #491's self-recording) |
-| γ at both prices, the larger published, from the Lean pins, on the path that ran | nothing: `panel.py --gamma` is typed by hand | the attempt record's γ, looked up from the variant's priced path and the pins (#491's self-recording); `variant_refusals` on a priced-path mismatch (#567) |
-| Every attempt recorded | `research run` custody for runs; panel rows by hand | the harness's `kernel-attempt/v1` records (#491) |
+| γ at both prices, the larger published, from the Lean pins, on the path that ran | the harness's attempt records (#491): γ from the price twins on the variant's declared `prices`, and a typed-in γ refused; outside the harness, nothing (`panel.py --gamma` is typed by hand) | a check that the declared path is the one the binary runs; `variant_refusals` on a priced-path mismatch (#567) |
+| Every attempt recorded | `research run` custody for runs; the harness's `kernel-attempt/v1` records (#491), published by the runner under `research run --on` (#590); other panel rows by hand | — |
 | A variant serves only with its own passing gate, and nothing tunes at serving | nothing (#540 caches kernel modules under fixed names) | `register`, `select` and `variant_refusals` (#567) |
 | No CPU work inside a GPU lease | nothing | none planned; a candidate for `gpu-lease`, which could report a lease's idle GPU time |
 | Measurements aren't labels | `research data label` refuses measurement keys | — |
@@ -270,8 +292,9 @@ Whoever lands one of these updates this skill in the same PR, and deletes what i
 | Lands | Who | What changes here | What goes |
 |---|---|---|---|
 | #491, the harness, on `main` | harness owner (bc-0de2d624), through a train | commands point at `main`, not a tree assembled from branches | per-kernel copies of the SASS gate and `verify.py` (`pearl_c_sm120/`) |
-| #491's self-recording: `kernel-attempt/v1`, lineage, outcome labels | bc-1a23b70c, with the harness owner and the panel's renderer | "What's been tried" step 2, "Name it", "Record it", the γ and lease rows above | hand `panel.py append`, once 90% of tier-2 runs record themselves |
-| the technique catalog and the facts page | bc-1a23b70c | "What's been tried" reads the catalog; the gotchas come from `fact` records | the hand-kept lines of `kb/sm120-kernels.md` |
+| #491's self-recording: on #491 (#583); the runner's publishing on #590 | bc-1a23b70c, with the harness owner and the panel's renderer | done: "What's been tried" step 2, "Name it", "Record it", the γ rows above | hand `panel.py append`, once 90% of tier-2 runs record themselves |
+| the technique catalog: first version `store:pous/docs/pouw/tried-techniques.md`; then generated from the records | bc-1a23b70c | done: "What's been tried" reads it | — |
+| the facts page: first version `store:pous/docs/pouw/sm120-gotchas.md`, hand-kept; then `fact` records | bc-1a23b70c | done: "Gotchas" and "Learned a fact" point at it; later, it is generated from `fact` records | research-notes `kb/sm120-kernels.md` (now a pointer) |
 | lane benches as tier-2a harness arms | harness owner | tier 2a runs in the harness, gated and recorded | `mainloop_bench`, `nvf4_bench` and `run.py check` as separate benches |
 | #240, the approach registry's CLI, on `main` | the research coordinator | `research notes claim`, `approach`, `approaches` run from `main` | — |
 | #567, then the migration's steps 2 to 4 | bc-f4e8ae34 | "Hooking a kernel into vLLM" | #540's `e2e.install`, `vllm_bench.install`, the fixed-name module cache |
@@ -280,6 +303,6 @@ Whoever lands one of these updates this skill in the same PR, and deletes what i
 
 - Every run you started is in the evidence store (`research data preserved <run|art>` exits 0), fill outputs included.
 - Every attempt has a row or a record, an outcome and a reason, so the next agent finds what you tried and dropped.
-- Every fact you learned is a line in `kb/sm120-kernels.md`; every friction you hit is fixed or noted.
+- Every fact you learned is a line in `store:pous/docs/pouw/sm120-gotchas.md`; every friction you hit is fixed or noted.
 - Your PR description says what you fixed and what you deleted along the way.
 - You hold no GPU lease, and no job of yours reads a tree you are about to change.

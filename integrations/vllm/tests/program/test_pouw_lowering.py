@@ -144,7 +144,7 @@ def test_under_pouw_the_linears_derive_to_pouw_rows_the_biased_one_fused_and_the
     rep = _derive(m, POUW)
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == {"NcpLinearRowBias_v1": M, "NcpLinearRow_v1": M, "Gemm_v1": M}, _hist(rep.program)
-    apps = {a["preconditions_checked"]["W_is_parameter"]: a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v2"}
+    apps = {a["preconditions_checked"]["W_is_parameter"]: a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"}
     assert apps["qkv.weight"]["emitted"] == f"NcpLinearRowBias_v1{{K={K},N={NQ}}} x{M}" and apps["qkv.weight"]["preconditions_checked"]["pouw"] == "ncp-v2"
     assert apps["o.weight"]["emitted"] == f"NcpLinearRow_v1{{K={NQ},N={K}}} x{M}"
     assert apps["lm_head.weight"]["emitted"] == f"Gemm_v1{{K={K},N={V}}} x{M}" and apps["lm_head.weight"]["preconditions_checked"]["pouw"] is None

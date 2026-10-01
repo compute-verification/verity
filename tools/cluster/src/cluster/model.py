@@ -60,6 +60,7 @@ class Node:
     smt_pairs: bool = True
     pools: dict[str, frozenset[int]] = field(default_factory=dict)
     gpu_model: str = ""
+    gpu_executor: str = ""  # what runs a GPU job here besides gpu-lease's own node: "n1-lease" (node 1's Kueue-lent leases)
 
     @property
     def cpus(self) -> frozenset[int]:
@@ -151,6 +152,7 @@ class Job:
     quiet_safe: bool = False
     node: str | None = None
     gpu_ids: tuple[int, ...] = ()
+    gpu_pool: tuple[int, ...] = ()
     locks: frozenset[str] = frozenset()
     inputs: frozenset[str] = frozenset()
     after: tuple[str, ...] = ()
@@ -199,6 +201,8 @@ class Job:
             out.append("only a batch job or a session may be quiet")
         if self.gpu_ids and len(self.gpu_ids) != self.gpus:
             out.append(f"gpu_ids names {len(self.gpu_ids)} GPUs for a job of {self.gpus}")
+        if self.gpu_pool and len(set(self.gpu_pool)) < self.gpus:
+            out.append(f"gpu_pool offers {len(set(self.gpu_pool))} GPUs for a job of {self.gpus}")
         if self.node is not None and self.node not in cluster.nodes:
             out.append(f"unknown node {self.node!r}")
         if self.workstream is not None and not any(w.name == self.workstream for w in cluster.workstreams):
@@ -248,7 +252,8 @@ def from_dict(d: dict[str, Any]) -> Cluster:
             numa=numa, system_cpus=cpuset.parse(nd.get("system_cpus", "")), memory_gib=int(nd["memory_gib"]),
             stops_at=instant(nd.get("stops_at")), drain_s=int(nd.get("drain_s", meta.get("drain_s", 0))),
             smt_pairs=bool(nd.get("smt_pairs", True)),
-            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()}, gpu_model=str(nd.get("gpu_model", "")))
+            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()}, gpu_model=str(nd.get("gpu_model", "")),
+            gpu_executor=str(nd.get("gpu_executor", "")))
     shares = tuple(
         Share(project=s["project"], node=s["node"], cpus=cpuset.parse(s["cpus"]) if "cpus" in s else None,
               max_gpus=s.get("max_gpus"), max_cpus=s.get("max_cpus"), max_memory_gib=s.get("max_memory_gib"),
@@ -327,7 +332,7 @@ def job_from_dict(d: dict[str, Any]) -> Job:
     for k in ("locks", "inputs"):
         if k in d:
             d[k] = frozenset(d[k])
-    for k in ("gpu_ids", "after"):
+    for k in ("gpu_ids", "gpu_pool", "after"):
         if k in d:
             d[k] = tuple(d[k])
     if "submitted" in d:

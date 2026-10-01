@@ -453,3 +453,142 @@ def test_sync_warns_once_pushed_on_a_citation_the_store_lacks(machines, tmp_path
     with (a / note).open("a") as f:
         f.write(f"again {UNKNOWN}\n")
     assert NS.sync(a, secrets=[], now=NOW)["warn"] == []
+
+
+# ---- RESEARCH_NOTES_TOKEN: past a cloud VM's global insteadOf --------------------------------------------------------------------------
+
+TOKEN = "dummy-notes-token"
+EXPLICIT = "https://x-access-token@github.com/danielreuter/research-notes.git"
+
+
+@pytest.fixture
+def cloud_vm(machines, tmp_path, monkeypatch):
+    """A cloud VM's global git config: `https://github.com/` rewritten to the bot's credentials (here a path with no repository, as
+    the bot is refused), and GitHub (the explicit-user URL) standing in as the local origin; any other explicit-user URL has no
+    repository either, and git may not leave the machine.  Clone a's origin is the plain notes URL."""
+    origin, a, b = machines
+    cfg = tmp_path / "gitconfig"
+    for url, prefix in ((tmp_path / "bot", "https://github.com/"), (tmp_path / "nowhere", "https://x-access-token@github.com/"),
+                        (origin, EXPLICIT)):
+        _git(tmp_path, "config", "--file", str(cfg), f"url.{url}{'' if url == origin else '/'}.insteadOf", prefix)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(cfg))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+    _git(a, "remote", "set-url", "origin", NS.NOTES_URL)
+    return origin, a, b
+
+
+def _argv_log(monkeypatch) -> list[list[str]]:
+    seen: list[list[str]] = []
+    run = subprocess.run
+
+    def spy(cmd, *args, **kw):
+        seen.append(list(cmd))
+        return run(cmd, *args, **kw)
+
+    monkeypatch.setattr(NS.subprocess, "run", spy)
+    return seen
+
+
+def test_token_url_names_the_github_repo_with_an_explicit_user_and_never_the_token(monkeypatch):
+    assert NS.token_url(NS.NOTES_URL) is None, "unset: nothing changes"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    for url in (NS.NOTES_URL, "https://github.com/danielreuter/research-notes", "git@github.com:danielreuter/research-notes.git",
+                "ssh://git@github.com/danielreuter/research-notes.git", "https://someone@github.com/danielreuter/research-notes.git"):
+        opts, where = NS.token_url(url)
+        assert where == EXPLICIT and not where.startswith("https://github.com/"), url
+        assert opts == ["-c", "credential.helper=", "-c", f"credential.helper={NS.CREDENTIAL_HELPER}"] and TOKEN not in " ".join(opts)
+    assert NS.token_url("/srv/notes.git") is None and NS.token_url("https://gitlab.com/a/b.git") is None
+
+
+def test_the_credential_helper_answers_the_token_from_the_environment(cloud_vm, tmp_path, monkeypatch):
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    opts, _ = NS.token_url(NS.NOTES_URL)
+    r = subprocess.run(["git", *opts, "credential", "fill"], input="protocol=https\nhost=github.com\n\n", capture_output=True,
+                       text=True, check=True, cwd=tmp_path)
+    assert "username=x-access-token\n" in r.stdout and f"password={TOKEN}\n" in r.stdout
+
+
+def test_sync_with_the_token_goes_past_the_bots_insteadof(cloud_vm, monkeypatch):
+    origin, a, b = cloud_vm
+    (a / "lanes" / "x").mkdir(parents=True)
+    (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
+    rep = NS.sync(a, secrets=[])
+    assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"], "unset: the plain URL is the bot's, refused as before"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    seen = _argv_log(monkeypatch)
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True) and _git(origin, "show", "main:lanes/x/report.md").startswith("CHECKPOINT")
+    assert _git(a, "rev-parse", "refs/remotes/origin/main") == _git(origin, "rev-parse", "main")
+    net = [c for c in seen if {"fetch", "push"} & set(c)]
+    assert net and all(EXPLICIT in c for c in net) and not any(TOKEN in " ".join(c) for c in seen)
+    assert _git(a, "config", "remote.origin.url").strip() == NS.NOTES_URL, "the clone's config is not touched"
+
+
+def test_a_refused_fetch_with_the_token_says_so_without_the_token(cloud_vm, tmp_path, monkeypatch):
+    _, a, _ = cloud_vm
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "--unset-all", f"url.{cloud_vm[0]}.insteadOf")
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and TOKEN not in rep["error"]
+
+
+def test_the_standby_pull_uses_the_token_and_updates_the_tracking_branch(cloud_vm, monkeypatch):
+    origin, a, b = cloud_vm
+    (b / "kb" / "from-b.md").write_text("b\n")
+    assert NS.sync(b, secrets=[])["pushed"]
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    assert NS.pull(a).returncode == 0 and (a / "kb" / "from-b.md").is_file()
+    assert _git(a, "rev-parse", "refs/remotes/origin/main") == _git(origin, "rev-parse", "main")
+
+
+def test_budgets_are_fetched_from_the_notes_origin_with_the_token(cloud_vm, monkeypatch):
+    from research.pods import budgets as B
+
+    origin, a, b = cloud_vm
+    (b / B.FILE).write_text('[budgets]\n"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }\n')
+    assert NS.sync(b, secrets=[])["pushed"]
+    with pytest.raises(OSError):
+        B.read(a)
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    assert "vy-a-" in B.read(a)[0]
+
+
+def test_a_missing_notes_clone_is_cloned_once_the_token_is_set(cloud_vm, tmp_path, monkeypatch):
+    origin = cloud_vm[0]
+    root = tmp_path / "home" / ".research" / "notes"
+    assert NS.ensure_clone(root) is None and not root.exists(), "unset: nothing to clone with"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    seen = _argv_log(monkeypatch)
+    assert NS.ensure_clone(root) == f"notes: cloned {NS.NOTES_URL} into {root}"
+    assert (root / DOC).is_file() and _git(root, "config", "remote.origin.url").strip() == NS.NOTES_URL
+    assert _git(root, "rev-parse", "HEAD") == _git(origin, "rev-parse", "main") and not any(TOKEN in " ".join(c) for c in seen)
+    assert NS.ensure_clone(root) is None, "there already"
+    assert [p.name for p in root.parent.iterdir()] == ["notes"]
+
+
+def test_a_failed_clone_leaves_nothing_and_says_why_without_the_token(cloud_vm, tmp_path, monkeypatch):
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "--unset-all", f"url.{cloud_vm[0]}.insteadOf")
+    root = tmp_path / "home" / "notes"
+    line = NS.ensure_clone(root)
+    assert line.startswith(f"notes: clone of {NS.NOTES_URL} into {root} failed: ") and TOKEN not in line
+    assert list(root.parent.iterdir()) == []
+
+
+def test_machine_resolution_clones_the_registry_on_a_fresh_vm(cloud_vm, tmp_path, monkeypatch):
+    from research import remote
+    from research.pods import registry
+
+    origin, _, b = cloud_vm
+    (b / "machines.d").mkdir()
+    (b / "machines.d" / "vy-nebius-1.toml").write_text('provider = "ssh"\nhost = "203.0.113.7"\nproject = "vy"\n')
+    assert NS.sync(b, secrets=[])["pushed"]
+    root = tmp_path / "fresh" / "notes"
+    monkeypatch.setenv("RESEARCH_NOTES", str(root))
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "absent-machines.toml"))
+    monkeypatch.delenv(registry.REGISTRY_ENV)
+    assert "vy-nebius-1" not in remote.load_machines() and not root.exists(), "unset: no clone, no registry"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    assert remote.resolve_machine("vy-nebius-1", "vy")["host"] == "203.0.113.7" and (root / "machines.d").is_dir()

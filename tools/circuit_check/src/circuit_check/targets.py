@@ -43,6 +43,12 @@ def load_registries() -> None:
         return
     from verity.ir.defs import REGISTRY
 
+    import verity.ml.boolean.attention  # noqa: F401
+    import verity.ml.boolean.cast  # noqa: F401
+    import verity.ml.boolean.elementwise  # noqa: F401
+    import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.mufu  # noqa: F401
+    import verity.ml.boolean.scalar  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -86,7 +92,8 @@ def _value(s: str) -> Any:
 
 
 def definition(spec: str) -> Any:
-    """The registered Definition ``spec`` names, bound to the statics its id writes."""
+    """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -95,7 +102,13 @@ def definition(spec: str) -> Any:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
     statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
-    fn = W.specialization(fam, statics)
+    try:
+        fn = W.specialization(fam, statics)
+    except KeyError:
+        fn = suite().get(spec.strip())
+        if fn is None:
+            raise
+        return fn
     return fn.bind() if hasattr(fn, "bind") and not statics and getattr(fn, "statics", None) == () else fn
 
 
@@ -210,6 +223,79 @@ def _core_roots() -> list[Any]:
             K.SM120_MXF4_DOT.bind(K=256)]
 
 
+def _boolean_roots() -> list[Any]:
+    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
+    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s row at I = 8
+    (`verity_vllm.program.registry.boolean_silu`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
+    `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
+    RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
+    and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
+    operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator, selects, max /
+    min and E4M3 cast (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
+    static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
+    reaches its head and halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its
+    tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served
+    norms on bits (`boolean_norms`) at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the switch's
+    binding, `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word Definitions of its
+    constant steps; the rest of Gemma-2's norm chain on bits (`boolean_dense_norm`, over `boolean_dense`'s rows): the mean at
+    N = 16 and at N = 1030 (two chunks, one element per thread), the narrowing at N = 16, and the rsqrt with its MUFU at the word
+    id and at mufu's `RsqrtApprox_v2`. The Gumbel select (`gumbel_boolean.GumbelSelectF32_v2`) at two lanes (its family's smallest, and the noisy row's:
+    about 600,000 gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and
+    their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes. FA2 with logit
+    soft-capping on bits (`boolean_softcap`) at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf in
+    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
+    from verity.ir.defs import bind
+    from verity.ml.boolean import attention as BAT
+    from verity.ml.boolean import gemm as BG
+    from verity.ml.boolean import mufu as BM
+    from verity_vllm.program.registry import boolean_activation as BA
+    from verity_vllm.program.registry import boolean_dense as BDN
+    from verity_vllm.program.registry import boolean_dense_norm as DN
+    from verity_vllm.program.registry import boolean_moe as BMOE
+    from verity_vllm.program.registry import boolean_norms as BN
+    from verity_vllm.program.registry import boolean_rope
+    from verity_vllm.program.registry import boolean_silu as BSL
+    from verity_vllm.program.registry import boolean_softcap as BSC
+    from verity_vllm.program.registry import gumbel_boolean as GB
+    from verity_vllm.program.registry import prims as P
+    from verity_vllm.program.registry import sampling_boolean as SB
+
+    rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
+                                   BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
+    rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
+             bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8),
+             bind(BMOE.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4)]
+    return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
+            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
+            bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
+            bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
+            bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
+            bind(BSL.SiluMul, I=8),
+            bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
+            bind(SB.TokenSelect, V=4161),
+            bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
+            bind(BN.RMSNormLanesCuda, N=40, BLOCK=32), bind(BN.RMSNormVarEpsCudaWord, N=16, EPS=1e-5),
+            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5),
+            bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)),
+            bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz), SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)),
+            bind(DN.MeanTriton, N=16), bind(DN.MeanTriton, N=1030), bind(DN.NarrowF32ToBf16, N=16),
+            bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox), bind(DN.RsqrtF32, N=1, RSQRT=bind(BM.RsqrtApprox)),
+            bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8),
+            bind(BSC.AttentionSoftcap, T=17, NH=1, KVH=1, D=16, BN=16, CAP=50.0, DOT=BG.HopperBF16WgmmaDot16, INV=BAT.Fa2InvSum,
+                 MASKED_FROM=0, TANH=BM.MufuTanh, EX2=BM.MufuEx2Ftz),
+            bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
+            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
+
+
+def _boolean_gather_roots() -> list[Any]:
+    """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
+    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import boolean_gather as BGA
+
+    return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -222,7 +308,9 @@ def _kernel_roots() -> list[Any]:
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, ref_prims, sampling, serve3, spec
+    from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
+    from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import boolean_attention
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -238,11 +326,19 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Prefill_v1", lambda: bind(lifted.Prefill, C=TINY, LP=3, **lifted_profile)),
         ("StepBody_v1", lambda: bind(lifted.StepBody, C=TINY, T=4, **lifted_profile)),
         ("AttentionN_v1", lambda: bind(spec.AttentionN, T=5, NH=2, KVH=1, D=16, BN=16)),
+        # about 7 minutes a target: the smallest Boolean chain whose second block rescales (T = BN + 1)
+        ("Attention_v6", lambda: bind(boolean_attention.AttentionV6, T=17, NH=1, KVH=1, D=16, BN=16)),
+        ("Attention_v7", lambda: bind(boolean_attention.AttentionV7, T=5, NH=1, KVH=1, D=16, BN=16, **boolean_attention.ATTENTION_FA3)),
+        # the served FA2 binding at the smallest chain whose unguarded block rescales (T = BN + 1, block 0 below MASKED_FROM)
+        ("Attention_v8", lambda: bind(boolean_attention.AttentionV8, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                      DOT=boolean_attention.ATTENTION_FA3["DOT"], INV=boolean_attention.ATTENTION_FA2["INV"])),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
         ("AllGather_v1", lambda: b1_tp2.all_gather(4, 8)),
         ("QuantLinearFp8_v1", lambda: bind(fp8.QuantLinearFp8, K=256, N=2, BIAS=True)),
+        ("ScaledMmFp8NoSwap_v1", lambda: bind(fp8.ScaledMmFp8NoSwap, K=64, N=2, BIAS=True, DOT=BlackwellE4m3QmmaDot32)),
+        ("QuantLinearNvfp4_v1", lambda: bind(nvfp4.QuantLinearNvfp4, K=64, N=2, DOT=BlackwellNvf4OmmaDot64)),
         ("ScaledMmFp8BlockSharedScale_v1", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=256, G=128)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
@@ -341,7 +437,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()

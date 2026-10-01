@@ -36,13 +36,13 @@ members = [
     "verity-native-peak",
     "verity-network-warden",
     "verity-numerical",
-    "verity-one-stage",
     "verity-pous",
     "verity-pouw",
     "verity-pouw-benchmarks",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-tc-probe",
+    "verity-tc-probe-fp4",
     "verity-vllm",
     "verity-workspace",
 ]
@@ -1559,17 +1559,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "verity-one-stage"
-version = "0.1.0"
-source = { editable = "protocols/one_stage" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
-
-[[package]]
 name = "verity-pous"
 version = "0.1.0"
 source = { editable = "protocols/pous" }
@@ -1654,10 +1643,28 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-tc-probe-fp4"
+version = "0.0.0"
+source = { virtual = "tools/tc_probe_fp4" }
+dependencies = [
+    { name = "numpy" },
+    { name = "research" },
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "research", editable = "tools/research" },
+    { name = "verity", editable = "packages/verity" },
+]
+
+[[package]]
 name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
+    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
@@ -1673,6 +1680,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
+    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
@@ -1695,7 +1703,6 @@ dependencies = [
     { name = "verity-flock" },
     { name = "verity-network-warden" },
     { name = "verity-numerical" },
-    { name = "verity-one-stage" },
     { name = "verity-pous" },
     { name = "verity-pouw" },
     { name = "verity-sampled-proofs" },
@@ -1726,7 +1733,6 @@ requires-dist = [
     { name = "verity-flock", editable = "backends/flock" },
     { name = "verity-network-warden", editable = "protocols/network_warden" },
     { name = "verity-numerical", editable = "backends/numerical" },
-    { name = "verity-one-stage", editable = "protocols/one_stage" },
     { name = "verity-pous", editable = "protocols/pous" },
     { name = "verity-pouw", editable = "protocols/pouw" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },

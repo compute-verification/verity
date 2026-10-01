@@ -167,7 +167,52 @@ def check_qword_vectors(a, out, bad):
             bad.append(("verify_refusals", label, got.get("error")))
     cuts = check_vector_cuts(a, v, out, bad)
     return {"evaluations": runs_checked, "order_refusals": orders, "inapplicable": inapplicable, "cut_refusals": cut_refusals,
-            "cuts": cuts}
+            "cuts": cuts, "v2": check_v2_vectors(a, v, out, bad)}
+
+
+def check_v2_vectors(a, v, out, bad):
+    """`qword_vectors.json` → `v2`: each evaluation at v2 (`--query-version 2`: v1's population, owners digest and Calls), and
+    each verify refusal's and acceptance's cut at v2 (`--cuts`): the failing Calls, and the recompute across units reported per
+    Call (Lean's per Definition, so summed by Call)."""
+    v2 = v["v2"]
+    runs = 0
+    for name, rs in v2["evaluations"]:
+        (out / f"{name}.desc").write_text(_text(v["descriptors"][name]))
+        for run in rs:
+            got = lean(a, out / f"{name}.desc", str(run["X"]), "--query-version", "2")
+            runs += 1
+            if not got["ok"] or got["population"] != run["population"] or got["owners_digest"] != run["owners_digest"]:
+                bad.append(("v2 evaluation", name, run["X"], got.get("error")))
+                continue
+            det = {c["call"]: c for c in got["detail"]}
+            for c in run["calls"]:
+                if any(det.get(c["call"], {}).get(k) != c[k] for k in ("owner", "units", "committed")):
+                    bad.append(("v2 evaluation", name, run["X"], c["call"]))
+    checked = {"cut": 0, "accepted": 0, "inapplicable": 0}
+    for label, dname, X, W, want in v2["verify_refusals"]:
+        (out / "v2.desc").write_text(_text(v["descriptors"][dname]))
+        if want["codes"] in (["cut"], []):
+            got = lean(a, out / "v2.desc", str(X), str(W), "--cuts", "--query-version", "2")
+            checked["cut" if want["codes"] else "accepted"] += 1
+            if got.get("cut") != want["cut"] or _across_by_call(got) != _report_by_call(want, got):
+                bad.append(("v2 verify", label, got.get("cut"), want["cut"], _across_by_call(got)))
+        elif want["codes"] == ["query-inapplicable"]:
+            got = lean(a, out / "v2.desc", str(X), "--query-version", "2")
+            checked["inapplicable"] += 1
+            if got["ok"] or not got.get("error", "").startswith("query-inapplicable"):
+                bad.append(("v2 verify", label, got.get("error")))
+    return {"evaluations": runs, **checked}
+
+
+def _across_by_call(got):
+    """Lean's `recomputed_across` per Call: its Definition's, from `qword-program --cuts --query-version 2`."""
+    return {k: got.get("cuts", {}).get(key, {}).get("recomputed_across") for k, key, _u in got.get("calls", [])}
+
+
+def _report_by_call(core, got):
+    """Core's `recomputed_across` per Call (`verify`'s detail lists only Calls with a pair), over the Calls Lean lists."""
+    rep = {c["call"]: c["n"] for c in core["recomputed_across"]["gates"]}
+    return {k: rep.get(k, 0) for k, _key, _u in got.get("calls", [])}
 
 
 #: the (X, W) the vectors' programs are cut and checked at, against core's `verify`
@@ -189,25 +234,27 @@ def check_vector_cuts(a, v, out, bad):
     for name, text in v["descriptors"].items():
         (out / f"{name}.desc").write_text(_text(text))
         prog = codec.decode_program(json.loads(_text(text)), reg)
-        for X, W in CUT_LIMITS:
-            q = po.query(X, W)
+        for (X, W), version in ((xw, ver) for ver in (1, 2) for xw in CUT_LIMITS):
+            q = po.query(X, W, version)
             obj = {"format": po.FORMAT, "program": po.program_sha512(prog), "query": q}
             want = po.verify(obj, prog)
-            got = lean(a, out / f"{name}.desc", str(X), str(W), "--cuts")
+            got = lean(a, out / f"{name}.desc", str(X), str(W), "--cuts", *(["--query-version", "2"] if version == 2 else []))
             checked += 1
             if "query-inapplicable" in want.codes:
                 if got.get("ok", True) and "error" not in got:
-                    bad.append(("cuts", name, X, W, "core: query-inapplicable", got.get("cut")))
+                    bad.append(("cuts", name, X, W, version, "core: query-inapplicable", got.get("cut")))
                 continue
             core_cut = [[c["call"], c["codes"]] for c in want.detail.get("cut", {}).get("gates", [])]
             if got.get("cut") != core_cut:
-                bad.append(("cuts", name, X, W, got.get("cut"), core_cut))
+                bad.append(("cuts", name, X, W, version, got.get("cut"), core_cut))
+            if version == 2 and _across_by_call(got) != _report_by_call(want.detail, got):
+                bad.append(("cuts", name, X, W, version, "recomputed_across", _across_by_call(got), _report_by_call(want.detail, got)))
             def_of = {k: key for k, key, _u in got.get("calls", [])}
             for c in want.detail.get("cut", {}).get("gates", []):
                 wide = c["detail"].get("unit-too-wide", {}).get("gates", [])
                 r = got.get("cuts", {}).get(def_of.get(c["call"]), {})
                 if r.get("wide") != wide:
-                    bad.append(("cuts", name, X, W, c["call"], "too-wide units", r.get("wide"), wide))
+                    bad.append(("cuts", name, X, W, version, c["call"], "too-wide units", r.get("wide"), wide))
     return checked
 
 

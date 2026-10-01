@@ -43,6 +43,11 @@ class _Operands:
 #: (`verity_vllm.pipeline.vu_export`) installs one around its own evaluations and removes it after.
 EVALUATION_TAPS: list[Callable[..., None]] = []
 
+#: the evaluation of every row on another IR, the last one installed: evaluator(pi, row, describe(row), operands) -> {member or port:
+#: words}, with optional ``prewarm(picked)`` (run in the parent before the replay forks) and ``seconds_per_vu`` (the pool's time per
+#: pick).  Empty on every record; the Boolean re-verification (`verity_vllm.pipeline.boolean_replay`) installs one around its replay.
+ROW_EVALUATORS: list[Callable[..., dict[str, np.ndarray]]] = []
+
 
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None], *,
              refs: list[dict[str, Any] | None] | None = None) -> dict[str, np.ndarray]:
@@ -178,6 +183,8 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
         wrefs.append(wref if wsl is not None else None)
     if plan:
         return {}
+    if ROW_EVALUATORS:
+        return ROW_EVALUATORS[-1](pi, r, d, _Operands(inputs, wslices))
     fn = DELEGATES.get(fam)
     if fn is not None:                                                   # a protocol's replay answers for the row (`delegate`)
         member = d["members"][0][0] if d["members"] else "out"
@@ -193,8 +200,8 @@ def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, i
 
 
 def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -> str | None:
-    """Reads what `replay_vu` would read of the committed store for `vu` -- its inputs (interior rows included) and its committed output
-    members -- without evaluating it; the first input it cannot resolve, named (the replay will name it too)."""
+    """Reads what `replay_vu` would read of the committed store for `vu` -- its inputs (interior rows included), its committed output
+    members and their plane copies -- without evaluating it; the first input it cannot resolve, named (the replay will name it too)."""
     r = pi.by_i[vu["i"]]
     d = pi.describe(r)
     if d is None:
@@ -207,6 +214,9 @@ def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -
     for m in d["members"]:
         width = int(m[1])
         store.words(vu["request_id"], arrive + d["step"], d["op_path"], m[0], d["row"] * width, (d["row"] + 1) * width)
+    for c in d.get("copies") or []:
+        width = int(c["width"])
+        store.words(vu["request_id"], arrive + d["step"], c["op_path"], c["member"], int(c["row"]) * width, (int(c["row"]) + 1) * width)
     return why
 
 

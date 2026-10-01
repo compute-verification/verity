@@ -97,6 +97,21 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
 
 
+def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):
+    """audit.py names each package by its resolved path. With the cache behind a symlink (node 1's `~/.cache/verity-check`),
+    the scratch tree's unresolved path matched no report, so a package that passed was failed as unreported
+    (r20261001-060430-71e3)."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    (root / "tools/lean/audit.py").write_text(FAKE_AUDIT.replace('"package": str(pkg)', '"package": str(pkg.resolve())'))
+    (tmp_path / "real-cache").mkdir()
+    (tmp_path / "cache-link").symlink_to(tmp_path / "real-cache")
+    out = tmp_path / "out"
+    rc = LA.run(out, tmp_path / "cache-link" / "lean-audit", tmp_path / "cache-link" / "lean-deps", log=lambda s: None)
+    doc = json.loads((out / "audit.json").read_text())
+    assert rc == 0 and doc["failed"] == [] and sorted(r["package"] for r in doc["packages"]) == ["pkg/a", "pkg/b"]
+
+
 def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tree(tmp_path, monkeypatch):
     """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `fixtures/tc/vectors`), so the
     audit, run from the scratch tree, is told where the checkout is."""
