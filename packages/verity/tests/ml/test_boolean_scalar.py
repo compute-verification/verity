@@ -16,6 +16,7 @@ from verity.evaluation.reference import standalone_call
 from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import REGISTRY, bind
+from verity.ir.types import Array
 from verity.ml import scalar as S
 from verity.ml.boolean import scalar as BSC
 from verity.ml.boolean import trace as TR
@@ -140,6 +141,41 @@ def test_bf16_gt_strict_on_every_pair_of_words() -> None:
         if diff.size:
             bad += [(hex(64 * hi + int(l)), hex(int(b))) for b in diff[:3] for l in range(64) if (int(got[b] ^ want[b]) >> l) & 1][:3]
     assert not bad, f"pairs (a, b) that differ from Bf16GtStrict_v1, first {bad[:5]}"
+
+
+# --- f32_key ---------------------------------------------------------------------------------------------------------------
+
+F32_SPECIALS = np.array([m | s for m in (0x00000000, 0x00000001, 0x007FFFFF, 0x00800000, 0x3F800000, 0x7F7FFFFF, 0x7F800000,
+                                         0x7F800001, 0x7FC00000, 0x7FFFFFFF) for s in (0, 0x80000000)], np.uint32)
+
+
+def _f32_key_pair(C, a, b):
+    na, ka = BSC.f32_key(C, a)
+    nb, kb = BSC.f32_key(C, b)
+    return [na, nb, BSC.gt_u(C, ka, kb), BSC.gt_u(C, kb, ka)]
+
+
+F32KeyPair = TR.definition("F32KeyPair", 1, _f32_key_pair, (("a", BSC.I32), ("b", BSC.I32)), Array(4, BL.BIT),
+                           register=False)
+
+
+def test_f32_key_orders_f32_values() -> None:
+    """`f32_key`'s NaN flags and the unsigned order of its keys against the f32 values' order (subnormals as they are, +0 and
+    -0 equal): every special pair both ways, random pairs, and each word against its neighbours (every carry boundary of the
+    sign fold)."""
+    rng = np.random.default_rng(3)
+    grid = np.array(list(itertools.product(range(len(F32_SPECIALS)), repeat=2)), np.int64).T
+    w = _words(32, 100_000, rng).astype(np.uint64)
+    a = np.concatenate([F32_SPECIALS[grid[0]], _words(32, 100_000, rng), w.astype(np.uint32), w.astype(np.uint32)])
+    b = np.concatenate([F32_SPECIALS[grid[1]], _words(32, 100_000, rng), ((w + 1) & 0xFFFFFFFF).astype(np.uint32),
+                        (w ^ 0x80000000).astype(np.uint32)])
+    got = BS.evaluate_words(bind(F32KeyPair), a, b).astype(np.int64).reshape(-1)
+    mag_a, mag_b = a.astype(np.int64) & 0x7FFFFFFF, b.astype(np.int64) & 0x7FFFFFFF
+    va, vb = np.where(a >> 31, -mag_a, mag_a), np.where(b >> 31, -mag_b, mag_b)
+    nan_a, nan_b = mag_a > 0x7F800000, mag_b > 0x7F800000
+    num = ~nan_a & ~nan_b
+    assert np.array_equal(got & 1, nan_a) and np.array_equal(got >> 1 & 1, nan_b)
+    assert np.array_equal((got >> 2 & 1)[num], (va > vb)[num]) and np.array_equal((got >> 3 & 1)[num], (vb > va)[num])
 
 
 # --- the selects on their whole truth table --------------------------------------------------------------------------------

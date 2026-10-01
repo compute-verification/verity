@@ -6,7 +6,7 @@
 
 Each is traced from a builder over `forms` (`trace.definition`). The builders are also pieces of larger circuits, such as an
 argmax over a logits row: `bf16_key` maps a bf16 word to a NaN flag and a 16-bit key whose unsigned order is the value order
-(+0 and -0 one key), `gt_u` compares two keys, `select` is the bitwise multiplexer.
+(+0 and -0 one key), `f32_key` an f32 word likewise, `gt_u` compares two keys, `select` is the bitwise multiplexer.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .. import scalar as S
 from .forms import NOT, OR, and_reduce, mux, or_reduce, sub
 from .trace import definition
 
-__all__ = ["Bf16GtStrict", "SelectBf16", "SelectI32", "bf16_gt_strict", "bf16_key", "gt_u", "select"]
+__all__ = ["Bf16GtStrict", "SelectBf16", "SelectI32", "bf16_gt_strict", "bf16_key", "f32_key", "gt_u", "select"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -33,6 +33,16 @@ def bf16_key(C, x):
     nan = C.AND(and_reduce(C, e), m_any)
     neg = C.AND(s, OR(C, e_any, m_any))
     return nan, [b ^ neg for b in x[:15]] + [NOT(neg)]
+
+
+def f32_key(C, x):
+    """`bf16_key` of an f32 word: ``(nan, key)``, ``key`` 32 bits whose unsigned order is the order of the non-NaN values
+    (`F32GtStrict_v1`'s: subnormals as they are, +0 and -0 one key)."""
+    m, e, s = x[:23], x[23:31], x[31]
+    e_any, m_any = or_reduce(C, e), or_reduce(C, m)
+    nan = C.AND(and_reduce(C, e), m_any)
+    neg = C.AND(s, OR(C, e_any, m_any))
+    return nan, [b ^ neg for b in x[:31]] + [NOT(neg)]
 
 
 def gt_u(C, a, b):
