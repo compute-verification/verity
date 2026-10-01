@@ -28,8 +28,9 @@ from typing import Any, Callable, MutableMapping
 
 RECORD = "gpu_lease.json"
 HEARTBEAT_S = 60
-STARTED = "GPU_LEASE_STARTED"      # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
-MAX_MIN = "GPU_LEASE_MAX_MIN"
+STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
+MAX_MIN = "VERITY_LEASE_MAX_MIN"
+TOOL_START = "GPU_LEASE_STARTED"   # the lease tool's own start-time override (its tests): never passed to it
 
 # the holder: start marker, the lease's lock descriptors to the Commit (socket argv[2]), the leased devices on stdout, then wait for
 # the Commit to exit (EOF on stdin)
@@ -84,6 +85,12 @@ def holder_argv(environ: MutableMapping[str, str], sock: int) -> list[str]:
             "--", sys.executable, "-c", _HOLDER, environ[STARTED], str(sock)]
 
 
+def tool_env(environ: MutableMapping[str, str]) -> dict[str, str]:
+    """The lease tool's environment: the Commit's, less the tool's start-time override (a stale one dates the lease to 1970 and
+    the pool ends it as expired)."""
+    return {k: v for k, v in environ.items() if k != TOOL_START}
+
+
 def _end_with(holder: subprocess.Popen) -> None:
     holder.wait()
     if not _EXITING.is_set():
@@ -93,7 +100,7 @@ def _end_with(holder: subprocess.Popen) -> None:
 
 
 def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> None:
-    """Take the leased Commit's GPUs now (``GPU_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
+    """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease, then see only its devices. Nothing before this call may initialise CUDA (the process sees no device until it returns). The
     lease's locks are this process's from here to its exit; the holder ending first (the lease tool's --max-min) kills this process."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
@@ -105,7 +112,7 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> 
     if tl is not None:
         tl.start("gpu_lease.wait")
     holder = subprocess.Popen(holder_argv(environ, theirs.fileno()), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                              pass_fds=(theirs.fileno(),), env=dict(environ))
+                              pass_fds=(theirs.fileno(),), env=tool_env(environ))
     theirs.close()
     line = holder.stdout.readline() if holder.stdout else b""
     if not line:
