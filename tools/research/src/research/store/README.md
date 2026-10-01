@@ -595,5 +595,5 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 ## 13. Deferred (each arrives with a named failure)
 
 `diff` (F9), `independent` (U3, descriptive not authoritative: shared closure files / lockfiles / inputs), `impact` (F4),
-pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
+`gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
 three-tier order above.
