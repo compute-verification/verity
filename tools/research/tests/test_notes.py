@@ -104,12 +104,14 @@ def test_a_lane_with_only_notes_sent_to_it_gets_a_report_of_its_own(tmp_path):
     assert all("CHECKPOINT" not in p.read_text() for p in sent)
 
 
-def test_a_lane_that_names_its_report_otherwise_keeps_it(tmp_path):
-    named = tmp_path / "lanes" / "b-encode" / "20260922T0625Z-report-roofline.md"
-    named.parent.mkdir(parents=True)
-    named.write_text(FRONT.format(lane="b-encode", status="open"))
-    _note(tmp_path, "b-encode", "20260923T2030Z-report-from-red-team-review.md", 30)
-    assert notes.report_for(tmp_path, "b-encode") == named
+def test_the_lanes_newest_report_of_its_own_is_its_report_whatever_its_slug(tmp_path):
+    _report(tmp_path, "kv", "# kv\n", 60)
+    named = tmp_path / "lanes" / "kv" / "20260923T2000Z-report-kv-prefix-design.md"
+    named.write_text(FRONT.format(lane="kv", status="final"))
+    t = (NOW - dt.timedelta(minutes=40)).timestamp()
+    os.utime(named, (t, t))
+    _note(tmp_path, "kv", "20260923T2030Z-report-from-red-team-review.md", 30)
+    assert notes.report_for(tmp_path, "kv") == named
 
 
 @pytest.mark.parametrize("line,commit,at,text", [
