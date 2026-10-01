@@ -3,6 +3,21 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "Bf16DivScalar_v2{N=8,C=30.0}": {
+   "and": 6920
+  },
+  "Bf16MulConst_v2{K=1023969417}": {
+   "and": 865
+  },
+  "Bf16MulConst_v2{K=1106247680}": {
+   "and": 629
+  },
+  "Bf16MulScalar_v2{N=8,C=30.0}": {
+   "and": 5032
+  },
+  "Bf16Tanh_v2{N=8}": {
+   "and": 3128
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
@@ -30,6 +45,12 @@
   "F32SubFtz_v3": {
    "and": 952
   },
+  "GeluTanhMulBf16_v2": {
+   "and": 1353
+  },
+  "GeluTanhMul_v2{I=8}": {
+   "and": 10824
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
   },
@@ -47,6 +68,9 @@
   },
   "SiluMul_v3{I=8}": {
    "and": 10976
+  },
+  "TanhBf16_v2": {
+   "and": 391
   }
  },
  "pieces": {

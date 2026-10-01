@@ -213,15 +213,19 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, and `silu_and_mul`'s row at I = 8
-    (`verity_vllm.program.registry.boolean_silu`); the steps, the cast, attention's softmax operations
-    (`verity.ml.boolean.attention`) and `SiluMulBf16_v3` are static-free."""
+    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, `silu_and_mul`'s row at I = 8
+    (`verity_vllm.program.registry.boolean_silu`), and Gemma-2's activations (`boolean_activation`): `gelu_tanh_and_mul`'s row
+    at I = 8 and the final-logit softcap's three rows at N = 8, CAP = 30, with the scalar element's word at K = f32(30); the
+    steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`) and the element Definitions are static-free."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
+    from verity_vllm.program.registry import boolean_activation as BA
     from verity_vllm.program.registry import boolean_silu as BSL
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
-            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8)]
+            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8),
+            bind(BA.GeluTanhMul, I=8), bind(BA.Bf16Tanh, N=8), bind(BA.Bf16DivScalar, N=8, C=30.0),
+            bind(BA.Bf16MulScalar, N=8, C=30.0), bind(BA.Bf16MulConstWord, K=0x41F00000)]
 
 
 def _kernel_roots() -> list[Any]:
