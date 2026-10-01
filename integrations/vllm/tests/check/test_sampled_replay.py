@@ -316,6 +316,29 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
     assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16")
 
 
+def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_nothing(world):
+    bmap, committed = world.bmap_and_reader()
+    seen = {"plan": set(), "replay": set()}
+
+    def reader(key):
+        def read(step, name, lo, hi):
+            seen[key].add((step, name, lo, hi))
+            return committed(step, name, lo, hi)
+        return read
+
+    plan = SR.sampled_replay(_programs(world), bmap, reader("plan"), None, per_stratum=2, seed=3, plan=True)
+    rep = SR.sampled_replay(_programs(world), bmap, reader("replay"), _weights(world), per_stratum=2, seed=3, workers=0)
+    assert plan["plan"] is True and plan["picked"] == rep["sample"]["picked"] and plan["unresolved_n"] == 0
+    assert seen["replay"] and seen["replay"] <= seen["plan"], sorted(seen["replay"] - seen["plan"])[:4]
+    by_step: dict = {}
+    for req, step, _row, _op in plan["picks"]:
+        by_step.setdefault(req, {}).setdefault(str(step), 0)
+        by_step[req][str(step)] += 1
+    assert len(plan["picks"]) == plan["picked"] and len({tuple(p) for p in plan["picks"]}) == plan["picked"]
+    assert by_step == {r: {str(s): v[0] for s, v in st.items()} for r, st in rep["sample"]["picks_by_request_step"].items()}, \
+        "the plan's picks are the replay's, request by request and step by step"
+
+
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
     def mutate(store, entries):
         k = (0, "model.layers.0.mlp.gate_up_proj/0")

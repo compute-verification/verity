@@ -66,7 +66,7 @@ from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, replay_vu
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, plan_vu, replay_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
@@ -314,13 +314,21 @@ def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: st
     return [dict(v, stratum=f"{'all' if draw == 'uniform' else v['family']}|all|all|all|all|all") for v in vus], int(k)
 
 
+def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
+    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size, its
+    picks ([request, request-relative step, Program row, op_path] in draw order) and the VUs whose inputs did not resolve."""
+    unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
+    return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
+            "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
+
+
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
                    weights: Callable[[str, int, int], np.ndarray | None], *, arrivals: dict[str, int] | None = None, per_stratum: int = 2,
                    seed: int, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
-                   manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family") -> dict[str, Any]:
+                   manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None, program_dirs: dict[str, str] | None = None,
+                   challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -333,7 +341,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
-    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS)."""
+    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS).  `plan`: the same draw, read only (`planned`)."""
     t_start = time.perf_counter()
     store = CommittedStore.of_record(bmap, committed, manifest)                 # [rel M-0367] reads through the manifest's alias table
     arrivals = arrivals or {}
@@ -364,13 +372,14 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
     cap = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap
+    if plan:
+        return planned(picked, indices, store, arrivals, t_start)
     if len(ranks) > 1:                                                            # TP: the map carries rank-local partials this version does not replay
         not_ev[f"multi-rank map (ranks {ranks}): rank-local partials / collectives not replayed at v1 (rank 0 module outputs only)"] += 0
     evaluated, equal, mism, not_evald = 0, 0, [], []
     strata_eval: Counter = Counter()
     strata_mism: Counter = Counter()
-    fam_time: Counter = Counter()
-    fam_n: Counter = Counter()
+    fam_time, fam_n = Counter(), Counter()
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
         t0 = time.perf_counter()
@@ -381,8 +390,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # process pool shares the committed store + the weights cache copy-on-write and returns small records.  The children never touch CUDA
     # (weights are pre-read into the cache in the parent, the committed reader slices host tensors); a pool failure / timeout falls back
     # to the serial path.  Results are folded in the picked order below, so the record is independent of the schedule.
-    if workers is None:
-        workers = max(1, min(32, (os.cpu_count() or 2) // 2))
+    workers = max(1, min(32, (os.cpu_count() or 2) // 2)) if workers is None else workers
     workers_requested = int(workers)
     pool_note = None
     # [rev-cb F-cb-44] a DEVICE-retained committed store (`--retain device`) cannot be read by forked children (CUDA after fork ->
