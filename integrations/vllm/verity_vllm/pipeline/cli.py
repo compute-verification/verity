@@ -216,7 +216,7 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
 def process_settings(environ: MutableMapping[str, str]) -> None:
     """The process-wide settings every command takes from the environment: a leased Commit's lease (`gpu_lease.acquire` reads and
     sets this environment)."""
-    if environ.get("GPU_LEASE_STARTED"):
+    if environ.get("VERITY_LEASE_STARTED"):
         from verity_vllm.pipeline import gpu_lease
         gpu_lease.use_environ(environ)
 

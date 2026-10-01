@@ -53,6 +53,7 @@ def test_the_commit_requests_its_tasks_gpus_for_at_most_its_timeout():
     assert argv[-2:] == ["/row/gpu_lease.started", "7"]
     assert GL.max_min(61) == 2 and GL.max_min(1) == 1
     assert GL.holder_argv({**env, "GPU_LEASE_N": "2"}, 7)[:2] == ["/l/gpu-lease", "2"]
+    assert GL.STARTED != GL.TOOL_START and GL.tool_env({**env, GL.TOOL_START: "/row/x"}) == env    # the tool's own start override
 
 
 def test_the_commit_takes_the_lease_itself_holds_its_lock_and_sees_only_the_leased_gpu(tmp_path):
