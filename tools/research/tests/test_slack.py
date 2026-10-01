@@ -864,6 +864,15 @@ def inbox(fake, routes_dirs, name, where="local"):
     return root["ts"]
 
 
+def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    root = fake.add(COORD, text="@infra a question", username="circuits", bot_id=BOT)
+    first = fake.add(COORD, text="an answer", username="infra", bot_id=BOT, thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--thread", first["ts"], "--text", "and more")
+    assert rc == 0 and posted(fake, out)["thread_ts"] == root["ts"]
+    assert bells(fake, box)[-1]["text"].startswith(f"from infra, thread {root['ts']}, reply ")
+
+
 def test_a_doorbell_carries_the_post_so_its_reader_needs_no_second_read(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a question", username="circuits", bot_id=BOT)

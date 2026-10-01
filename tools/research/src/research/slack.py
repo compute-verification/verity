@@ -403,6 +403,9 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     """Post, print `<ts> <permalink>`, and with `route` (the registry and the routes) deliver it to whoever it reaches."""
     tags = tuple(tags) + (("urgent",) if urgent and "urgent" not in tags else ())
     text = f"{slack_dates(text)}{_footer(tags)}"
+    if thread and not api.dry_run and len(text.encode()) < BROKER_MAX_BODY:   # a reply's ts (a doorbell's `reply R`): its thread
+        first = api.call("conversations.replies", channel=ch, ts=thread, limit=1).get("messages", [])
+        thread = (first[0].get("thread_ts") or first[0].get("ts") or thread) if first else thread
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
