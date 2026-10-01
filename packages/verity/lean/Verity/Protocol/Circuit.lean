@@ -4,10 +4,10 @@ import Mathlib.Data.Fintype.Card
 /-!
 # Circuits
 
-A circuit has gates `0, …, N - 1` in topological order: a gate reads only earlier gates. Some gates are input gates and
-some are output gates. Gate `g` holds one value of `w g` bits (`verity.ir`'s `Value<w>`). An input gate's value is given;
-every other gate computes its value from the gates it reads, the wires into it. The Boolean profile, which C-Flock
-proves, is `w = 1` (`Boolean.lean`).
+A circuit has gates `0, …, N - 1` in topological order: a gate reads only earlier gates. Some gates are input gates
+and some are output gates. Gate `g` holds one value of `w g` bits (`verity.ir`'s `Value<w>`). An input gate's value is
+given; every other gate computes its value from the gates it reads, the wires into it. The Boolean profile, which
+C-Flock proves, is `w = 1` (`Boolean.lean`).
 
 For a set `S` of gates, in the notation of the NCI draft:
 * `size S`: the number of gates in `S`. The size of a circuit is `size computed`, its number of non-input gates;
@@ -15,8 +15,8 @@ For a set `S` of gates, in the notation of the NCI draft:
 * `into S`: in(S), the gates outside `S` with a wire into `S`;
 * `exits S`: out(S), the gates of `S` that a gate outside `S` reads, and the output gates in `S`.
 
-A transcript is one run's data, a value for every gate. `eval a` is the honest transcript on the inputs `a`, and `run fix`
-evaluates with the gates that `fix` names held at the values it gives (how a unit is recomputed,
+A transcript is one run's data, a value for every gate. `eval a` is the honest transcript on the inputs `a`, and
+`run fix` evaluates with the gates that `fix` names held at the values it gives (how a unit is recomputed,
 `Partition.localEval`).
 
 `D` implements `C` (`Implements C D`, the draft's `C ≼ D`) when every input gate of `C` is an input gate of `D` and, on

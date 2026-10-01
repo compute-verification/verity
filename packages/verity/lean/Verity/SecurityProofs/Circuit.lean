@@ -70,6 +70,20 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n)
 theorem mem_gates {u : Fin n} {g : Fin C.N} : g ∈ P.gates u ↔ P.unit g = some u := by
   simp [gates]
 
+/-- The units' gates are the computed gates, each in exactly one unit. -/
+theorem sum_card_gates : ∑ u, (P.gates u).card = C.computed.card := by
+  classical
+  rw [← Finset.card_biUnion]
+  · congr 1
+    ext g
+    simp only [Finset.mem_biUnion, Finset.mem_univ, true_and, mem_gates, Circuit.computed, Finset.mem_filter]
+    rw [← Bool.not_eq_true, ← P.input_iff]
+    exact Option.ne_none_iff_exists'.symm
+  · intro u _ v _ huv
+    refine Finset.disjoint_left.2 fun g hu hv => huv ?_
+    rw [mem_gates] at hu hv
+    exact Option.some_injective _ (hu.symm.trans hv)
+
 theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ C.reads h) (hne : P.unit h ≠ P.unit g) :
     g ∈ P.committed := by
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
@@ -285,6 +299,16 @@ theorem eval_emb (a : D.Transcript) (g : Fin C.N) : (D.eval a (M.emb g)).cast (M
   · have hD : D.isInput (M.emb g) = true := by rw [M.isInput_emb, hi]
     rw [D.eval_input a hD, C.eval_input _ hi]
     rfl
+
+/-- Every circuit contains itself. -/
+def refl (C : Circuit) : Containment C C where
+  emb := id
+  emb_inj := Function.injective_id
+  emb_w _ := rfl
+  isInput_emb _ := rfl
+  reads_emb _ _ := (Finset.map_refl).symm
+  op_emb _ _ _ := rfl
+  outputs_emb _ h := h
 
 /-- **A circuit that contains `C` implements it.** -/
 def implementation : Implementation C D where
