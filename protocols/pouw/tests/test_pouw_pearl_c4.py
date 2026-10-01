@@ -688,11 +688,11 @@ def test_b_ovf_discounts_credit_by_its_pinned_table():
     measured on each bucket's R1 boundary (`beta_final.py`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from
     4,096 up."""
     assert F.B_OVF == ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
-                       (1024, Fraction(50, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+                       (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
     got = {n: F.b_ovf(n) for n in (128, 192, 256, 512, 896, 1024, 2047, 2048, 3584, 4096, 1 << 18)}
     assert got == {128: Fraction(414, 10_000), 192: Fraction(414, 10_000), 256: Fraction(223, 10_000),
                    512: Fraction(119, 10_000), 896: Fraction(119, 10_000), 1024: Fraction(50, 10_000),
-                   2047: Fraction(50, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
+                   2047: Fraction(50, 10_000), 2048: Fraction(18, 10_000), 3584: Fraction(18, 10_000), 4096: 0,
                    1 << 18: 0}
     assert [b for _, b in F.B_OVF] == sorted((b for _, b in F.B_OVF), reverse=True)
     s = F.PearlC4()
