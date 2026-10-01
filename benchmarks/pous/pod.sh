@@ -11,6 +11,7 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then p2-v1-gpu, and the table
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
+#   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
 #
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
@@ -123,7 +124,8 @@ elif [ "$IMPL" = band-gpu ]; then
   record_host
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
     --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu "$VCPU" \
-    --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO
+    --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO \
+    ${BAND_D:+--band-d "$BAND_D"}
   RC=$?
   nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
   exit $RC
@@ -143,7 +145,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
       --workers "$(nproc)" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
-      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D")
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"

@@ -298,6 +298,7 @@ class BandGpu:
 
         body = harness.run(a, ws, out, w_segment=_w_segment, tag_segments=TAG_SEGMENTS, **kw)
         scheme, extra, rows = body.pop("scheme_obj"), body.pop("extra_gaps"), body.pop("tag_rows")
+        body["scheme"], body["scheme_params"] = scheme.name, scheme.params.manifest()     # the band's d among them
         if body["metrics"] is None:
             body["profile"] = None
             return body
@@ -497,6 +498,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
                     help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+    ap.add_argument("--band-d", type=int, default=0,
+                    help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
+                         "holds with its cliff at d")
     ap.add_argument("--gates-only", action="store_true",
                     help="band-gpu, p2-v1-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
     a = ap.parse_args(argv)
@@ -506,6 +510,15 @@ def main(argv: list[str] | None = None) -> int:
     t = time.perf_counter()
     from verity_pous import schemes as _schemes
 
+    if a.band_d:
+        if a.impl != "band-gpu":
+            raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")
+        sys.path.insert(0, str(HERE))
+        from band_gpu.harness import with_in_degree
+        try:
+            with_in_degree(_schemes.get(a.scheme).params, a.band_d)
+        except ValueError as e:
+            raise SystemExit(str(e)) from None
     impl = IMPLS[a.impl]()
     if getattr(impl, "own_scheme", None):
         a.scheme = impl.own_scheme
@@ -524,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     doc["passed"] = all(g.get("passed") for g in doc["gates"].values())
     (out / "bench-result.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     ewb = (doc.get("metrics") or {}).get("ewb")
-    print(json.dumps({"scheme": a.scheme, "impl": a.impl, "weight_set": a.weight_set, "passed": doc["passed"],
+    print(json.dumps({"scheme": doc["scheme"], "impl": a.impl, "weight_set": a.weight_set, "passed": doc["passed"],
                       "ewb_MBps": {t: round(v / 1e6, 1) for t, v in ewb.items()} if isinstance(ewb, dict)
                       else (round(ewb / 1e6, 3) if ewb is not None else None),
                       "gates": {g: v.get("passed") for g, v in doc["gates"].items()}}), flush=True)
@@ -539,8 +552,9 @@ def main(argv: list[str] | None = None) -> int:
         rel = str(result.relative_to(Path(run_dir).resolve())) if result.is_relative_to(Path(run_dir).resolve()) else str(result)
         Path(run_dir, "result.json").write_text(json.dumps({
             "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
-            "workload_fingerprint": {"benchmark": SCHEMA, "scheme": a.scheme, "impl": a.impl, "weight_set": a.weight_set,
-                                     "hardware": a.hardware, "impl_commit": a.impl_commit},
+            "workload_fingerprint": {"benchmark": SCHEMA, "scheme": doc["scheme"], "scheme_params": doc.get("scheme_params"),
+                                     "impl": a.impl, "weight_set": a.weight_set, "hardware": a.hardware,
+                                     "impl_commit": a.impl_commit},
             "validation": {"status": "passed" if doc["passed"] else "failed", "checker": "benchmarks/pous/bench.py gates",
                            "detail": json.dumps({g: v.get("passed") for g, v in doc["gates"].items()}),
                            "evidence": [rel]},

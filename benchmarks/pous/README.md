@@ -87,7 +87,15 @@ research run --on <RTX 4090 pod> --project verity --source . --cwd source --camp
   -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]      # band and P2 v1, then the table
 research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2              # build check: both arms' kernel gates
+research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
+  -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6                                      # the band at in-degree 6
 ~~~
+
+`BAND_D=N` (`bench.py --band-d N`, band-gpu and side-by-side's band arm) runs the band at in-degree `d = N`, as
+`band-chain/dN/v1`, with no byte-format name registered for it. It is refused for `d < 5`, which has no certificate. For
+`d >= 5`, the certificate gate checks `band_meets_64` (or `band_meets_14` at 448 segments) with the cliff at `d`. The pinned
+vector is still checked at the registered `d = 12`, and the reference gate checks the run's own `d`. `bench-result.json` records
+the run's `d` in `scheme` and `scheme_params`.
 
 On an sm_120 (RTX PRO 6000) `pod.sh` builds with a CUDA 12.8 toolkit (installed from NVIDIA's apt repository when the image
 ships only CUDA 13, which torch's cu128 wheel does not match), `pous_native` for the device's capability (`native.arch_list`), and

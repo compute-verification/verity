@@ -94,7 +94,10 @@ def _backend(params, flip_last: bool = False):
     from verity_pous.labels import salt_value, tag
 
     harness = _harness()
-    sch = schemes.get(BAND, params=params.with_segments(64))
+    from band_gpu.live import scheme_of
+
+    at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
+    sch = scheme_of(at(params.d).name, at(params.d).params)
 
     def tags(salt, segs, device):
         return torch.tensor([[s, *salt] for s in segs], dtype=torch.int64)
@@ -103,9 +106,12 @@ def _backend(params, flip_last: bool = False):
         out = [fn(bytes(int(v) for v in t[g, 1:]), int(t[g, 0]), x[g]) for g in range(x.shape[0])]
         return torch.stack(out)
 
+    def encoder(sch_):
+        return lambda w, t: rows(lambda salt, s, seg: torch.frombuffer(bytearray(b"".join(sch_.encode_segment(
+            salt, s, seg.numpy().tobytes()))), dtype=torch.uint8).view(seg.shape).clone(), w, t)
+
     def encode(w, t):
-        c = rows(lambda salt, s, seg: torch.frombuffer(bytearray(b"".join(sch.encode_segment(salt, s, seg.numpy().tobytes()))),
-                                                       dtype=torch.uint8).view(seg.shape).clone(), w, t)
+        c = encoder(sch)(w, t)
         if flip_last and w.shape[0] > 1:
             c[-1, 3, 0] ^= 1
         return c
@@ -119,7 +125,7 @@ def _backend(params, flip_last: bool = False):
         return 1e-3
 
     return harness.Backend("cpu", encode, decode, tags, lambda salt, n: [tag(salt_value(salt), s).to_bytes(32, "little") for s in range(n)],
-                           lambda c, cpu: PyResponder(c), timer)
+                           lambda c, cpu: PyResponder(c), timer, encode_at=lambda d: encoder(at(d)))
 
 
 def _vectors(params):
@@ -195,6 +201,56 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
                                   vectors=_vectors(params))
     assert set(body["gates"]) == {"vector", "reference_encode", "round_trip"} and all(g["passed"] for g in body["gates"].values())
     assert body["metrics"] is None and body["measurements"] == [] and "--gates-only" in body["stopped"]
+
+
+def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
+    """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
+    format), whose segments round-trip and whose certificate at the frozen point is `band_meets_64` with the cliff at 6;
+    the verifier process rebuilds it from its manifest; d = 4 has no certificate and is refused."""
+    from verity_pous import band, schemes
+
+    harness = _harness()
+    from band_gpu.live import params_of, scheme_of
+
+    small = harness.with_in_degree(_small(), 6)
+    sch = scheme_of("band-chain/d6/v1", small)
+    assert sch.name == "band-chain/d6/v1" and sch.params.d == 6 and sch.name not in schemes.REGISTRY
+    w = hashlib.shake_256(b"verity-pous/test/band-d").digest(small.segment_bytes)
+    blocks = sch.encode_segment(harness.SALT, 0, w)
+    assert sch.decode_segment(harness.SALT, 0, blocks) == w
+    assert blocks != scheme_of(BAND, _small()).encode_segment(harness.SALT, 0, w)            # another d, another encoding
+    point = harness.with_in_degree(band.SECURE_FIRST, 6)
+    cert = scheme_of("band-chain/d6/v1", point).certificate
+    assert (cert.theorem, cert.cliff, cert.k, cert.rounds, cert.call_ns) == ("band_meets_64", 6, 111, 5, 483_000)
+    assert scheme_of("band-chain/d6/v1", point.with_segments(448)).certificate.theorem == "band_meets_14"
+    gate, _ = _bench().certificate_gate(scheme_of("band-chain/d6/v1", point), 111, 700_000)
+    assert gate["passed"] and gate["effective_rounds"] == 1
+    assert params_of("band-chain/d6/v1", point.manifest()) == point
+    for d in (4, 1):
+        with pytest.raises(ValueError, match=f"d = {d} is refused"):
+            harness.with_in_degree(band.SECURE_FIRST, d)
+
+
+def test_the_harness_runs_the_band_at_d6_and_records_d(tmp_path):
+    harness = _harness()
+    params = _small()
+    body = _bench().BandGpu().run(_args(tmp_path, band_d=6), WS, tmp_path, backend=_backend(harness.with_in_degree(params, 6)),
+                                  base=params, vectors=_vectors(params))
+    gates, m = body["gates"], body["metrics"]
+    assert body["scheme"] == "band-chain/d6/v1" and body["scheme_params"]["d"] == 6 and body["profile"]["params"]["d"] == 6
+    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control"):
+        assert gates[g]["passed"], (g, gates[g])
+    assert gates["vector"]["d"] == 12                                       # the pinned vector, at the registered d
+    assert m["recompute_control"]["dropped_blocks"] == 3 * 2 and "every 7-th" in m["recompute_control"]["pattern"]
+
+
+def test_bench_refuses_a_band_d_without_a_certificate_and_on_another_impl(tmp_path):
+    bench = _bench()
+    common = ["--weight-set", "qwen2.5-0.5b/linears+head", "--hardware", "cpu", "--out", str(tmp_path)]
+    with pytest.raises(SystemExit, match="d = 4 is refused"):
+        bench.main(["--impl", "band-gpu", "--band-d", "4", *common])
+    with pytest.raises(SystemExit, match="band-gpu's, not reference's"):
+        bench.main(["--impl", "reference", "--band-d", "6", *common])
 
 
 def _challenge(conn, i: int, width: int) -> tuple[int, int, bytes]:

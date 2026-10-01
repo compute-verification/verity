@@ -195,6 +195,8 @@ class Backend:
     keccak_latency: Callable[[int], float] | None = None
     recompute: Callable[[Any, Any, int], Callable[[], Any]] | None = None
     facts: Callable[[], dict[str, Any]] = dict
+    encode_at: Callable[[int], Callable[[Any, Any], Any]] | None = None
+    """The band's encoder at another in-degree (the pinned vector's, when the run's `d` is not the registered one)."""
 
 
 def set_kernels(flags: dict[str, Any]) -> dict[str, Any]:
@@ -304,7 +306,7 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
 
     return Backend(device, lambda w, t: dense.encode(w, t, window), lambda c, t: dense.decode_segments(c, t, window),
                    codec.segment_tags, tag_bytes, responder, timer, graphed, copy_bw, _sm_clock_mhz, step, keccak_latency,
-                   recompute, facts)
+                   recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)))
 
 
 def _nvcc_version() -> str | None:
@@ -324,27 +326,49 @@ def vector_bytes(label: str, n: int) -> bytes:
 
 
 def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The scheme's pinned vector, encoded on the device: its pinned blocks' digest, and one segment's encode time."""
+    """The scheme's pinned vector, encoded on the device: its pinned blocks' digest, and one segment's encode time.  The vector
+    is pinned at the registered point, so a band run at another in-degree encodes it at the registered `d`
+    (`backend.encode_at`); the run's own `d` is gated against `verity_pous` by `reference_gate`."""
     import torch
+    from verity_pous import schemes
 
     vector, label, count = PINNED[name]
     pinned = pinned or json.loads(VECTORS.read_text())
+    d = getattr(schemes.get(name).params, "d", None)
+    encode = backend.encode_at(d) if backend.encode_at is not None and d != getattr(params, "d", None) else backend.encode
     b, width = params.blocks_per_segment, params.block_bytes
     n = b if count is None else count
     w = vector_bytes(label, n * width) + bytes((b - n) * width)
     seg = torch.frombuffer(bytearray(w), dtype=torch.uint8).to(backend.device).view(1, b, width)
     tags = backend.tags(vector_bytes("salt", 24), [0], backend.device)
     held: list[Any] = []
-    seconds = backend.timer(lambda: held.append(backend.encode(seg, tags)))
+    seconds = backend.timer(lambda: held.append(encode(seg, tags)))
     got = hashlib.sha256(held[0][0, :n].contiguous().cpu().numpy().tobytes()).hexdigest()
-    return {"passed": got == pinned[vector], "vector": vector, "blocks": n, "digest": got, "encode_segment_s": seconds}
+    return {"passed": got == pinned[vector], "vector": vector, "d": d, "blocks": n, "digest": got, "encode_segment_s": seconds}
+
+
+MIN_BAND_D = 5
+"""The least in-degree with a certificate: `band_meets_64` and `band_meets_14` hold for every `d ≥ 5` at `D = 5`, `k = 111`,
+483 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
+
+
+def with_in_degree(base: Any, d: int) -> Any:
+    """The band's geometry at in-degree `d` (`--band-d`), refused below `MIN_BAND_D`: such a band has no certificate."""
+    from verity_pous.band import BandParams
+
+    if not isinstance(base, BandParams):
+        raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
+    if d < MIN_BAND_D:
+        raise ValueError(f"band in-degree d = {d} is refused: the band's certificates (band_meets_64, band_meets_14) hold for "
+                         f"d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d")
+    return BandParams(base.blocks_per_segment, base.m, d, base.segments)
 
 
 def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
-    from verity_pous import schemes
+    from .live import scheme_of
 
     name, params, s, w_seg = job
-    return s, b"".join(schemes.get(name, params=params).encode_segment(SALT, s, w_seg))
+    return s, b"".join(scheme_of(name, params).encode_segment(SALT, s, w_seg))
 
 
 def reference_gate(scheme: Any, c: bytes, w: bytes, picks: list[int], workers: int) -> dict[str, Any]:
@@ -644,11 +668,15 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     from verity_pous import schemes
     from verity_pous.verifier import leaf_hash
 
+    from .live import scheme_of
+
     base = base or schemes.get(a.scheme).params
+    if getattr(a, "band_d", 0):
+        base = with_in_degree(base, a.band_d)
     seg = base.segment_bytes
     total = -(-ws["bytes"] // seg)
     n = min(total, a.max_segments) if a.max_segments else total
-    scheme = schemes.get(a.scheme, params=base.with_segments(n))
+    scheme = scheme_of(schemes.Band(base).name if getattr(a, "band_d", 0) else a.scheme, base.with_segments(n))
     p = scheme.params
     width = p.block_bytes
     used = min(ws["bytes"], n * seg)

@@ -60,11 +60,26 @@ class LogicalClock:
 
 
 def params_of(name: str, manifest: dict[str, Any]) -> Any:
-    """The scheme's geometry from its manifest (every geometry's manifest is its fields, plus the scheme's name)."""
+    """The scheme's geometry from its manifest (every geometry's manifest is its fields, plus the scheme's name); a name that
+    is not registered is the band at another in-degree."""
     from verity_pous import schemes
+    from verity_pous.band import BandParams
 
-    base = schemes.get(name).params
-    return type(base)(**{k: v for k, v in manifest.items() if k != "scheme"})
+    fields = {k: v for k, v in manifest.items() if k != "scheme"}
+    return type(schemes.get(name).params)(**fields) if name in schemes.REGISTRY else BandParams(**fields)
+
+
+def scheme_of(name: str, params: Any) -> Any:
+    """The scheme `name` at `params`: a registered one, or the band at another in-degree `d` (`band-chain/d{d}/v1`): the
+    registered band's class at those parameters, its codec the band's at `d`, with no byte-format name registered for it."""
+    from verity_pous import schemes
+    from verity_pous.band import BandParams
+
+    if name in schemes.REGISTRY:
+        return schemes.get(name, params=params)
+    if isinstance(params, BandParams) and schemes.Band(params).name == name:
+        return schemes.Band(params)
+    raise KeyError(f"no POUS scheme {name!r} at {params!r}")
 
 
 class LiveResponder:
@@ -233,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
                              allowance=a.allowance, deadline_ns=deadline, clock=clock)
         Path(a.out).write_text(json.dumps({**doc, "clock": a.clock}, indent=1) + "\n")
         return 0
-    scheme = schemes.get(ready["scheme"], params=params)
+    scheme = scheme_of(ready["scheme"], params)
     raw = Path(a.leaves).read_bytes()
     vk = VerifierKey.from_leaves(params, bytes.fromhex(ready["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
     doc = {"root": vk.root.hex(), "clock": a.clock,
