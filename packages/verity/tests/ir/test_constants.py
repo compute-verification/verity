@@ -66,7 +66,7 @@ def test_a_program_holding_literals_holds_data():
     assert sorted(cid for _g, cid in data[p.root.id]) == sorted(
         [const(32, TEMP).id] + [const(32, POS).id] * 3 + [const(32, TOP_P).id])
     assert data[Scale.id] == [(1, const(32, SEVEN).id)]
-    assert K.program_data(p.root, lambda fid: fid == Scale.id) == {p.root.id: data[p.root.id]}
+    assert K.program_data(p.root, lambda fn: fn.id == Scale.id) == {p.root.id: data[p.root.id]}
 
 
 #: an operation whose body calls KScale, and two programs: one reaching KScale only through it, one reaching it again outside
@@ -78,7 +78,7 @@ Both = _c("KBoth", (("x", I32), ("t", I32)), Tuple(I32, I32), lambda B, S, x, t:
 def test_a_definition_reached_first_under_an_operation_is_listed_on_a_later_path():
     """KScale is reached first inside the operation KOp, which the walk does not visit, and then from the root: that path
     lists its constant. Reached only through KOp, it holds none."""
-    is_op = lambda fid: fid == Op.id  # noqa: E731
+    is_op = lambda fn: fn.id == Op.id  # noqa: E731
     assert K.program_data(Program(OnlyOp).root, is_op) == {}
     both = Program(Both)
     assert [n.fn.id for n in both.root.body.nodes if not is_input(n.fn)] == [Op.id, Scale.id]
@@ -97,9 +97,15 @@ def test_a_declared_table_is_data_unless_the_library_lists_it():
     assert K.program_data(root) == {Lookup.id: [(0, "k_library"), (0, "k_program")]}
     assert K.program_data(root, library=lambda n: n == "k_library") == {Lookup.id: [(0, "k_program")]}
     assert K.program_data(root, library=lambda n: True) == {Lookup.id: [(0, "k_program")]}
-    assert K.program_data(Program(ReadsUnderOp).root, lambda fid: fid == Reads.id) == {}
+    assert K.program_data(Program(ReadsUnderOp).root, lambda fn: fn.id == Reads.id) == {}
     with pytest.raises(ValueError, match="table"):
         PrimitiveDefinition("KBadLookup", 1, (("x", I32),), I32, lambda x: x, register=False, tables=(("t", "public"),))
+
+
+def test_a_strict_program_refuses_data(new):
+    with pytest.raises(ValueError, match="holds data"):
+        Program(Old, strict=K.program_data)
+    assert Program(New, registered=("eps",), strict=K.program_data).bindings == new.bindings
 
 
 def test_inputs_carry_the_values_and_the_program_holds_none(new):

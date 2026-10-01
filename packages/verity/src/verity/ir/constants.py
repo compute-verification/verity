@@ -18,7 +18,7 @@ anywhere else is data the Program still holds, and `program_data` lists it by th
 
 A table a primitive reads by index is no gate, so the primitive declares it (`PrimitiveDefinition.tables`): a ``library``
 table is an operation's own definition, and a ``registered`` one is the program's, which the primitive still holds. `verity.ir`
-names no operations and no library tables: the caller passes both in.
+names no operations and no library tables; the guard is `verity.ml.operations.program_data`, which passes in both.
 """
 from __future__ import annotations
 
@@ -60,12 +60,12 @@ def held_tables(prim: Any, library: Callable[[str], bool] = lambda _name: False)
     return [n for n, kind in getattr(prim, "tables", ()) if kind != "library" or not library(n)]
 
 
-def program_data(root: Any, operation: Callable[[str], bool] = lambda _id: False,
+def program_data(root: Any, operation: Callable[[Any], bool] = lambda _fn: False,
                  library: Callable[[str], bool] = lambda _name: False) -> dict[str, list[tuple[int, str]]]:
     """The data `root` (a Program's root Definition) still holds, by the Definition that holds it: descriptor id -> [(local
     gate, constant id or table name)], each Definition once, in first-reached order. Empty when the Program holds no data.
 
-    A Definition `operation(id)` names, and everything inside it when reached only through operations, holds none: a
+    A Definition `operation(fn)` names, and everything inside it when reached only through operations, holds none: a
     Definition reached first under an operation is not visited there, nor marked seen, so a path to it outside any operation
     still lists what it holds. A primitive reached outside any operation that holds a table (`held_tables`) is
     listed under its own id, at its one gate, by the table's name."""
@@ -74,7 +74,7 @@ def program_data(root: Any, operation: Callable[[str], bool] = lambda _id: False
 
     def walk(fn: Any, is_root: bool) -> None:
         fid = fn.id
-        if fid in seen or (not is_root and operation(fid)):
+        if fid in seen or (not is_root and operation(fn)):
             return
         seen.add(fid)
         body = fn.body
