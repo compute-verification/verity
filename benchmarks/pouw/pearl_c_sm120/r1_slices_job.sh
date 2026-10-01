@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Research question: how much of R1-H's per-atom-slice credit do exactly repeated and near-duplicate (at most 3 of 32 codes
-# apart) slices take on Llama-3.1-8B, per linear class, on natural text and on the adversarial token workloads?
+# apart, or D codes) slices take on Llama-3.1-8B, per linear class, on natural text and on the adversarial token workloads?
 #
 # Node 2, CPU only: r1_slices.py on every capture present (natural; repeat, phrase, lowent and long from r1_adv_job.sh).
 set -euo pipefail
@@ -10,7 +10,7 @@ SNAP="$HF_HOME/hub/models--unsloth--Meta-Llama-3.1-8B-Instruct/snapshots/$REV"
 CAPTURES="${CAPTURES:-/workspace/pouw/pouw-design/captures}"
 OUT="$RESEARCH_RUN_DIR/out"
 RUN=(env PYTHONPATH=packages/verity/src:protocols/pouw uv run --no-project --with numpy python benchmarks/pouw/pearl_c_sm120/r1_slices.py
-     --weights "$SNAP" --workers "${WORKERS:-8}")
+     --weights "$SNAP" --workers "${WORKERS:-8}" --d "${D:-3}")
 mkdir -p "$OUT"
 rc=0
 for w in natural ${WORKLOADS:-repeat phrase lowent long}; do
