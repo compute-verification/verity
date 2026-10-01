@@ -1,6 +1,6 @@
 """Coverage of record: the replay's reach reconciled against the query population, identity by identity
-(`query_population`), the query families no row evaluates with the mechanism that checks them, and the families the
-Commit value-checks by form (B) only (`form_b_families`)."""
+(`query_population`), the query families no row evaluates with the mechanism that checks them, the families the
+Commit value-checks by form (B) only (`form_b_families`), and the served call boundaries the draw must reach (`taps_in_draw`)."""
 from __future__ import annotations
 
 from collections import Counter
@@ -489,6 +489,50 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
                                      "kind_by_family": {**{k: "row" for k in sorted(fam_total) if k in QUERY_FAMILIES_WITH_ROWS}, **dict(sorted(kind_by_family.items()))},
                                      "batch_level": {k: dict(v) for k, v in sorted(batch_level.items())}},
             "query_checks": checks, "scope": scope}
+
+
+#: why a served call boundary must be reachable by the draw (`taps_in_draw`)
+TAPS_RULE = ("a call boundary the runtime served (binding-map entry `source: tap`, acquire.sources.served_tap) is bound as committed, never "
+             "evaluated by the Commit: the replay's openings of its producing Calls are its only check, so every one must be a VU of the "
+             "draw's population (class vu, inside its request's executed prefix) -- else the value is bound but never checked")
+
+
+def taps_in_draw(qpop: dict[str, Any], bmap: dict[str, Any], addresses: dict[tuple, dict], executed_prefix: dict[str, dict] | None,
+                 arrivals: dict[str, int] | None, manifest: dict[str, Any] | None, first_n: int = 6) -> dict[str, Any]:
+    """`qpop` (`query_population`) with `query_checks.taps_outside_draw`: the binding map's served call boundaries (`source: tap`) whose
+    producing rows are not a VU the draw can pick -- no row produces it, its rows are of another class, or it is past its request's
+    executed prefix (`split_not_executed`).  Any is a finding (`ok` False); the scope line counts them."""
+    aliases = alias_table(manifest)
+
+    def _key(rid: str, st: int, op: str, mem: str) -> tuple:
+        canon, inv = resolve_op_path(aliases, op)
+        return (rid, st, canon, mem, inv)
+
+    by = {_key(*k): a for k, a in addresses.items()}
+    tapped, n, first = 0, 0, []
+    for e in bmap.get("entries") or ():
+        if e.get("source") != "tap":
+            continue
+        tapped += 1
+        i = e["identity"]
+        rid = str(i["request_id"])
+        st = int(i["step"]) - int((arrivals or {}).get(rid, 0))
+        a = by.get(_key(rid, st, str(i["op_path"]), str(i["output_member"])))
+        ep = (executed_prefix or {}).get(rid)
+        why = ("no Program row produces it" if a is None else f"its producing rows are class {a['class']}, not vu ({a.get('why')})"
+               if a["class"] != "vu" else f"request-relative step {st} is past the executed prefix (n_exec {ep['n_exec']})"
+               if ep is not None and not ep.get("faults") and st >= int(ep["n_exec"]) else None)
+        if why:
+            n += 1
+            if len(first) < first_n:
+                first.append({"request_id": rid, "step": st, "op_path": i["op_path"], "member": i["output_member"], "why": str(why)[:200]})
+    checks = qpop["query_checks"]
+    checks["taps_outside_draw"] = {"n": n, "tapped": tapped, "first": first, "rule": TAPS_RULE}
+    if n:
+        checks["ok"] = False
+    if tapped:
+        qpop["scope"] += f"; served call boundaries (source tap) {tapped}, {tapped - n} with their producing Calls in the draw's population"
+    return qpop
 
 
 def _uncovered_mechanisms(all_vus: list[dict], not_ev_fam: Counter) -> list[dict]:
