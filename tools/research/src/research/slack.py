@@ -686,6 +686,21 @@ class Routes:
     def all(self) -> dict[str, dict]:
         return {**self.local, **{k: v for k, v in self._fetched.items() if v}}
 
+    def server_delivers(self) -> bool:
+        """Whether the console site's events route rings the doorbells: `routes.d/router.json` says `"mode": "server"`, in
+        the clone or, failing that, as published."""
+        if not hasattr(self, "_mode"):
+            p, raw = self.root / ROUTES_DIR / "router.json", None
+            try:
+                raw = p.read_bytes() if p.is_file() else self.get(f"{self.base}router.json")
+            except (OSError, SlackError):
+                pass
+            try:
+                self._mode = (json.loads(raw) or {}).get("mode") if raw else None
+            except (ValueError, AttributeError):
+                self._mode = None
+        return self._mode == "server"
+
     def inboxes(self) -> set[str]:
         return {r["inbox_ts"] for r in self.all().values()}
 
@@ -749,8 +764,9 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
     its reader.  One line per name saying what happened."""
     log = log or sys.stderr
-    if routes.all().get("router", {}).get("mode") == "server":
-        return []                                                    # the console site's events route delivers it
+    if routes.server_delivers():
+        print("route: the router delivers it", file=log)
+        return []
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     root = api.root(ch, thread) if thread else None
     for n in lead_names(msg.get("text", ""), reg):

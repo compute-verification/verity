@@ -951,9 +951,13 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     add_route(routes_dirs[0], "old-worker", "1.0", closed="2026-10-01T18:00Z", forward_to="circuits")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-worker", "--text", "where is the tree?")
     assert rc == 0 and "route @circuits: rang (for @old-worker, finished)" in err and len(bells(fake, box)) == 1
-    add_route(routes_dirs[0], "router", "", mode="server")
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}   # no inbox
+    (routes_dirs[1] / "router.json").write_text(json.dumps(router))                    # published, not yet in the clone
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "again")
-    assert rc == 0 and "route" not in err and len(bells(fake, box)) == 1
+    assert rc == 0 and "route: the router delivers it" in err and len(bells(fake, box)) == 1
+    (routes_dirs[0] / "router.json").write_text(json.dumps(router))
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "and again")
+    assert rc == 0 and "rang" not in err and len(bells(fake, box)) == 1
 
 
 def notes_clone(tmp_path) -> Path:
