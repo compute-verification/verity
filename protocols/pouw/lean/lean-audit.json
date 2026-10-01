@@ -32,7 +32,9 @@
   "Pouw.PearlC.TTOutTileUOnly",
   "Pouw.PearlC.DeviceChainCap",
   "Pouw.PearlC.TTOutChainOnly",
-  "Pouw.PearlC.RowSeedAssumptions"
+  "Pouw.PearlC.RowSeedAssumptions",
+  "Pouw.PearlC.TTOutFp4",
+  "Pouw.PearlC.TTOutFp4ChainOnly"
  ],
  "layers": {
   "Pouw.Assumptions": {
@@ -850,6 +852,48 @@
    "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.TTOutRowSeed"],
    "except": [],
    "why": "FragDraw, the fragment corollary's per-row draw (Daniel, 30 Sep 5:52 PM PDT): the named assumption imports no proofs"
+  },
+  "Pouw.PearlC.DeviceFp4": {
+   "imports": [
+    "Mathlib",
+    "Pouw.Basic",
+    "Pouw.PearlC.Tile",
+    "Pouw.PearlC.Fp4Chain",
+    "Pouw.PearlC.Fp4Skip",
+    "Pouw.PearlC.PeelExact"
+   ],
+   "except": [],
+   "why": "Pearl-C4's FP4 device record and its protocol, domain and tiles: definitions only, reading the named protocol, the tile rules, the FP4 chain and its replayed debit"
+  },
+  "Pouw.PearlC.DeviceFp4ChainOnly": {
+   "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.DeviceFp4Issue"],
+   "except": [],
+   "why": "Pearl-C4's chain-only credit, protocol, tiles and γ at an FP4 record: definitions only"
+  },
+  "Pouw.PearlC.DeviceFp4Hot": {
+   "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.DeviceFp4ChainOnly"],
+   "except": [],
+   "why": "Pearl-C4 v2's credit, W_ref, γ and the accounting a v2 protocol meets: definitions only"
+  },
+  "Pouw.PearlC.DeviceFp4Issue": {
+   "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.DeviceFp4"],
+   "except": [],
+   "why": "Pearl-C4's sm_120 record at the issue-bound FP32 price: definitions only, reading the FP4 record"
+  },
+  "Pouw.PearlC.PeelFp4Vectors": {
+   "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.DeviceFp4"],
+   "except": [],
+   "why": "generated data: import no proofs"
+  },
+  "Pouw.PearlC.TTOutFp4": {
+   "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.TTOut", "Pouw.PearlC.DeviceFp4"],
+   "except": [],
+   "why": "the named assumption at the FP4 record imports no proofs"
+  },
+  "Pouw.PearlC.TTOutFp4ChainOnly": {
+   "imports": ["Mathlib", "Pouw.Basic", "Pouw.PearlC.TTOutFp4", "Pouw.PearlC.DeviceFp4ChainOnly"],
+   "except": [],
+   "why": "the chain-only TT_OUT-FP4 forms and their game import no proofs"
   }
  },
  "pins": {
@@ -7570,7 +7614,73 @@
    ],
    "assumptions": [],
    "type_hash": "eea8fb0951714337a6bfb8a4028c2a641a8eca7dcd71f91f9cf039458a8286ee"
-  }
+  },
+  "Pouw.PearlC.Fp4Prices.sm120Issue_eq": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Issue_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Loop_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Loop_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Loop_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4HotChainOnly_sm120Loop_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Issue_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Issue_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Issue_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Issue_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Loop_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Loop_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Loop_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4Hot_sm120Loop_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4_sm120Issue_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4_sm120Issue_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4_sm120Issue_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4_sm120Issue_rcpApprox_8192": {},
+  "Pouw.PearlC.gammaFp4_sm120Loop_lut256_16384": {},
+  "Pouw.PearlC.gammaFp4_sm120Loop_lut256_8192": {},
+  "Pouw.PearlC.gammaFp4_sm120Loop_rcpApprox_16384": {},
+  "Pouw.PearlC.gammaFp4_sm120Loop_rcpApprox_8192": {},
+  "Pouw.PearlC.pearlCGammaFp4At": {},
+  "Pouw.PearlC.pearlCGammaFp4ChainOnlyAt": {},
+  "Pouw.PearlC.pearlCGammaFp4HotAt": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120At_16384": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120At_8192": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120ChainOnlyAt_16384": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120ChainOnlyAt_8192": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120HotAt_16384": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120HotAt_8192": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120HotChainOnlyAt_16384": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120HotChainOnlyAt_8192": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120Issue_16384": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120Issue_8192": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120_16384": {},
+  "Pouw.PearlC.pearlCGammaFp4Sm120_8192": {},
+  "Pouw.PearlC.pearlCSampledFp4At": {},
+  "Pouw.PearlC.pearlCSampledFp4ChainOnlyAt": {},
+  "Pouw.PearlC.pearlCSampledFp4HotAt": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120At_16384": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120At_8192": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120ChainOnlyAt_16384": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120ChainOnlyAt_8192": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120HotAt_16384": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120HotAt_8192": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120HotChainOnlyAt_16384": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120HotChainOnlyAt_8192": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120Issue_16384": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120Issue_8192": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120_16384": {},
+  "Pouw.PearlC.pearlCSampledFp4Sm120_8192": {},
+  "Pouw.PearlC.pearlCShapeFp4_headline": {},
+  "Pouw.PearlC.ttOutFp4ChainOnly_of_ttOut": {},
+  "Pouw.PearlC.ttOutTileFp4ChainOnly_of_ttOut": {}
  },
  "reads": {
   "Pouw.Assumptions": {
