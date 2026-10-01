@@ -77,7 +77,7 @@ def trunc(x: np.ndarray, bits: np.ndarray) -> np.ndarray:
 
 def job(cls: str, layer: int, args, key: str, start_kind: str) -> dict:
     a, b = rc.operands(cls, layer, args, key)
-    ac, bc = rc.quantize(a), rc.quantize(b)
+    ac, bc = rc.quantize(a[:args.rows]), rc.quantize(b)
     av, bv = rc.values(ac), rc.values(bc)
     start = STARTS[start_kind](av, bv, args.h, rc.rng(key, "start", layer, cls))
     rows, cols = len(ac), len(bc)
