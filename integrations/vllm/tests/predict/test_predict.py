@@ -263,6 +263,14 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
         assert S.score(inv, **kw)["summary"]["units_by_status"]["not_run"] == 7, "another code's results are not this code's"
         old = S.score(inv, **kw, reuse_code=(version,))["summary"]
         assert old["compared_by_code"] == {version: 7} and {**old, "compared_by_code": 0} == {**s, "compared_by_code": 0}
+    # whatever the order written: this code's result for a key, then the reused versions' in the order named
+    e = entries[0]
+    mixed = str(tmp_path / "mixed.jsonl")
+    with open(mixed, "w") as f:
+        f.writelines(json.dumps(x) + "\n" for x in ({**e, "digest": "own"}, {**e, "code": "a", "digest": "a"}, {**e, "code": "b", "digest": "b"}))
+    assert S.Cache(mixed, e["code"], ("a", "b")).get(e["key"])["digest"] == "own"
+    assert S.Cache(mixed, "c", ("a", "b")).get(e["key"])["digest"] == "a"
+    assert S.Cache(mixed, "c", ("b", "a")).get(e["key"])["digest"] == "b"
 
 
 def test_memory_estimate_is_above_a_measured_peak():

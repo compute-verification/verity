@@ -391,16 +391,19 @@ def code_version() -> str:
 class Cache:
     """Task results by (code version, key), persisted as JSONL (a scoring run resumes where a suspended one stopped).  A result
     is stamped with the `code` that wrote it, and only results of `code`, or of a version `reuse` names (`UNSTAMPED` for results
-    written before they carried one), are reused: an older predictor's refusal or Program never stands in for this one's."""
+    written before they carried one), are reused: an older predictor's refusal or Program never stands in for this one's.  Of
+    several results for a key, `code`'s wins, then each `reuse` version's in the order named, then the last written."""
 
     def __init__(self, path: str | None, code: str, reuse: tuple[str, ...] = ()) -> None:
         self.path, self.code, self.d = path, code, {}
-        accepted = {code, *reuse}
+        rank = {v: i for i, v in reversed(list(enumerate((code, *reuse))))}
         if path and os.path.exists(path):
             for line in open(path):
                 if line.strip():
                     r = json.loads(line)
-                    if r.get("status") != "killed" and r.get("code", UNSTAMPED) in accepted:
+                    v = r.get("code", UNSTAMPED)
+                    held = self.d.get(r["key"])
+                    if r.get("status") != "killed" and v in rank and (held is None or rank[v] <= rank[held.get("code", UNSTAMPED)]):
                         self.d[r["key"]] = r
 
     def get(self, key: str) -> dict | None:
@@ -664,8 +667,9 @@ class Options:
     no_workload: bool = option("--no-workload", action="store_true", default=False)
     cached_only: bool = option("--cached-only", action="store_true", default=False, help="predict nothing: score the predictions already in --cache")
     reuse_code: list[str] | None = option("--reuse-code", default=None, nargs="*",
-                                          help="also reuse --cache results of these predictor code versions (`unstamped`: written "
-                                               "before results carried one); by default only this code's are")
+                                          help="also reuse --cache results of these predictor code versions, after this code's and "
+                                               "in the order named (`unstamped`: written before results carried one); by default "
+                                               "only this code's are")
     rows_filter: str | None = option("--rows-filter", default=None, help="regex on the row id")
     out: str = option("--out", help="score JSON")
     md: str | None = option("--md", default=None, help="markdown table")
