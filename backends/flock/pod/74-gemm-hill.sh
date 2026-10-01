@@ -15,6 +15,8 @@
 #      Node 1's dispatcher starts every `provers` task on the same cores (128-175), so a job holds a lock on every slice it pins
 #      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds
 #      PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
+#      POINTS=1 (N: one GPU session of N points, one preflight check and then the step's statement swept N times, each point
+#      under out/p<i>/ with its own hillclimb-<i>.json citing the check, and result.json the session's; gemm_hill.py)
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  QUESTION= (the job's research question, else the
 #      campaign's)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
@@ -26,8 +28,8 @@
 #      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the preflight check's and the step's statements and serve their
 #      sessions on the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR
 #      alone (the GPU job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the
-#      pod network, so this pod holds only the prover); give both jobs the same K, N, WARM, RUNS and FC_VERIFY_AHEAD, and
-#      FC_VERIFY_SERVERS to the serving one
+#      pod network, so this pod holds only the prover); give both jobs the same K, N, POINTS, WARM, RUNS and
+#      FC_VERIFY_AHEAD, and FC_VERIFY_SERVERS to the serving one (its verifier processes serve every point's sessions)
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -48,6 +50,8 @@ export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLO
 export HOME=$FLOCK_WORK/home FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache}
 [ "${STAGE_ONLY:-0}" = 1 ] || [ "${SERVE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
 [ -n "${VERIFIERS:-}" ] && [ "${SERVE_ONLY:-0}" != 1 ] && export FC_VERIFIERS=$VERIFIERS
+POINTS=${POINTS:-1}; [ "${STAGE_ONLY:-0}" = 1 ] && POINTS=1
+case $POINTS in ''|*[!0-9]*|0*) echo "POINTS=$POINTS: a count of points, at least 1"; exit 1 ;; esac
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
 INST=${N:-}; unset N
 DEFS=$R/out/defs.json; INST=$(python3 backends/flock/pod/gemm_hill.py defs --K $K ${INST:+--n $INST} --out $DEFS) || exit 1
@@ -91,8 +95,8 @@ if [ "${SERVE_ONLY:-0}" = 1 ]; then
   OUT=$S/preflight RESEARCH_RUN_DIR=$S/preflight SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 \
     SELFTEST=0 > $R/out/preflight.log 2>&1 &
   GP=$!
-  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST \
-    MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 > $R/out/sweep.log 2>&1 &
+  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 SERVE_ONLY=$VERIFIERS SERVE_POINTS=$POINTS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS \
+    BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 > $R/out/sweep.log 2>&1 &
   SP=$!
   wait $GP || ok=0
   wait $SP || ok=0
@@ -100,7 +104,7 @@ if [ "${SERVE_ONLY:-0}" = 1 ]; then
   keep preflight; keep m35
   cp $S/preflight/classes/served.jsonl $R/out/preflight-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
   [ $ok = 1 ] && python3 -c 'import json, sys; r = [json.loads(l)["serve"] for f in sys.argv[1:] for l in open(f) if l.strip()]
-sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] and not x["timed_out"] for x in r) else 1)' \
+sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] * x.get("points", 1) and not x["timed_out"] for x in r) else 1)' \
     $R/out/preflight-served.jsonl $R/out/served.jsonl
   exit
 fi
@@ -110,17 +114,25 @@ if [ "${PREFLIGHT:-${GATE:-1}}" = 1 ]; then
     > $R/out/preflight.log 2>&1 || ok=0
   ph preflight end
   keep preflight
-  cp $R/out/preflight/binary.sha256 $R/out/ 2>/dev/null
+  python3 backends/flock/pod/gemm_hill.py key --binary-sha $R/out/preflight/binary.sha256 --out $R/out/preflight/key.json
 fi
-if [ $ok = 1 ]; then
-  ph sweep start
-  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps.tsv --" \
+# the session's points, one after another (P: each one's directory under out/ and the scratch, none with one point); a point
+# that fails ends the session
+pdir() { [ "$POINTS" = 1 ] || echo p$1/; }
+ran=0
+for i in $(seq 0 $((POINTS - 1))); do
+  [ $ok = 1 ] || break
+  P=$(pdir $i); mkdir -p $R/out/$P
+  ph sweep${P:+-p$i} start
+  OUT=$S/${P}m35 RESEARCH_RUN_DIR=$S/${P}m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/${P}stamps.tsv --" \
     bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
-    WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/sweep.log 2>&1 || ok=0
-  ph sweep end
-  keep m35
-  cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
-fi
+    WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/${P}sweep.log 2>&1 || ok=0
+  ph sweep${P:+-p$i} end
+  keep ${P}m35
+  cp $S/${P}m35/classes/results.jsonl $R/out/${P}results.jsonl 2>/dev/null
+  python3 backends/flock/pod/gemm_hill.py key --binary-sha $R/out/${P}m35/binary.sha256 --out $R/out/${P}key.json
+  ran=$((ran + 1))
+done
 kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
 if [ "${STAGE_ONLY:-0}" = 1 ]; then
   cp $S/preflight/classes/staged.jsonl $R/out/preflight-staged.jsonl; cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
@@ -128,10 +140,19 @@ if [ "${STAGE_ONLY:-0}" = 1 ]; then
 fi
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3
-PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
-  $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/results.jsonl \
-  --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
-  --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
-  --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
-[ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
+# every point that ran, or the one the session refused before it ran (its record says why)
+ph metrics start
+for i in $(seq 0 $(( (ran > 0 ? ran : 1) - 1 ))); do
+  P=$(pdir $i); mkdir -p $R/out/$P
+  BS=$R/out/${P}m35/binary.sha256; [ -f $BS ] || BS=$R/out/preflight/binary.sha256
+  if [ "$POINTS" = 1 ]; then RES=$R/result.json HC=$R/hillclimb.json; else RES=$R/out/${P}result.json HC=$R/hillclimb-$i.json; fi
+  PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
+    $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
+    --stamps $R/out/${P}stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
+    --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $BS --step ${STEP:-0} \
+    --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --point $i --points $POINTS --preflight-key $R/out/preflight/key.json \
+    --point-key $R/out/${P}key.json --out $R/out/${P}metrics.json --result $RES --hillclimb $HC || ok=0
+done
+ph metrics end
+python3 backends/flock/pod/gemm_hill.py session --dir $R --points $POINTS || ok=0
 [ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json

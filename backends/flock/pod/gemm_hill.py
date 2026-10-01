@@ -24,11 +24,22 @@ the RTX PRO peak under the workload's own `hill.` names, since the contract's ov
 H100 anchor. hillclimb.json is the step's verity/hillclimb-point/v0 record (throughput = VUs / T_session; gpu_util and
 gpu_held_s_per_vu over the timed sessions, the verifier's verdicts included), which `rollup` appends to its subcircuit's roll-up.
 
+A GPU session (74-gemm-hill.sh POINTS=N) is one tree, one binary, one FC_* set and one K: one preflight check, then N points,
+each the same statement's sweep. Every point's record cites the session's preflight check (outputs.json refs.preflight, its
+record's sha256 and its key) and refuses itself when its key (the binaries, the FC_* settings, the GPU; `key`) differs from the
+check's. Its GPU-held seconds are its own sweep's (gpu_held_s_point), the session's (gpu_held_s_session) and its share of them,
+its sweep plus the seconds outside every point split equally (gpu_held_s_amortized, which sum to the session's).
+gpu_held_s_job is the session's only when it has one point. With N > 1, each point's contract result is out/p<i>/result.json
+and result.json is the session's (`session`).
+
     python gemm_hill.py defs --K 8192 --out defs.json [--n 1024]      # the Gemm_v2 row whose coordinates are the statement's lanes
     python gemm_hill.py dmon --out dmon.tsv [--gpu 0]                  # nvidia-smi dmon -s u every second, each line after its epoch
     python gemm_hill.py stamp --out stamps.tsv -- BINARY prove ...    # the prover, its stdout passed through and each line stamped
+    python gemm_hill.py key --binary-sha binary.sha256 --out key.json # what a point shares with its session's preflight check
     python gemm_hill.py metrics --K 8192 --preflight preflight.jsonl --sweep results.jsonl --stamps stamps.tsv --dmon dmon.tsv \
-        --phases phases.tsv --census census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json
+        --phases phases.tsv --census census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json \
+        [--point I --points N --preflight-key preflight/key.json --point-key key.json]
+    python gemm_hill.py session --dir RUN_DIR [--points N]            # outputs.json, and with N > 1 the session's result.json
     python gemm_hill.py rollup --point hillclimb.json --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
     python gemm_hill.py plot POINTS... --out DIR [--put]   # per K, the three panels over the steps (roll-ups, points or run ids)
 """
@@ -292,6 +303,39 @@ def _phases(path: Path) -> dict[str, list[float]]:
     return out
 
 
+def _span(phases: dict[str, list[float]], name: str) -> float | None:
+    t = phases.get(name) or [None, None]
+    return t[1] - t[0] if None not in t else None
+
+
+def key(a) -> None:
+    """What a point must share with its session's preflight check, taken as each runs: the binaries' sha256 (70-class-sweep.sh's
+    binary.sha256, by name), every FC_* setting the prover inherits, and the GPU the pod was given."""
+    shas = {}
+    for ln in Path(a.binary_sha).read_text().splitlines() if Path(a.binary_sha).exists() else []:
+        if len(f := ln.split()) == 2:
+            shas[Path(f[1]).name] = f[0]
+    doc = {"binaries": shas, "env": {k: v for k, v in sorted(os.environ.items()) if k.startswith("FC_")},
+           "gpu": {k: os.environ.get(k) for k in ("NVIDIA_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES")}}
+    Path(a.out).write_text(json.dumps(doc, sort_keys=True) + "\n")
+
+
+def _key_differs(pk: dict | None, qk: dict | None) -> list[str]:
+    """The settings two keys don't share (``binaries.<name>``, ``env.<FC_*>``, ``gpu.<var>``); every one when either is missing."""
+    flat = lambda k: {f"{s}.{n}": v for s, d in (k or {}).items() for n, v in d.items()}  # noqa: E731
+    f, g = flat(pk), flat(qk)
+    return ["the key"] if pk is None or qk is None else sorted(n for n in f.keys() | g.keys() if f.get(n) != g.get(n))
+
+
+def _sha256(path: str | None) -> str | None:
+    import hashlib
+
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest() if path else None
+    except OSError:
+        return None
+
+
 def metrics(a) -> None:
     now = time.time()
     census = {h["id"]: h for h in json.loads(Path(a.census).read_text())}
@@ -304,14 +348,32 @@ def metrics(a) -> None:
     g = GS.preflight(Path(a.preflight) if a.preflight else None, shapes_needed=1)
     if g["status"] == "passed" and rec.get("definition") not in g["shapes"]:
         g = {**g, "status": "failed", "why": f"the preflight check proved {sorted(g['shapes'])}, not {rec.get('definition')}"}
+    # a session's points cite its one preflight check, and one whose key differs from the check's is refused
+    pk, qk = (json.loads(Path(f).read_text()) if f and Path(f).exists() else None for f in (a.preflight_key, a.point_key))
+    differs = _key_differs(pk, qk) if a.points > 1 or a.point_key else []
+    if g["status"] == "passed" and differs:
+        g = {**g, "status": "failed", "why": f"point {a.point}'s {', '.join(differs)} differ from its preflight check's"}
+    cite = {"output": "preflight", "record_sha256": _sha256(a.preflight), "status": g["status"], "key": pk,
+            "key_matches": not differs if a.points > 1 or a.point_key else None}
     start, end, live = _prove_process(Path(a.stamps))
     timed = [(t, x) for t, x in live if not x.get("warm")]
     warm = [(t, x) for t, x in live if x.get("warm")]
     samples = _dmon(Path(a.dmon))
     phases = _phases(Path(a.phases)) if a.phases else {}
     held_since = _pod_start() or (phases.get("job") or [None])[0] or (samples[0][0] if samples else None)
+    # the session's GPU-held seconds end where its points' metrics start; each point's own are its sweep's, and the seconds
+    # outside every point (pod start, the preflight check, the gaps) are shared equally by the points that ran
+    t_end = (phases.get("metrics") or [None])[0] or now
+    held = t_end - held_since if held_since else None
+    names = ["sweep"] if a.points == 1 else [f"sweep-p{i}" for i in range(a.points)]
+    spans = [x for x in (_span(phases, k) for k in names) if x is not None]
+    own = _span(phases, names[0 if a.points == 1 else a.point])
     flags = []
     out: dict = {"K": a.K, "definition": rec.get("definition"), "commit": _commit(Path(a.root)), "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+                 "point": {"index": a.point, "of": a.points}, "preflight": cite, "gpu_held_s_point": own, "gpu_held_s_session": held,
+                 "gpu_held_s_amortized": own + (held - sum(spans)) / len(spans) if own is not None and held is not None else None,
+                 # one point's job is the whole session's only when the session has one point
+                 "gpu_held_s_job": held if a.points == 1 else None,
                  "gpu": gpu, "peak": {"id": a.peak_id, "flop_per_second": peak["flop_per_second"], "rate": peak.get("rate"),
                                       "device": peak.get("device"), "matches_gpu": bool(gpu.get("name")) and gpu.get("name") == peak.get("device")},
                  "byte_identity": g, "accepted": bool(lv.get("accepted")), "flags": flags}
@@ -329,8 +391,7 @@ def metrics(a) -> None:
         steady = _window(samples, t0, t1)
         verify = [((x.get("verdict") or {}).get("verify_s")) for _, x in timed]
         session = [((x.get("verdict") or {}).get("session_s")) for _, x in timed]
-        job = _window(samples, samples[0][0] if samples else None, now)
-        held = now - held_since if held_since else None
+        job = _window(samples, samples[0][0] if samples else None, t_end)
         out.update({
             "m": lv.get("dense_m"), "k_log": lv.get("k_log"), "nbl": lv.get("nbl"), "instances": lv.get("instances"), "tile": st.get("tile"),
             "coords_per_statement": coords, "statement_digest": lv.get("statement_digest"), "shape": rec.get("shape"), "ands": rec.get("ands"),
@@ -345,7 +406,7 @@ def metrics(a) -> None:
                         "rounds": verdicts[-1].get("rounds"), "round_trips": timed[-1][1].get("calls"),
                         "why": "--session-tables J: the tables share one link exchange and both reps one root (Session.lean); "
                                "the device prover proves one table per session, so J = 1 on the GPU"},
-            "gpu_util_job": job["sm"] * job["s"] / held if job["sm"] is not None and held else None, "gpu_held_s_job": held,
+            "gpu_util_job": job["sm"] * job["s"] / held if job["sm"] is not None and held else None,
             "gpu_busy_s_job": job["busy"],
             # where the verifier ran, and what a coin round trip costs the session: the 64-byte pings on each session's open
             # connection before it starts, and the seconds the prover waited inside its round trips (the verifier's handling included)
@@ -390,6 +451,8 @@ def metrics(a) -> None:
         res = {"schema": "research/result/v0.1", "run_id": out["run_id"] or "unknown", "workload_fingerprint": None, "measurements": [],
                "validation": {"status": "failed", "checker": "the campaign contract", "detail": f"{type(e).__name__}: {e}"[:900]}}
     out["contract_problems"] = _validate(res)
+    if a.points > 1:
+        res["kind"] = "bench-point/v1"
     point = _point(a, out, g, peak, gpu, flags, timed)
     Path(a.out).write_text(json.dumps(out, indent=1, default=str))
     for path, doc in ((a.result, res), (a.hillclimb, point)):
@@ -431,7 +494,8 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
               *[{"name": f"hill.{k}", "value": out[k], "unit": u} for k, u in (
                   ("overhead", "ratio"), ("overhead_prove_only", "ratio"), ("t_session_s_per_coord", "s"), ("t_native_s_per_coord", "s"),
                   ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"),
-                  ("gpu_util_job", "fraction"), ("gpu_held_s_per_coord", "s"), ("gpu_held_s_job", "s"), ("session_s_per_statement", "s"))
+                  ("gpu_util_job", "fraction"), ("gpu_held_s_per_coord", "s"), ("gpu_held_s_job", "s"), ("session_s_per_statement", "s"),
+                  ("gpu_held_s_point", "s"), ("gpu_held_s_amortized", "s"), ("gpu_held_s_session", "s"))
                 if out.get(k) is not None],
               {"name": "hill.peak_flop_per_second", "value": peak["flop_per_second"], "unit": "FLOP/s"},
               *[{"name": f"hill.t_{k[2:]}", "value": rep(k), "unit": "s"} for k in ("t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito")
@@ -452,10 +516,12 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
         k_log=out.get("k_log"), tile=out.get("tile"), vcpu=out["vcpu"], hill_peak={"census_id": a.peak_id, "flop_per_second": peak["flop_per_second"],
                                                                                     "device": peak.get("device")},
         coins=out.get("coins"), session=out.get("session"), flags=out["flags"], hill={"step": a.step, "label": a.label})
+    pre = "" if a.points == 1 else f"p{a.point}/"
     return {"schema": contract.RESULT_SCHEMA, "run_id": out["run_id"] or "local", "workload_fingerprint": fp,
             "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.PREFLIGHT_CASES),
-                           "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/preflight/classes/results.jsonl"]},
-            "measurements": ms, "measurement_files": ["out/metrics.json", "out/results.jsonl"], "artifacts": ["hillclimb.json"]}
+                           "detail": (g.get("why") or json.dumps(g.get("shapes")))[:900], "evidence": ["out/preflight/classes/results.jsonl"]},
+            "measurements": ms, "measurement_files": [f"out/{pre}metrics.json", f"out/{pre}results.jsonl"],
+            "artifacts": [Path(a.hillclimb).name if a.hillclimb else "hillclimb.json"]}
 
 
 def _read(path: str | None) -> str | None:
@@ -484,13 +550,81 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "flags": flags, "question": os.environ.get("QUESTION") or QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
-            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why")}
+            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why"),
+            # the point among its GPU session's, the session's one preflight check it cites, and its GPU-held seconds (its own sweep,
+            # its share of the session's, the session's)
+            "point": out["point"], "preflight": out["preflight"], "gpu_held_s_point": out.get("gpu_held_s_point"),
+            "gpu_held_s_amortized": out.get("gpu_held_s_amortized"), "gpu_held_s_session": out.get("gpu_held_s_session")}
+
+
+def _load(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+SESSION_MEDIANS = (("gpu_held_s_amortized", "s"), ("gpu_held_s_point", "s"), ("t_session_s_per_vu", "s"), ("overhead", "ratio"),
+                   ("overhead_prove_only", "ratio"), ("throughput_vu_per_s", "1/s"), ("gpu_util", "fraction"),
+                   ("verify_s_per_statement", "s"))
+
+
+def session(a) -> None:
+    """A GPU session's declared outputs (outputs.json): its one preflight check's record (`preflight`), then each point's
+    hillclimb record, which cites it (refs.preflight). A session of several points also declares each point's contract result
+    (`result-<i>`, a bench-point/v1: the tables read bench-result/v1 only) and writes result.json as the session's own
+    (hillclimb-session/v0): passed only when its preflight check and every one of its points passed."""
+    R, n = Path(a.dir), a.points
+    pre = "out/preflight/classes/results.jsonl"
+    outs = [{"name": "preflight", "kind": "preflight-record/v0", "file": pre,
+             "meta": {"campaign": "proofs-hillclimb", "what": "the GPU session's preflight check (byte identity at B = 16: "
+                      + ", ".join(GS.PREFLIGHT_CASES) + "), which every point of the session cites"}}] if (R / pre).exists() else []
+    cite = {"preflight": "@preflight"} if outs else {}
+    for i in range(n):
+        meta = {"campaign": "proofs-hillclimb"} | ({} if n == 1 else {"point": i, "points": n})
+        refs = dict(cite)
+        if n > 1 and (R / f"out/p{i}/result.json").exists():
+            outs.append({"name": f"result-{i}", "kind": "bench-point/v1", "file": f"out/p{i}/result.json", "meta": meta, "refs": cite})
+            refs["result"] = f"@result-{i}"
+        hc = "hillclimb.json" if n == 1 else f"hillclimb-{i}.json"
+        if (R / hc).exists():
+            outs.append({"name": Path(hc).stem, "kind": "hillclimb-point/v0", "file": hc, "meta": meta, "refs": refs})
+    if outs:
+        (R / "outputs.json").write_text(json.dumps({"schema": "research/outputs/v0.1", "outputs": outs}, indent=1) + "\n")
+    if n == 1:
+        return
+    g = GS.preflight(R / pre, shapes_needed=1)
+    res = [_load(R / f"out/p{i}/result.json") for i in range(n)]
+    pts = [_load(R / f"hillclimb-{i}.json") for i in range(n)]
+    status = [((r or {}).get("validation") or {}).get("status") or "did not run" for r in res]
+    why = [f"point {i}: {s}" + (f" ({p['why']})" if s != "passed" and (p or {}).get("why") else "") for i, (s, p) in enumerate(zip(status, pts))]
+    ok = g["status"] == "passed" and all(s == "passed" for s in status)
+    ran = [p for p in pts if p]
+    ms = [{"name": "hill.points", "value": n, "unit": "count"}, {"name": "hill.points_passed", "value": status.count("passed"), "unit": "count"},
+          *([{"name": "hill.gpu_held_s_session", "value": ran[0]["gpu_held_s_session"], "unit": "s"}]
+            if ran and ran[0].get("gpu_held_s_session") is not None else []),
+          *[{"name": f"hill.median_{k}", "value": v, "unit": u} for k, u in SESSION_MEDIANS
+            if (v := _median([p.get(k) for p in ran])) is not None]]
+    fp = next((r.get("workload_fingerprint") for r in res if r and r.get("workload_fingerprint")), None)
+    doc = {"schema": "research/result/v0.1", "kind": "hillclimb-session/v0",
+           "run_id": os.environ.get("RESEARCH_RUN_ID") or next((p["run_id"] for p in ran if p.get("run_id")), "local"),
+           "workload_fingerprint": {**(fp or {}), "points": n},
+           "validation": {"status": "passed" if ok else "failed", "checker": f"the session's preflight check ({g['status']}) and its "
+                          f"{n} points' byte identity", "detail": ("; ".join([f"preflight check: {g['status']}"] + why))[:900],
+                          "evidence": [pre]},
+           "measurements": ms,
+           "measurement_files": [f for i in range(n) for f in (f"out/p{i}/metrics.json", f"out/p{i}/results.jsonl")],
+           "artifacts": [f for i in range(n) for f in (f"hillclimb-{i}.json", f"out/p{i}/result.json")]}
+    tmp = R / "result.json.tmp"
+    tmp.write_text(json.dumps(doc, indent=1, default=str))
+    os.replace(tmp, R / "result.json")
+    print(json.dumps({"points": n, "passed": status.count("passed"), "preflight": g["status"]}), "passed" if ok else "failed")
 
 
 def rollup(a) -> None:
     """Append a point to its subcircuit's roll-up (verity/hillclimb-rollup/v0), the whole file written beside it and renamed over
-    it; strings cut at 200 characters and the commit at 12. Every point names its run, and a run already there is not appended
-    twice."""
+    it; strings cut at 200 characters and the commit at 12. Every point names its run (and its index among the run's points: a
+    GPU session's run has several), and a point already there is not appended twice."""
     pt = json.loads(Path(a.point).read_text())
     f = Path(a.file)
     doc = json.loads(f.read_text())
@@ -498,8 +632,9 @@ def rollup(a) -> None:
         raise SystemExit(f"{f}: not the roll-up of {pt.get('subcircuit', {}).get('id')}")
     if not pt.get("run_id") or not pt.get("commit"):
         raise SystemExit(f"{a.point}: a point names its run and commit")
-    if any(p.get("run_id") == pt["run_id"] for p in doc["points"]):
-        print(f"{pt['run_id']} is already in {f}")
+    index = lambda p: (p.get("run_id"), (p.get("point") or {}).get("index", 0))  # noqa: E731
+    if any(index(p) == index(pt) for p in doc["points"]):
+        print(f"{pt['run_id']} point {index(pt)[1]} is already in {f}")
         return
     cut = lambda v: v[:200] if isinstance(v, str) else [cut(x) for x in v] if isinstance(v, list) else {k: cut(x) for k, x in v.items()} if isinstance(v, dict) else v  # noqa: E731
     pt = cut(pt)
@@ -514,7 +649,8 @@ def rollup(a) -> None:
 
 
 def _points(src: str, research: str) -> list[dict]:
-    """hillclimb points from a roll-up or point file, else the store's hillclimb-point/v0 output of the attempt `src`."""
+    """hillclimb points from a roll-up or point file, else the store's hillclimb-point/v0 outputs of the attempt `src` (a GPU
+    session's attempt has one per point), in point order."""
     p = Path(src)
     if p.exists():
         doc = json.loads(p.read_text())
@@ -525,9 +661,14 @@ def _points(src: str, research: str) -> list[dict]:
         raise SystemExit(f"{src}: no hillclimb-point/v0 in the store")
     import tempfile
 
+    pts = []
     with tempfile.TemporaryDirectory() as d:
-        subprocess.run([research, "data", "fetch", arts[0]["id"], "--to", d], capture_output=True, text=True, check=True)
-        return [json.loads(f.read_text()) for f in Path(d).rglob("*.json")][:1]
+        for i, art in enumerate(arts):
+            to = Path(d) / str(i)
+            to.mkdir()
+            subprocess.run([research, "data", "fetch", art["id"], "--to", str(to)], capture_output=True, text=True, check=True)
+            pts += [json.loads(f.read_text()) for f in to.rglob("*.json")][:1]
+    return sorted(pts, key=lambda pt: (pt.get("point") or {}).get("index", 0))
 
 
 def plot(a) -> None:
@@ -652,9 +793,19 @@ def main() -> None:
     m.add_argument("--step", type=int, default=0)
     m.add_argument("--label", default="baseline")
     m.add_argument("--node", default="vy-nebius-1")
+    m.add_argument("--point", type=int, default=0)
+    m.add_argument("--points", type=int, default=1)
+    m.add_argument("--preflight-key", default=None)
+    m.add_argument("--point-key", default=None)
     m.add_argument("--out", required=True)
     m.add_argument("--result", required=True)
     m.add_argument("--hillclimb", default=None)
+    k = sub.add_parser("key")
+    k.add_argument("--binary-sha", required=True)
+    k.add_argument("--out", required=True)
+    se = sub.add_parser("session")
+    se.add_argument("--dir", required=True)
+    se.add_argument("--points", type=int, default=1)
     r = sub.add_parser("rollup")
     r.add_argument("--point", required=True)
     r.add_argument("--file", required=True)
@@ -663,7 +814,8 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--put", action="store_true")
     a = ap.parse_args()
-    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "rollup": rollup, "plot": plot}[a.cmd_](a)
+    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "key": key, "session": session, "rollup": rollup,
+     "plot": plot}[a.cmd_](a)
 
 
 if __name__ == "__main__":
