@@ -1,0 +1,57 @@
+# A harness run on node 2 (vy-nebius-2) that isn't timed for the panel (gates, characterization, a smoke run), on one GPU: queue
+# pouw, priority pouw. A timed run preempts it and SkyPilot requeues it; it restarts from the beginning (each run is minutes).
+# PR #485's jobs/prover-dev.yaml with the pouw labels (server.md, 05:50Z) and the harness's command.
+#
+#   sky jobs launch -n pouw-harness-<what> benchmarks/pouw/harness/jobs/harness.yaml \
+#     --env BUILD=art:<id> --env NODE_UUIDS=<node 2's UUIDs, comma-separated, from server.md> \
+#     --env CMD='characterize.py --sections identity mma dram l2' \
+#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# CMD is a harness script and its arguments; the job adds --gpu, --expect-uuid and --out. The queue can't pin an index, so the job
+# sees its one GPU as index 0, and the harness refuses any UUID not in NODE_UUIDS and records the one it got. BUILD: jobs/env.sh.
+name: pouw-harness
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 8
+  labels:
+    budget-line: nebius-prover-dev
+  memory: 24
+
+workdir: .
+
+envs:
+  CMD: null
+  BUILD: null
+  NODE_UUIDS: null
+  CAMPAIGN: pouw
+  RESEARCH_RUNS: /workspace/research/runs
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+run: |
+  set -euo pipefail
+  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- bash -c '
+    . benchmarks/pouw/harness/jobs/env.sh "$BUILD" &&
+    CUDA_VISIBLE_DEVICES=0 CUDA_DEVICE_ORDER=PCI_BUS_ID "$PY" benchmarks/pouw/harness/$CMD \
+      --gpu 0 --expect-uuid "$NODE_UUIDS" --out "$RESEARCH_RUN_DIR/harness.json"'
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: pouw
+          kueue.x-k8s.io/priority-class: pouw
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
