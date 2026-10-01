@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import hashlib
 import json
 import os
 import re
@@ -70,17 +71,27 @@ COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-
 #: inferred later
 SCHEMES = {"os-seed-prf": "flock-i-v1", "live-os": "flock-i-v1+livecoins"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
-#: the column-major verifier fold (d1775df80, flock-fp's cde1c7ac1) is an unreviewed verifier change; a tree has it when its
-#: slot types build this way. Read from the source, not the commit's ancestry: the step-0 trees descend from the fold and revert it
+#: a tree folds column-major when its circuit.rs builds slot types this way. Read from the source, not the commit's ancestry:
+#: the step-0 trees descend from the fold (d1775df80) and revert it
 FOLD_MARK = ("backends/flock/live/src/circuit.rs", "CscCircuit::from_matrices")
+#: circuit.rs's git blob ids that fold, and the flags each carries. The fold as granted (d1775df80 = cde1c7ac1: red-team-proofs-554's
+#: grant on art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8) carries none; with 750e344fd (= acca35385, the
+#: session verifier's C0 = I check once per statement, outside both #554 grants) it carries that change's flag. Any other circuit.rs
+#: that folds is a fold nobody reviewed
+FOLDS = {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
+         "a38a04e336a687c52ab0d642aa4674e90669399d": ("verifier-c0-once-unreviewed",)}
 
 
-def has_fold(root: Path) -> bool:
-    """Whether the tree at `root` folds column-major; a tree whose circuit.rs can't be read counts as one that does."""
+def verifier_flags(root: Path) -> list[str]:
+    """The flags the verifier source of the tree at `root` carries; a circuit.rs that can't be read is a fold nobody reviewed."""
     try:
-        return FOLD_MARK[1] in (root / FOLD_MARK[0]).read_text()
+        src = (root / FOLD_MARK[0]).read_bytes()
     except OSError:
-        return True
+        return ["verifier-fold-unreviewed"]
+    if FOLD_MARK[1].encode() not in src:
+        return []
+    blob = hashlib.sha1(b"blob %d\0" % len(src) + src).hexdigest()
+    return list(FOLDS.get(blob, ("verifier-fold-unreviewed",)))
 
 
 def subcircuit(K: int) -> dict:
@@ -391,8 +402,7 @@ def metrics(a) -> None:
         flags.append("tile-statement-unreviewed")
     if st.get("tile") or not rec.get("stage"):
         flags.append("draft-554-unreviewed")
-    if has_fold(Path(a.root)):
-        flags.append("verifier-fold-unreviewed")
+    flags += verifier_flags(Path(a.root))
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
     if out.get("accepted") and not rec.get("domain"):
