@@ -29,8 +29,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     groupings keyed by descriptor ids, validated against a descriptor's
     structure, never inside a digest.
     `boolean` is the Boolean profile of descriptor v1 (PROTOCOL §9): the gates
-    `And_v1`, `Xor_v1`, `Not_v1`, the constant bits, `is_boolean` and the word
-    view (`word_type`, `bit_type`).
+    `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
+    `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed

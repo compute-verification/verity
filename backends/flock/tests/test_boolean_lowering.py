@@ -68,3 +68,16 @@ def test_the_lowered_coordinate_computes_gemm_coordinate_v2() -> None:
     got_s, fail = C.evaluate(inputs, T)
     assert not fail
     assert np.array_equal(IL.unslice_words(got_s["out"], T), want)
+
+
+@pytest.mark.parametrize("n", [2, 3, 8, 33])
+def test_an_n_input_gate_lowers_to_n_minus_1_ands_or_none(n) -> None:
+    from verity.ir import boolean as BL
+
+    T = 64
+    bits = np.random.default_rng(n).integers(0, 2, size=(T, n), dtype=np.uint64)
+    for gate, ands, want in ((BL.and_gate(n), n - 1, bits.all(axis=1)), (BL.xor_gate(n), 0, bits.sum(axis=1) & 1)):
+        C, _ = _lower(gate, [1] * n)
+        assert C.counts()["ands"] == ands
+        got_s, fail = C.evaluate({f"in{j}": IL.slice_words(bits[:, j], 1) for j in range(n)}, T)
+        assert not fail and np.array_equal(IL.unslice_words(got_s["out"], T), want.astype(np.uint64))

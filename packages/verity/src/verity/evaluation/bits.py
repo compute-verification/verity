@@ -35,7 +35,8 @@ _ROW_BUDGET = 1 << 28  # bytes of one body's wire rows per chunk of instances
 class Compiled:
     """One body: ``steps`` in order, each ``("gates", [(kind, out, a, b), ...])`` (local wire indices, every operand computed
     before its group), ``("call", callee, [member argument indices], out base, out leaves)`` or ``("scan", step, init, xs,
-    shared, n, carry leaves, out base)``. ``counts`` are the gates of the flattened circuit, by kind."""
+    shared, n, carry leaves, out base)``; an n-input gate is a balanced tree of two-input operations on scratch wires after the
+    node outputs. ``counts`` are the two-input operations of the flattened circuit, by kind (an n-input gate counts n - 1)."""
 
     target: str
     params: tuple[Type, ...]
@@ -123,16 +124,27 @@ def compile(target: Any) -> Compiled:  # noqa: A001 (the module's verb; `builtin
         if isinstance(fn, PrimitiveDefinition):
             if q in const:
                 continue
-            if not BL.is_gate(fn):
+            gk = BL.gate_kind(fn)
+            if gk is None:
                 raise TypeError(f"{spec.id} node {q}: {fn.id} is not a Boolean gate or constant bit")
-            kind, arity = BL.KINDS[fn.id]
+            kind, arity = gk
             if nd.form == "primitive":
                 ops = np.concatenate([idx(a.refs) for a in nd.args]).reshape(1, arity)
             else:
                 ops = np.stack([member_refs(nd, m) for m in range(nd.n)]).reshape(nd.n, arity)
             out = np.arange(base, base + len(ops), dtype=np.int64)
-            run.append((_KINDS.index(kind), out, ops[:, 0], ops[:, -1]))
-            counts[kind] += len(ops)
+            ki, cols = _KINDS.index(kind), [ops[:, j] for j in range(arity)]
+            while len(cols) > 2:
+                pairs, cols = cols, []
+                for j in range(0, len(pairs) - 1, 2):
+                    tmp = np.arange(k, k + len(ops), dtype=np.int64)
+                    k += len(ops)
+                    run.append((ki, tmp, pairs[j], pairs[j + 1]))
+                    cols.append(tmp)
+                if len(pairs) % 2:
+                    cols.append(pairs[-1])
+            run.append((ki, out, cols[0], cols[-1]))
+            counts[kind] += len(ops) * max(1, arity - 1)
             continue
         flush()
         child = compile(fn)
@@ -152,6 +164,7 @@ def compile(target: Any) -> Compiled:  # noqa: A001 (the module's verb; `builtin
         for kk in _KINDS:
             counts[kk] += len(members) * child.counts[kk]
     flush()
+    max_size = max(max_size, k)
     params, ret = spec.signature()
     hit = _COMPILED[spec] = Compiled(spec.id, tuple(t for _, t in params), ret, k, n_params, steps, idx(body.ret), counts,
                                      max_size)

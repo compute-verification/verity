@@ -23,7 +23,7 @@
   "AmpereBF16TcDot16_v2": {
    "and": 8623
   },
-  "And_v1": {
+  "And2_v1": {
    "and": 1
   },
   "Bf16AddF2fp_v1": {
@@ -302,7 +302,7 @@
   "U32Xor_v1": {
    "and": 0
   },
-  "Xor_v1": {
+  "Xor2_v1": {
    "and": 0
   }
  },

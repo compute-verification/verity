@@ -2,16 +2,16 @@
  "about": "verity/ir/PROTOCOL.md \u00a79: written by test_boolean.py --write",
  "gates": [
   [
-   "And_v1",
+   "And2_v1",
    "and",
    [
     [
-     "Value",
-     1
-    ],
-    [
-     "Value",
-     1
+     "Array",
+     2,
+     [
+      "Value",
+      1
+     ]
     ]
    ],
    [
@@ -50,16 +50,16 @@
    ]
   ],
   [
-   "Xor_v1",
+   "Xor2_v1",
    "xor",
    [
     [
-     "Value",
-     1
-    ],
-    [
-     "Value",
-     1
+     "Array",
+     2,
+     [
+      "Value",
+      1
+     ]
     ]
    ],
    [
@@ -122,6 +122,174 @@
       1
      ],
      0
+    ]
+   ]
+  ],
+  [
+   "And3_v1",
+   "and",
+   [
+    [
+     "Array",
+     3,
+     [
+      "Value",
+      1
+     ]
+    ]
+   ],
+   [
+    "Value",
+    1
+   ],
+   [
+    [
+     [
+      0,
+      0,
+      0
+     ],
+     0
+    ],
+    [
+     [
+      0,
+      0,
+      1
+     ],
+     0
+    ],
+    [
+     [
+      0,
+      1,
+      0
+     ],
+     0
+    ],
+    [
+     [
+      0,
+      1,
+      1
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      0,
+      0
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      0,
+      1
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      1,
+      0
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      1,
+      1
+     ],
+     1
+    ]
+   ]
+  ],
+  [
+   "Xor3_v1",
+   "xor",
+   [
+    [
+     "Array",
+     3,
+     [
+      "Value",
+      1
+     ]
+    ]
+   ],
+   [
+    "Value",
+    1
+   ],
+   [
+    [
+     [
+      0,
+      0,
+      0
+     ],
+     0
+    ],
+    [
+     [
+      0,
+      0,
+      1
+     ],
+     1
+    ],
+    [
+     [
+      0,
+      1,
+      0
+     ],
+     1
+    ],
+    [
+     [
+      0,
+      1,
+      1
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      0,
+      0
+     ],
+     1
+    ],
+    [
+     [
+      1,
+      0,
+      1
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      1,
+      0
+     ],
+     0
+    ],
+    [
+     [
+      1,
+      1,
+      1
+     ],
+     1
     ]
    ]
   ]
@@ -307,8 +475,8 @@
   ]
  ],
  "program": {
-  "descriptor": "{\"annotations\":{},\"callees\":[\"Xor_v1\",\"And_v1\",\"Const1[0x0]_v1\",\"ExampleFullAdder_v1\",\"Not_v1\",\"Input1_v1\",\"ExampleAdd2_v1\"],\"definitions\":{\"And_v1\":{\"form\":\"primitive\",\"id\":\"And_v1\",\"params\":[[\"a\",[\"Value\",1]],[\"b\",[\"Value\",1]]],\"ret\":[\"Value\",1]},\"Const1[0x0]_v1\":{\"form\":\"primitive\",\"id\":\"Const1[0x0]_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"ExampleAdd2_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,2]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,0,2]},\"type\":1}],\"axes\":[0,0],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[],\"fn\":2,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",2,1,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":4,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",1]]],[\"y\",[\"Array\",2,[\"Value\",1]]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",2,0,1]},{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",3,1,1]},{\"affine\":[\"n\",4,0,1]}]},\"ret_type\":[\"Array\",4,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"ExampleAdd2_v1\"},\"ExampleFullAdder_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",2,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",2,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",3,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Value\",1]],[\"b\",[\"Value\",1]],[\"c\",[\"Value\",1]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",1,0,1]},{\"affine\":[\"n\",4,0,1]}]},\"ret_type\":[\"Array\",2,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"ExampleFullAdder_v1\"},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"Not_v1\":{\"form\":\"primitive\",\"id\":\"Not_v1\",\"params\":[[\"a\",[\"Value\",1]]],\"ret\":[\"Value\",1]},\"Root[ExampleAdd2Program_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,2]},\"type\":1}],\"fn\":6,\"form\":\"call\",\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,4]},\"ret_type\":[\"Array\",4,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"Root[ExampleAdd2Program_v1]_v1\"},\"Xor_v1\":{\"form\":\"primitive\",\"id\":\"Xor_v1\",\"params\":[[\"a\",[\"Value\",1]],[\"b\",[\"Value\",1]]],\"ret\":[\"Value\",1]}},\"program_fn\":\"ExampleAdd2Program_v1\",\"root\":\"Root[ExampleAdd2Program_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",1],[\"Array\",2,[\"Value\",1]],[\"Array\",4,[\"Value\",1]]]}",
-  "program_digest": "8c86d520fbb47b0f06636095274df1ecca9fe01983f28ffaea121d6d956cf87d",
+  "descriptor": "{\"annotations\":{},\"callees\":[\"Xor2_v1\",\"And2_v1\",\"Const1[0x0]_v1\",\"ExampleFullAdder_v1\",\"Not_v1\",\"Xor3_v1\",\"Input1_v1\",\"ExampleAdd2_v1\"],\"definitions\":{\"And2_v1\":{\"form\":\"primitive\",\"id\":\"And2_v1\",\"params\":[[\"x\",[\"Array\",2,[\"Value\",1]]]],\"ret\":[\"Value\",1]},\"Const1[0x0]_v1\":{\"form\":\"primitive\",\"id\":\"Const1[0x0]_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"ExampleAdd2_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"p\",0,0,2]},{\"affine\":[\"p\",1,0,2]}]},\"type\":2}],\"axes\":[1],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[],\"fn\":2,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"fn\":3,\"form\":\"call\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",2,1,1]},\"type\":1}],\"fn\":3,\"form\":\"call\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"fn\":4,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"n\",2,0,1]},{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",3,1,1]}]},\"type\":3}],\"fn\":5,\"form\":\"primitive\",\"out\":1}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",1]]],[\"y\",[\"Array\",2,[\"Value\",1]]]],\"ret\":{\"concat\":[{\"alias\":[5,0]},{\"affine\":[\"n\",4,0,1]}]},\"ret_type\":[\"Array\",4,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"ExampleAdd2_v1\"},\"ExampleFullAdder_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"p\",0,0,1]},{\"affine\":[\"p\",1,0,1]}]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"p\",2,0,1]}]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"alias\":[0,0]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"alias\":[1,0]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"n\",2,0,1]},{\"affine\":[\"n\",3,0,1]}]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1}],\"params\":[[\"a\",[\"Value\",1]],[\"b\",[\"Value\",1]],[\"c\",[\"Value\",1]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",1,0,1]},{\"affine\":[\"n\",4,0,1]}]},\"ret_type\":[\"Array\",2,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"ExampleFullAdder_v1\"},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"Not_v1\":{\"form\":\"primitive\",\"id\":\"Not_v1\",\"params\":[[\"a\",[\"Value\",1]]],\"ret\":[\"Value\",1]},\"Root[ExampleAdd2Program_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":6,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[],\"axes\":[],\"fn\":6,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,2]},\"type\":0}],\"fn\":7,\"form\":\"call\",\"out\":4}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,4]},\"ret_type\":[\"Array\",4,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"Root[ExampleAdd2Program_v1]_v1\"},\"Xor2_v1\":{\"form\":\"primitive\",\"id\":\"Xor2_v1\",\"params\":[[\"x\",[\"Array\",2,[\"Value\",1]]]],\"ret\":[\"Value\",1]},\"Xor3_v1\":{\"form\":\"primitive\",\"id\":\"Xor3_v1\",\"params\":[[\"x\",[\"Array\",3,[\"Value\",1]]]],\"ret\":[\"Value\",1]}},\"program_fn\":\"ExampleAdd2Program_v1\",\"root\":\"Root[ExampleAdd2Program_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",1]],[\"Value\",1],[\"Array\",2,[\"Array\",2,[\"Value\",1]]],[\"Array\",3,[\"Value\",1]],[\"Array\",4,[\"Value\",1]]]}",
+  "program_digest": "568c1744f12b0d889f674d2b799ba9e0c429cca29739f38b50d60d6f5121de7e",
   "is_boolean": true,
   "gates": [
    [
@@ -333,7 +501,7 @@
    ],
    [
     4,
-    "Xor_v1",
+    "Xor2_v1",
     [
      0,
      2
@@ -341,7 +509,7 @@
    ],
    [
     5,
-    "Xor_v1",
+    "Xor2_v1",
     [
      1,
      3
@@ -354,7 +522,7 @@
    ],
    [
     7,
-    "Xor_v1",
+    "Xor2_v1",
     [
      0,
      2
@@ -362,7 +530,7 @@
    ],
    [
     8,
-    "Xor_v1",
+    "Xor2_v1",
     [
      7,
      6
@@ -370,7 +538,7 @@
    ],
    [
     9,
-    "And_v1",
+    "And2_v1",
     [
      0,
      2
@@ -378,7 +546,7 @@
    ],
    [
     10,
-    "And_v1",
+    "And2_v1",
     [
      7,
      6
@@ -386,7 +554,7 @@
    ],
    [
     11,
-    "Xor_v1",
+    "Xor2_v1",
     [
      9,
      10
@@ -394,7 +562,7 @@
    ],
    [
     12,
-    "Xor_v1",
+    "Xor2_v1",
     [
      1,
      3
@@ -402,7 +570,7 @@
    ],
    [
     13,
-    "Xor_v1",
+    "Xor2_v1",
     [
      12,
      11
@@ -410,7 +578,7 @@
    ],
    [
     14,
-    "And_v1",
+    "And2_v1",
     [
      1,
      3
@@ -418,7 +586,7 @@
    ],
    [
     15,
-    "And_v1",
+    "And2_v1",
     [
      12,
      11
@@ -426,7 +594,7 @@
    ],
    [
     16,
-    "Xor_v1",
+    "Xor2_v1",
     [
      14,
      15
@@ -437,6 +605,15 @@
     "Not_v1",
     [
      6
+    ]
+   ],
+   [
+    18,
+    "Xor3_v1",
+    [
+     8,
+     13,
+     16
     ]
    ]
   ],

@@ -5,7 +5,7 @@ in order), each a list of forms LSB first, as C-Flock's pieces take one argument
 list of forms (one element) or a list of elements, those of the return type in order.
 
 `trace` runs it once on a `Circuit` whose forms remember how they were made (`TL`: the XOR of two forms, or the NOT of one),
-and keeps the ANDs live in the outputs. Each AND becomes one `And_v1`; each AND operand and each output is written as the
+and keeps the ANDs live in the outputs. Each AND becomes one `And2_v1`; each AND operand and each output is written as the
 XORs and NOTs the builder made it by (identical forms share one wire), or, for a form the builder did not make from tracked
 forms, as a balanced XOR tree over its bits. So the gate circuit has exactly the builder's live ANDs, and its XOR and NOT gates
 are the builder's own linear work.
@@ -264,7 +264,6 @@ def _body(T: Traced, params: Sequence[Type], ret: Type, B, *colls):
     for i, (_, ops) in enumerate(T.gates):
         depth[T.first_gate + i] = 1 + max(depth[o] for o in ops)
     order = sorted(range(len(T.gates)), key=lambda i: (depth[T.first_gate + i], _KINDS.index(T.gates[i][0]), i))
-    prim = {"and": BL.AND, "xor": BL.XOR, "not": BL.NOT}
     g = 0
     while g < len(order):
         i0 = order[g]
@@ -273,9 +272,12 @@ def _body(T: Traced, params: Sequence[Type], ret: Type, B, *colls):
         while h < len(order) and T.gates[order[h]][0] == kind and depth[T.first_gate + order[h]] == d:
             h += 1
         group = order[g:h]
-        arity = len(T.gates[i0][1])
-        args = [Coll(Array(len(group), BL.BIT), _refs([ref[T.gates[i][1][a]] for i in group])) for a in range(arity)]
-        out = B.batch(prim[kind], *args, axes=(0,) * arity)
+        if kind == "not":
+            out = B.batch(BL.NOT, Coll(Array(len(group), BL.BIT), _refs([ref[T.gates[i][1][0]] for i in group])), axes=(0,))
+        else:
+            # operand-major (`Array<2, Array<m, Value<1>>>` over axis 1), so each operand's column keeps its runs
+            ops = _refs([ref[T.gates[i][1][a]] for a in range(2) for i in group])
+            out = B.batch(BL.AND if kind == "and" else BL.XOR, Coll(Array(2, Array(len(group), BL.BIT)), ops), axes=(1,))
         for m, i in enumerate(group):
             ref[T.first_gate + i] = out.refs[m]
         g = h

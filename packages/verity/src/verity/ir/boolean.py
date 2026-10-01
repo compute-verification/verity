@@ -1,13 +1,15 @@
 """The Boolean core: three gates on 1-bit wires, the two constant bits, and the word view of a Boolean Definition
 (`PROTOCOL.md` §9).
 
-    And_v1(a: Value<1>, b: Value<1>) -> Value<1>      a AND b
-    Xor_v1(a: Value<1>, b: Value<1>) -> Value<1>      a XOR b
+    And<n>_v1(x: Array<n, Value<1>>) -> Value<1>      x[0] AND ... AND x[n-1], for every n >= 2
+    Xor<n>_v1(x: Array<n, Value<1>>) -> Value<1>      x[0] XOR ... XOR x[n-1], for every n >= 2
     Not_v1(a: Value<1>) -> Value<1>                   NOT a
     Const1[0x0]_v1, Const1[0x1]_v1 : () -> Value<1>   the constants 0 and 1
 
-The format fixes what each of these means; no semantics package defines or re-registers them. A Definition is *Boolean*
-(`is_boolean`) when its signature has only 1-bit leaves and every primitive it reaches is one of them or an `Input1_v1`.
+AND and XOR are one family each, a member per number of inputs (`and_gate(n)`, `xor_gate(n)`; `AND` and `XOR` are the
+two-input members `And2_v1` and `Xor2_v1`), decoded by id like the constants. The format fixes what each of these means; no
+semantics package defines or re-registers them. A Definition is *Boolean* (`is_boolean`) when its signature has only 1-bit
+leaves and every primitive it reaches is one of them or an `Input1_v1`.
 
 **Elements and the word view.** A Boolean Definition's ports carry bits; an *element* of a port is an innermost
 `Array<w, Value<1>>` (one w-bit element, bit j = leaf j, least significant first) or a lone `Value<1>`. `word_type` replaces
@@ -19,29 +21,85 @@ from __future__ import annotations
 
 import re
 import weakref
-from typing import Any, Callable
+from typing import Any
 
+from .codec import register_lazy_family
 from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from .refs import Coll, concat
 from .types import Array, Record, Tuple, Type, Value
 
-__all__ = ["AND", "BIT", "CONSTANTS", "GATES", "KINDS", "NOT", "XOR", "bit_type", "constant", "elements", "is_boolean",
-           "is_constant_bit", "is_gate", "word_type"]
+__all__ = ["AND", "BIT", "CONSTANTS", "KINDS", "NOT", "XOR", "and_gate", "bit_type", "constant", "elements", "gate_kind",
+           "is_boolean", "is_constant_bit", "is_gate", "operands", "word_type", "xor_gate"]
 
 BIT = Value(1)
 
-
-def _gate(name: str, arity: int, op: Callable[..., int], doc: str) -> PrimitiveDefinition:
-    params = (("a", BIT), ("b", BIT))[:arity]
-    return PrimitiveDefinition(name, 1, params, BIT, op, doc=doc, conformance="protocol-defined")
+#: the gate kinds, in the order evaluators number them; a new kind is a new entry (and a format version)
+KINDS: tuple[str, ...] = ("and", "xor", "not")
 
 
-AND = _gate("And", 2, lambda a, b: a & b & 1, "a AND b on 1-bit wires")
-XOR = _gate("Xor", 2, lambda a, b: (a ^ b) & 1, "a XOR b on 1-bit wires")
-NOT = _gate("Not", 1, lambda a: (a ^ 1) & 1, "NOT a on a 1-bit wire")
+def _and(*x: int) -> int:
+    return int(all(b & 1 for b in x))
 
-#: gate id -> (kind, arity): the table every evaluator and lowering dispatches on; a new primitive kind is a new row
-KINDS: dict[str, tuple[str, int]] = {AND.id: ("and", 2), XOR.id: ("xor", 2), NOT.id: ("not", 1)}
-GATES: dict[str, PrimitiveDefinition] = {AND.id: AND, XOR.id: XOR, NOT.id: NOT}
+
+def _xor(*x: int) -> int:
+    v = 0
+    for b in x:
+        v ^= b
+    return v & 1
+
+
+_FAMILY = {"and": ("And", _and, "AND"), "xor": ("Xor", _xor, "XOR")}
+_N_ARY: dict[tuple[str, int], PrimitiveDefinition] = {}
+_N_ARY_ID = re.compile(r"^(And|Xor)([2-9]|[1-9][0-9]+)_v1$")
+
+
+def _n_ary(kind: str, n: int) -> PrimitiveDefinition:
+    if isinstance(n, bool) or not isinstance(n, int) or n < 2:
+        raise ValueError(f"an {kind} gate has n >= 2 inputs, not {n!r}")
+    p = _N_ARY.get((kind, n))
+    if p is None:
+        name, op, word = _FAMILY[kind]
+        p = PrimitiveDefinition(f"{name}{n}", 1, (("x", Array(n, BIT)),), BIT, op, doc=f"the {word} of {n} bits",
+                                conformance="protocol-defined")
+        p.family = name  # type: ignore[attr-defined]
+        _N_ARY[(kind, n)] = p
+    return p
+
+
+def and_gate(n: int) -> PrimitiveDefinition:
+    """`And<n>_v1`: the AND of n >= 2 bits."""
+    return _n_ary("and", n)
+
+
+def xor_gate(n: int) -> PrimitiveDefinition:
+    """`Xor<n>_v1`: the XOR of n >= 2 bits."""
+    return _n_ary("xor", n)
+
+
+AND = and_gate(2)
+XOR = xor_gate(2)
+NOT = PrimitiveDefinition("Not", 1, (("a", BIT),), BIT, lambda a: (a ^ 1) & 1, doc="NOT a on a 1-bit wire",
+                          conformance="protocol-defined")
+
+register_lazy_family(_N_ARY_ID, lambda m: _n_ary(m[1].lower(), int(m[2])))
+
+
+def gate_kind(fn: Any) -> tuple[str, int] | None:
+    """``(kind, inputs)`` of a gate of the profile (``kind`` in `KINDS`), else None."""
+    if fn is NOT:
+        return ("not", 1)
+    m = _N_ARY_ID.match(fn.id) if isinstance(fn, PrimitiveDefinition) else None
+    if m is None:
+        return None
+    key = (m[1].lower(), int(m[2]))
+    return key if _N_ARY.get(key) is fn else None
+
+
+def operands(*bits: Coll) -> Coll:
+    """One-bit values as an n-input gate's argument, ``Array<n, Value<1>>``: ``B.call(XOR, operands(a, b))``."""
+    if any(c.type != BIT for c in bits):
+        raise TypeError("a gate's operands are 1-bit values")
+    return Coll(Array(len(bits), BIT), concat([c.refs for c in bits]))
 
 
 def _constant_bit(b: int) -> PrimitiveDefinition:
@@ -63,7 +121,7 @@ def constant(b: int) -> PrimitiveDefinition:
 
 
 def is_gate(fn: Any) -> bool:
-    return isinstance(fn, PrimitiveDefinition) and GATES.get(fn.id) is fn
+    return gate_kind(fn) is not None
 
 
 def is_constant_bit(fn: Any) -> bool:

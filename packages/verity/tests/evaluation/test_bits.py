@@ -1,5 +1,6 @@
 """`verity.evaluation.bits`: the bit-sliced evaluator against the plain-integer reference, on seeded random Boolean circuits that
-use every node form (primitive, call, batch over axis 0, a shared and an inner axis, scan), and through the word view."""
+use every node form (primitive, call, batch over axis 0, a shared and an inner axis, scan) and gates of 1 to 9 inputs, and
+through the word view."""
 from __future__ import annotations
 
 import random
@@ -22,16 +23,19 @@ def _cat(t, *cs) -> Coll:
     return Coll(t, concat([c.refs for c in cs]))
 
 
+ops = BL.operands
+
+
 def _full_adder(B, S, c, a, b):
-    t = B.call(BL.XOR, a, b)
-    return _cat(Tuple(BIT, BIT), B.call(BL.XOR, B.call(BL.AND, a, b), B.call(BL.AND, t, c)), B.call(BL.XOR, t, c))
+    t = B.call(BL.XOR, ops(a, b))
+    return _cat(Tuple(BIT, BIT), B.call(BL.XOR, ops(B.call(BL.AND, ops(a, b)), B.call(BL.AND, ops(t, c)))), B.call(BL.XOR, ops(t, c)))
 
 
 #: (carry, a, b) -> (carry', sum bit): the step of a ripple-carry scan
 FULL_ADDER = CompositeDefinition("BitsTestFullAdder", 1, (), lambda S: ((("c", BIT), ("a", BIT), ("b", BIT)), Tuple(BIT, BIT)),
                                  _full_adder, register=False)
 PARITY3 = CompositeDefinition("BitsTestParity3", 1, (), lambda S: ((("v", Array(3, BIT)),), BIT),
-                              lambda B, S, v: B.call(BL.XOR, B.call(BL.XOR, v[0], v[1]), v[2]), register=False)
+                              lambda B, S, v: B.call(BL.xor_gate(3), v), register=False)
 
 
 def _adder(B, S, x, y):
@@ -49,12 +53,16 @@ def _random(seed: int) -> CompositeDefinition:
         rng = random.Random(seed)
         pool = [x[i] for i in range(W)] + [y[i] for i in range(W)] + [B.call(BL.constant(rng.randrange(2)))]
         for _ in range(60):
-            op = rng.choice(["and", "xor", "not", "fa", "par"])
+            op = rng.choice(["and", "xor", "not", "fa", "par", "and-n", "xor-n"])
             a, b, c = (rng.choice(pool) for _ in range(3))
             if op == "and":
-                pool.append(B.call(BL.AND, a, b))
+                pool.append(B.call(BL.AND, ops(a, b)))
             elif op == "xor":
-                pool.append(B.call(BL.XOR, a, b))
+                pool.append(B.call(BL.XOR, ops(a, b)))
+            elif op in ("and-n", "xor-n"):
+                k = rng.randrange(3, 10)
+                gate = BL.and_gate(k) if op == "and-n" else BL.xor_gate(k)
+                pool.append(B.call(gate, ops(*(rng.choice(pool) for _ in range(k)))))
             elif op == "not":
                 pool.append(B.call(BL.NOT, a))
             elif op == "fa":
@@ -62,9 +70,10 @@ def _random(seed: int) -> CompositeDefinition:
                 pool += [r[0], r[1]]
             else:
                 pool.append(B.call(PARITY3, _cat(Array(3, BIT), a, b, c)))
-        xy = B.batch(BL.AND, x, y, axes=(0, 0))
+        xy = B.batch(BL.AND, _cat(Array(2, Array(W, BIT)), x, y), axes=(1,))
         nx = B.batch(BL.NOT, xy, axes=(0,))
-        sh = B.batch(BL.XOR, x, rng.choice(pool), axes=(0, None))
+        shared = rng.choice(pool)
+        sh = B.batch(BL.XOR, _cat(Array(W, Array(2, BIT)), *(c for i in range(W) for c in (x[i], shared))), axes=(0,))
         cols = B.batch(PARITY3, m, axes=(1,))
         fas = B.batch(FULL_ADDER, nx, sh, y, axes=(0, 0, 0))
         s = B.call(ADDER, sh, y)
