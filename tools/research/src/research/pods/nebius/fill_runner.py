@@ -35,7 +35,10 @@ Every POLL_S seconds the runner:
     FILL_DIR/windows (`2026-10-01T10:00Z 30 # who`, one per line: start in UTC, minutes); Commit guests first, then pous,
     then the rest of Verity's (only with 2+ GPUs free), and a Commit that finds no free GPU stops the newest proofs or pous
     GPU job outside a window; and CPU jobs up to CPU_SLOTS, pinned
-    to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits.
+    to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits;
+  - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
+    those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory cap lowered to mem_gb if
+    given; and logs each scoped CPU job's peak memory (mem_peak_gb) when it exits.
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 """
 from __future__ import annotations
@@ -80,6 +83,7 @@ VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
 # takes a slot back by requeueing the newest lent job (143, as a preempted job)
 VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
 COMMIT_PREFIX = "verity-commit-"
+CGROUP_ROOT = os.environ.get("FILL_CGROUP_ROOT", "/sys/fs/cgroup")
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -110,6 +114,29 @@ def header(p: Path) -> dict:
     cap = MAX_MIN_EXCEPTIONS.get(p.name, 360 if h["project"] == "verity" and not h["gpus"] else 30)
     h["max_min"] = min(int(h["max_min"]), cap)
     return h
+
+
+def cpu_sets() -> dict[str, dict]:
+    """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (verity-top, 1 Oct: compute accounting's verifies on 0-47)."""
+    out = {}
+    try:
+        lines = (FILL / "cpu-sets").read_text().splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        f = line.split("#")[0].split()
+        if len(f) >= 3 and re.fullmatch(r"[\d,-]+", f[1]) and f[2].isdigit() and (len(f) < 4 or f[3].isdigit()):
+            out[f[0]] = {"cpus": f[1], "slots": int(f[2]), "mem_gb": int(f[3]) if len(f) > 3 else None}
+    return out
+
+
+def mem_peak_gb(pid: int) -> float | None:
+    """The peak memory of the cgroup `pid` runs in (its scope), in GB."""
+    try:
+        cg = Path(f"/proc/{pid}/cgroup").read_text().strip().split("::", 1)[1]
+        return round(int((Path(CGROUP_ROOT) / cg.lstrip("/") / "memory.peak").read_text()) / 1e9, 2)
+    except (OSError, IndexError, ValueError):
+        return None
 
 
 def gpu_count() -> int:
@@ -198,14 +225,19 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     verity = h["project"] == "verity" and not h["gpus"]
     in_pool = verity or h.get("lent")
     unit_name = None
-    cmd = ["nice", "-n", "19", "taskset", "-c", VERITY_CPU_SET if in_pool else CPU_SET, "bash", str(run)]
+    own = h.get("cpuset") if not h["gpus"] else None
+    cpus = own or (VERITY_CPU_SET if in_pool else CPU_SET)
+    cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "bash", str(run)]
+    if own:
+        cmd = ["ionice", "-c3", *cmd]
     if CPU_MEMBIND and not h["gpus"] and not verity:
         cmd = ["numactl", f"--membind={CPU_MEMBIND}", *cmd]
     if h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
         cmd = [GPU_LEASE, "1", *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
     elif shutil.which("systemd-run"):
-        unit_name = f"fill-{'verity' if verity else 'lent'}-{int(time.time() * 1000)}" if in_pool else None
+        kind = "cpuset" if own else "verity" if verity else "lent"
+        unit_name = f"fill-{kind}-{int(time.time() * 1000)}" if in_pool or own else None
         unit = ["--unit", unit_name] if unit_name else []
         cmd = ["systemd-run", "--user", "--scope", "--quiet", "--collect", *unit, "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G",
                "-p", "MemorySwapMax=0", "--", *cmd]
@@ -297,6 +329,10 @@ def reap() -> None:
                 rc = "adopted-exit"
         else:
             rc = j["proc"].poll()
+        if rc is None and j.get("unit") and not j["h"]["gpus"]:
+            peak = mem_peak_gb(j["pid"])
+            if peak is not None:
+                j["mem_peak_gb"] = max(peak, j.get("mem_peak_gb") or 0.0)
         if rc is None:
             if j.get("stopping") and time.monotonic() - j["stop_at"] > 20:
                 try:
@@ -328,8 +364,9 @@ def reap() -> None:
             shutil.move(str(run), FILL / dest / name)
             if dest == "queue":
                 os.utime(FILL / dest / name)
+        peak = {"mem_peak_gb": j["mem_peak_gb"]} if j.get("mem_peak_gb") is not None else {}
         event(kind, name, rc=rc, minutes=mins, paused_min=paused_min, owner=j["h"]["owner"], gpus=j["h"]["gpus"],
-              why=j.get("why"))
+              why=j.get("why"), **peak)
         del running[name]
 
 
@@ -494,8 +531,18 @@ def tick(n: int) -> str:
             for k in victims[:max(0, waiting - freeing)]:
                 stop(k, "a Commit reclaims its GPU")
     if not timed:
-        pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity" and not j["h"].get("lent")]
-        left = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity"]
+        sets = cpu_sets()
+        own = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity" and x[1]["owner"] in sets]
+        rest = [x for x in queued if x not in own]
+        for owner, s in sets.items():
+            busy = sum(1 for j in running.values() if j["h"].get("cpuset") and j["h"]["owner"] == owner)
+            mine = sorted((x for x in own if x[1]["owner"] == owner), key=lambda x: (x[2], x[0].name))
+            for p, h, _ in mine[:max(0, s["slots"] - busy)]:
+                cap = int(h.get("mem_gb", CPU_MEM_GB))
+                start(p, {**h, "cpuset": s["cpus"], "mem_gb": min(cap, s["mem_gb"]) if s["mem_gb"] else cap})
+        pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity"
+                    and not j["h"].get("lent") and not j["h"].get("cpuset")]
+        left = [x for x in rest if not x[1]["gpus"] and x[1]["project"] != "verity"]
         counts = Counter(j["h"]["owner"] for j in pous_cpu)
         cpu_running = len(pous_cpu)
         while left and cpu_running < CPU_SLOTS:
@@ -504,7 +551,7 @@ def tick(n: int) -> str:
             start(best[0], best[1])
             counts[best[1]["owner"]] += 1
             cpu_running += 1
-        verity_pool(queued)
+        verity_pool(rest)
     lines = [f"{now()} free GPUs {free}/{n}, kept free {sorted(keep_free(n)) or '-'}, waiters {want or '-'}, timed {timed}, "
              f"window waiting {window}, "
              f"backfill {backfill}, queued {len(queued)} "
@@ -542,6 +589,8 @@ def main() -> None:
         h = header(p)
         if unit and unit.startswith("fill-lent-"):
             h["lent"] = True
+        if unit and unit.startswith("fill-cpuset-"):
+            h["cpuset"] = cpu_sets().get(h["owner"], {}).get("cpus") or "adopted"
         if h["gpus"] and not unit:
             unit = f"gpu-lease-{pgid}"
         running[p.name] = {"pid": pgid, "proc": None, "h": h, "t0": time.monotonic(), "started": now(),

@@ -1276,6 +1276,70 @@ def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_b
     assert fr.numa0_gb() == {"numa0_reclaimable_gb": 8.0, "numa0_anon_gb": 1.0}
 
 
+def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared_slots(tmp_path, monkeypatch):
+    """verity-top (1 Oct 12:00 AM PDT): compute accounting's verifies run on 0-47, 4 at a time, at ionice idle, capped from a
+    measured peak, without taking CPU_SET's slots; everyone else's CPU jobs stay on CPU_SET."""
+    fill = tmp_path / "fill"
+    for d in ("queue", "running", "logs", "done", "failed"):
+        (fill / d).mkdir(parents=True)
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("GPU_LEASE_DIR", str(tmp_path / "leases"))
+    monkeypatch.setenv("FILL_CPU_SLOTS", "1")
+
+    def load():
+        spec = importlib.util.spec_from_file_location("fill_runner_cpusets", FILL_RUNNER)
+        fr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fr)
+        return fr
+
+    fr = load()
+    monkeypatch.setattr(fr, "disk_pct", lambda path: 0.0)
+    started = []
+
+    def fake_start(p, h, backfill=False):
+        started.append((p.name, h.get("cpuset"), h.get("mem_gb")))
+        p.unlink()
+        fr.running[p.name] = {"h": h, "t0": 0.0, "pid": 0, "proc": type("P", (), {"poll": lambda self: None})(),
+                              "started": "t", "paused": False, "unit": None}
+
+    def queue_jobs():
+        fr.running.clear()
+        started.clear()
+        for k in range(6):
+            (fill / "queue" / f"ver-{k}.sh").write_text("# fill: owner=bc-e gpus=0 cpus=4 mem_gb=48\n")
+        (fill / "queue" / "census.sh").write_text("# fill: owner=bc-d gpus=0 cpus=6\n")
+
+    monkeypatch.setattr(fr, "start", fake_start)
+    queue_jobs()
+    fr.tick(0)
+    assert started and all(c is None for _, c, _ in started)       # no cpu-sets: the shared slot and the Verity pool's lent ones
+    queue_jobs()
+    (fill / "cpu-sets").write_text("# owner cpus slots [mem_gb]\nbc-e 0-47 4 20  # verity-top 12:00 AM PDT\nbad line\n")
+    fr.tick(0)
+    assert sorted(started) == [("census.sh", None, None), *((f"ver-{k}.sh", "0-47", 20) for k in range(4))]
+    started.clear()
+    fr.tick(0)
+    assert started == []                    # 4 of theirs run; the census holds the shared slot; theirs are never lent
+
+    fr = load()
+    cmds = []
+    monkeypatch.setattr(fr.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: cmds.append(cmd) or type("P", (), {"pid": 1})())
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: None)
+    p = fill / "queue" / "ver-9.sh"
+    p.write_text("# fill: owner=bc-e gpus=0 cpus=4 mem_gb=48\n")
+    fr.start(p, {**fr.header(p), "cpuset": "0-47", "mem_gb": 20})
+    cmd = cmds[-1]
+    assert "MemoryMax=20G" in cmd and cmd[cmd.index("--unit") + 1].startswith("fill-cpuset-")
+    assert cmd[cmd.index("--") + 1:][:8] == ["ionice", "-c3", "nice", "-n", "19", "taskset", "-c", "0-47"]
+
+    cg = Path(f"/proc/{os.getpid()}/cgroup").read_text().strip().split("::", 1)[1]
+    (tmp_path / "cg" / cg.lstrip("/")).mkdir(parents=True)
+    (tmp_path / "cg" / cg.lstrip("/") / "memory.peak").write_text(f"{12_340_000_000}\n")
+    monkeypatch.setattr(fr, "CGROUP_ROOT", str(tmp_path / "cg"))
+    assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
+
+
 @pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")
 def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
     src, status = tmp_path / "pouw", tmp_path / "status.txt"
