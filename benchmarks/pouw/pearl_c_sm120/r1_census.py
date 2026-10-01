@@ -221,12 +221,12 @@ def region(e: np.ndarray) -> dict:
             "lemma": bool(lc >= LEMMA[1] or lr >= LEMMA[0])}
 
 
-def census(flags: np.ndarray, rows: int, cols: int) -> dict:
+def census(flags: np.ndarray, rows: int, cols: int, k_atoms: int) -> dict:
     n = len(flags)
     lead = np.where(flags.all(axis=0), n, (~flags).argmax(axis=0))
     out = {"atoms": n, "step_exact": float(flags.mean()),
            "step_exact_by_atom": [round(float(x), 6) for x in flags.mean(axis=1)[:64]],
-           "prefix": {"mean": float(lead.mean()), "credit_share": float(lead.mean() / n),
+           "prefix": {"mean": float(lead.mean()), "credit_share": float(lead.mean() / k_atoms),
                       "quantiles": {q: int(np.quantile(lead, q)) for q in (0.5, 0.9, 0.99)},
                       "share_at_least": {t: float((lead >= t).mean()) for t in PREFIXES}},
            "prefix_windows": {}, "windows": {}}
@@ -280,7 +280,7 @@ def job(layer: int, cls: str, args, key: str, out: Path) -> str:
         g = rng(key, "hot", layer, cls, start)
         flags, _, exact = chain(ac[:, :span], bc[:, :span], start_words(start, av, bv, g))
         assert np.allclose(exact / UNIT, y_true, rtol=0, atol=1e-6 * np.abs(y_true).max())
-        res["starts"][start] = {**census(flags, rows, cols),
+        res["starts"][start] = {**census(flags, rows, cols, k // 32),
                                 **error(ac[:args.err_rows], bc[:args.err_cols], start, rng(key, "err", layer, cls, start)),
                                 "seconds": round(time.monotonic() - t1, 1)}
         path.write_text(json.dumps(res, indent=1))
