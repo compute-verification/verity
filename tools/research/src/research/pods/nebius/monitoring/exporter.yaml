@@ -1,0 +1,18 @@
+# How SkyPilot's Prometheus finds vy_exporter.py, a host service on vy-nebius-1: a Service with no selector and a hand-made Endpoints
+# naming the node's private address (host_up.sh fills in NODE_IP). The Prometheus job kubernetes-service-endpoints scrapes every
+# Service annotated prometheus.io/scrape. The port is reachable only inside the VPC: the security group admits TCP 22 alone.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vy-exporter
+  namespace: monitoring
+  annotations: {prometheus.io/scrape: "true", prometheus.io/port: "9402", prometheus.io/path: /metrics}
+spec:
+  ports: [{name: metrics, port: 9402, targetPort: 9402}]
+---
+apiVersion: v1
+kind: Endpoints
+metadata: {name: vy-exporter, namespace: monitoring}
+subsets:
+  - addresses: [{ip: NODE_IP}]
+    ports: [{name: metrics, port: 9402}]

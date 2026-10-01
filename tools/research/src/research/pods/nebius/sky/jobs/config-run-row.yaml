@@ -1,0 +1,92 @@
+# A full vLLM sweep row (Build, Match, Commit; 5-11 h, one GPU throughout) on the Nebius cluster: queue deployments-gpu. Transitional:
+# it holds its GPU through its CPU Build, which the vLLM coordinator's pipeline split (GPU-only Commits, CPU-only Builds and checks)
+# replaces; until then it requests the GPU queue's 4 vCPU and bursts onto idle cores.
+# Coverage cells (--config-run 1) use config-run.yaml instead: a CPU Build task and a short GPU Commit task. The night sweep submits the same
+# file with the priority label set to sweep-night (the runbook's one-line sed).
+#
+#   sky jobs launch -n row-<id> tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml \
+#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha> \
+#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Resources are the measured peak of the 1-7B dense class, B 8-64 (#23, #60, #67, #68): 240-512 GB of host RAM, the Build on 1-4
+# cores (16 vCPU per GPU is the fleet plan's floor), ~200 GB on /workspace. Other classes override on the command line:
+#   small dense, B <= 16 (#4, #101)     --memory 192                                 94-188 GB
+#   long context 4096/512 (#11, #39)    --memory 512                                 the Build alone peaks at ~486 GiB
+#   TP2 (#70, #75)                      --gpus RTXPRO6000:2 --cpus 32 --memory 384   >= 377 GB
+# A row can't be checkpointed yet (5-11 h): circuits never borrows (kueue.yaml), so a row runs on circuits' own quota, which no
+# reclaim takes back. No config run is admitted in the quiet hour, 12:30-13:30Z.
+# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
+#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+name: config-run-row
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 4
+  labels:
+    budget-line: nebius-config-run
+  memory: 512
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "16"     # SkyPilot's runner sets 1; match resources.cpus (--cpus overrides need --env OMP_NUM_THREADS too)
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  cd "$SRC"
+  cd integrations/vllm
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  cd "$SRC"
+  export PATH=$CUDA_HOME/bin:$PATH
+  # compiled kernels and JIT builds persist on the host, under config-run.yaml's gpu-task rules (eager rows; trees with #561)
+  case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
+  if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+    export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
+  fi
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- \
+    bash -c 'cd "$SRC/integrations/vllm" && /workspace/jobs/venv312/bin/python -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REVISION"'
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-gpu
+          kueue.x-k8s.io/priority-class: circuits-gpu      # holds a GPU: ahead of queued 0-GPU Builds
+          verity.dev/build: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
