@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The timed window's workload, run inside its `gpu-lease ... --timed` from the source tree: run.py and form.py (at
 # FORM_SHAPES, default SHAPES) with NCP_DEFINES as given, then run.py's chash and hash_ir arms again with BLAKE3's default
-# mix as the control (OUT/mix0).
+# mix as the control (OUT/mix0), then rates.py (the forming's price per element, OUT/rates).
 # Host threads are pinned off node 2's cores 0-47 on the leased GPU's NUMA node (GPUs 0-3: 48-91; 4-7: 96-123, short of
 # 124-191), recorded in OUT/pinning.json, and coreload.py samples every core's load into OUT/coreload.jsonl throughout.
 set -euo pipefail
@@ -25,3 +25,4 @@ trap 'kill -TERM "$sampler" 2>/dev/null || true' EXIT
 taskset -c "$cores" python3 "$HERE/run.py" "$OUT"
 SHAPES=${FORM_SHAPES:-${SHAPES:-p d}} taskset -c "$cores" python3 "$HERE/form.py" "$OUT"
 NCP_DEFINES= S_IR=1 S_C="1 4 8" taskset -c "$cores" python3 "$HERE/run.py" "$OUT/mix0"
+taskset -c "$cores" python3 "$HERE/rates.py" "$OUT"
