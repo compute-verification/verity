@@ -5,8 +5,9 @@
 
 Each case is a random Call graph (reads, declared widths, returned gates, parameters and the gates that read them, returned
 parameters, recomputed pairs) with a random cut, committed set (derived, or served with perturbations) and width limits
-(Q_word_v1's, none, or random). Writes DIR/<i>.json and DIR/result.json; exits 1 unless the codes and the too-wide units
-agree on every case.
+(Q_word_v1's, none, or random), checked by v1's rule and again by `Q_word` v2's (`recompute="report"`, DIR/<i>-v2.json), where
+the `recomputed_across` count must agree too. Writes DIR/<i>.json and DIR/result.json; exits 1 unless the codes and the too-wide
+units agree on every case.
 """
 import argparse, json, random, subprocess, sys
 from pathlib import Path
@@ -60,22 +61,26 @@ def main():
     files, want = [], {}
     for i in range(a.n):
         c = case(rng)
-        f = a.out / f"{i}.json"
-        f.write_text(json.dumps(c))
-        files.append(str(f))
-        v = check_cut(graph(c["graph"]), c["owner"], c["committed"], tuple(c["limits"]) if c["limits"] else None)
-        wide = v.detail.get("unit-too-wide", {}).get("gates", [])
-        want[str(f)] = (list(v.codes), [list(x) for x in wide])
+        for rule, name in (("refuse", f"{i}.json"), ("report", f"{i}-v2.json")):
+            f = a.out / name
+            f.write_text(json.dumps(c if rule == "refuse" else dict(c, recompute=rule)))
+            files.append(str(f))
+            v = check_cut(graph(c["graph"]), c["owner"], c["committed"], tuple(c["limits"]) if c["limits"] else None, rule)
+            wide = v.detail.get("unit-too-wide", {}).get("gates", [])
+            want[str(f)] = (list(v.codes), [list(x) for x in wide], v.detail.get("recomputed_across", {}).get("n"))
     p = subprocess.run([a.lean, "cut-check", *files], capture_output=True, text=True)
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("CUTCHECK "):
             j = json.loads(line[9:])
-            got[j["file"]] = (j.get("codes", ["error: " + j.get("error", "")]), j.get("wide", [])[:64])
+            got[j["file"]] = (j.get("codes", ["error: " + j.get("error", "")]), j.get("wide", [])[:64], j.get("recomputed_across"))
     bad = [f for f in files if got.get(f) != want[f]]
     seen = sorted({c for f in files for c in want[f][0]})
+    v2 = [f for f in files if f.endswith("-v2.json")]
     result = {"seed": a.seed, "cases": len(files), "agree": len(files) - len(bad), "disagree": bad[:20],
-              "valid": sum(1 for f in files if not want[f][0]), "codes_seen": seen}
+              "valid": sum(1 for f in files if not want[f][0]), "codes_seen": seen,
+              "v2": {"cases": len(v2), "reported": sum(1 for f in v2 if want[f][2]),
+                     "refused_by_v1_alone": sum(1 for f in v2 if not want[f][0] and want[f[:-8] + ".json"][0] == ["gate-recomputed"])}}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     print(json.dumps(result))
     return 1 if bad else 0

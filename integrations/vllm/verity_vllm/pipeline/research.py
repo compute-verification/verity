@@ -31,7 +31,7 @@ from verity_vllm.pipeline.row_driver import CLI, utc
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
-ACCOUNT = {"build": "build", "match": "match", "commit": "verdict", "replay": "verdict"}
+ACCOUNT = {"build": "build", "plan": "plan", "match": "match", "commit": "verdict", "replay": "verdict"}
 
 
 def abs_store_env(environ: dict[str, str]) -> dict[str, str]:

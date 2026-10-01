@@ -30,6 +30,9 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   `verify_run.py` after the window: the first two must be accepted and the control rejected (the panel's rule of 11:50Z).
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
 
+``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
+(`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
+
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
 the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pearl-C v1 and v2.
@@ -37,6 +40,7 @@ the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pe
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import multiprocessing as mp
 import os
@@ -56,7 +60,12 @@ sys.path.insert(0, str(HERE.parent))
 SCHEME = "pearl-c-sm120-v1-h1"
 MODES = ("bf16", "fp8", "pearlc-nohash", "pearlc")
 PEARLC = ("pearlc-nohash", "pearlc")
-GROUP = {"fp8": "base", "bf16": "arm", "pearlc-nohash": "arm", "pearlc": "arm"}
+GROUP = {"fp8": "base", "fp8-graphs": "base-graphs", "bf16": "arm", "pearlc-nohash": "arm", "pearlc": "arm"}
+#: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline, the
+#: 19:58Z ruling), in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
+GRAPHED = ("fp8-graphs",)
+#: the graphed engine's CUDA-graph batch sizes: the decode batch and below
+CAPTURE_SIZES = [1, 2, 4, 8, 16, 24, 32]
 #: one rep of every mode, the baseline between each other mode's
 CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 #: the fallback's engine lifetimes: base, arm, base, arm, each timing its share of the reps
@@ -66,6 +75,9 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+#: the verify's no-write controls, each a retained pass the verifier must reject: every commitment write omitted, and (under
+#: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
+CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h1", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h1"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
@@ -78,30 +90,37 @@ SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-l
 
 def engine(args, group: str):
     from vllm import LLM
-    kw = {"model": args.model, "enforce_eager": True, "gpu_memory_utilization": args.mem_base if group == "base" else args.mem_arm,
+    kw = {"model": args.model, "enforce_eager": True,
+          "gpu_memory_utilization": args.mem_base if group in ("base", "base-graphs") else args.mem_arm,
           "max_num_seqs": BATCH, "max_model_len": PREFILL + 64,
           "max_num_batched_tokens": getattr(args, "batch_tokens", None) or PREFILL, "enable_prefix_caching": False,
           "seed": 0}
     if args.revision:
         kw["revision"] = args.revision
-    if group == "base":
+    if group in ("base", "base-graphs"):
         kw["quantization"] = "fp8"
+    if group == "base-graphs":
+        kw["enforce_eager"] = False
+        return LLM(**kw, compilation_config={"cudagraph_capture_sizes": CAPTURE_SIZES})
     try:
         return LLM(**kw, compilation_config={"mode": 0})
     except TypeError:
         return LLM(**kw)
 
 
-def install(model, args, beacon: bytes, state: dict):
-    """Every LinearBase layer's apply, found by type, through a `PearlCDeviceRun` over the layers' own weights while
-    ``state["active"]``, else stock."""
+def install(model, args, beacon: bytes):
+    """Every LinearBase layer's apply, found by type (`verity_vllm.linear.vllm_site`), through one `Stack` whose executor is a
+    `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  Returns the run, the weights by id and
+    the stack; the stack starts inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity_pouw.audit import Epoch, Workload
     from verity_pouw.protocol import Matmul, Shape
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.linear import vllm_site
+    from verity_vllm.linear.api import Stack
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
-    from vllm.model_executor.layers.linear import LinearBase
 
-    layers = [m for m in model.modules() if isinstance(m, LinearBase)]
-    weights = {w: layer.weight.data for w, layer in enumerate(layers)}
+    sites = vllm_site.discover(model)
+    weights = {site.weight_id: layer.weight.data for site, layer in sites}
     scheme = getattr(args, "scheme", None) or SCHEME
     bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
     if bad:
@@ -110,19 +129,25 @@ def install(model, args, beacon: bytes, state: dict):
     roots = PPD.weight_roots(kernel, weights, scheme)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.unverified(declared, roots, beacon).salt
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
+                              schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
+                              rows_form=getattr(args, "rows_form", "w"))
+    stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
+    bad = stack.refusals()
+    if bad:
+        raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
+    vllm_site.attach(stack, sites, Hooks(tag=f"pouw:{scheme}"))
+    return run, weights, stack
 
-    def make(original):
-        def apply(layer, x, bias=None):
-            w = getattr(layer, "_pouw_w", None)
-            return run.gemm(w, x, layer.weight, bias) if state["active"] and w is not None else original(layer, x, bias)
-        return apply
 
-    for w, layer in enumerate(layers):
-        layer._pouw_w = w
-    for qm in {id(layer.quant_method): layer.quant_method for layer in layers}.values():
-        qm.apply = make(type(qm).apply.__get__(qm))
-    return run, weights
+def arm_of(mode: str, run, args):
+    """The arm engine's arm for `mode`: ``bf16`` is vLLM's own apply with the stack attached (so the wrapper's cost is inside
+    the baseline), ``pearlc-nohash`` and ``pearlc`` the run without and with hashing, under the run's schedule."""
+    from verity_vllm.linear.api import Arm, PassSpec
+    if mode not in PEARLC:
+        return Arm(mode, "bf16")
+    return Arm(mode, "bf16", run.entry, spec=PassSpec(hashing=mode == "pearlc", schedule=getattr(args, "schedule", "serial"),
+                                                      run_id=os.environ.get("RESEARCH_RUN_ID")))
 
 
 def gate(run, weights: dict) -> list[dict]:
@@ -154,8 +179,76 @@ def gate(run, weights: dict) -> list[dict]:
                         "commitment_repeats": same, "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
     if run.hashing:
         out.append(screen_check(run, weights))
+    if run.hashing and run.schedule.side:
+        out.append(schedule_check(run, weights))
+    if run.hashing and getattr(run, "graphs", False):
+        out += graphs_check(run, weights)
     run.details["passes"].clear()
     run.gemm_ms()
+    return out
+
+
+def schedule_check(run, weights: dict) -> dict:
+    """The run's schedule on the card: the same calls (m = 32 on the unfused 64 x 64 path, m = 128 on the fused one), each
+    from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must commit the same A roots and
+    tile roots.  The run's schedule is its own again after."""
+    import torch
+    w, W = next(iter(weights.items()))
+    gen = torch.Generator(device=W.device).manual_seed(20260932)
+    xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
+    commits, mine = {}, run.schedule.name
+    for name in ("serial", mine):
+        run.begin(schedule=name)
+        run.poison()
+        for x in xs:
+            run.gemm(w, x, W, None)
+        commits[name] = {k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots", "tiles")}
+    run.begin(schedule=mine)
+    return {"check": "schedule", "schedule": mine, "priorities": run.details["schedule"], "serial": commits["serial"],
+            mine: commits[mine], "ok": commits["serial"] == commits[mine]}
+
+
+def graphs_check(run, weights: dict) -> list[dict]:
+    """With ``--graphs``, at every distinct (n, k): one m = 32 call made eagerly, then twice as a graph replay, each from a
+    fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
+    of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
+    import torch
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    out, seen = [], set()
+    gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
+    for w, W in weights.items():
+        if tuple(W.shape) in seen:
+            continue
+        seen.add(tuple(W.shape))
+        x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
+        got = []
+        for graphs in (False, True, True):
+            run.graphs = graphs
+            run.begin()
+            run.poison()
+            y = run.gemm(w, x, W, None).clone()
+            flags = run.flag_buf[:BATCH].clone()
+            c = run.end()
+            got.append((c["transcript_root"], c["activation_roots"], flags, y))
+        run.graphs = True
+        same = all(g[0] == got[0][0] and g[1] == got[0][1] and torch.equal(g[2], got[0][2]) and torch.equal(g[3], got[0][3])
+                   for g in got[1:])
+        out.append({"check": "graphs", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": BATCH, "eager_equals_replay": same,
+                    "ok": same})
+    w, W = next(iter(weights.items()))
+    x = torch.randn(PREFILL, W.shape[1], device=W.device, generator=gen)
+    x[::97] = 0
+    x[1::89, 1::8] = 1e4
+    x = x.to(torch.bfloat16)
+    run.begin()
+    run.gemm(w, x, W, None)
+    sh = run.shapes[(PREFILL, W.shape[0], W.shape[1])]
+    a, b = torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device), torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device)
+    PPD.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPD.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    run.end()
+    same = bool(torch.equal(a, b))
+    out.append({"check": "screen_bf16", "rows": PREFILL, "k": W.shape[1], "flagged": int(a.sum()), "flags_equal": same, "ok": same})
     return out
 
 
@@ -212,10 +305,10 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         from vllm_bench import PROMPTS, find_model
 
         llm = engine(args, group)
-        state, run = {"active": False}, None
+        run = stack = None
         ready: dict = {"group": group}
         if group == "arm":
-            run, weights = install(find_model(llm), args, beacon, state)
+            run, weights, stack = install(find_model(llm), args, beacon)
             ready["gate"] = gate(run, weights)
             run.hashing = False
             ready["gate"] += gate(run, weights)
@@ -227,15 +320,18 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         tok = llm.get_tokenizer()
         chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
 
-        def timed(prompts, sp, retain=None):
-            pearl = state["active"]
-            if pearl:
-                run.begin(retain, os.environ.get("RESEARCH_RUN_ID"))
-                run.gemm_ms()
-            torch.cuda.synchronize()
-            t0 = time.perf_counter()
-            outs = llm.generate(prompts, sp, use_tqdm=False)
-            commit = run.end() if pearl else {}
+        def timed(prompts, sp, retain=None, controls=()):
+            """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
+            import dataclasses
+            pearl = stack is not None and stack.executing
+            spec = dataclasses.replace(stack.active.spec, retain=retain, controls=tuple(controls)) if pearl else None
+            with stack.pass_(spec) if pearl else contextlib.nullcontext():
+                if pearl:
+                    run.gemm_ms()
+                torch.cuda.synchronize()
+                t0 = time.perf_counter()
+                outs = llm.generate(prompts, sp, use_tqdm=False)
+            commit = stack.passes[-1] if pearl else {}
             torch.cuda.synchronize()
             dt = time.perf_counter() - t0
             return dt, (run.gemm_ms()[0] / 1e3 if pearl else 0.0), commit, outs
@@ -249,9 +345,8 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
             if mode is not None:
                 if GROUP[mode] != group:
                     raise ValueError(f"mode {mode} is not the {group} engine's")
-                state["active"] = mode in PEARLC
-                if run:
-                    run.hashing = mode == "pearlc"
+                if stack is not None:
+                    stack.activate(arm_of(mode, run, args))
             if op == "chat":
                 *_, outs = timed(chat, SamplingParams(temperature=0.0, max_tokens=48))
                 conn.send({"tokens": [list(o.outputs[0].token_ids) for o in outs], "texts": [o.outputs[0].text for o in outs[:4]]})
@@ -266,17 +361,26 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
-                state["active"], run.hashing = True, True
+                from verity_vllm.linear.api import Control
+                stack.activate(arm_of("pearlc", run, args))
                 out = {}
                 for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
                     _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     want = cmd["want"][name]
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same}
-                run.omit = CONTROL_OMITS
-                _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / "control"))
-                run.omit = frozenset()
-                out["control"] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(CONTROL_OMITS)}
+                    if run.graphs:
+                        run.graphs = False
+                        try:
+                            _, _, eager, _ = timed([{"prompt_token_ids": x} for x in prompts], sp)
+                        finally:
+                            run.graphs = True
+                        out[name]["same_commitment_eager"] = all(eager.get(k) == want.get(k) for k in
+                                                                 ("transcript_root", "activation_roots", "units", "tiles"))
+                for label, omits in CONTROLS.items():
+                    _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / label),
+                                         controls=(Control("omit", omits),))
+                    out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
                 conn.send(out)
             else:
                 raise ValueError(f"unknown command {op!r}")
@@ -356,11 +460,13 @@ def prompts(reps: int) -> dict:
     return {"warm": ids(PREFILL), "prefill": [ids(PREFILL) for _ in range(reps)], "decode": [ids(PROMPT) for _ in range(BATCH)]}
 
 
-def schedule(reps: int, interleave: str) -> list[list[str]]:
+def schedule(reps: int, interleave: str, graphed: bool = False) -> list[list[str]]:
     """The timed modes in order, as one segment per engine lifetime: with both engines resident one segment, the reps
-    alternating by `CYCLE`; in ``blocks``, `BLOCKS` segments alternating base and arm, each with its share of the reps."""
+    alternating by `CYCLE` (with `graphed`, each ``fp8`` rep followed by an ``fp8-graphs`` one); in ``blocks``, `BLOCKS`
+    segments alternating base and arm, each with its share of the reps."""
     if interleave == "rep":
-        return [list(CYCLE) * reps]
+        cycle = [x for m in CYCLE for x in ((m, "fp8-graphs") if graphed and m == "fp8" else (m,))]
+        return [cycle * reps]
     share = [reps // 2 + reps % 2, reps // 2]
     arm = [m for m in CYCLE if GROUP[m] == "arm"]
     return [["fp8"] * share[i // 2] if i % 2 == 0 else arm * share[i // 2] for i in range(BLOCKS)]
@@ -369,7 +475,7 @@ def schedule(reps: int, interleave: str) -> list[list[str]]:
 def timing(records: list[dict]) -> dict:
     """Each mode's medians over its reps, and its reps, from the controller's records."""
     out = {}
-    for mode in MODES:
+    for mode in MODES + GRAPHED:
         pre = [r for r in records if r["mode"] == mode and r["phase"] == "prefill"]
         dec = [r for r in records if r["mode"] == mode and r["phase"] == "decode"]
         if not pre or not dec:
@@ -406,6 +512,9 @@ def split(results: dict) -> dict:
         full, nohash, gemm = t["pearlc"][f"{key}_s"], t["pearlc-nohash"][f"{key}_s"], t["pearlc-nohash"][f"{key}_gemm_s"]
         row = {"bf16_s": t["bf16"][f"{key}_s"], "fp8_s": t["fp8"][f"{key}_s"], "pearlc_s": full, "nohash_s": nohash, "gemm_s": gemm,
                "hashing_s": full - nohash, "else_s": nohash - gemm}
+        if "fp8-graphs" in t:
+            row["fp8_graphs_s"] = t["fp8-graphs"][f"{key}_s"]
+            row["slowdown_vs_fp8_graphs"] = full / row["fp8_graphs_s"]
         for base in ("fp8", "bf16"):
             b = row[f"{base}_s"]
             row.update({f"slowdown_vs_{base}": full / b, f"gemm_x_{base}": gemm / b, f"hashing_x_{base}": (full - nohash) / b,
@@ -428,7 +537,9 @@ def smoke(args) -> None:
     samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16."""
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
+                 "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
+                 "run": os.environ.get("RESEARCH_RUN_ID"),
                  "steps": [], "resident": False}
 
     def step(name, f):
@@ -510,7 +621,7 @@ def perplexity(args) -> int:
             return 99
         ran = True
         a = copy.copy(args)
-        a.scheme, a.batch_tokens = scheme, PPL_BATCH
+        a.scheme, a.batch_tokens, a.rows_form = scheme, PPL_BATCH, "w"
         w = Worker(ctx, a, group, beacon)
         try:
             res = {"gate": w.ready.get("gate"), "committer": w.ready.get("committer"), "modes": {}}
@@ -542,6 +653,8 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
+    from verity_pouw.serving import SCHEDULES
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
@@ -553,12 +666,22 @@ def main() -> None:
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
     ap.add_argument("--retain", help="the verify passes' directory")
+    ap.add_argument("--scheme", default=SCHEME, choices=sorted(PPD.SCHEMES), help="the Pearl-C scheme, and so its hashing format")
+    ap.add_argument("--schedule", choices=sorted(SCHEDULES), default="serial",
+                    help="deferred: each call's tile hashing on a side lane at the least priority and the rest at the greatest, "
+                         "as measured (the decode plan's step 2); deferred-caller: the rest on vLLM's stream at its own")
+    ap.add_argument("--fp8-graphs", action="store_true",
+                    help="also time stock FP8 as vLLM serves it (compiled, CUDA graphs), a third engine, beside the eager one")
+    ap.add_argument("--graphs", action="store_true", help="decode's calls (m <= GRAPH_ROWS) replay their steps as one CUDA graph each")
+    ap.add_argument("--rows-form", choices=("w", "s"), default="w",
+                    help="A's rows form: s takes forming's statistics from -h2's row-leaf pass over A (-h2 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
-    ap.add_argument("--scheme", default=SCHEME, help="the arm's Pearl-C scheme (pouw_pearl_c_device.SCHEMES)")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
+    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing != "h2":
+        ap.error(f"--rows-form s is -h2's, and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return
@@ -566,7 +689,9 @@ def main() -> None:
         sys.exit(perplexity(args))
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
+                 "rows_form": args.rows_form,
+                 "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}
 
@@ -598,6 +723,10 @@ def run_workers(ctx, args, beacon: bytes, p: dict, records: list[dict], out: dic
     base = Worker(ctx, args, "base", beacon)
     tokens_fp8 = base.ask(op="chat", mode="fp8")
     out["tokens_fp8"] = tokens_fp8
+    graphed = None
+    if getattr(args, "fp8_graphs", False):
+        graphed = Worker(ctx, args, "base-graphs", beacon)
+        out["tokens_fp8_graphs"] = graphed.ask(op="chat", mode="fp8-graphs")
     arm = None
     if args.interleave == "rep":
         try:
@@ -606,10 +735,13 @@ def run_workers(ctx, args, beacon: bytes, p: dict, records: list[dict], out: dic
             out["interleave"], out["resident_failure"] = "blocks", str(ex).splitlines()[0]
     if out["interleave"] == "rep":
         arm_steps(arm, last=False)
-        measure({"base": base, "arm": arm}, schedule(args.reps, "rep")[0], p, records, warm)
+        measure({"base": base, "base-graphs": graphed, "arm": arm}, schedule(args.reps, "rep", graphed is not None)[0], p,
+                records, warm)
         arm_steps(arm, last=True)
         arm.close()
         base.close()
+        if graphed is not None:
+            graphed.close()
     else:
         segments = schedule(args.reps, "blocks")
         for i, segment in enumerate(segments):
@@ -626,6 +758,8 @@ def run_workers(ctx, args, beacon: bytes, p: dict, records: list[dict], out: dic
 
 def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, verify: dict) -> None:
     tokens["fp8"] = out.pop("tokens_fp8", {})
+    if "tokens_fp8_graphs" in out:
+        tokens["fp8-graphs"] = out.pop("tokens_fp8_graphs")
     results = timing(records)
     for mode, r in results.items():
         r.update(tokens.get(mode, {}))
@@ -633,14 +767,16 @@ def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, veri
                "token_agreement_vs_bf16": {m: agree(r["tokens"], results["bf16"]["tokens"]) for m, r in results.items()
                                            if "tokens" in r and "tokens" in results.get("bf16", {})},
                "gates": {"arm": all(g["ok"] for g in ready.get("arm", {}).get("gate", [{"ok": False}]))},
-               "verify_pass": {k: {"manifest": v["manifest"], "same_commitment_as_timed": v.get("same_commitment_as_timed")}
+               "verify_pass": {k: {"manifest": v["manifest"], "same_commitment_as_timed": v.get("same_commitment_as_timed"),
+                                   "same_commitment_eager": v.get("same_commitment_eager")}
                                for k, v in verify.items()}}
     out.update(summary=summary, arm=ready.get("arm"), results=results)
     args.out.write_text(json.dumps(out, indent=1))
     print(json.dumps(summary), flush=True)
     import run_result
     ok = (not out.get("error") and all(m in results for m in MODES) and summary["gates"]["arm"]
-          and all(v["same_commitment_as_timed"] for k, v in summary["verify_pass"].items() if k != "control"))
+          and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False
+                  for k, v in summary["verify_pass"].items() if not k.startswith("control")))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r["timing"].items()]
     run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass repeats "
                      "its timed commitment", json.dumps(summary), ms)

@@ -1,4 +1,5 @@
-"""A host build of `hash.cuh`, `hash_sm120.cuh` and `h1_standin.cu` that runs its kernels thread for thread, for byte tests of the -h1 kernels without a GPU.
+"""A host build of `hash.cuh`, `hash_sm120.cuh`, `hash_h2.cuh`, `h1_standin.cu` and `pearl_c_sm120/h2_rows_stats.cuh` (with
+pearl_c_sm120.cu's S5_LINE and S5_FLOOR) that runs its kernels thread for thread, for byte tests without a GPU.
 
 Every CUDA thread of a block is a host thread; `__syncthreads` and `__syncwarp` are one barrier over the block (stronger than
 a warp's, which the kernels here allow: every thread of a block reaches the same syncs), which a thread leaves when it
@@ -19,9 +20,11 @@ HERE = Path(__file__).parent
 KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
            "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm",
-           "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s")
+           "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s", "hash_rows_b3s_stats")
+SM120 = HERE.parent / "pearl_c_sm120"
 
 PRELUDE = r"""
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
@@ -37,6 +40,19 @@ PRELUDE = r"""
 #define __launch_bounds__(...)
 #define __forceinline__ inline
 struct uint4 { uint32_t x, y, z, w; };
+struct float4 { float x, y, z, w; };
+struct float2 { float x, y; };
+static inline float2 make_float2(float a, float b) { return {a, b}; }
+static inline float __uint_as_float(uint32_t u) { float f; std::memcpy(&f, &u, 4); return f; }
+static inline uint32_t __float_as_uint(float f) { uint32_t u; std::memcpy(&u, &f, 4); return u; }
+// the IEEE single operations, correctly rounded to nearest on the host as on the device (no FMA contraction on x86-64's base
+// ISA), and fmaf the fused one
+static inline float __fmaf_rn(float a, float b, float c) { return std::fmaf(a, b, c); }
+static inline float __fadd_rn(float a, float b) { return a + b; }
+static inline float __fmul_rn(float a, float b) { return a * b; }
+static inline float __fdiv_rn(float a, float b) { return a / b; }
+static inline float __fsqrt_rn(float a) { return std::sqrt(a); }
+static inline float __frcp_rn(float a) { return 1.0f / a; }
 static inline uint4 make_uint4(uint32_t a, uint32_t b, uint32_t c, uint32_t d) { return {a, b, c, d}; }
 static inline uint32_t __funnelshift_r(uint32_t lo, uint32_t hi, int n) { n &= 31; return n ? (lo >> n) | (hi << (32 - n)) : lo; }
 static inline uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, int n) { n &= 31; return n ? (hi << n) | (lo >> (32 - n)) : hi; }
@@ -76,6 +92,7 @@ static inline uint32_t __shfl_sync(unsigned, uint32_t v, int src) {
   return r;
 }
 static inline uint32_t __shfl_xor_sync(unsigned m, uint32_t v, int o) { return __shfl_sync(m, v, (int)(threadIdx.x & 31) ^ o); }
+static inline float __shfl_xor_sync(unsigned m, float v, int o) { return __uint_as_float(__shfl_xor_sync(m, __float_as_uint(v), o)); }
 static inline long long clock64() { return 0; }
 static inline void __threadfence() {}
 static inline void __threadfence_block() {}
@@ -85,8 +102,9 @@ static std::vector<uint32_t> twin_dyn;
 
 
 def _source() -> str:
+    s5 = "".join(re.findall(r"^constexpr \w+ S5_(?:LINE|FLOOR) = .*\n", (SM120 / "pearl_c_sm120.cu").read_text(), re.M))
     body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text() + (HERE / "hash_h2.cuh").read_text()
-            + (HERE / "h1_standin.cu").read_text()).replace(
+            + (HERE / "h1_standin.cu").read_text() + s5 + (SM120 / "h2_rows_stats.cuh").read_text()).replace(
         "extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'

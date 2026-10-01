@@ -4,9 +4,10 @@ check over the ranks' components, the record per rank), docs/vllm-config-sweep-p
 A config run (`--config-run 1`) is the Build, the strict word check of its manifest (`word_check`), ONE instrumented Commit (`--pairs 1
 --only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay stratified by family, and
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
-decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match there is no account
-for the executed-prefix class (`check.executed_prefix`) to link to: when every request ran to its cap the class has nothing to classify and the
-replay's population is the whole manifest; a request stopped before its cap fails the Commit by name, as a missing input.  Every derive of
+decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match the account the
+executed-prefix class (`check.executed_prefix`) links to is the Commit's own token record (`check.commit_tokens`, `commit/tokens_p<pair>.json`):
+when every request ran to its cap the class has nothing to classify and the replay's population is the whole manifest; a request stopped
+before its cap is accepted only when every token it served opens from the run root to the committed sampled id.  Every derive of
 a Build goes through the host's Program cache when one is named (`derive_cached`, `pipeline.program_cache`).
 """
 from __future__ import annotations
@@ -71,7 +72,8 @@ def commit_verdict(row: Any, rck: int, wall: int) -> bool:
 
 
 def discard_bundles(row: Any) -> list[str]:
-    """Deletes the row's replay bundles (sealed or partial) once nothing will replay them: a Commit that did not end PENDING, a decided replay."""
+    """Deletes the row's replay bundles (sealed or partial) once nothing will replay them: a Commit that did not end PENDING, a decided replay
+    that left its slim keep (`cpu_replay.keep`)."""
     gone = sorted(glob.glob(f"{row.d}/commit/replay_bundle_p*"))
     for b in gone:
         if os.path.islink(b):
@@ -103,8 +105,11 @@ def replay(row: Any) -> None:
     ok = "PASS" if rc == 0 else "FAIL"
     row.verdict("replay", ok, f"rc={rc} wall={wall}s C2 replay on CPU from {bundle or 'no bundle'}" + (f": {why}" if why else ""))
     row.tl("stage.replay", "end", ("ok", ok), ("wall_s", wall))
-    if rc in (0, 3):
+    kept = f"{row.d}/commit/replay_slim_p{bundles[0]['pair']}/slim.json" if bundle else ""
+    if rc in (0, 3) and os.path.isfile(kept):
         discard_bundles(row)
+    elif rc in (0, 3):
+        row.log(f"decided replay left no slim keep ({kept or 'no bundle'}): the replay bundle is kept")
     if ok != "PASS":
         row.log("REPLAY FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "replay"))
