@@ -1,8 +1,9 @@
 """`verity-vllm manifest` -- the required-value manifest under the query of record (`Q_word_v1`), beside v1's `required_manifest`.
 
     build         --program <derive dir> [--workload wl.json] [--request-id r0] [--jobs N] --out manifest.json
-    build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD] [--jobs N] --out manifest.json
+    build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD | -] [--jobs N] --out manifest.json
                   TP row: --programs-root <rank r dir> --rank r [--workload-digest WD_r], once per rank, --ranks W
+                  `-`: WD is read from stdin once the components are built, so they build while the workload Program composes
     compare       --v1 manifest.json --v2 manifest.json [--out report.json]
 
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
@@ -235,7 +236,10 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
         return _build_in_turn(tasks, after)
+    t0 = time.time()
     with _pool_lock():
+        if log and time.time() - t0 >= 1:
+            log(f"  components: waited {time.time() - t0:.1f}s for the machine's component pool lock")
         head = _headroom()
         if head is None:
             return _build_in_turn(tasks, after)
@@ -344,6 +348,14 @@ def _declared(fixture: dict[str, Any]) -> list[dict[str, Any]]:
             for r in sorted(declared, key=lambda r: (int(r.get("arrive_step", 0)), r["index"]))]
 
 
+def stdin_digest() -> str:
+    """`--workload-digest -`: the next line of stdin.  An empty line or none (the workload Program was not composed) fails the manifest."""
+    wd = sys.stdin.readline().strip()
+    if not wd:
+        raise SystemExit("build-global --workload-digest -: no workload digest on stdin (the workload Program was not composed)")
+    return wd
+
+
 def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, wds: list[str | None], *, guarded_max: bool, jobs: int,
             log, **kw: Any) -> list[dict[str, Any]]:
     """The global manifest of each rank's Program set (`roots[i]` is rank `ranks[i]`'s): every component built by `build_components`,
@@ -366,7 +378,7 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
             raise ValueError(f"request {rid}: Program has {len(man['steps'])} steps, the declaration caps {reqs[r]['max_tokens']} tokens: wrong component")
         parts[rid] = man
         if r == len(reqs) - 1:
-            g = compose_global(fixture, parts, reqs, workload_digest=wds[k], rank=ranks[k], ranks=world)
+            g = compose_global(fixture, parts, reqs, workload_digest=stdin_digest() if wds[k] == "-" else wds[k], rank=ranks[k], ranks=world)
             if guarded_max:
                 g = GM.with_ms(dict(g, query=GM.merged(g["query"], [p["query"] for p in parts.values()])))
             out.append(g)
@@ -474,6 +486,8 @@ WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
                     "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
                     "scale; the Commit then needs the guarded-max tap build")
+UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "
+                        "a rule read there is the one the check computes")
 JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components, within "
              "the memory headroom); the manifest is the same under any.  0 (the default): the CPUs this process may use; 1: one process")
 
@@ -489,6 +503,7 @@ class BuildOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str = option("--word-check", env="VERITY_WORD_CHECK", default="16/32", help=WORD_CHECK_HELP)
     word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None, help=WORD_MAX_GATES_HELP)
+    unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
@@ -506,7 +521,8 @@ class BuildGlobalOptions:
     programs_root: list[str] = option("--programs-root", action="append",
                                       help="TP row: repeat per rank, with --rank r at the same position")
     workload_digest: list[str] | None = option("--workload-digest", action="append", default=None,
-                                               help="TP row: repeat per rank")
+                                               help="TP row: repeat per rank; `-`: read from stdin, one line per such rank in --programs-root "
+                                                    "order, once that rank's components are built")
     profile: str | None = option("--profile", default=None)
     rank: list[int] | None = option("--rank", type=int, action="append", default=None,
                                     help="the TP rank of the --programs-root at the same position (default 0)")
@@ -514,6 +530,7 @@ class BuildGlobalOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str = option("--word-check", env="VERITY_WORD_CHECK", default="16/32", help=WORD_CHECK_HELP)
     word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None, help=WORD_MAX_GATES_HELP)
+    unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
@@ -573,6 +590,7 @@ def main(a: Any) -> int:
     if a.cmd in ("build", "build-global"):
         from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
         _gc_tune()
+        word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,

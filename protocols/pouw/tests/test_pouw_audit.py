@@ -25,7 +25,7 @@ def setup(shapes, seed=1, kernel=reference_kernel):
     weights = {w: int7(rng, n, k) for w, (n, k) in work.weights().items()}
     acts = {u.index: int7(rng, u.shape.m, u.shape.k) for u in work.matmuls}
     prover = Prover(s, weights, kernel)
-    return s, work, weights, acts, prover, Epoch.start(work, prover.weight_roots, BEACON)
+    return s, work, weights, acts, prover, Epoch.unverified(work, prover.weight_roots, BEACON)
 
 
 def signed(rows):

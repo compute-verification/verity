@@ -8,9 +8,8 @@ optional fields omitted (never blank), every value non-empty and free of ``/`` a
     weight    w=<param>[/s=<tp rank>][/c=<row>]
     boundary  p=<profile_id>/r=<request_id>/b=<field>[/t=<pos>]
 
-``c=<row>`` on a weight id (capture format v2, ``docs/vllm-poc/capture-format.md`` section 11,
-2026-09-07 W3c) names one row block of a 2-D parameter in its own ``[N, K]`` layout: the leaf
-holding rows ``row .. row + rows_per_leaf - 1``.  For a ``torch.nn.Linear`` weight that is the
+``c=<row>`` on a weight id (capture format v2, 2026-09-07 W3c) names one row block of a 2-D
+parameter in its own ``[N, K]`` layout: the leaf holding rows ``row .. row + rows_per_leaf - 1``.  For a ``torch.nn.Linear`` weight that is the
 GEMM's weight *column* ``W[:, j]`` in the ``x @ W.T`` sense.  Without ``c`` the id names the whole
 tensor (format v1 leaves, and the range opening of a v2 tensor).
 
@@ -20,7 +19,7 @@ tensor (format v1 leaves, and the range opening of a v2 tensor).
 - ``l``: a decimal layer index or one of ``embed``, ``norm``, ``lm_head``, ``sampler``.
 - ``op``: ``[A-Za-z0-9_.]+`` (``layers.3.self_attn.qkv_proj.gemm``, ``sampler.select``).
 - ``c``: a coordinate, decimal ints joined by ``,`` (``c=17`` or ``c=3,7``).
-- ``x`` (capture-format speculative extension, lane SD 2026-09-08, ``docs/vllm-poc/speculative.md`` §3): the
+- ``x`` (capture-format speculative extension, lane SD 2026-09-08): the
   request-local step in which a *speculative* value was computed.  Without ``x`` a value id names the
   committed value at position ``t`` (unique per request, position, op, port — the format's identity
   rule); with ``x=<step>`` it names a value computed at ``t`` during step ``<step>``'s speculation that

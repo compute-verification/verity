@@ -964,7 +964,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 
 
 # ---------------------------------------------------------------------------------------------------------
-# CF1 (docs/vllm-poc/composition.md §2): the same bodies with the accidental constants and the hard-coded
+# CF1: the same bodies with the accidental constants and the hard-coded
 # callees as explicit statics — one `Serve_v2`, two binding records (Ampere: SERVE_AMPERE below; Hopper:
 # `hopper.SERVE_HOPPER`)
 # ---------------------------------------------------------------------------------------------------------

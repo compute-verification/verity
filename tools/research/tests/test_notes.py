@@ -65,6 +65,7 @@ def test_a_wait_checkpoint_names_the_one_shot_timer_that_wakes_the_lane(text, de
     hint = notes.wake_hint(text, NOW)
     assert f"subscribe_timer once=true delaySeconds={delay})" in hint and "not a cron timer" in hint
     assert notes.wake_hint("done #101, next #4 check-back 21:45Z", NOW) is None and notes.wake_hint("WAIT r1, no time", NOW) is None
+    assert "for check-back 2:45 PM PDT (21:45Z);" in notes.wake_hint("WAIT r1 check-back 21:45Z", NOW)
 
 
 def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
@@ -269,7 +270,7 @@ def test_the_inbox_is_handoffs_changed_since_last_shown_by_mtime_not_by_the_name
     assert [x["path"].name for x in again] == ["20260923T1900Z-handoff-coordinator.md"]
     assert notes.render_inbox("lane-a", again).splitlines() == [
         "INBOX lane-a: 1 new -- act on each, or say in your next checkpoint why not",
-        '  20:59Z 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
+        '  1:59 PM PDT (20:59Z) 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
 
 
 def test_a_successor_gets_its_predecessors_unread_handoffs_and_they_are_not_mail(tmp_path):
@@ -310,6 +311,21 @@ def test_cli_checkpoint_prints_the_inbox_once_and_superseded_leaves_it_for_the_s
     assert notes.main(["checkpoint", "b", "superseded", "by", "b2", "--commit", "none", "--root", str(tmp_path)]) == 0
     assert "INBOX" not in capsys.readouterr().out
     assert [x["path"].name for x in notes.inbox(tmp_path, "b2")] == ["20260923T2055Z-handoff-coordinator.md"]
+
+
+def test_cli_inbox_urgent_exits_0_only_on_an_unread_urgent_handoff_and_marks_nothing_read(tmp_path, capsys):
+    _report(tmp_path, "w", "", 60)
+    d = tmp_path / "lanes" / "w"
+    _touch(d / "20260923T2050Z-handoff-from-c-routine.md", 10, "# routine\n")
+    args = ["inbox", "w", "--urgent", "--root", str(tmp_path)]
+    assert notes.main(args) == 1 and "INBOX w: nothing new" in capsys.readouterr().out
+    _touch(d / "20260923T2055Z-handoff-from-c-URGENT-stop-the-sweep.md", 5, "# stop the sweep\n")
+    assert notes.main(args) == 0
+    out = capsys.readouterr().out
+    assert "INBOX w: 1 new" in out and "URGENT-stop-the-sweep" in out and "routine" not in out
+    assert notes.main(args) == 0 and len(notes.inbox(tmp_path, "w")) == 2
+    assert notes.main(["inbox", "w", "--root", str(tmp_path)]) == 0
+    assert notes.main(args) == 1
 
 
 def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, repo):

@@ -1,7 +1,7 @@
 """`research notes`: lane checkpoints and the coordinator's liveness table.
 
   research notes checkpoint LANE STATE TEXT... [--commit SHA] [--keep-pod WHY] [--root DIR]   # STATE = open | blocked | final | superseded
-  research notes inbox LANE [--peek]
+  research notes inbox LANE [--peek] [--urgent]   # --urgent: exit 1 unless an unread handoff's file name says `urgent`
   research notes bind LANE [--branch B] [--worktree DIR] [--pod NAME] [--succeeds LANE] [--brief PATH] [--final HH:MMZ] [--budget TEXT]
   research notes relaunch LANE [--as SUCCESSOR] [--why TEXT] [--brief PATH] [--final HH:MMZ] [--budget TEXT]   # contract §C in one command
   research notes status [--root DIR] [--repo DIR] [--pods] [--stale-min 30] [--since-hours 24] [--all] [--lane GLOB] [--exclude GLOB] [--json]
@@ -16,6 +16,7 @@
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
   research notes index [--root DIR] [--catalog PATH] [--search TEXT | --evidence ID]   # notes_index.py: notes, full text, citations
   research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
+  research notes claim | approach | approaches ...            # approaches.py: the approach registry (check, then claim)
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -105,6 +106,7 @@ from . import remote
 from .pythonpath import tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
 from .runs import new_run_id
+from .timefmt import both
 from .pods.workproc import FIND_PRUNE, NOT_WORK_RE, WORK_RE
 
 STATES = ("open", "blocked", "final", "superseded")
@@ -217,12 +219,12 @@ def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
         except ValueError:
             continue
         delta = (at - now).total_seconds()
-        delays.append((delta + 86400 if delta < -12 * 3600 else delta, f"{int(m[1]):02d}:{m[2]}Z"))
+        delays.append((delta + 86400, at + dt.timedelta(days=1)) if delta < -12 * 3600 else (delta, at))
     if not delays:
         return None
     delta, at = min(delays)
     return (f"wake: before ending the turn, arm a one-shot timer (cursor-subscriptions subscribe_timer once=true "
-            f"delaySeconds={max(60, int(delta))}) for check-back {at} UTC" + (" (already past: in 1 min)" if delta < 60 else "")
+            f"delaySeconds={max(60, int(delta))}) for check-back {both(at)}" + (" (already past: in 1 min)" if delta < 60 else "")
             + "; not a cron timer")
 
 
@@ -380,7 +382,7 @@ def render_inbox(lane: str, items: list[dict], limit: int = 15) -> str:
     lines = [f"INBOX {lane}: {len(items)} new -- act on each, or say in your next checkpoint why not"]
     for x in items[-limit:]:
         where = "" if x["lane_dir"] == lane else f"{x['lane_dir']}/"
-        lines.append(f"  {_ts(x['mtime']):%H:%MZ} {where}{x['path'].name}  \"{x['title']}\"")
+        lines.append(f"  {both(x['mtime'])} {where}{x['path'].name}  \"{x['title']}\"")
     if len(items) > limit:
         lines.append(f"  ... and {len(items) - limit} older: research notes inbox {lane} --peek")
     return "\n".join(lines)
@@ -1805,7 +1807,10 @@ def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
         return f"REFUSED {lane}: no worktree bound and no repo (--repo, $RESEARCH_REPO, or run inside the checkout)", 2
     tip = (_git(where, "rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}") or "").strip()
     if not tip:
-        return f"REFUSED {lane}: no local branch {branch} in {_tilde(where)}", 2
+        cur = (_git(where, "branch", "--show-current") or "").strip()
+        hint = f"; its worktree is on {cur}: `research notes bind {lane} --branch {cur} --worktree {_tilde(where)} --pod none`" \
+            if cur and cur not in NEVER_PUSH else ""
+        return f"REFUSED {lane}: no local branch {branch} in {_tilde(where)}{hint}", 2
     try:
         r = subprocess.run(["git", "-C", str(where), "push", "origin", f"refs/heads/{branch}:refs/heads/{branch}"],
                            capture_output=True, text=True, timeout=600)
@@ -1889,12 +1894,18 @@ def main(argv: list[str]) -> int:
     """`sync` / `scan` live in notes_sync; with RESEARCH_NOTES_SYNC=1 a successful checkpoint / bind / relaunch syncs what it wrote."""
     from . import notes_sync  # noqa: PLC0415
 
+    if line := notes_sync.ensure_clone(default_root()):
+        print(line, file=sys.stderr)
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
     if argv and argv[0] == "archive":
         from .notes_archive import main as archive_main  # noqa: PLC0415
 
         return archive_main(argv[1:], default_root())
+    if argv and argv[0] in ("claim", "approach", "approaches"):
+        from . import approaches  # noqa: PLC0415
+
+        return approaches.main(argv, default_root())
     if argv and argv[0] == "service":
         from .steward import service_main  # noqa: PLC0415
 
@@ -1931,6 +1942,9 @@ def _main(argv: list[str]) -> int:
     ib = sub.add_parser("inbox", help="the lane's handoffs it has not been shown yet (its own dir and its predecessors')")
     ib.add_argument("lane")
     ib.add_argument("--peek", action="store_true", help="do not mark them read (someone else looking)")
+    ib.add_argument("--urgent", action="store_true",
+                    help="only unread handoffs with `urgent` in the file name, never marked read; exit 1 when there are none "
+                         "(a worker's timer runs it)")
     ib.add_argument("--root", type=Path, default=None)
     bd = sub.add_parser("bind", help="record the lane's branch / worktree / pod (a successor that took over a predecessor's)")
     bd.add_argument("lane")
@@ -2009,6 +2023,10 @@ def _main(argv: list[str]) -> int:
             if ns.state == "superseded":                    # written by whoever relaunched it: the mail is the successor's
                 return 0
         items = inbox(root, ns.lane)
+        if getattr(ns, "urgent", False):
+            urgent = [x for x in items if "urgent" in x["path"].name.lower()]
+            print(render_inbox(ns.lane, urgent))
+            return 0 if urgent else 1
         print(render_inbox(ns.lane, items))
         if not getattr(ns, "peek", False):
             mark_seen(root, ns.lane, items)
@@ -2153,6 +2171,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
             more += steward_rule("render", render_lines, root, now, state)
             more += steward_rule("run", run_lines, root, now, state)
+            from .approaches import steward_lines as approaches_lines  # noqa: PLC0415
+
+            more += steward_rule("approaches", approaches_lines, root, now, state)
             more += steward_rule("state", lambda: save_state(root, state) or [])
         if lease_line:
             more.append(lease_line)
@@ -2162,7 +2183,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             srep = notes_sync.sync(root)
             more += sync_lines(root, srep, now)
         elif ns.sync:                                       # standby: read the others' notes, write nothing
-            _git(root, "pull", "-q", "--ff-only", timeout=300)
+            from . import notes_sync  # noqa: PLC0415
+
+            notes_sync.pull(root)
         elif ns.snapshot and acting and (snap := snapshot(root, now=now)) and snap["commit"]:
             more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)

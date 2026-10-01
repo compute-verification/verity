@@ -3,17 +3,20 @@ and runs each with today's `research run --on` onto one of the pods it was given
 
     research worker --dispatch --pods vy-coord-t1,vy-coord-t2 [--name rc] [--kinds merge-check,lean-regen,audit-main] [--once]
 
-It is one worker, `dispatch:{name}`, whose `jobs:work` token the Console mints (`$JOBS_TOKEN` or ~/.research/jobs/token); it
+It is one worker, `dispatch:{name}`, whose `jobs:work` token the Console mints: --token-file, else `$JOBS_WORKER_TOKEN`, else
+~/.research/jobs/dispatch-{name}.token, and never `research jobs`' `$JOBS_TOKEN` or ~/.research/jobs/token.  It
 runs where `research run --on` with custody works today, the research coordinator's VM.  Each pod it holds is a slot:
 
     host        no claim while this host's runs root or workdir has less free space than `research run`'s floor
                 ($RESEARCH_DISK_FLOOR_GB): the launch writes a worktree and records there.  Running jobs are still tended.
     measure     before a free pod asks for work, and again every PREFLIGHT_S, over ssh: AVX-512, memory, cores, free disk,
-                the tools on its PATH, the seconds left on its lease, and whether a `research` run is live on it.  This only
-                measures: what it finds is the claim's capabilities, so a job that needs AVX-512 only goes to a pod that has it,
-                and a job whose `min_lease_s` (timeout_s plus the lease margin, set by `research jobs add`) the pod's lease can't
-                cover isn't claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  The
-                one rule of its own is occupancy: a pod with a live run takes no second job.
+                the tools on its PATH, the seconds left on its lease, whether a `research` run is live on it, and whether its
+                `pod_setup.sh` has reported done (SETUP_MARKER, which the script removes first and writes last).  What it finds is
+                the claim's capabilities, so a job that needs AVX-512 only goes to a pod that has it, and a job whose
+                `min_lease_s` (timeout_s plus the lease margin, set by `research jobs add`) the pod's lease can't cover isn't
+                claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  Its rules of its
+                own are about whether a pod is free, not whether it's prepared: no job for a pod whose setup hasn't reported done
+                (a chain that launched a check while `pod_setup.sh` still ran cost train TVC an hour), nor for one with a live run.
     preflight   whether a pod is prepared is decided in one place, `tools/check/preflight.py` (#440), which `research run --on`
                 runs on the machine before claiming the run: a `--tool check` run gets it, and a `lean-regen` asks for it with
                 `--preflight check`.  A refusal is an error, retried on another pod, and the pod is benched for BENCH_S.
@@ -51,7 +54,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
-from .client import TOKEN_ENV, Unreachable
+from .client import TOKEN_ENV, WORKER_TOKEN_ENV, Unreachable
 
 KINDS = ("merge-check", "lean-regen", "audit-main")
 CHECK_KINDS = ("merge-check", "audit-main")
@@ -62,6 +65,7 @@ RENEW_S = 60
 POLL_S = 60
 PREFLIGHT_S = 600
 BENCH_S = 1800             # a pod that failed check's preflight sits out this long
+SETUP_MARKER = "~/.research/pod-setup.json"      # tools/check/pod_setup.sh writes it last, on the pod
 LAUNCH_TIMEOUT_S = 1800
 DEFAULT_TIMEOUT_S = 2 * 3600       # a cold check took 41 min, a Lean regeneration 30-40
 AUDIT_TIMEOUT_S = 3 * 3600         # a cold check with the Lean agreement
@@ -113,8 +117,11 @@ def describe(caps: dict) -> str:
             + (", avx512" if caps.get("avx512") else ", no avx512"))
 
 
-def occupied(caps: dict) -> str | None:
-    """The dispatcher's one rule of its own: one job per pod.  Whether a pod is prepared is preflight.py's to say."""
+def unavailable(caps: dict) -> str | None:
+    """Why a pod takes no job now: its setup hasn't reported done, or a run is live on it.  Whether a pod is prepared is
+    preflight.py's to say."""
+    if not caps.get("setup_done"):
+        return f"pod_setup.sh hasn't reported done ({SETUP_MARKER}): run it there, and it's used once it finishes"
     return f"{caps['busy']} live research run(s) on it" if caps.get("busy") else None
 
 
@@ -203,7 +210,7 @@ class Dispatcher:
         was = s.problem
         try:
             s.caps = self.runner.probe(s.pod)
-            s.problem = occupied(s.caps)
+            s.problem = unavailable(s.caps)
         except Exception as e:  # noqa: BLE001 -- an unreachable or missing pod asks for nothing, and the dispatcher goes on
             s.caps, s.problem = None, f"can't be measured: {type(e).__name__}: {e}"
         if s.problem and s.problem != was:
@@ -245,8 +252,8 @@ class Dispatcher:
         if self.clock() - s.renewed < RENEW_S:
             return
         try:
-            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/renew",
-                                            {"lease_token": s.lease, "progress": {"pod": s.pod, "run_id": s.run_id, "step": s.phase}})
+            progress = {k: v for k, v in (("pod", s.pod), ("run_id", s.run_id), ("step", s.phase)) if v}
+            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/renew", {"lease_token": s.lease, "progress": progress})
         except Unreachable as e:
             self.log(f"{s.pod}: job {s.job['id']}: renew unreachable ({e}); the lease has {s.job.get('lease_s', 900)} s")
             return
@@ -301,8 +308,10 @@ class Dispatcher:
     def _report(self, s: Slot) -> None:
         outcome, summary = s.outcome
         try:
-            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/complete",
-                                            {"lease_token": s.lease, "outcome": outcome, "run_id": s.run_id, "summary": summary[:2000]})
+            body = {"lease_token": s.lease, "outcome": outcome, "summary": str(summary)[:2000]}
+            if s.run_id:                                   # the site takes run_id only as a string
+                body["run_id"] = s.run_id
+            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/complete", body)
         except Unreachable as e:
             self.log(f"{s.pod}: job {s.job['id']}: complete unreachable ({e}); trying again")
             return
@@ -355,7 +364,7 @@ class Dispatcher:
 
 PROBE = r"""
 import glob, json, os, shutil, sys, time
-root, lease_file = sys.argv[1], sys.argv[2]
+root, lease_file, marker = sys.argv[1], sys.argv[2], os.path.expanduser(sys.argv[3])
 os.environ["PATH"] = os.path.expanduser("~/.elan/bin") + ":" + os.path.expanduser("~/.cargo/bin") + ":/usr/local/bin:" + os.environ.get("PATH", "")
 def alive(pid):
     try:
@@ -393,6 +402,11 @@ caps = {"avx512": " avx512f" in flags, "mem_gb": mem // 2**30, "cpus": os.cpu_co
         "tools": [t for t in ("uv", "lake", "cargo", "nvidia-smi") if shutil.which(t)]}
 if expires is not None:
     caps["lease_s"] = max(0, expires - int(time.time()))
+try:
+    caps["setup_at"] = json.load(open(marker))["done_utc"]
+    caps["setup_done"] = True
+except (OSError, ValueError, KeyError, TypeError):
+    caps["setup_done"] = False
 print(json.dumps(caps))
 """
 
@@ -409,6 +423,7 @@ class ResearchRunner:
     def env(self) -> dict:
         env = dict(os.environ if self.environ is None else self.environ)
         env.pop(TOKEN_ENV, None)
+        env.pop(WORKER_TOKEN_ENV, None)
         return env
 
     def local_problem(self) -> str | None:
@@ -431,7 +446,7 @@ class ResearchRunner:
         from .. import remote
 
         ssh, m = self._ssh(pod)
-        r = remote.ssh_run(ssh, [m.get("python", "python3"), "-c", PROBE, m["root"], LEASE_FILE], timeout=120)
+        r = remote.ssh_run(ssh, [m.get("python", "python3"), "-c", PROBE, m["root"], LEASE_FILE, SETUP_MARKER], timeout=120)
         if r.returncode != 0:
             raise RuntimeError(f"probe exited {r.returncode}: {r.stderr.decode(errors='replace')[-300:]}")
         return json.loads(r.stdout.decode().strip().splitlines()[-1])

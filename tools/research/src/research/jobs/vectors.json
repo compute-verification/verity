@@ -246,7 +246,12 @@
         {"at": 14, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
         {"at": 15, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "maybe"}, "expect": {"status": 400}},
         {"at": 16, "req": ["GET", "/api/jobs/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "running"}}},
-        {"at": 17, "req": ["DELETE", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 404}}
+        {"at": 17, "req": ["DELETE", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 404}},
+        {"at": 18, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": 7}, "expect": {"status": 400}},
+        {"at": 18, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "summary": ["ok"]}, "expect": {"status": 400}},
+        {"at": 18, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": 3}, "expect": {"status": 400}},
+        {"at": 18, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": ["merge-check"], "expect": {"status": 400}},
+        {"at": 19, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed"}, "expect": {"status": 200, "body": {"state": "done"}}}
       ]
     }
   ]

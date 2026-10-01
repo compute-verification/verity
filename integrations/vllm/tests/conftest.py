@@ -25,9 +25,9 @@ KNOWN_FAILURES = {
         "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
     "tests/pipeline/test_source_identity.py::test_negative_requested_sha_mismatch_fails_by_name":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[integration]":
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_verity_tree_and_sha[integration]":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[repo]":
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_verity_tree_and_sha[repo]":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
     "tests/pipeline/test_source_identity.py::test_repo_root_resolution_prefers_export_json_then_git_then_markers":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
@@ -37,8 +37,6 @@ KNOWN_FAILURES = {
         "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
     "tests/check/test_compiled_autotune.py::test_unknown_kernel_is_not_shown_and_does_not_raise":
         "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
-    "tests/observe/test_patterns_synthetic.py::test_gumbel_two_stage_sampler_is_one_token_select":
-        "the observer refuses the sampler's bf16 [1, V] logits view as not a row-contiguous float32 [R, V] view",
     "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
@@ -48,6 +46,18 @@ KNOWN_FAILURES = {
     "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
         "exact GELU against torch CPU: max ulp 875,646,710, normalised error nan",
 }
+
+
+def pytest_configure(config) -> None:
+    """Make this process's first MKL VML call on one thread, before any test.  torch's CPU `exp`, `log`, `tanh`, `erf` and the
+    other VML functions run in the MKL it links statically, whose first-call initialisation races when several threads call at
+    once: one intra-op thread then computes its whole chunk at about 2e-4 relative error (the `exp` reference against torch,
+    max ULP 1771, in some 6% of fresh processes).  Any VML call initialises all of them."""
+    try:
+        import torch
+    except ImportError:
+        return
+    torch.exp(torch.zeros(1))
 
 
 def pytest_collection_modifyitems(items) -> None:

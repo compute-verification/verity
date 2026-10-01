@@ -30,9 +30,10 @@ REGISTERED: list[str] = []
 
 
 def _authored(d: Any) -> bool:
-    """A Definition the core or the vLLM registry defines (not one a test module registered in the same session)."""
+    """A Definition the core, the vLLM registry or PoUW's circuit defines (not one a test module registered in the same
+    session)."""
     fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm")
+    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw")
 
 
 def load_registries() -> None:
@@ -50,6 +51,7 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
+    import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -175,6 +177,24 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
     return out
 
 
+def _pouw_roots() -> list[Any]:
+    """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
+    it (`verity_pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
+    their template partitions and the Z separator. Beside them, the model Program's rows at a PoUW site, without and with the
+    bias (`verity_vllm.program.registry.pouw_rows`)."""
+    from verity.ir.defs import bind
+    from verity_pouw.circuit import ncp2
+    from verity_vllm.program.registry import pouw_rows
+
+    shape = ncp2.Shape(16, 64, 16)
+    out = []
+    for kind in ("shift24", "word"):
+        out += [t for t in ncp2.templates(64, kind).values() if t not in out]
+        out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
+    return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
+                  bind(pouw_rows.NcpLinearCoordinate, K=64)]
+
+
 def _core_roots() -> list[Any]:
     from verity.ir.defs import bind
     from verity.ml import gemm as G
@@ -183,7 +203,9 @@ def _core_roots() -> list[Any]:
 
     A, H = P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16
     return [bind(G.DotBf16, K=64, DOT=A), bind(G.DotBf16, K=48, DOT=H), bind(G.GemmCoordinate, K=64, DOT=A),
-            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), K.HOPPER_E4M3_STEP, K.HOPPER_E4M3_DOT.bind(K=128),
+            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), P.BlackwellE4m3QmmaDot32,
+            P.BlackwellE5m2QmmaDot32, P.BlackwellNvf4OmmaDot64, P.BlackwellMxf4OmmaDot64, bind(G.GemmCoordinateE4m3, K=64, **G.GEMM_SM120_E4M3),
+            bind(G.GemmCoordinateNvf4, K=128, **G.GEMM_SM120_NVF4), bind(G.GemmCoordinateMxf4, K=128, **G.GEMM_SM120_MXF4), P.F32ToE2m1Sat, P.E4m3ToF32, K.HOPPER_E4M3_STEP, K.HOPPER_E4M3_DOT.bind(K=128),
             K.ADA_E4M3_STEP, K.ADA_E4M3_DOT.bind(K=128), K.SM120_NVF4_STEP, K.SM120_NVF4_DOT.bind(K=256), K.SM120_MXF4_STEP,
             K.SM120_MXF4_DOT.bind(K=256)]
 
@@ -251,7 +273,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
-             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0,
+             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4,
              "CONSTRUCTION": "shared-greedy"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
@@ -319,7 +341,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _kernel_roots() + _vocabulary_roots()
+    roots += _core_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()
@@ -375,8 +397,11 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
 
 
 def suite() -> dict[str, Any]:
-    """Every Definition the suite checks, by id."""
-    return select(reachable(catalog()))
+    """Every Definition the suite checks, by id: `select`'s, and PoUW's roots whatever their size (each P's whole call and
+    window share a family and a gate count, so `select` alone keeps one of them)."""
+    out = select(reachable(catalog()))
+    out.update({fn.id: fn for fn in _pouw_roots()})
+    return dict(sorted(out.items()))
 
 
 __all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "call_families", "catalog", "definition", "family", "instance_statics", "kind_of",
