@@ -6,10 +6,13 @@
     HopperBF16WgmmaDot16_v2     the same signature                                                    word view: HopperBF16WgmmaDot16_v1
     DotBf16_v3{K, DOT}          (x, w: Array<K, Array<16, Value<1>>>) -> Array<32, Value<1>>          word view: DotBf16_v2{K, DOT'}
     GemmCoordinate_v3{K, DOT}   (x, wrow: Array<K, Array<16, Value<1>>>) -> Array<16, Value<1>>       word view: GemmCoordinate_v2{K, DOT'}
+    Gemm_v3{K, N, DOT}          (x: Array<K, bf16 bits>, w: Array<N, Array<K, bf16 bits>>)
+                                -> Array<N, Array<16, Value<1>>>                                      word view: Gemm_v2{K, N, DOT'}
 
 The steps and the cast are traced from `fp`'s builders (`trace.definition`): their bodies are And/Xor/Not gates, with exactly
 the builders' live ANDs. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
-accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same steps without the cast. Each names its word
+accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same steps without the cast, and `Gemm_v3` is
+`Gemm_v2`'s: the coordinate batched over W's N rows. Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
 hardware captures.
 """
@@ -25,7 +28,8 @@ from .. import prims as P
 from . import fp
 from .trace import definition, word_of
 
-__all__ = ["AmpereBF16TcDot16", "DotBf16", "F2fpBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GemmCoordinate", "HopperBF16WgmmaDot16"]
+__all__ = ["AmpereBF16TcDot16", "DotBf16", "F2fpBf16", "GEMM_AMPERE", "GEMM_HOPPER", "Gemm", "GemmCoordinate",
+           "HopperBF16WgmmaDot16"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -71,8 +75,17 @@ def GemmCoordinate(B, S, x, wrow):
     return B.call(F2fpBf16, _steps(B, S, x, wrow))
 
 
+@composite("Gemm", 3, ["K", "N", "DOT"],
+           lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
+           conformance="exact-model-tested")
+def Gemm(B, S, x, w):
+    """`x[K] @ W[N,K]^T -> [N]` on bits, no epilogue: `GemmCoordinate_v3` over W's rows."""
+    return B.batch(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, w, axes=(None, 0))
+
+
 DotBf16.word = lambda b: bind(G.DotBf16, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinate.word = lambda b: bind(G.GemmCoordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+Gemm.word = lambda b: bind(G.Gemm, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 
 GEMM_AMPERE: dict = {"DOT": AmpereBF16TcDot16}
 GEMM_HOPPER: dict = {"DOT": HopperBF16WgmmaDot16}

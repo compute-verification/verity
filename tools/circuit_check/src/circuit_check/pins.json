@@ -45,6 +45,12 @@
   "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 31286
   },
+  "Gemm_v3{K=32,N=3,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 48966
+  },
+  "Gemm_v3{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 46626
+  },
   "GuardNegInfZero_v2": {
    "and": 63
   },

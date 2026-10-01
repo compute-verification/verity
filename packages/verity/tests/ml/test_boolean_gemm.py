@@ -28,6 +28,7 @@ AMPERE_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE)
 HOPPER_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER)
 DOTS = [bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=48, **BG.GEMM_HOPPER)]
 STEPS = [bind(BG.AmpereBF16TcDot16), bind(BG.HopperBF16WgmmaDot16)]
+GEMMS = [bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER)]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -38,8 +39,10 @@ PINS = {
     HOPPER_K64.id: (31554, 60294, 3059, "8dcec5922c2388c3c1c13cba0be0023338d856d8068d84470b545df02d4024e7"),
     DOTS[0].id: (33040, 62868, 3440, "c71d572a2958f817da93a41fe847a5be35b6c1549f76e43aa48f43ca92efbc4d"),
     DOTS[1].id: (23616, 45147, 2283, "6350b7661f2b2a0e9d522371c3222f0bfc59fc9e486a68116011e14403e0fdf3"),
+    GEMMS[0].id: (49758, 94596, 5205, "0a0a1dc213dbde84ec28e6db0f3033117e0416dbffc8edefe18ec7e95f358806"),
+    GEMMS[1].id: (47430, 90588, 4611, "1c7cb1693d564049edac0136a85ee174313479c3e7325f493db87f6c126b5fa7"),
 }
-TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS]
+TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -102,6 +105,15 @@ def test_the_coordinate_agrees_with_gemm_coordinate_v2(target) -> None:
     assert word.id == f"GemmCoordinate_v2{{K=64,DOT={TR.word_of(target.bindings['DOT']).id}}}"
     params, _ = E.batch.signature_of(word)
     _agree(target, K.sample_tc(np.random.default_rng(13), 4000, params))
+
+
+@pytest.mark.parametrize("target", GEMMS, ids=lambda t: t.id)
+def test_the_gemm_agrees_with_gemm_v2(target) -> None:
+    word = TR.word_of(target)
+    assert word.id == f"Gemm_v2{{K=32,N=3,DOT={TR.word_of(target.bindings['DOT']).id}}}"
+    params, _ = E.batch.signature_of(TR.word_of(bind(BG.GemmCoordinate, K=32, DOT=target.bindings["DOT"])))
+    xs, ws = K.sample_tc(np.random.default_rng(16), 3 * 2000, params)
+    _agree(target, [xs.reshape(2000, 3, 32)[:, 0], ws.reshape(2000, 3, 32)])
 
 
 def test_the_bit_sliced_evaluator_is_the_ir_oracle_here() -> None:
