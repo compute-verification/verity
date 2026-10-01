@@ -317,11 +317,11 @@ def test_the_mean_is_its_word_definition_on_80k_rows() -> None:
 
 
 @pytest.mark.skipif(not FULL, reason="VERITY_VLLM_BOOLEAN_NORMS_FULL: 80k rows of Gemma-2's chain at H = 2304, with and "
-                                     "without a residual (about 25 minutes and 4 GB per group of 10k)")
+                                     "without a residual (about 25 minutes and 2 GB per group of 10k)")
 @pytest.mark.parametrize("group", range(8))
 def test_the_chain_is_gemmas_on_80k_rows(group) -> None:
-    for chunk in range(10 * group, 10 * group + 10):
-        _chain_rows(H, 989, zlib.crc32(f"gemma2/{chunk}".encode()))
+    for chunk in range(20 * group, 20 * group + 20):
+        _chain_rows(H, 489, zlib.crc32(f"gemma2/{chunk}".encode()))
 
 
 # --- partition, recompute, purity ------------------------------------------------------------------------------------------------
