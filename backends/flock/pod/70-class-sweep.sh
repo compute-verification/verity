@@ -5,7 +5,8 @@
 # SHAPES (a file of shape digests), or with SELECT (table-free | reads | units) every shape whose unit reads no pinned table, reads
 # one, or either, outside the token-select Calls.
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
-#      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json  SHAPES=path/to/shapes.txt  SELECT=table-free  MODULES= (a module-path prefix)
+#      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
+#      SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
 #      FLOCK_WORK=/workspace (the builds, venvs and cached binaries under it)  PROTOCOL=sweep-v0  OUT=$RESEARCH_RUN_DIR/out  RESUME=path/to/results.jsonl (an earlier run's records: those shapes are skipped)
@@ -61,7 +62,7 @@ G_=; [ $G = 1 ] && G_=--gpu
 inp() { local p=$1; if [ -n "$p" ] && [ ! -e "$p" ] && [ -e "${RESEARCH_RUN_DIR:-/nonexistent}/inputs/$(basename "$p")" ]; then p=$RESEARCH_RUN_DIR/inputs/$(basename "$p"); fi; echo "$p"; }
 GRAPH=$(inp "${GRAPH:-}"); DEFS=$(inp "${DEFS:-}"); SHAPES=$(inp "${SHAPES:-}"); RESUME=$(inp "${RESUME:-}")
 [ -n "$RESUME" ] && { mkdir -p $O/classes; grep '^{' "$RESUME" > $O/classes/results.jsonl; }
-SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS")
+SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS"); [ -n "${PROGRAM:-}" ] && SRC=(--program-module "$PROGRAM")
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST:-1}" = 0 ] && SEL+=(--no-selftest-largest)
 [ -n "${BATCH_ANDS:-}" ] && SEL+=(--batch-ands "$BATCH_ANDS"); [ -n "${MAX_STATEMENT_BITS:-}" ] && SEL+=(--max-statement-bits "$MAX_STATEMENT_BITS"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \

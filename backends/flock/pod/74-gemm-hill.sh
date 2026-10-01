@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# BF16 GemmCoordinate hillclimb, one step at one K (gemm_hill.py): the gate (byte identity at B = 16: the GPU's proofs and
-# transcripts equal the CPU prover's, and the device paths agree), then one m = 35 statement of
-# GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1} proved warm once and timed three times, nvidia-smi dmon sampling the GPU every
-# second from the start; result.json (the campaign contract's) and out/metrics.json carry the overhead against the census's spec
+# GemmCoordinate hillclimb, one step at one K and dtype (gemm_hill.py): the gate (byte identity at B = 16: the GPU's proofs and
+# transcripts equal the CPU prover's, and the device paths agree), then one m = 35 statement of the dtype's coordinate (BF16's
+# GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}, or gemm_fp.py's sm_120 FP8 / FP4 row, its instances filling m = 35 from the
+# gate's staging) proved warm once and timed three times, nvidia-smi dmon sampling the GPU every second from the start; result.json (the campaign contract's) and out/metrics.json carry the overhead against the census's spec
 # peak, the throughput, the GPU utilization and the verifier's seconds, out/results.jsonl the statement's record, and
 # hillclimb.json the step's verity/hillclimb-point/v0 record (declared in outputs.json, so the store keeps it as its own artifact).
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
-# env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
+# env: K= (required: 2048, 4096, 8192 or 16384)  DTYPE=bf16 (or e4m3, nvf4, mxf4)  N= (instances; default BF16's
+#      gemm_hill.INSTANCES[K], an FP8 / FP4 row's `gemm_hill.py fill` of the gate, m = 35; required with GATE=0)  CPUSET= (the cores to
 #      pin to, e.g. 96-111: node 1's dispatched jobs all share 96-159, so jobs run side by side each take their own slice)
-#      CPUS=48 (without CPUSET: the first CPUS of the job's cores)  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
+#      CPUS=48 (without CPUSET: the first CPUS of the job's cores)  GATE=1  WARM=1  RUNS=3  PEAK_ID= (default the dtype's)
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
@@ -30,8 +31,13 @@ REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/gemm-hill}; mkdir -p $R/out
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLOCK_WORK/home
 export HOME=$FLOCK_WORK/home
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
-INST=${N:-}; unset N
-DEFS=$R/out/defs.json; INST=$(python3 backends/flock/pod/gemm_hill.py defs --K $K ${INST:+--n $INST} --out $DEFS) || exit 1
+DTYPE=${DTYPE:-bf16}; INST=${N:-}; unset N
+# "n SOURCE": n instances and the class sweep's source for them (DEFS= BF16's Gemm_v2 row, PROGRAM= gemm_fp.py's FP8 / FP4 row)
+src() { python3 backends/flock/pod/gemm_hill.py defs --dtype $DTYPE --K $K ${1:+--n $1} --out $R/out/defs.json; }
+SRC=
+if [ $DTYPE = bf16 ] || [ -n "$INST" ]; then S0=$(src $INST) || exit 1; INST=${S0%% *}; SRC=${S0#* }; GSRC=$SRC
+elif [ "${GATE:-1}" = 1 ]; then S0=$(src 16) || exit 1; GSRC=${S0#* }
+else echo "DTYPE=$DTYPE with GATE=0: N= is required"; exit 1; fi
 # the job template's cargo target dir is shared; the builds here keep their own
 unset CARGO_TARGET_DIR
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
@@ -44,7 +50,7 @@ printf 'job\tstart\t%s\n' "$HILL_T0" >> $R/out/phases.tsv
 Q=name,uuid,driver_version,memory.total,compute_cap,clocks.sm,clocks.max.sm,power.limit,temperature.gpu
 { echo $Q; nvidia-smi --query-gpu=$Q --format=csv,noheader,nounits 2>/dev/null | head -1; } > $R/out/gpu.csv
 { nvidia-smi -L; lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$HILL_PINNED rayon=$RAYON_NUM_THREADS"; free -g | head -2
-  df -h /workspace | tail -1; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-} K=$K instances=$INST"; } > $R/out/host.txt 2>&1
+  df -h /workspace | tail -1; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-} dtype=$DTYPE K=$K instances=${INST:-from the gate}"; } > $R/out/host.txt 2>&1
 DG=; case "${CUDA_VISIBLE_DEVICES:-}" in ''|*,*|*-*) ;; *) DG="--gpu $CUDA_VISIBLE_DEVICES" ;; esac
 python3 backends/flock/pod/gemm_hill.py dmon --out $R/out/dmon.tsv $DG &
 DMON=$!
@@ -63,16 +69,20 @@ GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gp
 ok=1
 if [ "${GATE:-1}" = 1 ]; then
   ph gate start
-  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \
+  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate bash backends/flock/pod/70-class-sweep.sh $GSRC BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \
     > $R/out/gate.log 2>&1 || ok=0
   ph gate end
   keep gate
   cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
+  if [ $ok = 1 ] && [ -z "$SRC" ]; then
+    INST=$(python3 backends/flock/pod/gemm_hill.py fill --dtype $DTYPE --K $K --gate $R/out/gate/classes/results.jsonl) && S0=$(src $INST) \
+      && SRC=${S0#* } && echo "instances=$INST (m = 35 from the gate's staging)" >> $R/out/host.txt || ok=0
+  fi
 fi
 if [ $ok = 1 ]; then
   ph sweep start
   OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps.tsv --" \
-    bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
+    bash backends/flock/pod/70-class-sweep.sh $SRC BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
     WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/sweep.log 2>&1 || ok=0
   ph sweep end
   keep m35
@@ -82,9 +92,9 @@ kill $DMON $SAMPLER 2>/dev/null; wait $DMON $SAMPLER 2>/dev/null
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
-  $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
+  $PYBIN backends/flock/pod/gemm_hill.py metrics --dtype $DTYPE --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
   --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --gpu-csv $R/out/gpu.csv \
-  --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
+  --census census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
 [ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json
