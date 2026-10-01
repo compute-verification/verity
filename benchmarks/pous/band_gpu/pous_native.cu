@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
 
 __constant__ uint64_t KECCAK_RC[24] = {
     0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL, 0x8000000080008000ULL,
@@ -845,6 +846,99 @@ __device__ __forceinline__ void keccak_f_fd(uint64_t st[25]) {
   }
 }
 
+// The bit-interleaved form of a lane: its even bits in the low word, its odd bits in the high word.  A rotation by 2s rotates
+// both words by s, one by 2s + 1 swaps them and rotates them by s + 1 and s: theta's five rotations by one and lane 1's cost
+// one funnel shift each instead of two.  XOR, AND and NOT act on it as on the lane; a left shift by 16 shifts each word by 8.
+__host__ __device__ constexpr uint64_t il_const(uint64_t x) {
+  uint64_t e = 0, o = 0;
+  for (int i = 0; i < 32; ++i) {
+    e |= ((x >> (2 * i)) & 1) << i;
+    o |= ((x >> (2 * i + 1)) & 1) << i;
+  }
+  return e | (o << 32);
+}
+
+__constant__ uint64_t KECCAK_RC_IL[24] = {
+    il_const(0x0000000000000001ULL), il_const(0x0000000000008082ULL), il_const(0x800000000000808aULL),
+    il_const(0x8000000080008000ULL), il_const(0x000000000000808bULL), il_const(0x0000000080000001ULL),
+    il_const(0x8000000080008081ULL), il_const(0x8000000000008009ULL), il_const(0x000000000000008aULL),
+    il_const(0x0000000000000088ULL), il_const(0x0000000080008009ULL), il_const(0x000000008000000aULL),
+    il_const(0x000000008000808bULL), il_const(0x800000000000008bULL), il_const(0x8000000000008089ULL),
+    il_const(0x8000000000008003ULL), il_const(0x8000000000008002ULL), il_const(0x8000000000000080ULL),
+    il_const(0x000000000000800aULL), il_const(0x800000008000000aULL), il_const(0x8000000080008081ULL),
+    il_const(0x8000000000008080ULL), il_const(0x0000000080000001ULL), il_const(0x8000000080008008ULL)};
+
+__device__ __forceinline__ uint32_t delta_swap32(uint32_t x, uint32_t m, int s) {
+  const uint32_t t = ((x >> s) ^ x) & m;
+  return x ^ t ^ (t << s);
+}
+
+// A word's even bits to its low half, its odd bits to its high half (and back).
+__device__ __forceinline__ uint32_t unshuffle32(uint32_t x) {
+  x = delta_swap32(x, 0x22222222u, 1);
+  x = delta_swap32(x, 0x0c0c0c0cu, 2);
+  x = delta_swap32(x, 0x00f000f0u, 4);
+  return delta_swap32(x, 0x0000ff00u, 8);
+}
+
+__device__ __forceinline__ uint32_t shuffle32(uint32_t x) {
+  x = delta_swap32(x, 0x0000ff00u, 8);
+  x = delta_swap32(x, 0x00f000f0u, 4);
+  x = delta_swap32(x, 0x0c0c0c0cu, 2);
+  return delta_swap32(x, 0x22222222u, 1);
+}
+
+__device__ __forceinline__ uint64_t il64(uint64_t x) {
+  const uint32_t a = unshuffle32((uint32_t)x), b = unshuffle32((uint32_t)(x >> 32));
+  return ((uint64_t)__byte_perm(a, b, 0x7632) << 32) | __byte_perm(a, b, 0x5410);
+}
+
+__device__ __forceinline__ uint64_t de_il64(uint64_t v) {
+  const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
+  return ((uint64_t)shuffle32(__byte_perm(e, o, 0x7632)) << 32) | shuffle32(__byte_perm(e, o, 0x5410));
+}
+
+__device__ __forceinline__ uint32_t rotl32(uint32_t x, int n) { return n ? __funnelshift_l(x, x, n) : x; }
+
+__device__ __forceinline__ uint64_t il_rotl(uint64_t v, int r) {
+  const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
+  return (r & 1) ? ((uint64_t)rotl32(e, r >> 1) << 32) | rotl32(o, (r + 1) >> 1)
+                 : ((uint64_t)rotl32(o, r >> 1) << 32) | rotl32(e, r >> 1);
+}
+
+__device__ __forceinline__ void keccak_round_il(uint64_t st[25], uint64_t rc) {
+  constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
+  constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
+  uint64_t bc[5];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) {
+    const uint64_t r1 = il_rotl(bc[(i + 1) % 5], 1);
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
+  }
+  uint64_t b[25];
+#pragma unroll
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = il_rotl(st[s], RHO[s]);
+#pragma unroll
+  for (int j = 0; j < 25; j += 5) {
+#pragma unroll
+    for (int i = 0; i < 5; ++i) st[j + i] = b[j + i] ^ ((~b[j + (i + 1) % 5]) & b[j + (i + 2) % 5]);
+  }
+  st[0] ^= rc;
+}
+
+template <int U>
+__device__ __forceinline__ void keccak_f_il(uint64_t st[25]) {
+  static_assert(24 % U == 0, "U divides 24");
+#pragma unroll 1
+  for (int r = 0; r < 24; r += U) {
+#pragma unroll
+    for (int u = 0; u < U; ++u) keccak_round_il(st, KECCAK_RC_IL[r + u]);
+  }
+}
+
 __device__ __forceinline__ int ld_acquire_gpu(const int* p) {
   int v;
   asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
@@ -889,20 +983,37 @@ __device__ __forceinline__ uint64_t xor_and(uint64_t t, uint64_t s, uint64_t m) 
 // absorb_chunk for the Π₂ half of band_chain_pairs_kernel (hw = 8196: chunks 0 .. 481 hold 17 message words each, the last
 // chunk two, then the carry and the pad), every word's contribution ANDed with m (all ones, or zero on a lane that must not
 // absorb), so both roles of a warp run the same instructions.
-template <bool LAST>
+// IL: the chunk, the carry and the state in the bit-interleaved form (il_const).
+template <bool LAST, bool IL>
 __device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_VECS], uint64_t& carry, uint64_t m) {
   constexpr int words = LAST ? 2 : RATE_WORDS, tail = 18;
+  auto shifted = [](uint64_t val, uint64_t c) -> uint64_t {  // (val << 16) | (c >> 48)
+    if constexpr (IL)
+      return ((uint64_t)__funnelshift_l((uint32_t)(c >> 32), (uint32_t)(val >> 32), 8) << 32) |
+             __funnelshift_l((uint32_t)c, (uint32_t)val, 8);
+    else
+      return (val << 16) | (c >> 48);
+  };
 #pragma unroll
   for (int w = 0; w < words; ++w) {
     const uint64_t val = chunk_word(v, w);
-    t[w] = xor_and(t[w], (val << 16) | (carry >> 48), m);
+    t[w] = xor_and(t[w], shifted(val, carry), m);
     carry = val;
   }
   if (LAST) {
-    t[words] = xor_and(t[words], carry >> 48, m);
-    t[tail / 8] = xor_and(t[tail / 8], (uint64_t)0x1F << (8 * (tail % 8)), m);
-    t[RATE_WORDS - 1] = xor_and(t[RATE_WORDS - 1], (uint64_t)0x80 << 56, m);
+    t[words] = xor_and(t[words], shifted(0, carry), m);
+    constexpr uint64_t pad = (uint64_t)0x1F << (8 * (tail % 8)), end = (uint64_t)0x80 << 56;
+    t[tail / 8] = xor_and(t[tail / 8], IL ? il_const(pad) : pad, m);
+    t[RATE_WORDS - 1] = xor_and(t[RATE_WORDS - 1], IL ? il_const(end) : end, m);
   }
+}
+
+template <int U, bool IL>
+__device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
+  if constexpr (IL)
+    keccak_f_il<U>(st);
+  else
+    keccak_f_fd<U>(st);
 }
 
 // band_chain_kernel's chains on lane pairs: a warp holds PAIR_ROWS rows, lane l row l % 16's sponge of role l / 16, one
@@ -917,11 +1028,13 @@ __device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_
 // 6 .. 10, so that the last tasks to run are a fifth of a call each.  Between steps the one live sponge (the last round's
 // absorber's) goes through `sponge`.  Same inputs and output as band_chain.
 // Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
-// nothing on the squeezer.  U unrolls the Keccak round loop.
+// nothing on the squeezer.  U unrolls the Keccak round loop.  IL: the state, the slots and the sponges in the bit-interleaved
+// form (il_const): X is converted as it is read and W as it is written; the slots' initial contents are the caller's to
+// convert (chunked_interleave_kernel).
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 
-template <int U>
+template <int U, bool IL>
 __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
     uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
     const int64_t* __restrict__ base, const int64_t* __restrict__ blk, const int64_t* __restrict__ len,
@@ -964,14 +1077,15 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
     if (s == 0) {  // the first call's first absorb (half 1 under prefix 1), on role 0 alone
       const uint64_t m = role == 0 ? ~0ull : 0;
       uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
+      if (IL) carry = il64(carry);
       const uint64_t* p = CHUNK_AT(1, 0);
       if (role == 0 && act) slot_load_cg(p, v);
       for (int64_t cc = 0; cc < nch; ++cc) {
-        if (cc < full) absorb_masked<false>(x, v, carry, m);
-        else absorb_masked<true>(x, v, carry, m);
+        if (cc < full) absorb_masked<false, IL>(x, v, carry, m);
+        else absorb_masked<true, IL>(x, v, carry, m);
         p += cstride;
         if (role == 0 && act && cc + 1 < nch) slot_load_cg(p, v);
-        keccak_f_fd<U>(x);
+        keccak_f_pairs<U, IL>(x);
       }
     }
     const int rounds = s == 0 ? 0 : any_more ? 10 : 9, i0 = part ? 6 : 1, i1 = s == 0 ? 0 : part ? rounds : 5;
@@ -991,8 +1105,11 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
 #pragma unroll
       for (int w = 0; w < 25; ++w) x[w] &= ~m;
       uint64_t carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i == 10 ? 1 : i + 1) << 8)) << 48;
-      auto xword = [&](int64_t jj) -> uint64_t {
-        return xrow ? __ldg(xrow + jj) : (jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull));
+      if (IL) carry = il64(carry);
+      auto xword = [&](int64_t jj) -> uint64_t {  // the pad's two words are their own interleaved forms
+        if (!xrow) return jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull);
+        const uint64_t w = __ldg(xrow + jj);
+        return IL ? il64(w) : w;
       };
       auto src = [&](int64_t cc, const uint64_t* p, ulonglong2 d[SLOT_VECS]) {
         if (x_in && cc < xch) {
@@ -1022,7 +1139,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
 #pragma unroll
             for (int w = 0; w < RATE_WORDS; ++w) {
               const int64_t jj = cc * RATE_WORDS + w;
-              if (jj < xwords) orow[jj] = chunk_word(v, w) ^ __ldg(crow + jj);
+              if (jj < xwords) orow[jj] = (IL ? de_il64(chunk_word(v, w)) : chunk_word(v, w)) ^ __ldg(crow + jj);
             }
           } else if (st_all || (st_tail && cc >= xch)) {
             slot_store_cg(p, v);
@@ -1031,10 +1148,10 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
         p += cstride;
 #pragma unroll
         for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) = __shfl_xor_sync(ALL, chunk_word(v, w), 16);
-        if (cc < full) absorb_masked<false>(x, v, carry, m);
-        else absorb_masked<true>(x, v, carry, m);
+        if (cc < full) absorb_masked<false, IL>(x, v, carry, m);
+        else absorb_masked<true, IL>(x, v, carry, m);
         if (sq && act && cc + 1 < nch) src(cc + 1, p, v);
-        keccak_f_fd<U>(x);
+        keccak_f_pairs<U, IL>(x);
       }
     }
 #undef CHUNK_AT
@@ -1050,9 +1167,22 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
   }
 }
 
+// Words 0 .. 16 of chunks c0 .. nch - 1 of both halves of rows row0 .. row0 + rows - 1 into the bit-interleaved form, in place.
+__global__ void chunked_interleave_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t nch,
+                                          int64_t c0) {
+  const int64_t per_chunk = rows * RATE_WORDS, per_half = (nch - c0) * per_chunk;
+  for (int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x; t < 2 * per_half; t += (int64_t)gridDim.x * blockDim.x) {
+    const int64_t h = t / per_half, cc = c0 + t % per_half / per_chunk, n = t % per_chunk / RATE_WORDS, w = t % RATE_WORDS;
+    uint64_t* q = st_words + ((h * nch + cc) * pitch + row0 + n) * SLOT_WORDS + w;
+    *q = il64(*q);
+  }
+}
+
+// interleave_from >= 0: the chain runs bit-interleaved, and chunks interleave_from .. 482 of both halves are converted first;
+// every word of the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.
 void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t warps_per_sm, int64_t calls,
                       torch::Tensor c, torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest,
-                      torch::Tensor out, int64_t unroll) {
+                      torch::Tensor out, int64_t unroll, int64_t interleave_from) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
               "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
@@ -1067,6 +1197,7 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   TORCH_CHECK(warps_per_sm >= 1 && (warps_per_sm <= 4 || warps_per_sm % 4 == 0), "warps_per_sm: 1 .. 4 or a multiple of 4");
   TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
   TORCH_CHECK(unroll >= 1 && unroll <= 24 && 24 % unroll == 0, "unroll: a divisor of 24 (1, 2, 3, 4, 6, 8, 12 or 24)");
+  TORCH_CHECK(interleave_from <= state.size(1), "interleave_from: a chunk index, or negative for no interleaving");
   if (rows == 0) return;
   c10::cuda::CUDAGuard guard(state.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
@@ -1078,14 +1209,21 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
   const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, PAIRS_WARPS_PER_BLOCK);
   const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / PAIRS_WARPS_PER_BLOCK, 1);
-  auto kernel = unroll == 24 ? band_chain_pairs_kernel<24>
-                : unroll == 12 ? band_chain_pairs_kernel<12>
-                : unroll == 8 ? band_chain_pairs_kernel<8>
-                : unroll == 6 ? band_chain_pairs_kernel<6>
-                : unroll == 4 ? band_chain_pairs_kernel<4>
-                : unroll == 3 ? band_chain_pairs_kernel<3>
-                : unroll == 2 ? band_chain_pairs_kernel<2>
-                              : band_chain_pairs_kernel<1>;
+  auto pick = [&](auto il) {
+    constexpr bool IL = decltype(il)::value;
+    return unroll == 24 ? band_chain_pairs_kernel<24, IL>
+           : unroll == 12 ? band_chain_pairs_kernel<12, IL>
+           : unroll == 8 ? band_chain_pairs_kernel<8, IL>
+           : unroll == 6 ? band_chain_pairs_kernel<6, IL>
+           : unroll == 4 ? band_chain_pairs_kernel<4, IL>
+           : unroll == 3 ? band_chain_pairs_kernel<3, IL>
+           : unroll == 2 ? band_chain_pairs_kernel<2, IL>
+                         : band_chain_pairs_kernel<1, IL>;
+  };
+  auto kernel = interleave_from >= 0 ? pick(std::true_type{}) : pick(std::false_type{});
+  if (interleave_from >= 0 && interleave_from < state.size(1))
+    chunked_interleave_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()),
+                                                                    state.size(2), row0, rows, state.size(1), interleave_from);
   kernel<<<blocks, threads, 0, stream>>>(
       reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
       reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
@@ -1657,7 +1795,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("band_chain_pairs", &band_chain_pairs, "band_chain on lane pairs, in a persistent launch", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("warps_per_sm"),
         pybind11::arg("calls"), pybind11::arg("c"), pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"),
-        pybind11::arg("dest"), pybind11::arg("out"), pybind11::arg("unroll") = 1);
+        pybind11::arg("dest"), pybind11::arg("out"), pybind11::arg("unroll") = 1,
+        pybind11::arg("interleave_from") = -1);
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
