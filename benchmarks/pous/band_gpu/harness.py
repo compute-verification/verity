@@ -87,8 +87,11 @@ STEP_VARIANTS = {
     "word_io": {"thread_rows": 1, "word_io": True, "fused": False, "pair": False},
     "fused": {"thread_rows": 1, "word_io": True, "fused": True, "pair": False},
     "pair": {"thread_rows": 1, "word_io": True, "fused": True, "pair": True, "pair_max_rows": 1 << 62},
+    "chain_pairs": {"chain_pairs": True},
 }
-"""The Feistel kernels a single-row `Π₂` call can run on; the step floor is the fastest of them."""
+"""The Feistel kernels a single-row `Π₂` call can run on; the step floor is the fastest of them.  `chain_pairs` is the
+decode's lane-pair kernel on one row's single chain call (`dense.chain_call`): each round's absorb overlaps the previous
+round's squeeze, about half the sequential Keccak-f of the others, with its bit-interleaved Keccak core."""
 LAUNCH_BOUND_FRACTION = 0.5
 """A plain-arm bandwidth below this fraction of the device-copy bandwidth is flagged launch-bound."""
 
@@ -303,6 +306,10 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
         return 2 * n / s / 1e9
 
     def step(settings: dict[str, Any], reps: int) -> list[float]:
+        if settings.get("chain_pairs"):
+            call = dense.chain_call(width, device)
+            call()
+            return [timer(call) for _ in range(reps)]
         before = set_kernels({})
         state = torch.randint(0, 256, (1, 2 * width + 64), dtype=torch.uint8, device=device)
         try:

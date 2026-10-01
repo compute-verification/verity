@@ -236,6 +236,21 @@ def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.
     return out
 
 
+def chain_call(width: int, device):
+    """One row's chain of length 0 on `band_chain_pairs_kernel`, its inputs staged: one `Π₂` call, its first absorb then
+    rounds 1 .. 9 (W is written in round 9), each round's absorb one chunk behind the previous round's squeeze, so 483 +
+    9 * 484 = 4,839 sequential Keccak-f where absorbing and squeezing in turn takes 10 * (483 + 482) = 9,650.  A chain's later
+    calls cost the same (10 rounds of 484, the next first absorb overlapping round 10).  Returns the call."""
+    from . import native
+
+    st = _Chunked(1, width, device)
+    c = torch.zeros(1, width, dtype=torch.uint8, device=device)
+    zero = torch.zeros(1, dtype=torch.int64, device=device)
+    out = torch.empty(1, width, dtype=torch.uint8, device=device)
+    return lambda: native.ext().band_chain_pairs(st.words, 0, 1, codec.PI_DOMAIN, 1, c, zero, zero, zero, zero, out,
+                                                 (width - 32) // CHUNK)
+
+
 def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, blocks: torch.Tensor,
                   per_segment: int, window: int | None = None) -> torch.Tensor:
     """`W` of the blocks `(segs[r], blocks[r])` alone, from every segment's `C` (`[S * B, L]`, segment-major) and tags
