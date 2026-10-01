@@ -89,6 +89,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (2:43 PM PDT): a decision Daniel must make goes where Slack notifies him, never only in a note or a lead's
+  thread. Use one question per post, with its options, your recommendation, and its deadline or default:
+  `research msg ask-daniel` (the card mentions him), or, if the card fails, `research msg send --to @daniel`.
 - 2026-10-01 (10:56 AM PDT): only leads get handles (a name in `research msg`), never individual workers; a worker is
   reached through its lead. A new lead is a line in `.agents/skills/using-slack/registry.json`, and `names open`
   refuses any other name.
