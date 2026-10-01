@@ -52,25 +52,27 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 128 * 1024
-BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES) and ALLOWLIST
+BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
-#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the soundness audit
-#: record, three vLLM workload specs and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past
-#: that and nothing joins them silently; the soundness audit record grows about 2.5 KiB per pin, so its cap leaves room for about
-#: 100 more pins instead. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
+#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload
+#: specs and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them
+#: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
 #: (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "backends/flock/verifier/lean/soundness/lean-audit.json": 512 * 1024,
     "census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
-    "integrations/vllm/verity_vllm/program/registry/quarantine/dense/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
+    "packages/verity/src/verity/ml/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
+AUDIT_RECORD = "lean-audit.json"
+#: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
+#: what a statement reviewer reads; it grows 3-5 KiB per pin, so this leaves a package room for several hundred more.
+AUDIT_RECORD_LIMIT = 2 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be.
 DATA_BUDGET = 40 * 1024 * 1024
@@ -78,21 +80,6 @@ REGISTRY = "fixtures/artifacts.json"
 
 
 def _tracked() -> list[str]:
-    if not (ROOT / ".git").exists():                # a shipped `git archive` (research run --source): the commit's tree as the
-        ready = ROOT / "READY.json"                 # machine's bare repository holds it, never what steps have built in it since
-        bare = ROOT.parent.parent / "git" / "verity.git"
-        if ready.exists() and bare.exists():
-            tree = json.loads(ready.read_text())["tree"]
-            out = subprocess.run(["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", tree], check=True,
-                                 capture_output=True).stdout
-            return sorted(p.decode() for p in out.split(b"\0") if p)
-        out = []
-        for d, dirs, files in os.walk(ROOT):
-            dirs[:] = [x for x in dirs if x not in (".venv", "__pycache__", ".lake")]
-            out += [os.path.relpath(os.path.join(d, f), ROOT) for f in files]
-        registered = [v.rstrip("/") for k, v in json.loads((ROOT / "fixtures" / "artifacts.json").read_text()).items()
-                      if k.startswith("art:") and isinstance(v, str)] if (ROOT / "fixtures" / "artifacts.json").is_file() else []
-        return sorted(p for p in out if p != "READY.json" and not any(p == r or p.startswith(r + "/") for r in registered))
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
     return [p.decode() for p in out.split(b"\0") if p]
 
@@ -264,8 +251,9 @@ def test_no_tracked_blob_exceeds_limit() -> None:
             size = os.path.getsize(ROOT / p)
         except FileNotFoundError:  # tracked but deleted in the working tree
             continue
-        if size > ALLOWLIST.get(p, BLOB_LIMIT):
-            offenders.append(f"{p}: {size / 1024:.0f} KiB")
+        limit = ALLOWLIST.get(p, AUDIT_RECORD_LIMIT if os.path.basename(p) == AUDIT_RECORD else BLOB_LIMIT)
+        if size > limit:
+            offenders.append(f"{p}: {size / 1024:.0f} KiB > {limit // 1024} KiB")
     assert not offenders, (
         f"tracked files over {BLOB_LIMIT // 1024} KiB: register a fixture in {REGISTRY} and gitignore its path "
         "(`research data put --kind fixture/v1 --preserve`, then `research data export`); evidence and run outputs belong in "

@@ -65,6 +65,7 @@ def test_a_wait_checkpoint_names_the_one_shot_timer_that_wakes_the_lane(text, de
     hint = notes.wake_hint(text, NOW)
     assert f"subscribe_timer once=true delaySeconds={delay})" in hint and "not a cron timer" in hint
     assert notes.wake_hint("done #101, next #4 check-back 21:45Z", NOW) is None and notes.wake_hint("WAIT r1, no time", NOW) is None
+    assert "for check-back 2:45 PM PDT (21:45Z);" in notes.wake_hint("WAIT r1 check-back 21:45Z", NOW)
 
 
 def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
@@ -269,7 +270,7 @@ def test_the_inbox_is_handoffs_changed_since_last_shown_by_mtime_not_by_the_name
     assert [x["path"].name for x in again] == ["20260923T1900Z-handoff-coordinator.md"]
     assert notes.render_inbox("lane-a", again).splitlines() == [
         "INBOX lane-a: 1 new -- act on each, or say in your next checkpoint why not",
-        '  20:59Z 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
+        '  1:59 PM PDT (20:59Z) 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
 
 
 def test_a_successor_gets_its_predecessors_unread_handoffs_and_they_are_not_mail(tmp_path):

@@ -8,11 +8,19 @@
 # first Lean step would key its later runs differently from its first. This puts the same tools on every pod before its first
 # check: uv (UV_VERSION), elan with the Lean toolchain every Lake package pins, and a minimal Rust toolchain. It changes nothing
 # already in place, and it prints what it found last, one line per tool, so two pods can be compared.
+#
+# It reports its setup done by writing POD_SETUP_MARKER (default ~/.research/pod-setup.json) last, and removes it first, so a
+# pod reports done only once all of this has succeeded. `research run` returns once a run launches, so a chain that starts a
+# check right after launching this one would race it (train TVC lost an hour that way); the merge queue's dispatcher claims
+# nothing for a pod without the marker.
 set -euo pipefail
 UV_VERSION=${UV_VERSION:-0.12.20}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TOOLCHAIN=$(cat "$ROOT/backends/flock/verifier/lean/lean-toolchain")
 export PATH="$HOME/.elan/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
+MARKER=${POD_SETUP_MARKER:-$HOME/.research/pod-setup.json}
+mkdir -p "$(dirname "$MARKER")"
+rm -f "$MARKER"
 
 if [ "$(uv --version 2>/dev/null | cut -d' ' -f2)" != "$UV_VERSION" ]; then
   curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh >/dev/null
@@ -32,3 +40,10 @@ echo "uv $(uv --version | cut -d' ' -f2)"
 echo "lake $(lake --version | head -1)"
 echo "cargo $(cargo --version)"
 echo "nvidia-smi $(command -v nvidia-smi >/dev/null && echo present || echo absent)"
+python3 -c 'import datetime, json, os, sys
+doc = {"done_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "uv": sys.argv[2], "lake": sys.argv[3],
+       "cargo": sys.argv[4], "toolchain": sys.argv[5]}
+with open(sys.argv[1] + ".tmp", "w") as f:
+    json.dump(doc, f)
+os.replace(sys.argv[1] + ".tmp", sys.argv[1])' "$MARKER" "$(uv --version | cut -d' ' -f2)" "$(lake --version | head -1)" "$(cargo --version)" "$TOOLCHAIN"
+echo "setup done: $MARKER"

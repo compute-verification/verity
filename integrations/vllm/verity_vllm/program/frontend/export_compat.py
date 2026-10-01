@@ -10,11 +10,12 @@ counts them as structural scaffolding.
 
 from __future__ import annotations
 
+import sys
 from contextlib import contextmanager
 
 import torch
 
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 
 _ORIG_DATA = torch._C.TensorBase.data
 
@@ -87,6 +88,66 @@ def apply_target_profile(profile):
             if hasattr(m, "num_compute_units"):
                 h.patch(m, "num_compute_units", lambda device_id=None, _n=profile.num_sms: _n)
         yield
+
+
+_CUDA_PLATFORM = "vllm.platforms.cuda.CudaPlatform"
+
+
+def _answer_cuda(platforms) -> None:
+    hooks.patch(platforms, "resolve_current_platform_cls_qualname", lambda: _CUDA_PLATFORM)
+
+
+class _AnswerCudaLoader:
+    """`vllm.platforms`' own loader, then `_answer_cuda` on the executed module: before anything can read `current_platform`."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def create_module(self, spec):
+        return self.inner.create_module(spec)
+
+    def exec_module(self, module) -> None:
+        self.inner.exec_module(module)
+        _answer_cuda(module)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+class _AnswerCudaFinder:
+    def find_spec(self, name, path, target=None):
+        if name != "vllm.platforms":
+            return None
+        import importlib.machinery
+        sys.meta_path.remove(self)
+        spec = importlib.machinery.PathFinder.find_spec(name, path)
+        if spec is not None and spec.loader is not None:
+            spec.loader = _AnswerCudaLoader(spec.loader)
+        return spec
+
+
+def select_cuda_platform(world: int = 1) -> str:
+    """A declared target is a CUDA device: vLLM's platform resolution answers `vllm.platforms.cuda.CudaPlatform` (the qualname its CUDA
+    plugin returns on a GPU host) instead of probing NVML for it.  On a GPU-free Build host NVML is absent and that probe resolves a
+    non-CUDA platform.  `import vllm` itself resolves `current_platform` (`torch_utils.PIN_MEMORY`), so before vLLM is imported the answer
+    is installed as `vllm.platforms` finishes executing; the class vLLM then instantiates is the GPU host's (`CudaPlatform`: the
+    NVML-backed class when NVML answers, the torch-backed one when it does not), and `apply_target_profile` answers the target's
+    capability on either.  The target is `world` such devices: the platform's `device_count()` answers `world`, not the host's visible
+    count, so `ParallelConfig`'s "world size larger than the available GPUs" check passes on a GPU-free host and the executor backend
+    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  Build path only: serving resolves its platform and counts
+    its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    # vLLM freezes export knobs at import (`VLLM_USE_LAYERNAME` -> `torch_utils._USE_LAYERNAME`): pin them before importing vLLM here
+    engine_env.pin(engine_env.EXPORT)
+    loaded = sys.modules.get("vllm.platforms")
+    if loaded is None:
+        sys.meta_path.insert(0, _AnswerCudaFinder())
+    elif loaded._current_platform is None:
+        _answer_cuda(loaded)
+    from vllm.platforms import current_platform
+    if not current_platform.is_cuda():
+        raise RuntimeError(f"vLLM resolved {type(current_platform).__qualname__} before the declared CUDA target could select its platform")
+    hooks.patch(type(current_platform), "device_count", classmethod(lambda cls, _n=int(world): _n))
+    return type(current_platform).__qualname__
 
 
 def read_back_applied() -> dict:
@@ -259,4 +320,4 @@ def export_compat(profile=None, model=None):
         yield
 
 
-__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "moe_ops_traced", "read_back_applied", "host_facts"]
+__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "read_back_applied", "host_facts"]

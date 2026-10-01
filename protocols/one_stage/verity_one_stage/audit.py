@@ -42,12 +42,14 @@ def _sha512(obj: Any) -> str:
 
 
 def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
-    """The audit's integrity profile under any of the three laws."""
+    """The audit's integrity profile under any of the four laws. The work law is the stratified law at its sizes (Lean
+    `Law.work`), so its profile is the same `Stratified` one, counting the drawn units (a closure proves more, and only
+    helps)."""
     if draw["law"] == "subset":
         law = Subset(draw["k"])
     elif draw["law"] == "bernoulli":
         law = Bernoulli(Fraction(draw["p"]))
-    elif draw["law"] == "stratified":
+    elif draw["law"] in ("stratified", "work"):
         law = core_law(law_of(draw), registration["population"])
     else:
         raise ValueError(f"no profile for a {draw['law']!r} draw")
@@ -57,11 +59,11 @@ def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: flo
 
 
 def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
-    """The law as core's `Stratified`: the uniform k-subset is one stratum, and a stratified law has one per template
-    (named by its descriptor id). None for `bernoulli`."""
+    """The law as core's `Stratified`: the uniform k-subset is one stratum, and a stratified or work law has one per
+    template (named by its descriptor id). None for `bernoulli`."""
     if law.get("law") == "subset":
         return Stratified.uniform(population, law["k"])
-    if law.get("law") == "stratified":
+    if law.get("law") in ("stratified", "work"):
         return Stratified(tuple(Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in law["strata"]))
     return None
 
@@ -72,7 +74,7 @@ def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta:
     p = profile(registration, draw, delta)
     out: dict[str, Any] = {"delta": delta, "of": registration["population"], "bound": p.bound(),
                            "rule": "except with probability delta, an accepted transcript has at most `bound` wrong units"}
-    if draw["law"] == "stratified":
+    if draw["law"] in ("stratified", "work"):
         out["per_template"] = p.stratum_bounds()
         out["rule"] += ", and at most `per_template[t]` of them in template t"
     return out
@@ -123,7 +125,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         "wrong_units": None}
     if accepted:
         p = profile(registration, draw, delta)
-        if draw["law"] == "stratified":
+        if draw["law"] in ("stratified", "work"):
             drawn = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
                      for s in draw["strata"]}
             rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": drawn}

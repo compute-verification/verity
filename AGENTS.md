@@ -75,7 +75,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
  pinned vectors, and `circuit`, `ncp-v2` as a Program that sampled proofs verifies; see
- its `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ its `PROTOCOL.md`. `protocols/network_warden` (`verity_network_warden`) is network
+ transparency's timing channel: the warden, its audit and calibration, and its Lean package
+ (`lean/`). Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -88,6 +90,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
+- `tools/cluster/`: `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger. Stdlib
+ only, imports neither `verity` nor `research`. On vy-nebius-2 its agent runs in shadow mode (read-only, beside
+ `gpu-lease`); nothing it decides is carried out yet (its `README.md`).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
@@ -122,6 +127,7 @@ what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tes
 `.agents/skills/testing/SKILL.md`.
 No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
+A test that adds more than about a minute to `check` says in its docstring what it catches that a cheaper test can't.
 
 ## Circuits
 
@@ -148,8 +154,11 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib). New Lean goes into the
-  package whose dependencies it needs, in a subdirectory and namespace of its own. All packages share one toolchain and
+  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), `protocols/network_warden/lean/` (the network
+  warden's timing-channel statements and proofs, Mathlib), and `packages/verity/lean/` (core's own
+  proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation, no dependencies). New Lean goes into the
+  package whose dependencies it needs, in a subdirectory and namespace of its own; a core-only proof goes into core's
+  package, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
@@ -180,9 +189,22 @@ Enforce deterministic requirements in code where practical. Use skills for
 recurring, non-obvious workflows, not as a substitute for tooling or as a
 reason to add approval steps.
 
-Make ordinary reversible engineering decisions independently. Surface changes
-to agreed semantics, acceptance criteria, material spending, or destructive
-behavior.
+Make ordinary reversible engineering decisions independently, and when a tool,
+rule or step gets in your way, fix it at the source if the fix is clearly yours
+rather than working around it. Surface changes to agreed semantics, acceptance
+criteria, material spending, or destructive behavior. When you can't tell which
+side a change is on, ask Daniel through your coordinator, with your
+recommendation, and record his ruling as a line here or in a skill so nobody
+asks twice. The rulings so far, and friction notes for what you can't fix now:
+`.agents/skills/friction/SKILL.md`.
+
+Two objectives are open, and Daniel wants help with them while we develop the
+codebase and the research harness: the right amount of cross-agent chatter and
+note-taking, enough to drive self-improvement and process wins and to catch
+inefficiencies but no more; and the right balance of autonomy, teamwork and
+asking Daniel. Neither is settled, and agents are expected to use their judgment
+and help tune both. Each ruling and each friction note is how a balance gets
+codified (`.agents/skills/friction/SKILL.md`).
 
 A guard never fails open, and an agent VM can be suspended at any moment, so
 nothing that bounds spend or preserves results may depend on one: pods bound
@@ -197,7 +219,7 @@ rather than accumulating them.
 ## Where writing goes
 
 - This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
-- Lane reports, handoffs, findings, drafts: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
+- Lane reports, handoffs, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
 - Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
@@ -216,7 +238,13 @@ Push your branch after every commit: `research notes push <you>` (never `main`, 
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
 origin lacks.
 
+Slack (computeverification.slack.com) is for handle holders (coordinators and service agents) and named humans only; a worker asks its
+own coordinator. The coordination API (ask, announce, 👀/✅/❌, who subscribes, the wake recipe): `.agents/skills/using-slack/SKILL.md`.
+
 ## Skills
+
+When writing or launching a job for `research run` (its cwd, its outputs, `--declared-output`, scratch), use
+`.agents/skills/writing-runs/SKILL.md`: custody uploads only the declared outputs and the run's own records in full.
 
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.

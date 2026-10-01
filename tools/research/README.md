@@ -19,6 +19,7 @@ src/research/
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
+├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
@@ -61,9 +62,11 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [...] -- CMD...
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
+research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
+             [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (tools/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]
@@ -82,6 +85,7 @@ research merge --train A B C [--on MACHINE --project P] [--command CMD]  # sever
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
+research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
 After a history rewrite, a `commit-map/v1` artifact records each old commit's image and whether its tree was kept; it applies once
@@ -118,8 +122,9 @@ the target's checkout): when the merge's diff touches a prefix, only an attempt 
 needs.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open, not a draft,
-names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and has the grants the rules file
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
+names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
+ready PR`, a `ready` label on `pr:{n}@{head}`, which replaces the merge-request note), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
@@ -162,6 +167,14 @@ anyway. Only RunPod's explicit no-stock reply is exit 5, the one failure to answ
 exit 2.
 `research pods registry` lists the merged table, and `registry import
 --apply` seeds `machines.d` from machines.toml.
+
+A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
+`rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
+--user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
+reaches it. The one such machine is the Nebius server `vy-nebius-1` (`pods/nebius/`): `launch.sh` brings it up (`--dry-run`
+needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
+cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
+Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
@@ -235,6 +248,26 @@ run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
 `--mem-wait S` polls for up to S seconds instead. job.json records the
 admission (`run.remote.mem`) and the attempt records
 `execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
+
+A tool can declare a preflight (`Tool.preflight`: a Python script in the tree
+and its args), which says whether a machine is prepared for it. When a
+`--tool` run's shipped tree declares one, `launch-request` runs it there,
+in the tree, with the runner's environment, before anything else is
+admitted. `RESEARCH_PREFLIGHT_INPUTS` names the run's `--send` files and,
+with custody, `RESEARCH_PREFLIGHT_CUSTODY` the staged key's directory. It
+runs under the interpreter `research` itself runs on, since it may be
+checking what else is installed. On exit 0 the run starts, and job.json
+records the report (`run.remote.preflight`). Any other exit refuses the run
+(`PreflightFailed`, exit 3, `refused.json`), with the script's stderr as the
+reason. Nothing starts and no attempt is recorded, so a refusal is an error,
+never a verdict, and `research merge --train` stops rather than bisecting. A
+declaration that exists but cannot be read also refuses. `--preflight TOOL`
+runs TOOL's preflight before a run of something else, such as a Lean record
+regeneration on a check pod, and refuses if the tree declares none. `check`
+declares `tools/check/preflight.py`: the tools `pod_setup.sh` installs, the
+Lean dependencies (warm, or restorable from the store, never GitHub), one
+store read, `avx512f` when the run carries an upstream build that needs it,
+and free disk.
 
 Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Provisioning is a separate, explicit act; `--on` never creates a pod.
@@ -343,6 +376,39 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
+
+### Slack
+
+`research slack` (`slack.py`) is the coordination API on Slack: handles ask one another (`ask`), announce to some or all
+(`announce`), and close each thread with 👀/✅/❌ (`pickup`, `done`, `decline`; `roster` for an announcement). The conventions
+(only handle holders are on Slack, who subscribes to what, the wake recipe, the norms) are the `using-slack` skill, and
+`.agents/skills/using-slack/registry.json` names the handles (user groups), the channels and the humans the commands
+check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and `$SLACK_API_URL` points
+it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port. `--dry-run` sends nothing
+and prints each request. `match` reads the thread (`conversations.replies`) only for a reply that tags no one;
+`verify-author` always fetches the message by channel and ts, since a wake payload is not evidence of its author, and fails
+closed on an allowlist entry without an id. Every handle posts through the one bot under its own username, so the username
+is a label: `verify-author` proves a post is Verity's bot, a listed alerting bot or a named human, not which handle wrote it.
+The same bot can place each reaction on a message only once, which is why an announcement's addressees answer with status
+lines rather than reactions. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the registry.
+
+The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `groups:history` (read, match, roster,
+verify-author in private channels; `channels:history` for a public one), `reactions:write` (pickup, done, decline), and for
+`groups sync` `usergroups:read` and `usergroups:write`. It must be a member of both channels (`chat:write.public` does not
+reach private channels), and Cursor's Slack app must be in both too: Cursor delivers the wakes, this bot posts.
+
+**Scaling past wake-on-everything (a design, not built).** Cursor's `subscribe_slack_channel` wakes every subscriber on every
+top-level message and has no mention filter, so each handle holder pays one wake (and one `match`) per ask anyone makes, and
+that cost grows with (handles × asks). Threads already scope replies to their participants, and workers never subscribe;
+what grows is `#agent-coordination`'s top level. The fix is a relay: a small service subscribed to the Slack Events API
+(`message.groups`) for `#agent-coordination`, which reads the registry, finds the handles a message addresses, and posts a
+one-line pointer (the permalink, the asker, the first line) into each addressed handle's own inbox channel
+(`#inbox-<handle>`, one per registry handle, created by the relay). Each holder then subscribes only to its inbox, top-level
+only, and never wakes for someone else's ask; `match` stays as the check on the one message it is woken for, and a thread's
+participants still subscribe to the thread itself. The relay holds only a bot token with `groups:history`, `chat:write` and
+`groups:write`, is idempotent per event id (Slack retries deliveries), sends what it can't route to `@infra`, and must fail
+visibly, not silently: when it is down, holders fall back to subscribing to `#agent-coordination` itself. Build it when
+wakes per holder per day make the top level a measurable cost, not before.
 
 ### Notes and evidence over MCP
 

@@ -306,7 +306,7 @@ def cmd_pull(argv: list[str]) -> int:
     try:
         m = remote.resolve_machine(ns.machine, ns.project)
         tgt = remote.pod_target(m)
-        ssh = remote.ssh_argv(tgt["host"], tgt["port"])
+        ssh = remote.ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
         store_root = f"{m['root'].rstrip('/')}/store"
         st = A.open_store(None, ns.store)
         doc = json.loads(_cat(ssh, f"{store_root}/attempts/{ns.run}.json"))
