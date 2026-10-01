@@ -274,7 +274,67 @@ def fold (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Ar
   let e := fun (i : Nat) => lw[i % 64]! * eIn[i / 64]!
   return addDelta e st.db.toList (addDelta (fun i => alpha * e i) st.da.toList out)
 
-def circuitFold (st : Stmt) : CircuitFold := { kLog := st.c.kLog, pin := st.pin, fold := st.fold }
+/-- Whether `folded` can read the block's structure: `k_log ≥ 6`, every range inside the block on slots of at least 64
+columns, and no two ranges sharing a column (`Circuit.checkLayout` establishes all three). -/
+def structured (st : Stmt) : Bool :=
+  let kl := st.c.kLog
+  let rs := st.c.ranges.toList
+  decide (6 ≤ kl) && rs.all (fun r => decide (6 ≤ r.slotLog ∧ r.slotLog ≤ kl ∧ (r.pos0 + r.count) * 2 ^ r.slotLog ≤ 2 ^ kl)) &&
+    decide (rs.Pairwise fun a b => (a.pos0 + a.count) * 2 ^ a.slotLog ≤ b.pos0 * 2 ^ b.slotLog ∨
+      (b.pos0 + b.count) * 2 ^ b.slotLog ≤ a.pos0 * 2 ^ a.slotLog)
+
+/-- `Σ_{i < n} f(i)`. -/
+def sumUpTo (n : Nat) (f : Nat → F128) : F128 := Nat.fold n (fun i _ acc => acc + f i) 0
+
+/-- A slot type's share of the 64 entries: `Σ_{y mod 64 = s} base[y] · eLo[⌊y/64⌋]` at `s`. -/
+def project (base eLo : Array F128) : Array F128 :=
+  Array.ofFn (n := 64) fun s => sumUpTo eLo.size fun u => base[s.val + 64 * u]! * eLo[u]!
+
+/-- `folded`'s ranges: each range's slot type folded once (`slotBase`, cached as `foldRanges` caches it), its share of
+entry `s` the base projected on `eq(r[.. sl − 6], ·)`, times `Σ_q eq(ρ[sl − 6 ..], q) · eq(r[sl − 6 ..], q)` over the
+range's slots `q`. -/
+def partialRanges (st : Stmt) (alpha : F128) (lw rho rr : Array F128) :
+    List Range → Array ((Kind × Nat) × Array F128) → Array F128 → V (Array F128)
+  | [], _, out => pure out
+  | r :: rs, bases, out => do
+    let key := (r.kind, r.slotLog)
+    let (base, bases') ← match bases.find? (fun kb => decide (kb.1 = key)) with
+      | some (_, b) => pure (b, bases)
+      | none => do
+        let b ← st.slotBase alpha lw rho key
+        pure (b, bases.push (key, b))
+    let h := r.slotLog - 6
+    let eHi := eqTable (rho.extract h rho.size)
+    let rHi := eqTable (rr.extract h rr.size)
+    let wt := sumUpTo r.count fun k => eHi[r.pos0 + k]! * rHi[r.pos0 + k]!
+    let p := project base (eqTable (rr.extract 0 h))
+    partialRanges st alpha lw rho rr rs bases' (Array.ofFn (n := 64) fun s => out[s.val]! + wt * p[s.val]!)
+
+/-- `folded` from the block's structure (`structured`), never a `2^k_log` vector: the ranges' shares (`partialRanges`),
+then each Δ entry `(i, c)`'s `α·e(i)` (B's: `e(i)`) times `eq(r, ⌊c/64⌋)` at `c mod 64`, and `β·eq(r, ⌊pin/64⌋)`, for
+`r = ts` reversed. -/
+def foldedPartial (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F128) := do
+  let kl := st.c.kLog
+  if rho.size + 6 != kl || lw.size != 64 then throw "lincheck fold: the point is not the block's"
+  let rr := ts.reverse
+  let out ← st.partialRanges alpha lw rho rr st.c.ranges.toList #[] (Array.replicate 64 0)
+  let n := 2 ^ kl
+  let eIn := eqTable rho
+  let eR := eqTable rr
+  let e := fun (i : Nat) => lw[i % 64]! * eIn[i / 64]!
+  let add := fun (w : Nat → F128) (o : Array F128) (ic : Nat × Nat) =>
+    if ic.2 < n then o.modify (ic.2 % 64) (· + w ic.1 * eR[ic.2 / 64]!) else o
+  let out := st.db.toList.foldl (add e) (st.da.toList.foldl (add fun i => alpha * e i) out)
+  return if st.pin < n then out.modify (st.pin % 64) (· + beta * eR[st.pin / 64]!) else out
+
+/-- The lincheck's `CircuitFold.folded`: `foldedPartial` on a structured block, else `fold` with `β` at the pin, halved. -/
+def folded (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F128) :=
+  if st.structured && ts.size + 6 == st.c.kLog then st.foldedPartial alpha beta lw rho ts
+  else do
+    let v ← st.fold alpha lw rho
+    pure (ts.foldl (fun c t => halve t c) (v.modify st.pin (· + beta)))
+
+def circuitFold (st : Stmt) : CircuitFold := { kLog := st.c.kLog, pin := st.pin, fold := st.fold, folded := st.folded }
 
 /-- The region's point in `F^m` for a link point `r ∈ F^{m_pts}` (§16.2). -/
 def regionPoint (st : Stmt) (reg : Region) (r : Array F128) : Array F128 := Id.run do
