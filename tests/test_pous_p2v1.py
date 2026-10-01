@@ -213,6 +213,23 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
     assert body["metrics"] is None and body["measurements"] == [] and "--gates-only" in body["stopped"]
 
 
+def test_audits_0_runs_the_p2_arm_untimed_with_no_limit_audit_or_control_and_says_so(tmp_path, monkeypatch):
+    _, harness, _ = _p2()
+    monkeypatch.setattr(harness.H, "audit_round", lambda *a, **k: pytest.fail("an untimed run started an audit"))
+    monkeypatch.setattr(harness.H, "calibrate_limit", lambda *a, **k: pytest.fail("an untimed run calibrated a limit"))
+    body = _bench().P2V1Gpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=_backend(), params=_small())
+    assert body["timed"] is False and body["audits"] == "skipped (untimed placement)" and body["profile"] is None
+    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags"}
+    assert all(g["passed"] for g in body["gates"].values())
+    m = body["metrics"]
+    assert m["timed"] is False and set(m["loop"]["overhead"]) == {1, 8} and m["seqroot"]["twice_limit_s"] is None
+    assert not {"audit", "deadline", "calibration", "value_control", "late_control", "recompute_control"} & set(m)
+    names = {r["name"] for r in body["measurements"]}
+    assert {"encode_GBps", "stored_GBps", "decode_overhead_T1", "seqroot_root_s"} <= names
+    assert not [name for name in names if name.startswith(("audit", "recompute"))]
+    assert not (tmp_path / "leaves-p2.bin").exists()
+
+
 def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monkeypatch):
     import json
 

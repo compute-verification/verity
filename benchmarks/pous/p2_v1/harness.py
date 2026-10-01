@@ -191,6 +191,23 @@ def _recomputer(backend: Backend, bound: Any, rows_: Any, dropped: list[int]) ->
     return rc
 
 
+def _seqroot(backend: Backend, bound: Any, plain_rows: Any, dropped: list[int], reps: int, limit: int | None) -> dict[str, Any]:
+    """SeqRoot's block (`seqroot_block`) encoded again from its plaintext row, `max(3, reps)` times: its two roots, against
+    twice the limit when there is one (`None` in an untimed run)."""
+    clocks = []
+    j = seqroot_block(dropped)
+    m_j = plain_rows[dropped.index(j):dropped.index(j) + 1]
+    root_reps = H._reps_raw(backend.timer, lambda: bound.encode(m_j, j), max(3, reps))
+    one = min(root_reps)
+    if backend.clock_mhz is not None and backend.clock_mhz():
+        clocks.append(backend.clock_mhz())
+    return {"block": j, "encode_one_block_s": one, "encode_one_block_reps_s": root_reps, "root_s": one / 2,
+            "twice_limit_s": 2 * limit / 1e9 if limit is not None else None,
+            "root_over_twice_limit": (one / 2) / (2 * limit / 1e9) if limit else None, "sampled_sm_mhz": clocks or None,
+            "label": "untuned root (an addition chain on CGBN's generic squaring): an upper bound on the fastest GPU root, "
+                     "not a SeqRoot floor"}
+
+
 def seqroot_block(dropped: list[int]) -> int:
     """SeqRoot's block: a pseudo-random one of the dropped blocks, whose plaintext row the recompute control holds."""
     return dropped[int.from_bytes(hashlib.sha256(b"verity-pous/bench/p2-v1/seqroot").digest()[:8], "big") % len(dropped)]
@@ -268,6 +285,35 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     plain = {t: statistics.median(plain_reps[t]) for t in tokens}
     pous = {t: statistics.median(pous_reps[t]) for t in tokens}
     decode_s = statistics.median(decode_reps)
+    launch_bound = {t: (copy_bw is not None and (used / plain[t]) / 1e9 < H.LAUNCH_BOUND_FRACTION * copy_bw) for t in tokens}
+    loop = {"tokens": tokens, "tensors": len(pl), "tensor_bytes": sum(size for *_, size in pl), "plain_s": plain, "pous_s": pous,
+            "decode_s": decode_s, "overhead": {t: pous[t] / plain[t] - 1 for t in tokens},
+            "slowdown": {t: pous[t] / plain[t] for t in tokens}, "plain_graphed": plain_how, "pous_graphed": pous_how,
+            "plain_reps_s": plain_reps, "pous_reps_s": pous_reps, "device_copy_GBps": copy_bw, "launch_bound": launch_bound}
+    dropped = list(range(0, blocks, RECOMPUTE_EVERY))
+
+    def result(metrics: dict[str, Any], rows_: list[tuple[str, Any, str]], prof: dict[str, Any] | None) -> dict[str, Any]:
+        return {"implementation": {"name": "p2-v1-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
+                                   "kernels": "p2v1.cu: p2dec.cu's tuned decode with v1 keys expanded by pous_native.shake256_rows; "
+                                              "encode by an addition-chain root on CGBN's generic squaring"},
+                "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
+                "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex()},
+                **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
+                "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
+
+    if not a.audits:
+        seqroot = _seqroot(backend, bound, plaintext_rows(bound, c, dropped), dropped, a.reps, None)
+        nvme = H.nvme_probe(a.nvme_dir, c_host, nb, a.nvme_samples) if a.nvme_dir else None
+        facts["after"] = backend.facts()
+        metrics = {**H.UNTIMED, "encode_s": encode_s, "encoded_blocks": encoded, "encode_GBps": encoded * payload / encode_s / 1e9,
+                   "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,
+                   "stored_GBps": blocks * nb / decode_s / 1e9, "decode_reps_s": decode_reps, "loop": loop, "seqroot": seqroot,
+                   "nvme": nvme}
+        rows_ = [("encode_GBps", metrics["encode_GBps"], "GB/s"), ("stored_GBps", metrics["stored_GBps"], "GB/s")]
+        rows_ += [(f"decode_overhead_T{t}", loop["overhead"][t], "x") for t in tokens]
+        rows_ += [("seqroot_root_s", seqroot["root_s"], "s")]
+        rows_ += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
+        return result(metrics, rows_, None)
 
     leaves = out / "leaves-p2.bin"
     leaves.write_bytes(b"".join(R.leaf(salt, i // bps, i % bps, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
@@ -285,7 +331,6 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     value = control("p2-value", H.control_answers(c_host, nb, zero=set(range(0, blocks, 10))))
     late = control("p2-late", H.control_answers(c_host, nb, late_every=10, late_ns=limit + H.LATE_EXTRA_NS))
-    dropped = list(range(0, blocks, RECOMPUTE_EVERY))
     plain_rows = plaintext_rows(bound, c, dropped)
     rec = control("p2-recompute", H.control_answers(c_host, nb, recompute=_recomputer(backend, bound, plain_rows, dropped),
                                                     dropped=set(dropped)))
@@ -293,14 +338,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                  "pattern": f"one block in {RECOMPUTE_EVERY} of all of C, each re-encoded on demand from its decoded row Dec(C_i)",
                  **rec, **H.recompute_margins(rec, set(dropped), limit)}
 
-    clocks = []
-    j = seqroot_block(dropped)
-    m_j = plain_rows[dropped.index(j):dropped.index(j) + 1]
-    root_reps = H._reps_raw(backend.timer, lambda: bound.encode(m_j, j), max(3, a.reps))
-    one = min(root_reps)
+    seqroot = _seqroot(backend, bound, plain_rows, dropped, a.reps, limit)
     del plain_rows
-    if backend.clock_mhz is not None and backend.clock_mhz():
-        clocks.append(backend.clock_mhz())
     nvme = H.nvme_probe(a.nvme_dir, c_host, nb, a.nvme_samples) if a.nvme_dir else None
     facts["after"] = backend.facts()
 
@@ -315,17 +354,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     point = {"k": k == R.K_AUDIT, "rtt_allowance": bool(honest.get("rtt_allowance_within_spec")),
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
-    seqroot = {"block": j, "encode_one_block_s": one, "encode_one_block_reps_s": root_reps, "root_s": one / 2,
-               "twice_limit_s": 2 * limit / 1e9,
-               "root_over_twice_limit": (one / 2) / (2 * limit / 1e9) if limit else None, "sampled_sm_mhz": clocks or None,
-               "label": "untuned root (an addition chain on CGBN's generic squaring): an upper bound on the fastest GPU root, "
-                        "not a SeqRoot floor"}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
-    launch_bound = {t: (copy_bw is not None and (used / plain[t]) / 1e9 < H.LAUNCH_BOUND_FRACTION * copy_bw) for t in tokens}
-    loop = {"tokens": tokens, "tensors": len(pl), "tensor_bytes": sum(size for *_, size in pl), "plain_s": plain, "pous_s": pous,
-            "decode_s": decode_s, "overhead": {t: pous[t] / plain[t] - 1 for t in tokens},
-            "slowdown": {t: pous[t] / plain[t] for t in tokens}, "plain_graphed": plain_how, "pous_graphed": pous_how,
-            "plain_reps_s": plain_reps, "pous_reps_s": pous_reps, "device_copy_GBps": copy_bw, "launch_bound": launch_bound}
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),
                 "allowance_kind": honest.get("allowance_kind"), "rtt_allowance_ns": honest.get("rtt_allowance_ns"),
                 "honest_margin_min_s": (honest.get("margin_s") or {}).get("min"),
@@ -344,13 +373,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
               ("recompute_margin_max_s", recompute["device_margin_s"].get("max"), "s"),
               ("seqroot_root_s", seqroot["root_s"], "s")]
     rows_ += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
-    return {"implementation": {"name": "p2-v1-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
-                               "kernels": "p2v1.cu: p2dec.cu's tuned decode with v1 keys expanded by pous_native.shake256_rows; "
-                                          "encode by an addition-chain root on CGBN's generic squaring"},
-            "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
-            "setup": {"manifest": P.manifest(), "w_commitment": model.hex(), "salt": salt.hex()},
-            "gates": gates, "metrics": metrics, "profile": profile(k, limit, gaps) if gates["timed_audit"]["passed"] else None,
-            "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
+    return result(metrics, rows_, profile(k, limit, gaps) if gates["timed_audit"]["passed"] else None)
 
 
 def _encode_head(backend: Backend, bound: Any, m_dev: Any, encoded: int) -> tuple[float, Any]:

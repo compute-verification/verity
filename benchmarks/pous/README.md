@@ -104,3 +104,8 @@ the run's `d` in `scheme` and `scheme_params`.
 and with CUDA 12.8+ it uses 2.7.1 cu128. It builds `pous_native` for the device's capability (`native.arch_list`) and `libp2v1.so`
 for `ARCH=sm_120` on an RTX PRO 6000. Without a system `gmp.h`, CGBN's host pass takes gmpy2's wheel's from the venv.
 `WORK`, `VCPU`, `RCPU` and `WORKERS` place it on a shared node's directories and cores.
+
+`AUDITS=0` (`bench.py --audits 0`, band-gpu and p2-v1-gpu only) is for an untimed, preemptible placement. The gates, encode,
+the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's SeqRoot root) run as in a timed run. No limit,
+audit or control runs, so there is no certificate gate and no storage profile. `bench-result.json` and `result.json`'s
+fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no audit or latency number is cited from it.

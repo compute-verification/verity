@@ -15,6 +15,8 @@
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
+# AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
+# limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 #
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.

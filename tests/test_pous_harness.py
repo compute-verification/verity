@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import socket
 import struct
 import sys
@@ -253,6 +254,54 @@ def test_bench_refuses_a_band_d_without_a_certificate_and_on_another_impl(tmp_pa
         bench.main(["--impl", "band-gpu", "--band-d", "4", *common])
     with pytest.raises(SystemExit, match="band-gpu's, not reference's"):
         bench.main(["--impl", "reference", "--band-d", "6", *common])
+
+
+def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_so(tmp_path, monkeypatch):
+    """`--audits 0` (`AUDITS=0`, an untimed placement): the gates, encode, the loop and the step floor run, but no limit,
+    audit or control does; the result says `timed: false` and carries no audit, deadline or latency number to cite."""
+    import dataclasses
+
+    params = _small()
+    harness = _harness()
+    monkeypatch.setattr(harness, "audit_round", lambda *a, **k: pytest.fail("an untimed run started an audit"))
+    monkeypatch.setattr(harness, "calibrate_limit", lambda *a, **k: pytest.fail("an untimed run calibrated a limit"))
+    backend = dataclasses.replace(_backend(params), step=lambda settings, reps: [7e-4] * reps)
+    body = _bench().BandGpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=backend, base=params, vectors=_vectors(params))
+    assert body["timed"] is False and body["audits"] == "skipped (untimed placement)" and body["profile"] is None
+    gates = body["gates"]
+    assert set(gates) == {"vector", "reference_encode", "round_trip", "segment_tags"} and all(g["passed"] for g in gates.values())
+    m = body["metrics"]
+    assert m["timed"] is False and m["step_floor"]["min_s"] == 7e-4 and set(m["loop"]["overhead"]) == {1, 8}
+    assert not {"audit", "deadline", "calibration", "value_control", "late_control", "recompute_control"} & set(m)
+    names = {r["name"] for r in body["measurements"]}
+    assert {"encode_GBps", "decode_overhead_T1", "decode_overhead_T8", "step_floor_min_s"} <= names
+    assert not [name for name in names if name.startswith(("audit", "recompute", "certificate"))]
+    assert not (tmp_path / "leaves.bin").exists()
+
+
+def test_bench_labels_an_untimed_result_and_refuses_audits_0_where_it_would_pass_vacuously(tmp_path, monkeypatch):
+    bench = _bench()
+    common = ["--weight-set", "qwen2.5-0.5b/linears+head", "--hardware", "cpu", "--out", str(tmp_path)]
+    with pytest.raises(SystemExit, match="only band-gpu and p2-v1-gpu run untimed"):
+        bench.main(["--impl", "reference", "--audits", "0", *common])
+
+    class Untimed:
+        name = "band-gpu"
+
+        def run(self, a, ws, out):
+            assert a.audits == 0
+            return {"timed": False, "audits": "skipped (untimed placement)", "gates": {"round_trip": {"passed": True}},
+                    "metrics": {"ewb": 2e9, "decode_pass_s": 1e-3}, "profile": None,
+                    "measurements": [{"name": "encode_GBps", "value": 3.0, "unit": "GB/s"}]}
+
+    monkeypatch.setitem(bench.IMPLS, "band-gpu", Untimed)
+    monkeypatch.setattr(bench, "conformance_gate", lambda name: {"passed": True})
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    assert bench.main(["--impl", "band-gpu", "--audits", "0", *common]) == 0
+    doc = json.loads((tmp_path / "bench-result.json").read_text())
+    assert doc["timed"] is False and doc["audits"] == "skipped (untimed placement)"
+    fingerprint = json.loads((tmp_path / "result.json").read_text())["workload_fingerprint"]
+    assert fingerprint["timed"] is False and fingerprint["audits"] == "skipped (untimed placement)"
 
 
 def _challenge(conn, i: int, width: int) -> tuple[int, int, bytes]:

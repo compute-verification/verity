@@ -302,11 +302,14 @@ class BandGpu:
         if body["metrics"] is None:
             body["profile"] = None
             return body
+        body["gates"]["segment_tags"] = tags_gate(rows, len(rows))
+        if body.get("timed") is False:      # --audits 0: no audit, so no certificate gate and no profile
+            body["profile"] = None
+            return body
         audit = body["metrics"]["audit"]
         k, limit = int(audit.get("k") or 0), int(audit.get("limit_ns") or 0)
         gate, gaps = certificate_gate(scheme, k, limit)
         body["gates"]["certificate"] = gate
-        body["gates"]["segment_tags"] = tags_gate(rows, len(rows))
         body["profile"] = profile_json(scheme, k, limit, gaps + extra) if body["gates"]["timed_audit"]["passed"] else None
         return body
 
@@ -468,7 +471,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--weight-set", required=True, help="an id of benchmarks/pous/weight_sets.json")
     ap.add_argument("--hardware", required=True, help="a census hardware id (census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--audits", type=int, default=20)
+    ap.add_argument("--audits", type=int, default=20,
+                    help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
+                         "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the verifier's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu, p2-gpu: only the first N segments (0: all)")
@@ -510,6 +515,8 @@ def main(argv: list[str] | None = None) -> int:
     t = time.perf_counter()
     from verity_pous import schemes as _schemes
 
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu")):
+        raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v1-gpu run untimed (--audits 0)")
     if a.band_d:
         if a.impl != "band-gpu":
             raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")
@@ -538,6 +545,7 @@ def main(argv: list[str] | None = None) -> int:
     (out / "bench-result.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     ewb = (doc.get("metrics") or {}).get("ewb")
     print(json.dumps({"scheme": doc["scheme"], "impl": a.impl, "weight_set": a.weight_set, "passed": doc["passed"],
+                      **({"timed": False, "audits": doc["audits"]} if doc.get("timed") is False else {}),
                       "ewb_MBps": {t: round(v / 1e6, 1) for t, v in ewb.items()} if isinstance(ewb, dict)
                       else (round(ewb / 1e6, 3) if ewb is not None else None),
                       "gates": {g: v.get("passed") for g, v in doc["gates"].items()}}), flush=True)
@@ -554,7 +562,8 @@ def main(argv: list[str] | None = None) -> int:
             "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
             "workload_fingerprint": {"benchmark": SCHEMA, "scheme": doc["scheme"], "scheme_params": doc.get("scheme_params"),
                                      "impl": a.impl, "weight_set": a.weight_set, "hardware": a.hardware,
-                                     "impl_commit": a.impl_commit},
+                                     "impl_commit": a.impl_commit,
+                                     **({"timed": False, "audits": doc["audits"]} if doc.get("timed") is False else {})},
             "validation": {"status": "passed" if doc["passed"] else "failed", "checker": "benchmarks/pous/bench.py gates",
                            "detail": json.dumps({g: v.get("passed") for g, v in doc["gates"].items()}),
                            "evidence": [rel]},

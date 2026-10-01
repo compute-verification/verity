@@ -528,6 +528,10 @@ def control_answers(c_host: bytes, width: int, *, zero: set[int] = frozenset(), 
     return answer
 
 
+UNTIMED = {"timed": False, "audits": "skipped (untimed placement)"}
+"""The label of an `--audits 0` run (`AUDITS=0`, a preemptible placement): no limit, audit or control ran, so it reports no
+audit, deadline or latency number and has no storage profile; its gates, encode, loop and step floor ran as in a timed run."""
+
 RECOMPUTE_MARGIN_KIND = "upper bound on attacker latency (honest kernel, per-step launches, host sync)"
 """The band's recompute is `dense.decode_blocks`: the honest kernel, its permute steps launched one by one from Python, and a
 host sync, all inside the timed call, so its device time is above an attacker's and `device_margin_s` overstates the margin."""
@@ -735,6 +739,32 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     plain = {t: statistics.median(plain_reps[t]) for t in tokens}
     pous = {t: statistics.median(pous_reps[t]) for t in tokens}
     decode_s = statistics.median(decode_reps)
+    launch_bound = {t: (copy_bw is not None and (used / plain[t]) / 1e9 < LAUNCH_BOUND_FRACTION * copy_bw) for t in tokens}
+    loop = {"tokens": tokens, "tensors": len(pl), "tensor_bytes": sum(size for *_, size in pl), "plain_s": plain, "pous_s": pous,
+            "decode_s": decode_s, "overhead": {t: pous[t] / plain[t] - 1 for t in tokens},
+            "slowdown": {t: pous[t] / plain[t] for t in tokens}, "plain_graphed": plain_how, "pous_graphed": pous_how,
+            "plain_reps_s": plain_reps, "pous_reps_s": pous_reps, "device_copy_GBps": copy_bw, "launch_bound": launch_bound}
+    cert = scheme.certificate
+
+    def result(metrics: dict[str, Any], rows: list[tuple[str, Any, str]], gaps: tuple[str, ...]) -> dict[str, Any]:
+        return {"implementation": {"name": "band-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/band_gpu/harness.py",
+                                   "kernels": kernels, "reference_segments": picks},
+                "device": facts, "segments": n, "segments_of_weight_set": total, "blocks": p.blocks, "weight_bytes": used,
+                **({} if a.audits else UNTIMED), "gates": gates, "metrics": metrics, "scheme_obj": scheme, "extra_gaps": gaps,
+                "tag_rows": backend.tag_bytes(SALT, max(n, tag_segments)),
+                "measurements": [{"name": k, "value": v, "unit": u} for k, v, u in rows if v is not None]}
+
+    if not a.audits:
+        step = step_floor(backend, a.step_reps, cert.call_ns if cert is not None else None, facts)
+        nvme = nvme_probe(a.nvme_dir, c_host, width, a.nvme_samples) if a.nvme_dir else None
+        facts["after"] = backend.facts()
+        metrics = {**UNTIMED, "encode_s": encode_s, "encode_GBps": used / encode_s / 1e9, "decode_pass_s": decode_s,
+                   "ewb": used / decode_s, "decode_reps_s": decode_reps, "loop": loop, "step_floor": step, "nvme": nvme}
+        rows = [("encode_GBps", metrics["encode_GBps"], "GB/s")]
+        rows += [(f"decode_overhead_T{t}", loop["overhead"][t], "x") for t in tokens]
+        rows += [("step_floor_min_s", step["min_s"], "s")] if step else []
+        rows += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
+        return result(metrics, rows, ())
 
     leaves = out / "leaves.bin"
     leaves.write_bytes(b"".join(leaf_hash(p, SALT, i, c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
@@ -766,7 +796,6 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                  **recompute_ctl, **recompute_margins(recompute_ctl, set(dropped), limit),
                  "recompute_margin_kind": RECOMPUTE_MARGIN_KIND}
 
-    cert = scheme.certificate
     step = step_floor(backend, a.step_reps, cert.call_ns if cert is not None else None, facts)
     nvme = nvme_probe(a.nvme_dir, c_host, width, a.nvme_samples) if a.nvme_dir else None
     facts["after"] = backend.facts()
@@ -790,11 +819,6 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                 "effective_rounds": None if cert is None else cert.effective_rounds(limit),
                 "certificate_rounds": None if cert is None else cert.rounds,
                 "effective_rounds_at_measured_step": limit // int(step["min_s"] * 1e9) if step and step["min_s"] > 0 else None}
-    launch_bound = {t: (copy_bw is not None and (used / plain[t]) / 1e9 < LAUNCH_BOUND_FRACTION * copy_bw) for t in tokens}
-    loop = {"tokens": tokens, "tensors": len(pl), "tensor_bytes": sum(size for *_, size in pl), "plain_s": plain, "pous_s": pous,
-            "decode_s": decode_s, "overhead": {t: pous[t] / plain[t] - 1 for t in tokens},
-            "slowdown": {t: pous[t] / plain[t] for t in tokens}, "plain_graphed": plain_how, "pous_graphed": pous_how,
-            "plain_reps_s": plain_reps, "pous_reps_s": pous_reps, "device_copy_GBps": copy_bw, "launch_bound": launch_bound}
     metrics = {"encode_s": encode_s, "encode_GBps": used / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,
                "decode_reps_s": decode_reps, "loop": loop, "deadline": deadline, "calibration": cal, "audit": honest,
                "value_control": value, "late_control": late, "recompute_control": recompute, "step_floor": step, "nvme": nvme}
@@ -808,9 +832,4 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     rows += [("certificate_headroom_s", deadline["certificate_headroom_ns"] / 1e9, "s")] if covered is not None else []
     rows += [("step_floor_min_s", step["min_s"], "s")] if step else []
     rows += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
-    return {"implementation": {"name": "band-gpu", "commit": a.impl_commit, "harness": "benchmarks/pous/band_gpu/harness.py",
-                               "kernels": kernels, "reference_segments": picks},
-            "device": facts, "segments": n, "segments_of_weight_set": total, "blocks": p.blocks, "weight_bytes": used,
-            "gates": gates, "metrics": metrics, "scheme_obj": scheme, "extra_gaps": gaps,
-            "tag_rows": backend.tag_bytes(SALT, max(n, tag_segments)),
-            "measurements": [{"name": k, "value": v, "unit": u} for k, v, u in rows if v is not None]}
+    return result(metrics, rows, gaps)
