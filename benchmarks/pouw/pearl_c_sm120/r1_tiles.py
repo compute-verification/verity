@@ -15,7 +15,10 @@ T x T words, for T in --tiles, it reports:
   m16n8_sdet, m16n8_cheap: the share of the tile's (m16n8 sub-tile, atom) pairs whose every word is S-determined, or
     cheaply spotted (the tensor core steps a whole m16n8 tile, so only those let a derived word skip its step);
   binade: the share of the tile's words that keep H's top bit and sign at every step (the domain check), and ratio, the
-    largest |C - H| / |H| over the chain.
+    largest |C - H| / |H| over the chain;
+  row_cheap, row_exact: the largest share, over the tile's rows, of a row's steps in the tile that are cheaply spotted, or
+    exact (a written row diluted among model rows, one per tile, shows here and nowhere else); row_cheap_lo and
+    row_exact_lo, the smallest.
 
 On model rows a threshold's false-positive rate is the share of tiles above it; on written rows its catch rate is the share
 above it.  Every tile's values are written with its first row and column, so the tiles holding row 0 of a capture (the
@@ -61,7 +64,7 @@ def job(cls: str, layer: int, args, key: str) -> dict:
     inside, ratio = np.ones(len(hu), bool), np.zeros(len(hu))
     run, best = np.zeros(len(hu), np.int64), np.zeros(len(hu), np.int64)
     debit = {L: np.zeros(len(hu), np.int64) for L in DEBITS}
-    exact_n, sdet_n = np.zeros(len(hu), np.int64), np.zeros(len(hu), np.int64)
+    exact_n, sdet_n, cheap_n = (np.zeros(len(hu), np.int64) for _ in range(3))
     m_sdet, m_cheap = [], []
     checked = 0
     for t in range(args.atoms):
@@ -85,6 +88,7 @@ def job(cls: str, layer: int, args, key: str) -> dict:
         best = np.maximum(best, run)
         exact_n += exact
         sdet_n += sdet
+        cheap_n += cheap
         inside &= (top_bit(now) == e0) & (np.sign(now) == np.sign(hu)) & (ptop < e0)
         ratio = np.maximum(ratio, np.abs(now - hu) / np.abs(hu))
         m_sdet.append(sdet.reshape(rows // 16, 16, cols // 8, 8).all(axis=(1, 3)))
@@ -108,6 +112,9 @@ def job(cls: str, layer: int, args, key: str) -> dict:
         per["m16n8_cheap"] = tiled(mch, T // 16, T // 8).mean(axis=2)
         per["binade"] = tiled(grid(inside), T).mean(axis=2)
         per["ratio"] = tiled(grid(ratio), T).max(axis=2)
+        by_row = lambda v: tiled(grid(v), T).reshape(rows // T, cols // T, T, T).mean(axis=3) / args.atoms
+        per["row_cheap"], per["row_cheap_lo"] = by_row(cheap_n).max(axis=2), by_row(cheap_n).min(axis=2)
+        per["row_exact"], per["row_exact_lo"] = by_row(exact_n).max(axis=2), by_row(exact_n).min(axis=2)
         out["tiles"][str(T)] = {
             "shape": list(per["exact"].shape),
             "summary": {k: {"min": float(v.min()), "p50": float(np.median(v)), "p99": float(np.quantile(v, 0.99)),
