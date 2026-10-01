@@ -98,14 +98,15 @@ padding when `hZero` is discharged, and not before.
 
 ## Before the headline is cited: the legacy SHA-256 and Blake3 paths
 
-The headline is about SHA-512 throughout. These older paths say otherwise, and each is retired, by its owner, before
-the headline is cited (red-team review of the restatement, change 6). Retiring a pinned theorem removes its pin, a
-changed record with a named statement reviewer.
+The headline is about SHA-512 throughout. These older paths say otherwise (red-team review of the restatement, change
+6). The Blake3 row leaf's setup lemmas are retired: `Refine.setup_wf` with its pin, and `blake3_regions_wf`,
+`parse_checkLayout`, `checkLayout_slots` and `pin_ok`, which only it used (`Refine/Setup.lean`). Each item below reaches
+past its own files, so it is retired by its owner before the headline is cited. Retiring a pinned theorem removes its
+pin, a changed record with a named statement reviewer.
 
-| Item | What it is | Owner |
-|---|---|---|
-| `Refine.setup_wf`, `blake3_regions_wf` (`Refine/Setup.lean`) | the Blake3 row leaf's statements are well formed (`Flock.Blake3Row`); `setup_wf` is pinned | the refinement lane (bc-159ce83b) |
-| `Refine/Live.lean` | `liveTable`, one table's live session on the Blake3 unsalted path | the refinement lane (bc-159ce83b) |
-| `Flock/Tags.lean` | the tags with a SHA-256 frame-v3 tree (`frame_v3_tree: sha256`: `circuit19c7269a`, `circuitFd02e847`, `circuit631567f7`) and SHA-256 leaves | flock-verifier |
-| `verity/flock-tables` | the tables statement in `live/src/tables.rs`, `python/verity_flock/tables.py` and `backends/flock/README.md` | flock-circuit |
-| M0's coins | the non-ZK session's coins from one seed (`cfg.coin_seed`), not per-round OS coins (`ASSUMPTIONS.md`, The headline, its coins) | proofs-verify-overlap |
+| Item | What it is | Owner | What it reaches |
+|---|---|---|---|
+| `Refine/Live.lean` | `liveTable`, one table's live session on the Blake3 unsalted path, and `Game.Sim` (`Sim.prob_le`, pinned) | the refinement lane (bc-159ce83b) | `Refine/LiveSim.lean` (`live_le`, pinned) and `Refine/LiveCompiled.lean` (`live_le_tableC`, pinned) are built on it |
+| `Flock/Tags.lean` | the tags with a SHA-256 frame-v3 tree (`frame_v3_tree: sha256`: `circuit19c7269a`, `circuitFd02e847`, `circuit631567f7`) and SHA-256 leaves | flock-verifier | seven agreement sets in `verifier/vectors.json` name them (`lean_statement`), which `check`'s `lean-agreement` replays against the upstream builds `upstream.json` pins and `ci-bundle.sh` builds; `circuitEb90718f` is `circuit631567f7` with changes; `PROTOCOL.md` §16.5 and the verifier's README describe them |
+| `verity/flock-tables` | the tables statement in `live/src/tables.rs`, `python/verity_flock/tables.py` and `backends/flock/README.md` | flock-circuit | M0's code, past the Lean package |
+| M0's coins | the non-ZK session's coins from one seed (`cfg.coin_seed`), not per-round OS coins (`ASSUMPTIONS.md`, The headline, its coins) | proofs-verify-overlap | M0's code |
