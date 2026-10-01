@@ -4,15 +4,17 @@
 0. Build: rates.cu with the node's nvcc into OUT, refused on a spill, a stack frame or local memory.
 1. Each rate kernel at REPEATS repeats, REPS times each after a warm-up: its price is the slope of the median time over the
    repeats at NVML's SM clock (read before and after), in units of one dense E4M3 MAC (1,024 a clock an SM), per element
-   (rate_salt, rate_free: G groups of four entries a thread) or per instruction (the controls: eight a repeat a thread;
-   rate_encdec's two F2FPs a step).
+   (rate_salt, rate_salt_fused, rate_free: G groups of four entries a thread) or per instruction (the controls: eight a
+   repeat a thread; rate_encdec's two F2FPs a step; a pair control's two ops four registers each, so two ops that share an
+   issue pipe price at its rate and two on different pipes at the dispatch bound).
 2. The floor: SALT and FREE are the cheapest instruction counts per element of the steps that read the unit's stream and
    of those that read the data alone (#295's `d3_trace` at sums = f16, with the negations folded into the adds and |.|
    into HMNMX2; the PRMT that packs two casts' halves is left out, since a hand-scheduled F2FP can merge into the other
    half).  A lower bound on any implementation's price is the larger of the dispatch bound (DISPATCH units an
    instruction: four schedulers a clock, 32 lanes each, against 1,024 MACs) times the count, and each class's count
    times its measured price.  rate_salt and rate_free are what the PTX form achieves, with one feedback LOP3 a group
-   (and, in rate_salt, the PRMTs).
+   (and, in rate_salt, the PRMTs).  SALT_FUSED is SALT with the centre and the scale in one HFMA2 (exact for every E4M3
+   amplitude, so rate_salt_fused's gate inputs carry E4M3 amplitudes and are held to the unfused reference).
 3. The gate: rate_salt and rate_free at one repeat on GATE threads; their inputs and outputs go to OUT/rates/gate.json,
    and `rates.py --check OUT` holds them to #295's `verity.ml.tc.fp16` (PR #295's tree on PYTHONPATH).
 
@@ -42,13 +44,20 @@ GATE = 64
 PATTERNS = 1024
 MACS_PER_SM_CLOCK = 1024
 DISPATCH = 8
-MIXES = {"rate_salt": 4 * G, "rate_free": 4 * G}
+MIXES = {"rate_salt": 4 * G, "rate_salt_fused": 4 * G, "rate_free": 4 * G}
+KIND = {"rate_free": "free", "rate_salt_fused": "salt8"}
+#: name: (class, instructions a register a repeat); a pair's two ops alternate over the eight registers
 CONTROLS = {"rate_ffma": ("FFMA", 1), "rate_hfma2": ("HFMA2", 1), "rate_lop3": ("LOP3", 1), "rate_hadd2": ("HADD2", 1),
             "rate_hmul2": ("HMUL2", 1), "rate_hmnmx2": ("HMNMX2", 1), "rate_encdec": ("F2FP", 2),
-            "rate_dec": ("F2FP_DEC", 1), "rate_prmt": ("PRMT", 1)}
+            "rate_dec": ("F2FP_DEC", 1), "rate_prmt": ("PRMT", 1),
+            "rate_pair_hfma2_hadd2": ("HFMA2+HADD2", 1), "rate_pair_hadd2_encdec": ("HADD2+F2FP", 1.5),
+            "rate_pair_hadd2_lop3": ("HADD2+LOP3", 1), "rate_pair_hadd2_ffma": ("HADD2+FFMA", 1),
+            "rate_pair_encdec_lop3": ("F2FP+LOP3", 1.5), "rate_pair_hfma2_hmnmx2": ("HFMA2+HMNMX2", 1)}
 #: per element: the noise field (LOP3), the centre (HFMA2), the scale (HMUL2), s = e + e o pi (HADD2), the three blocks
 #: (HADD2), the three casts (F2FP)
 SALT = {"LOP3": 0.5, "HFMA2": 0.5, "HMUL2": 0.5, "HADD2": 2.0, "F2FP": 1.5}
+#: SALT with the centre and the scale in one HFMA2 (rate_salt_fused)
+SALT_FUSED = {"LOP3": 0.5, "HFMA2": 0.5, "HADD2": 2.0, "F2FP": 1.5}
 #: per element: the unpack (F2FP_DEC), the prescale (HMUL2), the sum of squares (HFMA2), partner and floor max (HMNMX2)
 FREE = {"F2FP_DEC": 0.5, "HMUL2": 0.5, "HFMA2": 0.5, "HMNMX2": 1.0}
 
@@ -95,16 +104,23 @@ def e4m3_codes(rng: random.Random) -> int:
     return sum(((c ^ 1) if c & 0x7F == 0x7F else c) << 8 * i for i, c in enumerate(rng.getrandbits(8) for _ in range(4)))
 
 
+def e4m3_amplitude(rng: random.Random) -> int:
+    """A positive finite E4M3 value at least 2^-6 (codes 0x08-0x7E), as an f16: the amplitudes rate_free forms."""
+    c = rng.randint(0x08, 0x7E)
+    return ((c >> 3) + 8) << 10 | (c & 7) << 7
+
+
 def patterns(kind: str) -> bytes:
     """PATTERNS threads' inputs, G groups of 8 words each.  "salt" (rate_salt, the controls): h0, h1, A0, A1, w0, w1, 0, 0;
-    the controls read words 0-7 and the next group's first two.  "free" (rate_free): four codes, six zeros, the floor
-    (2^-6 in both halves; rate_free reads group 0's)."""
+    the controls read words 0-7 and the next group's first two.  "salt8" (rate_salt_fused): the same with E4M3 amplitudes.
+    "free" (rate_free): four codes, six zeros, the floor (2^-6 in both halves; rate_free reads group 0's)."""
     rng = random.Random(f"ncp_sm120/rates/{kind}")
     words = []
     for _ in range(PATTERNS * G):
-        if kind == "salt":
+        if kind in ("salt", "salt8"):
+            amp = e4m3_amplitude if kind == "salt8" else (lambda r: f16_normal(r, True))
             words += [f16_normal(rng) | f16_normal(rng) << 16 for _ in range(2)]
-            words += [f16_normal(rng, True) | f16_normal(rng, True) << 16 for _ in range(2)]
+            words += [amp(rng) | amp(rng) << 16 for _ in range(2)]
             words += [rng.getrandbits(32), rng.getrandbits(32), 0, 0]
         else:
             words += [e4m3_codes(rng), 0, 0, 0, 0, 0, 0, 0x24002400]
@@ -119,7 +135,7 @@ def gate_inputs(blob: bytes, threads: int) -> list[list[int]]:
 def floor(units: dict[str, float]) -> dict:
     """The lower bound per element of each step set (module docstring, 2.)."""
     res = {}
-    for name, ops in (("salt", SALT), ("free", FREE)):
+    for name, ops in (("salt", SALT), ("salt_fused", SALT_FUSED), ("free", FREE)):
         dispatch = DISPATCH * sum(ops.values())
         classes = {c: n * units[c] for c, n in ops.items() if units.get(c) is not None}
         res[name] = {"ops": ops, "instructions": sum(ops.values()), "dispatch_bound": dispatch,
@@ -146,9 +162,9 @@ def run(out: str) -> int:
     nv = pc.Nvml(d.uuid)
     threads = d.sms * BLOCKS_PER_SM * THREADS_PER_BLOCK
     size = threads * G * 8 * 4
-    blobs = {kind: (patterns(kind) * -(-threads // PATTERNS))[:size] for kind in ("salt", "free")}
+    blobs = {kind: (patterns(kind) * -(-threads // PATTERNS))[:size] for kind in ("salt", "salt8", "free")}
     srcs, dst = {kind: d.put(b) for kind, b in blobs.items()}, d.alloc(size)
-    src = lambda name: srcs["free" if name == "rate_free" else "salt"]
+    src = lambda name: srcs[KIND.get(name, "salt")]
     reps = int(os.environ.get("REPS", "11"))
     result = {"identity": ident, "threads": threads, "repeats": list(REPEATS), "reps": reps, "kernels": {}}
 
@@ -197,19 +213,24 @@ def check(out: str) -> int:
     halves = lambda f, *ws: f(*map(lo, ws)) | f(*map(hi, ws)) << 16
     enc2 = lambda a: fp16.to_e4m3(lo(a)) | fp16.to_e4m3(hi(a)) << 8
     enc4 = lambda a, b: enc2(a) | enc2(b) << 16
-    bad = 0
-    for ins, inf, salt, free in zip(gate["inputs_salt"], gate["inputs_free"], gate["rate_salt"], gate["rate_free"]):
-        grp = [ins[8 * g:8 * g + 8] for g in range(G)]
-        centre = lambda w: fp16.fma(0x3400, 0x3C00 | (w & 0x3FF), 0xB600)
-        e = [[halves(lambda a, w: fp16.mul(a, centre(w)), gr[2 + j], gr[4 + j]) for j in range(2)] for gr in grp]
-        for g, gr in enumerate(grp):
-            h, x = gr[0:2], e[(g + 1) % G]
-            s = [halves(fp16.add, e[g][j], x[j]) for j in range(2)]
-            b0 = enc4(*(halves(fp16.add, h[j], e[g][j]) for j in range(2)))
-            b1 = enc4(*(halves(fp16.add, h[j], x[j]) for j in range(2)))
-            b2 = enc4(*(halves(lambda a, b: fp16.add(fp16.neg(a), fp16.neg(b)), h[j], s[j]) for j in range(2)))
-            want = [b0, b1, b2, b0 ^ b2, b1]
-            bad += sum(a != b for a, b in zip(salt[8 * g:8 * g + 5], want))
+    bad = words = 0
+    centre = lambda w: fp16.fma(0x3400, 0x3C00 | (w & 0x3FF), 0xB600)
+    for kernel, kind in (("rate_salt", "salt"), ("rate_salt_fused", "salt8")):
+        if kernel not in gate:
+            continue
+        for ins, salt in zip(gate[f"inputs_{kind}"], gate[kernel]):
+            grp = [ins[8 * g:8 * g + 8] for g in range(G)]
+            e = [[halves(lambda a, w: fp16.mul(a, centre(w)), gr[2 + j], gr[4 + j]) for j in range(2)] for gr in grp]
+            for g, gr in enumerate(grp):
+                h, x = gr[0:2], e[(g + 1) % G]
+                s = [halves(fp16.add, e[g][j], x[j]) for j in range(2)]
+                b0 = enc4(*(halves(fp16.add, h[j], e[g][j]) for j in range(2)))
+                b1 = enc4(*(halves(fp16.add, h[j], x[j]) for j in range(2)))
+                b2 = enc4(*(halves(lambda a, b: fp16.add(fp16.neg(a), fp16.neg(b)), h[j], s[j]) for j in range(2)))
+                want = [b0, b1, b2, b0 ^ b2, b1]
+                bad += sum(a != b for a, b in zip(salt[8 * g:8 * g + 5], want))
+                words += 5
+    for inf, free in zip(gate["inputs_free"], gate["rate_free"]):
         grp = [inf[8 * g:8 * g + 8] for g in range(G)]
         fl = grp[0][7]
         hs = [[halves(fp16.from_e4m3, gr[0] & 0xFF | (gr[0] >> 8 & 0xFF) << 16), halves(fp16.from_e4m3,
@@ -221,7 +242,7 @@ def check(out: str) -> int:
             q = [halves(lambda z: fp16.fma(z, z, 0), halves(lambda a: fp16.mul(a, 0x1C00), hs[g][j])) for j in range(2)]
             want = [*amp, *q, gr[0] ^ amp[0] ^ amp[1]]
             bad += sum(a != b for a, b in zip(free[8 * g:8 * g + 5], want))
-    words = len(gate["inputs_salt"]) * G * 10
+            words += 5
     print(json.dumps({"gate": "all match" if not bad else "MISMATCH", "words": words, "differing": bad}))
     return 1 if bad else 0
 

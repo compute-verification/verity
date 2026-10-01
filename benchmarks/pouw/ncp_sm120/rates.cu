@@ -6,13 +6,17 @@
 //   rate_salt  c = fma(1/4, t, -3/8), t = 0x3C00 | (w & 0x3FF);  e = A * c;  x = the other group's e (form_rows' gather of
 //              e o pi, here a register);  s = e + x;  [Q(h + e) | Q(h + x) | Q((-h) + (-s))], Q the e4m3x2 cast, the three
 //              4-code words b0, b1, b2 (the negations folded into the add);  next w = (b0 ^ b2, b1), the loop's one extra instruction a group
+//   rate_salt_fused  rate_salt with the centre and the scale in one HFMA2, e = fma(A/4, t, -3A/8): equal to A * c whenever
+//              -3A/8 is exact (every E4M3 amplitude), A/4 and -3A/8 formed once a row (here before the loop)
 //   rate_free  h = dec(codes), p = the other group's h (the partner);  A = max(max(|h|, |p|), floor);  z = h * 2^-8;
 //              q = fma(z, z, q);  next codes = codes ^ A0 ^ A1, the loop's one extra instruction a group
 //
 // Args (form_sm120.cu's): p0 the inputs (u32, threads x G x 8), p1 the outputs (u32, threads x G x 8: the last repeat's
 // b0, b1, b2 and w, or A0, A1, q0, q1 and codes); i0 repeats, i1 threads.  The controls chain eight independent registers
 // a thread through one instruction each a repeat: FFMA, HFMA2, LOP3, HADD2, HMUL2, HMNMX2, the e4m3x2 cast and its decode
-// (two F2FPs, encdec), the decode alone (F2FP.UNPACK_B) or PRMT.
+// (two F2FPs, encdec), the decode alone (F2FP.UNPACK_B) or PRMT.  The pair controls (rate_pair_*) interleave two of those
+// on the eight registers, four each, so a pair that shares one issue pipe prices at the slower one's rate and a pair on two
+// pipes at the dispatch bound.
 #include <cstdint>
 
 #define DEV __device__ __forceinline__
@@ -107,6 +111,46 @@ extern "C" __global__ void __launch_bounds__(256) rate_salt(const Args a) {
   }
 }
 
+extern "C" __global__ void __launch_bounds__(256) rate_salt_fused(const Args a) {
+  const int tid = blockIdx.x * blockDim.x + threadIdx.x, reps = a.i[0];
+  if (tid >= a.i[1]) return;
+  const uint32_t* in = reinterpret_cast<const uint32_t*>(a.p[0]) + (size_t)tid * G * 8;
+  uint32_t h[G][2], A4[G][2], A38[G][2], w[G][2], b[G][3];
+#pragma unroll
+  for (int g = 0; g < G; ++g)
+#pragma unroll
+    for (int j = 0; j < 2; ++j) {
+      h[g][j] = in[8 * g + j], w[g][j] = in[8 * g + 4 + j];
+      A4[g][j] = hmul2(in[8 * g + 2 + j], 0x34003400u), A38[g][j] = hmul2(in[8 * g + 2 + j], 0xB600B600u);
+    }
+#pragma unroll 4
+  for (int r = 0; r < reps; ++r) {
+    uint32_t e[G][2];
+#pragma unroll
+    for (int g = 0; g < G; ++g)
+#pragma unroll
+      for (int j = 0; j < 2; ++j) e[g][j] = hfma2(A4[g][j], (w[g][j] & 0x03FF03FFu) | 0x3C003C00u, A38[g][j]);
+#pragma unroll
+    for (int g = 0; g < G; ++g) {
+      const uint32_t* x = e[(g + 1) % G];
+      const uint32_t s0 = hadd2(e[g][0], x[0]), s1 = hadd2(e[g][1], x[1]);
+      b[g][0] = enc4(hadd2(h[g][0], e[g][0]), hadd2(h[g][1], e[g][1]));
+      b[g][1] = enc4(hadd2(h[g][0], x[0]), hadd2(h[g][1], x[1]));
+      b[g][2] = enc4(hnadd2(h[g][0], s0), hnadd2(h[g][1], s1));
+      w[g][0] = b[g][0] ^ b[g][2];
+      w[g][1] = b[g][1];
+    }
+  }
+  uint32_t* out = reinterpret_cast<uint32_t*>(a.p[1]) + (size_t)tid * G * 8;
+#pragma unroll
+  for (int g = 0; g < G; ++g) {
+#pragma unroll
+    for (int j = 0; j < 3; ++j) out[8 * g + j] = b[g][j];
+    out[8 * g + 3] = w[g][0];
+    out[8 * g + 4] = w[g][1];
+  }
+}
+
 extern "C" __global__ void __launch_bounds__(256) rate_free(const Args a) {
   const int tid = blockIdx.x * blockDim.x + threadIdx.x, reps = a.i[0];
   if (tid >= a.i[1]) return;
@@ -141,6 +185,31 @@ extern "C" __global__ void __launch_bounds__(256) rate_free(const Args a) {
 }
 
 template <int OP>
+DEV void step(uint32_t& v, uint32_t k, uint32_t m) {
+  if (OP == 0) {
+    float f = __uint_as_float(v);
+    asm volatile("fma.rn.f32 %0, %0, %1, %2;" : "+f"(f) : "f"(__uint_as_float(k)), "f"(__uint_as_float(m)));
+    v = __float_as_uint(f);
+  } else if (OP == 1) {
+    v = hfma2(v, k, m);
+  } else if (OP == 2) {
+    asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(v) : "r"(k), "r"(m));
+  } else if (OP == 3) {
+    v = hadd2(v, k);
+  } else if (OP == 4) {
+    v = hmul2(v, k);
+  } else if (OP == 5) {
+    v = hmax2(v, k);
+  } else if (OP == 6) {
+    v = dec2(enc2(v));
+  } else if (OP == 7) {
+    v = dec2(v);
+  } else {
+    asm volatile("prmt.b32 %0, %0, %1, 0x5410;" : "+r"(v) : "r"(k));
+  }
+}
+
+template <int OPA, int OPB>
 DEV void control(const Args& a) {
   const int tid = blockIdx.x * blockDim.x + threadIdx.x, reps = a.i[0];
   if (tid >= a.i[1]) return;
@@ -152,39 +221,23 @@ DEV void control(const Args& a) {
 #pragma unroll 4
   for (int r = 0; r < reps; ++r)
 #pragma unroll
-    for (int j = 0; j < 8; ++j) {
-      if (OP == 0) {
-        float f = __uint_as_float(v[j]);
-        asm volatile("fma.rn.f32 %0, %0, %1, %2;" : "+f"(f) : "f"(__uint_as_float(k)), "f"(__uint_as_float(m)));
-        v[j] = __float_as_uint(f);
-      } else if (OP == 1) {
-        v[j] = hfma2(v[j], k, m);
-      } else if (OP == 2) {
-        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(v[j]) : "r"(k), "r"(m));
-      } else if (OP == 3) {
-        v[j] = hadd2(v[j], k);
-      } else if (OP == 4) {
-        v[j] = hmul2(v[j], k);
-      } else if (OP == 5) {
-        v[j] = hmax2(v[j], k);
-      } else if (OP == 6) {
-        v[j] = dec2(enc2(v[j]));
-      } else if (OP == 7) {
-        v[j] = dec2(v[j]);
-      } else {
-        asm volatile("prmt.b32 %0, %0, %1, 0x5410;" : "+r"(v[j]) : "r"(k));
-      }
-    }
+    for (int j = 0; j < 8; j += 2) step<OPA>(v[j], k, m), step<OPB>(v[j + 1], k, m);
   uint32_t* out = reinterpret_cast<uint32_t*>(a.p[1]) + (size_t)tid * G * 8;
 #pragma unroll
   for (int j = 0; j < 8; ++j) out[j] = v[j];
 }
-extern "C" __global__ void __launch_bounds__(256) rate_ffma(const Args a) { control<0>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_hfma2(const Args a) { control<1>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_lop3(const Args a) { control<2>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_hadd2(const Args a) { control<3>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_hmul2(const Args a) { control<4>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_hmnmx2(const Args a) { control<5>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_encdec(const Args a) { control<6>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_dec(const Args a) { control<7>(a); }
-extern "C" __global__ void __launch_bounds__(256) rate_prmt(const Args a) { control<8>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_ffma(const Args a) { control<0, 0>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_hfma2(const Args a) { control<1, 1>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_lop3(const Args a) { control<2, 2>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_hadd2(const Args a) { control<3, 3>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_hmul2(const Args a) { control<4, 4>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_hmnmx2(const Args a) { control<5, 5>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_encdec(const Args a) { control<6, 6>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_dec(const Args a) { control<7, 7>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_prmt(const Args a) { control<8, 8>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_pair_hfma2_hadd2(const Args a) { control<1, 3>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_pair_hadd2_encdec(const Args a) { control<3, 6>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_pair_hadd2_lop3(const Args a) { control<3, 2>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_pair_hadd2_ffma(const Args a) { control<3, 0>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_pair_encdec_lop3(const Args a) { control<6, 2>(a); }
+extern "C" __global__ void __launch_bounds__(256) rate_pair_hfma2_hmnmx2(const Args a) { control<1, 5>(a); }
