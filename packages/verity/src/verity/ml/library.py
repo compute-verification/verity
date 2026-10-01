@@ -6,9 +6,9 @@ Every circuit type and every table a statement names carries a label. It is ``li
 list, and ``program`` otherwise:
 
 * the verifier holds library objects and folds them itself; they are the public track, and it holds nothing else;
-* a program object is no circuit object: it is a registered input of the program (`verity.ir.program`'s
-  `RegisteredInput<w>_v1`, bound at registration), a value committed under a hiding leaf and always hidden. There is one
-  build, the private one.
+* a program table or value is a registered input (`verity.ir.program`'s `RegisteredInput<w>_v1`, bound at registration), a
+  value committed under a hiding leaf and always hidden; a program's circuit types stay committed in c. There is one build,
+  the private one.
 
 The list is fixed and versioned. Adding or removing an entry is a new `VERSION`, and so a new `digest()`.
 
