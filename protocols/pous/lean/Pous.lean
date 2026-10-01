@@ -5,6 +5,7 @@ import Pous.Model.Audit
 import Pous.Model.PubEncoder
 import Pous.Model.Inc
 import Pous.Model.M1
+import Pous.Model.M1p
 import Pous.Model.HashChain
 import Pous.Model.Pebbling
 import Pous.Model.Labelling
@@ -19,5 +20,7 @@ import Pous.Accounting.PubMeets
 import Pous.Accounting.Numbers
 import Pous.Accounting.LemmaA
 import Pous.Assumptions
+import Pous.P2.Assumptions
 import Pous.Pinned
+import Pous.P2.Pinned
 import Pous.Sanity

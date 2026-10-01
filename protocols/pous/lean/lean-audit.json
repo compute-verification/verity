@@ -6,7 +6,7 @@
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
- "assumptions": ["Pous.Assumptions"],
+ "assumptions": ["Pous.Assumptions", "Pous.P2.Assumptions"],
  "layers": {
   "Pous.Game": {
    "imports": ["Mathlib", "Pous.Game"],
@@ -22,6 +22,11 @@
    "imports": ["Mathlib", "Pous"],
    "except": [],
    "why": "the trusted layer imports no proofs"
+  },
+  "Pous.P2": {
+   "imports": ["Mathlib", "Pous.Game", "Pous.Model", "Pous.Accounting", "Pous.P2"],
+   "except": [],
+   "why": "P2's bridges and pins read only the game, the models and the parameters"
   }
  },
  "pins": {
@@ -43,6 +48,11 @@
    "assumptions": [],
    "type_hash": "c2740af40bb88160cac02caae7c55e7403e9cfa14849e7b49145085c88f10952"
   },
+  "Pous.P2.accept_le": {},
+  "Pous.P2.accept_le_b19": {},
+  "Pous.P2.accept_le_family_105": {},
+  "Pous.P2.idealAudit_bridges": {},
+  "Pous.P2.not_sgi_freeRoots_b19": {},
   "Pous.honest_seq_accepted": {
    "signature": [
     "Pous.honest_seq_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) (k : Nat) (W : Pous.Bits sch.n) :",
@@ -232,6 +242,11 @@
    "assumptions": [],
    "type_hash": "78a3b5c4a214c89de8600e205823606d0e21b31f5b470228bf221252454f51c3"
   },
+  "PousMargin.raw_b19_128": {},
+  "PousMargin.raw_b19_256": {},
+  "PousMargin.raw_b19_64": {},
+  "PousP2p.family_k85_fails": {},
+  "PousP2p.not_meets_m1p_b19_k85": {},
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
    "assumptions": [],
@@ -389,6 +404,12 @@
    "assumptions": [],
    "type_hash": "58c8e580dd827db0c95acb367b31d26822be7a4e9e3168080a25cad7c446ab2e"
   },
+  "PousProofs.P2ErrorSplitB19Uncond": {},
+  "PousProofs.P2MeetsM1pB19Uncond": {},
+  "PousProofs.P2MeetsM1pFamilyUncond": {},
+  "PousProofs.P2MeetsM1pW8192Uncond": {},
+  "PousProofs.P2SlackB19Uncond": {},
+  "PousProofs.P2SlackFamilyUncond": {},
   "PousProofs.P3ConcreteMeets14GB": {
    "signature": ["PousProofs.P3ConcreteMeets14GB : Pous.Pinned.P3ConcreteMeets14GB"],
    "assumptions": [],
