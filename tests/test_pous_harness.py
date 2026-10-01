@@ -176,6 +176,8 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     assert rec["wrong"] == 0 and rec["late"] > 0 and rec["dropped_blocks"] == 3                               # recomputed right, late
     assert rec["margin_s"]["min"] < 0 and "cliff" in rec["pattern"]
     assert rec["recomputed_answers"] > 0 and rec["device_margin_s"]["max"] == (limit - 1_000_000) / 1e9     # the timer's 1 ms
+    assert rec["recompute_margin_kind"].startswith("upper bound on attacker latency")
+    assert gates["recompute_control"]["recomputed_answers"] == rec["recomputed_answers"]
     assert m["loop"]["plain_graphed"][1] == {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
     assert all(len(r) == 1 for r in m["loop"]["plain_reps_s"].values())                                      # every rep kept
     assert m["step_floor"] is None and m["nvme"]["block_read_s"]["n"] == 8 and not list(nvme.iterdir())
@@ -295,15 +297,22 @@ def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
     width, bps = 4, 8
     c = torch.arange(2 * bps * width, dtype=torch.uint8).view(2, bps, width)
     w_host = bytes(range(100, 100 + 2 * bps * width))
+    state = {"timing": False, "calls": [], "ops": []}
+
+    class Traced(torch.Tensor):                                            # each op on the key, and whether it ran timed
+        @classmethod
+        def __torch_function__(cls, func, types, args=(), kwargs=None):
+            state["ops"].append((getattr(func, "__name__", str(func)), state["timing"]))
+            return super().__torch_function__(func, types, args, kwargs or {})
+
     key = torch.tensor([1, 2, 3, 4], dtype=torch.uint8)
-    state = {"timing": False, "calls": []}
 
     def recompute(store, tags, i):
         assert int(store.view(-1, width)[i].sum()) == 0 and int(store.view(-1, width)[i - 1].sum()) > 0   # only it is dropped
 
         def call():
             state["calls"].append(state["timing"])
-            return key.clone()
+            return key.clone().as_subclass(Traced)
         return call
 
     def timer(fn):
@@ -316,6 +325,8 @@ def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
                              w_host, bps, width)
     assert rc(13) == (bytes(k ^ w for k, w in zip([1, 2, 3, 4], w_host[13 * width:14 * width])), 2_500)
     assert state["calls"] == [True]
+    xors = [timed for name, timed in state["ops"] if "xor" in name]
+    assert xors and all(xors), state["ops"]                               # the XOR with W's block is a device op, timed
     untimed = harness._recomputer(harness.Backend("cpu", None, None, None, None, None, lambda fn: 0.0, recompute=recompute), c,
                                   None, [5, 13], w_host, bps, width)
     with pytest.raises(IndexError):                                       # a timer that skips the call leaves no answer
@@ -329,6 +340,14 @@ def test_the_recompute_margin_is_the_limit_minus_each_recomputed_answers_device_
     got = harness.recompute_margins(doc, {10, 20}, 600_000)
     assert got["recomputed_answers"] == 2 and got["recompute_device_s"]["min"] == 4e-4
     assert got["device_margin_s"]["min"] == -1e-4 and got["device_margin_s"]["max"] == 2e-4    # the fastest beats the limit
+
+
+def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
+    harness = _harness()
+    assert harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 3})["passed"]
+    assert not harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 0})["passed"]
+    assert not harness.recompute_gate({"wrong": 0, "answers": 20})["passed"]
+    assert not harness.recompute_gate({"wrong": 1, "answers": 20, "recomputed_answers": 3})["passed"]
 
 
 def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_is_flagged():

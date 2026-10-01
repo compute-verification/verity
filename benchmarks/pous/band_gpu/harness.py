@@ -528,6 +528,11 @@ def control_answers(c_host: bytes, width: int, *, zero: set[int] = frozenset(), 
     return answer
 
 
+RECOMPUTE_MARGIN_KIND = "upper bound on attacker latency (honest kernel, per-step launches, host sync)"
+"""The band's recompute is `dense.decode_blocks`: the honest kernel, its permute steps launched one by one from Python, and a
+host sync, all inside the timed call, so its device time is above an attacker's and `device_margin_s` overstates the margin."""
+
+
 def recompute_margins(doc: dict[str, Any], dropped: set[int], limit_ns: int) -> dict[str, Any]:
     """The recompute control's margins from each recomputed answer's recorded device time: the adversary's latency taken as its
     device time alone, with no transport or responder overhead (in the adversary's favour), against the limit.  The fastest
@@ -535,6 +540,16 @@ def recompute_margins(doc: dict[str, Any], dropped: set[int], limit_ns: int) -> 
     device = [a["device_ns"] for rec in doc.get("records") or [] for a in rec["answers"] if a["index"] in dropped]
     return {"recomputed_answers": len(device), "recompute_device_s": quantiles([d / 1e9 for d in device]),
             "device_margin_s": quantiles([(limit_ns - d) / 1e9 for d in device])}
+
+
+def recompute_gate(recompute: dict[str, Any]) -> dict[str, Any]:
+    """The recompute control's gate: some challenge hit a dropped block (a run that missed them all would pass vacuously) and
+    every recomputed answer is correct.  Whether a recompute beats the limit is the measured margin, not the gate."""
+    hits = recompute.get("recomputed_answers") or 0
+    return {"passed": recompute.get("wrong", 1) == 0 and bool(recompute.get("answers")) and hits > 0,
+            "audits_accepted": recompute.get("audits_accepted"), "late": recompute.get("late"), "recomputed_answers": hits,
+            "note": "passes when some challenge hit a dropped block and every recomputed answer is correct; whether it beats "
+                    "the limit is the measured margin, device_margin_s (from each recomputed answer's device time)"}
 
 
 def _plain_arm(backend: Backend, w: Any, pl: list[tuple[str, int, int, int, int]], xs: dict[int, dict[int, Any]], tokens: list[int],
@@ -748,7 +763,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                                          dropped=set(dropped)))
     recompute = {"dropped_fraction": len(dropped) / p.blocks, "dropped_blocks": len(dropped),
                  "pattern": f"every {window + 1}-th block of a segment (the cliff's)" if window else "each segment's last block",
-                 **recompute_ctl, **recompute_margins(recompute_ctl, set(dropped), limit)}
+                 **recompute_ctl, **recompute_margins(recompute_ctl, set(dropped), limit),
+                 "recompute_margin_kind": RECOMPUTE_MARGIN_KIND}
 
     cert = scheme.certificate
     step = step_floor(backend, a.step_reps, cert.call_ns if cert is not None else None, facts)
@@ -761,10 +777,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                               "accepted": value.get("audits_accepted"), "wrong": value.get("wrong")}
     gates["late_control"] = {"passed": late.get("audits_accepted") == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
                              "accepted": late.get("audits_accepted"), "late": late.get("late"), "wrong": late.get("wrong")}
-    gates["recompute_control"] = {"passed": recompute.get("wrong", 1) == 0 and bool(recompute.get("answers")),
-                                  "audits_accepted": recompute.get("audits_accepted"), "late": recompute.get("late"),
-                                  "note": "passes when every recomputed answer is correct; whether it beats the limit is the "
-                                          "measured margin, device_margin_s (from each recomputed answer's device time)"}
+    gates["recompute_control"] = recompute_gate(recompute)
     gaps = ()
     if step and step["below_certificate"]:
         gaps = (f"a Π₂ call took {step['min_s'] * 1e9:,.0f} ns on this device ({step['fastest']} kernel), under the "

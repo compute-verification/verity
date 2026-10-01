@@ -37,7 +37,9 @@ Implementations:
     limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
     reject on time alone; the only answers held), and a recompute control (a fraction of `C` dropped, each challenged dropped
     block recomputed on the device from its kept parents, `W`'s block XORed in on the device, as an adversary would: the limit
-    minus each recomputed answer's recorded device time is the measured margin);
+    minus each recomputed answer's recorded device time is the measured margin, labelled `recompute_margin_kind`: an upper
+    bound on attacker latency, from the honest kernel with per-step launches and a host sync, so it overstates the margin; the
+    gate fails when no challenge hit a dropped block);
   - the `Π₂` step floor, the fastest honest kernel (an upper bound on an attacker's), with the SM clock sampled while it
     runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;

@@ -311,10 +311,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                               "accepted": value.get("audits_accepted"), "wrong": value.get("wrong")}
     gates["late_control"] = {"passed": late.get("audits_accepted") == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
                              "accepted": late.get("audits_accepted"), "late": late.get("late"), "wrong": late.get("wrong")}
-    gates["recompute_control"] = {"passed": recompute.get("wrong", 1) == 0 and bool(recompute.get("answers")),
-                                  "audits_accepted": recompute.get("audits_accepted"), "late": recompute.get("late"),
-                                  "note": "passes when every recomputed answer is correct; whether it beats the limit is the "
-                                          "measured margin, device_margin_s (from each recomputed answer's device time)"}
+    gates["recompute_control"] = H.recompute_gate(recompute)
     point = {"k": k == R.K_AUDIT, "rtt_allowance": bool(honest.get("rtt_allowance_within_spec")),
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
