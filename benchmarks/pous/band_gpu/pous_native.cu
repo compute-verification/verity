@@ -1055,8 +1055,9 @@ __device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
 // absorber's) goes through `sponge`.  Same inputs and output as band_chain.
 // Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
 // nothing on the squeezer.  U unrolls the Keccak round loop.  IL: the state, the slots and the sponges in the bit-interleaved
-// form (il_const): X is converted a Keccak-f after it is loaded (so its load latency stays hidden) and W as it is written;
-// the slots' initial contents are the caller's to convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads
+// form (il_const): X is converted a Keccak-f after it is loaded (so its load latency stays hidden), or read from `cx`, the
+// caller's interleaved copy of `c`, when `x_il`; W is converted as it is written, and the slots' initial contents are the
+// caller's to convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads
 // each chunk back from its slot one chunk late, so round 9 of a call that another follows writes every chunk of half 0.
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
@@ -1064,8 +1065,9 @@ constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 template <int U, bool IL, bool LAG>
 __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
     uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
-    const int64_t* __restrict__ base, const int64_t* __restrict__ blk, const int64_t* __restrict__ len,
-    const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next, int64_t groups, int calls) {
+    const uint64_t* __restrict__ cx, bool x_il, const int64_t* __restrict__ base, const int64_t* __restrict__ blk,
+    const int64_t* __restrict__ len, const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next,
+    int64_t groups, int calls) {
   constexpr int64_t hw = 8196, xwords = 8192, nch = (hw + RATE_WORDS - 1) / RATE_WORDS, msg = 8 * hw + 2;
   constexpr int64_t full = msg / RATE, xch = xwords / RATE_WORDS;
   static_assert(nch == full + 1 && hw - full * RATE_WORDS == 2 && msg - full * RATE == 18,
@@ -1124,7 +1126,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       for (int w = 0; w < 25; ++w) x[w] = __ldcg(sp + w);
     }
     if (s > 0) keeper = (i1 & 1) ? 1 : 0;
-    const uint64_t* xrow = more ? c + (base[r] + blk[r] - j) * xwords : nullptr;
+    const uint64_t* xrow = more ? cx + (base[r] + blk[r] - j) * xwords : nullptr;
     const uint64_t* crow = fin ? c + (base[r] + blk[r]) * xwords : nullptr;
     uint64_t* orow = fin ? out + dest[r] * xwords : nullptr;
     for (int i = i0; i <= i1; ++i) {
@@ -1163,7 +1165,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       uint64_t* p = LAG ? SLOT_AT(h, 0, ra) : CHUNK_AT(h, 0);  // chunk cc's slot, then (once stored) cc + 1's
       if (sq && act) src(0, p, v);
       auto produce = [&](int64_t cc) {  // the squeezer's chunk cc, written
-        if (IL && x_in && cc <= xch) {
+        if (IL && x_in && !x_il && cc <= xch) {
 #pragma unroll
           for (int w = 0; w < RATE_WORDS; ++w)
             if (cc * RATE_WORDS + w < xwords) chunk_word(v, w) = il64(chunk_word(v, w));
@@ -1256,11 +1258,21 @@ __global__ void chunked_interleave_kernel(uint64_t* st_words, int64_t pitch, int
   }
 }
 
+// dst = the bit-interleaved form of src, word by word (n16 16-byte pairs of words).
+__global__ void il64_copy_kernel(const ulonglong2* __restrict__ src, ulonglong2* __restrict__ dst, int64_t n16) {
+  for (int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x; t < n16; t += (int64_t)gridDim.x * blockDim.x) {
+    const ulonglong2 v = __ldcs(src + t);
+    __stcs(dst + t, make_ulonglong2(il64(v.x), il64(v.y)));
+  }
+}
+
 // interleave_from >= 0: the chain runs bit-interleaved, and chunks interleave_from .. 482 of both halves are converted first;
-// every word of the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.
+// every word of the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.  x_il (with
+// interleave_from >= 0): X is read from an interleaved copy of c, made first (c.numel() more bytes of device memory), so that
+// each C row is converted once rather than once for every row whose chain absorbs it.
 void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t warps_per_sm, int64_t calls,
                       torch::Tensor c, torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest,
-                      torch::Tensor out, int64_t unroll, int64_t interleave_from, bool lag) {
+                      torch::Tensor out, int64_t unroll, int64_t interleave_from, bool lag, bool x_il) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
               "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
@@ -1276,6 +1288,8 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
   TORCH_CHECK(unroll >= 1 && unroll <= 24 && 24 % unroll == 0, "unroll: a divisor of 24 (1, 2, 3, 4, 6, 8, 12 or 24)");
   TORCH_CHECK(interleave_from <= state.size(1), "interleave_from: a chunk index, or negative for no interleaving");
+  TORCH_CHECK(!x_il || interleave_from >= 0, "x_il: only for an interleaved chain");
+  TORCH_CHECK(!x_il || reinterpret_cast<uintptr_t>(c.data_ptr()) % 16 == 0, "x_il: c must be 16-byte aligned");
   if (rows == 0) return;
   c10::cuda::CUDAGuard guard(state.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
@@ -1300,12 +1314,20 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   };
   auto pick_il = [&](auto lag) { return interleave_from >= 0 ? pick(std::true_type{}, lag) : pick(std::false_type{}, lag); };
   auto kernel = lag ? pick_il(std::true_type{}) : pick_il(std::false_type{});
+  torch::Tensor cx = c;
+  if (x_il) {
+    cx = torch::empty_like(c);
+    il64_copy_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<const ulonglong2*>(c.data_ptr<uint8_t>()),
+                                                           reinterpret_cast<ulonglong2*>(cx.data_ptr<uint8_t>()),
+                                                           c.numel() / 16);
+  }
   if (interleave_from >= 0 && interleave_from < state.size(1))
     chunked_interleave_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()),
                                                                     state.size(2), row0, rows, state.size(1), interleave_from);
   kernel<<<blocks, threads, 0, stream>>>(
       reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
-      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
+      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), reinterpret_cast<const uint64_t*>(cx.data_ptr<uint8_t>()), x_il,
+      base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
       len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(), reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()),
       reinterpret_cast<uint64_t*>(sponge.data_ptr<int64_t>()), ctl.data_ptr<int>(), ctl.data_ptr<int>() + groups, groups,
       (int)calls);
@@ -1875,7 +1897,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("warps_per_sm"),
         pybind11::arg("calls"), pybind11::arg("c"), pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"),
         pybind11::arg("dest"), pybind11::arg("out"), pybind11::arg("unroll") = 1,
-        pybind11::arg("interleave_from") = -1, pybind11::arg("lag") = false);
+        pybind11::arg("interleave_from") = -1, pybind11::arg("lag") = false, pybind11::arg("x_il") = false);
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),

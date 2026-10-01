@@ -107,6 +107,9 @@ CHAIN_PAIRS_UNROLL = [4]
 CHAIN_PAIRS_IL = [False]
 """The lane-pair chain keeps its lanes bit-interleaved (even bits, odd bits: a rotation by one is one funnel shift), converting
 the state's initial contents, X as it reads it and W as it writes it."""
+CHAIN_PAIRS_IL_X = [False]
+"""The interleaved lane-pair chain reads X from an interleaved copy of `C`, made before it starts (1 GB more device memory for
+the 0.5B weight set's 30 segments), so that each row of `C` is converted once, not once for every chain that absorbs it."""
 CHAIN_PAIRS_LAG = [False]
 """The lane-pair chain's absorber takes each chunk one chunk late, reading back the slot the squeezer just wrote (in the same
 load instructions as the squeezer's next chunk) instead of receiving it by shuffles."""
@@ -237,7 +240,8 @@ def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.
         # The two puts above are the state's only nonzero bytes, all from chunk (width - 32) // CHUNK of half 1 on.
         native.ext().band_chain_pairs(st.words, 0, r, codec.PI_DOMAIN, CHAIN_PAIRS_WPS[0], int(ln.max()) + 1, c_flat, base,
                                       blk, ln, dest, out, CHAIN_PAIRS_UNROLL[0],
-                                      (width - 32) // CHUNK if CHAIN_PAIRS_IL[0] else -1, CHAIN_PAIRS_LAG[0])
+                                      (width - 32) // CHUNK if CHAIN_PAIRS_IL[0] else -1, CHAIN_PAIRS_LAG[0],
+                                      CHAIN_PAIRS_IL[0] and CHAIN_PAIRS_IL_X[0])
         return out
     for start, n, _ in st.launches(0, allow_split=False):
         native.ext().band_chain(st.words, start, n, codec.PI_DOMAIN, CHUNKED_THREADS[0], c_flat, base, blk, ln, dest, out)
