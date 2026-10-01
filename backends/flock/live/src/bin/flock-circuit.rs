@@ -319,6 +319,8 @@ fn tables_arg() -> usize {
 
 struct CircuitVerifier {
     tabs: Tables,
+    /// how the lincheck's last vector is computed (`FC_LINCHECK`)
+    lincheck: sverify::Lincheck,
     /// the last `verify` call's phase timers
     phases: Mutex<Option<Value>>,
 }
@@ -348,7 +350,7 @@ impl StatementVerifier for CircuitVerifier {
 
 impl CircuitVerifier {
     fn new(tabs: Tables) -> Self {
-        CircuitVerifier { tabs, phases: Mutex::new(None) }
+        CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None) }
     }
 
     /// The verifier of one-table sessions.
@@ -372,7 +374,7 @@ impl CircuitVerifier {
         let t = Instant::now();
         let extra = st.extra_claims(link.points, &tb.inst);
         ph.regions_s = t.elapsed().as_secs_f64();
-        catch_unwind(AssertUnwindSafe(|| sverify::verify_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch, ph)))
+        catch_unwind(AssertUnwindSafe(|| sverify::verify_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, self.lincheck, ch, ph)))
             .map_err(|_| "verifier panicked".to_string())?
             .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
@@ -2772,6 +2774,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("opened_salt_altered", false, true),
     ("coin_seed_record_replays", true, false),
     ("record_replays_offline", true, false),
+    ("lincheck_modes_agree", true, false),
     ("unit_draw_session", true, false),
     ("unit_draw_from_file", true, false),
     ("unit_draw_ignored_refused", false, false),
@@ -2904,6 +2907,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "prover_is_deterministic" {
         return determinism_case(st, inst, gpu);
+    }
+    if name == "lincheck_modes_agree" {
+        return lincheck_modes_case(st, inst, gpu);
     }
     if name == "gpu_proofs_match_cpu" {
         return gpu_cpu_case(st, inst);
@@ -3366,6 +3372,63 @@ fn with_tail(text: &str) -> (String, String) {
     let mut b: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
     b[1] = format!("META {}", serde_json::to_string(&meta).unwrap());
     (a.join("\n"), b.join("\n"))
+}
+
+/// The session verifier's lincheck three ways (`FC_LINCHECK`: upstream's flat fold, the structured `comb_partial`, both): one
+/// honest session's record and proofs re-verified offline under each, then with rep 0's lincheck `z_partial` or first round
+/// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
+/// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason.
+fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    let s0 = Arc::new(Mutex::new(server(st, inst)));
+    let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+    let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+    if v["accepted"] != true || proofs.len() != 2 {
+        return json!({"case": "lincheck_modes_agree", "accepted": v["accepted"], "pass": false, "why": v["why"]});
+    }
+    let alter = |f: &dyn Fn(&mut R1csProofLigerito)| -> Vec<Vec<u8>> {
+        let mut ps = proofs.clone();
+        let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
+        f(&mut p);
+        ps[0] = bincode::serialize(&(c, p)).unwrap();
+        ps
+    };
+    let reencoded = alter(&|_| {}) == proofs;
+    let sets = [("honest", proofs.clone()), ("z_partial", alter(&|p| p.lincheck.z_partial[3] += F128::ONE)),
+                ("round", alter(&|p| p.lincheck.rounds[0].0 += F128::ONE))];
+    // the record binds each proof's digest: an altered proof's is written in, so that the verifier, not the record, judges it
+    let cfg = config(st, inst);
+    let rec_for = |ps: &[Vec<u8>]| {
+        let mut r = rec.clone();
+        if let Some(ds) = r[format!("proof_{}", cfg.dk())].as_array_mut() {
+            for d in ds.iter_mut().filter(|d| d["stream"] == rep_stream(TABLE, 0)) {
+                d[cfg.dk()] = json!(hex(&cfg.dg(&ps[0])));
+            }
+        }
+        r
+    };
+    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
+        let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
+        let ver = CircuitVerifier { tabs: Tables::one(st, inst), lincheck: m, phases: Mutex::new(None) };
+        match Server::from_record(config(st, inst), Box::new(ver), &rec_for(ps), map) {
+            Ok(mut s) => {
+                let f = s.finish();
+                let reps = f["reps"].as_array().cloned().unwrap_or_default();
+                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"],
+                       "lincheck": reps.iter().map(|r| json!({"mode": r["timing"]["phases"]["lincheck_mode"], "s": r["timing"]["phases"]["lincheck_s"],
+                                                               "comb": r["timing"]["phases"]["lincheck_comb"]})).collect::<Vec<_>>()})
+            }
+            Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
+        }
+    }).collect())).collect();
+    let all = |what: &str, ok: &dyn Fn(&Value) -> bool| runs.iter().filter(|r| r.0 == what).all(|r| r.1.iter().all(ok));
+    let same_why = runs.iter().all(|r| r.1.iter().all(|x| x["why"] == r.1[0]["why"]));
+    let lincheck_rejects = |x: &Value| x["accepted"] == false && x["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
+    let pass = reencoded && same_why && all("honest", &|x| x["accepted"] == true) && all("z_partial", &lincheck_rejects)
+        && all("round", &lincheck_rejects);
+    json!({"case": "lincheck_modes_agree", "expect": "flat, partial and both: the same verdict on honest and altered lincheck proofs",
+           "gpu": gpu, "accepted": v["accepted"], "reencoded_identical": reencoded, "same_why": same_why,
+           "runs": runs.iter().map(|(w, r)| json!({"proofs": w, "modes": r})).collect::<Vec<_>>(), "pass": pass})
 }
 
 /// The prover as a function of (statement, witness, prover seed, verifier coins): two sessions with the same injected prover seed
@@ -3864,6 +3927,7 @@ fn main() {
     if tables > 1 && flag("--gpu") {
         refuse("--session-tables above 1: the CPU prover (the device prover proves one table per session)".into());
     }
+    sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
