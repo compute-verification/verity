@@ -28,10 +28,16 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `annotations` is `verity/annotations/v0`: names, descriptions, formats and
     groupings keyed by descriptor ids, validated against a descriptor's
     structure, never inside a digest.
+    `boolean` is the Boolean profile of descriptor v1 (PROTOCOL §9): the gates
+    `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
+    `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
+    `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
+    `evaluate_words` through the word view); `evaluate_batch` uses it for one
+    without a kernel.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
@@ -39,7 +45,17 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
     hardware and protocol objects core owns (`library`), and numpy kernels
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
-    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.tc.relation`
+    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
+    the word library as Boolean Definitions: C-Flock's linear-form builder and
+    pieces (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), the multiplexer tree (`gather`),
+    `trace.definition` (a builder traced into And/Xor/Not gates, with `word_of`
+    its word Definition), the BF16 dot, coordinate and GEMM and the E4M3, E5M2,
+    NVFP4 and MXFP4 steps and coordinates on bits (`gemm`: `DotBf16_v3`,
+    `GemmCoordinate_v3`, `Gemm_v3`, `GemmCoordinateE4m3_v2`, `GemmCoordinateNvf4_v2`,
+    `GemmCoordinateMxf4_v2`), attention's softmax operations and inverse sum on bits
+    (`attention`), the element-wise FP32, BF16 and I32 operations on bits
+    (`elementwise`), the bf16 widening on bits (`cast`), and the bf16 comparator,
+    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `verity.ml.tc.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
@@ -62,11 +78,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
- The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its draws from the verifier's own randomness, and verification plans. See its
- `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
- audit: registration, the verifier's draw over a partition's proof units, and the
- audit record with its profile; `benchmarks/one_stage` runs it end to end with
+ The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
+ audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
+ audit record with its profile), the two-stage law, its draws from the verifier's own
+ randomness, and verification plans. The Lean states it; its `README.md` signposts that
+ Lean and lists what it does not state yet. `benchmarks/one_stage` runs the one-stage audit end to end with
  C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
  that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference

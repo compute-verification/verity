@@ -66,7 +66,7 @@ from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, plan_vu, replay_vu
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
@@ -163,6 +163,8 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}
     need = {lib for f in fams for lib in _FAMILY_LIBS.get(f, ())}
     out: dict[str, str] = {}
+    for ev in ROW_EVALUATORS[-1:]:                                  # an evaluator on another IR compiles what the sample reaches
+        out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
             from verity_vllm.program.registry import prims as _prims
@@ -221,7 +223,8 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
                  " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
         with fork_pool(workers) as pool:
             res = pool.map_async(_fork_worker, range(len(picked)), chunksize=max(1, len(picked) // (workers * 8)))
-            out = res.get(timeout=max(300.0, 3.0 * len(picked)))
+            per_vu = max([3.0] + [float(getattr(ev, "seconds_per_vu", 3.0)) for ev in ROW_EVALUATORS[-1:]])
+            out = res.get(timeout=max(300.0, per_vu * len(picked)))
         return out
     finally:
         if frozen:
@@ -312,11 +315,52 @@ def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2) -> tuple
     return [dict(v, stratum=f"{v['family']}|all|all|all|all|all") for v in vus], int(k)
 
 
+def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: dict[str, int], executed_prefix: dict[str, dict] | None,
+             ring_slots: int | None, *, attention_paths: list[str] | None, tp: dict[str, Any] | None, program_dirs: dict[str, str] | None,
+             manifest: dict[str, Any] | None, memo: dict | None = None) -> tuple:
+    """`sampled_replay`'s enumeration: every Program's index and its request's population, with the not-evaluable counts, their codes,
+    the manifest addresses, the `last` anchors and the address correspondence.  ``memo`` keeps the indices and the populations across calls
+    on the same Programs objects (the slim planner fills it before the run's seed exists)."""
+    memo = {} if memo is None else memo
+    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
+    addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
+    anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
+    addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
+    rank = ranks[0] if len(ranks) == 1 else 0
+    for rid, inst in programs.items():
+        pi = indices.get(id(inst)) or memo.get(("index", id(inst)))
+        if pi is None:
+            pi = memo[("index", id(inst))] = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid),
+                                                         query=manifest_query(manifest), norm_scales=norm_scales.policy_of(manifest))
+        indices[id(inst)] = pi
+        addr_rec["correspondence"][str(rid)] = pi.correspondence
+        # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
+        # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
+        # [revb F-r17b-39] the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
+        # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
+        anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
+        key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]))
+        if key not in memo:                                                       # a request's addresses are its own (keyed by it)
+            got_a: dict[tuple, dict] = {}
+            got_c: dict[str, dict] = {}
+            memo[key] = (*population(pi, rid, rank=rank, arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots, addresses=got_a,
+                                     last_step=int(anchors[rid]["last_step"]), codes=got_c), got_a, got_c)
+        vus, ne, nef, got_a, got_c = memo[key]
+        all_vus.extend(vus)
+        not_ev.update(ne)
+        not_ev_fam.update(nef)
+        addresses.update(got_a)
+        codes.update(got_c)
+        indices[rid] = pi
+    return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
+
+
 def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
-    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size and
-    the VUs whose inputs did not resolve."""
+    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size, its
+    picks ([request, request-relative step, Program row, op_path] in draw order) and the VUs whose inputs did not resolve."""
     unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
-    return {"plan": True, "picked": len(picked), "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
+    return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
+            "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
 
 
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
@@ -325,7 +369,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, plan: bool = False) -> dict[str, Any]:
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, plan: bool = False, memo: dict | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -343,27 +387,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     store = CommittedStore.of_record(bmap, committed, manifest)                 # [rel M-0367] reads through the manifest's alias table
     arrivals = arrivals or {}
     ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
-    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
-    addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
-    anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
-    addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
-    for rid, inst in programs.items():
-        pi = indices.get(id(inst))
-        if pi is None:
-            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid), query=manifest_query(manifest), norm_scales=norm_scales.policy_of(manifest))
-            indices[id(inst)] = pi
-        addr_rec["correspondence"][str(rid)] = pi.correspondence
-        # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
-        # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
-        # [revb F-r17b-39] the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
-        # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
-        anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
-        vus, ne, nef = population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots,
-                                  addresses=addresses, last_step=int(anchors[rid]["last_step"]), codes=codes)
-        all_vus.extend(vus)
-        not_ev.update(ne)
-        not_ev_fam.update(nef)
-        indices[rid] = pi
+    all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
+        programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo)
     pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
     picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])

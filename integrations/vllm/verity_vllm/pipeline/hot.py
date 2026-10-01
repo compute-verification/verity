@@ -55,7 +55,7 @@ SCHEMA = "verity-sweep/hot-commit/v1"
 # toolchain view must not inherit that engine
 ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
-ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH"}
+ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
 WORKLOAD_ENGINE_KEYS = ("case", "model", "repo", "revision", "engine_args_required", "target", "execution", "row", "tokenizer", "dtype", "max_model_len")
 RC_HOT_INFRA = 70          # the worker died / refused before running the job (client falls back to cold)
 RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", "/workspace/cp/RELEASING"))     # pod_release.sh holds it while it ships

@@ -83,7 +83,7 @@ simp with that.
 ## Assumptions and pins
 
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
-  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`). Its docstring opens with its
+  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an

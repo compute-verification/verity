@@ -136,7 +136,7 @@
      "words": 256
     }
    },
-   "cap": "22713/25",
+   "cap": "22699/25",
    "f1_a0": {
     "noise_law_lo": -1476,
     "noise_law_sha256": "34f22ee8b03b8315919df9997889565657bc36bdc7aa563af9b8d6393c44f3f2",
@@ -300,7 +300,7 @@
      "words": 256
     }
    },
-   "cap": "22713/25",
+   "cap": "22699/25",
    "f1_a0": {
     "noise_law_lo": -2124,
     "noise_law_sha256": "49fc3b86033d5d3cddffc7e6f2cb25cc2f194d767aa7a3b1b7810fa16c65a53b",
@@ -475,7 +475,7 @@
      "words": 4096
     }
    },
-   "cap": "584954/25",
+   "cap": "583066/25",
    "f1_a0": {
     "noise_law_lo": -2112,
     "noise_law_sha256": "244c1458bd00fd843bc37f24c576f3bff5317cb4065dd95d265c4f4e22123743",

@@ -72,8 +72,7 @@ def test_the_commit_derives_the_facts_of_a_manifest_of_either_query_under_that_q
     """A Q_word manifest (the record since S1) carries no producer annotations either: the Commit derives its facts from the Programs,
     keyed as that manifest names its instance outputs, and the handed-down `model/out` is promoted; a manifest the query path did not
     build keeps its own entries."""
-    pytest.importorskip("torch")
-    from verity_vllm.pipeline import commit as C
+    from verity_vllm.pipeline import commit_plan as C
     from verity_vllm.query.required import QUERIES
     P = gemma_like_program()
     corr = Correspondence(P)

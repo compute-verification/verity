@@ -1,0 +1,82 @@
+# A port-lane capture on the Nebius cluster (the sm_120 GEMM correspondence, the FA2 capture, the e4m3 step probe, the 188-SM
+# kernels): queue deployments-gpu, priority capture (above the sweep, so it takes the next free GPU, and never evicted by a later row).
+# Its bootstrap is CPU-only (the venv, vLLM, the checkpoints; no native taps: a capture doesn't use them; Commits that do run
+# through config-run), writing its record under /workspace/jobs, never into the tree. It runs no Build, so it doesn't block a
+# prover bench.
+#
+#   sky jobs launch -n capture-<what> tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml \
+#     --env CMD='python -m tc_probe ...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Resources: one GPU (a TP2 capture: --gpus RTXPRO6000:2), and the small-dense class's host peak, 94-188 GB, since a capture
+# serves a model without a Build. No capture has a recorded peak on the PRO 6000 yet: take the first run's peak from its Attempt's
+# telemetry and lower --memory.
+# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
+#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+name: port-capture
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 4
+  labels:
+    budget-line: nebius-port-capture
+  memory: 192
+
+envs:
+  VLLM_USE_FLASHINFER_SAMPLER: "0"   # the integration's engine env; its warm-up JIT-builds FlashInfer's top_k (--env to override)
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "16"     # SkyPilot's runner sets 1; match resources.cpus (--cpus overrides need --env OMP_NUM_THREADS too)
+  CMD: null
+  CAMPAIGN: vllm-sm120-port
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+  PY: /workspace/jobs/venv312/bin/python     # the stages' interpreter: the venv the setup's bootstrap builds (WORK=/workspace/jobs),
+  PY312: /workspace/jobs/venv312/bin/python  # not the pod layout's /workspace/venv312
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  cd "$SRC"
+  cd integrations/vllm
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cpu --out /workspace/jobs/bootstrap/capture-cpu     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine)
+  # $CMD may write into its tree, so each capture runs from a private copy of the shared one (seconds: a capture builds no taps)
+  priv=/workspace/jobs/src/pod-$(hostname); rm -rf "$priv" && mkdir -p "$priv" && cp -a "$SRC"/. "$priv"/; export SRC=$priv
+  cd "$SRC"
+  export PATH=$CUDA_HOME/bin:$PATH
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- bash -c "cd \"$SRC\" && $CMD"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-gpu
+          kueue.x-k8s.io/priority-class: capture
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

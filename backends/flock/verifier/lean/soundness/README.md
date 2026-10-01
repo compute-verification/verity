@@ -124,7 +124,11 @@ link term per audit.
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
   layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
-  the end-to-end theorems with that binding.
+  the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
+  with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline). Each
+  is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
+  `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
+  `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumptions/e2e-checklist.md`), or a numeric condition.
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
@@ -157,13 +161,13 @@ link term per audit.
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices and L1 proved; the link from `setupH`'s unit net to the derived rows remains |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
-| L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named; proved for RoPE | RoPE: `Rope.rope_sound`, a verified lowering; the rest: the IR comparison tests |
+| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumptions/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `python tools/lean/audit.py backends/flock/verifier/lean/soundness` to check every declaration (`lean-audit.json`).
@@ -232,8 +236,11 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - It needs two executable checks (PR #147): `Net.parse` refuses a net whose input rows reach its constant, and
     `HmRow.pin` refuses a pin range with no slot. Otherwise an input port can cover a slot's constant column and Δ's
     copies rewrite that row, or the pin's row is empty or lands inside another range.
-- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`). For RoPE it is proved
-  (`Rope.rope_sound`, `assumptions/l1-template-rows.md`).
+- **What a correct unit computes** is its certificate's, not a hypothesis (L1 was dropped, Daniel, Sep 30): the
+  end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
+  `GateRows.rows G L` and `G` computes `D`, a unit that is not wrong computes `D` (`IsRowsUnit.computes_of_cert`,
+  `Certificate.lean`). RoPE's rows are proved to be its gate circuit's (`Rope.rope_sound`,
+  `assumptions/template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
   - `Rows.compose` reads a unit's rows in logical order from a `Compose.Logical`: the columns in order, the input bits
     first, and each column's row as the block holds it, or a copy of `one` (the unit's constant, which Δ binds to the
@@ -376,7 +383,7 @@ term below 2^-170.
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
   step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
-  (`placement_of_setupH`). L1 is proved for RoPE and otherwise remains.
+  (`placement_of_setupH`). What a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).
 
 ## 3. Zero knowledge (planned; not yet proved)
 

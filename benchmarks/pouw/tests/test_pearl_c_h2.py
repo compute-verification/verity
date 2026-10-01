@@ -1,7 +1,8 @@
 """The -h2 kernels (`pearl_c/hash_h2.cuh`) against frame-b3s, `verity.commitments.merkle`'s reference, through
 `simt_twin.py`'s thread-for-thread host build: the segment-tree level keys, row leaves at every length class (the aligned
 16-byte-load path and the byte path, short last segments, odd levels), short-value leaves, and whole trees against
-`MerkleTree`'s root."""
+`MerkleTree`'s root; and rows form `s` (`pearl_c_sm120/h2_rows_stats.cuh`), the row leaves with forming's stats against the
+scheme's `s5_stats`."""
 
 from __future__ import annotations
 
@@ -9,10 +10,13 @@ import hashlib
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.commitments.merkle import b3s_level_key
+from verity.ml.tc import fp32
+from verity_pouw.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 spec = importlib.util.spec_from_file_location("simt_twin", HERE / "simt_twin.py")
@@ -153,3 +157,42 @@ def test_kernel_keys_follow_the_domain():
         assert [got[32 * r:32 * r + 32] for r in range(3)] == [d.leaf(r, r, ROW, rows[1300 * r:1300 * (r + 1)]) for r in range(3)]
         outs.add(got)
     assert len(outs) == 3
+
+
+def f32_rows(tag: str, rows: int, k: int) -> np.ndarray:
+    """FP32 words: a row of normal draws at one binade (2^-20 .. 2^20), so that the chains' terms are alike and their order
+    shows in the sums; -0, a subnormal and a tiny value on the stats' sampled positions (multiples of 8); row 1 with 3e17,
+    whose square is near FP32's top; and the last row all zeros."""
+    rng = np.random.default_rng(int.from_bytes(hashlib.sha256(tag.encode()).digest()[:8], "little"))
+    x = (rng.standard_normal((rows, k)) * np.exp2(rng.integers(-20, 21, (rows, 1)))).astype(np.float32)
+    x[:, 0], x[:, 8], x[:, k - 8] = -0.0, np.float32(1e-40), np.float32(-1e-3)
+    x[1, 16 % k] = np.float32(3e17)
+    x[-1] = 0.0
+    return x.view(np.uint32)
+
+
+@pytest.mark.parametrize("k", [256, 1024, 3072, 4096])
+def test_rows_form_s_writes_the_row_leaves_and_s5_stats(k):
+    """hash_rows_b3s_stats over m = 12 rows, hashing m_real = 8 (ranks 3–10): the leaves and level keys are hash_rows_b3s's,
+    nothing past m_real's leaves is written, and every row's alpha, beta, 1/alpha and (s, rho), the filler rows' included,
+    are the scheme's s5_stats (stats_s5's order: chain c over x[256 i + 8 c], then the butterfly)."""
+    m, m_real, rb, d = 12, 8, 4 * k, domain(16)
+    words = f32_rows(f"rows form s {k}", m, k)
+    rows = words.tobytes()
+    tmpl, tlen = template(ROW)
+    nseg, poison = rb // 256, b"\xa5"
+    leaves, skeys = T.buffer(poison * 32 * m), T.buffer(poison * 32 * 10)
+    alpha, beta, ia, aux = (T.buffer(poison * n * m) for n in (4, 4, 4, 8))
+    T.launch("hash_rows_b3s_stats", m, 32 * -(-nseg // 32),
+             [T.buffer(rows), leaves, T.buffer(d.domain_id), skeys, T.buffer(tmpl), alpha, beta, ia, aux],
+             [m_real, rb, 3, tlen, m], smem=nseg * (32 + 33))
+    want_skeys = T.buffer(poison * 32 * 10)
+    want = rows_b3s(rows, m_real, rb, d, rank0=3, skeys=want_skeys)
+    assert leaves.raw[:32 * m_real] == want and leaves.raw[32 * m_real:32 * m] == poison * 32 * (m - m_real)
+    assert want == b"".join(d.leaf(3 + r, 3 + r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m_real))
+    assert skeys.raw[:32 * 10] == want_skeys.raw[:32 * 10]
+    for r in range(m):
+        s_, rho, a_, b_ = C.s5_stats([int(w) for w in words[r]])
+        got = [int.from_bytes(buf.raw[n * r:n * r + 4], "little") for buf, n in ((alpha, 4), (beta, 4), (ia, 4), (aux, 8))]
+        got.append(int.from_bytes(aux.raw[8 * r + 4:8 * r + 8], "little"))
+        assert got == [a_, b_, fp32.div(0x3F800000, a_), s_, rho], (k, r)
