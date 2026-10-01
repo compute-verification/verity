@@ -8,8 +8,9 @@ constructs it with no arguments, and calls `build` once. Device pointers and CUD
 the device's primary context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
 
 A call's ``phases`` (v0.6) are named by the step groups the executor schedules, `GROUPS`; the chain times them in three
-parts, `PARTS`, the last of which is `MOVABLE`, what its side stream (the ``deferred`` schedule) takes. v0.4's phase names
-``before``, ``gemm`` and ``after`` are still accepted, each as its part, and deprecated.
+parts, `PARTS`, the last of which is `MOVABLE`. Its side stream takes `DEFERRED` alone, the served ``deferred`` schedule's
+side lane (tile hashing), and the screen stays on the main lane. v0.4's phase names ``before``, ``gemm`` and ``after`` are
+still accepted, each as its part, and deprecated; their one ``after`` can't be split, so they get no side stream.
 
 An arm may have ``prefetch(dev, call, shape, flags)`` (optional, v0.6): before a flag set's first gate at a shape, the
 harness syncs the device and calls it on each call it is about to gate (`refs.prefetch`), so an arm whose gate recomputes
@@ -81,6 +82,9 @@ GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 MOVABLE = frozenset({"tile_hash", "screen"})
 #: the chain's parts (`chain.py`), each the groups it runs, in order
 PARTS = {"before": ("a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
+#: the groups the chain's side stream takes: the served deferred schedule's side lane, so must equal
+#: verity_pouw.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
+DEFERRED = frozenset({"tile_hash"})
 VERIFIER_FIELDS = {
     "run": ("python", "run_dir", "run_id", "commit", "arm"),
     "shape": ("python", "run_dir", "run_id", "commit", "arm", "shape", "transcript", "dir"),
@@ -161,9 +165,10 @@ class Call(Protocol):
     time (a copy made in `prepare` would time a chain that isn't one). y is `outputs["y"]` (else `outputs["d"]`): m x n
     row-major, its first m rows, BF16 unless the call sets ``y_format`` ("f32" or "int32"). Optional: ``phases``, a dict of
     step groups (`GROUPS`, ``gemm`` among them), each ``fn(stream)``, which in `GROUPS` order enqueue the same work as
-    `launch`; with it the chain splits the call's decode time by `PARTS`, and runs the `MOVABLE` groups on a side stream
+    `launch`; with it the chain splits the call's decode time by `PARTS`, and runs the `DEFERRED` groups on a side stream
     (they may then overlap the next call; the harness keeps call j from reusing its operand set, or the call object, until
-    call j - S's are done). Deprecated: v0.4's ``before``, ``gemm`` and ``after``, each run as its part."""
+    call j - S's are done). Deprecated: v0.4's ``before``, ``gemm`` and ``after``, each run as its part, and no side
+    stream."""
 
     outputs: dict[str, Buffer]
 
@@ -220,6 +225,16 @@ def phase_parts(phases: dict | None) -> tuple[dict[str, list], bool] | None:
         raise ArmError(f"phases {sorted(keys)}: step groups are {', '.join(GROUPS)}, gemm among them"
                        + (f" (unknown {unknown})" if unknown else ""))
     return {p: [phases[g] for g in gs if g in keys] for p, gs in PARTS.items()}, True
+
+
+def side_split(phases: dict | None) -> tuple[list, list] | None:
+    """The side chain's after part: the fns the main lane runs after the gemm part and those the side stream runs
+    (`DEFERRED`), each in `GROUPS` order; None unless `phases` are step groups with a deferred one among them."""
+    got = phase_parts(phases)
+    if got is None or not got[1] or not DEFERRED & set(phases):
+        return None
+    after = [g for g in PARTS["after"] if g in phases]
+    return [phases[g] for g in after if g not in DEFERRED], [phases[g] for g in after if g in DEFERRED]
 
 
 def check_arm(arm: Any, precisions: set[str]) -> None:

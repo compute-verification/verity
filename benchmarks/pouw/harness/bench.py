@@ -745,7 +745,8 @@ def chain_entries(bench: Bench, dev, shape, timed: list[Entry], arms: list, arm_
             if links is None:
                 unchained[f"{a.name}/{role}"] = why
                 continue
-            variants = ["full"] + (list(CH.SPLIT_VARIANTS) if role == "hash" and CH.has_phases(links) else [])
+            variants = ["full"] + ([v for v in CH.SPLIT_VARIANTS if v != "side" or CH.has_side(links)]
+                                   if role == "hash" and CH.has_phases(links) else [])
             for v in variants:
                 add(("chain", shape.label, a.name, role, v), links, DV.INPUT_KIND[a.inputs], v, e.key, a,
                     a.flag_sets[role])
@@ -803,21 +804,23 @@ def chain_report(shape, fams, arms, entries: list[Entry], med: dict, methods: tu
         var = {e.meta["variant"]: med[e.key] for e in ch if e.key[2] == a.name and e.key[3] == "hash"}
         d = derive_ms.get(DV.INPUT_KIND[a.inputs], {})
         split = {}
-        if set(CH.SPLIT_VARIANTS) <= set(var):
+        if {"full", "gemm", "before-gemm"} <= set(var):
             for m in methods:
-                full, g, bg, side = (var[v].get(m) for v in ("full", *CH.SPLIT_VARIANTS))
-                if None in (full, g, bg, side):
+                full, g, bg = (var[v].get(m) for v in ("full", "gemm", "before-gemm"))
+                side = var.get("side", {}).get(m)
+                if None in (full, g, bg):
                     continue
                 split[m] = {"derive_ms": d.get(m), "before_ms": bg - g, "during_ms": g - (d.get(m) or 0.0),
-                            "after_ms": full - bg, "full_ms": full, "side_ms": side, "after_exposed_side_ms": side - bg,
-                            "hidden_by_side_ms": full - side}
+                            "after_ms": full - bg, "full_ms": full}
+                if side is not None:
+                    split[m] |= {"side_ms": side, "after_exposed_side_ms": side - bg, "hidden_by_side_ms": full - side}
                 if m in r and r[m].get("baseline_ms"):
                     base = r[m]["baseline_ms"]
-                    split[m] |= {"full_x": full / base, "side_x": side / base}
+                    split[m] |= {"full_x": full / base} | ({"side_x": side / base} if side is not None else {})
         r["split"] = split or "the arm's calls expose no phases (step groups, arm.GROUPS)"
         if split:
             r["split_groups"] = CH.split_groups(next(e.chain.links for e in ch if e.key[2] == a.name
-                                                     and e.meta["variant"] == "side"))
+                                                     and e.meta["variant"] == "before-gemm"))
         out["arms"][a.name] = r
     return out
 
@@ -1008,7 +1011,7 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
                           "baseline": g["baseline"], "baseline_kernel": chain["baselines"][g["baseline"]]["graph"]["kernel"],
                           "baseline_ms": g["baseline_ms"], "chain_length": chain["length"]}
             side = c["split"].get("graph") if isinstance(c["split"], dict) else None
-            if side:
+            if side and "side_x" in side:
                 r["panel"]["slowdown_side_stream"] = round(side["side_x"], 4)
             r["panel"] |= panel_reps(bench.items, ("chain", shape.label, a.name, "hash", "full"),
                                      ("chain", shape.label, g["baseline"], r["panel"]["baseline_kernel"], "full"))

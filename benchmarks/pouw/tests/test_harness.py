@@ -1224,7 +1224,7 @@ def test_a_chain_derives_each_call_from_the_previous_calls_y_and_wraps():
 
 
 def test_the_side_stream_chain_guards_set_reuse_and_joins_at_its_end():
-    b, dev, e = chain_bench(phases=True)
+    b, dev, e = chain_bench(phases="groups")
     links = CH.baseline_links(e, B.FAMILIES["fp8-e4m3"])
     ch = CH.Chain(dev, SMALL, links, "e4m3", "side")
     dev.log.clear()
@@ -1302,7 +1302,8 @@ def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_ro
     arm_es = H.arm_entries(b, dev, arm, SMALL, sets, first=False)
     got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
     variants = sorted(x.key[3:] for x in got if x.key[2] == arm.name)
-    assert variants == [("hash", "before-gemm"), ("hash", "full"), ("hash", "gemm"), ("hash", "side"), ("nohash", "full")]
+    side = [("hash", "side")] if phases == "groups" else []
+    assert variants == [("hash", "before-gemm"), ("hash", "full"), ("hash", "gemm"), *side, ("nohash", "full")]
     assert "arm_gate" in b.ledger.records[("chain", SMALL.label, arm.name, "hash", "full")]["detail"]
     es = [e, *arm_es, *got]
     b.capture(es, 4)
@@ -1317,32 +1318,39 @@ def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_ro
     groups = rep["chain"]["arms"][arm.name]["split_groups"]
     if phases == "groups":
         assert groups == {"before_ms": ["a_tree", "forming"], "during_ms": ["gemm", "cleanup"],
-                          "after_ms": ["tile_hash", "screen"]}
+                          "after_ms": ["tile_hash", "screen"], "side_stream": ["tile_hash"]}
+        assert "side_ms" in split
     else:
-        assert groups.startswith("v0.4 phases")
+        assert groups.startswith("v0.4 phases") and "side_ms" not in split and "side_x" not in split
     panel = rep["arms"][arm.name]["panel"]
     assert panel["decode_method"] == "dependent-chain" and panel["baseline_kernel"] == "k"
     assert panel["slowdown"] == pytest.approx(round((1.6 + cleanup) / 0.6, 4))
     assert panel["hash_free"] == pytest.approx(round((1.5 + cleanup) / 0.6, 4))
-    assert panel["chain_length"] == 66 and "slowdown_side_stream" in panel
+    assert panel["chain_length"] == 66 and ("slowdown_side_stream" in panel) == (phases == "groups")
 
 
-def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_takes_the_movable_groups():
+def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_takes_the_served_deferred_groups():
+    """The side stream takes what the served deferred schedule moves (tile hashing) and leaves the screen on the main lane;
+    v0.4's one ``after`` can't be split that way, so it gets no side chain."""
     assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
-    assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS
+    assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS and A.DEFERRED <= A.MOVABLE
     try:
         from verity_pouw import serving
     except ImportError:
         serving = None
     if serving is not None:
         assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
-        assert set(A.PARTS["after"]) == serving.DEFERRED.side
+        assert A.DEFERRED == serving.DEFERRED.side
     f = {g: (lambda s, g=g: g) for g in A.GROUPS + ("before", "after", "hash")}
     parts, named = A.phase_parts({g: f[g] for g in ("forming", "gemm", "screen")})
     assert named and {p: [fn(0) for fn in fns] for p, fns in parts.items()} == {
         "before": ["forming"], "gemm": ["gemm"], "after": ["screen"]}
     parts, named = A.phase_parts({p: f[p] for p in ("before", "gemm", "after")})
     assert not named and [fn(0) for fn in parts["after"]] == ["after"]
+    kept, deferred = A.side_split({g: f[g] for g in A.GROUPS})
+    assert ([fn(0) for fn in kept], [fn(0) for fn in deferred]) == (["screen"], ["tile_hash"])
+    assert A.side_split({p: f[p] for p in ("before", "gemm", "after")}) is None
+    assert A.side_split({g: f[g] for g in ("forming", "gemm", "screen")}) is None and A.side_split(None) is None
     assert A.phase_parts(None) is None and A.phase_parts({"before": f["before"], "gemm": f["gemm"]}) is None
     for bad, why in (({"before": 0, "gemm": 0, "after": 0, "a_tree": 0}, "mix"), ({"gemm": 0, "hash": 0}, "unknown"),
                      ({"forming": 0, "screen": 0}, "gemm among them")):
@@ -1360,7 +1368,10 @@ def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_tak
             c.phases[g] = lambda s, g=g, run=c.phases[g]: (moved.append((g, s)), run(s))
     ch = CH.Chain(dev, SMALL, links, "e4m3", "side")
     ch.enqueue(dev.stream, 3)
-    assert moved == [(g, dev.side_stream) for _ in range(3) for g in ("tile_hash", "screen")]
+    assert moved == [("tile_hash", dev.side_stream), ("screen", dev.stream)] * 3
+    v04 = chain_bench(phases=True)
+    with pytest.raises(A.ArmError, match="deferred group"):
+        CH.Chain(v04[1], SMALL, CH.baseline_links(v04[2], B.FAMILIES["fp8-e4m3"]), "e4m3", "side")
     links[1].call.phases["hash"] = f["hash"]
     got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
     assert "unknown ['hash']" in unchained[f"{arm.name}/hash"]

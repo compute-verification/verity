@@ -8,14 +8,17 @@ least `MIN_LENGTH`; call 0 derives from the last call of the previous replay. Va
 - ``full``: f, then the call's `launch`.
 - An arm whose calls have `phases` (step groups, `arm.GROUPS`; in order, the same work as `launch`) also gets, by the
   parts `arm.PARTS` makes of them (before: a_tree, forming; gemm: gemm, cleanup; after: tile_hash, screen, the movable
-  groups), ``gemm`` (f, then the gemm part alone), ``before-gemm`` (f, before, gemm) and ``side`` (f, before and gemm on
-  the timing stream, after forked to a side stream, the ``deferred`` schedule; the chain waits for call j - S's after
-  before deriving call j's A, since call j reuses its operand set, and joins the side stream at its end, so the drain is
-  timed once per L calls). v0.4's phases ``before``, ``gemm`` and ``after`` are each their part.
+  groups), ``gemm`` (f, then the gemm part alone), ``before-gemm`` (f, before, gemm) and ``side`` (f, before, gemm and the
+  screen on the timing stream, tile hashing (`arm.DEFERRED`) forked to a side stream after the gemm part: the served
+  ``deferred`` schedule, `verity_pouw.serving.DEFERRED`; the chain waits for call j - S's side work before deriving call
+  j's A, since call j reuses its operand set, and joins the side stream at its end, so the drain is timed once per L
+  calls). v0.4's phases ``before``, ``gemm`` and ``after`` are each their part, and get no ``side``: their one ``after``
+  can't be split into what the served schedule moves and what it keeps.
 - ``derive-only``: f alone, per derive kind (what f costs, y resident in the L2).
 
 The split, per call: derive = derive-only; before = before-gemm - gemm; during = gemm - derive; after = full - before-gemm;
-the side stream's exposed after = side - before-gemm.
+the side chain's exposed after = side - before-gemm (the screen, and whatever of the tile hashing the side stream doesn't
+hide).
 
 The gate, before any chain is timed: its call's own gate passed; then S + 1 steps, each f on the device and a sync, the
 derived A (and its scales) byte-equal to the twin's f of the source y read back, then the call launched; for an arm, its
@@ -65,6 +68,9 @@ class Chain:
         self.fork = [dev.event() for _ in links] if variant == "side" else []
         self.done = [dev.event() for _ in links] if variant == "side" else []
         self.parts = [A.phase_parts(ln.call.phases)[0] for ln in links] if variant in SPLIT_VARIANTS else []
+        self.sides = [A.side_split(ln.call.phases) for ln in links] if variant == "side" else []
+        if None in self.sides:
+            raise A.ArmError(f"a side chain needs step-group phases with a deferred group ({', '.join(sorted(A.DEFERRED))})")
 
     def part(self, j: int, name: str, stream: int) -> None:
         for fn in self.parts[j % len(self.links)][name]:
@@ -90,13 +96,17 @@ class Chain:
                 self.part(j, "before", stream)
                 self.part(j, "gemm", stream)
             elif self.variant == "side":
+                kept, deferred = self.sides[j % S]
                 self.part(j, "before", stream)
                 self.part(j, "gemm", stream)
                 dev.record(self.fork[j % S], stream)
                 side = dev.side_stream
                 dev.wait(side, self.fork[j % S])
-                self.part(j, "after", side)
+                for fn in deferred:
+                    fn(side)
                 dev.record(self.done[j % S], side)
+                for fn in kept:
+                    fn(stream)
         if self.variant == "side" and n:
             dev.wait(stream, self.done[(n - 1) % S])
 
@@ -194,9 +204,15 @@ def has_phases(links: list[Link]) -> bool:
     return all(A.phase_parts(getattr(ln.call, "phases", None)) is not None for ln in links)
 
 
+def has_side(links: list[Link]) -> bool:
+    return all(A.side_split(getattr(ln.call, "phases", None)) is not None for ln in links)
+
+
 def split_groups(links: list[Link]) -> dict[str, list[str]] | str:
-    """The step groups each of the split's times covers (`SPLIT_PARTS`), as link 0's call names them."""
+    """The step groups each of the split's times covers (`SPLIT_PARTS`), as link 0's call names them, and those the side
+    stream took (``side_stream``)."""
     phases = links[0].call.phases
     if not A.phase_parts(phases)[1]:
-        return "v0.4 phases: the arm's own before, gemm and after"
-    return {t: [g for g in A.PARTS[p] if g in phases] for t, p in SPLIT_PARTS.items()}
+        return "v0.4 phases: the arm's own before, gemm and after (no side stream)"
+    return ({t: [g for g in A.PARTS[p] if g in phases] for t, p in SPLIT_PARTS.items()}
+            | {"side_stream": [g for g in A.PARTS["after"] if g in phases and g in A.DEFERRED]})

@@ -104,9 +104,10 @@ Decode rows count on the panel only as a dependent chain, which needs a library 
 `Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
 `tile_hash`, `screen`, as `verity_pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
-after (tile_hash, screen, the movable groups, which the side-stream variant runs off the main lane as the `deferred`
-schedule does), and the report's `split_groups` names the groups each time covers. v0.4's `before`, `gemm` and `after` still
-work, each as its part, and are deprecated; `arm.py` has the contract.
+after (tile_hash, screen, the movable groups), and the report's `split_groups` names the groups each time covers. The
+side-stream variant times the served `deferred` schedule (`verity_pouw.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
+off the main lane, the screen on it. v0.4's `before`, `gemm` and `after` still work, each as its part, and are deprecated;
+their one `after` can't be split that way, so they get no side-stream variant. `arm.py` has the contract.
 
 A search's best, timed later with `--lt-enumerate-names FILE`, needs an `--lt-enumerate-max` that reaches every configuration
 FILE names: the enumeration keeps only its first `--lt-enumerate-max` (8,192) per library and swap, and cuBLASLt 13's FP8
