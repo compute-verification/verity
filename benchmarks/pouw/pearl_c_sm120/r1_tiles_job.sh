@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Research question: can R1-H's exact-window tile rule reject every verifier tile a written-row region touches while
+# Research question: can R1-H's exact-window tile rule, a debit of every step in an exact run of at least L atoms capped at
+# rho of the tile's credit, reject every verifier tile a written-row region touches while
 # passing model rows, and at what thresholds and false-positive rate? Per tile of 16, 64 and 128 words square, under the
 # centred start: the share of words exact over 4-16 consecutive atoms, the exact and S-determined step shares, the m16n8
 # sub-tiles S-determined or cheaply spotted in every word, and the domain check. Model rows: natural text, the repeated

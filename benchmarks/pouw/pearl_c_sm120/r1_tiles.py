@@ -8,6 +8,9 @@ product are multiples of g, so the step is T24(acc + S); `r1_sdet`) and cheaply 
 T x T words, for T in --tiles, it reports:
 
   win<L>: the share of the tile's words exact over some L consecutive atoms, for L in WINDOWS;
+  debit<L>: the share of the tile's steps that lie in a run of at least L consecutive exact steps of one word, for L in
+    DEBITS: the debit a replay that uncredits such runs charges, against the cap rho of the tile's credit (a prover
+    regroups a region's rows and columns as it likes, so only the debit's total, not its geometry in the tile, bounds it);
   exact, sdet: the tile's shares of exact and S-determined steps;
   m16n8_sdet, m16n8_cheap: the share of the tile's (m16n8 sub-tile, atom) pairs whose every word is S-determined, or
     cheaply spotted (the tensor core steps a whole m16n8 tile, so only those let a derived word skip its step);
@@ -34,6 +37,7 @@ from r1_sdet import t24, top_bit, v2
 from verity.ml.kernels import group_sum_total_batch
 
 WINDOWS = (4, 6, 8, 9, 12, 16)
+DEBITS = (2, 3, 4, 5, 6, 8, 9)
 
 
 def tiled(x: np.ndarray, tr: int, tc: int | None = None) -> np.ndarray:
@@ -56,6 +60,7 @@ def job(cls: str, layer: int, args, key: str) -> dict:
     hu, e0 = prev.copy(), top_bit(prev)
     inside, ratio = np.ones(len(hu), bool), np.zeros(len(hu))
     run, best = np.zeros(len(hu), np.int64), np.zeros(len(hu), np.int64)
+    debit = {L: np.zeros(len(hu), np.int64) for L in DEBITS}
     exact_n, sdet_n = np.zeros(len(hu), np.int64), np.zeros(len(hu), np.int64)
     m_sdet, m_cheap = [], []
     checked = 0
@@ -74,6 +79,8 @@ def job(cls: str, layer: int, args, key: str) -> dict:
         assert np.array_equal(now[sdet], t24(prev + part)[sdet]), "an S-determined step that isn't T24(acc + S)"
         checked += int(sdet.sum())
         exact = now == prev + part
+        for L in DEBITS:
+            debit[L] += np.where(~exact & (run >= L), run, 0)
         run = (run + 1) * exact
         best = np.maximum(best, run)
         exact_n += exact
@@ -83,6 +90,8 @@ def job(cls: str, layer: int, args, key: str) -> dict:
         m_sdet.append(sdet.reshape(rows // 16, 16, cols // 8, 8).all(axis=(1, 3)))
         m_cheap.append(cheap.reshape(rows // 16, 16, cols // 8, 8).all(axis=(1, 3)))
         prev = now
+    for L in DEBITS:
+        debit[L] += np.where(run >= L, run, 0)
     grid = lambda v: v.reshape(rows, cols)
     out = {"class": cls, "layer": layer, "written": args.adv, "rows": rows, "cols": cols, "atoms": args.atoms,
            "h": args.h, "start": "centred", "checked_sdet_steps": checked, "tiles": {}}
@@ -92,6 +101,7 @@ def job(cls: str, layer: int, args, key: str) -> dict:
         if rows < T or cols < T or T % 16:
             continue
         per = {f"win{L}": tiled(grid(best >= L), T).mean(axis=2) for L in WINDOWS}
+        per.update({f"debit{L}": tiled(grid(debit[L]), T).mean(axis=2) / args.atoms for L in DEBITS})
         per["exact"] = tiled(grid(exact_n), T).mean(axis=2) / args.atoms
         per["sdet"] = tiled(grid(sdet_n), T).mean(axis=2) / args.atoms
         per["m16n8_sdet"] = tiled(msd, T // 16, T // 8).mean(axis=2)
