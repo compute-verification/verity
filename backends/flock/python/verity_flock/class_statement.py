@@ -12,8 +12,8 @@ M0's statement proves a template's identical units with every instance's input r
   next w bits of the current leaf, low bits first, when they fit there and the next leaf's low bits when not, so four FP4 or two
   FP8 elements share a leaf and the row's little-endian bytes are the elements' packed memory layout; each row padded with
   unread zero words to a whole number of 64-word SHA-512 blocks, as frame-v3 rows are; under ``FLOCK_CORE_ROWS=1`` an FP GEMM
-  coordinate's x and its scales are one packed row and its W column and scales another, each core's element row with no
-  padding, `element_rows`), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
+  coordinate's x and its scales are one packed row and its W column and scales another, each core's bit row (``sha512/row/v2``)
+  of exactly its elements' bits, `element_rows`), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
@@ -46,7 +46,6 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ir import partition_object as PO
 from verity.ir.types import Array, Value
 from verity.ir.cut import DefinitionCut
@@ -77,13 +76,13 @@ def _pad(n: int, to: int) -> int:
 
 #: FLOCK_PACK_WORDS=1: words narrower than a leaf share it (`_slots`); a different circuit and statement from the default layout's
 PACK_WORDS = os.environ.get("FLOCK_PACK_WORDS") == "1"
-#: FLOCK_CORE_ROWS=1: an FP GEMM coordinate's rows are core's element rows (`element_rows`); packed, and a different circuit and
+#: FLOCK_CORE_ROWS=1: an FP GEMM coordinate's rows are core's bit rows (`element_rows`); packed, and a different circuit and
 #: statement from both other layouts'
 CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
-#: Per FP GEMM coordinate family: its element format and, per row, the role and the parameters it holds (codes, then scales)
-ELEMENT_ROWS = {"GemmCoordinateE4m3_v1": ("e4m3", ((ROLE_X, ("x",)), (ROLE_W, ("wrow",)))),
-                "GemmCoordinateNvf4_v1": ("nvfp4", ((ROLE_X, ("x", "sx")), (ROLE_W, ("wrow", "sw")))),
-                "GemmCoordinateMxf4_v1": ("mxfp4", ((ROLE_X, ("x", "sx")), (ROLE_W, ("wrow", "sw"))))}
+#: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
+ELEMENT_ROWS = {"GemmCoordinateE4m3_v1": (("x",), ("wrow",)),
+                "GemmCoordinateNvf4_v1": (("x", "sx"), ("wrow", "sw")),
+                "GemmCoordinateMxf4_v1": (("x", "sx"), ("wrow", "sw"))}
 
 
 def _slots(widths: Sequence[int], packed: bool = False) -> tuple[list[tuple[int, int]], int]:
@@ -136,19 +135,16 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[tuple]]:
-    """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row of role 1 and the W column with
-    its scales one of role 2, each core's element row (``verity.commitments.rowleaf``: the codes, then the scales, nothing after).
-    Returns the merged source groups, the `sources` groups each one joins, and each row's (format, role, k). Refuses a Definition
-    that is not such a coordinate and a source that is not one whole parameter in element order (`whole_blocks` refuses a row
-    that is not whole SHA-512 blocks)."""
-    from verity.commitments.rowleaf import ELEMENT_FORMATS
-
+def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+    """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
+    scales another, each core's bit row (``verity.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
+    the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
+    bits. Refuses a Definition that is not such a coordinate and a source that is not one whole parameter in element order
+    (`whole_blocks` refuses a row that is not whole SHA-512 blocks)."""
     family = act.fn.id.split("{")[0]
     if family not in ELEMENT_ROWS:
         raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id} is not an FP GEMM coordinate ({sorted(ELEMENT_ROWS)})")
-    fmt, rows = ELEMENT_ROWS[family]
-    f = ELEMENT_FORMATS[fmt]
+    rows = ELEMENT_ROWS[family]
     sig = act.fn.signature()[0]
     first = [sum(t.leaves for _n, t in sig[:i]) for i in range(len(sig))]
     held = []
@@ -158,33 +154,29 @@ def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> t
         if p is None or leaves != list(range(first[p], first[p] + sig[p][1].leaves)):
             raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: a source that is not one whole parameter in element order")
         held.append(sig[p][0])
-    merged, joins, kinds = [], [], []
-    for role, params in rows:
+    merged, joins, bits = [], [], []
+    for params in rows:
         if any(nm not in held for nm in params):
             raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: the unit reads no {params}")
         idx = tuple(held.index(nm) for nm in params)
-        k = len(groups[idx[0]])
         g = [t for i in idx for t in groups[i]]
-        if [uc.in_widths[t] for t in g] != [f.code_bits] * k + [8] * f.n_scales(k):
-            raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: {params} are not {k} {f.code} codes and their {f.scale} scales")
         merged.append(g)
         joins.append(idx)
-        kinds.append((fmt, role, k))
+        bits.append(sum(uc.in_widths[t] for t in g))
     if sorted(i for j in joins for i in j) != list(range(len(groups))):
         raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: a source in no row")
-    return merged, joins, kinds
+    return merged, joins, bits
 
 
-def whole_blocks(name: str, kinds: list[tuple]) -> None:
-    """Refuse element rows that are not whole SHA-512 blocks (NVFP4 k < 2048 or not a multiple of it, MXFP4 likewise at 4096,
-    E4M3 at 128): core's rows are unpadded, and a partial last block needs its padding bits pinned by the verifier, which
-    neither verifier does, so such a shape is not staged."""
-    from verity.commitments.rowleaf import ELEMENT_FORMATS
-
-    for fmt, _role, k in kinds:
-        if ELEMENT_FORMATS[fmt].row_len(k) % 128:
-            raise ValueError(f"FLOCK_CORE_ROWS: {name}: an {fmt} row of k = {k} is {ELEMENT_FORMATS[fmt].row_len(k)} bytes, not "
-                             "whole SHA-512 blocks (refused)")
+def whole_blocks(name: str, bits: list[int]) -> None:
+    """Refuse bit rows that are not whole SHA-512 blocks (NVFP4 k < 2048 or not a multiple of it, MXFP4 likewise at 4096,
+    E4M3 at 128). ``sha512/row/v2`` takes any length, but this circuit hashes a row's whole blocks after the prefix and then a
+    constant padding block, and no slot pins fill bits or a padding block that shares a row's last bytes; so such a shape is not
+    staged."""
+    for b in bits:
+        if b % 1024:
+            raise ValueError(f"FLOCK_CORE_ROWS: {name}: a row of {b} bits is {-(-b // 8)} bytes, not whole SHA-512 blocks "
+                             "(refused: this circuit hashes whole blocks)")
 
 
 def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
@@ -465,7 +457,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
-    GEMM coordinate's rows are core's element rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS)."""
+    GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS)."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -475,20 +467,20 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     ins, want, idents = lanes_ if len(lanes_) == 3 else (*lanes_, None)
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
-    kinds = None
+    bits = None
     if core_rows:
-        groups, joins, kinds = element_rows(act, uc, groups)
-        whole_blocks(act.fn.id, kinds)
+        groups, joins, bits = element_rows(act, uc, groups)
+        whole_blocks(act.fn.id, bits)
         idents = [list(zip(*(idents[i] for i in j))) for j in joins] if idents is not None else None
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packed)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b""), len(groups))
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packed)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
-    text = FC.compose(low, sub, partition=partition, program=program, port_rows=kinds)
+    text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
         raise AssertionError(f"class {name}: the laid-out unit rows disagree with the reference on its lanes")
-    if kinds is not None:
-        _check_element_rows(uc, ins, groups, kinds, per_port, name)
+    if bits is not None:
+        _check_bit_rows(uc, ins, groups, bits, per_port, name)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
@@ -522,22 +514,20 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
-        ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if kinds is not None else {})
+        ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if bits is not None else {})
 
 
-def _check_element_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], kinds: list[tuple], per_port: dict,
-                        name: str, lanes: int = 8) -> None:
-    """The first ``lanes`` staged rows of each port are core's element row of the lane's codes and scales
-    (``rowleaf.element_row_bytes``; one row costs about 10 ms at k = 16384)."""
-    from verity.commitments.rowleaf import ELEMENT_FORMATS, element_row_bytes
+def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+                    name: str, lanes: int = 8) -> None:
+    """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``)."""
+    from verity.commitments.rowleaf import bit_row
 
-    for i, (g, (fmt, _role, k)) in enumerate(zip(groups, kinds)):
+    for i, (g, n_bits) in enumerate(zip(groups, bits)):
         rows = per_port[f"p{i}"]
         for lane in range(min(lanes, len(rows))):
-            vals = [int(ins[t][lane]) for t in g]
-            want = element_row_bytes(fmt, vals[:k], vals[k:])
-            if rows[lane].astype("<u2").tobytes() != want or len(want) != ELEMENT_FORMATS[fmt].row_len(k):
-                raise AssertionError(f"class {name}: port p{i} lane {lane} is not core's {fmt} row of its codes and scales")
+            want = bit_row(*(([int(ins[t][lane])], uc.in_widths[t]) for t in g))
+            if (rows[lane].astype("<u2").tobytes(), 16 * rows.shape[1]) != want or want[1] != n_bits:
+                raise AssertionError(f"class {name}: port p{i} lane {lane} is not core's bit row of its elements")
 
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
