@@ -9,6 +9,7 @@ import pytest
 
 from verity.evaluation import self_check
 from verity.ir.defs import bind
+from verity_vllm.pipeline import cli
 from verity_vllm.program.kernels import dense_rows as DR
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import rows
@@ -222,6 +223,27 @@ def test_prepared_weights_are_keyed_by_their_buffer():
     assert DR.prepared(w2) is not DR.prepared(w)
     for arr in (w, w2, w):
         assert np.array_equal(DR.dot_ampere(x, arr, 2)[0], _reference(x, arr)[0])
+
+
+@pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
+def test_the_words_are_the_same_at_any_thread_count(dot_id, monkeypatch):
+    """`VERITY_DENSE_THREADS` only splits the coordinates: at the default, 1, 16 and 64 threads the words are the int64 twin's; a value
+    that is not a positive integer leaves the default, and the process's CPUs bound the count."""
+    rng = np.random.default_rng(5710)
+    x = _x(rng)
+    w, _ = _w(rng, x)
+    ref, ref_nf = _reference(x, w, dot_id)
+    monkeypatch.setattr(DR, "_THREADS", [DR.MAX_THREADS])
+    monkeypatch.setattr(DR.os, "sched_getaffinity", lambda _pid: set(range(64)))
+    for env, n in (("", DR.MAX_THREADS), ("1", 1), ("16", 16), ("64", 64), ("0", DR.MAX_THREADS), ("many", DR.MAX_THREADS)):
+        DR.use_threads(None)
+        cli.process_settings({cli.DENSE_THREADS_ENV: env})
+        assert DR.threads() == n, env
+        out, nf = DR.dot_chain(x, w, dot_id)
+        assert np.array_equal(out, ref) and np.array_equal(nf, ref_nf), env
+    monkeypatch.setattr(DR.os, "sched_getaffinity", lambda _pid: {0, 1, 2})
+    DR.use_threads(16)
+    assert DR.threads() == 3
 
 
 def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch):
