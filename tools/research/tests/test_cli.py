@@ -127,10 +127,12 @@ STUB_SUBMIT = """\
 import json, sys
 open(sys.argv[0] + '.argv', 'w').write(json.dumps(sys.argv[1:]))
 a = sys.argv
-if '--gpus' in a and a[a.index('--gpus') + 1] == '9':
+val = lambda k, d=None: a[a.index(k) + 1] if k in a else d
+if val('--gpus') == '9':
     print(json.dumps({'refused': 'vy-nebius-2: not 9 GPUs'})); sys.exit(3)
-print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {}, 'wrap': ['env', 'HELD=1'],
-                  'workload_wrap': ['lease', '--']}))
+print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {'gpus': int(val('--gpus', 0))},
+                  'wrap': ['env', 'HELD=1'], 'workload_wrap': ['lease', '--'], 'kind': val('--kind'),
+                  'question': val('--question', ''), 'max_s': int(val('--max-s', 1200)), 'warnings': ['stub warning']}))
 """
 
 
@@ -158,7 +160,8 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--source", str(src), "--project", "verity"]
     assert main([*base, "--mem-gb", "64", "--gpus", "1", "--max-min", "10", "--preemptible", "--quiet", "--class", "bench",
                  "--kind", "vllm.commit", "--", "true"]) == 0
-    assert "the queue places run" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "the queue places run" in err and "warning: stub warning" in err
     argv = json.loads((src / "tools" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
     assert argv[:2] == ["submit", str(src / "tools" / "cluster" / "descriptions" / "nebius.toml")]
     for k, v in (("--project", "verity"), ("--submitter", "lane-x"), ("--class", "bench"), ("--gpus", "1"), ("--mem-gb", "64"),
@@ -168,31 +171,36 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     [kw] = seen
     assert kw["machine_name"] == "vy-nebius-2" and kw["queue"]["wrap"] == ["env", "HELD=1"] and kw["mem_gb"] is None
     assert kw["queue"]["workload_wrap"] == ["lease", "--"] and (kw["queue"]["kind"], kw["queue"]["phase"]) == ("vllm.commit", "gpu")
+    assert kw["queue"]["disk_gb"] == 20 and "--disk-gb" not in argv
     assert kw["harness_args"][kw["harness_args"].index("--timeout") + 1] == str(600 + 60 * cli.GPU_WAIT_MIN)
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--", "true"]) == 0
     assert seen[-1]["queue"]["kind"] == "adhoc" and seen[-1]["queue"]["phase"] == "cpu"
     assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "600"
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "cpu", "--gpus", "1", "--", "true"]) == 2
-    assert "a cpu phase takes no --gpus" in capsys.readouterr().err
+    assert "a cpu phase takes no GPUs" in capsys.readouterr().err
+    assert main([*base, "--kind", "lean-audit", "--question", "does it check?", "--disk-gb", "5", "--", "true"]) == 0
+    argv = json.loads((src / "tools" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
+    assert argv[argv.index("--disk-gb") + 1] == "5.0" and seen[-1]["queue"]["disk_gb"] == 5.0
+    assert "--mem-gb" not in argv and "--max-s" not in argv and argv[argv.index("--question") + 1] == "does it check?"
+    assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "1200", "the kind's time"
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "gpu", "--", "true"]) == 2
 
     assert main([*base, "--mem-gb", "8", "--gpus", "9", "--max-min", "1", "--", "true"]) == 3
     assert "the queue refuses the job: vy-nebius-2: not 9 GPUs" in capsys.readouterr().err
-    assert len(seen) == 2
+    assert len(seen) == 3
 
 
-def test_run_queue_needs_source_memory_and_a_longest_time(tmp_path, capsys):
+def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue(tmp_path, capsys):
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--project", "verity"]
     assert main([*base, "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 2
     assert "--source GITDIR" in capsys.readouterr().err
-    src = _queue_source(tmp_path)
-    assert main([*base, "--source", str(src), "--max-min", "1", "--", "true"]) == 2
-    assert "--mem-gb" in capsys.readouterr().err
-    assert main([*base, "--source", str(src), "--mem-gb", "8", "--", "true"]) == 2
-    assert "--max-min M or --timeout" in capsys.readouterr().err
     assert main([*base, "--source", str(tmp_path), "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 3
     assert "no tools/cluster" in capsys.readouterr().err
     assert not (tmp_path / "runs").exists() or not list((tmp_path / "runs").iterdir())
+    plain = ["run", "--runs-dir", str(tmp_path / "runs")]
+    assert main([*plain, "--gpus", "1", "--cpus", "4", "--", "true"]) == 2
+    assert "--gpus, --cpus declare a job to the queue and mean nothing without --queue" in capsys.readouterr().err
+    assert main([*plain, "--kind", "lean-audit", "--", "true"]) == 2
 
 
 def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
