@@ -137,8 +137,8 @@ class TargetProfile:
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the IR the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
-                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.boolean.lift`); derive
-                           refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
+                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.boolean.derived`); the
+                           Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16

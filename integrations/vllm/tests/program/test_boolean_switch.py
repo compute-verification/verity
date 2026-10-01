@@ -109,6 +109,23 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
     assert {r["word"]: r["boolean"] for r in dry["derived_calls"]}["F32AddFtz_v1"] == ["F32AddFtz_v3"]
 
 
+def test_a_word_derivation_report_becomes_its_program_on_bits():
+    from verity.ir.codec import encode_program, program_digest
+    from verity_vllm.program.frontend.derive import DeriveReport
+
+    P = Program(_derived(), annotations={"note": "carried"})
+    desc = encode_program(P)
+    prov = {"result": {"root": _spec_id(P.fn), "digest": program_digest(desc), "gates": P.gates}}
+    word = DeriveReport(P, None, prov, prov["result"]["digest"], _spec_id(P.fn), P.gates, descriptor=desc)
+    rep = BB.derived(word)
+    bits = Program(BB.lift(P.fn))
+    assert rep.ok and rep.digest == program_digest(bits) == program_digest(rep.descriptor) != word.digest
+    assert rep.root == _spec_id(bits.fn) and rep.gates == bits.gates and rep.program.annotations == {"note": "carried"}
+    assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest}
+    assert rep.provenance["result"]["digest"] == rep.digest and word.provenance["result"]["digest"] == word.digest
+    assert BB.purity(rep.program)["non_boolean"]["definitions"] == 0
+
+
 def test_a_definition_with_no_boolean_version_is_refused_by_name():
     lonely = PrimitiveDefinition("LonelyWord", 1, (("a", F32),), F32, lambda a: a, register=False)
     word = _derived({"guard": lonely})
@@ -131,11 +148,11 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     ex = [torch.empty(4, dtype=torch.float32, device="meta")] * 2
     word = derive_report(M(), ex, mode="reference")
     assert word.ok and "ir" not in word.provenance
-    rep = derive_report(M(), ex, mode="reference", ir="boolean")
+    rep = BB.derived(word)
     assert not rep.ok and rep.unsupported.reason == "numerics_unregistered"
     assert sorted(rep.unsupported.detail["missing"]) == ['AddRef_v1{N=4,DT="f32"}', 'MulRef_v1{N=4,DT="f32"}']
-    with pytest.raises(ValueError, match="ir must be one of"):
-        derive_report(M(), ex, mode="reference", ir="bits")
+    assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest}
+    assert BB.derived(rep) is rep
 
 
 def test_bit_offsets_are_the_prefix_sums_of_the_leaf_widths():

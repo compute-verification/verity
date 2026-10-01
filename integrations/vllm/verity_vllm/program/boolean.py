@@ -11,8 +11,8 @@ looked up among every module of `verity.ml.boolean` and of `verity_vllm.program.
 `lift(fn)` is a derived Program's function (`frontend.derive`'s flat `Derived[...]`) on bits: the same Calls in the same order,
 each of the Boolean version of its Definition, over parameters and values whose every w-bit word is an element
 ``Array<w, Value<1>>`` (`boolean.bit_type`).  Word leaf j of a collection is element j of its bit form, so node indices and the
-runtime correspondence carry over unchanged.  `TargetProfile.ir == "boolean"` selects it at derive; the default (word) derives
-exactly as before.
+runtime correspondence carry over unchanged.  `derived(report)` is a word derivation's report with its Program on bits, which
+the Build takes when `TargetProfile.ir == "boolean"`; the default (word) derives exactly as before.
 
 `purity(program)` lists every Definition a Program reaches that is not Boolean (a word-id MUFU sub-Call inside a Boolean
 version counts): zero when the Program is bits throughout.  `dry_run(program)` reads a word Program and reports what its Boolean
@@ -33,13 +33,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from verity.ir import boolean as BL
-from verity.ir.codec import _spec_id
+from verity.ir.codec import descriptor_id
 from verity.ir.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ir.refs import Coll, PartLog, concat, prefix_runs
 from verity.ir.types import Array, Record, Tuple, Type, Value
 from verity_vllm.config import option
 
-IRS = ("word", "boolean")
 SCHEMA = "verity-vllm/boolean-purity/v1"
 
 
@@ -60,7 +59,7 @@ def _base(fid: str) -> str:
 
 
 def _fid(fn: Any) -> str:
-    return _spec_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
+    return descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
 
 
 # ---- the table: word id -> Boolean Definition, from the Boolean Definitions' own `word` links ---------------------------------
@@ -288,6 +287,35 @@ def boolean_function(fn: SpecializedDefinition) -> SpecializedDefinition:
     return bind(v) if isinstance(v, CompositeDefinition) else v
 
 
+def derived(rep, *, check_registry: bool = True):
+    """A word derivation's report (`frontend.derive.DeriveReport`) with its Program on bits (`boolean_function`), the word root and
+    digest in its provenance (``ir``); a refusal (``numerics_unregistered``) names every Call with no Boolean version."""
+    from dataclasses import replace
+
+    from verity.ir.codec import encode_program, program_digest
+    from verity.ir.liveness import dead_gates
+    from verity.ir.program import Program
+    from verity_vllm.program.frontend.derive import DeriveReport, Unsupported
+    from verity_vllm.program.frontend.torch_frontend import check_identity
+
+    if not rep.ok:
+        return rep
+    prov = dict(rep.provenance, ir={"ir": "boolean", "word_root": rep.root, "word_digest": rep.digest})
+    try:
+        fn = boolean_function(rep.program.fn)
+    except NoBooleanVersion as e:
+        u = Unsupported("numerics_unregistered", hint=f"ir=boolean: {e}", detail={"missing": e.missing})
+        return DeriveReport(None, u, prov | {"unsupported": u.to_json()})
+    program = Program(fn, annotations=dict(rep.program.annotations))
+    check_identity(program, check_registry=check_registry)
+    desc = encode_program(program)
+    digest, root, dead = program_digest(desc), descriptor_id(program.fn), dead_gates(program, limit=32)
+    # each Call and node index is the word Program's, and word leaf j is element j: the correspondence carries over unchanged
+    prov["result"] = dict(prov["result"], root=root, digest=digest, gates=program.gates, dead_gates=dead.total)
+    return replace(rep, program=program, provenance=prov, digest=digest, root=root, gates=program.gates, dead=dead,
+                   descriptor=desc if rep.descriptor is not None else None)
+
+
 # ---- purity: the Definitions a Program reaches that are not Boolean ------------------------------------------------------------
 
 def _reachable(roots) -> dict[str, Any]:
@@ -295,7 +323,7 @@ def _reachable(roots) -> dict[str, Any]:
     stack = list(roots)
     while stack:
         fn = stack.pop()
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         if fid in seen:
             continue
         seen[fid] = fn
@@ -314,7 +342,7 @@ def _non_boolean(defs: dict[str, Any]) -> dict:
                                        "specializations": 0, "example": fid, "calls": set()})
         e["specializations"] += 1
         if not isinstance(fn, PrimitiveDefinition):
-            e["calls"] |= {_base(_spec_id(n.fn)) for n in fn.body.nodes if _spec_id(n.fn) in bad}
+            e["calls"] |= {_base(descriptor_id(n.fn)) for n in fn.body.nodes if descriptor_id(n.fn) in bad}
     rows = [{**e, "calls": sorted(e["calls"])} for _, e in sorted(by.items())]
     return {"definitions": len(rows), "specializations": len(bad), "list": rows}
 
@@ -352,7 +380,7 @@ def dry_run(program) -> dict:
     would: dict[str, Any] = {}
     gaps: dict[str, str] = {}
     for n in derived_calls(program):
-        fid = _spec_id(n.fn)
+        fid = descriptor_id(n.fn)
         e = calls.setdefault(_base(fid), {"word": _base(fid), "boolean": set(), "specializations": set(), "calls": 0})
         e["calls"] += 1
         if fid in e["specializations"]:
@@ -371,8 +399,8 @@ def dry_run(program) -> dict:
         rows.append({"word": e["word"], "boolean": sorted(e["boolean"]) or None, "specializations": len(e["specializations"]),
                      "calls": e["calls"], "gap": next((gaps[f] for f in sorted(e["specializations"]) if f in gaps), None)})
     nb = _non_boolean(would)
-    wrappers = sorted({_base(_spec_id(n.fn)) for n in program.root.body.nodes if n.fn.name == "WorkloadRequest"}
-                      | {_base(_spec_id(program.root))}) if nb["definitions"] else []
+    wrappers = sorted({_base(descriptor_id(n.fn)) for n in program.root.body.nodes if n.fn.name == "WorkloadRequest"}
+                      | {_base(descriptor_id(program.root))}) if nb["definitions"] else []
     count = nb["definitions"] + len(wrappers)
     return {"schema": SCHEMA, "mode": "dry-run", "derived_calls": rows,
             "gaps": sorted({r["word"] for r in rows if r["gap"]}),
@@ -416,5 +444,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["IRS", "NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "boolean_function", "purity", "dry_run",
+__all__ = ["NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "boolean_function", "derived", "purity", "dry_run",
            "derived_calls", "Options", "main"]
