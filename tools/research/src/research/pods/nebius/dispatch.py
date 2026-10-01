@@ -140,7 +140,10 @@ PACK = Path(os.environ.get("PACK_SPOOL", str(ROOT / "pack")))
 PACK_PODS = int(os.environ.get("PACK_PODS", "1"))
 PACK_SLOTS = 3
 PACK_TEMPLATE = "commit-pack"
-PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b")
+PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b",
+               # a model joins only once a packed twin's run root equals its unpacked row's
+               "qwen3-06b", "qwen25-05b-instruct", "falcon3-1b", "qwen25-coder-15b", "r1-distill-qwen-15b", "qwen3-17b", "smollm2-17b",
+               "qwen25-3b", "llama32-3b")
 PACK_MAX_BATCH = 8
 PACK_DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
 PACK_REPLAY_K = 460
