@@ -167,12 +167,12 @@ def test_a_point_without_a_key_is_refused_and_the_key_names_what_differs(tmp_pat
     b = {"binaries": {"flock-circuit": "b" * 64}, "env": {"FC_Y": "1"}, "gpu": {"CUDA_VISIBLE_DEVICES": "0"}}
     assert GH._key_differs(a, a) == [] and GH._key_differs(a, b) == ["binaries.flock-circuit", "env.FC_X", "env.FC_Y"]
     sha = tmp_path / "binary.sha256"
-    sha.write_text(f"{SHA}  /w/bin-x/flock-circuit\n{'b' * 64}  /w/bin-x/flock-circuit-selftest\n")
+    sha.write_text(f"{SHA}  /w/target-0/release/flock-circuit\n{'b' * 64}  /w/target-1/release/flock-circuit\n")
     monkeypatch.setenv("FC_VERIFY_AHEAD", "10")
     monkeypatch.setenv("NVIDIA_VISIBLE_DEVICES", "GPU-1")
     GH.key(SimpleNamespace(binary_sha=str(sha), out=str(tmp_path / "key.json")))
     k = json.loads((tmp_path / "key.json").read_text())
-    assert k["binaries"] == {"flock-circuit": SHA, "flock-circuit-selftest": "b" * 64}
+    assert k["binaries"] == {"/w/target-0/release/flock-circuit": SHA, "/w/target-1/release/flock-circuit": "b" * 64}
     assert k["env"]["FC_VERIFY_AHEAD"] == "10" and all(n.startswith("FC_") for n in k["env"]) and k["gpu"]["NVIDIA_VISIBLE_DEVICES"] == "GPU-1"
 
 

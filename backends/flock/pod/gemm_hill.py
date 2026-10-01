@@ -310,18 +310,19 @@ def _span(phases: dict[str, list[float]], name: str) -> float | None:
 
 def key(a) -> None:
     """What a point must share with its session's preflight check, taken as each runs: the binaries' sha256 (70-class-sweep.sh's
-    binary.sha256, by name), every FC_* setting the prover inherits, and the GPU the pod was given."""
+    binary.sha256, by path: a prover and a selftest build can share a name), every FC_* setting the prover inherits, and the GPU
+    the pod was given."""
     shas = {}
     for ln in Path(a.binary_sha).read_text().splitlines() if Path(a.binary_sha).exists() else []:
         if len(f := ln.split()) == 2:
-            shas[Path(f[1]).name] = f[0]
+            shas[f[1]] = f[0]
     doc = {"binaries": shas, "env": {k: v for k, v in sorted(os.environ.items()) if k.startswith("FC_")},
            "gpu": {k: os.environ.get(k) for k in ("NVIDIA_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES")}}
     Path(a.out).write_text(json.dumps(doc, sort_keys=True) + "\n")
 
 
 def _key_differs(pk: dict | None, qk: dict | None) -> list[str]:
-    """The settings two keys don't share (``binaries.<name>``, ``env.<FC_*>``, ``gpu.<var>``); every one when either is missing."""
+    """The settings two keys don't share (``binaries.<path>``, ``env.<FC_*>``, ``gpu.<var>``); every one when either is missing."""
     flat = lambda k: {f"{s}.{n}": v for s, d in (k or {}).items() for n, v in d.items()}  # noqa: E731
     f, g = flat(pk), flat(qk)
     return ["the key"] if pk is None or qk is None else sorted(n for n in f.keys() | g.keys() if f.get(n) != g.get(n))
