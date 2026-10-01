@@ -309,6 +309,15 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
         A[:, pos] = R
         B[:, pos] = R
         return A, B
+    if name.startswith("swar-plateau-"):
+        # Built for SWAR (sm120_exact/swar_window.py): every 8th position 1, so rho = 1, and the rest R < 8 (live), so the
+        # non-stride codes sit in E4M3's top binades; `ab` gives B the same rows, `pm` one shared random sign per position.
+        spec = name.removeprefix("swar-plateau-").split("-")
+        X = np.full(k, float(spec[-1].removeprefix("r")))
+        X[::8] = 1.0
+        if "pm" in spec:
+            X = X * rng.choice([-1.0, 1.0], k)
+        return np.tile(X, (rows, 1)), np.tile(X, (cols, 1)) if "ab" in spec else rng.standard_t(4, (cols, k))
     pos = {"spike1-first": np.arange(1), "spikes-first": np.arange(L),
            "spikes-permuted": rng.permutation(k)[:L],
            "spikes-groupstart": np.arange(0, k, 128)[:L]}[name]
