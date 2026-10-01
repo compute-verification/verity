@@ -518,16 +518,22 @@ useful    U/(α_A·α_B), glue
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
   §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
-  - β = 3.42 / 2.00 / 1.11 / 0.49 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
+  - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
   - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
     fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
   - β is measured, not derived. It is the worst net saving that annealing plus exact block optimisation found over the
     families R1 admits at 10×, after A0's gather and ρ, with a 1.5× margin on the gain, made non-increasing in n.
-    The evidence is research store `cheap-binding/pearlc4-fix/beta_table.py --mu 1.5` on `strong.jsonl` and
-    `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256 and 512 (`exact256.jsonl`).
+  - It is measured on each bucket's own R1 admission boundary at k = 1,024, where the cap is largest, and at 0.005,
+    0.01 and 0.015 inside it, since the worst family can sit there (at n = 256 and 2,048 it does). The need is
+    1.5× the mean over 8 draws of the best search. Each bucket takes the largest of that need, the assessor's
+    boundary check (2.23% at n = 256) and the earlier grid table (0.17% stands at n = 2,048).
+  - The evidence is `art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e` (`beta_final.py`, the
+    boundary run and its sources). The grid before it is research store `cheap-binding/pearlc4-fix/beta_table.py
+    --mu 1.5` on `strong.jsonl` and `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256
+    and 512 (`exact256.jsonl`).
   - R1's per-row bound and the tile cap read `credit_of`, so both tighten with it. The fork (`tt-out-aw`) takes the same
     discount.
-  - Honest cost, from shapes alone: 0.50% of credit on Qwen2.5-0.5B, 0.23% on 1.5B, about 0.1% on 3B, 7B and
+  - Honest cost, from shapes alone: 0.54% of credit on Qwen2.5-0.5B, 0.24% on 1.5B, about 0.1% on 3B, 7B and
     Llama-3.2-1B/3B, and at most 0.019% from 8B up.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte with its sign; these

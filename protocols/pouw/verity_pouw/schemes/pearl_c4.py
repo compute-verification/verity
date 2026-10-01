@@ -660,11 +660,13 @@ F1_B_OVERFIT = 10
 #: B-OVF, measured, not derived (theory-pearl-c4-domain.md §6.12b; the assessor's B, ratings.md 18:45Z): a unit's
 #: creditOf is discounted by β(n_b)·mnk, n_b the largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout
 #: annealed and block-optimised after the salt, over the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ,
-#: with a 1.5× margin on the measured gain and made non-increasing in n (research store cheap-binding/pearlc4-fix/
-#: beta_table.py --mu 1.5 on strong.jsonl, strong_ext.jsonl; exact block optimisation within 1.02× of annealing at
-#: n = 256 and 512, exact256.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
-B_OVF = ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
-         (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+#: with a 1.5× margin on the measured gain and made non-increasing in n.  It is taken on each bucket's own R1 admission
+#: boundary at k = 1,024 (``k_min``), where the cap is largest, and just inside it (the worst family can sit there): the larger of
+#: that need and the assessor's boundary check, never below the earlier grid table (condition 7; research store
+#: art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e, beta_final.py; the grid's beta_table.py on
+#: strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
+         (1024, Fraction(50, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
 #: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
 B_OVF_MIN_N = B_OVF[0][0]
 
