@@ -11,10 +11,12 @@
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, toolchain.txt (nvcc --version and the full nvcc command line), source.txt (the verity commit), MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA names the toolkit, default
-#        /usr/local/cuda-13.0)
+#        /usr/local/cuda-13.0; PY the fixture's python, default `uv run python`; outside a git checkout, such as research's
+#        staged tree of a commit, SOURCE_SHA names the commit)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 CUDA=${CUDA:-/usr/local/cuda-13.0}; OUT=${1:-/tmp/pearl-c-sm120-ship}
+SRC=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null) || SRC=${SOURCE_SHA:?"$ROOT is not a git checkout: name its commit in SOURCE_SHA"}
 [ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }
 "$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"
@@ -24,9 +26,10 @@ case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm120.cubin" > "$OUT/pearl_c_sm120.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm120.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm120.sass"
-(cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
+(cd "$ROOT" && ${PY:-uv run python} benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$OUT/"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c protocols/pouw packages/verity; } > "$OUT/source.txt"
+{ echo "$SRC"; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c protocols/pouw packages/verity 2>/dev/null \
+    || echo "no git checkout: the commit's staged tree"; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"
