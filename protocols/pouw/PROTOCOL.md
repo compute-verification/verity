@@ -640,7 +640,8 @@ useful    U/(α_A·α_B), glue
   row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
-    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SB's range;
+    per-row rules or R1 (`r1_row`, row by row over its workers), the draws and their openings, and a count of device
+    scale bytes outside D-SB's range;
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
@@ -648,8 +649,7 @@ useful    U/(α_A·α_B), glue
   once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
   sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
-  the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
-  not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).
+  and the transcript tree and the records are built on the host after timing.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format

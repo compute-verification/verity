@@ -1085,6 +1085,40 @@ def test_replay_rejects(tmp_path):
     assert bad(lambda t: t["openings"].pop(0))["reason"] == "'the transcript does not open tile 0'"
 
 
+def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_path):
+    """The replay's prove declares R1's rows as the honest prover does (`pearl_c_work.declare` on the transcript): A row 5,
+    the assessor's spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the
+    verifier accepts.  Credited, as prove declared before R1 (r20261001-134930-22d2's m64-n512-k2048 unit, B row 386), it
+    rejects.  prove maps R1 row by row over its workers, and two workers give the one worker's transcript."""
+    s = V.scheme("nvfp4", True)
+    rows_a = V.rows("work-life", "A", 20, K) + [F.bf16_row([0] * K)] * 12
+    rows_a[5] = F.bf16_row([x >> 16 for x in spike_row(0, K)])
+    rows_b = V.rows("work-life", "B", 16, K)
+    unit = Matmul(3, Shape(32, K, 16), 9)
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.unverified(Workload((unit,)), prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    assert F.row_passes(s.fmt, F.parse_row(rows_a[5], K))
+    honest = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, {9: W.Split(K)}, real_rows={3: 20}, transcript=tr)
+    assert honest == [W.UnitRecord(unit, 20, K, (5,), ())]
+    call = {"scheme": s.name, "shape": [32, K, 16], "index": 3, "weight": 9, "real_rows": 20, "epoch_beacon": b"beacon".hex()}
+    R.write_dump(tmp_path, call, b"".join(rows_a), b"".join(rows_b), tr.activation_roots[0], prover.weight_roots[9],
+                 b"".join(prover.digest(i) for i in range(2)))
+    serial = R.prove(tmp_path, "r-test", 8, workers=1, scheme=s)
+    assert serial["records"] == [{"real_rows": 20, "k_kept": K, "excluded_a": [5], "excluded_b": []}]
+    assert [o["tile"] for o in serial["openings"]] == [0, 1]
+    assert R.prove(tmp_path, "r-test", 8, workers=2, scheme=s) == serial
+    rep = R.verify(json.loads(json.dumps(serial)), scheme=s)
+    assert rep["accepted"] and rep["reason"] == ""
+
+    credited = json.loads(json.dumps(serial))
+    credited["records"][0]["excluded_a"] = []
+    digest = W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [W.UnitRecord(unit, 20, K)])
+    credited["draw"]["value"] = R.draw_beacon(bytes.fromhex(serial["transcript"]["root"]), digest).value.hex()
+    rep = R.verify(credited, scheme=s)
+    assert not rep["accepted"] and rep["reason"].startswith("A row 5 is credited but its own debit passes R1's bound")
+
+
 def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
     """`s` with B̃'s noise keyed by `salt` in place of the job's: a weight forming reused from another epoch, or one
     keyed by no salt."""
