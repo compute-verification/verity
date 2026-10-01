@@ -441,7 +441,6 @@ prints the table; the groups are:
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
   `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
-  on a `kernel-attempt/v1` record, `kernel_outcome` (enum: screened | frontier | kept | dropped | voided | superseded) and `kernel_reason`;
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
   stay valid when the file moves into a month folder).
@@ -571,9 +570,6 @@ run-files/v1             the files a result.json pointed at, as one tree
 run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
-kernel-attempt/v1        one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py): meta = variant, parent, tier,
-                         harness and gates, metrics, steps, gamma at both FP32 prices, verify, hypothesis; refs.parent; payload null;
-                         labels kernel_outcome, kernel_reason
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
 trust-dossier/v1         the computed trust level of one numerical target (`python tools/tc_probe/trust.py --publish`): meta =
