@@ -334,8 +334,9 @@ def test_the_norms_are_b1s_at_the_served_widths(N, EPS) -> None:
                                      "(about 40 minutes)")
 @pytest.mark.parametrize("N, EPS", SERVED)
 def test_the_norms_are_b1s_on_80k_rows(N, EPS) -> None:
-    for chunk in range(20 if N == 576 else 1):
-        _rows(N, EPS, 4096, 1000 * N + chunk)
+    per = 4096 if N <= 1024 else 1024  # the walker tiles the shared scale over the N members: 0.5 GB per 1024 rows at N = 2048
+    for chunk in range((20 if N == 576 else 1) * 4096 // per):
+        _rows(N, EPS, per, 1000 * N + chunk)
 
 
 # --- partition, recompute, purity ------------------------------------------------------------------------------------------------
