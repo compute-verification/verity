@@ -864,6 +864,17 @@ def inbox(fake, routes_dirs, name, where="local"):
     return root["ts"]
 
 
+def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    post = fake.add(COORD, text="@circuits is node 2 free?", user=human)
+    for _ in range(2):
+        assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
+    (bell,) = bells(fake, box)
+    assert bell["text"].startswith(f"from daniel, thread {post['ts']}: @circuits is node 2 free?")
+
+
 def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a question", username="circuits", bot_id=BOT)

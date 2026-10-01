@@ -22,6 +22,7 @@ Notes are records, never messages.
   research msg handles [--json] | subscriptions --as HANDLE        # the registry; the subscribe calls a handle's holder makes
   research msg match --as HANDLE --event JSON|TEXT|@PATH|- [--why] # exit 0 addressed, 1 not, 2 error
   research msg verify-author --event JSON|@PATH|- [--why]          # exit 0 only for our bot, a channel's bot or a named human
+  research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
   research msg ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
                           --default V --deadline '3:00 PM'|ISO --link URL [--wait]     # a card in #ask-daniel; prints `<id> <ts> <permalink>`
@@ -1105,6 +1106,21 @@ def cmd_match(ns: argparse.Namespace, reg: dict) -> int:
     return 0 if why else 1
 
 
+def cmd_deliver(ns: argparse.Namespace, reg: dict) -> int:
+    """Ring the doorbells for a post already in the channel that no client delivered: a person's typed post, while the
+    router isn't live.  Safe to repeat: a name with this post's doorbell isn't rung again."""
+    api, ch = client(ns), channel_id(ns, reg, FRONT_DOOR)
+    msg = fetch_message(api, ch, ns.ts, ns.thread)
+    if not msg:
+        raise SlackError(f"no message {ns.ts} in the channel")
+    msg = {**msg, "thread_ts": msg.get("thread_ts") or ns.thread}
+    link = api.call("chat.getPermalink", channel=ch, message_ts=ns.ts).get("permalink") or "-"
+    routes = routes_of(ns)
+    routes._mode = None                                              # the router may be the very thing missing
+    deliver(api, reg, routes, ch, msg, link)
+    return 0
+
+
 def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
     """Fail closed: exit 0 only when the message, fetched from Slack by channel and ts, has an author the registry names.
     With --dry-run the event's own fields are judged (a test of the allowlist, not of a real post)."""
@@ -1757,6 +1773,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("match", "exit 0 if the post is addressed to you, 1 if not, 2 on error", as_=True)
     p.add_argument("--event", required=True, help="the message event as JSON, plain text, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the reason (or `not addressed`) on stderr")
+    p = cmd("deliver", "ring the doorbells for a post no client delivered (a person's typed post)")
+    p.add_argument("--ts", required=True, help="the post's ts")
+    p.add_argument("--thread", default=None, metavar="TS", help="its thread's root ts, when it is a reply")
     p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
     p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
@@ -1798,7 +1817,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
             return cmd_groups_sync(ns, reg, path)
         return {"handles": cmd_handles, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
-                "verify-author": cmd_verify_author, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
+                "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,
                 "subscribe": cmd_subscribe, "watch": cmd_watch}[ns.cmd](ns, reg)
     except SlackError as e:
