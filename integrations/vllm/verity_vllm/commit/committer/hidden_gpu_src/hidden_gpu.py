@@ -15,8 +15,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _repo_of_this_file():
-    """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITOR_REPO, never a default path.  The former
-    `REPO = os.environ.get('VERITOR_REPO', '/workspace/cp/veritor')` made a Commit under --gpu-tree without VERITOR_REPO import verity.ir
+    """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITY_TREE, never a default path.  The former
+    `REPO = os.environ.get(<tree variable>, <the pod's default tree>)` made a Commit under --gpu-tree without the variable import verity.ir
     from the pod's DEFAULT tree while verity_vllm ran the release (tp M-1830).  This file is shipped at
     <tree>/verity_vllm/commit/committer/hidden_gpu_src/ and materialised at <tree>/out/gen/r9/cmt-hidden/src/ (pod_hidden_gpu.sh), so the tree
     is found by walking up to the first ancestor holding verity_vllm/ -- the same answer from either copy."""
@@ -31,9 +31,9 @@ def _repo_of_this_file():
 
 
 REPO = _repo_of_this_file()
-_env_repo = os.environ.get('VERITOR_REPO')
+_env_repo = os.environ.get('VERITY_TREE')
 if _env_repo and os.path.realpath(_env_repo) != REPO:
-    raise ImportError(f'PRECHECK_FAIL_SOURCE_IDENTITY: hidden_gpu at {HERE} belongs to tree {REPO} but $VERITOR_REPO={_env_repo} names another tree')
+    raise ImportError(f'PRECHECK_FAIL_SOURCE_IDENTITY: hidden_gpu at {HERE} belongs to tree {REPO} but $VERITY_TREE={_env_repo} names another tree')
 # verity_vllm must resolve from THIS tree: if it is already imported from elsewhere, refuse (mixed tree) rather than import silently
 _vc = sys.modules.get('verity_vllm')
 if _vc is not None and getattr(_vc, '__file__', None) and os.path.realpath(os.path.dirname(os.path.dirname(_vc.__file__))) != REPO:
@@ -42,7 +42,6 @@ if REPO not in sys.path:
     sys.path.insert(0, REPO)
 import numpy as np  # noqa: E402  -- identity is settled before anything heavy loads
 import torch  # noqa: E402
-from torch.utils.cpp_extension import load  # noqa: E402
 from verity_vllm.commit import hidden_stream as hs  # noqa: E402
 from verity_vllm.commit import scheme  # noqa: E402
 from verity_vllm.config import option  # noqa: E402
@@ -50,33 +49,15 @@ from verity_vllm.config import option  # noqa: E402
 _EXT = None
 
 
-def _clear_stale_jit_lock(bd, max_age_s=600.0):
-    """torch's cpp_extension.load() serialises builds with `<build_dir>/lock` (FileBaton) and WAITS FOREVER while it exists; a process
-    killed mid-build (OOM, timeout) leaves it behind and every later loader hangs silently (R13 07:24Z: three runs 'hung' at the first
-    instrumented step in the worker's ext load).  A lock older than `max_age_s` cannot be a live build here (~2 min) -> remove it, loudly."""
-    import sys, time
-    p = os.path.join(bd, "lock")
-    try:
-        age = time.time() - os.stat(p).st_mtime
-    except FileNotFoundError:
-        return
-    if age > max_age_s:
-        print(f"[jit] removing stale build lock {p} ({age:.0f} s old; a killed build left it)", file=sys.stderr, flush=True)
-        try:
-            os.remove(p)
-        except FileNotFoundError:
-            pass
-
-
 def ext():
+    """JIT-build the GPU tree extension once per process into `<HIDDEN_GPU_BUILD or torch's default>/<source digest12>`, serialised
+    with other jobs on the host (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
-        bd = os.environ.get('HIDDEN_GPU_BUILD', None)
-        if bd:
-            os.makedirs(bd, exist_ok=True)
-            _clear_stale_jit_lock(bd)
-        _EXT = load(name='hidden_gpu_tree', sources=[os.path.join(HERE, 'hidden_gpu_tree.cu')], extra_cuda_cflags=['-O3', '--use_fast_math'],
-                    build_directory=bd, verbose=False)
+        from verity_vllm.commit.committer import native_jit
+
+        _EXT, _bd, _digest = native_jit.jit_load('hidden_gpu_tree', [os.path.join(HERE, 'hidden_gpu_tree.cu')],
+                                                 parent=os.environ.get('HIDDEN_GPU_BUILD') or None, cuda_cflags=('-O3', '--use_fast_math'))
     return _EXT
 
 

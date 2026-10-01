@@ -15,6 +15,7 @@ from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
+from verity_vllm.check.replay.delegate import DELEGATES, Place
 
 
 #: [R16 fp8] a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
@@ -65,7 +66,8 @@ INTERIOR_DEPTH = 4     # composed interior producers per VU (Gemm under a BiasAd
 
 
 def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
-                  inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None) -> dict[str, np.ndarray]:
+                  inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
+                  row: int | None = None) -> dict[str, np.ndarray]:
     """F_row on the row's resolved inputs: committed member words, registered weight slices, committed prompt ids -- or, for an arg that
     names an INTERIOR producer row (a member-less row such as the pre-bias Gemm of a biased linear, MAN-07, or the Fp8GroupQuant of an
     FP8 linear whose two ports the GEMM reads as two arg slices), that row's OWN evaluation from ITS committed inputs (bounded depth;
@@ -132,14 +134,15 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                 if m is None:
                     pr = pi.by_i.get(a)
                     pd = pi.describe(pr) if pr is not None else None
-                    if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:      # an interior producer: compose it
+                    if pd is not None and pd["members"] == [] and (pd["family"] in EVALUATORS or pd["family"] in DELEGATES):  # an interior producer
                         if depth >= INTERIOR_DEPTH:
                             raise _Unresolved(f"interior chain deeper than {INTERIOR_DEPTH} at row {a} ({pd['family']})")
                         sub_rec: list = []
                         if a in interior:                                              # [R16 fp8] one evaluation per interior row per VU
                             got = interior[a]
                         else:
-                            got = interior[a] = _evaluate_row(pi, store, weights, pr, rid, arrive, sub_rec, depth=depth + 1, interior=interior)
+                            got = interior[a] = _evaluate_row(pi, store, weights, pr, rid, arrive, sub_rec, depth=depth + 1, interior=interior,
+                                                              row=d["row"] if row is None else row)
                         out = _interior_slice(got, lo, hi)
                         if out is None:
                             raise _Unresolved(f"arg slice ['n', {a}, {lo}, {hi}) exceeds the interior {pd['family']} output "
@@ -168,6 +171,11 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
         inputs.append(words)
         wslices.append(wsl)
         wrefs.append(wref if wsl is not None else None)
+    fn = DELEGATES.get(fam)
+    if fn is not None:                                                   # a protocol's replay answers for the row (`delegate`)
+        member = d["members"][0][0] if d["members"] else "out"
+        at = d["row"] if d["members"] or row is None else row                   # an interior producer is at its consumer's row
+        return fn(st, inputs, wslices, Place(rid, arrive + d["step"], d["op_path"], at, member, store))
     return evaluate(fam, st, inputs, wslices, refs=wrefs)
 
 

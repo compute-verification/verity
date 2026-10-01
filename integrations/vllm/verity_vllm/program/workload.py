@@ -213,7 +213,7 @@ _REQUEST_CACHE: dict[tuple, SpecializedDefinition] = {}
 
 
 def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]] | None = None,
-                      canon: dict[str, tuple[Any, dict]] | None = None) -> RequestComponent:
+                      canon: dict[str, tuple[Any, dict]] | None = None, digest: str | None = None) -> RequestComponent:
     """Decode a request Program descriptor (derive_step `descriptor.json.gz`) into a callable specialization.
 
     The derived root is `[Input batch per prescribed leaf group..., body nodes...]` (program.py lowering): a scalar/array
@@ -221,8 +221,8 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     order. Component parameter j is the j-th Input batch (type `Array<n_j, Value<w_j>>`). `wrapper_params` = the request
     wrapper's own parameters `[(name, type repr)]` (derive_step `instances.json.gz` `params`): the Input batches are grouped
     back onto them by leaf count, so `groups[j]` names the wrapper parameter batch j belongs to (the shared one is `weights`).
-    Without it every batch is its own group (`p<j>`) and nothing can be shared."""
-    digest = program_digest(desc)
+    Without it every batch is its own group (`p<j>`) and nothing can be shared.  `digest`: `program_digest(desc)`, when the caller has it."""
+    digest = digest or program_digest(desc)
     key = (("program_digest", digest), ("program_fn", desc["program_fn"]))
     cached = _REQUEST_CACHE.get(key)
     dp = decode_program(desc, registry)

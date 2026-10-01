@@ -1,0 +1,1297 @@
+"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for every
+ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a lowered or
+spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal and dry run on
+a CPU stand-in for libcuda (#449's, with fake_tma.c's tensor maps; an RTX PRO 6000's name, SM count, compute capability,
+UUID and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu
+states it, and each mainloop GEMM's operands against the tensor maps encoded for them.  The FP8 bench arm
+(pearlc_arm.py) against the harness's arm interface v0: its accounting the scheme's, its calls on the stand-in as the harness
+drives them, and its gate on the fixture.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a build passes
+the gate."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from fractions import Fraction
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+H100_DIR = HERE.parent / "pearl_c"
+
+
+def load(name: str, path: Path):
+    """The module at `path` under its own name: #449's tree has a fixture.py too, and the suite imports both trees in one
+    process."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+F = load("pearl_c_sm120_fixture", HERE / "fixture.py")
+S = load("pearl_c_sm120_sass_gate", HERE / "sass_gate.py")
+RUN = load("pearl_c_sm120_run", HERE / "run.py")
+W = F.W
+
+SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
+SM120_MAX_DYN = 101376                   # sm_120's opt-in dynamic shared memory per block (99 KB)
+UUID = "GPU-0123abcd-4567-89ef-0123-456789abcdef"
+RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+
+
+def const(name: str) -> int:
+    return int(re.search(rf"\b{name} = (\d+)", SOURCE).group(1))
+
+
+def swz64(r: int, c: int) -> int:
+    return r * 64 + ((c ^ ((r >> 1) & 3)) << 4)
+
+
+def swz128(r: int, c: int) -> int:
+    return r * 128 + ((c ^ (r & 7)) << 4)
+
+
+def test_swizzles_are_the_kernels_and_conflict_free():
+    """Each 16-byte chunk of a row lands once, and an ldmatrix phase (eight consecutive rows' chunk c, any 8-row base) reads
+    eight distinct 16-byte bank groups."""
+    assert "r * 64 + ((c ^ ((r >> 1) & 3)) << 4)" in SOURCE and "r * 128 + ((c ^ (r & 7)) << 4)" in SOURCE
+    for swz, chunks in ((swz64, 4), (swz128, 8)):
+        row = 16 * chunks
+        for r in range(64):
+            assert sorted(swz(r, c) - r * row for c in range(chunks)) == list(range(0, row, 16))
+        for base in range(0, 64, 8):
+            for c in range(chunks):
+                assert len({(swz(base + j, c) // 16) % 8 for j in range(8)}) == 8
+
+
+MAINLOOP = (HERE / "mainloop_sm120.cuh").read_text()
+#: the mainloop's dynamic shared memory at 128 x 128 (ML_GEMM's Mainloop<128, 128, G, 3, ...>): 3 stages of 128-byte depth
+#: and a barrier pair of 16 bytes per stage
+ML_SMEM = 3 * (128 + 128) * 128 + 16 * 3
+
+
+def gemm_smem(mode: str, tm: int, bn: int) -> int:
+    """gemm_body's dynamic shared memory (the 64 x 64 and 128 x 32 GEMMs)."""
+    bk, stages, peel = const("BK"), const("STAGES"), const("PEEL_ROW")
+    return stages * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S") else 0)
+
+
+def gemms() -> list[tuple[str, str, int, int, int]]:
+    """Every GEMM kernel (name, mode, tile, G): the 128 x 128 ones on the mainloop (ML_GEMM), the others on gemm_body."""
+    return ([(n, m, 128, 128, int(g)) for n, m, g in re.findall(r"^ML_GEMM\((\w+), (M_\w+), (\d+)\)", SOURCE, re.M)]
+            + [(n, m, int(tm), int(bn), int(g))
+               for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)]
+            + [(n, m, 128, 128, 0) for n, m in re.findall(r"^ML_GEMM_HOT\((\w+), (M_\w+)\)", SOURCE, re.M)]
+            + [(n, m, int(tm), int(bn), 0)
+               for n, m, tm, bn in re.findall(r"^GEMM_HOT\((\w+), (M_\w+), (\d+), (\d+)\)", SOURCE, re.M)])
+
+
+def gemm_tile(name: str) -> tuple[int, int]:
+    if name.startswith("gemm_words"):
+        return (128, 32)
+    return (64, 64) if name.endswith(("_d", "_d_u", "_d_hu")) else (128, 128)
+
+
+def test_gemms_fit_sm120_shared_memory():
+    """gemm_body's GEMMs and the mainloop's (ML_GEMM, all at 128 x 128, each with its _smem probe the mainloop's SMEM) fit
+    sm_120's 99 KB, and the gate knows every one."""
+    assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
+    assert "SMEM = STAGES * STAGE + 16 * STAGES" in MAINLOOP and "STAGE = (TM + BN) * BK" in MAINLOOP
+    assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM + ML_EXTRA<MODE>;" in SOURCE
+    assert "ML_EXTRA = MODE == M_PEARLC_W ? 32 : 0;" in SOURCE and "W_SLOT = W_DIGESTS + 512 * 32" in SOURCE
+    assert "W_WORDS = 128 * 128, W_DIGESTS = 8 * W_WORDS" in SOURCE and RUN.W_SLOT == 8 * 128 * 128 + 512 * 32
+    names = {n for n, *_ in gemms()}
+    ml = {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u",
+          "gemm_pearlc_b", "gemm_pearlc_b_u", "gemm_ct_hu", "gemm_pearlc_hu", "gemm_pearlc_s_hu", "gemm_pearlc_b_hu",
+          "gemm_pearlc_w_u", "gemm_pearlc_w_hu"}
+    assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u",
+                          "gemm_ct_d_hu", "gemm_pearlc_d_hu"}
+    assert "*out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM + ML_EXTRA<MODE>;" in SOURCE
+    for name in names:
+        if name.endswith("_hu"):
+            assert S.WANT[name] == S.WANT[name.removesuffix("_hu") + "_u"], name   # the unpromoted chain's atoms and peel
+    for name, mode, tm, bn, g in gemms():
+        assert (ML_SMEM + 32 * (mode == "M_PEARLC_W") if name in ml else gemm_smem(mode, tm, bn)) <= SM120_MAX_DYN, name
+        assert mode != "M_PEARLC_W" or g == 0, name   # v1's consumers spill at the hash warps' register split
+        assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
+        assert g in (0, 4) and (g == 0) == (name.endswith(("_u", "_hu")) or name == "gemm_fast")
+    assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
+    assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
+                              "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
+    assert set(S.WANT) - {"words", "words_u", *form_kernels()} == names
+    assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
+
+
+
+def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unchanged():
+    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's 10:29Z ruling): within each aligned
+    32, position 8q + 2b + s holds column 8b + 2q + s; the kernel's k32 and the fixture's are the same map, an involution,
+    and a product over k of two operands both in K32 order is the unpermuted one's, word for word, on both device records."""
+    t = np.arange(96)
+    order = F.k32(t)
+    assert (F.k32(order) == t).all()
+    grid = np.arange(32).reshape(4, 4, 2).transpose(1, 0, 2).reshape(32)
+    assert all((order[32 * i:32 * i + 32] == grid + 32 * i).all() for i in range(3))
+    assert "(t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | (t & 1)" in SOURCE
+    assert "t[(size_t)j * count + k32(line)] = c[j]" in SOURCE
+    rng = np.random.default_rng(20260930)
+    a, b = rng.integers(0, 256, (5, 1024), dtype=np.uint8), rng.integers(0, 256, (3, 1024), dtype=np.uint8)
+    for x in (a, b):
+        x[(x & 0x7F) == 0x7F] = 0
+    for device in F.VARIANTS:
+        assert (F.product(device, F.k32(a), F.k32(b)) == F.product(device, a, b)).all()
+        assert (F.product(device, a, F.k32(b)) != F.product(device, a, b)).any()
+
+
+def test_kernel_constants_match_the_reference():
+    from verity_pouw.schemes import pearl_c as C
+    from verity_pouw.schemes import pearl_kw as P
+    from verity_pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+
+    assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
+    assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
+    run = (HERE / "run.py").read_text()
+    n256, n16 = re.search(r"NORM_256, NORM_16 = (0x[0-9A-F]+), (0x[0-9A-F]+)", run).groups()
+    assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
+    label = re.search(r"LINE_LABEL\[(\d+)\] = \{([^}]*)\}", SOURCE)
+    assert bytes(ord(c) for c in re.findall(r"'(.)'", label.group(2))) == P.LABELS["noise-line"] and int(label.group(1)) == 23
+    from verity.commitments.blake3 import blake3
+    assert F.unit_block(b"s" * 32, b"b" * 32, 7)[72:] == blake3(C.LABELS["seed-A"]) == blake3(b"pearl-c/v0/seed-A")
+    variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
+    assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0, F.HOT: 0}
+    assert RUN.HOT_VARIANTS == {F.HOT}
+    promoted = {g for *_, g in gemms() if g}
+    assert promoted == {SM120.g} and SM120.window % const("BK") == 0 and SM120_UNPROMOTED.g is None
+
+
+SASS_OK = "\n".join([
+    "Function : gemm_x", "  /*0010*/ QMMA.16832.F32.E4M3.E4M3 R4, R8, R12, R4 ;",
+    "  /*0020*/ HMMA.16816.F32.BF16 R4, R8, R12, R4 ;", "  /*0030*/ LDSM.16.M88.4 R8, [R2] ;"])
+PTXAS_OK = ("ptxas info    : Compiling entry function 'gemm_x' for 'sm_120a'\n"
+            "ptxas info    : Function properties for gemm_x\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\n"
+            "ptxas info    : Used 96 registers, used 1 barriers, 64 bytes smem\n")
+
+
+def test_sass_gate_refuses_what_it_should(monkeypatch):
+    monkeypatch.setattr(S, "WANT", {"gemm_x": (1, 1)})
+    funcs, problems = S.gate(PTXAS_OK, SASS_OK)
+    assert not problems and funcs["gemm_x"]["QMMA"] == 1 and funcs["gemm_x"]["HMMA"] == 1 and funcs["gemm_x"]["regs"] == 96
+    bad = {
+        "a lowered FP8 atom": SASS_OK.replace("QMMA.16832.F32.E4M3.E4M3", "HMMA.16816.F32.F16"),
+        "a missing peel step": SASS_OK.replace("HMMA.16816.F32.BF16", "FFMA"),
+        "local memory": SASS_OK + "\n  /*0040*/ LDL R1, [R1] ;",
+        "a different atom": SASS_OK.replace("QMMA.16832.F32.E4M3.E4M3", "QMMA.16832.F32.E5M2.E5M2"),
+    }
+    for why, sass in bad.items():
+        assert S.gate(PTXAS_OK, sass)[1], why
+    assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "8 bytes spill stores"), SASS_OK)[1]
+    assert S.gate(PTXAS_OK + "ptxas warning : Registers are spilled\n", SASS_OK)[1]
+    assert S.gate(PTXAS_OK, SASS_OK.replace("gemm_x", "gemm_y"))[1]
+
+
+@pytest.mark.skipif(not os.environ.get("VERITY_POUW_NVCC"), reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 15 s)")
+def test_the_sm120a_build_passes_the_gate(tmp_path):
+    cuda = Path(os.environ["VERITY_POUW_NVCC"])
+    cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
+    with open(ptxas, "w") as err:
+        subprocess.run([str(cuda / "bin" / "nvcc"), "-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-fmad=false",
+                        "-Xptxas", "-v", "-cubin", "-o", str(cubin), str(HERE / "pearl_c_sm120.cu")], check=True, stderr=err)
+    env = dict(os.environ, PATH=f"{cuda / 'bin'}:{os.environ['PATH']}")
+    sass.write_text(subprocess.run([str(cuda / "bin" / "cuobjdump"), "-sass", str(cubin)], check=True, capture_output=True, text=True,
+                                   env=env).stdout)
+    funcs, problems = S.gate(ptxas.read_text(), sass.read_text())
+    assert not problems, problems
+    for name in ("gemm_pearlc", "gemm_pearlc_u"):
+        assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "h1_rows_p", "h1_level_keys", "h1_tree",
+            "h1_commit", "h1_tiles", "hot_a", "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s"} <= set(funcs)
+    # v2-hot's honest cost: the unpromoted chain's atoms and peel, and one FADD (H_i's removal) a word of the peeled modes
+    fadds = {}
+    for f, body in re.findall(r"Function : (\w+)\n(.*?)(?=\n\s+Function : |\Z)", sass.read_text(), re.S):
+        fadds[f] = len(re.findall(r"\bFADD\b", body))
+    for hu in [n for n in funcs if n.endswith("_hu")]:
+        u = hu.removesuffix("_hu") + "_u"
+        assert (funcs[hu]["QMMA"], funcs[hu]["HMMA"]) == (funcs[u]["QMMA"], funcs[u]["HMMA"]), hu
+        words = 0 if "_ct" in hu else 16 if hu.endswith("_d_hu") else 64
+        assert fadds[hu] - fadds[u] == words, (hu, fadds[hu], fadds[u])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("device", ["sm120", "sm120-unpromoted"])
+def test_twin_tile_is_the_scheme_on_the_record(device):
+    """#449's twin on each sm_120 record, the bench arm's gate: a tile half of filler rows, and one on rows the caller
+    passes, through `pearl_c` itself."""
+    from verity_pouw.protocol import Context, Matmul, Tile
+    from verity_pouw.protocol import Shape as MShape
+    from verity_pouw.schemes import pearl_c as C
+    from verity_pouw.schemes.pearl_c_device import DEVICES
+
+    dev, small = DEVICES[device], W.Shape("small", 96, 128, 256)
+    jb = W.job(small, dev)
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", device=dev, hashing="h1")
+    noise = C.Noise(jb.seeds["seed_a"], jb.seeds["seed_b"])
+    ctx = Context(bytes(32), Matmul(0, MShape(small.m, small.k, small.n), 0), bytes(32), bytes(32))
+    own = W.tile(jb, 64, 64)
+    given = W.tile(jb, 0, 0, W.gen_f32(np.arange(64), small.k, 7), W.gen_f32(np.arange(64), small.k, 8))
+    assert (own.a.words[small.m_real - 64:] == 0).all() and not (given.a.words == W.a_words(small, jb.seeds, np.arange(64))).all()
+    for (r0, c0), t in (((64, 64), own), ((0, 0), given)):
+        ra, rb = [r.astype("<u4").tobytes() for r in t.a.words], [r.astype("<u4").tobytes() for r in t.b.words]
+        ops = s.encode(ctx, noise, ra, rb, Tile(tuple(range(r0, r0 + 64)), tuple(range(c0, c0 + 64))))
+        checked = s.checked(ctx, ops)
+        assert ops.a.codes == t.a.codes.tolist() and ops.b.codes == t.b.codes.tolist()
+        assert ops.a.alpha == t.a.alpha.tolist() and ops.b.alpha == t.b.alpha.tolist()
+        assert checked.c == t.c.tolist() and checked.u == t.u.tolist()
+        assert s.digest(ctx, noise, checked) == t.leaf and s.tickets(noise, checked) == t.tickets
+
+
+@pytest.fixture(scope="module")
+def small_fixture(tmp_path_factory):
+    out = tmp_path_factory.mktemp("pearl-c-sm120-fixture")
+    F.build(out, 128, 128, 1024)
+    return out
+
+
+@pytest.fixture(scope="module")
+def small_fixture_h2(tmp_path_factory):
+    out = tmp_path_factory.mktemp("pearl-c-sm120-fixture-h2")
+    F.build(out, 128, 128, 1024, hashing="h2")
+    return out
+
+
+@pytest.mark.slow
+def test_fixture_agrees_with_the_scheme(small_fixture):
+    man = json.loads((small_fixture / "check.json").read_text())
+    assert man["shape"] == [128, 128, 1024] and man["layout"] == "rowmajor, k32"
+    assert set(man["variants"]) == {"sm120", "sm120-unpromoted", F.HOT}
+    cs = {}
+    for variant, spec in man["variants"].items():
+        assert spec["crosscheck"]["agree"] and spec["scheme"] == (None if variant == F.HOT else f"pearl-c-{variant}-v1-h1")
+        c = np.frombuffer((small_fixture / variant / "c.bin").read_bytes(), "<u4")
+        u = np.frombuffer((small_fixture / variant / "u.bin").read_bytes(), "<u4")
+        assert c.size == u.size == 128 * 128 and (c != u).mean() > 0.99
+        cs[variant] = c
+    assert (cs["sm120"] != cs["sm120-unpromoted"]).any()
+    hot = np.frombuffer((small_fixture / F.HOT / "hot_a.bin").read_bytes(), "<u4")
+    exps = (hot >> 23 & 0xFF).astype(int) - 127
+    assert hot.size == 128 and ((10 <= exps) & (exps <= 16)).all() and 0 < (hot >> 31).sum() < 128
+    assert (cs[F.HOT] != cs["sm120-unpromoted"]).mean() > 0.99
+    y_plain = (small_fixture / man["common"]["y_plain"]["file"]).read_bytes()
+    y_fast = (small_fixture / man["common"]["y_fast"]["file"]).read_bytes()
+    assert len(y_plain) == len(y_fast) == 2 * 128 * 128
+
+
+def test_the_screen_never_contradicts_the_per_row_rules():
+    """stats_s5's screen (fixture.screen_verdict, row_verdict's twin) against pearl_c_work.row_passes: a row it passes
+    passes and a row it fails fails, on screen_rows (every verdict, and both ways to fail: the floor and the dead count)
+    and on heavy-tailed BF16-widened rows at two depths; a row with a NaN or an infinity is left open.  Passing a row whose
+    largest square is under the band without counting (the kernel's shortcut, taken on the Gaussian rows) changes no verdict.
+    Its squares are numpy's FP32 products, which are fp32.mul's subnormals included."""
+    from verity_pouw.schemes import pearl_c_work as PW
+    screen = F.screen_rows(1024)
+    v = [F.screen_verdict(r) for r in screen]
+    assert v[:12] == [0] * 8 + [0, 0, 1, 2] and v[-5:] == [1, 1, 2, 2, 2]
+    words = lambda r: [int(w) for w in np.frombuffer(r, "<u4")]  # noqa: E731
+    floor_ok = lambda r: (lambda st: F.P.f32_of_bits(st[1]) * F.P.f32_of_bits(st[2]) >= 1.0)(F.C.s5_stats(words(r)))  # noqa: E731
+    assert floor_ok(screen[10]) and not floor_ok(screen[-5])
+    rng = np.random.default_rng(5)
+    rows = screen + [(rng.standard_t(df, k).astype(np.float32).view("<u4") & 0xFFFF0000).astype("<u4").tobytes()
+                     for k in (1024, 2048) for df in (2, 3, 4) for _ in range(6)]
+    for r in rows:
+        verdict = F.screen_verdict(r)
+        assert verdict == F.screen_verdict(r, shortcut=False)
+        assert verdict == 2 or (verdict == 0) == PW.row_passes(words(r)), verdict
+    x = np.frombuffer(screen[0], "<f4")
+    assert F.screen_verdict(screen[0], shortcut=False) == 0 and float((x * x).max()) < 64 * float(np.sum(x[::8] ** 2)) / 128 / 2
+    x = np.array([1.5, 3e-20, 2.0 ** -70, 1.1e-23, 7.0 * 2.0 ** -80, 1.2 * 2.0 ** 60, 2.0 ** 65], np.float32)
+    assert [int(w) for w in (x * x).view("<u4")] == [F.fp32.mul(int(w), int(w)) for w in x.view("<u4")]
+
+
+# ---- the dry run ---------------------------------------------------------------------------------------------------
+
+KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
+HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh", "hash_h2.cuh")) + \
+    (HERE.parent / "pouw_hash" / "h1_sm120.cuh").read_text()
+#: the -h1 kernels (#449's hash.cuh, hash_sm120.cuh and h1_sm120.cuh) the pipeline launches at the dry run's shapes, the
+#: trees under every form: no pads (every count a power of two) and no level wider than hash_tree_small's. h1_commit is
+#: not among them: A's 1024-row tree is wider than one CTA folds (width <= 2 * blockDim), and the arm's dry run (m = 32)
+#: launches it
+H1_LAUNCHED = {"h1_rows_p", "h1_tree", "h1_tiles", "seed_line_a", "hash_rows_w", "hash_tree_small", "hash_node_keys",
+               "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
+#: -h2's (hash_h2.cuh's leaves, under its one form's levels)
+H2_LAUNCHED = {"hash_rows_b3s", "hash_leaves_b3s", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p"}
+#: the one-launch tree kernels' (domain id, level keys) pointer slots
+LEVEL_KEYS = {"h1_tree": (1, 9), "h1_commit": (2, 7), "h1_tiles": (7, 9)}
+
+
+def form_kernels() -> list[str]:
+    return re.findall(r"^FORM_KERNEL\((\w+), \d, (?:true|false), \w+\)", SOURCE, re.M)
+
+
+def form_rates() -> list[str]:
+    return [n for n in form_kernels() if n.startswith("form_rate")]
+
+
+def own_kernels() -> list[str]:
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"}
+    names = [n for n, *_ in gemms()]
+    return sorted(plain) + names + [g + "_smem" for g in names] + form_kernels()
+
+
+def kernel_names() -> list[str]:
+    """Every kernel in the cubin: pearl_c_sm120.cu's and the hash headers' it includes."""
+    return own_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE)))
+
+
+def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
+    """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm120.cu."""
+    if name == "lines":
+        count = i[2]
+        return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count}
+    if name in ("stats_s5", "h1_rows_stats"):
+        rows, k = i[:2]
+        need = {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 4 * rows}
+        if name == "h1_rows_stats":
+            assert i[2] <= rows, i
+            need.update({6: 32 * i[2], 7: 32})
+        return need
+    if name == "eprime":
+        return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
+    if name == "form_rows":
+        rows, k = i[:2]
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 32, 6: 32 * rows, 7: 32 * rows, 8: 4 * rows,
+                9: 4 * rows}
+    if name.startswith("form_"):
+        rows, k = i[:2]
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
+    if name.startswith("gemm_") and not name.endswith("_smem"):
+        M, N, K = i[:3]
+        need = {0: M * K, 1: N * K}
+        if name.endswith("_hu"):
+            need[12] = 4 * M                          # H, a start word per row
+        base = name.removesuffix("_hu").removesuffix("_u").removesuffix("_d")
+        if base in ("gemm_plain", "gemm_fast"):
+            need.update({4: 2 * M * N, 7: 4 * M, 8: 4 * N})
+        elif base in ("gemm_ct", "gemm_words"):
+            assert base == "gemm_ct" or N == 32, name
+            need[2] = 4 * M * N
+        else:
+            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_b", "gemm_pearlc_w"), name
+            need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
+            if base == "gemm_pearlc":
+                need.update({2: 4 * M * N, 3: 4 * M * N})
+            if base == "gemm_pearlc_b":
+                need.update({9: M * N, 11: 32})       # a 32-byte digest per row and 32 columns; the message key
+            if base == "gemm_pearlc_w":               # two slots a CTA; a leaf per 64 x 64 tile; the message and leaf keys
+                need.update({11: 32, 13: 2 * RUN.W_SLOT * min(188, M // 128 * (N // 128)), 14: M // 64 * (N // 64) * 32, 15: 32})
+        if gemm_tile(name) == (128, 128):
+            need[10] = 4 * 128                        # ml::Maps: A, B, P_A, P_B
+        return need
+    if name in ("words", "words_u"):
+        M, N, K = i[:3]
+        assert N == 32 and M % 16 == 0 and K % 128 == 0
+        return {0: M * K, 1: N * K, 2: 4 * M * N}
+    if name == "pa":
+        return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
+    if name == "pb":
+        return {0: 32 * i[0], 2: 128 * i[0], 3: 32 * 32 * 4, 4: 128 * i[0]}
+    if name == "hash_msg_v":
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32}
+    if name == "hash_leaf_p":
+        return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, 2: 32}
+    if name in ("hash_rows_w", "h1_rows_p"):
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
+    levels = lambda width: 32 * (width.bit_length() - 1)  # noqa: E731
+    if name == "h1_tree":
+        return {0: 32 * (2 * i[1] - 1), 1: 32, 2: 4, 3: 32 * i[0], 9: levels(i[1])}
+    if name == "h1_commit":
+        return {0: i[0] * i[1], 1: 32 * (2 * i[2] - 1), 2: 32, 3: 4, 4: 32, 5: 104, 6: 32, 7: levels(i[2])}
+    if name == "h1_tiles":
+        tiles = -(-i[0] // 64) * (i[1] // 64)
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32, 4: 32 * tiles, 5: 32, 6: 32 * (2 * i[2] - 1), 7: 32,
+                8: 4, 9: levels(i[2])}
+    if name == "hash_tree_small":
+        return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
+    if name == "hash_tree_leaves":
+        return {0: 32 * i[0], 1: 32 * i[0], 2: 32}
+    if name == "b3s_level_keys":
+        return {0: 32 * i[0], 1: 32}
+    if name == "hash_rows_b3s":
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
+    if name == "hash_leaves_b3s":
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 64}
+    if name == "hash_node_keys":
+        return {0: 32 * i[0], 1: 32}
+    if name == "hash_pad":
+        return {0: 32 * i[1], 1: 32}
+    if name == "hash_nodes":
+        return {0: 64 * i[1], 1: 32 * i[1], 2: 32}
+    if name == "seed_line_a":
+        return {0: 32, 1: 104, 2: 32, 3: 32}
+    if name == "hot_a":
+        return {0: 32, 1: 4 * i[0], 2: 8 * i[0], 3: 4 * i[0]}
+    if name == "quant_s5":
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0], 2: i[0] * i[1]}
+    if name == "plainq":
+        return {0: 4 * i[0] * i[1], 1: i[0] * i[1], 2: 4 * i[0]}
+    if name == "gen_f32":
+        return {0: 4 * i[0] * i[1]}
+    if name == "diff_words":
+        return {0: 4 * i[0], 1: 4 * i[0], 2: 8}
+    if name.endswith("_smem"):
+        return {0: 4}
+    raise AssertionError(f"no footprint for {name}")
+
+
+def threads(name: str, i: list[int]) -> int:
+    """Threads the launch must cover."""
+    return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "form_rows": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
+            "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
+            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
+            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "h1_rows_p": lambda: 32 * i[0],
+            "h1_tree": lambda: i[1] // 2, "hash_tree_leaves": lambda: i[0], "h1_commit": lambda: 32 * i[0],
+            "h1_tiles": lambda: 128 * -(-i[0] // 64) * (i[1] // 64),
+            "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1, "hot_a": lambda: i[0],
+            "b3s_level_keys": lambda: i[0], "hash_leaves_b3s": lambda: i[0],
+            "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
+
+
+@pytest.fixture(scope="module")
+def ship(tmp_path_factory):
+    cc = shutil.which("cc") or shutil.which("gcc")
+    if not cc:
+        pytest.skip("no C compiler for the libcuda stand-in")
+    out = tmp_path_factory.mktemp("pearl-c-sm120-ship")
+    subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(HERE / "fake_tma.c")],
+                   check=True)
+    shutil.copy(HERE / "run.py", out)
+    (out / "pearl_c_sm120.cubin").write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
+    return out
+
+
+def dry_env(ship: Path, log: Path, **kw) -> dict:
+    env = dict(os.environ, PEARLC_LIBCUDA=str(ship / "fake_cuda.so"), PEARLC_LIBNVML="/nonexistent", FAKE_LOG=str(log),
+               FAKE_KERNELS=",".join(kernel_names()), FAKE_NAME=RTX, FAKE_SMS="188", FAKE_CC="12.0",
+               FAKE_UUID=UUID[4:].replace("-", ""), FAKE_MAXDYN=str(SM120_MAX_DYN), FAKE_SMEM=str(ML_SMEM),
+               CUDA_VISIBLE_DEVICES="1", CUDA_DEVICE_ORDER="PCI_BUS_ID", PEARLC_EXPECT_UUID=UUID, SHAPES="1024", REPS="2")
+    env.update(kw)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+@pytest.mark.slow
+def test_runner_refuses_another_device(small_fixture, ship, tmp_path):
+    """A wrong UUID, a second visible device index, another card, or an ungated run on the card: exit 3 before any launch."""
+    for kw in ({"PEARLC_EXPECT_UUID": UUID.replace("0123abcd", "ffffffff")}, {"CUDA_VISIBLE_DEVICES": "1,2"},
+               {"FAKE_NAME": "NVIDIA H100 80GB HBM3", "FAKE_CC": "9.0"}, {"PEARLC_EXPECT_UUID": None}, {"PEARLC_UNGATED": "1"}):
+        log = tmp_path / "refused.jsonl"
+        log.unlink(missing_ok=True)
+        r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=dry_env(ship, log, **kw),
+                           capture_output=True, text=True)
+        assert r.returncode == 3, (kw, r.stderr)
+        env = json.loads(r.stdout.splitlines()[0])
+        assert env["kind"] == "env" and env["refused"] and len(r.stdout.splitlines()) == 1
+        assert not log.exists() or '"launch"' not in log.read_text()
+
+
+@pytest.mark.slow
+def test_runner_dry_run(small_fixture, ship, tmp_path):
+    """The identity passes, the check fails (the stand-in computes nothing) and times nothing; ungated on the stand-in, every
+    launch of the check and the timing fits its buffers."""
+    log = tmp_path / "gated.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=dry_env(ship, log),
+                       capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    rows = [json.loads(x) for x in r.stdout.splitlines()]
+    assert [x["kind"] for x in rows] == ["env", "mem", "check"] and rows[0]["uuid"] == UUID and rows[0]["cc"] == [12, 0]
+    assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
+
+    log = tmp_path / "launches.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1024x1024x3072"),
+                       capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    rows = [json.loads(x) for x in r.stdout.splitlines()]
+    kinds = [x["kind"] for x in rows]
+    assert kinds[:3] == ["env", "mem", "check"] and kinds.count("timing") == 3
+    assert set(rows[2]["variants"]) == {"sm120", "sm120-unpromoted", F.HOT}
+    for t in rows[3:]:
+        assert t["gates"]["ungated"] and {"split_ms", "call_e2e_ms", "ratio_vs_own_plain_gemm", "consistency", "job_ms"} <= set(t)
+        assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
+        assert t["form_rate"]["blocks"] == 2 * 188 and set(form_rates()) <= set(t["form_rate"])
+        assert {"form_a_scalar", "form_b_scalar"} <= set(t["ms"])
+        assert set(t["call_e2e_ms_by_form"]) == {f"{','.join(f)}/{g}" for f in RUN.FORMS for g in RUN.FORMINGS}
+        assert {"stats_a@forming=fold", "form_a@forming=fold"} <= set(t["alt_ms"])
+        warps = RUN.VARIANT_G[t["variant"]] == 0
+        assert set(t["deferral"]["ms"]) == {"gemm_alone", "hashing_alone", "pair_same_priority", "pair_main_greatest",
+                                            "fused_gemm", "y_only_gemm"} | ({"hash_warps_gemm"} if warps else set())
+        assert set(t.get("call_e2e_ms_by_epilogue", ())) == (set(RUN.EPILOGUES) if warps else set())
+        hw = {"y_hash_warps_vs_unfused_words_differing", "leaves_hash_warps_vs_unfused_words_differing"}
+        assert (hw <= set(t["consistency"])) == warps and not t["hash_warps"]
+
+    allocs: dict[int, int] = {}
+    seen, maps = set(), set()
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs, maps)
+        if ev["op"] == "launch":
+            seen.add(ev["name"])
+    assert seen == set(own_kernels()) | H1_LAUNCHED
+    for t in rows[3:]:
+        assert t["fused"] and t["hashing"] == "h1"
+        assert set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
+                                         "digests_fused_vs_unfused_words_differing"}
+
+    log = tmp_path / "launches_h2.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1000x1024x3072", VARIANTS="sm120",
+                                   HASHING="h2"),
+                       capture_output=True, text=True, check=False)
+    assert r.returncode == 4, r.stderr
+    (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
+    assert t["hashing"] == "h2" and not t["fused"] and set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
+    allocs, seen, timed = {}, set(), False
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs)
+        if ev["op"] == "launch":
+            timed = timed or ev["name"] == "gen_f32"
+            if timed:
+                seen.add(ev["name"])
+    assert H2_LAUNCHED | {"hash_pad"} <= seen and not seen & {"hash_rows_w", "hash_tree_leaves"}
+
+
+class LaunchLog:
+    """A driver stand-in in the process: device memory is addresses, and each launch is logged as (kernel, grid and block,
+    shared memory, stream, pointer words, integer words)."""
+
+    def __init__(self):
+        self.log, self.names, self.top = [], {}, 1 << 36
+
+    def cuModuleGetFunction(self, ref, mod, name: bytes) -> int:
+        ref._obj.value = len(self.names) + 1
+        self.names[ref._obj.value] = name.decode()
+        return 0
+
+    def cuMemAlloc_v2(self, ref, n: int) -> int:
+        ref._obj.value, self.top = self.top, self.top + (n + 255) // 256 * 256
+        return 0
+
+    def cuLaunchKernel(self, fn, gx, gy, gz, bx, by, bz, smem, stream, params, extra) -> int:
+        a = RUN.Args.from_address(params[0])
+        self.log.append((self.names[fn.value], (gx, gy, gz, bx, by, bz), smem, stream, tuple(a.p), tuple(a.i)))
+        return 0
+
+    def __getattr__(self, name: str):
+        return lambda *a: 0
+
+
+def test_bound_steps_launch_what_unbound_steps_do(monkeypatch):
+    """Pipeline.steps binds each step's launches at its first call: every call after launches the same kernels with the
+    same words as building them at the call would, on the device's stream at the call, after the caller repoints buffers
+    (as #540 does y and leaves each call), under every form and forming, at decode's tile and at 128 x 128 with the fused
+    chain under each epilogue (the hash warps' drops hash_msg and hash_leaf); the GEMMs' shared-memory probe still runs while
+    a step records."""
+    monkeypatch.setattr(RUN.Pipeline, "GEMM_SMEM", {})
+    dev = RUN.Dev.__new__(RUN.Dev)
+    cu = dev.cu = LaunchLog()
+    dev.mod, dev.fns, dev.live, dev.stream, dev.recording, dev.sms = None, {}, set(), None, None, 188
+    k = 1024
+    keys = {nm: dev.alloc(104 if nm == "unit" else 32) for nm in ("dom_a", "dom_b", "dom_t", "line_b", "k_msg", "k_leaf", "unit")}
+
+    def calls(steps) -> list:
+        out = []
+        for _, _, f in steps:
+            cu.log.clear()
+            f()
+            out.append([x for x in cu.log if not x[0].endswith("_smem")])
+        return out
+
+    configs = [(64, 32, "sm120", forms, forming, "b") for forms in RUN.FORMS for forming in RUN.FORMINGS]
+    configs += [(128, 128, F.HOT, forms, forming, ep) for forms in RUN.FORMS for forming in RUN.FORMINGS for ep in RUN.EPILOGUES]
+    for m, m_real, variant, forms, forming, epilogue in configs:
+        pipe = RUN.Pipeline(dev, m, 128, k, variant, keys, dev.alloc(4 * m * k), dev.alloc(4 * 128 * k), m_real=m_real)
+        pipe.rows_form, pipe.tree_form = forms
+        pipe.forming_form, pipe.epilogue = forming, epilogue
+        bound, unbound = pipe.steps(), pipe.steps(bound=False)
+        names = [nm for nm, _, _ in bound]
+        assert pipe.hash_warps == (epilogue == "w" and m == 128)
+        assert m != 128 or ("hash_leaf" in names) != pipe.hash_warps and "hash_msg" not in names
+        assert [x[0] for c in calls(bound) for x in c if x[0].startswith("gemm_pearlc")] == (
+            ["gemm_pearlc_w_hu"] if pipe.hash_warps else ["gemm_pearlc_b_hu"] if m == 128 else ["gemm_pearlc_d"])
+        assert [nm for nm, _, _ in bound] == [nm for nm, _, _ in unbound]
+        assert ("stats_a" in names) == (forms[0] != "s")
+        assert {"hash_rows_a" if forms[0] == "s" else "stats_a", "stats_b"} <= {
+            nm for nm, phase, _ in bound if phase in RUN.forming_phases(forms[0])}
+        first = calls(bound)
+        assert first == calls(unbound) == calls(bound), (m, forms, forming)
+        dev.stream = 77
+        pipe.b["y"], pipe.b["leaves"] = dev.alloc(pipe.size["y"]), dev.alloc(pipe.size["leaves"] + 64) + 32
+        pipe.b.update(digests=dev.alloc(pipe.size["digests"]))
+        again = calls(bound)
+        assert again == calls(unbound) != first and {x[3] for c in again for x in c} == {77}
+        assert all(w >> 56 != RUN.BOUND_TAG for c in again for x in c for w in x[4])
+        dev.stream = None
+    assert set(RUN.Pipeline.GEMM_SMEM) >= {"gemm_ct_d", "gemm_pearlc_b_hu"}
+
+
+def room(allocs: dict[int, int], ptr: int) -> int:
+    """Bytes from ptr to the end of the live allocation holding it (0 if none): a tree's root is its buffer's last node."""
+    return next((base + n - ptr for base, n in allocs.items() if base <= ptr < base + n), 0)
+
+
+def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
+    """One stand-in log line against the live allocations: a launch's pointers and grid cover its footprint, a copy's
+    ranges are allocated, a tensor map's matrix is; with `maps` (the maps encoded so far), a mainloop GEMM's operands (and
+    its peel's P_A, P_B) have maps of their shapes."""
+    if ev["op"] == "alloc":
+        allocs[ev["ptr"]] = ev["bytes"]
+    elif ev["op"] == "free":
+        allocs.pop(ev["ptr"])
+    elif ev["op"] == "copy":
+        for end in ("dst", "src"):
+            assert allocs.get(ev[end], 0) >= ev["bytes"], ev
+    elif ev["op"] == "tmap":
+        assert room(allocs, ev["ptr"]) >= ev["depth"] * ev["rows"] and ev["box"] == [128, 128], ev
+        if maps is not None:
+            maps.add((ev["ptr"], ev["depth"], ev["rows"]))
+    elif ev["op"] == "launch":
+        name, p, i = ev["name"], ev["p"], ev["i"]
+        for slot, n in needs(name, p, i).items():
+            if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
+                continue
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6), ("form_rows", 8), ("form_rows", 9),
+                                                ("stats_s5", 5), ("h1_rows_stats", 5)}:
+                continue
+            assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
+        g = ev["grid"]
+        assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
+        if name.startswith("form_s5"):
+            assert g[:2] == [i[1] // 128, i[0] // 64] and ev["block"] == 128
+        if name.startswith("form_rate"):
+            assert g[1:] == [1, 1] and 0 < g[0] <= (i[0] // 64) * (i[1] // 128) and ev["block"] == 128 and i[2] > 0
+        if name == "plainq":
+            assert g[0] == i[0]
+        if name == "lines":
+            assert i[3] in (0x4600, 0x4400)
+        if name.startswith("gemm_") and not name.endswith("_smem"):
+            tm, bn = gemm_tile(name)
+            ml = (tm, bn) == (128, 128)
+            assert ev["block"] == (384 if ml else 256) and 48 * 1024 < ev["smem"] <= SM120_MAX_DYN
+            assert g[0] <= min(188, (i[0] // tm) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
+            if ml and maps is not None:
+                M, N, K = i[:3]
+                assert {(p[0], K, M), (p[1], K, N)} <= maps, name
+                assert not p[5] or {(p[5], 128, M), (p[6], 128, N)} <= maps, name
+        if name in ("words", "words_u"):
+            warps = ev["block"] // 32
+            assert ev["block"] % 32 == 0 and g[0] == -(-(i[0] // 16 * i[1] // 8) // warps), (g, ev["block"])
+        if name == "hash_rows_b3s":
+            assert g[0] == i[0] and -(-i[1] // 256) <= ev["block"] <= 512 and ev["block"] % 32 == 0 and i[3] <= 64
+        if name == "hash_leaves_b3s":
+            assert i[1] <= 256 and i[3] <= 64
+
+
+# ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------
+
+ARM_V0 = '''"""The harness's arm interface v0 (benchmarks/pouw/harness/arm.py), the members pearlc_arm uses."""
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+
+@dataclass(frozen=True)
+class Shape:
+    label: str
+    m: int
+    k: int
+    n: int
+
+    @property
+    def mkn(self) -> int:
+        return self.m * self.k * self.n
+
+
+@dataclass(frozen=True)
+class Buffer:
+    ptr: int
+    nbytes: int
+
+
+@dataclass
+class OperandSet:
+    index: int
+    weight_id: int
+    seed: int
+    a: Buffer
+    b: Buffer
+    a_scale: Buffer | None = None
+    b_scale: Buffer | None = None
+    host: Callable[[str], bytes] | None = None
+
+
+@dataclass(frozen=True)
+class Work:
+    tensor_macs: dict
+    w_ref: str
+    credited: str
+    unit: str
+    hashed_bytes: dict
+    weight_hashed_bytes: dict = field(default_factory=dict)
+    gamma: dict | None = None
+
+
+@dataclass
+class Gate:
+    ok: bool
+    checked: dict
+    detail: dict[str, Any] = field(default_factory=dict)
+'''
+ARMS = ["PearlCSm120", "PearlCSm120Unpromoted"]
+ARMS_H2 = ["PearlCSm120H2", "PearlCSm120UnpromotedH2"]
+#: the arm's call under run.py's default forms (GPU 1's kernels) and under h1_sm120.cuh's one-launch kernels
+FOLD = "p,fold"
+ARM_FORMS = [None, FOLD]
+
+
+@pytest.fixture(scope="module")
+def arm_dir(tmp_path_factory):
+    """The harness's arm.py once it is in the tree, the interface's text until then."""
+    real = HERE.parent / "harness"
+    if (real / "arm.py").exists():
+        return real
+    out = tmp_path_factory.mktemp("arm-v0")
+    (out / "arm.py").write_text(ARM_V0)
+    return out
+
+
+@pytest.fixture(scope="module")
+def A(arm_dir):
+    sys.path.insert(0, str(arm_dir))
+    try:
+        return load("pearlc_arm", HERE / "pearlc_arm.py")
+    finally:
+        sys.path.remove(str(arm_dir))
+
+
+def test_arm_accounting_is_the_schemes(A):
+    """Work, W_ref and the credit are the scheme's on the arm's record, and G = 4's γ is #449's `bench.gamma` (the H100's
+    formula) at SM120_PRICES; the unpromoted record credits no promotion adds, so its γ is its own.  The hashed bytes are
+    -h1's: A's rows and B's under their domains, the message digests, the tile leaves and both trees' nodes."""
+    from verity_pouw.protocol import Shape as MShape
+    from verity_pouw.schemes import pearl_c as C
+
+    sys.path.insert(0, str(H100_DIR))
+    try:
+        B = load("pearl_c_h100_bench", H100_DIR / "bench.py")
+    finally:
+        sys.path.remove(str(H100_DIR))
+    p = C.SM120_PRICES
+    B.FADD_PER_MAC, B.PEEL_UNITS = Fraction(p.fadd, C.WINDOW), p.bf16_mac * C.PEEL_K
+    B.FORMING_CREDITED, B.FORMING_A_ONLY = p.forming_credited, p.forming_a_only
+    Shape = sys.modules["arm"].Shape
+    for cls in ARMS:
+        arm = getattr(A, cls)()
+        assert (arm.stream, arm.precision, arm.inputs) == ("fp8", "fp8-e4m3", "f32")
+        assert arm.flag_sets == {"hash": {"hash"}, "nohash": frozenset()} and arm.panel["line"] == "pearl-c-sm120"
+        assert arm.scheme.name == arm.name and arm.name.endswith("-v1-h1")
+        assert arm.panel["version"] == {"PearlCSm120": "v1-h1", "PearlCSm120Unpromoted": "v2-h1"}[cls]
+        for shape in (Shape("m8192-n8192-k8192", 8192, 8192, 8192), Shape("m32-n8192-k8192", 32, 8192, 8192)):
+            assert arm.domain(shape) is None
+            w, s, m, mr = arm.work(shape), MShape(shape.m, shape.k, shape.n), A.padded(shape.m), shape.m
+            tiles = -(-mr // 64) * (shape.n // 64)
+            assert (w.w_ref, w.credited) == (str(arm.scheme.wref(s)), str(arm.scheme.credit_of(s)))
+            assert w.tensor_macs == {"fp8-e4m3": m * shape.n * shape.k + m * (C.R + arm.device.atom.k) * shape.k,
+                                     "bf16": m * shape.n * C.PEEL_K}
+            assert w.hashed_bytes == {"blake3/rows": mr * (64 + 4 * shape.k), "blake3/messages": 8 * mr * shape.n,
+                                      "blake3/leaves": mr * shape.n, "blake3/tile_leaves": 96 * tiles,
+                                      "blake3/tree_nodes": 64 * (A.R.pow2(mr) - 1 + A.R.pow2(tiles) - 1)}
+            assert w.weight_hashed_bytes == {"blake3/rows": shape.n * (64 + 4 * shape.k),
+                                             "blake3/tree_nodes": 64 * (A.R.pow2(shape.n) - 1)}
+            g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
+            if cls == "PearlCSm120":
+                assert g == B.gamma(shape.n, shape.k)
+            else:    # v2's debit cap is 1/1,000 under TT_OUT's γ0 = 1/400: about 0.3616% (GPU 2's Derived figure)
+                assert arm.rho == Fraction(1, 1000) and round(float(g["cap"]) * 100, 4) == 0.3616
+            assert f"ρ = {arm.rho}" in w.gamma["basis"]
+            assert g["floor"] < g["cap"] < Fraction(1, 100) and g["cap"] < g["cap_chain_only"]
+    for cls, h1 in zip(ARMS_H2, ARMS):
+        arm, base = getattr(A, cls)(), getattr(A, h1)()
+        assert arm.hashing == arm.scheme.hashing == "h2" and arm.scheme.name == arm.name == base.name.removesuffix("-h1") + "-h2"
+        assert arm.panel == {"line": "pearl-c-sm120", "version": base.panel["version"].replace("-h1", "-h2")}
+        assert (arm.variant, arm.rho, arm.flag_sets) == (base.variant, base.rho, base.flag_sets)
+        assert arm.forms() == A.R.ALT_FORMS and arm.lineage()["mechanism"][:3] == list(A.MECHANISM_H2)
+        for shape in (Shape("m8192-n8192-k8192", 8192, 8192, 8192), Shape("m32-n8192-k8192", 32, 8192, 8192)):
+            assert arm.domain(shape) is None and arm.work(shape).gamma == base.work(shape).gamma
+        assert "segments" in arm.domain(Shape("x", 128, 33792, 1024)) and base.domain(Shape("x", 128, 33792, 1024)) is None
+    arm = A.PearlCSm120()
+    assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))
+    assert "multiple of 128" in arm.domain(Shape("x", 128, 1024, 100))
+    assert arm.domain(Shape("x", 24, 1024, 128))       # the scheme's own rule: 16 | m
+
+
+def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str, forms: str | None = None,
+           **env: str) -> list[dict]:
+    """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows, the call under run.py's `forms`
+    (PEARLC_A_FORMS, None its default); its JSON lines."""
+    r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, mode, str(tmp / "run"),
+                        *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows"),
+                                            PEARLC_A_FORMS=forms, **env),
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return [json.loads(x) for x in r.stdout.splitlines()]
+
+
+def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
+    """The stand-in's log cut at the driver's marks: each launch, weight side or transcript window with the launches, copies
+    and flips inside."""
+    out, allocs, maps, cur = [], {}, set(), None
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs, maps)
+        if ev["op"] == "mark" and ev["what"] in ("launch", "weight", "phases", "transcripts"):
+            cur = (ev, [])
+        elif ev["op"] == "mark" and ev["what"] == "end":
+            out.append(cur)
+            cur = None
+        elif cur is not None and ev["op"] in ("launch", "copy", "mark"):
+            cur[1].append(ev)
+    return out, allocs
+
+
+def transcript(run: Path, arm: str, label: str, root: str = "transcripts") -> tuple[dict, Path]:
+    path = run / root / arm / label / "manifest.json"
+    return json.loads(path.read_text()), path
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
+@pytest.mark.parametrize("cls", ARMS)
+def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls, forms):
+    """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy, the
+    kernels each role's step needs under the call's forms and no others (nohash: no tree of A, no seed_A, no E_A lines, no
+    hashes), E_A's line key seed_line_a's (h1_commit's under `fold`) from A's root, each operand set's E_A lines and call
+    buffers its own, the phases the call's launches split before, at and after the chain, every footprint allocated; the gate
+    fails (the stand-in computes nothing, so seed_A isn't the scheme's and no twin tile matches) naming every output in full;
+    freeing set 0's gated hash calls launches each once more, synchronously, and writes its transcript with the trees'
+    frame-b3 sizes; nothing leaks."""
+    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry", forms=forms)
+    arm = getattr(A, cls)()
+    sx = "" if arm.device.g else "_u"
+    end = rows[-1]
+    fused = {"pre": True, "dec": False}             # prefill's 256 rows are 128 x 128 tiles; decode's 32 pad to 64 x 64
+    for g in rows[:-1]:
+        assert not g["ok"] and set(g["checked"].values()) == {"all"}
+        stored = set() if fused[g["shape"]] else {"c", "u"}
+        assert set(g["checked"]) == {"y"} | stored | (set(A.HASHED) if g["role"] == "hash" else set())
+        assert g["detail"]["scheme"] == arm.name and all(t["failed"] for t in g["detail"]["twin_tiles"])
+        if g["role"] == "hash":
+            assert g["detail"]["seeds"] == {"seed_a": False, "line_a": False, "seed_b": True}
+    assert end["live"] == [] and set(end["transcribed"]) == {"pre", "dec"}
+
+    words = {"pre": "gemm_words", "dec": "words"}
+
+    def chain(shape: str, role: str = "hash") -> str:
+        return ("gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b") + sx if fused[shape] else "gemm_pearlc_d" + sx
+
+    if forms == FOLD:
+        commit = ["h1_commit", "lines"]              # A's trees (256 and 32 rows) fit h1_commit's last CTA
+        hashes = lambda shape: ["hash_leaf_p", "h1_tree"] if fused[shape] else ["h1_tiles"]  # noqa: E731
+        tree = ["h1_rows_p", "h1_tree"]
+    else:
+        commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
+        hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]  # noqa: E731
+        tree = ["hash_rows_w", "hash_tree_small"]
+    forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
+    weight = (["hash_node_keys", *tree, "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
+              + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])
+    got, allocs = windows(tmp_path / "dry.jsonl")
+    assert not allocs
+    ea: dict[tuple, int] = {}
+    launched: dict[tuple, list[dict]] = {}
+    for mark, evs in got:
+        names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
+        copy = ["copy"] if mark["shape"] == "dec" else []
+        if mark["what"] == "transcripts":
+            sh = mark["shape"]
+            call = copy + commit + forming(sh) + [chain(sh)] + hashes(sh)
+            assert all(ev["stream"] == 0 for ev in evs)
+            assert names == weight + call + copy + forming(sh) + [chain(sh, "nohash")] + weight + call
+            keys_of: dict[int, int] = {}
+            for ev in evs:      # each one-launch tree reads the level keys hash_node_keys last wrote under its domain
+                if ev.get("name") == "hash_node_keys":
+                    keys_of[ev["p"][1]] = ev["p"][0]
+                elif ev.get("name") in LEVEL_KEYS:
+                    dom, lk = LEVEL_KEYS[ev["name"]]
+                    assert ev["p"][lk] == keys_of[ev["p"][dom]], ev["name"]
+            man, _ = transcript(tmp_path / "run", arm.name, mark["shape"])
+            neg, _ = transcript(tmp_path / "run", arm.name, mark["shape"], root="negative")
+            m, n = man["shape"]["m"], man["shape"]["n"]
+            tiles = -(-m // 64) * (n // 64)
+            assert man["scheme"] == arm.name and man["commitment"]["count"] == tiles and man["matmul"] == {"index": 0, "weight": 0}
+            assert {f: s["bytes"] for f, s in man["files"].items()} == {
+                "tree_a": 32 * (2 * A.R.pow2(m) - 1), "tree_b": 32 * (2 * A.R.pow2(n) - 1), "tree_t": 32 * (2 * A.R.pow2(tiles) - 1),
+                "leaves": 32 * tiles, "rows_a": 4 * m * man["shape"]["k"], "rows_b": 4 * n * man["shape"]["k"]}
+            assert Path(man["files"]["rows_a"]["path"]).parent == tmp_path / "rows" / arm.name / mark["shape"]
+            assert man["poisoned"] == neg["poisoned"] == "0xA5" and "negative_control" not in man
+            assert neg["negative_control"] == A.NEGATIVE and {f: neg["files"][f] for f in ("rows_a", "rows_b")} == {
+                f: man["files"][f] for f in ("rows_a", "rows_b")}
+            continue
+        assert all(ev["stream"] == end["stream"] for ev in evs), mark
+        if mark["what"] == "weight":
+            assert names == weight
+            continue
+        if mark["what"] == "phases":
+            parts: dict[str, list[dict]] = {}
+            for ev in evs:
+                if ev["op"] == "mark" and ev["what"] == "phase":
+                    cur = parts.setdefault(ev["name"], [])
+                else:
+                    cur.append(ev)
+            whole = launched[(mark["shape"], mark["role"], mark["set"])]
+            assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == whole, mark
+            assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"], mark["role"])]
+            assert [ev["name"] for ev in parts["after"]] == (hashes(mark["shape"]) if mark["role"] == "hash" else [])
+            continue
+        launched[(mark["shape"], mark["role"], mark["set"])] = evs
+        sh, f = mark["shape"], forming(mark["shape"])
+        want = {"hash": copy + commit + f + [chain(sh)] + hashes(sh), "nohash": copy + f + [chain(sh, "nohash")],
+                "known_bad": copy + commit + f + [chain(sh), "xor_byte"] + hashes(sh)}[mark["role"]]
+        assert names == want, mark
+        by = {ev.get("name"): ev for ev in evs}
+        if mark["role"] != "nohash":
+            lines, gemm = by["lines"], by[chain(sh)]
+            if forms == FOLD:
+                seed = by["h1_commit"]
+                assert lines["p"][0] == seed["p"][4] and seed["p"][5] == mark["keys"]["unit"]
+            else:
+                seed = by["seed_line_a"]
+                assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
+            assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[sh])
+            assert by["eprime"]["p"][0] == lines["p"][1]
+            if fused[sh]:        # the digests gemm_pearlc_b writes under the message key are those the tile leaves read
+                assert gemm["p"][9] == by["hash_leaf_p"]["p"][0] and gemm["p"][11] == mark["keys"]["k_msg"] and not gemm["p"][2]
+            elif forms == FOLD:
+                assert by["h1_tiles"]["p"][:2] == gemm["p"][2:4]
+            else:
+                assert by["hash_msg_v"]["p"][:2] == gemm["p"][2:4] and by["hash_msg_v"]["p"][2] == by["hash_leaf_p"]["p"][0]
+        e = by["eprime"]["p"][0]
+        assert ea.setdefault((mark["shape"], mark["set"]), e) == e
+    for shape in ("pre", "dec"):
+        assert ea[(shape, 0)] != ea[(shape, 1)]
+        calls = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name") == chain(shape)) for s in (0, 1)]
+        assert all(calls[0]["p"][j] != calls[1]["p"][j] for j in ((0, 4, 9, 10) if fused[shape] else (0, 2, 3, 4)))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS_H2)
+def test_h2_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
+    """The -h2 arms as the harness drives them, on the stand-in: A's and B's row leaves by hash_rows_b3s, a CTA a row, under
+    the row template (`t_row`, put once an epoch) and storing their segment keys in the set's skeys_a and skeys_b; the tile
+    tree's leaves by hash_leaves_b3s under `t_tile`; no -h1 leaf kernel nor another tree form; the transcripts in -h2's
+    scheme; nothing leaks."""
+    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry", forms=FOLD)
+    arm = getattr(A, cls)()
+    assert rows[-1]["live"] == [] and set(rows[-1]["transcribed"]) == {"pre", "dec"}
+    got, allocs = windows(tmp_path / "dry.jsonl")
+    assert not allocs
+    names = {ev.get("name") for _, evs in got for ev in evs}
+    assert {"hash_rows_b3s", "hash_leaves_b3s", "hash_tree_small", "seed_line_a"} <= names
+    assert not names & {"hash_rows_w", "hash_tree_leaves", "h1_rows_p", "h1_rows_stats", "h1_tree", "h1_commit", "h1_tiles",
+                        "b3s_level_keys"}
+    for mark, evs in got:
+        if "keys" not in mark:
+            continue
+        rows_b3s = [ev for ev in evs if ev.get("name") == "hash_rows_b3s"]
+        if mark["role"] != "nohash":
+            assert len(rows_b3s) == 1 and rows_b3s[0]["grid"][0] == {"pre": 256, "dec": 32}[mark["shape"]]
+            assert rows_b3s[0]["p"][4] == mark["keys"]["t_row"] and rows_b3s[0]["p"][3]
+        for ev in evs:
+            if ev.get("name") == "hash_leaves_b3s":
+                assert ev["p"][3] == mark["keys"]["t_tile"]
+    for shape in ("pre", "dec"):
+        man, _ = transcript(tmp_path / "run", arm.name, shape)
+        assert man["scheme"] == arm.name and man["scheme_args"]["hashing"] == "h2"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
+@pytest.mark.parametrize("cls", ARMS + ARMS_H2)
+def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, request, ship, arm_dir, tmp_path, cls, forms):
+    """The fixture's bytes (the scheme's, at its epoch and seeds) where the kernels would have written them pass the gate, the
+    device's seed_A and E_A's line key the scheme's from its root_A.  At the fixture's 128 rows the call is fused, so it stores
+    y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
+    last sampled tile's row fails the gate against the second launch's hash_msg_v (on the stand-in, which computes no tile
+    leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
+    (verify.py, `verity_pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
+    stand-in writes nothing) and which the verifier rejects.  The -h2 arms, on the -h2 fixture, under their one form."""
+    if cls in ARMS_H2 and forms:
+        pytest.skip("-h2 has one form")
+    small_fixture = request.getfixturevalue("small_fixture_h2" if cls in ARMS_H2 else "small_fixture")
+    first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"), forms=forms)
+    arm = getattr(A, cls)()
+    assert first["ok"] and first["checked"] == {name: "all" for name in ("y",) + A.HASHED}
+    assert not any(first["detail"]["words_differing_from_relaunch"].values())
+    assert first["detail"]["seeds"] == {"seed_a": True, "line_a": True, "seed_b": True}
+    assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
+    assert not flipped["ok"] and flipped["flipped"][0] == "digests"
+    diff = flipped["detail"]["words_differing_from_relaunch"]
+    assert diff["digests"] == 1 and sum(diff.values()) == 1
+    assert not any(t["failed"] for t in flipped["detail"]["twin_tiles"])
+    assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
+
+    man, path = transcript(tmp_path / "run", arm.name, "fixture")
+    check = json.loads((small_fixture / "check.json").read_text())
+    assert man["beacon"] == check["beacon"] and man["weight_root"] == check["seeds"]["root_b"]
+    _, neg_path = transcript(tmp_path / "run", arm.name, "fixture", root="negative")
+    assert all(set((neg_path.parent / f"{f}.bin").read_bytes()) == {A.POISON} for f in ("tree_a", "tree_t", "tree_b", "leaves"))
+    r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    line, control = r.stdout.splitlines()
+    sha, neg_sha = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (path, neg_path))
+    assert line.startswith(f"ACCEPT {arm.name} fixture: verity_pouw.audit.Verifier, Sampled(1) drew tiles ")
+    assert line.endswith(f"; transcript sha256:{sha}; verifier test; run r-test")
+    assert control.startswith(f"REJECT negative control {arm.name} fixture: ")
+    assert control.endswith(f"; transcript sha256:{neg_sha}; verifier test; run r-test")
+    verdict = json.loads((tmp_path / "run" / "verify.json").read_text())
+    assert verdict["ok"] and verdict["transcripts"][0]["accepted"] and verdict["transcripts"][0]["line"] == line
+    assert not verdict["negative_controls"][0]["accepted"] and verdict["negative_controls"][0]["line"] == control
+
+
+REFS_STUB = '''
+import multiprocessing, os
+from concurrent.futures import ProcessPoolExecutor
+
+
+class _Logged(ProcessPoolExecutor):
+    def submit(self, fn, *args, **kw):
+        with open(os.environ["REFS_LOG"], "a") as f:
+            f.write(f"{fn.__name__} {args[1]} {args[2]}\\n")
+        return super().submit(fn, *args, **kw)
+
+
+_POOL = None
+
+
+def pool():
+    global _POOL
+    if _POOL is None:
+        _POOL = _Logged(2, mp_context=multiprocessing.get_context("fork"))
+    return _POOL
+'''
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS)
+def test_the_twin_in_the_harness_pool_gates_as_it_does_inline(A, small_fixture, ship, arm_dir, tmp_path, cls):
+    """With the harness's `refs.pool` (a stub of two forked workers that logs each submit), the prefetch submits each sampled
+    tile once, the three gates take those, and every verdict is the inline twin's, the flipped digest's rejection too."""
+    harness = tmp_path / "harness"
+    harness.mkdir()
+    shutil.copy(arm_dir / "arm.py", harness)
+    (harness / "refs.py").write_text(REFS_STUB)
+    check, log = str(small_fixture / "check.json"), tmp_path / "refs.log"
+    for d in ("pool", "inline"):
+        (tmp_path / d).mkdir()
+    pooled = driver(A, ship, harness, tmp_path / "pool", cls, "accept", check, REFS_LOG=str(log))
+    inline = driver(A, ship, arm_dir, tmp_path / "inline", cls, "accept", check)
+    samples = A.W.samples(A.W.Shape("fixture", 128, 128, 1024))
+    assert sorted(log.read_text().splitlines()) == sorted(f"tile {r0} {c0}" for r0, c0 in samples)
+    assert [(g["ok"], g.get("detail")) for g in pooled] == [(g["ok"], g.get("detail")) for g in inline]
+    assert [g["ok"] for g in pooled] == [True, False, True]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
+def test_the_harness_poisoned_dump_is_accepted_and_its_no_write_control_rejected(A, small_fixture, ship, arm_dir, tmp_path, forms):
+    """Arm interface v0.5, as `bench.poison_dump` drives it: `transcript_buffers` (every set buffer but the tensor maps and the
+    one-launch trees' counters, whose 0xA5 would keep a tree from folding its top) poisoned, the weight side and the call
+    rewrite what the transcript reads, and `dump`'s transcript is accepted; poisoned again with nothing launched, the control
+    is all poison and rejected.  Freeing the call then makes no transcript of its own."""
+    *_, restored = driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "harness", str(small_fixture / "check.json"), forms=forms)
+    assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
+    rec = restored["poisoning"]
+    assert not set(rec["buffers"]) & set(A.UNPOISONED) and set(rec["buffers"]) == set(A.OWN + A.CALL) - set(A.UNPOISONED)
+    assert all(rec["written"][b] for b in A.HASHED + ("tree_b",))
+    man, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
+    neg, neg_path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture", root="negative")
+    assert "negative_control" not in man and neg["negative_control"] == A.HARNESS_NEGATIVE
+    assert all(set((neg_path.parent / f"{f}.bin").read_bytes()) == {A.POISON} for f in ("tree_a", "tree_t", "tree_b", "leaves"))
+    r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    line, control = r.stdout.splitlines()
+    sha, neg_sha = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (path, neg_path))
+    assert line.startswith("ACCEPT pearl-c-sm120-v1-h1 fixture: ") and line.endswith(f"; transcript sha256:{sha}; verifier test; run r-test")
+    assert control.startswith("REJECT negative control ") and f"sha256:{neg_sha}" in control
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS)
+def test_arm_build_names_its_variant_and_lineage(A, ship, arm_dir, tmp_path, cls):
+    """The build record's `lineage`: the forms' mechanism tags, the panel line and version, the chain's phases by step group,
+    PEARLC_LINEAGE's parent and panel attempt for this arm alone, no γ; its verifier names the control.  With the harness's
+    ledger (arm interface v0.5, #583) its `variant`: one id for both arms, the cubin's digest, the digest of the sources the
+    cubin's includes reach and run.py, both schemes, the forming's priced path."""
+    extra = {"pearl-c-sm120-v1-h1": {"parent": "art:" + "c" * 64, "panel": {"attempt": 67}}}
+    rec, = driver(A, ship, arm_dir, tmp_path, cls, "build", forms=FOLD, PEARLC_LINEAGE=json.dumps(extra))
+    arm = getattr(A, cls)()
+    lin = rec["lineage"]
+    assert "gamma" not in lin and lin["approach"] == "pouw/pearl-c-sm120" and lin["phase_groups"] == A.PHASE_GROUPS
+    assert lin["mechanism"] == ["hash:h1-commit-one-launch", "hash:h1-tiles-one-launch", "hash:h1-level-key-table",
+                                "forming:split", "epilogue:b"]
+    assert rec["forms"] == {"a": FOLD, "forming": "split", "epilogue": "b"}
+    if cls == "PearlCSm120":
+        assert lin["panel"] == {"line": "pearl-c-sm120", "version": "v1-h1", "attempt": 67} and lin["parent"] == "art:" + "c" * 64
+    else:
+        assert lin["panel"] == {"line": "pearl-c-sm120", "version": "v2-h1"} and "parent" not in lin
+    assert rec["verifier"]["control"] == "negative/{arm}/{shape}/manifest.json"
+    if not (arm_dir / "ledger.py").exists():
+        assert "variant" not in rec
+        return
+    sys.path.insert(0, str(arm_dir))
+    try:
+        L = load("ledger", arm_dir / "ledger.py")
+    finally:
+        sys.path.remove(str(arm_dir))
+    src = {p.relative_to(A.REPO).as_posix() for p in A.sources(A.HERE / "pearl_c_sm120.cu")}
+    assert src == {"benchmarks/pouw/pearl_c_sm120/pearl_c_sm120.cu", "benchmarks/pouw/pearl_c_sm120/mainloop_sm120.cuh",
+                   "benchmarks/pouw/pouw_hash/pouw_hash.cuh", "benchmarks/pouw/pouw_hash/h1_sm120.cuh",
+                   "benchmarks/pouw/pearl_c/hash_sm120.cuh", "benchmarks/pouw/pearl_c/hash.cuh", "benchmarks/pouw/pearl_c_sm120/run.py"}
+    v = rec["variant"]
+    assert v["source_sha256"] == L.source_sha256(A.sources(A.HERE / "pearl_c_sm120.cu"), A.REPO)
+    assert v["id"] == f"pearl-c-sm120/{v['source_sha256'][:12]}" and v["prices"] == "cast-8.72"
+    assert v["binary_sha256"] == hashlib.sha256((ship / "pearl_c_sm120.cubin").read_bytes()).hexdigest()
+    assert v["schemes"] == ["pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120-v1-h1"] and arm.scheme.name in v["schemes"]
+
+
+@pytest.mark.slow
+def test_a_transcript_its_call_did_not_write_is_rejected(A, small_fixture, ship, arm_dir, tmp_path):
+    """The stale-output case (bc-b139c29c, 11:33Z): the fixture's bytes pass the gate, but the transcript's call writes
+    nothing, as a kernel that skipped its commitment would.  The dump then reads the poison, not the gate's bytes, and the
+    verifier rejects it and its negative control, so verify.py fails."""
+    *_, restored = driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "stale", str(small_fixture / "check.json"))
+    assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
+    _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
+    assert set((path.parent / "tree_a.bin").read_bytes()) == {A.POISON}
+    r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True, check=False)
+    assert r.returncode == 1, r.stdout + r.stderr
+    line, control = r.stdout.splitlines()
+    assert line.startswith("REJECT pearl-c-sm120-v1-h1 fixture: ") and control.startswith("REJECT negative control ")
+    assert not json.loads((tmp_path / "run" / "verify.json").read_text())["ok"]
+
+
+@pytest.mark.slow
+def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_dir, tmp_path):
+    """verify.py rejects, before any tile is recomputed: another root_A (every drawn tile's activation openings fail), another
+    tile root (the leaf openings), a beacon the salt isn't from, a file that isn't the manifest's (its SHA-256), a scheme the
+    arguments don't name; and a run directory with no transcript, or an arm's error in place of one."""
+    driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "accept", str(small_fixture / "check.json"))
+    V = load("pearl_c_sm120_verify", HERE / "verify.py")
+    _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
+    flip = lambda h: ("11" if h[:2] == "00" else "00") + h[2:]  # noqa: E731
+
+    def tampered(edit) -> dict:
+        d = tmp_path / "t" / edit.__name__
+        shutil.copytree(path.parent, d)
+        man = json.loads(path.read_text())
+        edit(man, d)
+        (d / "manifest.json").write_text(json.dumps(man))
+        return V.verify(d / "manifest.json", 4, "test")
+
+    def root_a(man, d):
+        man["activation_root"] = flip(man["activation_root"])
+
+    def tile_root(man, d):
+        man["commitment"]["root"] = flip(man["commitment"]["root"])
+
+    def beacon(man, d):
+        man["beacon"] = flip(man["beacon"])
+
+    def leaves(man, d):
+        (d / "leaves.bin").write_bytes(bytes(32) + (d / "leaves.bin").read_bytes()[32:])
+
+    def scheme(man, d):
+        man["scheme_args"]["device"] = "sm120-unpromoted"
+
+    for edit, why in ((root_a, "activation opening"), (tile_root, "transcript opening"), (beacon, "salt"),
+                      (leaves, "the manifest says"),
+                      (scheme, "is not")):
+        r = tampered(edit)
+        assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (edit.__name__, r["line"])
+
+    empty, failed = tmp_path / "empty", tmp_path / "failed" / "transcripts" / "pearl-c-sm120-v1-h1" / "pre"
+    empty.mkdir()
+    failed.mkdir(parents=True)
+    (failed / "error.txt").write_text("RuntimeError: no\n")
+    for run, missing in ((empty, []), (failed.parents[2], ["transcripts/pearl-c-sm120-v1-h1/pre"])):
+        assert V.main([str(run), "--run", "r-test"]) == 1
+        assert json.loads((run / "verify.json").read_text()) == {
+            "verifier_commit": os.environ.get("RESEARCH_SOURCE_SHA", "unknown"), "draws": 3, "run": "r-test", "ok": False,
+            "transcripts": [], "negative_controls": [], "uncontrolled": [], "missing": missing}
+
+    alone = tmp_path / "alone"
+    shutil.copytree(path.parent, alone / "transcripts" / "pearl-c-sm120-v1-h1" / "fixture")
+    assert V.main([str(alone), "--draws", "1", "--jobs", "1", "--run", "r-test"]) == 1
+    verdict = json.loads((alone / "verify.json").read_text())
+    assert verdict["transcripts"][0]["accepted"] and verdict["uncontrolled"] == [verdict["transcripts"][0]["manifest"]]
+
+
+FILL_STUB = """#!/bin/bash
+echo '{"kind": "timing"}'
+case "$SHAPES" in
+  bad) echo "ValueError: the kernels take m a multiple of 64, n of 128 and k of 1024" >&2; exit 1;;
+  once) [ -e "$STUB_SEEN" ] || { touch "$STUB_SEEN"; echo "transient" >&2; exit 1; };;
+esac
+"""
+
+
+def test_forms_fill_exits_4_only_at_the_pass_that_failed(tmp_path):
+    """forms_fill.sh under a stub run.py: 99 while chunks remain and 0 once every chunk is done; 4 right after a failed pass,
+    naming the chunk and its error in the log, and the next start runs that chunk again; 1 at a chunk's sixth start; with a
+    lease budget (FORMS_FILL_LEASE_S), chunks back to back in one invocation, a failure still exiting 4 at once.  A
+    failure never turns into a later exit 4 (the 18:26Z forms jobs: their last chunk passed, then 4 for chunks refused an hour
+    earlier, and the retry 4 at once with nothing in the log)."""
+    ship, stubs = tmp_path / "ship", tmp_path / "bin"
+    (ship / "check").mkdir(parents=True)
+    stubs.mkdir()
+    files = {"pearl_c_sm120.cubin": "x", "run.py": "", "check/check.json": "{}"}
+    for name, text in files.items():
+        (ship / name).write_text(text)
+    (ship / "MANIFEST.sha256").write_text("".join(f"{hashlib.sha256(t.encode()).hexdigest()}  {n}\n" for n, t in files.items()))
+    (stubs / "python3").write_text(FILL_STUB)
+    (stubs / "python3").chmod(0o755)
+    env = {**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}", "GPU_LEASE_UUID": "GPU-test", "STUB_SEEN": str(tmp_path / "seen")}
+
+    def starts(out: str, table: str, n: int, *cubin: str, lease: int = 0) -> list[subprocess.CompletedProcess]:
+        (tmp_path / f"{out}.chunks").write_text(table)
+        argv = ["bash", str(HERE / "forms_fill.sh"), str(tmp_path / f"{out}.chunks"), str(tmp_path / out), str(ship), *cubin]
+        run_env = {**env, "FORMS_FILL_LEASE_S": str(lease)}
+        return [subprocess.run(argv, env=run_env, capture_output=True, text=True, check=False) for _ in range(n)]
+
+    ok = starts("ok", "# (shape, form set)\n\na|64|v|1|w,nodes|split|b|0|2\nb|once|v|1|p,one|split|b|0|1\nc|64|v|1|s,one|split|w|0|1\n",
+                5, hashlib.sha256(b"x").hexdigest())
+    assert [r.returncode for r in ok] == [99, 4, 99, 0, 0]
+    assert "chunk b failed" in ok[1].stdout and "transient" in ok[1].stdout and "all 3 chunks done" in ok[3].stdout
+    assert {p.name for p in (tmp_path / "ok").glob("b.*")} == {"b.done", "b.jsonl", "b.err", "b.starts", "b.try1.jsonl", "b.try1.err"}
+    passes = [json.loads(x) for x in (tmp_path / "ok" / "a.jsonl").read_text().splitlines() if '"pass"' in x]
+    assert [(p["pass"], p["rc"], p["gpu_lease_uuid"]) for p in passes] == [(1, 0, "GPU-test")]
+
+    bad = starts("bad", "a|64|v|1|w,nodes|split|b|0|1\nb|bad|v|1|w,nodes|split|b|0|1\nc|64|v|1|w,nodes|split|b|0|1\n", 7)
+    assert [r.returncode for r in bad] == [99, 4, 4, 4, 4, 4, 1]
+    assert all("chunk b failed" in r.stdout and "k of 1024" in r.stdout for r in bad[1:6])
+    assert "started 5 times" in bad[6].stdout and not (tmp_path / "bad" / "c.starts").exists()
+
+    assert [r.returncode for r in starts("wrong", "a|64|v|1|w,nodes|split|b|0|1\n", 1, "0" * 64)] == [1]
+
+    (tmp_path / "seen").unlink()
+    leased = starts("leased", "a|64|v|1|w,nodes|split|b|0|1\nb|once|v|1|p,one|split|b|0|1\nc|64|v|1|s,one|split|w|0|1\n", 3,
+                    lease=3600)
+    assert [r.returncode for r in leased] == [4, 0, 0]
+    assert "chunk a passes=1" in leased[0].stdout and "chunk b failed" in leased[0].stdout
+    assert "chunk b passes=1" in leased[1].stdout and "chunk c passes=1" in leased[1].stdout

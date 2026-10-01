@@ -7,6 +7,11 @@
                         project  = "verity"            # or projects = ["verity", "other"]
                         root     = "/workspace/research"
                         python   = "python3"
+                    or to a host reached over plain ssh (a cloud VM with a static address; nothing is looked up, nothing provisioned):
+                        provider = "ssh"
+                        host     = "203.0.113.7"       # port = 22, user = "root" by default
+                        user     = "research"
+                        rate_usd_per_hour = 14.40      # the attempt's cost rate (a runpod pod reports its own)
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
                     which snapshot ran.  No pip, no editable install, no credentials on the machine.
@@ -203,10 +208,26 @@ def guard_idle_min(machine: dict[str, Any]) -> float | None:
 
 # ---- transport --------------------------------------------------------------------------------------------------------------------------
 
+def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
+    """host/port/user/rate for a `provider = "ssh"` machine, as its entry lists them."""
+    who = f"machine {machine.get('name') or '?'}"
+    host, port, user = machine.get("host"), machine.get("port", 22), machine.get("user", "root")
+    if not isinstance(host, str) or not host:
+        raise Refused(f"{who}: provider ssh needs host = \"...\"")
+    if not isinstance(port, int) or not 0 < port < 65536:
+        raise Refused(f"{who}: port {port!r} is not a TCP port")
+    if not isinstance(user, str) or not user:
+        raise Refused(f"{who}: user {user!r} is not a user name")
+    return {"host": host, "port": port, "user": user, "pod_name": machine.get("name"), "cost_per_hr": machine.get("rate_usd_per_hour"),
+            "rate_observed_utc": utc_now_ms(), "gpu": machine.get("gpu")}
+
+
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
-    """host/port/rate for a runpod machine (read-only API call).  Not RUNNING -> refused."""
+    """host/port/user/rate for a runpod machine (read-only API call; not RUNNING -> refused) or an ssh one (`ssh_host_target`)."""
+    if machine.get("provider") == "ssh":
+        return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
-        raise Refused(f"provider {machine.get('provider')!r} not supported (runpod only for now)")
+        raise Refused(f"provider {machine.get('provider')!r} not supported (runpod or ssh)")
     from .pods import runpod
 
     who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
@@ -230,14 +251,14 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
-    return {"host": tgt[0], "port": tgt[1], "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
+    return {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
             "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
 
 
-def ssh_argv(host: str, port: int, *, connect_timeout: int = 15) -> list[str]:
+def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int = 15) -> list[str]:
     from .pods import runpod
 
-    base = runpod.ssh_command(host, port)
+    base = runpod.ssh_command(host, port, user=user)
     return [*base[:-1], "-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}", base[-1]]
 
 
@@ -1198,11 +1219,21 @@ def lease_extend_s(harness_args: list[str]) -> float | None:
     (research.pods.lease.RUN_MARGIN_S); None without a --timeout."""
     from .pods.lease import RUN_MARGIN_S
 
-    try:
-        t = float(flag_value(harness_args, "--timeout") or "")
-    except ValueError:
+    t = timeout_seconds(flag_value(harness_args, "--timeout"))
+    return t + RUN_MARGIN_S if t and t > 0 else None
+
+
+def timeout_seconds(text: str | None) -> float | None:
+    """A --timeout (`1.5`, `900`, `40m`, `6h`, `7d`: seconds or credentials.parse_ttl's grammar) in seconds; None when absent.
+    ValueError when malformed."""
+    from .store.credentials import parse_ttl
+
+    if text is None:
         return None
-    return t + RUN_MARGIN_S if t > 0 else None
+    try:
+        return float(text)
+    except ValueError:
+        return float(parse_ttl(text))
 
 
 def lease_line(lz: dict[str, Any] | None, asked: float | None, machine: str) -> str:
@@ -1263,8 +1294,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                               f"~/.config/verity/r2.env; --no-custody-r2 launches without run custody)") from None
             rec["custody"] = custody_pub
         tgt = pod_target(m)
-        ssh = ssh_argv(tgt["host"], tgt["port"])
-        rec.update(pod_id=m["pod_id"], host=tgt["host"], port=tgt["port"], root=m["root"], phase="shipping")
+        user = tgt.get("user", "root")
+        ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
+        rec.update(pod_id=m.get("pod_id"), host=tgt["host"], port=tgt["port"], user=user, root=m["root"], phase="shipping")
         write_json_atomic(local_dir / "remote.json", rec)
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
@@ -1299,9 +1331,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
-                   "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
+                   "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
-                   "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
+                   "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
                               "root": m["root"], "tool": tool_dir, "tool_identity": rec["tool_identity"] if rec["tool_checked"] else None,
                               "source_sha": tree_sha, "source_dir": src_dir,
                               "source_archive_sha256": ready.get("archive_sha256"), "source_files": ready.get("files"),
@@ -1359,7 +1391,7 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     rec = _read_json(local_dir / "remote.json")
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
-    ssh = ssh_argv(rec["host"], rec["port"])
+    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
     if everything:
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
@@ -1387,6 +1419,15 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     st = _read_json(local_dir / "status.json") or {}
     rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
+    rec.pop("launcher_exited", None)
+    pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
+    if not st and isinstance(pid, int):
+        # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
+        probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
+                                          f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=120)
+        lines = probe.stdout.decode(errors="replace").splitlines() if probe.returncode == 0 else []
+        if lines and lines[0] == "exited":
+            rec["launcher_exited"] = {"at_utc": rec["observed_utc"], "runner_pid": pid, "last_line": (lines[1] if len(lines) > 1 else "")[-300:]}
     if everything:
         manifest = _verify_and_manifest(ssh, rd, local_dir, rec)
         rec["preserved"] = manifest is not None
