@@ -9,15 +9,16 @@
 #   research run ... --send ship.tar --send pearl_c4.cubin -- bash runtree/divisor_confirm.sh card|timed
 #
 # ship.tar: GPU 1's ship, cubin 40d5531b (r20260930-231211-2f19's inputs/ship.tar). pearl_c4.cubin: dd01ae5e (in
-# r20260930-162438-25e9's inputs/pc4-ship.tar). card: gpu-lease 1, untimed, 5 reps. timed: gpu-lease 8 --timed, the
-# harness on the lease's first GPU, 20 reps as the 3:41 PM PDT divisor window. Then verify.py --tier 2b on each output.
+# r20260930-162438-25e9's inputs/pc4-ship.tar). card: gpu-lease 1, untimed. timed: gpu-lease 8 --timed, the harness on
+# the lease's first GPU. Both take 20 reps (bench.py's minimum), as the 3:41 PM PDT divisor window. Then verify.py --tier 2b
+# on each output.
 set -uo pipefail
 mode=${1:?card|timed|inner}
 IN=/workspace/pouw/fill-out/harness/inputs-bab84c16
 ROOT=$PWD N=$PWD/runtree/nvfp4 O=$RESEARCH_RUN_DIR/confirm
 NAMES=$IN/names/m32-n8192-k8192.txt
 TN=3535b07fcbe656d1200fd80712bc5d47d0ed764c
-reps=20; [[ $mode == card || ${CONFIRM_MODE:-} == card ]] && reps=5
+reps=20
 G="--gpu lease --server-md $IN/node2-gpus.md --clock-label locked-2100 --finalists 3 --reps $reps"
 ARM_FP8="--arm-path benchmarks/pouw/pearl_c_sm120 --arm pearlc_arm:PearlCSm120"
 
