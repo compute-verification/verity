@@ -313,12 +313,13 @@ run() {
     echo "$run_id $rc" > "$marker"
   fi
   # a proof (VY_N2_PROOF=1 at submit) runs the Commit as node 1's gpu task did, its replay on the GPU, and only comes home: it is
-  # compared with node 1's record of the same row, and nothing is queued after it
+  # compared with node 1's record of the same row, and nothing is queued after it. It exits with the Commit's rc, so its lease's
+  # holder sees a failed proof as one
   if [ -n "${PROOF:-}" ]; then
     home "$run_id"
     rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
     echo "n2-commit $KEY: proof Commit $run_id on node 2 rc $rc; its row and Attempt are on node 1"
-    return 0
+    return "$rc"
   fi
   if [ "$rc" != 0 ] || [ "${VY_N2_REPLAY:-n2}" = n1 ]; then
     # node 1 takes it from here: the Commit again (task 1) after a failure here, else the replay (task 2), with the whole row
