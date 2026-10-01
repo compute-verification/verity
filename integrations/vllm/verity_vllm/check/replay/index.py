@@ -97,6 +97,7 @@ class ProgramIndex:
         # [v2 flip, P2] Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
         # (`Population.program_path`: its owning module, a collective site's site path)
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
+        self._v2_ports: dict[int, dict[str, str]] = {}
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
         from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -112,6 +113,7 @@ class ProgramIndex:
             mem = pop.members_of(cid)
             if mem:
                 self._v2[cid] = [(m.member, m.width, m.dtype) for m in mem]
+                self._v2_ports[cid] = dict(reversed([(m.port, m.member) for m in mem]))      # a port's own member, before a partial on it
                 self._v2_module[cid] = pop.program_path(cid)
         self.correspondence: dict[str, Any] | None = corr.provenance()
         del P, corr, pop
@@ -191,6 +193,10 @@ class ProgramIndex:
 
     def step_of(self, i: int) -> int:
         return max(0, bisect.bisect_right(self._seg_lo, int(i)) - 1)
+
+    def member_of_port(self, i: int) -> dict[str, str]:
+        """Row i's output port -> the member it is committed as (`CallMember.port`); {} for a row whose outputs are interior."""
+        return dict(self._v2_ports.get(int(i), {}))
 
     def describe(self, r: dict) -> dict | None:
         """Family, statics, module -> op_path, members (name, width, dtype) and request-local row of a Program row; None if unmodelled."""

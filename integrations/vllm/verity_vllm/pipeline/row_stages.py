@@ -37,9 +37,10 @@ import shutil
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Callable
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
@@ -219,36 +220,9 @@ class SingleRow(Row):
         """The row runs the guarded-max tap build: by default, as every row's attention is FA2/FA3 (GUARDED_MAX_TAP=0 for A/B only)."""
         return self.ck_.guarded_max_tap == "1"
 
-    def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
-        guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
-        wd = ""
-        policy = R.tap_policy_flags(self.ck_)
-        self.tl(f"{stage}.required_manifest", "start", ("query", R.QUERY_OF_RECORD))
-        if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
-            wd = R.workload_digest(self.d)
-            cmd = self.cli("manifest", "build-global", "--fixture", self.wl, "--programs-root", self.d,
-                           *(["--workload-digest", wd] if wd else []), *policy, "--out", f"{self.d}/manifest.json")
-        else:
-            cmd = self.cli("manifest", "build", "--program", f"{self.d}/build_request", "--workload", self.wl, *policy,
-                           "--out", f"{self.d}/manifest.json")
-        log = f"{self.d}/manifest.log"
-        with open(log, "w") as f:
-            rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
-        if rc == 0:
-            self.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-            self.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
-            return 0
-        if os.path.exists(f"{self.d}/manifest.json"):
-            os.remove(f"{self.d}/manifest.json")
-        hit = next((ln for ln in open(log, errors="replace") if "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" in ln), None)
-        if hit is not None:
-            self.log(f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE: {hit.rstrip(chr(10))}")
-            self.tl(f"{stage}.required_manifest", "end", ("rc", 3), ("fail_class", "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"))
-            return 3
-        self.tl(f"{stage}.required_manifest", "end", ("rc", 1))
-        self.log(f"required-value manifest NOT built (rc={rc}; see manifest.log): {_tail(log)}")
-        return 1
+    def required_manifest(self, stage: str, digest: Callable[[], str] | None = None) -> int | None:
+        """The required-value manifest of record (`row_build.required_manifest`) -> 0 | 3 | 1 | None."""
+        return RB.required_manifest(self, stage, digest)
 
     # ------------------------------------------------------------------------------------------------ Build
     def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None) -> list[str]:
@@ -340,19 +314,8 @@ class SingleRow(Row):
         return out
 
     def follow_compose(self, to: int) -> tuple[Any, str, str]:
-        """B >= 2: the workload Program's compose starts beside the derives (`global-program --follow`) and loads each component as its
-        derive finishes -> (its future, the derives-done marker, the derives-failed marker)."""
-        done, stop = f"{self.d}/build_workload.derives_done", f"{self.d}/build_workload.derives_failed"
-        for f in (done, stop):
-            if os.path.exists(f):
-                os.remove(f)
-        dirs = [f"{self.d}/build_request", *(f"{self.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T))]
-        cmd = self.cli("global-program", "--workload", self.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{self.d}/build_workload",
-                       "--checkpoint-dir", self.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=self.py312)
-        pool = ThreadPoolExecutor(max_workers=1)
-        fut = pool.submit(self.run_tl, "build.global_program", to, f"{self.d}/build_workload.log", cmd)
-        pool.shutdown(wait=False)
-        return fut, done, stop
+        """B >= 2: the workload Program's compose and the manifest beside the derives (`row_build.follow_compose`)."""
+        return RB.follow_compose(self, to)
 
     def build(self) -> None:
         scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
@@ -366,11 +329,12 @@ class SingleRow(Row):
         self.tl("build.summary", "start")
         ok = self.guarded("build summary", R.build_summary, self.d)
         wd = ""
+        early = None
         self.tl("build.summary", "end", ("ok", ok))
         if follow is not None:
             fut, done, stop = follow
             open(done if ok == "PASS" else stop, "w").close()
-            rcw = fut.result()
+            rcw, early = fut.result()
             for f in (done, stop):
                 if os.path.exists(f):
                     os.remove(f)
@@ -393,7 +357,7 @@ class SingleRow(Row):
                 self.verdict("build-target", "WAIVED", line, quiet=True)
         mrc = 0
         if ok == "PASS" and os.path.isfile(f"{self.d}/build_request/instances.json.gz"):
-            mrc = self.required_manifest("build")
+            mrc = self.required_manifest("build") if early is None else early
             if mrc == 3:
                 self.verdict("build", "FAIL", f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see {self.d}/manifest.log)")
                 self.tl("stage.build", "end", ("ok", "false"))
@@ -402,6 +366,8 @@ class SingleRow(Row):
             if mrc != 0:
                 ok = "FAIL"
                 self.verdict("build-manifest", "FAIL", "required-value manifest not built (manifest.log)")
+        elif early == 0 and os.path.exists(f"{self.d}/manifest.json"):
+            os.remove(f"{self.d}/manifest.json")
         digest, man = R.build_line(self.d)
         self.verdict("build", ok, f"rc={rc1}/{rc2} wall={wall}s digest={digest} workload_digest={wd[:16]} manifest={man}")
         self.tl("stage.build", "end", ("ok", ok), ("wall_s", wall))

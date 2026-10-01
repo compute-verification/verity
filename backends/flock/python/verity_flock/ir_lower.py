@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from functools import lru_cache, partial
+from functools import lru_cache, partial, reduce
 from typing import Callable, Sequence
 
 import numpy as np
@@ -94,18 +94,22 @@ PIECES: dict[str, Callable] = {
 }
 PIECES.update(tail_pieces.PIECES)
 PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.ml.prims) for the same total function
+# the Boolean core's gates (verity.ir.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
+PIECES["Not_v1"] = lambda C, a: [a[0].inv()]
+GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C, [b[0] for b in x])],
+                 r"Xor(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [reduce(lambda s, b: s ^ b[0], x[1:], x[0][0])]}
 
 
 class _Pieces(dict):
-    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``);
-    ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``)
+    or an arity (:data:`GATE_FAMILIES`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
 
     wrap = None
 
     def _resolve(self, key):
         import re
 
-        for pat, fn in tail_pieces.FAMILIES.items():
+        for pat, fn in (*tail_pieces.FAMILIES.items(), *GATE_FAMILIES.items()):
             if isinstance(key, str) and re.fullmatch(pat, key):
                 self[key] = self.wrap(key, fn) if self.wrap else fn
                 return self[key]

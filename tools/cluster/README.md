@@ -20,8 +20,10 @@ do beside Kueue. Node 1's executor under the one queue is kueue-fold's.
 A lane submits with `research run --queue` (tools/research): it declares the job's class and resources, `cluster submit`
 places it and names the wrappers its node's executor runs it under (`submit.py`): the machine-side runner runs in a capped
 and pinned systemd scope, the job's CPU allocation, so the run's custody finishes before it is released, and a GPU job's
-workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked only while it runs. Node 1's GPUs wait for kueue-fold's executor; such a job goes to node 2 or is
-refused. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
+workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked only while it runs. On node 1 it runs under node 1's
+`gpu-lease`, whose GPUs `n1_lease.py` lends from Kueue, once the description sets its `gpu_executor = "n1-lease"`; until then
+such a job goes to node 2 or is refused. Only a GPU job pinned to node 1 (`--on vy-nebius-1`) goes there, since the submit path
+can't see node 1's lease pool. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
 `kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now.
 
 ## Layout
@@ -41,7 +43,9 @@ src/cluster/
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
 ├── submit.py   the submit path: a declared job's placement and its node executor's wrappers (research run --queue)
 ├── kinds.py    the job-kind registry (kinds/<owner>.toml): a kind's shape, time and question; the held rules as warnings
-└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate
+├── status.py   each node's running, queued and held jobs by owner and key, GPU-h ready, holds, disk and node 1's
+│               unreplayed bundles (release.py's rule), read over SSH; read-only
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
 vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
@@ -81,4 +85,5 @@ uv run cluster submit tools/cluster/descriptions/nebius.toml --run-id R --now T 
 uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
+uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
 ~~~

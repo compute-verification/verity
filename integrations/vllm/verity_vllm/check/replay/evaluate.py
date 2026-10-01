@@ -43,6 +43,11 @@ class _Operands:
 #: (`verity_vllm.pipeline.vu_export`) installs one around its own evaluations and removes it after.
 EVALUATION_TAPS: list[Callable[..., None]] = []
 
+#: the evaluation of every row on another IR, the last one installed: evaluator(pi, row, describe(row), operands) -> {member or port:
+#: words}, with optional ``prewarm(picked)`` (run in the parent before the replay forks) and ``seconds_per_vu`` (the pool's time per
+#: pick).  Empty on every record; the Boolean re-verification (`verity_vllm.pipeline.boolean_replay`) installs one around its replay.
+ROW_EVALUATORS: list[Callable[..., dict[str, np.ndarray]]] = []
+
 
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None], *,
              refs: list[dict[str, Any] | None] | None = None) -> dict[str, np.ndarray]:
@@ -178,6 +183,8 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
         wrefs.append(wref if wsl is not None else None)
     if plan:
         return {}
+    if ROW_EVALUATORS:
+        return ROW_EVALUATORS[-1](pi, r, d, _Operands(inputs, wslices))
     fn = DELEGATES.get(fam)
     if fn is not None:                                                   # a protocol's replay answers for the row (`delegate`)
         member = d["members"][0][0] if d["members"] else "out"

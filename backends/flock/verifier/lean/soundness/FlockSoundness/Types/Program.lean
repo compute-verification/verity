@@ -16,7 +16,8 @@ statement and no unit's gate: a zero leaf's bits, and a leaf cut's bits past its
 - `mapG`, reading each input, `one` and copy of `CB` off `C`: an input off the same input, a copy off its output's row.
 
 Every unit output is an output of both circuits. `pairs` gives one `UnitPair` per unit, so `rowsL1`: at values with 1 on
-`one`, every unit wrong on the Boolean circuit is wrong on its rows. This is `hL1` of `E2E.lean` for every such program.
+`one`, every unit wrong on the Boolean circuit is wrong on its rows. It carries `E2E.lean`'s theorems, which are about the
+rows circuit, to the Boolean circuit (`UProg.flock_e2e_count`, `Types/ProgramE2E.lean`).
 -/
 
 open Flock Flock.DeriveAll

@@ -147,14 +147,16 @@ extern "C" __global__ void __launch_bounds__(1024) hash_tree_small(const Args a)
   }
 }
 
-// hash_leaf with each of a tile's chunks (32 digests) on its own thread, four threads a tile and 32 tiles a CTA of 128, and
+// hash_leaf with each of a tile's chunks (32 digests) on its own thread, four threads a tile and blockDim / 4 tiles a CTA (32
+// at 128 threads, the most cvs holds), and
 // with partial tiles: a tile of r < 64 rows (the decode headline's m = 32) is its 2r digests in ⌈2r / 32⌉ chunks under
-// BLAKE3's tree, as the reference's leaf() hashes it.  Launch ⌈tiles / 32⌉ CTAs of 128.  Same arguments as hash_leaf.
+// BLAKE3's tree, as the reference's leaf() hashes it.  Launch ⌈tiles / (blockDim / 4)⌉ CTAs of a multiple of 4 threads, at
+// most 128.  Same arguments as hash_leaf.
 extern "C" __global__ void __launch_bounds__(128) hash_leaf_p(const Args a) {
   __shared__ uint32_t cvs[32][4][8];
   const int rows = a.i[0], cols = a.i[1], tn = cols / 64, per = cols / 32;
   const int lt = threadIdx.x / 4, ch = threadIdx.x % 4;
-  const int t = blockIdx.x * 32 + lt, tiles = (rows + 63) / 64 * tn;
+  const int t = blockIdx.x * (blockDim.x / 4) + lt, tiles = (rows + 63) / 64 * tn;
   const int ti = t / tn, tj = t % tn;
   const int r = t < tiles ? min(64, rows - 64 * ti) : 0, nd = 2 * r, nch = (nd + 31) / 32;
   uint32_t key[8];

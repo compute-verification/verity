@@ -89,6 +89,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (12:05 AM PDT): a protocol's README is an outline, signposts and its core API, and Lean is the source of
+  truth for a mature protocol. A protocol keeps a `PROTOCOL.md` only while it is experimental (Python is the truth until
+  the Lean catches up), and the PR whose Lean covers it deletes the file.
 - 2026-10-01: whoever lands a train runs `research merge --sweep` after each push, which closes the landed PRs, retargets
   their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared

@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import os
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -157,7 +158,7 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
                GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"))
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
     holder = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", *pause], env=env,
-                              stdout=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, text=True, start_new_session=True)
     waiter = None
     try:
         assert holder.stdout.readline().strip() == "ready"
@@ -169,7 +170,7 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
         assert (gl / "wait.1.99999").exists(), "the adapter reads; it removes nothing (gpu-lease's next reader does)"
         waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "true"],
                                   env={**env, "GPU_LEASE_POLL_S": "3600", "GPU_LEASE_WHO": "bc-waiter"},
-                                  stderr=subprocess.PIPE, text=True)
+                                  stderr=subprocess.PIPE, text=True, start_new_session=True)
         assert waiter.stderr.readline().startswith("gpu-lease: waiting for 1 GPU(s), queued as wait.")
         obs = nebius2.read(0, gl)
         assert [a.id for a in nebius2.allocations(c, obs)] == [a.id]
@@ -178,7 +179,10 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
     finally:
         for p in (waiter, holder):
             if p is not None:
-                p.terminate()
+                try:
+                    os.killpg(p.pid, signal.SIGTERM)    # the waiter's bash alone would leave its `sleep 3600` orphaned
+                except ProcessLookupError:
+                    pass
                 p.wait()
 
 
@@ -220,3 +224,17 @@ def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it
         p.terminate()
         p.wait()
         os.close(lock)
+
+
+def test_a_waiter_pinned_to_more_gpus_than_it_asks_for_is_granted_only_from_them(c, tmp_path):
+    """5:55 PM PDT on 30 Sep: a `gpu-lease 1 --on 2,3,4,5,6,7` request read without its `on=` was granted GPU 0, which gpu-lease
+    can't take, and the node sat idle behind it. `on=` naming more GPUs than the request is its pool."""
+    from cluster.plan import Start, plan
+    line = "pid=355694 n=1 on=2,3,4,5,6,7 run=r1 who=w since=2026-10-01T00:51:49Z max=20 preempt=1"
+    [(j, _)] = nebius2.queue(c, nebius2.Observation(0, {}, (("wait.1.355694", line),)))
+    assert (j.gpus, j.gpu_ids, j.gpu_pool) == (1, (), (2, 3, 4, 5, 6, 7)) and not j.problems(c)
+    [s] = [a for a in plan(c, "vy-nebius-2", [], [j], epoch("2026-10-01T00:52:00Z")) if isinstance(a, Start)]
+    assert s.alloc.gpus[0] in (2, 3, 4, 5, 6, 7)
+    exact = "pid=7 n=2 on=3,5 run=r2 who=w since=2026-10-01T00:51:49Z"
+    [(k, _)] = nebius2.queue(c, nebius2.Observation(0, {}, (("wait.1.7", exact),)))
+    assert (k.gpu_ids, k.gpu_pool) == ((3, 5), ())
