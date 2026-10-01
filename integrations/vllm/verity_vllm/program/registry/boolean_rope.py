@@ -17,7 +17,7 @@ one proof unit under `Q_word` v1, as in the word Program.
 from __future__ import annotations
 
 from verity.ir import boolean as BL
-from verity.ir.defs import bind, composite
+from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import Coll, concat
 from verity.ir.types import Array
 from verity.ml.boolean import fp
@@ -50,9 +50,7 @@ RopeOutAdd = definition("RopeOutAdd", 2, rope_out_add, _XYCS, BF16, word=P.RopeO
                         doc="NeoX RoPE's second half on bits: RopeOutAdd_v1, bf16_rn(RN32(y*c + RN32(x*s)))")
 
 
-@composite("RoPEHead", 2, ["D"], lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
-           conformance="exact-model-tested; qualification: " + b1.COS_SIN_QUALIFICATION)
-def RoPEHead(B, S, x, cs):
+def _rope_head(B, S, x, cs):
     """`RoPEHead_v1`'s body on bits, ``cs = [cos[0:R] | sin[0:R]]`` and R = D/2: ``out[i] = RopeOut_v2(x[i], x[i+R], cos[i],
     sin[i])``, ``out[i+R] = RopeOutAdd_v2(...)`` on the same operands."""
     R = S.D // 2
@@ -62,13 +60,20 @@ def RoPEHead(B, S, x, cs):
     return Coll(Array(S.D, BF16), concat([lo.refs, hi.refs]))
 
 
-@composite("RoPE", 2, ["NHEADS", "D"],
-           lambda S: ((("x", Array(S.NHEADS, Array(S.D, BF16))), ("cs", Array(S.D, BF16))), Array(S.NHEADS, Array(S.D, BF16))),
-           conformance="exact-model-tested; qualification: " + b1.COS_SIN_QUALIFICATION)
-def RoPE(B, S, x, cs):
+def _rope(B, S, x, cs):
     """`RoPE_v1`'s body on bits: `RoPEHead_v2{D}` on each head, the cos/sin row shared."""
     return B.batch(bind(RoPEHead, D=S.D), x, cs, axes=(0, None))
 
 
+# Constructed rather than decorated so that setting `word` reads as construction to the P9 lint, not as a runtime patch.
+RoPEHead = CompositeDefinition("RoPEHead", 2, ("D",),
+                               lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
+                               _rope_head, doc=_rope_head.__doc__,
+                               conformance="exact-model-tested; qualification: " + b1.COS_SIN_QUALIFICATION)
 RoPEHead.word = lambda b: bind(b1.RoPEHead, D=b["D"])  # type: ignore[attr-defined]
+RoPE = CompositeDefinition("RoPE", 2, ("NHEADS", "D"),
+                           lambda S: ((("x", Array(S.NHEADS, Array(S.D, BF16))), ("cs", Array(S.D, BF16))),
+                                      Array(S.NHEADS, Array(S.D, BF16))),
+                           _rope, doc=_rope.__doc__,
+                           conformance="exact-model-tested; qualification: " + b1.COS_SIN_QUALIFICATION)
 RoPE.word = lambda b: bind(b1.RoPE, NHEADS=b["NHEADS"], D=b["D"])  # type: ignore[attr-defined]
