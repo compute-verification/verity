@@ -1178,7 +1178,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
                       f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
-    GL.acquire(TL)            # a leased Commit's GPU from here to its exit (pipeline.gpu_lease); the target below reads the device
+    GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
                 target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
@@ -1842,8 +1842,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
                 "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
-                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30,
-                            "nvidia_smi_used_mib": nvidia_smi_used_mib()},
+                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
@@ -1919,6 +1918,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # R14 BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args)
+                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and _HOT is None, after=_wstage)   # nothing below reads the device
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))
