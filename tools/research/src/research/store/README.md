@@ -554,6 +554,36 @@ from its record. A failure whose key had expired says so in the marker's `error`
   the catalog from the remote, require every attempt tied to the pod to be preserved, and read the pod guard's state for its run
   dirs: without a guard state younger than 10 min, custody is unknown and nothing is terminated.
 
+### 10.2 Retention of node data — `research keep`, `research retention` (`retention.py`)
+
+Nothing under a node's `/workspace` is deleted without a record that allows it. A record (`research/retention/v0`) is a sidecar,
+`<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data: `path` (relative to the root), `node`, `owner` (a
+lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority` (`low|normal|high|keep`), `preserved` (an art id or
+null), `regenerate` (a command or null), `why`. It covers everything beneath its path. A run dir whose `.custody` says
+`preserved: true` and which has no sidecar has an implicit record: owner its lane, else its campaign, else `runner`; `preserved` its
+run record; `expires` 7 d after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing is written for it, and a sidecar wins.
+
+~~~text
+research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
+research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
+research retention report [--root /workspace] [--depth 2] [--json]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+~~~
+
+`--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (§7) before recording its id; a failed push
+records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded path and every
+area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
+
+Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
+then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
+expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
+`/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are
+read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
+count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
+for the run dir (§10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads no remote; either
+way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of unowned,
+unpreserved bitsets that nobody could decide to delete.
+
 ## 11. Known kinds (`kinds.py`)
 
 ~~~text
@@ -568,6 +598,7 @@ proof/v1                 payload = proof bytes; meta {statement_digest, backend,
 fixture/v1               a repo-replicated input (golden records, instances); payload file/tree
 run-files/v1             the files a result.json pointed at, as one tree
 run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
+node-data/v1             a node's /workspace path, put by `research keep --preserve` (§10.2): payload its file or tree; meta {path, node, owner}
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
@@ -595,5 +626,5 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 ## 13. Deferred (each arrives with a named failure)
 
 `diff` (F9), `independent` (U3, descriptive not authoritative: shared closure files / lockfiles / inputs), `impact` (F4),
-`gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
+pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
 three-tier order above.
