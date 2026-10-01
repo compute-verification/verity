@@ -89,6 +89,8 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (12:37 PM PDT): lanes work around the clock, so timelines are planned in hours: a pilot, trial or rollout gets
+  hours (about eight for a process pilot), not the days or weeks a human team would give it.
 - 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
   message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (12:05 AM PDT): a protocol's README is an outline, signposts and its core API, and Lean is the source of
