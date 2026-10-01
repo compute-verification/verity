@@ -10,10 +10,12 @@
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
 # env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
-#      pin to, e.g. 96-111)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices). Node 1's dispatched jobs all
-#      share 96-159, so a job holds a lock on every slice it pins (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and
-#      waits for slices another job holds  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
-#      STEP=0 LABEL=baseline (the hillclimb step and what changed)  HILL_NODE=vy-nebius-1
+#      pin to, inside the job's affinity)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices; pass CPUS=16).
+#      Node 1's dispatcher starts every `provers` task on the same cores (128-175), so a job holds a lock on every slice it pins
+#      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds  GATE=1  WARM=1  RUNS=3
+#      PEAK_ID=rtx-pro-6000-server/bf16
+#      STEP=0 LABEL=baseline (the hillclimb step and what changed)  QUESTION= (the job's research question, else the
+#      campaign's)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
 #      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the gate's and the step's statements into FLOCK_STAGE_CACHE,

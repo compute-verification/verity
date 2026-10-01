@@ -467,7 +467,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "session": (out.get("session") or {}).get("label"), "scheme": SCHEMES.get(out.get("coins")),
             # flock-circuit is both the prover (`prove`) and the verifier (`serve`)
             "impl": {"commit": out["commit"]["commit"], "prover_sha256": _read(a.binary_sha), "verifier_sha256": _read(a.binary_sha)},
-            "flags": flags, "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
+            "flags": flags, "question": os.environ.get("QUESTION") or QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
             "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why")}
