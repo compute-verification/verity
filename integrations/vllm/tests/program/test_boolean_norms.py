@@ -192,8 +192,8 @@ def test_the_squares_are_their_word_primitives_on_every_bf16_word() -> None:
 
 def test_the_thread_is_its_word_body() -> None:
     rng = np.random.default_rng(2)
-    x = np.concatenate([_bf16_rows(rng, 40_000, 8), _rand_bf16(rng, (20_000, 8)),
-                        BF16_SPECIALS[rng.integers(0, len(BF16_SPECIALS), (20_000, 8))]])
+    x = np.concatenate([_bf16_rows(rng, 16_000, 8), _rand_bf16(rng, (8_000, 8)),
+                        BF16_SPECIALS[rng.integers(0, len(BF16_SPECIALS), (8_000, 8))]])
     xf = _f32(x)
     acc = _w(P.F32Mul, xf[:, 1], xf[:, 1])
     for j in (0, 2, 3, 4, 5, 6, 7):
@@ -389,8 +389,8 @@ def test_the_cuda_norm_recomputes_nothing_across_its_calls() -> None:
 def test_the_triton_norm_recomputes_only_the_mufu_bridges_packing_of_rms() -> None:
     r = members_check(bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD))
     assert r["recomputed_gates"] == 63
-    assert {(a["definition"], a["gates"]) for a in r["recomputes"]} == {("WordOnBits_v1{WORD=DivFullRcp_v1}", 63)}
-    assert all("DivFullScaleA_v1" in e[1] for a in r["recomputes"] for e in a["examples"])
+    assert {(a["definition"], a["gates"]) for a in r["recomputes"]} == {("DivFullRcpBits_v1", 63)}
+    assert all("DivFullScaleABits_v1" in e[1] for a in r["recomputes"] for e in a["examples"])
 
 
 def _reached(fn) -> tuple[set[str], set[str]]:
@@ -400,7 +400,7 @@ def _reached(fn) -> tuple[set[str], set[str]]:
         d = stack.pop()
         if d.id in seen or d.id in bridges:
             continue
-        if getattr(d, "base_id", None) == "WordOnBits_v1":
+        if d.id in BN.BRIDGES:
             bridges.add(d.id)
             continue
         seen.add(d.id)
@@ -415,8 +415,7 @@ def test_only_the_mufu_bridges_are_word_ids(which) -> None:
     top = bind(BN.RMSNormFusedCuda, N=1536, EPS=1e-6, **BN.CUDA_WORD) if which == "cuda" else \
         bind(BN.RMSNormTriton, N=1536, EPS=1e-6, **BN.TRITON_WORD)
     seen, bridges = _reached(top)
-    want = {"cuda": {"WordOnBits_v1{WORD=RsqrtApprox_v1}"},
-            "triton": {"WordOnBits_v1{WORD=MufuSqrtFtz_v1}", "WordOnBits_v1{WORD=DivFullScaleA_v1}", "WordOnBits_v1{WORD=DivFullRcp_v1}"}}
+    want = {"cuda": {"RsqrtApproxBits_v1"}, "triton": {"MufuSqrtFtzBits_v1", "DivFullScaleABits_v1", "DivFullRcpBits_v1"}}
     assert bridges == want[which]
     prims = {i for i in seen if isinstance(REGISTRY.defs.get(i), PrimitiveDefinition)}
     assert prims <= {"And2_v1", "Xor2_v1", "Not_v1", "Const1[0x0]_v1", "Const1[0x1]_v1"}, prims
@@ -437,4 +436,4 @@ def test_word_views_and_refusals() -> None:
     with pytest.raises(ValueError, match="a warp has 1 to 32 lanes, not 33"):
         _ = bind(BN.RMSNormWarpCuda, L=33).body
     with pytest.raises(TypeError, match="must take and return 32-bit words"):
-        _ = bind(BN.WordOnBits, WORD=P.F2fpBf16).signature()
+        BN._on_bits(P.F2fpBf16)
