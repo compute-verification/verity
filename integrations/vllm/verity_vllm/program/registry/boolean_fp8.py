@@ -1,18 +1,21 @@
-"""The served FP8 linear on bits: `fp8`'s composites, version 2 (the dot version 3, versions 1 and 2 being the word dots),
-their word bodies line for line over Boolean Definitions, so each one's word view is its word composite at the same statics
-(`elementwise.on_bits`).
+"""The served FP8 linear on bits: `fp8`'s composites, version 2 (the two dots versions 3 and 4, versions 1 and 2 being the
+word dots), their word bodies line for line over Boolean Definitions, so each one's word view is its word composite at the same
+statics (`elementwise.on_bits`; a `DOT` static, a Boolean e4m3 step, read as its word view).
 
     Fp8RowAbsMax_v2{K}, Fp8RowScale_v2, Fp8ActQuant_v2{K}           the per-token activation quantisation
     DotE4m3_v3{K}, ScaledMmFp8Coordinate_v2{K,BIAS}, ScaledMmFp8_v2{K,N,BIAS}, QuantLinearFp8_v2{K,N,BIAS}
                                                                     the per-tensor cutlass GEMM (k32 wgmma chain, fused epilogue)
+    DotE4m3_v4{K,DOT}, ScaledMmFp8NoSwapCoordinate_v2{K,BIAS,DOT}, ScaledMmFp8NoSwap_v2{K,N,BIAS,DOT}
+                                                                    the same GEMM without swap_ab over the step DOT (cc 12.0)
     Fp8GroupScale_v2{G}, Fp8GroupQuant_v2{K,G}, ScaledMmFp8BlockCoordinate_v2{K,G}, ScaledMmFp8Block_v2{K,N,G},
     ScaledMmFp8BlockCoordinateGivenScale_v2{K,G}, ScaledMmFp8BlockSharedScaleTile_v2{K,G}, ScaledMmFp8BlockSharedScale_v2{K,N,G}
                                                                     the block-scaled linear (128x128 weight blocks)
 
 Every word is its bits (`verity.ir.boolean.word_type`): bf16 `Array<16, Value<1>>`, f32 `Array<32, Value<1>>`, e4m3
 `Array<8, Value<1>>`. The callees are the Boolean versions of the word bodies': `verity.ml.boolean.scalar`'s f32 arithmetic,
-max / min and casts, `verity.ml.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`; the word constants (+0, 448,
--448, the minimum scale, the group quantiser's eps) are written with the constant bits.
+max / min and casts, `verity.ml.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` (or `DOT`, such as `BlackwellE4m3QmmaDot32_v2`) and
+`F2fpBf16_v2`; the word constants (+0, 448, -448, the minimum scale, the group quantiser's eps) are written with the constant
+bits.
 """
 from __future__ import annotations
 
@@ -153,6 +156,54 @@ QuantLinearFp8V2 = EW.on_bits(
                 + ((("b", Array(S.N, BF16)),) if S.BIAS else ())),
                Tuple(Array(S.K, E4M3), F32, Array(S.N, BF16))),
     _quant_linear, F8.QuantLinearFp8)
+
+
+def _dot_e4m3_steps(B, S, xq, wq):
+    """`DotE4m3_v2`'s body on bits: K/32 `DOT` steps (a Boolean e4m3 k32 step) in ascending k from +0."""
+    assert S.K % 32 == 0, S.K
+    acc = _Bits(B).word(0, 32)
+    for s in range(S.K // 32):
+        acc = B.call(S.DOT, acc, xq[32 * s:32 * s + 32], wq[32 * s:32 * s + 32])
+    return acc
+
+
+DotE4m3V4 = EW.on_bits("DotE4m3", 4, ["K", "DOT"], lambda S: ((("xq", Array(S.K, E4M3)), ("wq", Array(S.K, E4M3))), F32),
+                       _dot_e4m3_steps, F8.DotE4m3V2, lifted=["DOT"])
+
+
+def _no_swap_coordinate(B, S, xq, sx, wrow, sw, *bias):
+    """`ScaledMmFp8NoSwapCoordinate_v1`'s body on bits: `bf16(s_x * (s_w * acc))` or `bf16(fma(s_x, s_w * acc, f32(b)))`, `acc`
+    the `DotE4m3_v4{K, DOT}` chain."""
+    acc = B.call(bind(DotE4m3V4, K=S.K, DOT=S.DOT), xq, wrow)
+    t = B.call(SC.F32Mul, sw, acc)
+    if S.BIAS:
+        y = B.call(SC.F32Fma, sx, t, B.call(SC.Bf16ToF32, bias[0]))
+    else:
+        y = B.call(SC.F32Mul, sx, t)
+    return B.call(BG.F2fpBf16, y)
+
+
+ScaledMmFp8NoSwapCoordinateV2 = EW.on_bits(
+    "ScaledMmFp8NoSwapCoordinate", 2, ["K", "BIAS", "DOT"],
+    lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32))
+                + ((("b", BF16),) if S.BIAS else ())), BF16),
+    _no_swap_coordinate, F8.ScaledMmFp8NoSwapCoordinate, lifted=["DOT"])
+
+
+def _no_swap(B, S, xq, sx, w, sw, *bias):
+    """`ScaledMmFp8NoSwap_v1`'s body on bits: the N coordinates (`ScaledMmFp8NoSwapCoordinate_v2`) over the weight rows."""
+    coord = bind(ScaledMmFp8NoSwapCoordinateV2, K=S.K, BIAS=S.BIAS, DOT=S.DOT)
+    if S.BIAS:
+        return B.batch(coord, xq, sx, w, sw, bias[0], axes=(None, None, 0, None, 0))
+    return B.batch(coord, xq, sx, w, sw, axes=(None, None, 0, None))
+
+
+ScaledMmFp8NoSwapV2 = EW.on_bits(
+    "ScaledMmFp8NoSwap", 2, ["K", "N", "BIAS", "DOT"],
+    lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", F32))
+                + ((("b", Array(S.N, BF16)),) if S.BIAS else ())),
+               Array(S.N, BF16)),
+    _no_swap, F8.ScaledMmFp8NoSwap, lifted=["DOT"])
 
 
 def _group_scale(B, S, x):

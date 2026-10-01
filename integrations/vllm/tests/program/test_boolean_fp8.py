@@ -14,6 +14,7 @@ from verity.evaluation.reference import standalone_call
 from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import bind
+from verity.ml.boolean import gemm as BG
 from verity.ml.boolean import trace as TR
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_fp8 as BF
@@ -34,22 +35,33 @@ PINS = {
         (8740864, 15709696, 1140864, "f045320bcfd0aea545792a3d334b482a360eb340d81539159f9264edbb64c92b"),
     "ScaledMmFp8BlockSharedScale_v2{K=256,N=128,G=128}":
         (8123644, 14528596, 1112924, "92e8e7e2bc4cc9ba78d6993f67b2eef88277f8106d097bb3147ab7ed5ea41b90"),
+    "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}":
+        (18256, 34804, 2050, "6e0d4f336ec3e4c04b1860d74083d883c4f64862b3bea5295a907cc124672b83"),
+    "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}":
+        (50474, 94830, 4884, "7f57b9e8cd9f74b25f8d46bbe30974ae1b1dc50cabd0bfe3c2774c49a8828f38"),
 }
+#: the cc 12.0 (sm_120 mma.sync) and Hopper (wgmma) e4m3 k32 steps on bits, the no-swap linear's DOT
+SM120, HOPPER = BG.BlackwellE4m3QmmaDot32, BG.HopperE4m3QgmmaDot32
 
 PINNED = [bind(BF.Fp8RowScaleV2), bind(BF.DotE4m3V3, K=64), bind(BF.ScaledMmFp8CoordinateV2, K=64, BIAS=True),
           bind(BF.Fp8ActQuantV2, K=256), bind(BF.QuantLinearFp8V2, K=256, N=2, BIAS=True), bind(BF.Fp8GroupQuantV2, K=256, G=128),
           bind(BF.ScaledMmFp8BlockCoordinateV2, K=256, G=128), bind(BF.ScaledMmFp8BlockV2, K=256, N=128, G=128),
-          bind(BF.ScaledMmFp8BlockSharedScaleV2, K=256, N=128, G=128)]
+          bind(BF.ScaledMmFp8BlockSharedScaleV2, K=256, N=128, G=128), bind(BF.DotE4m3V4, K=64, DOT=SM120),
+          bind(BF.ScaledMmFp8NoSwapV2, K=64, N=2, BIAS=True, DOT=SM120)]
 
 #: every composite once (the quantisers at the kernel's smallest row, K = 256; the block-scaled GEMMs at G = 32, two k tiles and
-#: two weight blocks), with and without bias
+#: two weight blocks), with and without bias; the no-swap linear on both steps
 AGREEMENT = [bind(BF.Fp8RowScaleV2), bind(BF.Fp8RowAbsMaxV2, K=256), bind(BF.Fp8ActQuantV2, K=256), bind(BF.DotE4m3V3, K=64),
              bind(BF.ScaledMmFp8CoordinateV2, K=64, BIAS=True), bind(BF.ScaledMmFp8CoordinateV2, K=64, BIAS=False),
              bind(BF.ScaledMmFp8V2, K=64, N=3, BIAS=True), bind(BF.ScaledMmFp8V2, K=32, N=2, BIAS=False),
              bind(BF.QuantLinearFp8V2, K=256, N=2, BIAS=True), bind(BF.Fp8GroupScaleV2, G=32),
              bind(BF.Fp8GroupQuantV2, K=64, G=32), bind(BF.ScaledMmFp8BlockCoordinateV2, K=64, G=32),
              bind(BF.ScaledMmFp8BlockV2, K=64, N=64, G=32), bind(BF.ScaledMmFp8BlockCoordinateGivenScaleV2, K=64, G=32),
-             bind(BF.ScaledMmFp8BlockSharedScaleTileV2, K=64, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=64, N=64, G=32)]
+             bind(BF.ScaledMmFp8BlockSharedScaleTileV2, K=64, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=64, N=64, G=32),
+             bind(BF.DotE4m3V4, K=64, DOT=SM120), bind(BF.DotE4m3V4, K=64, DOT=HOPPER),
+             bind(BF.ScaledMmFp8NoSwapCoordinateV2, K=64, BIAS=True, DOT=SM120),
+             bind(BF.ScaledMmFp8NoSwapCoordinateV2, K=64, BIAS=False, DOT=HOPPER),
+             bind(BF.ScaledMmFp8NoSwapV2, K=64, N=3, BIAS=True, DOT=SM120)]
 
 #: bf16 words that reach the quantiser's guards: signed zeros, subnormals, the normal range's ends, infinities, NaNs
 BF16_SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x807F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1], np.uint16)
@@ -101,7 +113,9 @@ def test_pinned_counts_and_digests(target) -> None:
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
-    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, target.bindings)
+    lifted = {k: (TR.word_of(x) if k == "DOT" else x) for k, x in target.bindings.items()}
+    want = 2 if (target.defn.name, target.defn.version) == ("DotE4m3", 4) else 1
+    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, want, lifted)
     n = 64 if BS.compile(target).counts["and"] > 200_000 else 400
     inputs = _inputs(word, n, sum(map(ord, target.id)))
     got, ref = _flat(BS.evaluate_words(target, *inputs)), _flat(E.evaluate_batch(word, *inputs))
