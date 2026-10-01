@@ -8,9 +8,9 @@
    four rows' raw streams.  check_form.py holds them to #295's `D3Family.side` and `xof` (SHAKE256), or BLAKE3's XOF.
 2. The unit at each SHAPES entry (p: m = n = k = 8,192; d: m = 32): X_q (m x k) and W (n x k) from gen_any (seeds 3, 4),
    formed by each XOF of XOFS into run.py's X~ and Y~.  Arms, each REPS pairs interleaved with the plain GEMM at K = k (the
-   baseline), each a dependent chain of CHAIN_P / CHAIN_D: the stages (a_stream, a_rows, b_stream, b_rows: SHAKE's
-   streams are their own kernel, BLAKE3's are inside the rows kernel), form (A then B), and unit (form, then the GEMM arm
-   of each UNIT_ARMS entry arm:S).  After each unit arm, one more call after C and the digests are poisoned, and its
+   baseline), each a dependent chain of CHAIN_P / CHAIN_D: the stages (SHAKE's a_stream, b_stream and streams, both
+   sides' in one launch, its own kernel; BLAKE3's streams are inside the rows kernel; a_rows, b_rows), form (the streams,
+   then A's rows and B's), and unit (form, then the GEMM arm of each UNIT_ARMS entry arm:S).  After each unit arm, one more call after C and the digests are poisoned, and its
    sampled lanes go to OUT/form/arms.json in check.py's format (a shape entry per XOF, its `xof` named), then a
    negative control (poisoned, nothing launched).
 
@@ -200,7 +200,9 @@ def perm_words(k: int) -> tuple[bytes, bytes]:
 class Side:
     """One side's rows (A: X~'s rows from X_q's, B: Y~'s from W's) formed into `out` (rows `pitch` bytes apart)."""
 
-    def __init__(self, d: Dev, rows: int, k: int, left: bool, xof: str, codes: int, out: int, pitch: int):
+    def __init__(self, d: Dev, rows: int, k: int, left: bool, xof: str, codes: int, out: int, pitch: int,
+                 at: tuple[int, int] | None = None):
+        """`at`: SHAKE's message lanes and c buffers, when the side's rows sit in a joint pair's (`Unit`)."""
         self.d, self.rows, self.k, self.left, self.xof = d, rows, k, left, xof
         self.codes, self.out, self.pitch = codes, out, pitch
         msgs = [message("E1" if left else "F1", line) for line in range(rows)]
@@ -209,8 +211,12 @@ class Side:
             self.nb = len(blob[0]) // 136
             if any(len(b) != 136 * self.nb for b in blob):
                 raise SystemExit("rows' messages absorb in different numbers of blocks")
-            self.lanes = d.put(b"".join(blob))
-            self.c = d.alloc(rows * k * 2)
+            blob = b"".join(blob)
+            if at:
+                self.lanes, self.c = at
+                d.ck("cuMemcpyHtoD_v2", pc.u64(self.lanes), C.c_char_p(blob), len(blob))
+            else:
+                self.lanes, self.c = d.put(blob), d.alloc(rows * k * 2)
             self.roots = 0
         else:
             self.nb, self.lanes, self.c = 0, 0, 0
@@ -241,6 +247,32 @@ class Side:
         got = self.d.read(out, rows * n)
         self.d.free(out)
         return got
+
+
+class Unit:
+    """Both sides of a unit: X_q's rows into X~ and W's into Y~.  Under SHAKE the two sides' streams are one launch (one
+    thread a row over A's rows then B's), since each row's squeeze is sequential and its latency, not the rows' count,
+    sets the stream's time."""
+
+    def __init__(self, d: Dev, x, xof: str, ca: int, cb: int):
+        m, n, k = x.rows, x.n, x.k
+        self.d, self.rows, self.k, self.xof = d, m + n, k, xof
+        self.nb, self.lanes, self.c, at_a, at_b = 0, 0, 0, None, None
+        if xof == "shake":
+            self.nb = len(shake_blocks(message("E1", 0))) // 136
+            self.lanes, self.c = d.alloc((m + n) * self.nb * 136), d.alloc((m + n) * k * 2)
+            at_a, at_b = (self.lanes, self.c), (self.lanes + m * self.nb * 136, self.c + m * k * 2)
+        self.A = Side(d, m, k, True, xof, ca, x.x, x.K, at_a)
+        self.B = Side(d, n, k, False, xof, cb, x.y, x.K, at_b)
+
+    def streams(self) -> None:
+        if self.xof == "shake":
+            self.d.launch("form_c_shake", -(-self.rows // 32), 32, 0, p=(self.lanes, self.c), i=(self.rows, self.k, self.nb))
+
+    def run(self) -> None:
+        self.streams()
+        self.A.form_rows()
+        self.B.form_rows()
 
 
 def gen_any(d: Dev, ptr: int, count: int, seed: int) -> None:
@@ -297,15 +329,15 @@ def shape(d: Dev, nv, kind: str, xofs: list[str], reps: int) -> list[dict]:
     base = lambda: x.launch("plain", 0, k, 0)
     out = []
     for xof in xofs:
-        A = Side(d, m, k, True, xof, ca, x.x, x.K)
-        B = Side(d, n, k, False, xof, cb, x.y, x.K)
+        U = Unit(d, x, xof, ca, cb)
+        A, B = U.A, U.B
         res = {"kind": kind, "xof": xof, "m": x.m, "rows": m, "n": n, "k": k, "K": x.K, "T": x.K // 32, "tm": x.tm,
                "bn": x.bn, "nct": x.nct, "tiles": x.tiles, "grid": x.grid, "seeds": [SEED_A, SEED_B], "formed": True,
                "context": {key: v.hex() if isinstance(v, bytes) else v for key, v in CONTEXT.items()},
                "layout": ncp.layout(kind), "arms": [], "timing": []}
-        stages = [("a_rows", A.form_rows), ("b_rows", B.form_rows), ("form", lambda: (A.run(), B.run()))]
+        stages = [("a_rows", A.form_rows), ("b_rows", B.form_rows), ("form", U.run)]
         if xof == "shake":
-            stages = [("a_stream", A.stream), ("b_stream", B.stream)] + stages
+            stages = [("a_stream", A.stream), ("b_stream", B.stream), ("streams", U.streams)] + stages
         for name, body in stages:
             before = nv.read()
             got = ncp.interleaved(d, nv, body, base, reps, chain)
@@ -315,7 +347,7 @@ def shape(d: Dev, nv, kind: str, xofs: list[str], reps: int) -> list[dict]:
             emit({"part": "form", "kind": kind, "xof": xof, "arm": name, "ms": round(row["ms"], 4),
                   "base_ms": round(row["base_ms"], 4)})
         for arm, S in unit_arms():
-            body = lambda arm=arm, S=S: (A.run(), B.run(), x.launch(arm, S, x.K, 0))
+            body = lambda arm=arm, S=S: (U.run(), x.launch(arm, S, x.K, 0))
             before = nv.read()
             got = ncp.interleaved(d, nv, body, base, reps, chain)
             row = {"arm": f"unit_{arm}", "gemm": arm, "S": S, "ms": statistics.median(got["reps"]),
