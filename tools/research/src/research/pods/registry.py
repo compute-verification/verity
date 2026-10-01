@@ -14,7 +14,8 @@ agents registering two pods write two files, so nothing is ever hand-merged; in 
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
 Where it is read (`registry_dir`): `$RESEARCH_MACHINES_D` when set (`none` turns it off), else `<notes>/machines.d` on a machine
-that has no machines.toml (a cloud VM), else nowhere -- the laptop reads machines.toml alone until the switch-over sets the
+that has no machines.toml (a cloud VM; with RESEARCH_NOTES_TOKEN set, a missing notes clone is cloned first:
+`notes_sync.ensure_clone`), else nowhere -- the laptop reads machines.toml alone until the switch-over sets the
 variable.  Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
 machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
@@ -130,6 +131,11 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
     d = registry_dir(machines_toml, environ)
     if d is None:
         return toml_machines
+    if REGISTRY_ENV not in (os.environ if environ is None else environ):
+        from ..notes_sync import ensure_clone  # noqa: PLC0415
+
+        if line := ensure_clone(notes_root(environ)):
+            print(line, file=sys.stderr)
     entries, bad = load_dir(d)
     out = dict(toml_machines)
     for name, why in bad.items():
