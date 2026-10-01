@@ -236,6 +236,9 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
         return _build_in_turn(tasks, after)
+    own = _own_budget()
+    if own is not None:
+        return _build_forked(tasks, jobs, after, own, log)
     t0 = time.time()
     with _pool_lock():
         if log and time.time() - t0 >= 1:
@@ -244,6 +247,28 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
         if head is None:
             return _build_in_turn(tasks, after)
         return _build_forked(tasks, jobs, after, head, log)
+
+
+CGROUP_MEMORY_MAX = "/sys/fs/cgroup/memory.max"
+MEMINFO = "/proc/meminfo"
+
+
+def _own_budget() -> int | None:
+    """The memory this process's builds may budget without the machine's pool lock: `BUILD_RAM_BUDGET_GB` (capped by the headroom),
+    else the headroom of a cgroup whose `memory.max` is below the host's RAM; None when the headroom is the host's, shared."""
+    head = _headroom()
+    env = os.environ.get("BUILD_RAM_BUDGET_GB")
+    if env:
+        b = int(float(env) * 2**30)
+        return b if head is None else min(b, head)
+    try:
+        with open(CGROUP_MEMORY_MAX) as f:
+            lim = f.read().strip()
+        with open(MEMINFO) as f:
+            total = next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemTotal")
+    except (OSError, StopIteration, ValueError, IndexError):
+        return None
+    return head if lim.isdigit() and int(lim) < total else None
 
 
 def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
