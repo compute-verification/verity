@@ -1,4 +1,4 @@
-"""Authored examples for the torch frontend (acceptance material, `docs/frontend-pytorch-2026-09-07.md` §5–§6).
+"""Authored examples for the torch frontend (acceptance material, frontend design §5–§6).
 
 Part 1 re-authors composites of TA1's registry (`verity_vllm/program/registry/b1.py`) in PyTorch. Their `Program`
 digests must equal the digests of TA1's hand-built definitions (same `Name_vN{statics}`, same parameter names,

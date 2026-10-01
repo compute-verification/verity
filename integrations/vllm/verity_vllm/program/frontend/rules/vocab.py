@@ -13,6 +13,7 @@ from typing import Callable
 
 from verity.ir.defs import bind as ir_bind
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
@@ -142,6 +143,7 @@ from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
 
 
 def _norm_v2(role: str):
@@ -243,6 +245,13 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     from verity_vllm.program.registry import moe_pad as _mp  # noqa: PLC0415
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
+
+def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
+    if FA2_MASKED_FROM is None:
+        raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
+    from verity_vllm.program.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+
 # -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
@@ -258,10 +267,15 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
-           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; an optional
-           # static, so the role and its note -- and with them this vocabulary's version -- stay as they were)
-           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None:
-               ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
+           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
+           # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
+           # this vocabulary's version -- stay as they were; a `CAP` with an `FA2_MASKED_FROM` binds the softcapped chain
+           # (`AttentionSoftcap_v2`), and a `CAP` without one has no kind
+           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None, CAP=None:
+               _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP) if CAP is not None
+               else ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+               if FA2_MASKED_FROM is not None
+               else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
            # [R13 X-08] `scale_tensor` (generic bf16 row x 0-d bf16 tensor) and [R15 dense] the other op-shaped elementwise / activation /
            # softcap kinds come from `_dense_kinds()` above (promoted from quarantine.dense; Gemma-2's ops were the first instances)
@@ -275,6 +289,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_router_topk_ordered_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKOrderedNorm, E=E, TOPK=TOPK, VPT=VPT),
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
+           # the same launches with the k16 step as a static, bound when the active target's fused_moe_kernel runs another step than
+           # the Ampere/Ada one (`registry.targets.moe_expert_dot`); those above keep the `_v1` records' digests
+           "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
+           "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
@@ -305,7 +323,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G)},
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
+           # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
+           # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -329,6 +350,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm": "MoeExpertGemm_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=False) for one (token, slot) pair — bf16_rne(DotBf16(x, W[e][n,:])), "
                               "e an I32 value operand (gather over the expert axis inside the body)",
            "moe_expert_gemm_w": "MoeExpertGemmW_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=True) — bf16_rne(f32mul(DotBf16(x, W[e][n,:]), g)), g the pair's routed weight",
+           "moe_expert_gemm_dot": "MoeExpertGemm_v2{E,K,N,DOT}: MoeExpertGemm_v1 with the target's k16 step DOT — bf16_rne(DotBf16_v2{K,DOT}(x, W[e][n,:]))",
+           "moe_expert_gemm_w_dot": "MoeExpertGemmW_v2{E,K,N,DOT}: MoeExpertGemmW_v1 with the target's k16 step DOT — "
+                                    "bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W[e][n,:]), g))",
            "moe_sum": "MoeSum_v1{TOPK,H}: _moe_C.moe_sum — per token, ascending-k f32 sum of the TOPK weighted expert rows from +0, one bf16 RNE",
            "moe_ffn_fixed": "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}: [R17-42 padded] the whole fused block of one token from its router logits -- "
                             "MoeRouterTopK_v1 -> ALL E MoeExpertBody_v1{H,I} on their own weights (g_e the routed weight of the slot the router "
@@ -344,7 +368,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
-                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs"})
+                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
+           "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
+                              "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
+                              "bf16(w * (rstd * (x - mean)) + b)"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

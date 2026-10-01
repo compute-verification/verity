@@ -2,7 +2,7 @@
 each reproduced here as a plain torch module (no `transformers` import) with the op pattern the exported graph carries, checked
 for acceptance (and evaluation against torch CPU where the pattern computes something) AND a neighbouring negative that must
 stay refused. Op forms verified against `torch.export` of `transformers 5.16.1` `LlamaForCausalLM` / `GPT2LMHeadModel` (sdpa, f32)
-on 2026-09-09 (docs/vllm-poc/derive-hf5-report.md §1)."""
+on 2026-09-09."""
 from __future__ import annotations
 
 import math
