@@ -124,12 +124,14 @@ fi
 # the session's points, one after another (P: each one's directory under out/ and the scratch, none with one point); a point
 # that fails ends the session
 pdir() { [ "$POINTS" = 1 ] || echo p$1/; }
+# RESIDENT=1 (with POINTS > 1): one prover process serves every point (gemm_hill.py resident), its statement built once
+RES_SOCK=; [ "${RESIDENT:-0}" = 1 ] && [ "$POINTS" -gt 1 ] && RES_SOCK=/tmp/hill-resident-$$.sock
 ran=0
 for i in $(seq 0 $((POINTS - 1))); do
   [ $ok = 1 ] || break
   P=$(pdir $i); mkdir -p $R/out/$P
   ph sweep${P:+-p$i} start
-  OUT=$S/${P}m35 RESEARCH_RUN_DIR=$S/${P}m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/${P}stamps.tsv --" \
+  OUT=$S/${P}m35 RESEARCH_RUN_DIR=$S/${P}m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/${P}stamps.tsv --${RES_SOCK:+ python3 $REPO/backends/flock/pod/gemm_hill.py resident --sock $RES_SOCK --phases $R/out/phases.tsv --}" \
     bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
     WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/${P}sweep.log 2>&1 || ok=0
   ph sweep${P:+-p$i} end
@@ -138,6 +140,7 @@ for i in $(seq 0 $((POINTS - 1))); do
   python3 backends/flock/pod/gemm_hill.py key --binary-sha $R/out/${P}m35/binary.sha256 --out $R/out/${P}key.json
   ran=$((ran + 1))
 done
+[ -n "$RES_SOCK" ] && [ -f $RES_SOCK.pid ] && { kill -9 $(cat $RES_SOCK.pid) 2>/dev/null; cp $RES_SOCK.log $R/out/resident.log 2>/dev/null; rm -f $RES_SOCK $RES_SOCK.pid; }
 kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
 if [ "${STAGE_ONLY:-0}" = 1 ]; then
   cp $S/preflight/classes/staged.jsonl $R/out/preflight-staged.jsonl

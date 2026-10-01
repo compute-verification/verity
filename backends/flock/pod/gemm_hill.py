@@ -214,6 +214,46 @@ def stamp(a) -> None:
     sys.exit(rc)
 
 
+def resident(a) -> None:
+    """One point's ``prove`` on the session's resident prover (``flock-circuit prove-serve`` on --sock): its LIVE lines on stdout,
+    as ``prove`` prints them. The session's first point starts it (``prover-start`` in --phases, the session's seconds, not the
+    point's); every point after connects to it."""
+    import socket
+
+    cmd = a.cmd[1:] if a.cmd[:1] == ["--"] else a.cmd
+    if cmd[1:2] != ["prove"]:
+        sys.exit(f"resident: {cmd[:2]} is not a prove")
+    binary, args = cmd[0], cmd[2:]
+    opt = lambda k, d=None: args[args.index(k) + 1] if k in args else d  # noqa: E731
+    req = {"verifier": opt("--verifier"), "instances": os.path.abspath(opt("--instances")), "circuit": os.path.abspath(opt("--circuit")),
+           "runs": int(opt("--runs", "1")), "warm": int(opt("--warm", "0")), "gpu": "--gpu" in args}
+    s = socket.socket(socket.AF_UNIX)
+    try:
+        s.connect(a.sock)
+    except OSError:
+        t0, log = time.time(), Path(f"{a.sock}.log")
+        with open(log, "ab") as f:
+            p = subprocess.Popen([binary, "prove-serve", "--listen-unix", a.sock, "--instances", req["instances"], "--circuit", req["circuit"]]
+                                 + (["--gpu"] if req["gpu"] else []), stdout=f, stderr=f, start_new_session=True)
+        Path(f"{a.sock}.pid").write_text(f"{p.pid}\n")
+        while not any(ln.startswith("RESIDENT\t") for ln in log.read_text(errors="replace").splitlines()):
+            if p.poll() is not None:
+                sys.exit(f"resident: the prover exited {p.returncode} before serving ({log})")
+            time.sleep(0.05)
+        with open(a.phases, "a") as f:
+            f.write(f"prover-start\tstart\t{t0}\nprover-start\tend\t{time.time()}\n")
+        s.connect(a.sock)
+    s.sendall((json.dumps(req) + "\n").encode())
+    for ln in s.makefile("rb"):
+        if ln.startswith(b"DONE"):
+            sys.exit(0)
+        sys.stdout.buffer.write(ln)
+        sys.stdout.buffer.flush()
+        if ln.startswith(b"REFUSED"):
+            sys.exit(2)
+    sys.exit(f"resident: the prover closed the point's connection without DONE ({a.sock}.log)")
+
+
 def _records(path: Path | None) -> list[dict]:
     if path is None or not path.exists():
         return []
@@ -391,8 +431,12 @@ def metrics(a) -> None:
     t_end = (phases.get("metrics") or [None])[0] or now
     held = t_end - held_since if held_since else None
     names = ["sweep"] if a.points == 1 else [f"sweep-p{i}" for i in range(a.points)]
-    spans = [x for x in (_span(phases, k) for k in names) if x is not None]
-    own = _span(phases, names[0 if a.points == 1 else a.point])
+    # a resident prover's start (`resident`: the statement built once for every point) is the session's, as the check is
+    def own_s(k: str) -> float | None:
+        x, (s0, s1), (r0, r1) = _span(phases, k), phases.get(k) or [None, None], phases.get("prover-start") or [None, None]
+        return x - max(0.0, min(s1, r1) - max(s0, r0)) if x is not None and None not in (r0, r1) else x
+    spans = [x for x in (own_s(k) for k in names) if x is not None]
+    own = own_s(names[0 if a.points == 1 else a.point])
     flags = []
     out: dict = {"K": a.K, "definition": rec.get("definition"), "commit": _commit(Path(a.root)), "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
                  "point": {"index": a.point, "of": a.points}, "preflight": cite, "gpu_held_s_point": own, "gpu_held_s_session": held,
@@ -853,6 +897,10 @@ def main() -> None:
     s = sub.add_parser("stamp")
     s.add_argument("--out", required=True)
     s.add_argument("cmd", nargs=argparse.REMAINDER)
+    rp = sub.add_parser("resident")
+    rp.add_argument("--sock", required=True)
+    rp.add_argument("--phases", required=True)
+    rp.add_argument("cmd", nargs=argparse.REMAINDER)
     m = sub.add_parser("metrics")
     m.add_argument("--K", type=int, required=True)
     m.add_argument("--preflight", "--gate", dest="preflight")    # --gate: its old name
@@ -894,8 +942,8 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--put", action="store_true")
     a = ap.parse_args()
-    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "key": key, "session": session, "rollup": rollup,
-     "plot": plot}[a.cmd_](a)
+    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "resident": resident, "metrics": metrics, "key": key, "session": session,
+     "rollup": rollup, "plot": plot}[a.cmd_](a)
 
 
 if __name__ == "__main__":

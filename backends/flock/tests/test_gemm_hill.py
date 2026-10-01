@@ -68,7 +68,7 @@ def _key(path: Path, fc: dict, sha: str = SHA) -> str:
     return str(path)
 
 
-def _session(R: Path, monkeypatch, points: int, point_fc: list[dict]) -> list[dict]:
+def _session(R: Path, monkeypatch, points: int, point_fc: list[dict], extra_phases: tuple[str, ...] = ()) -> list[dict]:
     """A GPU session's run dir as 74-gemm-hill.sh leaves it before its metrics: the preflight check's record and key, and per
     point its sweep's record, stamps and key; the phases put the job's start at 1000, the preflight check at 1001-1041, point
     i's sweep at 1042 + 40 i for 30 + i s, and the metrics at 1001 + 40 (points + 1). Then each point's metrics and the
@@ -92,7 +92,7 @@ def _session(R: Path, monkeypatch, points: int, point_fc: list[dict]) -> list[di
     for i in range(points):
         t = 1042 + 40 * i
         phases += [f"sweep-p{i}\tstart\t{t}", f"sweep-p{i}\tend\t{t + 30 + i}"]
-    phases.append(f"metrics\tstart\t{1001 + 40 * (points + 1)}")
+    phases += [*extra_phases, f"metrics\tstart\t{1001 + 40 * (points + 1)}"]
     (R / "out/phases.tsv").write_text("\n".join(phases) + "\n")
     out = []
     for i in range(points):
@@ -150,6 +150,71 @@ def test_every_point_of_a_gpu_session_cites_its_one_preflight_check_and_shares_i
     m = {x["name"]: x["value"] for x in sess["measurements"]}
     assert (m["hill.points"], m["hill.points_passed"], m["hill.gpu_held_s_session"], m["hill.median_gpu_held_s_point"]) == (3, 3, 161.0, 31.0)
     assert all((tmp_path / f).is_file() for f in sess["measurement_files"] + sess["artifacts"])
+
+
+def test_a_resident_provers_start_is_the_sessions_seconds_not_its_first_points(tmp_path, monkeypatch):
+    pts = _session(tmp_path, monkeypatch, 3, [{"FC_VERIFY_AHEAD": "10"}] * 3, ("prover-start\tstart\t1043", "prover-start\tend\t1050"))
+    # point 0's 30 s sweep started the prover (7 s of it), which every point shares, as the 68 s outside the sweeps
+    assert [p["gpu_held_s_point"] for p in pts] == [23.0, 31.0, 32.0]
+    assert [round(p["gpu_held_s_amortized"] - p["gpu_held_s_point"], 9) for p in pts] == [round(75 / 3, 9)] * 3
+    assert abs(sum(p["gpu_held_s_amortized"] for p in pts) - 161.0) < 1e-9
+
+
+FAKE_PROVER = """\
+import json, socket, sys
+a = sys.argv[1:]
+assert a[0] == "prove-serve", a
+sock, files, gpu = a[a.index("--listen-unix") + 1], {k: a[a.index("--" + k) + 1] for k in ("instances", "circuit")}, "--gpu" in a
+s = socket.socket(socket.AF_UNIX)
+s.bind(sock)
+s.listen()
+print("RESIDENT\\t" + json.dumps({"sock": sock}), flush=True)
+while True:
+    c, _ = s.accept()
+    f = c.makefile("rwb")
+    r = json.loads(f.readline())
+    if {k: r[k] for k in files} != files or r["gpu"] != gpu:
+        f.write(b"REFUSED\\t{}\\n")
+    else:
+        for run in range(r["warm"] + r["runs"]):
+            f.write(("LIVE\\t" + json.dumps({"run": run, "warm": run < r["warm"], "verifier": r["verifier"]}) + "\\n").encode())
+        f.write(b"DONE\\n")
+    f.close()
+    c.close()
+"""
+
+
+def test_every_point_of_a_session_proves_on_the_one_resident_prover_the_first_one_starts(tmp_path, capfd):
+    """`gemm_hill.py resident` against a stand-in for `flock-circuit prove-serve`: the first point starts it (one prover-start
+    phase), the next connects to the same process, and each gets its own sessions' LIVE lines."""
+    import os
+    import signal
+    import subprocess
+
+    binary = tmp_path / "flock-circuit"
+    binary.write_text(f"#!{sys.executable}\n" + FAKE_PROVER)
+    binary.chmod(0o755)
+    inst, circ = tmp_path / "inst-2048.bin", tmp_path / "circuit.txt"
+    inst.write_bytes(b"i")
+    circ.write_text("c")
+    sock, phases = tmp_path / "r.sock", tmp_path / "phases.tsv"
+    run = lambda *extra: subprocess.run([sys.executable, str(POD / "gemm_hill.py"), "resident", "--sock", str(sock), "--phases", str(phases),  # noqa: E731
+                                         "--", str(binary), "prove", "--verifier", "10.0.0.1:7500", "--instances", str(inst), "--circuit",
+                                         str(circ), "--runs", "2", "--warm", "1", *extra], capture_output=True, text=True)
+    try:
+        first, pid = run("--gpu"), (tmp_path / "r.sock.pid").read_text()
+        second = run("--gpu")
+        refused = run()
+    finally:
+        os.kill(int((tmp_path / "r.sock.pid").read_text()), signal.SIGKILL)
+    assert first.returncode == 0 and second.returncode == 0, (first.stderr, second.stderr)
+    for r in (first, second):
+        live = [json.loads(ln[5:]) for ln in r.stdout.splitlines()]
+        assert [(x["run"], x["warm"], x["verifier"]) for x in live] == [(0, True, "10.0.0.1:7500"), (1, False, "10.0.0.1:7500"),
+                                                                      (2, False, "10.0.0.1:7500")]
+    assert (tmp_path / "r.sock.pid").read_text() == pid
+    assert [ln.split("\t")[:2] for ln in phases.read_text().splitlines()] == [["prover-start", "start"], ["prover-start", "end"]]
+    assert refused.returncode == 2 and refused.stdout.startswith("REFUSED")
 
 
 def test_a_session_of_no_points_is_its_preflight_check_alone(tmp_path):

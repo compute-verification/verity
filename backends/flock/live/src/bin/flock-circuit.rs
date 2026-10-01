@@ -4,6 +4,12 @@
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
+//!   flock-circuit prove-serve --listen-unix SOCK --instances INST --circuit FILE [--gpu] [--session-tables J]
+//!
+//! `prove-serve` is `prove` kept resident for the points of one GPU session: the statement is built once, then each connection
+//! on SOCK is one point's `prove` (one JSON line: verifier, runs, warm, instances, circuit, gpu), answered with its LIVE lines
+//! and `DONE`. Each point draws its own seeds and opens its own sessions, as a `prove` process does; a request whose files
+//! are not the very files (device and inode) the statement was built from, or whose `--gpu` differs, is refused.
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, each row's `b || c`,
 //! outputs; no row, no salt) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -3906,6 +3912,49 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
     });
 }
 
+/// `prove-serve`: one point's `prove` per connection on `--listen-unix`, on the statement built once (see the module doc).
+fn prove_serve(st: &Arc<Stmt>, inst: &Arc<Instances>, tables: usize) {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::fs::MetadataExt;
+    let file = |p: &str| std::fs::metadata(p).map(|m| (m.dev(), m.ino())).map_err(|e| format!("{p}: {e}"));
+    let (circuit, instances) = (file(&arg("--circuit", "")).unwrap_or_else(|e| refuse(e)), file(&arg("--instances", "")).unwrap_or_else(|e| refuse(e)));
+    let gpu = flag("--gpu");
+    let split = (tables > 1).then(|| session_tables(st, inst, None, tables).ok()).flatten();
+    let base = Plan { gpu, tables, split, ..Plan::default() };
+    let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    let sock = arg("--listen-unix", "");
+    let _ = std::fs::remove_file(&sock);
+    let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap_or_else(|e| refuse(format!("{sock}: {e}")));
+    println!("RESIDENT\t{}", json!({"sock": sock, "pid": std::process::id()}));
+    std::io::stdout().flush().ok();
+    for conn in listener.incoming() {
+        let Ok(mut conn) = conn else { continue };
+        let mut line = String::new();
+        if conn.try_clone().map(|c| BufReader::new(c).read_line(&mut line)).is_err() {
+            continue;
+        }
+        let r: Value = serde_json::from_str(&line).unwrap_or(Value::Null);
+        let same = |k: &str, want: (u64, u64)| file(r[k].as_str().unwrap_or("")).map(|f| f == want).unwrap_or(false);
+        let why = if !same("circuit", circuit) || !same("instances", instances) {
+            Some("not the circuit and instances files this prover built its statement from")
+        } else if r["gpu"].as_bool() != Some(gpu) {
+            Some("--gpu differs from this prover's")
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            let _ = writeln!(conn, "REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
+            continue;
+        }
+        let (runs, warm) = (r["runs"].as_u64().unwrap_or(1) as usize, r["warm"].as_u64().unwrap_or(0) as usize);
+        let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
+        prove_sessions(st, inst, &base, &seeds, warm, r["verifier"].as_str().unwrap_or("127.0.0.1:7500"), verify_ahead, &mut |_, v, _| {
+            let _ = writeln!(conn, "LIVE\t{v}");
+        });
+        let _ = writeln!(conn, "DONE");
+    }
+}
+
 fn refuse(why: String) -> ! {
     println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
     std::process::exit(2);
@@ -3994,6 +4043,7 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
+        "prove-serve" => prove_serve(&st, &inst, tables),
+        _ => eprintln!("usage: flock-circuit serve|prove|prove-serve|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }
