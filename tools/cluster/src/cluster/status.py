@@ -1,6 +1,6 @@
 """`cluster status`: each node's running, queued and held work by owner and key, its GPU-hours ready, its holds, its disk,
 and node 1's unreplayed Commit bundles. Read-only: every command it sends a node (`COMMANDS`) only reads, through
-`kubectl get`, `df`, `find` and `du`, or `ls` and `cat`.
+`kubectl get`, `df`, `find` and `du`, or `ls`, `stat` and `cat`.
 
 `read` takes a node's snapshot over SSH (`HOSTS`, as `machines.d/<node>.toml` registers them); `node1` and `node2` are the
 pure half, snapshot and `now` in, report out, and `render` prints reports as text.
@@ -23,8 +23,9 @@ doesn't count them.
 **Node 2** is its agent's ledger state (`state.json`, `ledger.state`): leases are running jobs and waiters queued, owned by
 their submitter and keyed by their run (else the lease's job id). A job's length is the model's (`Job.length_s`: its
 `max_s`, else a session's `expected_s`). `gpu-lease` doesn't manage CPUs, so a lease's CPUs are 0. Node 2 has no Kueue,
-so no holds. The agent writes no state during a timed window (`agent.py`), so the state is stale only when it is older
-than `STALE_S` outside one, or than the window's end plus `STALE_S`.
+so no holds. The agent rewrites `state.json` every tick, but its `t` is its last record's, which a quiet ledger leaves
+old, so the state's age is the file's mtime. The agent writes no state during a timed window (`agent.py`), so the state is
+stale only when it is older than `STALE_S` outside one, or than the window's end plus `STALE_S`.
 """
 from __future__ import annotations
 
@@ -54,8 +55,8 @@ COMMANDS = {
     "bundles": f"sudo -n true && {{ sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
                " | sudo -n xargs -0r du -sb 2>/dev/null; true; }",
     # the agent's state: <live>/state.json with --roll, else its run's <live>/<stamp>/state.json; the newest
-    "state": f'cd {LIVE} && f=$(ls -t state.json */state.json 2>/dev/null | head -1) && test -n "$f" && echo "{LIVE}/$f"'
-             ' && cat "$f"',
+    "state": f'cd {LIVE} && f=$(ls -t state.json */state.json 2>/dev/null | head -1) && test -n "$f"'
+             f' && echo "{LIVE}/$f $(stat -c %Y "$f")" && cat "$f"',
 }
 READS = {nebius1.NODE: ("kueue", "df", "bundles"), nebius2.NODE: ("state", "df")}
 
@@ -86,9 +87,15 @@ def read(node: str, run: Callable[[str], str], t: int) -> dict[str, Any]:
         snap["k8s"] = json.loads(raw["kueue"])["items"]
         snap["bundles"] = raw["bundles"]
     if "state" in raw:
-        path, _, body = raw["state"].partition("\n")
-        snap["state_path"], snap["state"] = path, json.loads(body)
+        snap.update(state_snap(raw["state"]))
     return snap
+
+
+def state_snap(raw: str) -> dict[str, Any]:
+    """The `state` command's output: the file's path and mtime, then the file."""
+    head, _, body = raw.partition("\n")
+    path, _, mtime = head.partition(" ")
+    return {"state_path": path, "state_mtime": int(mtime) if mtime.strip() else None, "state": json.loads(body)}
 
 
 def disk_pct(df: str) -> int:
@@ -216,7 +223,8 @@ def node2(snap: dict[str, Any], now: int, owner: str | None = None) -> dict[str,
     rep = _report(snap, now, owner, rows, [], [], None)
     window = [a for a in allocs if a.job.quiet]
     ends = [a.ends_by for a in window]
-    age = now - st.t if st.t is not None else None
+    written = snap.get("state_mtime") or st.t
+    age = now - written if written is not None else None
     held_back = bool(window) and (None in ends or now <= max(ends) + STALE_S)
     rep["ledger"] = {"path": snap.get("state_path"), "seq": st.seq, "t": st.t, "age_s": age, "window": bool(window),
                      "stale": age is None or (age > STALE_S and not held_back)}
@@ -328,5 +336,5 @@ def main(nodes: list[str], owner: str | None, as_json: bool, key: Path | None = 
     return 1 if any("error" in r for r in reps) else 0
 
 
-__all__ = ["NODES", "HOSTS", "COMMANDS", "READS", "BUNDLE_ROOTS", "ReadError", "ssh", "read", "disk_pct", "bundles", "batch",
+__all__ = ["NODES", "HOSTS", "COMMANDS", "READS", "BUNDLE_ROOTS", "ReadError", "ssh", "read", "state_snap", "disk_pct", "bundles", "batch",
            "node1", "node2", "report", "render", "span", "main"]

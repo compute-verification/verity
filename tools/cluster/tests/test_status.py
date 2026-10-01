@@ -208,6 +208,13 @@ def test_node2_rows_are_the_ledgers_leases_and_waiters_by_submitter_and_run():
     assert [r["owner"] for r in status.node2(node2_snapshot(), T, owner="circuits")["jobs"]] == ["circuits"]
 
 
+def test_node2_state_rewritten_every_tick_is_fresh_though_its_ledger_is_quiet():
+    snap = {**node2_snapshot(), **status.state_snap(f"/live/state.json {T + 590}\n" + json.dumps(node2_snapshot()["state"]))}
+    lg = status.node2(snap, T + 600)["ledger"]
+    assert (snap["state_mtime"], lg["t"], lg["age_s"], lg["stale"]) == (T + 590, T - 2, 10, False)
+    assert status.node2(snap, T + 590 + status.STALE_S + 1)["ledger"]["stale"]
+
+
 def test_node2_state_held_back_by_a_timed_window_is_stale_only_after_the_window_should_have_ended():
     timed = job("gl-314342", "pous", submitter="bc-dd22acf8", priority="timed", quiet=True, gpus=8, cpus=0, max_s=1200,
                 node=nebius2.NODE, run="r20260930-221231-3dd1")
@@ -245,7 +252,7 @@ def test_render_prints_each_nodes_header_then_its_jobs_and_held_workloads_by_own
 def test_cli_status_reads_every_node_with_read_only_commands_and_prints_json(capsys, monkeypatch):
     sent: list[tuple[str, str]] = []
     out = {nebius1.NODE: {"kueue": json.dumps({"items": node1_snapshot()["k8s"]}), "df": DF, "bundles": DU},
-           nebius2.NODE: {"state": "/live/state.json\n" + json.dumps(node2_snapshot()["state"]), "df": DF}}
+           nebius2.NODE: {"state": f"/live/state.json {T - 1}\n" + json.dumps(node2_snapshot()["state"]), "df": DF}}
 
     def runner(node):
         def run(cmd):
@@ -261,6 +268,7 @@ def test_cli_status_reads_every_node_with_read_only_commands_and_prints_json(cap
     assert doc["schema"] == "cluster/status/v1" and doc["t"] == T
     assert [n["node"] for n in doc["nodes"]] == [nebius1.NODE, nebius2.NODE]
     assert doc["nodes"][0]["bundles"]["count"] == 2 and doc["nodes"][1]["ledger"]["path"] == "/live/state.json"
+    assert doc["nodes"][1]["ledger"]["age_s"] == 1
     assert sorted(sent) == sorted([(nebius1.NODE, status.COMMANDS[k]) for k in ("kueue", "df", "bundles")]
                                   + [(nebius2.NODE, status.COMMANDS[k]) for k in ("state", "df")])
     writes = re.compile(r"\b(patch|delete|apply|create|edit|label|annotate|scale|cordon|drain|rm|mv|kill|tee|chmod|chown)\b|>(?!/dev/null)")
