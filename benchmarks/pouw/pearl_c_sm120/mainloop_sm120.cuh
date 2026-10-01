@@ -97,8 +97,9 @@ struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 // stay as launched.  Launch NT threads with __launch_bounds__(NT, CTAS), CTAS blocks per SM, and SMEM bytes of dynamic shared
 // memory at a 1,024-byte-aligned address (`extern __shared__ __align__(1024)`).  STAGES stages of 128 bytes of depth; G = 4
 // or 0; TAIL: the producer loads P_A's TM and P_B's BN rows (128 bytes each) into a stage after each tile's last, for the
-// epilogue.
-template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 40, int WM_ROWS = 64> struct Mainloop {
+// epilogue; with TAIL_LOADS false it only hands the consumers that stage, empty (an epilogue's scratch), loading nothing.
+template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 40, int WM_ROWS = 64, bool TAIL_LOADS = true>
+struct Mainloop {
   static constexpr int BK = 128, WM = WM_ROWS, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8, APS = BK / 32;
   static constexpr bool SPLIT = NCW % 4 == 0;
@@ -154,7 +155,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 4
   ML_DEV void produce(const Maps* maps, int M, int N, int K, int group) {
     const int tiles_m = M / TM, tiles_n = N / BN, KT = K / BK;
     tma_acquire(maps->a); tma_acquire(maps->b);
-    if (TAIL) { tma_acquire(maps->pa); tma_acquire(maps->pb); }
+    if (TAIL && TAIL_LOADS) { tma_acquire(maps->pa); tma_acquire(maps->pb); }
     for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
       int tm, tn;
       raster(t, tiles_m, tiles_n, group, tm, tn);
@@ -167,9 +168,11 @@ template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 4
       }
       if (TAIL) {
         mbar_wait(empty(s), ph ^ 1);
-        mbar_expect_tx(full(s), STAGE);
-        tma_load(stage(s), maps->pa, full(s), 0, tm * TM);
-        tma_load(stage(s) + A_BYTES, maps->pb, full(s), 0, tn * BN);
+        mbar_expect_tx(full(s), TAIL_LOADS ? STAGE : 0);
+        if (TAIL_LOADS) {
+          tma_load(stage(s), maps->pa, full(s), 0, tm * TM);
+          tma_load(stage(s) + A_BYTES, maps->pb, full(s), 0, tn * BN);
+        }
         advance();
       }
     }

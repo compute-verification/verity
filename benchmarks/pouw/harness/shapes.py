@@ -1,5 +1,5 @@
 """The bench's shapes: the panel's two headlines (prefill m8192-n8192-k8192, decode m32-n8192-k8192), m = n = k from 2,048
-to 32,768, and the linears of Qwen2.5-7B and Llama-3.1-70B at m = 2,048 (prefill) and m = 32 (decode). (n, k) per linear:
+to 32,768, and the linears of Qwen2.5-7B, Llama-3.1-70B and Llama-3.1-8B at m = 2,048 (prefill) and m = 32 (decode). (n, k) per linear:
 qkv's n is the query width plus two KV widths, gate_up's is twice the intermediate size. Square and headline shapes are
 labelled like the panel (`m{m}-n{n}-k{k}`); every shape's `key` is that form."""
 
@@ -16,8 +16,10 @@ PREFILL_M, DECODE_M = 2048, 32
 QWEN25_7B = {"qkv": (4608, 3584), "o": (3584, 3584), "gate_up": (37888, 3584), "down": (3584, 18944)}
 #: Llama-3.1-70B: hidden 8,192, intermediate 28,672, 64 heads and 8 KV heads of 128.
 LLAMA31_70B = {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)}
+#: Llama-3.1-8B: hidden 4,096, intermediate 14,336, 32 heads and 8 KV heads of 128.
+LLAMA31_8B = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 
-MODELS = {"qwen2.5-7b": QWEN25_7B, "llama3.1-70b": LLAMA31_70B}
+MODELS = {"qwen2.5-7b": QWEN25_7B, "llama3.1-70b": LLAMA31_70B, "llama3.1-8b": LLAMA31_8B}
 
 
 def key(m: int, k: int, n: int) -> str:
