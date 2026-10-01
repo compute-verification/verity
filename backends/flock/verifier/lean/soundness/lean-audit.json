@@ -512,18 +512,6 @@
    "assumptions": [],
    "type_hash": "ad1d1e21493446a23aef3af9db3b8da3a326ba981a3f8fb7a7d3308aed078c61"
   },
-  "FlockSoundness.Audit.Law.execOS_miss_le": {
-   "signature": [
-    "FlockSoundness.Audit.Law.execOS_miss_le {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
-    "  (hk : ∀ (s : Fin m), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card) (S : Fin m → Flock.Draw.Stratum)",
-    "  (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) (K pop : Nat) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin m → Nat)",
-    "  (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : FlockSoundness.Assumptions.UniformRandomBytes L t) (c : Nat) :",
-    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.execOS t (Flock.Draw.Law.stratified K (Array.ofFn S)) pop).miss c)",
-    "    ((FlockSoundness.Audit.Law.stratified σ k hk).miss c)"
-   ],
-   "assumptions": [],
-   "type_hash": "76cab9b5cc9dfbbbcbf72d4b5cd01471109d64f4105b9a8b0d43bee5c8113fd4"
-  },
   "FlockSoundness.Audit.Law.execOS_subset_escape_le": {
    "signature": [
     "FlockSoundness.Audit.Law.execOS_subset_escape_le (n k : Nat) (hk : instLENat.le k n) {Ω : Type} [Fintype Ω] [Nonempty Ω]",
@@ -3849,20 +3837,6 @@
    "assumptions": [],
    "type_hash": "c01354d83dcca47255a0c822b1c7ecb57e0cfaafcc971e6bc8b34245409dd1da"
   },
-  "FlockSoundness.RowsCert.sound": {
-   "signature": [
-    "FlockSoundness.RowsCert.sound {R : FlockSoundness.Rows} {G : FlockSoundness.GateRows.Circ}",
-    "  {L : FlockSoundness.GateRows.Lay} (cert : FlockSoundness.RowsCert R G L) (zR : Fin R.w → Bool) (hz : R.Sat zR)",
-    "  (h1 : Eq (zR R.one) Bool.true) (i : Nat) (hi : instLTNat.lt i L.outLen) (o : Nat)",
-    "  (ho : Eq (L.outAt (instHAdd.hAdd (instHAdd.hAdd L.andBase (FlockSoundness.GateRows.nAnd G)) i)) (Option.some o))",
-    "  (hol : instLTNat.lt o G.outs.length) :",
-    "  Eq (zR ⟨instHAdd.hAdd (instHAdd.hAdd L.andBase (FlockSoundness.GateRows.nAnd G)) i, ⋯⟩)",
-    "    (List.instGetElemNatLtLength.getElem",
-    "      (G.eval fun k => if h : instLTNat.lt (L.inCol k) R.w then zR ⟨L.inCol k, h⟩ else Bool.false) o ⋯)"
-   ],
-   "assumptions": [],
-   "type_hash": "98ead4240ac505f850a0246a47ec79eb0be887254c8fd98145ec68aadcda6dc5"
-  },
   "FlockSoundness.StrictCR.TreeRewind.le": {
    "signature": [
     "FlockSoundness.StrictCR.TreeRewind.le {D : Type} {H : List UInt8 → D} {β : Type} {G : FlockSoundness.Game β}",
@@ -5494,7 +5468,6 @@
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
@@ -6297,7 +6270,6 @@
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
@@ -6409,7 +6381,6 @@
     "FlockSoundness.Rope.rope_sound",
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
-    "FlockSoundness.RowsCert.sound",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
@@ -6755,7 +6726,6 @@
     "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
@@ -6924,7 +6894,6 @@
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.floor_le_workK",
@@ -7208,7 +7177,7 @@
    "definitions": {
     "FlockSoundness.RowsCert": "95770421f5c47ab86d90d72f71fde8c3301a5edc2074a6fd8e14f54b4ca78d82"
    },
-   "pins": ["FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert", "FlockSoundness.RowsCert.sound"]
+   "pins": ["FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert"]
   },
   "FlockSoundness.CompiledLock": {
    "digest": "bb12a5c8277a0a17076792ea5476955a848d4e64128ce5e7b0fe40545372db91",
@@ -7460,7 +7429,6 @@
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
@@ -7489,7 +7457,6 @@
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Prog.flock_headline"
@@ -7505,7 +7472,6 @@
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
@@ -7614,7 +7580,6 @@
     "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_miss_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
@@ -8055,11 +8020,7 @@
     "FlockSoundness.GateRows.srcForm": "14a8bd499e130ff67a78076492ba5f127ef01ce85dd2ff1bb2e5129ae5adc339",
     "FlockSoundness.GateRows.start": "28c298ef7af4ae14d64d5b90ca52e78798ac0c9b7d984579041cb55c90497ed0"
    },
-   "pins": [
-    "FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert",
-    "FlockSoundness.Rope.rope_sound",
-    "FlockSoundness.RowsCert.sound"
-   ]
+   "pins": ["FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert", "FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Headline": {
    "digest": "96d1014d9ee596716a056e29e36daf56a34c0a5bf467a4221d003ef8b491b919",
@@ -8309,7 +8270,6 @@
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
-    "FlockSoundness.RowsCert.sound",
     "FlockSoundness.UProg.flock_e2e_count_classes",
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
