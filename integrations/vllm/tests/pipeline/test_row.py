@@ -5,8 +5,8 @@
   waits for the stage to be gone, records the cancel and exits 128+signal;
 * a row's derives run in parallel by default, as many as the memory headroom holds at the largest shape's planned peak (a fit
   that bounds the epoch's measured derives) and at most one per CPU, the longest shapes first;
-* a batch's workload Program compose waits only on the shapes its requests run, and its manifest is built beside the envelope's
-  derive, kept only when the Build passes;
+* a batch's workload Program compose waits only on the shapes its requests run, and its manifest is built beside the compose and the
+  envelope's derive, taking the workload digest once it is composed (none when the compose fails), kept only when the Build passes;
 * after a PASS Build the row stops (exit 21, no Match) when a call-boundary identity of its manifest has no source the
   Commit attaches, the first one named in stages.txt, and goes on to Match when each has one;
 * a Commit over a Match record whose account files are gone refuses to start (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE,
@@ -351,23 +351,27 @@ def test_the_extra_shapes_derive_longest_first(tmp_path, monkeypatch):
     assert [lp + t for lp, t in extra] == sorted((lp + t for lp, t in extra), reverse=True)
 
 
-def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", **shape) -> tuple[SingleRow, dict]:
-    """A B=8 Build whose children are stubbed: the compose records the dirs it was given, the manifest build writes manifest.json, and
-    the derives end only once the compose and the manifest beside them have (so nothing either one waits on is the envelope's derive)."""
+def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int = 0, **shape) -> tuple[SingleRow, dict]:
+    """A B=8 Build whose children are stubbed: the compose records the dirs it was given, the manifest build takes the workload digest
+    and writes manifest.json, and the derives end only once the compose and the manifest beside them have, every request's shape
+    derived first (so nothing either one waits on is the envelope's derive)."""
     r, _ran = _derive_row(tmp_path, monkeypatch, cpus=4)
     for k, v in shape.items():
         setattr(r, k, v)
-    seen: dict = {"derived": None, "manifests": 0, "follow": None}
+    seen: dict = {"derived": None, "manifests": [], "follow": None}
 
     def run_tl(stage, to, lf, cmd, *extra):
         assert stage == "build.global_program"
         seen["derived"] = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--derived"]
-        os.makedirs(f"{r.d}/build_workload", exist_ok=True)
-        Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
-        return 0
+        if compose_rc == 0:
+            os.makedirs(f"{r.d}/build_workload", exist_ok=True)
+            Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
+        return compose_rc
 
-    def required_manifest(stage):
-        seen["manifests"] += 1
+    def required_manifest(stage, digest=None):
+        seen["manifests"].append(wd := digest() if digest else None)
+        if wd == "":
+            return None
         Path(f"{r.d}/manifest.json").write_text("{}")
         return 0
 
@@ -378,6 +382,11 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", **shape) -> tuple
         return seen["follow"]
 
     def derive_all(to):
+        wl = r.path(r.wl)
+        for d in [*([f"{r.d}/build_request"] if (r.LP, r.T) in R.request_shapes(wl) else []),
+                  *(f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(wl, r.LP, r.T))]:
+            os.makedirs(d, exist_ok=True)
+            Path(f"{d}/result.json").write_text(json.dumps({"ok": True}))
         seen["before_derives_end"] = (seen["follow"][0].result(), os.path.exists(f"{r.d}/manifest.json"))
         os.makedirs(f"{r.d}/build_request", exist_ok=True)
         Path(f"{r.d}/build_request/instances.json.gz").write_bytes(b"")
@@ -395,7 +404,7 @@ def test_a_batch_composes_and_builds_its_manifest_without_waiting_for_the_envelo
     r, seen = _batch_build(tmp_path, monkeypatch)
     assert (r.LP, r.T) not in R.request_shapes(r.path(r.wl))
     r.build()
-    assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == 1
+    assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == ["w" * 64]
     assert seen["derived"] == [f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(r.path(r.wl), r.LP, r.T)]
     assert (Path(r.d) / "manifest.json").exists() and (Path(r.d) / "stages.txt").read_text().startswith("build PASS ")
     # an envelope a request runs is a component: the compose lists it
@@ -410,6 +419,36 @@ def test_a_failed_batch_build_keeps_no_manifest(tmp_path, monkeypatch):
     with pytest.raises(Stop) as e:
         r.build()
     assert e.value.rc == 10 and seen["before_derives_end"][1] and not (Path(r.d) / "manifest.json").exists()
+    # a compose that fails gives the manifest no workload digest: none is built
+    r, seen = _batch_build(tmp_path / "compose", monkeypatch, compose_rc=1)
+    with pytest.raises(Stop) as e:
+        r.build()
+    assert e.value.rc == 10 and seen["before_derives_end"] == ((1, None), False) and seen["manifests"] == [""]
+    assert not (Path(r.d) / "manifest.json").exists()
+
+
+#: `manifest build-global` as far as the row sees it: the workload digest it was given (`-`: the next stdin line, an empty one fails)
+#: becomes manifest.json
+_MANIFEST_CHILD = """
+import json, sys
+a = sys.argv[1:]
+wd = a[a.index("--workload-digest") + 1]
+if wd == "-":
+    wd = sys.stdin.readline().strip()
+    if not wd:
+        sys.exit("no workload digest on stdin")
+json.dump({"workload_digest": wd}, open(a[a.index("--out") + 1], "w"))
+"""
+
+
+def test_a_batch_manifest_takes_the_workload_digest_once_it_is_composed(tmp_path, monkeypatch):
+    r, _ran = _derive_row(tmp_path, monkeypatch, cpus=4)
+    os.makedirs(f"{r.d}/build_request_LP9_T1")
+    monkeypatch.setattr(r, "cli", lambda *a, py=None: [sys.executable, "-c", _MANIFEST_CHILD, *a])
+    assert r.required_manifest("build", lambda: "w" * 64) == 0
+    assert json.loads((Path(r.d) / "manifest.json").read_text()) == {"workload_digest": "w" * 64}
+    assert r.required_manifest("build", lambda: "") is None and not (Path(r.d) / "manifest.json").exists()
+    assert [e.get("rc") for e in _timeline(r) if e["stage"] == "build.required_manifest" and e["ev"] == "end"] == [0, "none"]
 
 
 # ---------------------------------------------------------------------------------------------------------------- Build: call boundaries
