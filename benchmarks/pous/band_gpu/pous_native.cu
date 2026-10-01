@@ -162,50 +162,15 @@ __global__ void feistel_kernel(uint8_t* x, int64_t x_stride, int64_t half, const
 // ---- one thread per row (throughput): a whole Keccak state in one thread's registers ------------------------------------
 __device__ __forceinline__ uint64_t rotl64(uint64_t x, int n) { return (x << n) | (x >> (64 - n)); }
 
-// Rotations on the FMA pipe, which the Keccak rounds otherwise leave idle while LOP3 and SHF share the ALU pipe: x rotated
-// by n (0 < n < 32) is lo(x * 2^n) + hi(x * 2^n), the two never overlapping.  ROT_MUL is not const, so ptxas cannot turn
-// the multiplies back into shifts.
-__constant__ uint32_t ROT_MUL[32] = {1u << 0,  1u << 1,  1u << 2,  1u << 3,  1u << 4,  1u << 5,  1u << 6,  1u << 7,
-                                     1u << 8,  1u << 9,  1u << 10, 1u << 11, 1u << 12, 1u << 13, 1u << 14, 1u << 15,
-                                     1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22, 1u << 23,
-                                     1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31};
-
-__device__ __forceinline__ uint32_t rotl32_fma(uint32_t x, int n) {
-  if (!n) return x;
-  uint32_t lo, r;
-  asm("mul.lo.u32 %0, %1, %2;" : "=r"(lo) : "r"(x), "r"(ROT_MUL[n]));
-  asm("mad.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(x), "r"(ROT_MUL[n]), "r"(lo));
-  return r;
-}
-
-__device__ __forceinline__ uint64_t rotl64_fma(uint64_t x, int n) {
-  uint32_t lo = (uint32_t)x, hi = (uint32_t)(x >> 32);
-  if (n >= 32) {
-    const uint32_t t = lo;
-    lo = hi;
-    hi = t;
-    n -= 32;
-  }
-  if (!n) return ((uint64_t)hi << 32) | lo;
-  uint32_t a, b, l, h;
-  asm("mul.hi.u32 %0, %1, %2;" : "=r"(a) : "r"(hi), "r"(ROT_MUL[n]));
-  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(l) : "r"(lo), "r"(ROT_MUL[n]), "r"(a));
-  asm("mul.hi.u32 %0, %1, %2;" : "=r"(b) : "r"(lo), "r"(ROT_MUL[n]));
-  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(h) : "r"(hi), "r"(ROT_MUL[n]), "r"(b));
-  return ((uint64_t)h << 32) | l;
-}
-
 // ρ and π then χ, fully unrolled: lane s moves to PI_DEST[s] rotated by RHO[s] (the standard offsets, lane s = x + 5y going to
 // (y, 2x + 3y)) into a fresh array, then χ reads it back row by row.  Every rotation is independent, instead of the in-place
-// 24-step cycle whose serial carry costs a move per step.  F >= 1: ρ's rotations on the FMA pipe (rotl64_fma).
-template <int F = 0>
+// 24-step cycle whose serial carry costs a move per step.
 __device__ __forceinline__ void keccak_rho_pi_chi(uint64_t st[25]) {
   constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
   constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
   uint64_t b[25];
 #pragma unroll
-  for (int s = 0; s < 25; ++s)
-    b[PI_DEST[s]] = !RHO[s] ? st[s] : F >= 1 ? rotl64_fma(st[s], RHO[s]) : rotl64(st[s], RHO[s]);
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = RHO[s] ? rotl64(st[s], RHO[s]) : st[s];
 #pragma unroll
   for (int j = 0; j < 25; j += 5) {
 #pragma unroll
@@ -856,30 +821,28 @@ __device__ __forceinline__ uint64_t xor3_64(uint64_t a, uint64_t b, uint64_t c) 
          xor3_32((uint32_t)a, (uint32_t)b, (uint32_t)c);
 }
 
-// F: 0 every rotation a funnel shift, 1 ρ's on the FMA pipe, 2 θ's too.
-template <int F>
 __device__ __forceinline__ void keccak_round_fd(uint64_t st[25], uint64_t rc) {
   uint64_t bc[5];
 #pragma unroll
   for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
 #pragma unroll
   for (int i = 0; i < 5; ++i) {
-    const uint64_t r1 = F >= 2 ? rotl64_fma(bc[(i + 1) % 5], 1) : rotl64(bc[(i + 1) % 5], 1);
+    const uint64_t r1 = rotl64(bc[(i + 1) % 5], 1);
 #pragma unroll
     for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
   }
-  keccak_rho_pi_chi<F>(st);
+  keccak_rho_pi_chi(st);
   st[0] ^= rc;
 }
 
 // The round loop unrolled U times.
-template <int U, int F>
+template <int U>
 __device__ __forceinline__ void keccak_f_fd(uint64_t st[25]) {
   static_assert(24 % U == 0, "U divides 24");
 #pragma unroll 1
   for (int r = 0; r < 24; r += U) {
 #pragma unroll
-    for (int u = 0; u < U; ++u) keccak_round_fd<F>(st, KECCAK_RC[r + u]);
+    for (int u = 0; u < U; ++u) keccak_round_fd(st, KECCAK_RC[r + u]);
   }
 }
 
@@ -937,16 +900,12 @@ __device__ __forceinline__ uint64_t de_il64(uint64_t v) {
 
 __device__ __forceinline__ uint32_t rotl32(uint32_t x, int n) { return n ? __funnelshift_l(x, x, n) : x; }
 
-template <bool FMA = false>
 __device__ __forceinline__ uint64_t il_rotl(uint64_t v, int r) {
-  auto rot = [](uint32_t x, int n) { return FMA ? rotl32_fma(x, n) : rotl32(x, n); };
   const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
-  return (r & 1) ? ((uint64_t)rot(e, r >> 1) << 32) | rot(o, (r + 1) >> 1)
-                 : ((uint64_t)rot(o, r >> 1) << 32) | rot(e, r >> 1);
+  return (r & 1) ? ((uint64_t)rotl32(e, r >> 1) << 32) | rotl32(o, (r + 1) >> 1)
+                 : ((uint64_t)rotl32(o, r >> 1) << 32) | rotl32(e, r >> 1);
 }
 
-// F as in keccak_round_fd.
-template <int F>
 __device__ __forceinline__ void keccak_round_il(uint64_t st[25], uint64_t rc) {
   constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
   constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
@@ -955,13 +914,13 @@ __device__ __forceinline__ void keccak_round_il(uint64_t st[25], uint64_t rc) {
   for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
 #pragma unroll
   for (int i = 0; i < 5; ++i) {
-    const uint64_t r1 = il_rotl<(F >= 2)>(bc[(i + 1) % 5], 1);
+    const uint64_t r1 = il_rotl(bc[(i + 1) % 5], 1);
 #pragma unroll
     for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
   }
   uint64_t b[25];
 #pragma unroll
-  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = il_rotl<(F >= 1)>(st[s], RHO[s]);
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = il_rotl(st[s], RHO[s]);
 #pragma unroll
   for (int j = 0; j < 25; j += 5) {
 #pragma unroll
@@ -970,13 +929,13 @@ __device__ __forceinline__ void keccak_round_il(uint64_t st[25], uint64_t rc) {
   st[0] ^= rc;
 }
 
-template <int U, int F>
+template <int U>
 __device__ __forceinline__ void keccak_f_il(uint64_t st[25]) {
   static_assert(24 % U == 0, "U divides 24");
 #pragma unroll 1
   for (int r = 0; r < 24; r += U) {
 #pragma unroll
-    for (int u = 0; u < U; ++u) keccak_round_il<F>(st, KECCAK_RC_IL[r + u]);
+    for (int u = 0; u < U; ++u) keccak_round_il(st, KECCAK_RC_IL[r + u]);
   }
 }
 
@@ -1049,12 +1008,12 @@ __device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_
   }
 }
 
-template <int U, bool IL, int F>
+template <int U, bool IL>
 __device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
   if constexpr (IL)
-    keccak_f_il<U, F>(st);
+    keccak_f_il<U>(st);
   else
-    keccak_f_fd<U, F>(st);
+    keccak_f_fd<U>(st);
 }
 
 // band_chain_kernel's chains on lane pairs: a warp holds PAIR_ROWS rows, lane l row l % 16's sponge of role l / 16, one
@@ -1073,11 +1032,10 @@ __device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
 // form (il_const): X is converted a Keccak-f after it is loaded (so its load latency stays hidden) and W as it is written;
 // the slots' initial contents are the caller's to convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads
 // each chunk back from its slot one chunk late, so round 9 of a call that another follows writes every chunk of half 0.
-// F: the Keccak rounds' rotations on the FMA pipe (keccak_round_fd).
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 
-template <int U, bool IL, bool LAG, int F>
+template <int U, bool IL, bool LAG>
 __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
     uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
     const int64_t* __restrict__ base, const int64_t* __restrict__ blk, const int64_t* __restrict__ len,
@@ -1131,7 +1089,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
         else absorb_masked<true, IL>(x, v, carry, m);
         p += cstride;
         if (role == 0 && act && cc + 1 < nch) slot_load_cg(p, v);
-        keccak_f_pairs<U, IL, F>(x);
+        keccak_f_pairs<U, IL>(x);
       }
     }
     const int rounds = s == 0 ? 0 : any_more ? 10 : 9, i0 = part ? 6 : 1, i1 = s == 0 ? 0 : part ? rounds : 5;
@@ -1221,7 +1179,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
             }
             p += cstride;
           }
-          keccak_f_pairs<U, IL, F>(x);
+          keccak_f_pairs<U, IL>(x);
         }
       } else {
         for (int64_t cc = 0; cc < nch; ++cc) {
@@ -1232,7 +1190,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
           if (cc < full) absorb_masked<false, IL>(x, v, carry, m);
           else absorb_masked<true, IL>(x, v, carry, m);
           if (sq && act && cc + 1 < nch) src(cc + 1, p, v);
-          keccak_f_pairs<U, IL, F>(x);
+          keccak_f_pairs<U, IL>(x);
         }
       }
     }
@@ -1265,7 +1223,7 @@ __global__ void chunked_interleave_kernel(uint64_t* st_words, int64_t pitch, int
 // every word of the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.
 void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t warps_per_sm, int64_t calls,
                       torch::Tensor c, torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest,
-                      torch::Tensor out, int64_t unroll, int64_t interleave_from, bool lag, int64_t fma) {
+                      torch::Tensor out, int64_t unroll, int64_t interleave_from, bool lag) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
               "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
@@ -1281,8 +1239,6 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
   TORCH_CHECK(unroll >= 1 && unroll <= 24 && 24 % unroll == 0, "unroll: a divisor of 24 (1, 2, 3, 4, 6, 8, 12 or 24)");
   TORCH_CHECK(interleave_from <= state.size(1), "interleave_from: a chunk index, or negative for no interleaving");
-  TORCH_CHECK(fma == 0 || ((fma == 1 || fma == 2) && (unroll == 12 || unroll == 8 || unroll == 6)),
-              "fma: 0, or 1 or 2 at unroll 6, 8 or 12");
   if (rows == 0) return;
   c10::cuda::CUDAGuard guard(state.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
@@ -1294,25 +1250,16 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
   const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, PAIRS_WARPS_PER_BLOCK);
   const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / PAIRS_WARPS_PER_BLOCK, 1);
-  auto pick_fma = [&](auto il, auto lag, auto f) {
-    constexpr bool IL = decltype(il)::value, LAG = decltype(lag)::value;
-    constexpr int F = decltype(f)::value;
-    return unroll == 12 ? band_chain_pairs_kernel<12, IL, LAG, F>
-           : unroll == 8 ? band_chain_pairs_kernel<8, IL, LAG, F>
-                         : band_chain_pairs_kernel<6, IL, LAG, F>;
-  };
   auto pick = [&](auto il, auto lag) {
     constexpr bool IL = decltype(il)::value, LAG = decltype(lag)::value;
-    if (fma == 1) return pick_fma(il, lag, std::integral_constant<int, 1>{});
-    if (fma == 2) return pick_fma(il, lag, std::integral_constant<int, 2>{});
-    return unroll == 24 ? band_chain_pairs_kernel<24, IL, LAG, 0>
-           : unroll == 12 ? band_chain_pairs_kernel<12, IL, LAG, 0>
-           : unroll == 8 ? band_chain_pairs_kernel<8, IL, LAG, 0>
-           : unroll == 6 ? band_chain_pairs_kernel<6, IL, LAG, 0>
-           : unroll == 4 ? band_chain_pairs_kernel<4, IL, LAG, 0>
-           : unroll == 3 ? band_chain_pairs_kernel<3, IL, LAG, 0>
-           : unroll == 2 ? band_chain_pairs_kernel<2, IL, LAG, 0>
-                         : band_chain_pairs_kernel<1, IL, LAG, 0>;
+    return unroll == 24 ? band_chain_pairs_kernel<24, IL, LAG>
+           : unroll == 12 ? band_chain_pairs_kernel<12, IL, LAG>
+           : unroll == 8 ? band_chain_pairs_kernel<8, IL, LAG>
+           : unroll == 6 ? band_chain_pairs_kernel<6, IL, LAG>
+           : unroll == 4 ? band_chain_pairs_kernel<4, IL, LAG>
+           : unroll == 3 ? band_chain_pairs_kernel<3, IL, LAG>
+           : unroll == 2 ? band_chain_pairs_kernel<2, IL, LAG>
+                         : band_chain_pairs_kernel<1, IL, LAG>;
   };
   auto pick_il = [&](auto lag) { return interleave_from >= 0 ? pick(std::true_type{}, lag) : pick(std::false_type{}, lag); };
   auto kernel = lag ? pick_il(std::true_type{}) : pick_il(std::false_type{});
@@ -1891,7 +1838,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("warps_per_sm"),
         pybind11::arg("calls"), pybind11::arg("c"), pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"),
         pybind11::arg("dest"), pybind11::arg("out"), pybind11::arg("unroll") = 1,
-        pybind11::arg("interleave_from") = -1, pybind11::arg("lag") = false, pybind11::arg("fma") = 0);
+        pybind11::arg("interleave_from") = -1, pybind11::arg("lag") = false);
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
