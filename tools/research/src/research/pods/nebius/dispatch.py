@@ -42,6 +42,9 @@ and memory, and runs with hostPID, runtime class nvidia, `NVIDIA_VISIBLE_DEVICES
 VY_LEASE_MAX_MIN, 120), which sets CUDA_VISIBLE_DEVICES. `"lease": "self"` sets the pod up the same way and leaves the leasing to
 the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can release the GPU for a CPU phase and lease one again.
 At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
+A leased pod's GPUs come from its queue's pool: VY_LEASE_HOSTDIRS (`QUEUE=DIR,...`, one n1_lease.py per pool) names the host
+directory mounted at `/run/gpu-lease`, e.g. `deployments-gpu=/run/gpu-lease-circuits` so circuits' Commits lease from holders in
+their own quota; any other queue mounts /run/gpu-lease, the `provers` pool.
 
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
 Both are append-only: a wrong outcome is corrected by a later `done.jsonl` line for the key (and an `ev: correct` log line) that
@@ -133,6 +136,7 @@ DEFAULT_PRIORITY = {"backfill": "backfill"}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
 LEASE_DIR = "/run/gpu-lease"
+LEASE_HOSTDIRS = dict(kv.split("=", 1) for kv in os.environ.get("VY_LEASE_HOSTDIRS", "").split(",") if "=" in kv)
 LEASE_BIN = os.environ.get("VY_GPU_LEASE", "/workspace/verity-guest/bin/gpu-lease")
 PACK_COMMITS = os.environ.get("PACK_COMMITS", "0") == "1"
 PACK_ADOPT = os.environ.get("PACK_ADOPT", "1") == "1"
@@ -336,7 +340,7 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
         pod_spec["runtimeClassName"] = "nvidia"
     if lease:
         pod_spec["hostPID"] = True
-        pod_spec["volumes"].append({"name": "gpu-lease", "hostPath": {"path": LEASE_DIR, "type": "Directory"}})
+        pod_spec["volumes"].append({"name": "gpu-lease", "hostPath": {"path": LEASE_HOSTDIRS.get(queue, LEASE_DIR), "type": "Directory"}})
         pod_spec["containers"][0]["volumeMounts"].append({"name": "gpu-lease", "mountPath": LEASE_DIR})
     return {
         "apiVersion": "batch/v1", "kind": "Job",

@@ -7,6 +7,7 @@ rule cannot evaluate is refused by name; an argument of another shape is a colle
 replay reads the committed words and checks the served output as before."""
 from __future__ import annotations
 
+import json
 import os
 import types
 
@@ -138,12 +139,12 @@ def _drive(world, com, src, *, steps=range(1 + T)):
     com._cur = None
 
 
-def _dense_source(world, man=None, root=None):
+def _dense_source(world, man=None, root=None, plan=None):
     model = runtime(["model.embed_tokens", PF[len("model."):], IL[len("model."):], "logits_processor"],
                     {n[len("model."):]: _tensor(w, torch.bfloat16) for n, w in world.fields.items()})
     com = Recorder(model)
     classes = taps.attach(com, man or world.man, ("instance_outputs",), taps.TapSources(),
-                          programs=(None, root or os.path.dirname(world.pdir)))  # under the root
+                          programs=(None, root or os.path.dirname(world.pdir)), call_boundary_plan=plan)  # under the root
     assert classes == ("instance_outputs", CB.FAMILY) and len(com.sources) == 1
     com.sources[0].install()
     return com, com.sources[0]
@@ -513,3 +514,86 @@ def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_l
     stray, ssrc = _dense_source(pair, pair.man, pair.root)
     _drive_pair(pair, stray, ssrc, ["r1", "r0"], lambda e, rows: [("warmup-7-aec3dda0", *rows[0][1:]), *rows[1:]])
     assert not stray.acquired and "('warmup-7-aec3dda0', 4)" in stray.errors[0]
+
+
+def test_the_warm_up_commits_zero_words_of_the_records_layout_and_evaluates_nothing(pair, monkeypatch):
+    """The Commit's warm-up instrumented run is never a record (`taps.warmup`): every target, packed, per request or step-shared, is zero
+    words of the name, shape and dtype the record commits, and no template is evaluated.  Off again, the same source commits the IR's
+    words, and a bounded committer's `learn_only` follows the same switch."""
+    com, src = _dense_source(pair, pair.man, pair.root)
+    _drive_pair(pair, com, src, ["r1", "r0"])
+    ref = [(s, n, tuple(t.shape), t.dtype, CB.words(torch, t).tobytes()) for s, n, t in com.acquired]
+    calls, real = [], CP.evaluate_template
+    monkeypatch.setattr(CP, "evaluate_template", lambda *a, **k: calls.append(a[2]) or real(*a, **k))
+    warm, wsrc = _dense_source(pair, pair.man, pair.root)
+    taps.warmup(warm, True)
+    _drive_pair(pair, warm, wsrc, ["r1", "r0"], lambda e, rows: [(f"warmup-{rid[3]}", lo, hi) for rid, lo, hi in rows])
+    assert not warm.errors and not calls, warm.errors
+    assert [(s, n, tuple(t.shape), t.dtype) for s, n, t in warm.acquired] == [x[:4] for x in ref]
+    assert not any(CB.words(torch, t).any() for _s, _n, t in warm.acquired)
+    assert wsrc.stats["placeholder_bodies"] == wsrc.stats["bodies"] == len(wsrc.plan.bodies)
+    taps.warmup(warm, False)
+    warm.acquired.clear()
+    _drive_pair(pair, warm, wsrc, ["r1", "r0"])
+    assert calls and [(s, n, tuple(t.shape), t.dtype, CB.words(torch, t).tobytes()) for s, n, t in warm.acquired] == ref
+    bounded = types.SimpleNamespace(bounded=True, learn_only=False, sources=[wsrc])
+    taps.warmup(bounded, True)
+    assert bounded.learn_only and wsrc.placeholder
+    taps.warmup(bounded, False)
+    assert not bounded.learn_only and not wsrc.placeholder
+
+
+# ------------------------------------------------------------------------------------------------------------------------- the record
+def _read_back(plan):
+    return CP.of_json(json.loads(json.dumps(CP.to_json(plan))))
+
+
+def _same_plan(a, b):
+    """Every field of two plans equal: the templates with their operands' fx names (which template equality leaves out), the literals'
+    words and each Definition with its arity."""
+    assert list(a.bodies) == list(b.bodies) and a.bodies == b.bodies
+    assert [[o.where for q in x.parts for o in q.template.operands] for x in a.bodies.values()] == \
+           [[o.where for q in x.parts for o in q.template.operands] for x in b.bodies.values()]
+    assert a.literals.keys() == b.literals.keys() and all(np.array_equal(a.literals[s], b.literals[s]) and b.literals[s].dtype == np.uint64
+                                                          for s in a.literals)
+    assert {s: (d, n) for s, (d, n) in a.definitions.items()} == b.definitions
+    for f in ("program_dirs", "fields", "kernel_only", "composition", "order", "by_index", "identities", "uncovered", "bytes_per_token",
+              "tensors_per_step"):
+        assert getattr(a, f) == getattr(b, f), f
+
+
+def test_a_plan_read_back_from_its_record_is_the_plan_and_commits_the_same_words(dense, monkeypatch):
+    """The Commit's call-boundary plan (`pipeline.boundary_plan`) is `to_json` of the Build's: read back (`of_json`), every field is
+    the derived plan's and the source attached with it commits the same words as one that derives its own; a kernel-only Definition
+    stays kernel-only."""
+    plan = CB.plan_of(dense.man, os.path.dirname(dense.pdir))
+    back = _read_back(plan)
+    _same_plan(plan, back)
+    runs = []
+    for given in (None, back):
+        com, src = _dense_source(dense, plan=given)
+        assert src.plan is given or given is None
+        _drive(dense, com, src)
+        assert not com.errors
+        runs.append([(s, n, CB.words(torch, t).tobytes()) for s, n, t in com.acquired])
+    assert runs[0] == runs[1] and len(runs[0]) == len(CB.manifest_sites(dense.man))
+    monkeypatch.setattr(CP, "REFERENCE_LEAVES", 100)
+    kernel = CB.plan_of(dense.man, dense.pdir)
+    assert kernel.kernel_only == _read_back(kernel).kernel_only == {f"Gemm_v1{{K={H},N={V}}}"}
+
+
+def test_a_global_plan_read_back_keeps_each_requests_template_and_the_composition(pair):
+    """Two requests, one body evaluated per request (r1's other epsilon): the parts, their templates, the composition and the runtime's
+    request names survive the record, and the binding map's split of the words committed with it is the derived plan's."""
+    plan = CB.plan_of(pair.man, pair.root)
+    back = _read_back(plan)
+    _same_plan(plan, back)
+    assert not back.bodies[(0, IL[len("model."):])].packed and back.composition == plan.composition and back.by_index == {0: "r0", 1: "r1"}
+    runs = []
+    for given in (None, back):
+        com, src = _dense_source(pair, pair.man, pair.root, plan=given)
+        _drive_pair(pair, com, src, ["r1", "r0"])
+        assert not com.errors, com.errors
+        runs.append([(s, n, CB.words(torch, t).tobytes()) for s, n, t in com.acquired])
+    assert runs[0] == runs[1] and runs[0]
+

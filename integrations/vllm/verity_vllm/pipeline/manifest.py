@@ -227,7 +227,7 @@ def _send(conn: Any, program_dir: str, kw: dict[str, Any]) -> None:
 
 
 def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, after: Callable[[int, dict[str, Any]], None] | None = None,
-                     log=None) -> list[dict[str, Any]]:
+                     budget_gb: float | None = None, log=None) -> list[dict[str, Any]]:
     """`build(program_dir, **kw)` of every `(program_dir, kw)`, each followed by `after(i, manifest)`, in order.  With `jobs` > 1 (and
     `fork`, and a readable memory headroom) each build runs in a process of its own, largest first, while their estimated peaks
     (`_peak`) fit `HEADROOM_SHARE` of the headroom; a Build without a histogram runs alone.  A build is a function of its Build dir, so
@@ -236,6 +236,9 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
         return _build_in_turn(tasks, after)
+    own = _own_budget(budget_gb)
+    if own is not None:
+        return _build_forked(tasks, jobs, after, own, log)
     t0 = time.time()
     with _pool_lock():
         if log and time.time() - t0 >= 1:
@@ -244,6 +247,27 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
         if head is None:
             return _build_in_turn(tasks, after)
         return _build_forked(tasks, jobs, after, head, log)
+
+
+CGROUP_MEMORY_MAX = "/sys/fs/cgroup/memory.max"
+MEMINFO = "/proc/meminfo"
+
+
+def _own_budget(budget_gb: float | None = None) -> int | None:
+    """The memory this process's builds may budget without the machine's pool lock: `budget_gb` (capped by the headroom), else the
+    headroom of a cgroup whose `memory.max` is below the host's RAM; None when the headroom is the host's, shared."""
+    head = _headroom()
+    if budget_gb:
+        b = int(budget_gb * 2**30)
+        return b if head is None else min(b, head)
+    try:
+        with open(CGROUP_MEMORY_MAX) as f:
+            lim = f.read().strip()
+        with open(MEMINFO) as f:
+            total = next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemTotal")
+    except (OSError, StopIteration, ValueError, IndexError):
+        return None
+    return head if lim.isdigit() and int(lim) < total else None
 
 
 def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
@@ -357,7 +381,7 @@ def stdin_digest() -> str:
 
 
 def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, wds: list[str | None], *, guarded_max: bool, jobs: int,
-            log, **kw: Any) -> list[dict[str, Any]]:
+            log, budget_gb: float | None = None, **kw: Any) -> list[dict[str, Any]]:
     """The global manifest of each rank's Program set (`roots[i]` is rank `ranks[i]`'s): every component built by `build_components`,
     checked and composed in declaration order."""
     reqs = _declared(fixture)
@@ -384,7 +408,7 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
             out.append(g)
             parts.clear()
 
-    build_components(tasks, jobs=jobs, after=after, log=log)
+    build_components(tasks, jobs=jobs, after=after, budget_gb=budget_gb, log=log)
     return out
 
 
@@ -401,7 +425,7 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
                        profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
                        guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
-                       word_max_gates: str | None = None, jobs: int = 1,
+                       word_max_gates: str | None = None, jobs: int = 1, budget_gb: float | None = None,
                        log=None) -> dict[str, Any]:
     """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP; `jobs`
     processes build the components (`build_components`)."""
@@ -411,7 +435,8 @@ def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[in
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
     parts = _global(fixture, roots, ranks, world, wds, profile=profile, return_slots=return_slots, word=word, norm_scales=norm_scales,
-                    guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs, log=log)
+                    guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs,
+                    budget_gb=budget_gb, log=log)
     return merge_ranks(parts) if world > 1 else parts[0]
 
 
@@ -538,6 +563,9 @@ class BuildGlobalOptions:
     vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     jobs: int = option("--jobs", type=int, env=JOBS_ENV, default=0, help=JOBS_HELP)
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="the component builds' own memory budget (capped by the headroom): set, they size "
+                                                    "their pool from it without the machine's component pool lock")
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
 
@@ -604,7 +632,8 @@ def main(a: Any) -> int:
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
                                  profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales,
                                  guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
-                                 cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(), log=log)
+                                 cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(),
+                                 budget_gb=a.build_ram_budget_gb, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],

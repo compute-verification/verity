@@ -1,7 +1,8 @@
 """The plan stage of a single-GPU row (`row_stages.SingleRow`): what the Commit would otherwise derive on the GPU without needing the
 engine, derived on a 0-GPU task before the GPU is held.  The manifest of record and the weights of record beside the component Program,
 as the Commit stage would derive them, and the producer facts (`commit-plan`, `pipeline.commit_plan`) in `plan/commit_plan.json`, which
-the Commit stage passes (`--plan`) and takes only when the plan's key is its own.  Nothing seeded by the run root is planned here.
+the Commit stage passes (`--plan`) and takes only when the plan's key is its own.  Nothing seeded by the run root is planned here.  The
+call-boundary plan is the Build's (`call_boundaries_cmd`, beside `call_boundaries.json`), passed the same way (`--call-boundary-plan`).
 """
 from __future__ import annotations
 
@@ -17,6 +18,10 @@ PLAN_TIMEOUT = 14400
 
 def path(row: Any) -> str:
     return f"{row.d}/plan/commit_plan.json"
+
+
+def boundary_path(row: Any) -> str:
+    return f"{row.d}/call_boundary_plan.json"
 
 
 def programs_args(row: Any) -> list[str]:
@@ -41,7 +46,24 @@ def commit_flags(row: Any) -> list[str]:
     if os.path.isfile(path(row)):
         flags += ["--plan", path(row)]
         row.log(f"plan: {path(row)} (the Commit takes its producer facts from it when the plan's key is its own, else plan_recomputed)")
+    if os.path.isfile(boundary_path(row)):
+        flags += ["--call-boundary-plan", boundary_path(row)]
+        row.log(f"call-boundary plan: {boundary_path(row)} (the Commit takes it when the plan's key is its own, else plan_recomputed)")
     return flags
+
+
+def call_boundaries_cmd(row: Any) -> list[str] | None:
+    """The Build's call-boundary check over the Programs the Commit reads, writing the Commit's call-boundary plan on a PASS
+    (`boundary-plan`, `pipeline.boundary_plan`); None (`gate call-boundaries` over the row dir, no plan) without the Build's manifest or
+    Programs.  A plan of an earlier attempt is removed either way."""
+    if os.path.exists(boundary_path(row)):
+        os.remove(boundary_path(row))
+    man, progs = f"{row.d}/manifest.json", programs_args(row)
+    if not (os.path.isfile(man) and progs):
+        return None
+    pdig = row.program_digest()
+    return row.cli("boundary-plan", "--workload", row.wl, "--required-manifest", man, *(["--program-digest", pdig] if pdig else []), *progs,
+                   "--gate-out", f"{row.d}/call_boundaries.json", "--out", boundary_path(row))
 
 
 def plan(row: Any) -> None:

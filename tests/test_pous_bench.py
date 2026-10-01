@@ -42,7 +42,7 @@ def test_harness_registry_and_certificate_gate():
     assert set(bench.VllmGpu.MODELS) == {ws["id"] for ws in json.loads((BENCH / "weight_sets.json").read_text())["weight_sets"]}
     one = schemes.get()
     gate, gaps = bench.certificate_gate(one, 111, 536_800)
-    assert gate["passed"] and gate["effective_rounds"] == 1 and gaps == ()
+    assert gate["passed"] and gate["effective_rounds"] == 2 and gaps == ()
     gate, gaps = bench.certificate_gate(one, 111, 3_000_000)
     assert not gate["passed"] and "covers 5" in gate["refusals"][0]
     _, gaps = bench.certificate_gate(schemes.get(segments=30), 111, 536_800)
