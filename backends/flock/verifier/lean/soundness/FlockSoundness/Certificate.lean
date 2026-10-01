@@ -38,8 +38,8 @@ theorem run_congr : ∀ (gs : List Gate) (w : ℕ) {v v' : ℕ → Bool}, (∀ j
       simp only [run]
       refine run_congr gs (w + 1) (fun i hi => ?_) hwf.2 j (by simp only [List.length_cons] at hj; omega)
       by_cases hiw : i = w
-      · rw [if_pos hiw, if_pos hiw]; exact Gate.val_congr g hwf.1 h
-      · rw [if_neg hiw, if_neg hiw]; exact h i (by omega)
+      · rw [ite_eq_left hiw, ite_eq_left hiw]; exact Gate.val_congr g hwf.1 h
+      · rw [ite_eq_right hiw, ite_eq_right hiw]; exact h i (by omega)
 
 /-- A gate circuit's outputs read only its inputs. -/
 theorem Circ.eval_congr (C : Circ) (hwf : gatesWF C.nIn C.gates = true)
@@ -110,9 +110,9 @@ theorem sound (zR : Fin R.w → Bool) (hz : R.Sat zR) (h1 : zR R.one = true)
   set z : ℕ → Bool := fun c => if h : c < R.w then zR ⟨c, h⟩ else false with hzdef
   set pad : ℕ → Prop := fun c => c < L.andBase ∧ ¬ ∃ k < G.nIn, L.inCol k = c with hpad
   set z' : ℕ → Bool := fun c => if pad c then false else z c with hz'def
-  have hz'z : ∀ c, ¬ pad c → z' c = z c := fun c hc => if_neg hc
+  have hz'z : ∀ c, ¬ pad c → z' c = z c := fun c hc => ite_eq_right hc
   have hnpad : ∀ c, L.andBase ≤ c → ¬ pad c := fun c hc hp => by have := hp.1; omega
-  have hzR : ∀ c : Fin R.w, z c.val = zR c := fun c => by simp only [hzdef, dif_pos c.isLt]
+  have hzR : ∀ c : Fin R.w, z c.val = zR c := fun c => by simp only [hzdef, dite_eq_left c.isLt]
   have hlist : ∀ l : List (Fin R.w), (∀ c ∈ l, c.val < R.nIn → ∃ k < G.nIn, L.inCol k = c.val) →
       psum z' (listMask (l.map Fin.val)) (rows G L).length = xorSum l zR := by
     intro l hl
@@ -135,16 +135,16 @@ theorem sound (zR : Fin R.w → Bool) (hz : R.Sat zR) (h1 : zR R.one = true)
       · have hany : ((List.range G.nIn).any fun k => L.inCol k == r) = true := by
           obtain ⟨k, hk, hkr⟩ := hin
           exact List.any_eq_true.2 ⟨k, List.mem_range.2 hk, by simp [hkr]⟩
-        rw [if_pos hany]
+        rw [ite_eq_left hany]
         simp only [psum_two_pow, show r < (rows G L).length by omega, decide_true, Bool.true_and, Bool.and_self]
       · have hany : ((List.range G.nIn).any fun k => L.inCol k == r) = false := by
           rw [Bool.eq_false_iff]
           intro h
           obtain ⟨k, hk, hkr⟩ := List.any_eq_true.1 h
           exact hin ⟨k, List.mem_range.1 hk, by simpa using hkr⟩
-        rw [if_neg (by simp [hany])]
+        rw [ite_eq_right (by simp [hany])]
         simp only [psum_zero, Bool.and_self]
-        exact if_pos ⟨hr, hin⟩
+        exact ite_eq_left ⟨hr, hin⟩
     · by_cases hrc : r < constCol G L
       · have hi' : r - R.nIn < R.nComp := by have := cert.w_eq; have := cert.nIn_eq; omega
         have hrow := cert.row ⟨r - R.nIn, hi'⟩
@@ -227,7 +227,7 @@ theorem computes_of_cert {G : Circ} {L : Lay} (cert : RowsCert R G L) (D : (ℕ 
     (List.getElem_of_eq (hD _) _))
   have hlt := cert.inCol_lt_w hk
   have hin : L.inCol k < R.nIn := by have := cert.inCol_lt k hk; have := cert.nIn_eq; omega
-  rw [dif_pos hlt, dif_pos hlt, hzR]
+  rw [dite_eq_left hlt, dite_eq_left hlt, hzR]
   exact P.localEval_of_not_mem X (I.outside _ (hnc ⟨L.inCol k, hlt⟩ hin))
 
 end Audit.Partition.IsRowsUnit

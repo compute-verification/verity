@@ -50,7 +50,7 @@ noncomputable def collOf (p : Prop) (h : p → Merkle.Collision H) : Pair :=
 
 theorem collOf_isColl {p : Prop} (h : p → Merkle.Collision H) (hp : p) : IsColl H (collOf H p h) := by
   unfold collOf
-  rw [dif_pos hp]
+  rw [dite_eq_left hp]
   exact ⟨_, _, rfl, (h hp).choose_spec.choose_spec⟩
 
 /-- An event of a run, as a finder's output: a collision whenever the event holds. -/
@@ -62,8 +62,8 @@ theorem ind_le_onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Merkle
   unfold ind
   by_cases h : q a
   · have hc : IsColl H (onePick H q hq a) := collOf_isColl H (hq a) h
-    rw [if_pos h, if_pos hc]
-  · rw [if_neg h]
+    rw [ite_eq_left h, ite_eq_left hc]
+  · rw [ite_eq_right h]
     split_ifs <;> norm_num
 
 /-- Two runs' conflict at some position, as a finder's output. -/
