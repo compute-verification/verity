@@ -1,6 +1,6 @@
 """Kueue's queue state and pod-to-queue map as Prometheus metrics, for Grafana's per-queue panels and the idle-GPU alerts.
 
-    python3 vy_exporter.py [--listen ADDR:PORT] [--kubectl CMD] [--ready DIR]
+    python3 vy_exporter.py [--listen ADDR:PORT] [--kubectl CMD] [--ready DIR] [--watch FILE]
 
 A host service on vy-nebius-1 (host_up.sh installs it), read by the host's own kubectl. SkyPilot's Prometheus finds it through the
 selectorless Service in exporter.yaml, so no in-cluster credentials are needed. Kueue's own metrics endpoint wants RBAC for a scrape
@@ -11,6 +11,14 @@ token, and kube-state-metrics doesn't carry the queue label. Every scrape reads 
     vy_pod_queue{holder_namespace,holder_pod,queue} 1      each running pod Kueue admitted, and its queue
     vy_ready_jobs{lane}                                     job files in <ready>/<lane>/ (the dispatcher's ready files)
     vy_exporter_ok                                          1 when the last read of Kueue succeeded
+
+With --watch, also `cluster watch`'s last findings (tools/cluster's watch.py; node 1's vy-stall-watch timer writes FILE whole):
+
+    vy_job_stalled{node,owner,handle,usergroup,lane,key,name,run,goal,state,why}   a job with no progress for the window, or a
+                                            goal job waiting that long for a grant: its seconds without progress (else waiting)
+    vy_watch_ok{node,why}                   1 when the watch read the node; 0 with its error (node="registry": the Slack registry)
+    vy_watch_watched{node}   vy_watch_unwatched{node}           the jobs it judged, and those it couldn't
+    vy_watch_age_seconds                    since the watch ran (+Inf when FILE is missing or unreadable)
 
 Labels on pods are `holder_*`, not `pod`/`namespace`, which Prometheus's service discovery sets to the exporter's own target.
 CPU quantities are in cores, memory in bytes, GPUs as counts. Stdlib only.
@@ -77,6 +85,47 @@ def render(clusterqueues: dict, pods: dict, ready: dict[str, int], ok: bool = Tr
     return "".join(f"# TYPE {name} gauge\n" + "\n".join(lines) + "\n" for name, lines in rows.items())
 
 
+WATCH_LABELS = ("node", "owner", "handle", "usergroup", "lane", "key", "name", "run", "goal", "state", "why")
+
+
+def read_watch(path: str) -> dict | None:
+    try:
+        with open(path) as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) and doc.get("schema") == "cluster/watch/v1" else None
+
+
+def render_watch(doc: dict | None, now: float) -> str:
+    """The exposition text for a `cluster watch --json` document (None: missing or unreadable)."""
+    rows: dict[str, list[str]] = {}
+
+    def add(name: str, labels: dict[str, Any], value: float) -> None:
+        lab = ",".join(f'{k}="{_esc(v)}"' for k, v in labels.items())
+        val = "+Inf" if value == float("inf") else f"{value:g}"
+        rows.setdefault(name, []).append(f"{name}{{{lab}}} {val}" if lab else f"{name} {val}")
+
+    if doc is None:
+        add("vy_watch_age_seconds", {}, float("inf"))
+    else:
+        add("vy_watch_age_seconds", {}, max(0.0, now - float(doc.get("t") or 0)))
+        if doc.get("error"):
+            add("vy_watch_ok", {"node": "registry", "why": str(doc["error"])[:200]}, 0)
+        for n in doc.get("nodes") or []:
+            node = n.get("node", "?")
+            add("vy_watch_ok", {"node": node, "why": str(n.get("error") or "")[:200]}, float(not n.get("error")))
+            if n.get("error"):
+                continue
+            add("vy_watch_watched", {"node": node}, float(n.get("watched") or 0))
+            add("vy_watch_unwatched", {"node": node}, float(len(n.get("unwatched") or ())))
+            for f in n.get("findings") or []:
+                f = {**f, "key": f.get("job")}
+                labels = {k: "-" if f.get(k) in (None, "") else f[k] for k in WATCH_LABELS}
+                add("vy_job_stalled", labels, float(f.get("quiet_s") or f.get("for_s") or 1))
+    return "".join(f"# TYPE {name} gauge\n" + "\n".join(lines) + "\n" for name, lines in rows.items())
+
+
 def ready_counts(root: str) -> dict[str, int]:
     out: dict[str, int] = {}
     try:
@@ -91,8 +140,8 @@ def ready_counts(root: str) -> dict[str, int]:
 
 
 class State:
-    def __init__(self, kubectl: list[str], ready: str) -> None:
-        self.kubectl, self.ready, self.lock = kubectl, ready, threading.Lock()
+    def __init__(self, kubectl: list[str], ready: str, watch: str | None = None) -> None:
+        self.kubectl, self.ready, self.watch, self.lock = kubectl, ready, watch, threading.Lock()
         self.at, self.text = 0.0, ""
 
     def get(self, what: list[str]) -> dict:
@@ -108,7 +157,7 @@ class State:
                 except (OSError, subprocess.SubprocessError, ValueError):
                     text = render({}, {}, ready_counts(self.ready), ok=False)
                 self.at, self.text = time.monotonic(), text
-            return self.text
+            return self.text + (render_watch(read_watch(self.watch), time.time()) if self.watch else "")
 
 
 def main() -> None:
@@ -116,8 +165,9 @@ def main() -> None:
     ap.add_argument("--listen", default="127.0.0.1:9402")
     ap.add_argument("--kubectl", default="k3s kubectl")
     ap.add_argument("--ready", default="/workspace/jobs/ready")
+    ap.add_argument("--watch", default=None, help="cluster watch's --out file (vy-stall-watch.timer writes it)")
     a = ap.parse_args()
-    state = State(shlex.split(a.kubectl), a.ready)
+    state = State(shlex.split(a.kubectl), a.ready, a.watch)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802

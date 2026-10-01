@@ -104,6 +104,38 @@ def test_the_exporter_publishes_each_queue_and_which_pod_is_in_it(tmp_path):
     assert "vy_exporter_ok{} 0" in ex.render({}, {}, {}, ok=False)
 
 
+WATCH = {"schema": "cluster/watch/v1", "t": 1790820000, "window_s": 1800, "nodes": [
+    {"node": "vy-nebius-1", "window": False, "watched": 4, "unwatched": [{"owner": "proofs-bf16-hill", "job": "k", "why": "w"}],
+     "findings": [{"node": "vy-nebius-1", "owner": "vllm-epoch-run", "handle": "circuits", "usergroup": "S0C5U3LHMFT",
+                   "lane": "vllm-epoch-run", "job": "cov-g176", "name": "nd-coverage-1a2b3c4d5e-gpu-0", "run": "r20261001-0101-ab12",
+                   "goal": None, "state": "running", "gpus": 1, "for_s": 3600, "quiet_s": 2400,
+                   "why": 'no run file changed, and its processes and GPUs were idle for 30m "x"'}]},
+    {"node": "vy-nebius-2", "error": "ReadError: research@vy-n2: ssh: connect to host vy-n2 port 22: Connection timed out"}]}
+
+
+def test_the_exporter_publishes_cluster_watchs_stalled_jobs_and_whether_the_watch_is_running(tmp_path):
+    ex = load("vy_exporter")
+    f = tmp_path / "stall-watch.json"
+    f.write_text(json.dumps(WATCH))
+    lines = ex.render_watch(ex.read_watch(str(f)), 1790820090).splitlines()
+    assert "vy_watch_age_seconds 90" in lines
+    assert ('vy_job_stalled{node="vy-nebius-1",owner="vllm-epoch-run",handle="circuits",usergroup="S0C5U3LHMFT",'
+            'lane="vllm-epoch-run",key="cov-g176",name="nd-coverage-1a2b3c4d5e-gpu-0",run="r20261001-0101-ab12",goal="-",'
+            'state="running",why="no run file changed, and its processes and GPUs were idle for 30m \\"x\\""} 2400') in lines
+    assert 'vy_watch_ok{node="vy-nebius-1",why=""} 1' in lines and 'vy_watch_watched{node="vy-nebius-1"} 4' in lines
+    assert 'vy_watch_unwatched{node="vy-nebius-1"} 1' in lines
+    assert ('vy_watch_ok{node="vy-nebius-2",why="ReadError: research@vy-n2: ssh: connect to host vy-n2 port 22: Connection timed '
+            'out"} 0') in lines and not any('node="vy-nebius-2"' in ln for ln in lines if not ln.startswith("vy_watch_ok"))
+    assert sum(ln.startswith("# TYPE ") for ln in lines) == 5
+    bad = ex.render_watch({**WATCH, "nodes": [], "error": "registry r: ValueError: @a and @b both own lane 'x'"}, 1790820000)
+    assert "vy_watch_ok{node=\"registry\",why=\"registry r: ValueError: @a and @b both own lane 'x'\"} 0" in bad
+    for missing in (tmp_path / "absent.json", tmp_path / "torn.json", tmp_path / "other.json"):
+        (tmp_path / "torn.json").write_text('{"schema": "cluster/wat')
+        (tmp_path / "other.json").write_text('{"schema": "cluster/status/v1", "t": 1}')
+        assert ex.read_watch(str(missing)) is None
+    assert ex.render_watch(None, 0) == "# TYPE vy_watch_age_seconds gauge\nvy_watch_age_seconds +Inf\n"
+
+
 def test_a_firing_notification_becomes_markdown_notes_naming_the_job_and_its_lane(tmp_path):
     sink = load("alert_sink")
     assert sink.job_id_of("gpu-209-ce1b86e4-head") == 209 and sink.job_id_of("m0-v3-a13-198-ce1b86e4-head") == 198
