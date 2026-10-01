@@ -516,6 +516,33 @@ def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_l
     assert not stray.acquired and "('warmup-7-aec3dda0', 4)" in stray.errors[0]
 
 
+def test_the_warm_up_commits_zero_words_of_the_records_layout_and_evaluates_nothing(pair, monkeypatch):
+    """The Commit's warm-up instrumented run is never a record (`taps.warmup`): every target, packed, per request or step-shared, is zero
+    words of the name, shape and dtype the record commits, and no template is evaluated.  Off again, the same source commits the IR's
+    words, and a bounded committer's `learn_only` follows the same switch."""
+    com, src = _dense_source(pair, pair.man, pair.root)
+    _drive_pair(pair, com, src, ["r1", "r0"])
+    ref = [(s, n, tuple(t.shape), t.dtype, CB.words(torch, t).tobytes()) for s, n, t in com.acquired]
+    calls, real = [], CP.evaluate_template
+    monkeypatch.setattr(CP, "evaluate_template", lambda *a, **k: calls.append(a[2]) or real(*a, **k))
+    warm, wsrc = _dense_source(pair, pair.man, pair.root)
+    taps.warmup(warm, True)
+    _drive_pair(pair, warm, wsrc, ["r1", "r0"], lambda e, rows: [(f"warmup-{rid[3]}", lo, hi) for rid, lo, hi in rows])
+    assert not warm.errors and not calls, warm.errors
+    assert [(s, n, tuple(t.shape), t.dtype) for s, n, t in warm.acquired] == [x[:4] for x in ref]
+    assert not any(CB.words(torch, t).any() for _s, _n, t in warm.acquired)
+    assert wsrc.stats["placeholder_bodies"] == wsrc.stats["bodies"] == len(wsrc.plan.bodies)
+    taps.warmup(warm, False)
+    warm.acquired.clear()
+    _drive_pair(pair, warm, wsrc, ["r1", "r0"])
+    assert calls and [(s, n, tuple(t.shape), t.dtype, CB.words(torch, t).tobytes()) for s, n, t in warm.acquired] == ref
+    bounded = types.SimpleNamespace(bounded=True, learn_only=False, sources=[wsrc])
+    taps.warmup(bounded, True)
+    assert bounded.learn_only and wsrc.placeholder
+    taps.warmup(bounded, False)
+    assert not bounded.learn_only and not wsrc.placeholder
+
+
 # ------------------------------------------------------------------------------------------------------------------------- the record
 def _read_back(plan):
     return CP.of_json(json.loads(json.dumps(CP.to_json(plan))))
