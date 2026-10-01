@@ -171,7 +171,7 @@ def _traced(name: str, version: int, statics: tuple[str, ...], sig: Callable, ma
 
     def body(B, S, *colls):
         params, ret = sig(S)
-        return TR._body(traced(S), [t for _, t in params], ret, B, *colls)
+        return TR.emit(traced(S), [t for _, t in params], ret, B, *colls)
 
     d = CompositeDefinition(name, version, statics, sig, body, doc=doc, conformance="exact-model-tested")
     d.traced = traced  # type: ignore[attr-defined]
