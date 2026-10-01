@@ -53,11 +53,14 @@ class Options(CR.Options):
                                    help="the forked pool's time per picked VU (the replay's default is 3 s, for the word kernels)")
 
 
+_RUN_MAX = 1 << 20  # elements converted at once (an embedding table's 28M words would take 7 GB of temporaries whole)
+
+
 def _runs(widths: list[int]) -> list[tuple[int, int, int, int]]:
-    """(width, first element, end element, first bit) of each run of equal element widths."""
+    """(width, first element, end element, first bit) of each run of equal element widths, at most `_RUN_MAX` elements long."""
     out, lo, bit = [], 0, 0
     for j in range(1, len(widths) + 1):
-        if j == len(widths) or widths[j] != widths[lo]:
+        if j == len(widths) or widths[j] != widths[lo] or j - lo == _RUN_MAX:
             out.append((widths[lo], lo, j, bit))
             bit += widths[lo] * (j - lo)
             lo = j

@@ -36,6 +36,14 @@ def test_words_go_to_bits_least_significant_first_and_back() -> None:
         BR.to_bits(np.zeros(3, np.uint16), [16, 16])
 
 
+def test_a_long_run_of_one_width_converts_in_blocks(monkeypatch) -> None:
+    words = np.random.default_rng(4).integers(0, 1 << 16, size=11, dtype=np.uint64)
+    whole = BR.to_bits(words, [16] * 11)
+    monkeypatch.setattr(BR, "_RUN_MAX", 4)
+    assert [hi - lo for _, lo, hi, _ in BR._runs([16] * 11)] == [4, 4, 3]
+    assert np.array_equal(BR.to_bits(words, [16] * 11), whole) and BR.to_words(whole, [16] * 11).tolist() == words.tolist()
+
+
 class _Index:
     def __init__(self, ports: dict[str, str]) -> None:
         self.ports = ports
