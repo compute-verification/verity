@@ -152,6 +152,99 @@ __global__ void tree_level_kernel(const uint32_t *__restrict__ in, uint32_t *__r
     o4[1] = make_uint4(bswap(s.h[4]), bswap(s.h[5]), bswap(s.h[6]), bswap(s.h[7]));
 }
 
+// --- hm96-sha256/v1 leaves over the chunk leaves (verity.commitments.hm96; verity_vllm.commit.hiding.GpuSalts) -------------
+//   x = the chunk leaf above (in place); y = 128 salt bytes, RFC 8439 ChaCha20 blocks 2i, 2i+1 of the run's salt key with the
+//   step's 12-byte nonce, i the leaf's index in its step; c = SHA-256(salt_prefix || y); b = x XOR M(key) y;
+//   leaf = SHA-256(leaf_prefix || b || c).  The prefixes are one block each: mid[0..8) and mid[8..16) are their midstates.
+//   tables[p][v] (128 x 256 x 32 bytes) is the XOR of the key's columns 8p + s over the set bits s of v, the digest's byte order.
+__device__ __forceinline__ uint32_t cc_rotl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+
+__device__ __forceinline__ void chacha20_block(const uint32_t (&key)[8], uint32_t counter, const uint32_t (&nonce)[3], uint32_t *out) {
+    uint32_t s[16] = {0x61707865u, 0x3320646eu, 0x79622d32u, 0x6b206574u, key[0], key[1], key[2], key[3],
+                      key[4], key[5], key[6], key[7], counter, nonce[0], nonce[1], nonce[2]};
+    uint32_t x[16];
+    #pragma unroll
+    for (int i = 0; i < 16; ++i) x[i] = s[i];
+    #pragma unroll
+    for (int r = 0; r < 10; ++r) {
+#define VY_QR(a, b, c, d) { x[a] += x[b]; x[d] = cc_rotl(x[d] ^ x[a], 16); x[c] += x[d]; x[b] = cc_rotl(x[b] ^ x[c], 12); \
+                            x[a] += x[b]; x[d] = cc_rotl(x[d] ^ x[a], 8);  x[c] += x[d]; x[b] = cc_rotl(x[b] ^ x[c], 7); }
+        VY_QR(0, 4, 8, 12) VY_QR(1, 5, 9, 13) VY_QR(2, 6, 10, 14) VY_QR(3, 7, 11, 15)
+        VY_QR(0, 5, 10, 15) VY_QR(1, 6, 11, 12) VY_QR(2, 7, 8, 13) VY_QR(3, 4, 9, 14)
+#undef VY_QR
+    }
+    #pragma unroll
+    for (int i = 0; i < 16; ++i) out[i] = x[i] + s[i];
+}
+
+struct SaltKey { uint32_t key[8]; uint32_t nonce[3]; };
+
+__global__ void hm96_leaves_kernel(uint32_t *__restrict__ leaves, long n, long first, SaltKey sk, const uint4 *__restrict__ tables,
+                                   const uint32_t *__restrict__ mid) {
+    const long li = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (li >= n) return;
+    const long i = first + li;
+    uint32_t y[32];
+    chacha20_block(sk.key, (uint32_t)(2 * i), sk.nonce, y);
+    chacha20_block(sk.key, (uint32_t)(2 * i + 1), sk.nonce, y + 16);
+    uint4 m0 = make_uint4(0u, 0u, 0u, 0u), m1 = m0;
+    #pragma unroll
+    for (int q = 0; q < 32; ++q) {
+        #pragma unroll
+        for (int r = 0; r < 4; ++r) {
+            const uint4 *e = tables + ((size_t)(4 * q + r) * 256 + ((y[q] >> (8 * r)) & 0xFFu)) * 2;
+            const uint4 a = __ldg(e), b = __ldg(e + 1);
+            m0.x ^= a.x; m0.y ^= a.y; m0.z ^= a.z; m0.w ^= a.w;
+            m1.x ^= b.x; m1.y ^= b.y; m1.z ^= b.z; m1.w ^= b.w;
+        }
+    }
+    uint4 *x4 = reinterpret_cast<uint4 *>(leaves + li * 8);
+    const uint4 x0 = x4[0], x1 = x4[1];
+    const uint32_t bw[8] = {x0.x ^ m0.x, x0.y ^ m0.y, x0.z ^ m0.z, x0.w ^ m0.w, x1.x ^ m1.x, x1.y ^ m1.y, x1.z ^ m1.z, x1.w ^ m1.w};
+    Sha c;
+    #pragma unroll
+    for (int j = 0; j < 8; ++j) c.h[j] = mid[j];
+    uint32_t w[16];
+    #pragma unroll
+    for (int j = 0; j < 16; ++j) w[j] = bswap(y[j]);
+    c.compress(w);
+    #pragma unroll
+    for (int j = 0; j < 16; ++j) w[j] = bswap(y[16 + j]);
+    c.compress(w);
+    #pragma unroll
+    for (int j = 0; j < 16; ++j) w[j] = 0u;
+    w[0] = 0x80000000u;
+    w[15] = (64u + 128u) * 8u;
+    c.compress(w);
+    Sha l;
+    #pragma unroll
+    for (int j = 0; j < 8; ++j) l.h[j] = mid[8 + j];
+    #pragma unroll
+    for (int j = 0; j < 8; ++j) { w[j] = bswap(bw[j]); w[8 + j] = c.h[j]; }
+    l.compress(w);
+    #pragma unroll
+    for (int j = 0; j < 16; ++j) w[j] = 0u;
+    w[0] = 0x80000000u;
+    w[15] = (64u + 64u) * 8u;
+    l.compress(w);
+    x4[0] = make_uint4(bswap(l.h[0]), bswap(l.h[1]), bswap(l.h[2]), bswap(l.h[3]));
+    x4[1] = make_uint4(bswap(l.h[4]), bswap(l.h[5]), bswap(l.h[6]), bswap(l.h[7]));
+}
+
+// the SHA-256 states after each one-block prefix (the salt prefix, then the leaf prefix): 128 bytes in, 16 words out
+__global__ void hm96_midstates_kernel(const uint8_t *__restrict__ prefixes, uint32_t *__restrict__ mid) {
+    for (int k = 0; k < 2; ++k) {
+        Sha s; s.init();
+        uint32_t w[16];
+        for (int j = 0; j < 16; ++j) {
+            const uint8_t *p = prefixes + 64 * k + 4 * j;
+            w[j] = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+        }
+        s.compress(w);
+        for (int j = 0; j < 8; ++j) mid[8 * k + j] = s.h[j];
+    }
+}
+
 }  // namespace
 
 torch::Tensor chunk_leaves(torch::Tensor stream, int64_t chunk_words, int64_t launch_tag, int64_t src_mask, int64_t HB, int64_t M, int64_t NB) {
@@ -192,7 +285,37 @@ std::vector<torch::Tensor> tree_levels(torch::Tensor leaves) {
     return lv;
 }
 
+torch::Tensor hm96_midstates(torch::Tensor prefixes) {
+    TORCH_CHECK(prefixes.is_cuda() && prefixes.dtype() == torch::kUInt8 && prefixes.is_contiguous() && prefixes.numel() == 128);
+    auto mid = torch::empty({16}, prefixes.options().dtype(torch::kInt32));
+    hm96_midstates_kernel<<<1, 1, 0, at::cuda::getCurrentCUDAStream()>>>(prefixes.data_ptr<uint8_t>(), reinterpret_cast<uint32_t *>(mid.data_ptr<int32_t>()));
+    return mid;
+}
+
+// leaves [n, 8] (chunk leaves of one step's leaves [first, first + n)) become hm96-sha256/v1 leaves in place.  salt_key: 11 int32 on
+// the host, the ChaCha20 key's 8 words then the step's 3 nonce words; tables and mid on the device (hm96_midstates)
+void hm96_leaves(torch::Tensor leaves, int64_t first, torch::Tensor salt_key, torch::Tensor tables, torch::Tensor mid) {
+    TORCH_CHECK(leaves.is_cuda() && leaves.dtype() == torch::kInt32 && leaves.is_contiguous() && leaves.dim() == 2 && leaves.size(1) == 8);
+    TORCH_CHECK(!salt_key.is_cuda() && salt_key.dtype() == torch::kInt32 && salt_key.numel() == 11 && salt_key.is_contiguous());
+    TORCH_CHECK(tables.is_cuda() && tables.dtype() == torch::kUInt8 && tables.is_contiguous() && tables.numel() == 128 * 256 * 32);
+    TORCH_CHECK(mid.is_cuda() && mid.dtype() == torch::kInt32 && mid.numel() == 16);
+    const long n = leaves.size(0);
+    TORCH_CHECK(first >= 0 && 2 * (first + n) <= (1LL << 32), "the salt stream's 32-bit block counter would wrap");
+    if (n == 0) return;
+    SaltKey sk;
+    const int32_t *k = salt_key.data_ptr<int32_t>();
+    for (int j = 0; j < 8; ++j) sk.key[j] = (uint32_t)k[j];
+    for (int j = 0; j < 3; ++j) sk.nonce[j] = (uint32_t)k[8 + j];
+    const int threads = 128;
+    const long blocks = (n + threads - 1) / threads;
+    hm96_leaves_kernel<<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+        reinterpret_cast<uint32_t *>(leaves.data_ptr<int32_t>()), n, (long)first, sk, reinterpret_cast<const uint4 *>(tables.data_ptr<uint8_t>()),
+        reinterpret_cast<const uint32_t *>(mid.data_ptr<int32_t>()));
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("hm96_midstates", &hm96_midstates, "the hm96-sha256/v1 prefixes' SHA-256 midstates");
+    m.def("hm96_leaves", &hm96_leaves, "hm96-sha256/v1 leaves over chunk leaves, in place, salts from the run's ChaCha20 stream");
     m.def("chunk_leaves", &chunk_leaves, "SHA-256 chunk leaves over the M1 stream");
     m.def("tree_level", &tree_level, "one Merkle level (production node/lift rule)");
     m.def("tree_levels", &tree_levels, "all Merkle levels on the GPU");
