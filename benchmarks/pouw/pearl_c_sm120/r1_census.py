@@ -18,7 +18,8 @@ products (E4M3 values are integers in units of 2^-9, so every sum is an exact in
 Rows are quantized per row (absmax to 448, E4M3 round-to-nearest-even), A's tokens and B's weight rows both.  Starts: `zero`
 (+0), and `h<H>`: word (i, j) starts at H_ij = s_ij 2^(round(log2 r_ij) + H) (1 + u_ij / 2), r_ij = sqrt(32) |a_i| |b_j| / k
 (the atom sum's rms), s and u keyed per word; the output is fl(C - H), whose error against the exact product is reported
-(over all of k, on the first --err-rows x --err-cols words).
+(over all of k, on the first --err-rows x --err-cols words), with `order_free`, the share of those words whose final FP32 word
+is unchanged when the chain visits the atoms in reverse order (1 where each atom's contribution doesn't depend on the state).
 
 Per (layer, class, start), over the first --atoms atoms: the exact share per atom, the exact prefix from the start (mean = an upper bound on the atoms a
 verifier must uncredit per word, a share 32 * mean / k of the credit), and for the prefix windows [0, t) and for 32-atom
@@ -245,6 +246,28 @@ def census(flags: np.ndarray, rows: int, cols: int, k_atoms: int) -> dict:
     return out
 
 
+def repeated_slices(codes: np.ndarray) -> dict:
+    """The share of (row, atom) code slices that another row repeats at the same atom: exactly, and up to sign (the chain is
+    odd, so a negated slice's contribution is the negated contribution under the negated start)."""
+    rows, k = codes.shape
+    codes = np.where((codes & 0x7F) == 0, 0, codes).astype(np.uint8)
+    nonzero = codes.reshape(rows, k // 32, 32).any(axis=2)
+    out = {}
+    for name, c in (("exact", codes), ("up_to_sign", None)):
+        if c is None:
+            s = codes.reshape(rows, k // 32, 32)
+            first = np.take_along_axis(s, (s != 0).argmax(axis=2)[..., None], axis=2)
+            c = np.where((first >> 7) == 1, s ^ np.where(s != 0, np.uint8(0x80), np.uint8(0)), s).reshape(rows, k)
+        rep = np.zeros((rows, k // 32), bool)
+        for t in range(k // 32):
+            v = np.ascontiguousarray(c[:, 32 * t:32 * t + 32]).view(np.dtype((np.void, 32))).ravel()
+            _, inv, cnt = np.unique(v, return_inverse=True, return_counts=True)
+            rep[:, t] = cnt[inv] > 1
+        out[name] = float((rep & nonzero).mean())
+    out["zero_slices"] = float((~nonzero).mean())
+    return out
+
+
 def start_words(start: str, av: np.ndarray, bv: np.ndarray, g: np.random.Generator) -> np.ndarray:
     if start == "zero":
         return np.zeros(len(av) * len(bv), np.uint32)
@@ -258,8 +281,11 @@ def error(ac: np.ndarray, bc: np.ndarray, start: str, g: np.random.Generator) ->
     y, truth = (acc.view(np.float32) - s0.view(np.float32)).astype(np.float64), exact / UNIT
     y_bf16 = (f32_to_bf16_rn_batch(truth.astype(np.float32).view(np.uint32))[0].astype(np.uint32) << 16).view(np.float32)
     rms = np.sqrt(np.mean(truth ** 2))
+    rev = np.arange(ac.shape[1]).reshape(-1, 32)[::-1].ravel()
+    _, back, _ = chain(ac[:, rev], bc[:, rev], s0)
     return {"rel_err_rms": float(np.sqrt(np.mean((y - truth) ** 2)) / rms),
-            "bf16_rel_err_rms": float(np.sqrt(np.mean((y_bf16 - truth) ** 2)) / rms), "words": len(y)}
+            "bf16_rel_err_rms": float(np.sqrt(np.mean((y_bf16 - truth) ** 2)) / rms), "words": len(y),
+            "order_free": float((back == acc).mean())}
 
 
 def job(layer: int, cls: str, args, key: str, out: Path) -> str:
@@ -272,6 +298,7 @@ def job(layer: int, cls: str, args, key: str, out: Path) -> str:
     res = {"layer": layer, "class": cls, "rows": rows, "cols": cols, "k": k, "census_atoms": span // 32, "key": key,
            "zero_codes": {"a": float(((ac & 0x7F) == 0).mean()), "b": float(((bc & 0x7F) == 0).mean())},
            "subnormal_codes": {"a": float(((ac & 0x78) == 0).mean()), "b": float(((bc & 0x78) == 0).mean())},
+           "repeated_slices": {"a": repeated_slices(ac), "b": repeated_slices(bc)},
            "starts": {}}
     path = out / f"L{layer:03d}-{cls}.json"
     y_true = (av[:, :span] @ bv[:, :span].T).ravel()
