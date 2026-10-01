@@ -1,7 +1,7 @@
 /-
 PROTOCOL.md §16.7: `Q_word` v1 over the verifier's own copy of the program (`verity.ir.cut`, PR #111, read through #120's
 format, `Flock.Program`): each Call's computing graph (`CallGraph` of `cut.CallGraph`), separability, and the Program's units
-by Call, which `Flock.Qword` cuts.
+by Call, which `Flock.Qword` cuts. `Q_word` v2 evaluates the same; only its cut check differs (`checkCalls`' `report`).
 
 A Call is cut as its Definition's activation in a one-Call Program: parameter `i`'s leaf `j` is Input gate `starts[i] + j`,
 the Definition's own gates follow at `lo`. In a graph, an operand outside the Call is an input: numbered by first read when
@@ -267,6 +267,8 @@ structure CutCheck where
   /-- the graph's computing gates and recomputed pairs, the derived committed set's size, the widest unit boundary and the
   boundary gates in all -/
   stats : Array Nat := #[]
+  /-- under `Q_word` v2, the recomputed pairs whose gates two units compute (reported, not refused) -/
+  across : Nat := 0
   deriving Inhabited
 
 def CutCheck.toJson (r : CutCheck) : Json :=
@@ -276,17 +278,21 @@ def CutCheck.toJson (r : CutCheck) : Json :=
 /-- `partition_object._verify_calls` without served commits: each Definition's cut, once, checked on its Call's whole graph
 (`check_cut` with the derived committed set and the width rule `(X, W, 0)`), in first-Call order. The graph is built without
 its input table: with the derived committed set, the Call's parameters (input gates) can fail none of the invariant's
-clauses, since every read of one and every returned one is committed, and their count cancels from the gate count. -/
-def checkCalls (P : Prog) (calls : Array (Nat × Nat × Qword.DCut)) (X W : Nat) : V (Array (Nat × CutCheck)) := do
+clauses, since every read of one and every returned one is committed, and their count cancels from the gate count.
+`report`: `Q_word` v2's rule (a value computed in two units reported, `across`, not refused); v1's otherwise. -/
+def checkCalls (P : Prog) (calls : Array (Nat × Nat × Qword.DCut)) (X W : Nat) (report : Bool := false) :
+    V (Array (Nat × CutCheck)) := do
   let mut done : Array (Nat × CutCheck) := #[]
   for (_, d, c) in calls do
     if done.any (·.1 == d) then continue
     let gr ← graph P d (full := false)
-    let (codes, wide) := Partition.checkCut gr.g c.owner none (some (X, W, 0))
-    let stats := if c.owner.size != gr.g.n then #[] else
+    let (codes, wide) := Partition.checkCut gr.g c.owner none (some (X, W, 0)) report
+    let ok := c.owner.size == gr.g.n
+    let stats := if !ok then #[] else
       let (ob, og) := Partition.boundaryWidths gr.g c.owner
       #[gr.g.n, gr.g.recomputed.size, (Partition.derivedCommitted gr.g c.owner).size, ob.foldl max 0, og.foldl (· + ·) 0]
-    done := done.push (d, { codes, wide, stats })
+    let across := if report && ok then (gr.g.cut c.owner none true).recomputedAcross.size else 0
+    done := done.push (d, { codes, wide, stats, across })
   return done
 
 /-- `verify`'s `cut`: every Call whose Definition's cut fails, in Call order, with that cut's codes. -/
