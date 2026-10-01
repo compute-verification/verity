@@ -1,5 +1,5 @@
-import Verity.TC.Ampere.Group
-import Verity.TC.Proofs.SemGroup
+import Verity.SecurityProofs.TC.Ampere.Group
+import Verity.SecurityProofs.TC.Proofs.SemGroup
 
 /-!
 # One Ampere group, the semantics' side

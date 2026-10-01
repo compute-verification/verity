@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.Step
+import Verity.SecurityProofs.TC.Proofs.Step
 
 /-!
 # Completeness: the honest witness satisfies every predicate

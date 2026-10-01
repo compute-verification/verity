@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.SemGroup
+import Verity.SecurityProofs.TC.Proofs.SemGroup
 
 /-!
 # The FP32 word at the boundary

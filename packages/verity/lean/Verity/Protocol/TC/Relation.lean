@@ -1,11 +1,11 @@
-import Verity.TC.Pipeline
+import Verity.Protocol.TC.Pipeline
 
 /-!
 # The step relation: `verity.ml.tc.relation.check_step`
 
 A transcription of `relation.py`'s tables, its predicate kinds (`Census.MUL`, `BOOL`, `LIN`, `LOOKUP`, `RANGE`, `ISZERO`)
 and `check_step`, predicate for predicate and in order, over the integers (Python's `int`). It reads nothing from
-`Verity.TC.Spec`: the two transcriptions are independent, and `Verity.TC.Sound` proves them equivalent.
+`Verity.TC.Spec`: the two transcriptions are independent, and `Verity.SecurityProofs.TC.Sound` proves them equivalent.
 
 Where this differs from the Python:
 
@@ -16,7 +16,7 @@ Where this differs from the Python:
 * **`RANGE` and `ISZERO` are their meaning**: `RANGE x bits` is `0 ≤ x < 2^bits`, which is what `Census.RANGE` accepts
   (one `T_range` lookup when `bits ≤ 16`; otherwise non-negativity, the 16-bit chunk split and a lookup per chunk), and
   `ISZERO x bits z` is `x` in range with `z = [x = 0]`, which is what `Census.ISZERO`'s 12-bit chunks, lookups and muls
-  accept. `Verity.TC.Gadgets` proves the chunked forms equivalent.
+  accept. `Verity.SecurityProofs.TC.Gadgets` proves the chunked forms equivalent.
 * **Products the checker computes itself** (`both`, `fin_inf`, `any_inf * any_ninf`, `inf_out * neg_inf`, the running
   product of the "attained" chain) appear as those products, as in the Python, and the `MUL`s that check them against
   themselves are kept.

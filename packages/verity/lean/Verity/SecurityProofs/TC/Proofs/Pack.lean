@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.Words
+import Verity.SecurityProofs.TC.Proofs.Words
 
 /-!
 # The unit boundary: `pack_relation` is `pack_value` then `cvt.rn.bf16.f32`

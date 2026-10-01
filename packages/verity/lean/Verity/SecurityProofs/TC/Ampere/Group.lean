@@ -1,11 +1,12 @@
-import Verity.TC.Ampere.Arith
-import Verity.TC.Proofs.Group
+import Verity.SecurityProofs.TC.Ampere.Arith
+import Verity.SecurityProofs.TC.Proofs.Group
 
 /-!
 # One Ampere group, the relation's side
 
-`Verity.TC.Proofs.Group` for the Ampere/Ada parameters (`AP`): a term's alignment, and every column of the finite path.
-The maximum exponent (`estar_eq`) and the output state (`out_poly`) do not depend on the parameters and are reused.
+`Verity.SecurityProofs.TC.Proofs.Group` for the Ampere/Ada parameters (`AP`): a term's alignment, and every column of
+the finite path. The maximum exponent (`estar_eq`) and the output state (`out_poly`) do not depend on the parameters and
+are reused.
 -/
 
 namespace Verity.TC.Proofs.Ampere

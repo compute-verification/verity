@@ -1,5 +1,5 @@
-import Verity.TC.Ampere.Step
-import Verity.TC.Proofs.Words
+import Verity.SecurityProofs.TC.Ampere.Step
+import Verity.SecurityProofs.TC.Proofs.Words
 
 /-!
 # The FP32 word at the boundary, on the Ampere pipeline (floor `-132`)

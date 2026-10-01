@@ -1,5 +1,5 @@
-import Verity.TC.Ampere.Words
-import Verity.TC.Proofs.Complete
+import Verity.SecurityProofs.TC.Ampere.Words
+import Verity.SecurityProofs.TC.Proofs.Complete
 
 /-!
 # Completeness for an Ampere group: the honest witness satisfies every predicate

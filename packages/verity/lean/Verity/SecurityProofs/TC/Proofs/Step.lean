@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.SemGroup
+import Verity.SecurityProofs.TC.Proofs.SemGroup
 
 /-!
 # One group, both sides: `group_sound`

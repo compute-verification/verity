@@ -1,5 +1,6 @@
 import Verity.Guarantees.Circuit
 import Verity.Guarantees.Game
+import Verity.Guarantees.TC
 
 /-!
 # Core's guarantees

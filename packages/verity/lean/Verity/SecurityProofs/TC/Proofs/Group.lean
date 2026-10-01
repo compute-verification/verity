@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.Norm
+import Verity.SecurityProofs.TC.Proofs.Norm
 
 /-!
 # One group, the relation's side: what the predicates force

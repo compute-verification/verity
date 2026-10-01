@@ -1,10 +1,11 @@
-import Verity.TC.Proofs.Group
+import Verity.Protocol.TC.Bridge
+import Verity.SecurityProofs.TC.Proofs.Group
 
 /-!
 # One group, the semantics' side
 
 `groupSum_eq` is `group_sum` on the Hopper adder in terms of the relation's total `T` and maximum exponent `E`.
-`stateOf` is the relation's canonical state of a value, and `Admissible` the values a group takes as its accumulator.
+`finResult_admissible`: its finite result is `Admissible` (`Verity.Protocol.TC.Bridge`).
 -/
 
 namespace Verity.TC.Proofs
@@ -60,19 +61,6 @@ theorem groupSum_eq (ts : List Term) (xs : List TermIn) (hc : Corr (-133) ts xs)
     have he : eFin T E = if E + ↑(bitLength T.natAbs) - 26 < -126 then -126 else E + ↑(bitLength T.natAbs) - 26 := by
       unfold eFin eOut; split <;> omega
     rw [← hm, ← he]
-
-/-- The relation's state of a value: what `decode_state ∘ pack_value` gives on a group's output. -/
-def stateOf (Z : Int) : Value → State
-  | .nan => ⟨1, 0, 0, Z, 0⟩
-  | .inf n => ⟨0, 1, if n then 1 else 0, Z, 0⟩
-  | .fin t => if t.magnitude = 0 then ⟨0, 0, 0, Z, 0⟩
-      else ⟨0, 0, if t.negative then 1 else 0, t.exponent, t.magnitude⟩
-
-/-- The values a group takes as its accumulator: an FP32 word's value, or a group's output. -/
-def Admissible : Value → Prop
-  | .fin t => t.magnitude < 2 ^ 24 ∧
-      (t.magnitude ≠ 0 → -126 ≤ t.exponent ∧ t.exponent ≤ 127 ∧ (2 ^ 23 ≤ t.magnitude ∨ t.exponent = -126))
-  | _ => True
 
 theorem finResult_admissible (T E : Int) (hT : T.natAbs < 2 ^ 32) (hov : ¬ eFin T E > 127) :
     Admissible (.fin (finResult T E)) := by

@@ -1,5 +1,5 @@
-import Verity.TC.Spec
-import Verity.TC.Relation
+import Verity.Protocol.TC.Spec
+import Verity.Protocol.TC.Relation
 
 /-!
 # One product: the relation's product rows are forced, and they are `bf16_product_total`

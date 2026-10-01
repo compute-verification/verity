@@ -1,4 +1,4 @@
-import Verity.TC.Pipeline
+import Verity.Protocol.TC.Pipeline
 
 /-!
 # The step semantics: `verity.ml.tc.total.tc_dot_total` on BF16 pipelines

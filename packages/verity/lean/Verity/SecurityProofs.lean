@@ -12,6 +12,7 @@ import Verity.SecurityProofs.Game.Seq
 import Verity.SecurityProofs.Game.Lock
 import Verity.SecurityProofs.Game.Batch
 import Verity.SecurityProofs.Game.Rewinding
+import Verity.SecurityProofs.TC
 
 /-!
 # Proofs of core's guarantees

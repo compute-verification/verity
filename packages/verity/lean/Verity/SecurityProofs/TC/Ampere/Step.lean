@@ -1,5 +1,5 @@
-import Verity.TC.Ampere.SemGroup
-import Verity.TC.Proofs.Step
+import Verity.SecurityProofs.TC.Ampere.SemGroup
+import Verity.SecurityProofs.TC.Proofs.Step
 
 /-!
 # One Ampere group, both sides: `group_sound`

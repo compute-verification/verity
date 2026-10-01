@@ -58,7 +58,7 @@ While proving, check one file at a time, and leave the whole package and the aud
   /tmp/scratch/Probe.lean`. It takes well under a second against built imports:
 
   ~~~lean
-  import Verity.TC.AmpereSound
+  import Verity.SecurityProofs.TC.AmpereSound
   #print axioms Verity.TC.ampere_step_hw     -- a sorry shows as sorryAx, long before the audit runs
   example (a b : Nat) : a + b = b + a := by exact?
   ~~~

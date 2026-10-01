@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.Prod
+import Verity.SecurityProofs.TC.Proofs.Prod
 
 /-!
 # `group_sum`'s two folds, against the relation's terms

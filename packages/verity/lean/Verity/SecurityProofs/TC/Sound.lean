@@ -1,9 +1,9 @@
-import Verity.TC.Spec
-import Verity.TC.Relation
+import Verity.Protocol.TC.Spec
+import Verity.Protocol.TC.Relation
 import Verity.Assumptions
-import Verity.TC.Proofs.Step
-import Verity.TC.Proofs.Words
-import Verity.TC.Proofs.Complete
+import Verity.SecurityProofs.TC.Proofs.Step
+import Verity.SecurityProofs.TC.Proofs.Words
+import Verity.SecurityProofs.TC.Proofs.Complete
 
 /-!
 # The step relation is the step semantics

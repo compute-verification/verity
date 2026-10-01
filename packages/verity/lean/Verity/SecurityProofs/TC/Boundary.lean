@@ -1,5 +1,5 @@
-import Verity.TC.AmpereSound
-import Verity.TC.Proofs.Pack
+import Verity.SecurityProofs.TC.AmpereSound
+import Verity.SecurityProofs.TC.Proofs.Pack
 
 /-!
 # The unit boundary: the committed BF16 word

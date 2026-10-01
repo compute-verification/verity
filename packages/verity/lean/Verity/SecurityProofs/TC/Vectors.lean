@@ -1,4 +1,4 @@
-import Verity.TC.Spec
+import Verity.Protocol.TC.Spec
 
 /-!
 # Vectors: `tc_dot_total` on the Hopper and Ampere/Ada pipelines

@@ -1,4 +1,4 @@
-import Verity.TC.Proofs.Fold
+import Verity.SecurityProofs.TC.Proofs.Fold
 
 /-!
 # Normalisation: the relation's columns against `group_sum`'s shifts
