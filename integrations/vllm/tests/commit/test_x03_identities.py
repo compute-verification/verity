@@ -9,6 +9,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity_vllm.acquire.sources.call_boundary_source import CallBoundarySource  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
 
@@ -128,3 +129,53 @@ def test_offline_core_without_module_set_is_skipped_not_passed():
     assert r["ok"] is None and "skipped" in r
     rec = {"extra": {"expected_tensors": 9, "committed_tensors": 9, "errors": [], "errors_n": 0, "identity_check": r}, "openings": {"n": 64, "verified": 64}}
     assert not commit_verdict(rec, True)[0]
+
+
+class _CallBoundaries:
+    """The call-boundary source's names: the Program's fx nodes, counted on through the run (Gemma-2's final-logit softcap)."""
+    short_name = "call_boundary"
+    split_step_names = CallBoundarySource.split_step_names
+
+    def __init__(self, steps: int):
+        self.at = {s: [f"logits_processor/{op}{'' if s == 0 else f'_{s}'}/out" for op in ("div", "tanh")] for s in range(steps)}
+
+    def targets_at(self, step: int) -> dict[str, int]:
+        return {n: 1 for n in self.at.get(step, [])}
+
+    def target_names(self) -> frozenset[str]:
+        return frozenset(n for ns in self.at.values() for n in ns)
+
+
+def _cb_com(steps: int = 3) -> tuple[NativeHostCommitter, _CallBoundaries]:
+    com = _com()
+    com._modules.append(("logits_processor", LinearBase()))
+    cb = _CallBoundaries(steps)
+    com.sources.append(cb)
+    return com, cb
+
+
+def test_call_boundary_names_are_checked_against_the_steps_targets_not_step_0():
+    """Gemma-2-2B k06 (r20260930-184803-4e5e): '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
+    Each step commits its own body's names; rule (4) compared them with step 0's.  They are checked against the source's targets."""
+    com, cb = _cb_com()
+    for s in range(3):
+        com._layouts[s] = _layout(_good_step() + ["logits_processor"] + cb.at[s])
+    r = com.identity_check()
+    assert r["ok"] is True, r["violations"]
+    com.sources.remove(cb)                                            # the old rule: every later step differs from step 0
+    r = com.identity_check()
+    assert r["violations_n"] == 2 and r["violations"][0]["multiplicity_vs_step0"]["logits_processor/div_1/out"] == (1, 0)
+
+
+def test_a_dropped_doubled_or_foreign_call_boundary_tensor_still_fails():
+    com, cb = _cb_com()
+    com._layouts[0] = _layout(_good_step() + ["logits_processor"] + cb.at[0])
+    com._layouts[1] = _layout(_good_step() + ["logits_processor"] + cb.at[1][:1] + cb.at[1][:1])     # tanh_1 dropped, div_1 twice
+    com._layouts[2] = _layout(_good_step() + ["logits_processor"] + cb.at[2] + cb.at[0][:1])        # step 0's div at step 2
+    r = com.identity_check()
+    assert r["ok"] is False and [v["step"] for v in r["violations"]] == [1, 2]
+    assert r["violations"][0]["call_boundaries_bad"] == {"logits_processor/div_1/out": (2, 1), "logits_processor/tanh_1/out": (0, 1)}
+    assert r["violations"][1]["call_boundaries_bad"] == {"logits_processor/div/out": (1, 0)}
+    rec = {"extra": {"expected_tensors": 18, "committed_tensors": 18, "errors": [], "errors_n": 0, "identity_check": r}, "openings": {"n": 64, "verified": 64}}
+    ok, why = commit_verdict(rec, True)
+    assert not ok and "call_boundaries_bad" in why

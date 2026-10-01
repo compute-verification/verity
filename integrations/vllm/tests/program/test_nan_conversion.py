@@ -3,7 +3,7 @@
 `F2fpBf16_v1` (NaN -> 0x7FFF, the measured `cvt.rn.bf16.f32` word) is the conversion B0/B1 bind; it is the same
 function as `veritor.core.tc.f32_to_bf16_hw_word` (`veritor.tc-ampere-bf16@2`).  `F32ToBf16Rn_v1` (NaN -> 0x7FC0)
 stays registered, byte for byte, as the software canonicalisation (`veritor.tc-ampere-bf16@1`); the production
-program never binds it, so the B0/B1 program digests are unchanged by L8 (`docs/verified-backend/l8-nan-primitive.md`).
+program never binds it, so the B0/B1 program digests are unchanged by L8.
 """
 
 from __future__ import annotations

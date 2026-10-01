@@ -88,7 +88,13 @@ TARGETS: dict[str, tuple[int, int]] = {
     "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
     "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
     "b200": (10, 0), "gb200": (10, 0),
+    "rtxpro6000": (12, 0),
 }
+
+#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
+#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
+#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -258,7 +264,10 @@ class BuildConfig:
     """How the Build stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
-                                    help="concurrent derives: N, or auto (cgroup headroom / 20 GiB, 1..8); default 1 (TP: ranks x shapes)")
+                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
                                        help="seconds per derive; default scales with the envelope (TP: 7200)")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
@@ -389,8 +398,8 @@ class RunEnv:
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
-    veritor_repo: str | None = option("--veritor-repo", env="VERITOR_REPO", default=None,
-                                      help="must name the tree that runs when given (the mixed-tree refusal)")
+    verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
+                                     help="must name the tree that runs when given (the mixed-tree refusal)")
     research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
     research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")

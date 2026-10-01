@@ -8,7 +8,7 @@ this module builds/loads it, reconstructs the two MUFU tables from the shipped d
   (prefill) and the ``seqlen_q == 1`` (decode, ``is_causal`` forced false, ngroups-swapped) launches;
 * :func:`scale_log2` -- ``params.scale_softmax_log2`` exactly as ``flash_api.cpp`` derives it.
 
-Domain (what was measured, see docs/vllm-poc/attention-model.md): kernel
+Domain (what was measured): kernel
 ``flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 64, 4, false, false, bf16>, Is_causal,
 Is_local=false, Has_alibi=false, Is_even_MN=false, Is_even_K=true, Is_softcap=false, Split=false,
 Append_KV=false>`` (vllm-flash-attn 506341a, ``--use_fast_math``), num_splits=1, window (-1,-1),
@@ -31,7 +31,7 @@ from verity_vllm.program.kernels import _jit
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "fa2_model.cpp"
 CPP_DEP = HERE / "cpp" / "tc_model.cpp"
-LIB = _jit.lib_path("libfa2_model.so")                 # build product (cpp/build/, gitignored), compiled on first use
+LIB = _jit.lib_path("libfa2_model.so")                 # build product (the _jit cache, outside the checkout), compiled on first use
 
 M_LOG2E = 1.4426950408889634  # <math.h> M_LOG2E as a double
 KBLOCK_M = 64

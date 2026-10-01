@@ -27,7 +27,7 @@ from typing import Iterator
 
 from .defs import Body, PrimitiveDefinition, SpecializedDefinition
 from .intervals import Intervals, complement, full, norm, ref_intervals, restrict, total
-from .refs import Refs
+from .refs import Concat, Refs
 from .types import Tuple as TupleT
 
 _MEMBER_LIMIT = 1 << 22  # members × partial-read intervals above which a batch argument is over-approximated
@@ -117,9 +117,22 @@ class Liveness:
         node_live: list[Intervals] = [()] * len(nodes)
         scan_runs: dict[int, list[tuple[Intervals, int]]] = {}
 
+        marked: dict[int, list] = {}  # id(PartLog) -> [log, how many of its parts are marked]
+
         def mark(refs: Refs) -> None:
             t: dict[tuple[str, int], list] = {}
-            ref_intervals(refs, t)
+            if isinstance(refs, Concat) and refs.prefix is not None:
+                log, j = refs.prefix
+                m = marked.get(id(log))
+                if m is None or m[0] is not log:
+                    m = marked[id(log)] = [log, 0]
+                for p in log.parts[m[1]:j]:
+                    ref_intervals(p, t)
+                m[1] = max(m[1], j)
+                for p in refs.parts[j:]:
+                    ref_intervals(p, t)
+            else:
+                ref_intervals(refs, t)
             for (space, idx), ivs in t.items():
                 (live if space == "n" else pread)[idx].extend(ivs)
 

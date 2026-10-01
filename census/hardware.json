@@ -92,6 +92,34 @@
     "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
   },
   {
+    "id": "rtx-pro-6000-server/e4m3",
+    "name": "RTX PRO 6000",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "dtype": "e4m3",
+    "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 1000e12,
+    "accumulate": "fp32",
+    "memory_bytes": 103079215104,
+    "sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: 'FP8 Tensor Core 2 PFLOPS', 'FP4 Tensor Core 4 PFLOPS', 96 GB GDDR7 (the table states neither sparsity nor the accumulate width)",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      },
+      {
+        "label": "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4 (the Workstation Edition, the same 188-SM GB202 at a 2617 MHz boost clock): 'Peak FP8 Tensor TFLOPS with FP32 Accumulate' 1007.6 dense / 2015.2 with the sparsity feature (footnote 2), equal to the FP16-accumulate row, and FP4 2015.2 / 4030.4",
+        "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
+      }
+    ],
+    "methodology": "datasheet peak, dense, FP32 accumulate; not measured on our cards. An FMA counts as two FLOP; sparsity figures never used. The server page's 2 PFLOPS FP8 is the sparse figure (its 4 PFLOPS FP4 matches the whitepaper's sparse 4030.4), so the dense peak is 1 PFLOPS, and FP32 accumulate runs at the FP16-accumulate rate on this professional part (whitepaper Table 4). The page's figures are rounded and its boost clock unstated: at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1, the whitepaper's per-clock rate gives 935.6 TFLOPS. To be confirmed by a native-peak/v1 measurement",
+    "memory_bytes_per_second": 1597e9,
+    "memory_sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: Memory Bandwidth 1597 GB/s, 512-bit GDDR7",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      }
+    ]
+  },
+  {
     "id": "l40s-48gb/bf16",
     "name": "L40S",
     "device": "NVIDIA L40S 48GB",
