@@ -174,7 +174,7 @@ def test_a_preserved_custody_marker_is_an_implicit_record_owned_by_the_lane_then
     found = R.record_at(a, "research/runs/r1")
     assert found.source == "custody" and not (a / R.SIDECAR).exists(), "nothing is written for an implicit record"
     assert found.record == {**found.record, "schema": R.SCHEMA, "path": "research/runs/r1", "node": NODE, "owner": "compute-accounting",
-                            "created": "2026-09-20T10:00:00Z", "expires": "2026-09-28T00:00:00Z", "priority": "normal",
+                            "created": "2026-09-20T10:00:00Z", "expires": "2026-09-23T00:00:00Z", "priority": "normal",
                             "preserved": ART, "regenerate": None}
     assert R.record_at(run_dir(tmp_path, "research/runs/r2", campaign="pouw"), "research/runs/r2").record["owner"] == "pouw"
     r3 = R.record_at(run_dir(tmp_path, "research/runs/r3", created=None), "research/runs/r3").record
@@ -336,7 +336,7 @@ def test_gc_deletes_a_recorded_file_with_its_sidecar_and_an_expired_implicit_run
                   remote_check=lambda art, p: seen.append((art, p)) or None)
     assert not f.exists() and not R.sidecar(f).exists() and not r1.exists()
     assert seen == [(ART, r1)], "the run record is what is re-verified"
-    assert by_path(plan)["research/runs/r1"]["reason"].startswith("deleted: normal, expired 2026-09-28T00:00:00Z, preserved art:")
+    assert by_path(plan)["research/runs/r1"]["reason"].startswith("deleted: normal, expired 2026-09-23T00:00:00Z, preserved art:")
 
 
 def test_gc_skips_a_path_a_job_queued_during_gc_names(tmp_path):

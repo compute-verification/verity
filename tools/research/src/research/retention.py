@@ -48,7 +48,7 @@ SIDECAR = ".retention.json"
 FIELDS = ("schema", "path", "node", "owner", "by", "created", "expires", "priority", "preserved", "regenerate", "why")
 PRIORITIES = ("low", "normal", "high", "keep")
 COLLECTABLE = ("low", "normal")
-RUN_EXPIRY = timedelta(days=7)
+RUN_EXPIRY = timedelta(hours=48)
 DEFAULT_ROOT = Path("/workspace")
 DEFAULT_JOBS_DIRS = (Path("/workspace/pouw/fill/queue"), Path("/workspace/pouw/fill/running"))
 POLICY = "default/v0"
@@ -199,7 +199,7 @@ def implicit(run_dir: Path, rel: str) -> dict | None:
     return {"schema": SCHEMA, "path": rel, "node": m.get("host"), "owner": owner, "by": None,
             "created": fmt_utc(created) if created else None, "expires": fmt_utc(verified + RUN_EXPIRY) if verified else None,
             "priority": "normal", "preserved": rr if ids.is_art(rr) else None, "regenerate": None,
-            "why": f"run custody: the run record is on the remote, and the local copy expires {RUN_EXPIRY.days} d after it"}
+            "why": f"run custody: the run record is on the remote, and the local copy expires {RUN_EXPIRY // timedelta(hours=1)} h after it"}
 
 
 @dataclass

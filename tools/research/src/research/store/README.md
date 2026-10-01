@@ -561,7 +561,7 @@ Nothing under a node's `/workspace` is deleted without a record that allows it. 
 lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority` (`low|normal|high|keep`), `preserved` (an art id or
 null), `regenerate` (a command or null), `why`. It covers everything beneath its path. A run dir whose `.custody` says
 `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its campaign, else `runner`; `preserved` its
-run record; `expires` 7 d after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing is written for it, and a sidecar wins.
+run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing is written for it, and a sidecar wins.
 
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
