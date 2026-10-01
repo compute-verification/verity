@@ -16,6 +16,7 @@
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
   research notes index [--root DIR] [--catalog PATH] [--search TEXT | --evidence ID]   # notes_index.py: notes, full text, citations
   research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
+  research notes claim | approach | approaches ...            # approaches.py: the approach registry (check, then claim)
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -105,6 +106,7 @@ from . import remote
 from .pythonpath import tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
 from .runs import new_run_id
+from .timefmt import both
 from .pods.workproc import FIND_PRUNE, NOT_WORK_RE, WORK_RE
 
 STATES = ("open", "blocked", "final", "superseded")
@@ -217,12 +219,12 @@ def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
         except ValueError:
             continue
         delta = (at - now).total_seconds()
-        delays.append((delta + 86400 if delta < -12 * 3600 else delta, f"{int(m[1]):02d}:{m[2]}Z"))
+        delays.append((delta + 86400, at + dt.timedelta(days=1)) if delta < -12 * 3600 else (delta, at))
     if not delays:
         return None
     delta, at = min(delays)
     return (f"wake: before ending the turn, arm a one-shot timer (cursor-subscriptions subscribe_timer once=true "
-            f"delaySeconds={max(60, int(delta))}) for check-back {at} UTC" + (" (already past: in 1 min)" if delta < 60 else "")
+            f"delaySeconds={max(60, int(delta))}) for check-back {both(at)}" + (" (already past: in 1 min)" if delta < 60 else "")
             + "; not a cron timer")
 
 
@@ -380,7 +382,7 @@ def render_inbox(lane: str, items: list[dict], limit: int = 15) -> str:
     lines = [f"INBOX {lane}: {len(items)} new -- act on each, or say in your next checkpoint why not"]
     for x in items[-limit:]:
         where = "" if x["lane_dir"] == lane else f"{x['lane_dir']}/"
-        lines.append(f"  {_ts(x['mtime']):%H:%MZ} {where}{x['path'].name}  \"{x['title']}\"")
+        lines.append(f"  {both(x['mtime'])} {where}{x['path'].name}  \"{x['title']}\"")
     if len(items) > limit:
         lines.append(f"  ... and {len(items) - limit} older: research notes inbox {lane} --peek")
     return "\n".join(lines)
@@ -1898,6 +1900,10 @@ def main(argv: list[str]) -> int:
         from .notes_archive import main as archive_main  # noqa: PLC0415
 
         return archive_main(argv[1:], default_root())
+    if argv and argv[0] in ("claim", "approach", "approaches"):
+        from . import approaches  # noqa: PLC0415
+
+        return approaches.main(argv, default_root())
     if argv and argv[0] == "service":
         from .steward import service_main  # noqa: PLC0415
 
@@ -2156,6 +2162,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
             more += steward_rule("render", render_lines, root, now, state)
             more += steward_rule("run", run_lines, root, now, state)
+            from .approaches import steward_lines as approaches_lines  # noqa: PLC0415
+
+            more += steward_rule("approaches", approaches_lines, root, now, state)
             more += steward_rule("state", lambda: save_state(root, state) or [])
         if lease_line:
             more.append(lease_line)
