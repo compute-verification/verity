@@ -149,8 +149,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
         return (rid, st, canon, mem, inv)
 
     non_row_idents: list[dict] = []                                                # [F-moe-r17-05] the no-row families, classified below
-    keyed: Counter = Counter()                                                     # row-produced identities of a no-row family (ATen norm scales)
-    keyed_not_exec: Counter = Counter()
+    keyed, keyed_not_exec = Counter(), Counter()                                   # row-produced identities of a no-row family (ATen norm scales)
     if manifest is not None:
         for ident in manifest.get("identities") or []:
             fam = str(ident.get("family"))
@@ -158,8 +157,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
             ranks_seen.add(int(ident.get("rank", 0) or 0))
             if _row_produced(ident) and ident.get("step") != "*" and ident.get("request_id") != "*":
                 keyed[fam] += fam not in QUERY_FAMILIES_WITH_ROWS
-                by_key[(str(ident.get("request_id")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")),
-                        int(ident.get("invocation", 0) or 0))] = ident
+                by_key[(str(ident.get("request_id")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")), int(ident.get("invocation", 0) or 0))] = ident
             elif executed_prefix:
                 non_row_idents.append(ident)
     else:
@@ -177,11 +175,9 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
     req_ids: Counter = Counter()                                                   # required row identities per request (manifest rows families)
     past_stop: list[dict] = []                                                     # an EVALUATED VU past a request's executed prefix: FAIL by name
     outside: list[dict] = []
-    n_outside = 0
     rows_disagree: list[dict] = []
-    n_rows_disagree = 0
     rows_annot: list[dict] = []
-    n_rows_annot = 0
+    n_outside = n_rows_disagree = n_rows_annot = n_missing = 0
     groups: dict[tuple, dict] = {}
     seen_keys: set[tuple] = set()
     for (rid, st, op, mem), a in sorted(addresses.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], kv[0][3])):
@@ -242,7 +238,6 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
             g["first"].append([rid, st, op, mem])
     # --- required identities no row produces (manifest / replay address disagreement) ----------------------------------------------------
     missing: list[dict] = []
-    n_missing = 0
     if manifest is not None:
         for k, ident in by_key.items():
             if k not in seen_keys:
