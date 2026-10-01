@@ -309,7 +309,9 @@ class GraphCalls:
 
     def _into(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's graph steps launched on `raw`, the stream vLLM is capturing, over the graph's own buffers.  The graph
-        must exist: made outside any capture (its eager run syncs), by vLLM's warm-up forward."""
+        must exist: made outside any capture (its eager run syncs), by vLLM's warm-up forward.  Returns the graph's own y, not
+        a copy: a captured forward calls each weight once (`whole_capture_end`), and reads that call's y, or changes it in
+        place, before the weight's next call rewrites it."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -322,7 +324,7 @@ class GraphCalls:
                 f()
         finally:
             self.kernel.dev.stream = None
-        return g.y.clone(), screen
+        return g.y, screen
 
     def _scatter(self, w: int, sh: Any, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
         """The graph's last step: the call's leaves, flags (when it screened) and A root into the pass's buffers, at the
