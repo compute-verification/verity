@@ -7,6 +7,7 @@ import numpy as np
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
 from verity.evaluation import evaluate
 from verity.ir.defs import bind
+from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay.driver import manifest_query
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
@@ -112,5 +113,11 @@ def test_a_norm_scale_manifest_addresses_every_rsqrt_row_where_it_is_committed(t
     q = manifest_query(man)
     assert addresses(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True)) <= named
     assert not addresses(ProgramIndex(doc, program_dir=pdir, query=q)) <= named
-    vus, ne, _nef = population(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True), "r0")
+    at: dict = {}
+    vus, ne, _nef = population(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True), "r0", addresses=at)
     assert "RsqrtF32_v1" in {v["family"] for v in vus} and not [w for w in ne if "no registered evaluator" in w], dict(ne)
+    qp = COV.query_population(man, at, set(), ranks=[0])
+    checks = qp["query_checks"]
+    assert checks["vus_outside_query"]["n"] == 0 and checks["identities_without_rows"]["n"] == 0 and checks["accounted"], checks
+    assert qp["sampled_strata"]["by_family_reached"]["norm_scales"] == qp["query_total"]["by_family"]["norm_scales"]
+    assert "norm_scales" not in {u["family"] for u in qp["uncovered_by_name"]}
