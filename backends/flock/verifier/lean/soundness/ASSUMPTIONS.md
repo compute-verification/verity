@@ -138,8 +138,8 @@ executable accept is the model's) gives one with no positions, at `δ_tree = 0` 
   (`pp : ProgPlaces`);
 - **the hash** is SHA-512 (`Refine.H512`, `Refine.enc512`), for the session's leaves and nodes and for the rows' commit
   strings, with the rows' value binding (`flock_e2e_count_hm96`);
-- **the draw** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), whose count
-  curve is at most `Law.stratified`'s under A3 (`Law.execOS_miss_le`).
+- **the draw** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), under A3
+  (`hA3`).
 
 It is proved under the assumptions its footprint lists. Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`.
 
@@ -270,12 +270,12 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   (`FlockSoundness/Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
   `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
   Python, not Lean), a unit that is not wrong, with its constant 1, carries on each committed output wire `D`'s output on
-  its input wires (`GateRows.rows_sound`). `RowsCert` is a fact about finite data, which a kernel computation checks
-  (RoPE's facts, by `decide +kernel`); `∀ x, G.eval x = D x` is not, since it ranges over every input, and nothing in
-  Lean ties `D` to a Definition until the Definition's Boolean semantics is stated there. `Rope.rope_sound` is
-  `RowsCert.sound`'s conclusion for RoPE's pinned rows, checked in the kernel. Once every Definition lowers to a Boolean
-  circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma replaces the per-template
-  `RowsCert`.
+  its input wires. `RowsCert` is a fact about finite data, which a kernel computation checks (RoPE's facts, by
+  `decide +kernel`); `∀ x, G.eval x = D x` is not, since it ranges over every input, and nothing in Lean ties `D` to a
+  Definition until the Definition's Boolean semantics is stated there. `Rope.rope_sound` proves, for RoPE's pinned rows,
+  that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
+  lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma replaces the
+  per-template `RowsCert`.
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
   statements of PROTOCOL.md §16 satisfy it.
@@ -353,8 +353,8 @@ and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem
 So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
 as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Law.execOS_miss_le`, `Prog.flock_e2e_count` and
-`Prog.flock_e2e_drawn`, and the certificate's `IsRowsUnit.computes_of_cert`, `RowsCert.sound` and `GateRows.rows_sound`.
+`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
+and the certificate's `IsRowsUnit.computes_of_cert`.
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.

@@ -7,7 +7,7 @@
 
 **The headline** is `Prog.flock_headline` (`FlockSoundness/Headline.lean`; `ASSUMPTIONS.md`, The headline): the count
 curve on `p.circuit outs` with `pp : ProgPlaces`, SHA-512 as the session's hash and the rows' (`flock_e2e_count_hm96`),
-at the live draw `Law.execOS` composed with A3 (`Law.execOS_miss_le`). It is proved under the assumptions its footprint
+at the live draw `Law.execOS` under A3 (`hA3`). It is proved under the assumptions its footprint
 lists (`ASSUMPTIONS.md`, The headline), every hypothesis with its kind:
 - hardness: `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`) and `SHA512CRExpected` (`ecr/sha-512`, through
   `hCR`);
