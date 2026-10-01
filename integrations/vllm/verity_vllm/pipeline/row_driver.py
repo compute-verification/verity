@@ -253,11 +253,11 @@ class Row:
             f.write(line + "\n")
         return rc, line
 
-    def call_boundaries(self, to: int | str) -> None:
+    def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has
-        a source the Commit attaches (`gate call-boundaries`); the verdict line names the first identity without one."""
+        a source the Commit attaches (`cmd`, else `gate call-boundaries`); the verdict line names the first identity without one."""
         lf = f"{self.d}/call_boundaries.log"
-        rc = self.run_tl("build.call_boundaries", to, lf, self.cli("gate", "call-boundaries", self.d, "--out", f"{self.d}/call_boundaries.json"))
+        rc = self.run_tl("build.call_boundaries", to, lf, cmd or self.cli("gate", "call-boundaries", self.d, "--out", f"{self.d}/call_boundaries.json"))
         with open(lf, errors="replace") as f:
             line = (f.read().splitlines() or [""])[-1][:600]
         if rc == 0:

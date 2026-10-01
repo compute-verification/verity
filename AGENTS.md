@@ -185,8 +185,8 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 - A theorem that a ledger, a table or a PR cites as proved is pinned in `lean-audit.json`. `audit.py --update` records
   it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
-  `--update` prints (each changed signature before and after, each changed definition as it is now), and the merge
-  handoff names them.
+  `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
+  description names them.
 - A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
   that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
   dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
@@ -239,7 +239,7 @@ rather than accumulating them.
 ## Where writing goes
 
 - This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
-- Lane reports, handoffs, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
+- Lane reports, checkpoints, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`. Notes are records, never messages: a handoff, an order or an ask goes on Slack (below), or to your own Cursor workers as a follow-up.
 - Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
@@ -252,7 +252,7 @@ rather than accumulating them.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
-jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan. Before
+jobs detached on the pod, write one-line checkpoints, and message someone only to unblock or to change their plan. Before
 starting work another agent could plausibly be doing, read the notes' `kb/onboarding.md`: check `research notes approaches`
 and claim yours at your first checkpoint (`research notes claim`).
 

@@ -224,12 +224,21 @@ __global__ void hm96_finish_leaves(uint8_t* tree, Hm96Key key, uint64_t nonce, c
     if (i >= n) return;
     uint32_t yw[48];
     hm96_salt(key, nonce, i, yw);
-    const uint8_t* y = (const uint8_t*)yw;
+    // salt byte p is byte p % 4 of word p / 4 (little-endian); unrolled, so the salt stays in registers and the table rows'
+    // loads (64 bytes each, 16 at a time) are independent
     uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    for (int p = 0; p < 192; p++) {
-        const uint64_t* e = tables + ((size_t)p * 256 + y[p]) * 8;
 #pragma unroll
-        for (int k = 0; k < 8; k++) m[k] ^= e[k];
+    for (int q = 0; q < 48; q++) {
+#pragma unroll
+        for (int r = 0; r < 4; r++) {
+            const ulonglong2* e = (const ulonglong2*)(tables + ((size_t)(4 * q + r) * 256 + ((yw[q] >> (8 * r)) & 0xff)) * 8);
+#pragma unroll
+            for (int k = 0; k < 4; k++) {
+                const ulonglong2 v = __ldg(e + k);
+                m[2 * k] ^= v.x;
+                m[2 * k + 1] ^= v.y;
+            }
+        }
     }
     const uint64_t* x = (const uint64_t*)(tree + i * 64);   // the digest's bytes as little-endian words, as the mask's limbs
     uint64_t b[8];

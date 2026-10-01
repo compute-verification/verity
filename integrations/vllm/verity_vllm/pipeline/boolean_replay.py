@@ -51,6 +51,10 @@ class Options(CR.Options):
     word: bool = option("--word", action="store_true", default=False, help="also replay the same draw with the word evaluators")
     seconds_per_vu: float = option("--seconds-per-vu", type=float, default=60.0,
                                    help="the forked pool's time per picked VU (the replay's default is 3 s, for the word kernels)")
+    worker_peak_gb: float | None = option("--worker-peak-gb", type=float, default=9.6,
+                                          help="a forked Boolean worker's measured peak memory, GiB (default: a 460-unit replay's, "
+                                               "16 workers at 154 GiB in r20261001-115415-9980): the workers are capped at the peaks that "
+                                               "fit in the cgroup's memory.max less its use")
 
 
 _RUN_MAX = 1 << 20  # elements converted at once (an embedding table's 28M words would take 7 GB of temporaries whole)
