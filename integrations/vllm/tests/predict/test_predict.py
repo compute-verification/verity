@@ -154,7 +154,11 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
         _row(tmp_path, topk, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}},
              {**sweep, "sampling_params": {**sweep["sampling_params"], "top_k": 50}}),
     ]}
-    res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64)
+    cache = str(tmp_path / "cache.jsonl")
+    res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache)
+    assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True)["summary"] == res["summary"]
+    cold = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=str(tmp_path / "empty.jsonl"), cached_only=True)
+    assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 4
     units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
     assert units[(greedy, "build_step")]["status"] == "exact"
     assert units[(greedy, "build_workload")]["status"] == "exact"
@@ -168,6 +172,11 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     s = res["summary"]
     assert (s["units_compared"], s["units_exact"]) == (4, 3)
     assert "| first divergence | units |" in S.table_md(res)
+
+
+def test_memory_estimate_is_above_a_measured_peak():
+    """A Qwen3-4B request of LP+T = 79 peaked at 814 MB resident (`_child`'s max_rss_mb); the pool admits units by the estimate."""
+    assert S.mem_estimate_mb(model_shape(json.loads((FIX / "qwen3-4b.config.json").read_text())), [79]) > 814
 
 
 def test_score_never_writes_into_a_rows_root(tmp_path):

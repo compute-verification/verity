@@ -453,8 +453,8 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
           path_map: list[tuple[str, str]] | None = None, diverge: bool = True, max_diverge: int = 40, equivalence_on: bool = True,
           rows_filter: str | None = None, workload: bool = True, cache: str | None = None, cached_only: bool = False, log=None) -> dict:
     """`max_rows`: request units over LP+T = max_rows (and workloads over that many summed rows) are `over_budget`; the units
-    running at once have estimated peaks summing to at most `mem_mb` (`mem_estimate_mb`). `cached_only`: no task runs, the
-    units without a result in `cache` are `not_run`."""
+    running at once have estimated peaks summing to at most `mem_mb` (`mem_estimate_mb`). `cached_only`: no prediction runs, the
+    units without one in `cache` are `not_run` (the cached ones' first divergences are still located)."""
     t0 = time.time()
     log = log or (lambda r: print(json.dumps({k: v for k, v in r.items() if k != "phi"})[:400], file=sys.stderr, flush=True))
     C = Cache(cache)
@@ -492,7 +492,7 @@ def score(inv: dict, *, hf_home: str, checkpoints: dict | None = None, max_rows:
                                                             "descriptor": desc, "rows": u["rows"], "equivalence": equivalence_on,
                                                             "mem_mb": 3 * P["tasks"][u["key"]]["mem_mb"]})
     dt = sorted(dtasks.values(), key=lambda t: t["rows"])[:max_diverge] if diverge else []
-    div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log, C, mem_mb, run=not cached_only)
+    div = _pool_map(_diverge_task, dt, max(1, min(workers, 2)), log, C, mem_mb)
     for row in P["rows"]:
         for u in row["units"]:
             d = div.get(u.get("divergence_key")) if u.get("status") == "differs" else None
@@ -606,7 +606,7 @@ class Options:
     max_diverge: int = option("--max-diverge", type=int, default=40, help="locate the first divergence of at most this many differing units")
     no_equivalence: bool = option("--no-equivalence", action="store_true", default=False)
     no_workload: bool = option("--no-workload", action="store_true", default=False)
-    cached_only: bool = option("--cached-only", action="store_true", default=False, help="run no task: score the results already in --cache")
+    cached_only: bool = option("--cached-only", action="store_true", default=False, help="predict nothing: score the predictions already in --cache")
     rows_filter: str | None = option("--rows-filter", default=None, help="regex on the row id")
     out: str = option("--out", help="score JSON")
     md: str | None = option("--md", default=None, help="markdown table")
