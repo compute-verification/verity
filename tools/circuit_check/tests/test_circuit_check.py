@@ -261,7 +261,7 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 
 def test_every_call_the_suite_checks_is_partitioned():
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
-    at T = 17 are about 1.9M gates)."""
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap)."""
     calls = TG.call_families()
     over = {k: fn.gates for k, fn in SUITE.items() if TG.family(fn) in calls and getattr(fn, "gates", 0) > OPTS.partition_max_gates}
     assert not over
