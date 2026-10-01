@@ -107,11 +107,14 @@ def score(variant: dict, layer: int, cls: str, codes: np.ndarray, rows_w: np.nda
         cr = credited[rows]
         steps = cheap[:, rows, :].transpose(1, 0, 2)          # rows, atoms, cols
         n_cred = int(cr.sum())
+        per_row = [float(steps[i][cr[i]].mean()) for i in range(len(rows)) if cr[i].any()]
         out[name] = {"credited_share": float(cr.sum() / max(nonzero[rows].sum(), 1)),
                      "cheap_share_credited": float(steps[cr].mean()) if n_cred else None,
                      "cheap_share_all": float(steps.mean()),
-                     "max_row_cheap_credited": float(max((steps[i][cr[i]].mean() for i in range(len(rows)) if cr[i].any()),
-                                                         default=0.0))}
+                     "row_cheap_all": [float(x) for x in steps.mean(axis=(1, 2))],
+                     "row_cheap_credited": per_row,
+                     "max_row_cheap_credited": max(per_row, default=0.0),
+                     "min_row_cheap_credited": min(per_row, default=None)}
     return out
 
 
