@@ -1,6 +1,6 @@
 // A standalone sm_120 probe (no torch): does the integer pipe's issue rate depend on how many distinct registers an
-// instruction reads?  keccak_probe.cu found LOP3 and SHF at 3.45 warp instructions per SM clock with two loop-invariant
-// sources, while the band chain's Keccak-f, whose LOP3s read three registers, issues at about 0.49 per scheduler clock and
+// instruction reads, how far back its source was written, how many registers are live, or how many warps share a
+// scheduler?  The band chain's Keccak-f, whose LOP3s read three registers, issues at about 0.49 per scheduler clock and
 // gains 2 % from a second warp per scheduler.
 //
 //   nvcc -O3 -arch=sm_120 -o rf_probe rf_probe.cu && ./rf_probe > rf.json
@@ -8,12 +8,15 @@
 // Each thread runs 16 chains x[0..15] of one pattern, unrolled; y, z are loop-invariant.  x[k+a] is x[(k+a) % 16], written
 // 16 - a instructions before it is read, and no two consecutive instructions read a common register unless the pattern says
 // so.  Reported as warp instructions per SM clock (clock64 inside the kernel) at 1, 2, 4 and 12 warps per scheduler, null
-// where that many blocks do not fit on an SM.  The dep and live patterns ask why a second warp per scheduler lifts these
-// streams by a third but the chain's Keccak-f (short dependences, 144-168 registers) by 2 %.
+// where that many blocks do not fit on an SM.  Under ncu, smsp__inst_executed over smsp__cycles_elapsed and
+// sm__pipe_aluheavy_cycles_active check these rates.
 #include <cuda_runtime.h>
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <vector>
 
 #define CK(x)                                                                                    \
@@ -101,7 +104,13 @@ __global__ void rf_kernel(uint32_t* out, int iters, long long* cycles) {
 #pragma unroll
   for (int k = 0; k < R; ++k) acc ^= keep(e[k]);
   out[blockIdx.x * blockDim.x + threadIdx.x] = acc;
-  if (threadIdx.x == 0) cycles[blockIdx.x] = c1 - c0;
+  if (threadIdx.x == 0) {
+    uint32_t sm;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+    cycles[3 * blockIdx.x] = c0;
+    cycles[3 * blockIdx.x + 1] = c1;
+    cycles[3 * blockIdx.x + 2] = sm;
+  }
 }
 
 template <int P>
@@ -114,12 +123,20 @@ static double rate(int sms, int wps, int iters, uint32_t* dout, long long* dcyc)
   CK(cudaDeviceSynchronize());
   rf_kernel<P><<<blocks, threads>>>(dout, iters, dcyc);
   CK(cudaDeviceSynchronize());
-  std::vector<long long> cyc(blocks);
-  CK(cudaMemcpy(cyc.data(), dcyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost));
-  double mean = 0;
-  for (auto c : cyc) mean += (double)c;
-  mean /= blocks;
-  return (double)iters * UNROLL * 16 * 4 * wps / mean;  // warp instructions per SM clock
+  std::vector<long long> cyc(3 * blocks);
+  CK(cudaMemcpy(cyc.data(), dcyc, cyc.size() * sizeof(long long), cudaMemcpyDeviceToHost));
+  // Blocks that share an SM need not overlap for their whole run, and one that runs alone for a while finishes early, so a
+  // mean of per-block durations can overstate the rate; time each SM from its first block's start to its last block's end
+  // on that SM's clock instead.
+  std::map<long long, std::array<long long, 3>> span;  // smid -> first start, last end, blocks
+  for (int b = 0; b < blocks; ++b) {
+    auto it = span.find(cyc[3 * b + 2]);
+    if (it == span.end()) span[cyc[3 * b + 2]] = {cyc[3 * b], cyc[3 * b + 1], 1};
+    else it->second = {std::min(it->second[0], cyc[3 * b]), std::max(it->second[1], cyc[3 * b + 1]), it->second[2] + 1};
+  }
+  double sum = 0;
+  for (auto& [sm, s] : span) sum += (double)iters * UNROLL * 16 * 4 * s[2] / (double)(s[1] - s[0]);
+  return sum / span.size();  // warp instructions per SM clock
 }
 
 typedef double (*Rate)(int, int, int, uint32_t*, long long*);
@@ -135,7 +152,7 @@ int main(int argc, char** argv) {
   uint32_t* dout;
   long long* dcyc;
   CK(cudaMalloc(&dout, (size_t)sms * 12 * 128 * sizeof(uint32_t)));
-  CK(cudaMalloc(&dcyc, (size_t)sms * 12 * sizeof(long long)));
+  CK(cudaMalloc(&dcyc, (size_t)sms * 12 * 3 * sizeof(long long)));
   printf("{\"device\": \"%s\", \"sms\": %d, \"cc\": \"%d.%d\", \"iters\": %d, \"unit\": \"warp instructions per SM clock\", "
          "\"warps_per_scheduler\": [1, 2, 4, 12], \"patterns\": [",
          p.name, sms, p.major, p.minor, iters);
