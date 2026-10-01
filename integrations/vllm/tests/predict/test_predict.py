@@ -39,10 +39,13 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
     ("qwen25-05b", "312cae23ded0630175327fc649a7428a55f3617d415a10a58b8108cead775860"),
     ("phi3-mini", "4ed042b63f2bee015bf60be7b44b0eb29be3251ecf51c4cc199182584a14c21b"),
     ("qwen3-4b", "0af57f58fe6aa8df3f878faac16ad2b03b7295f01a82cc9d6dfbd7652613cfcd"),
+    ("olmoe-1b-7b", "84fb48c7110b00c236474e7cb97f14e79c65937c41bf1339bc8e4df335153ebb"),
+    ("qwen3-30b-a3b", "e4e7975d885c51f6c7c046cec02b483ffd2eed8b0697266bff54a80d2357362a"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
-    cls = {"qwen25-05b": "Qwen2ForCausalLM", "phi3-mini": "Phi3ForCausalLM", "qwen3-4b": "Qwen3ForCausalLM"}.get(model, "LlamaForCausalLM")
+    cls = {"qwen25-05b": "Qwen2ForCausalLM", "phi3-mini": "Phi3ForCausalLM", "qwen3-4b": "Qwen3ForCausalLM", "olmoe-1b-7b": "OlmoeForCausalLM",
+           "qwen3-30b-a3b": "Qwen3MoeForCausalLM"}.get(model, "LlamaForCausalLM")
     assert r.function == f"Derived[vLLMStep[{cls}]]_v1{{SRC={{f8a263a011b5}}}}"
     assert r.digest == digest
 
@@ -95,6 +98,10 @@ def test_weights_record_follows_the_module_order():
     normed = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen3"}))]
     assert normed[2:5] == ["model.model.layers.0.self_attn.o_proj.weight", "model.model.layers.0.self_attn.q_norm.weight",
                            "model.model.layers.0.self_attn.k_norm.weight"]
+    moe = weight_leaves(model_shape(json.loads((FIX / "olmoe-1b-7b.config.json").read_text())))
+    assert [n.split("layers.0.")[-1] for n, _ in moe[1:10]] == [
+        "self_attn.qkv_proj.weight", "self_attn.q_norm.weight", "self_attn.k_norm.weight", "self_attn.o_proj.weight", "mlp.gate.weight",
+        "mlp.experts.w13_weight", "mlp.experts.w2_weight", "input_layernorm.weight", "post_attention_layernorm.weight"]
 
 
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
@@ -104,6 +111,9 @@ def test_weights_record_follows_the_module_order():
     ({**TINY, "sliding_window": 32}, {}, "sliding window 32"),
     ({**TINY, "model_type": "phi3", "sliding_window": 8}, {}, "a history of 9 keys under the sliding window of 7 keys"),
     ({**TINY, "hidden_act": "gelu"}, {}, "hidden_act 'gelu'"),
+    ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "num_experts": 32}, {}, "32 experts, top-8"),
+    ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "shared_expert_intermediate_size": 512}, {}, "shared experts"),
+    ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "mlp_only_layers": [0]}, {}, "dense MLP layers among the MoE ones"),
     (TINY, {"sampling": {**STOCH, "top_k": 50}}, "top_k 50"),
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
@@ -159,6 +169,8 @@ def test_score_reports_exact_divergence_and_refusals(tmp_path):
     assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True)["summary"] == res["summary"]
     cold = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=str(tmp_path / "empty.jsonl"), cached_only=True)
     assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 4
+    tight = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, max_mem_mb=1, cache=cache, cached_only=True)
+    assert tight["summary"]["units_by_status"]["over_budget"] == 4
     units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
     assert units[(greedy, "build_step")]["status"] == "exact"
     assert units[(greedy, "build_workload")]["status"] == "exact"

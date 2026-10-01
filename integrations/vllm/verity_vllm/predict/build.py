@@ -9,7 +9,8 @@ the weights record (vLLM's parameters in module order, then its buffers), one ca
 
 Vocabulary (v1, dense Llama-family decoders under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input norm), Gemm
 (target-keyed; the q/k/v projection's bias, when the family's rule gives it one, a BiasAdd per row), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
-RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, and the token select: greedy TokenSelect, or the seeded
+RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, the fused-MoE block in its indexed-read construction (router
+Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul / MoeExpertGemmW per (token, slot) pair, MoeSum per row), and the token select: greedy TokenSelect, or the seeded
 temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split count a `splits` Input entry, or the single
 request's constant S).  Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a silent
 approximation).
@@ -49,6 +50,10 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
 I64 = Value(64)
 
 
+#: the family facts (`engine.profiles.family_facts`) `model_shape` reads; a family with any other refuses
+_FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPERTS")
+
+
 class Unexpressible(Exception):
     """φ asks for a structure the vocabulary cannot express.  The message names the fact precisely."""
 
@@ -70,7 +75,10 @@ class ModelShape:
     rot: int
     qkv_bias: bool = False
     window: int | None = None
-    qk_norm: bool = False
+    qk_norm: str | None = None
+    E: int = 0
+    TOPK: int = 0
+    renorm: bool = False
 
     @property
     def QKV(self) -> int:
@@ -80,12 +88,13 @@ class ModelShape:
 def model_shape(hf: dict) -> ModelShape:
     """The shape facts of an HF `config.json` the vocabulary reads, through the two declared homes of model facts: the family facts
     table (`engine.profiles.family_facts`: vLLM's class and constructor kind per `model_type`) and `program.model.config_of` (the
-    static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense block with
-    no per-family facts beyond the per-head q/k RMSNorm: a family with any (a norm variant, a soft-cap, MoE, LayerNorm), a linear bias other
-    than the q/k/v one a family's rule gives, an activation other than SiLU, a partial rotary width or a rotary scaling without an
-    analytic table raises `Unexpressible`.  A sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for
+    static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense and the
+    fused-MoE (indexed-read) blocks with no per-family facts beyond the q/k RMSNorm (per head, or over all heads as `qk_norm` "all")
+    and the router's renormalization: a family with any other (a norm variant, a soft-cap, LayerNorm, shared experts), a linear bias
+    other than the q/k/v one a family's rule gives, an activation other than SiLU, a partial rotary width or a rotary scaling without
+    an analytic table raises `Unexpressible`.  A sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for
     the families whose vLLM code hands it to FA2 (the `dense2` patterns); `build_program` refuses a history longer than it."""
-    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
     from verity_vllm.engine.profiles.generic import effective_sliding_window
     from verity_vllm.program import model as analytic
     family = str(hf.get("model_type", "")).lower()
@@ -94,14 +103,35 @@ def model_shape(hf: dict) -> ModelShape:
         raise Unexpressible(f"model_type {family!r}: not in the family facts table")
     rules = dict(ff.get("rules") or {})
     facts = []
-    if ff.get("arch") != "dense":
-        facts.append(f"family {family!r} constructor {ff.get('arch')!r} (the dense block only)")
-    if ff.get("facts") or rules.get("qk_norm") not in (None, "head"):
-        facts.append(f"family {family!r} per-family facts {sorted(ff.get('facts') or {})}, q/k norm {rules.get('qk_norm')}")
+    arch = ff.get("arch")
+    if arch not in ("dense", "moe"):
+        facts.append(f"family {family!r} constructor {arch!r} (the dense and MoE blocks only)")
+    other = sorted(set(ff.get("facts") or {}) - set(_FACTS_READ))
+    if other or rules.get("qk_norm") not in (None, "head"):
+        facts.append(f"family {family!r} per-family facts {other}, q/k norm {rules.get('qk_norm')}")
     try:
         C, _ = analytic.config_of(hf, family_rules={family: rules})
+        fv = {} if other else resolve_facts(hf, C)[0]
     except (KeyError, ValueError) as e:
         raise Unexpressible(f"config.json: {e}") from None
+    qk_norm = "head" if rules.get("qk_norm") == "head" else "all" if fv.get("QK_NORM") else None
+    if fv.get("QK_NORM") and float(fv.get("QK_NORM_EPS", C["EPS"])) != float(C["EPS"]):
+        facts.append(f"a q/k norm epsilon {fv['QK_NORM_EPS']} other than the layer norms' {C['EPS']}")
+    if fv.get("CLIP_QKV") is not None:
+        facts.append(f"clip_qkv {fv['CLIP_QKV']}")
+    if int(fv.get("SHARED_EXPERTS") or 0):
+        facts.append(f"shared experts (shared_expert_intermediate_size {fv['SHARED_EXPERTS']})")
+    E = TOPK = 0
+    I = int(C["I"])
+    if arch == "moe":
+        from verity_vllm.program.frontend.rules.vllm_moe import TOPK_SOFTMAX_E_TESTED
+        E, TOPK = int(C.get("NUM_EXPERTS") or 0), int(C.get("TOPK") or 0)
+        if ff.get("moe_width_key"):
+            I = int(hf[ff["moe_width_key"]])
+        if E not in TOPK_SOFTMAX_E_TESTED or not 1 <= TOPK <= E:
+            facts.append(f"{E} experts, top-{TOPK} (the router is difftested for E in {sorted(TOPK_SOFTMAX_E_TESTED)})")
+        if hf.get("mlp_only_layers") or int(hf.get("decoder_sparse_step") or 1) != 1:
+            facts.append("dense MLP layers among the MoE ones (mlp_only_layers / decoder_sparse_step)")
     qkv_bias = bool(C.get("BIAS"))
     if qkv_bias and "qkv_bias" not in rules:
         facts.append("attention_bias (q/k/v and o_proj biases)")
@@ -125,8 +155,9 @@ def model_shape(hf: dict) -> ModelShape:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
     cls = re.match(r"\w+", ff["vllm_class"]).group(0)
     return ModelShape(arch=family, model_class=cls, H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
-                      D=int(C["D"]), I=int(C["I"]), EPS=float(C["EPS"]), tie=bool(C["tie_word_embeddings"]), max_pos=int(C["MAX_POS"]),
-                      rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None, qk_norm=rules.get("qk_norm") == "head")
+                      D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(C["tie_word_embeddings"]), max_pos=int(C["MAX_POS"]),
+                      rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None, qk_norm=qk_norm, E=E, TOPK=TOPK,
+                      renorm=bool(fv.get("RENORMALIZE")))
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
@@ -155,11 +186,17 @@ def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
         out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
         if C.qkv_bias:
             out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
+        if C.qk_norm == "all":
+            out += [(p + "self_attn.q_norm.weight", bf(C.NH * C.D)), (p + "self_attn.k_norm.weight", bf(C.KVH * C.D))]
         out.append((p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)))
-        if C.qk_norm:
+        if C.qk_norm == "head":
             out += [(p + "self_attn.q_norm.weight", bf(C.D)), (p + "self_attn.k_norm.weight", bf(C.D))]
-        out += [(p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I)),
-                (p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
+        if C.E:
+            out += [(p + "mlp.gate.weight", bf(C.E, C.H)), (p + "mlp.experts.w13_weight", bf(C.E, 2 * C.I, C.H)),
+                    (p + "mlp.experts.w2_weight", bf(C.E, C.H, C.I))]
+        else:
+            out += [(p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I))]
+        out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
     out.append(("model.model.norm.weight", bf(C.H)))
     if not C.tie:
         out.append(("model.lm_head.weight", bf(C.V, C.H)))
@@ -188,13 +225,40 @@ class _Specs:
         self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
         self.qkv_bias = self.kind("bias_add", N=C.QKV) if C.qkv_bias else None
-        self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm else None
+        self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm == "head" else None
+        if C.qk_norm == "all":
+            self.q_norm, self.k_norm = self.kind("rmsnorm", N=C.NH * C.D, EPS=C.EPS), self.kind("rmsnorm", N=C.KVH * C.D, EPS=C.EPS)
         self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, C.V)
+        if C.E:
+            self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
         self.silu = self.kind("silu_mul", I=C.I)
         self.token_select = self.kind("token_select", V=C.V)
         self._attn: dict[tuple, Any] = {}
         self._const: dict[tuple, Any] = {}
+
+    def moe(self) -> None:
+        """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
+        softmax (in selection order under `indexed-read-ordered`; the renormalizing form when the family renormalizes), the per-pair
+        expert GEMMs (the target's k16 step as `DOT` where `registry.targets.moe_expert_dot` names one) and the routed sum."""
+        from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, INDEXED_READ_ORDERED, TOPK_SOFTMAX_VPT
+        import torch
+        C = self.C
+        c = self.tp.effective_moe_construction()
+        if c not in (INDEXED_READ, INDEXED_READ_ORDERED):
+            raise Unexpressible(f"vocabulary cannot express: moe_construction {c!r} (indexed-read only)")
+        self.router = self.gemm(C.H, C.E)
+        self.topk = self.kind("moe_router_topk" + ("_ordered" if c == INDEXED_READ_ORDERED else "") + ("_norm" if C.renorm else ""),
+                              E=C.E, TOPK=C.TOPK, VPT=TOPK_SOFTMAX_VPT[torch.bfloat16])
+        try:
+            dot = self.TG.moe_expert_dot(self.tp)
+        except self.TG.UnregisteredTarget as e:
+            raise Unexpressible(f"numerics_unregistered: {e}") from None
+        extra = {} if dot is None else {"DOT": dot}
+        sfx = "" if dot is None else "_dot"
+        self.expert_up = self.kind("moe_expert_gemm" + sfx, E=C.E, K=C.H, N=2 * C.I, **extra)
+        self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.I, N=C.H, **extra)
+        self.moe_sum = self.kind("moe_sum", TOPK=C.TOPK, H=C.H)
 
     def stochastic_select(self, S):
         """`GumbelTopPTokenSelect[vllm]`'s kind: the select over a derived `splits` operand, or at the single request's constant S."""
@@ -266,19 +330,10 @@ class _Model:
         n += 1
         self.layers = []
         for _ in range(C.NL):
-            lw = {"qkv": W[n]}
-            n += 1
-            if C.qkv_bias:
-                lw["qkv_b"] = W[n]
-                n += 1
-            lw["o"] = W[n]
-            n += 1
-            if C.qk_norm:
-                lw.update(q_norm=W[n], k_norm=W[n + 1])
-                n += 2
-            lw.update(gate_up=W[n], down=W[n + 1], ln1=W[n + 2], ln2=W[n + 3])
-            self.layers.append(lw)
-            n += 4
+            names = ["qkv"] + (["qkv_b"] if C.qkv_bias else []) + (["q_norm", "k_norm"] if C.qk_norm == "all" else []) + ["o"] + \
+                (["q_norm", "k_norm"] if C.qk_norm == "head" else []) + (["gate_w", "w13", "w2"] if C.E else ["gate_up", "down"]) + ["ln1", "ln2"]
+            self.layers.append({k: W[n + i] for i, k in enumerate(names)})
+            n += len(names)
         self.norm = W[n]
         n += 1
         self.lm_head = self.embed if C.tie else W[n]
@@ -314,8 +369,12 @@ class _Model:
             cs = [Coll(prq[1], self.cos_sin.refs.slice((pos0 + i) * C.rot, (pos0 + i + 1) * C.rot)) for i in range(M)]
             q_in = [qkv[i].refs.slice(0, q_w) for i in range(M)]
             k_in = [qkv[i].refs.slice(q_w, q_w + k_w) for i in range(M)]
-            if S.head_norm is not None:
+            if C.qk_norm == "head":
                 q_in, k_in = self.head_norms(q_in, C.NH, lw["q_norm"]), self.head_norms(k_in, C.KVH, lw["k_norm"])
+            elif C.qk_norm == "all":
+                pqn, pkn = _ptypes(S.q_norm), _ptypes(S.k_norm)
+                q_in = [self.call(S.q_norm, Coll(pqn[0], q_in[i]), Coll(pqn[1], lw["q_norm"].refs)).refs for i in range(M)]
+                k_in = [self.call(S.k_norm, Coll(pkn[0], k_in[i]), Coll(pkn[1], lw["k_norm"].refs)).refs for i in range(M)]
             q = [self.call(S.rope_q, Coll(prq[0], q_in[i]), cs[i]) for i in range(M)]
             k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
@@ -336,11 +395,30 @@ class _Model:
             o = [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)]
             f = [self.call(S.fused, Coll(pf[0], o[i].refs), Coll(pf[1], res[i]), Coll(pf[2], lw["ln2"].refs)) for i in range(M)]
             res = [f[i][1].refs for i in range(M)]
-            gu = [self.call(S.gate_up, Coll(pgu[0], f[i][0].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
-            a = [self.call(S.silu, Coll(ps[0], gu[i].refs)) for i in range(M)]
-            d = [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)]
+            if C.E:
+                d = self.moe([f[i][0] for i in range(M)], lw)
+            else:
+                gu = [self.call(S.gate_up, Coll(pgu[0], f[i][0].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
+                a = [self.call(S.silu, Coll(ps[0], gu[i].refs)) for i in range(M)]
+                d = [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)]
         f = [self.call(S.fused, Coll(pf[0], d[i].refs), Coll(pf[1], res[i]), Coll(pf[2], self.norm.refs)) for i in range(M)]
         return [f[i][0] for i in range(M)]
+
+    def moe(self, x: list[Coll], lw: dict) -> list[Coll]:
+        """The fused-MoE block over the rows `x` as `rules.vllm_moe` binds its launches: each row's router logits and top-k, then
+        each (token, slot) pair p = t * TOPK + k in pair order: the w13 expert GEMM (expert id ids[t][k]), the activation, the w2
+        expert GEMM with the routed weight w[t][k]; then each row's sum of its TOPK down rows."""
+        S, C, M, K = self.S, self.C, len(x), self.C.TOPK
+        pr, pt, pu, pa, pw, pm = (_ptypes(fn) for fn in (S.router, S.topk, S.expert_up, S.silu, S.expert_down, S.moe_sum))
+        lg = [self.call(S.router, Coll(pr[0], x[t].refs), Coll(pr[1], lw["gate_w"].refs)) for t in range(M)]
+        r = [self.call(S.topk, Coll(pt[0], lg[t].refs)) for t in range(M)]
+        ids = [r[p // K][1].refs.slice(p % K, p % K + 1) for p in range(M * K)]
+        ws = [r[p // K][0].refs.slice(p % K, p % K + 1) for p in range(M * K)]
+        up = [self.call(S.expert_up, Coll(pu[0], x[p // K].refs), Coll(pu[1], ids[p]), Coll(pu[2], lw["w13"].refs)) for p in range(M * K)]
+        act = [self.call(S.silu, Coll(pa[0], up[p].refs)) for p in range(M * K)]
+        down = [self.call(S.expert_down, Coll(pw[0], act[p].refs), Coll(pw[1], ids[p]), Coll(pw[2], ws[p]), Coll(pw[3], lw["w2"].refs))
+                for p in range(M * K)]
+        return [self.call(S.moe_sum, Coll(pm[0], concat([down[t * K + k].refs for k in range(K)]))) for t in range(M)]
 
     def head_norms(self, rows: list, heads: int, weight: Coll) -> list:
         """The per-head q/k RMSNorm over every row's heads, rows major (one launch over [rows, heads, D]) -> each row's normed heads."""
