@@ -169,6 +169,27 @@ def test_every_call_boundary_is_committed_once_per_step_with_the_ir_words(dense)
     assert src.declaration_classes()[0]["class"] == CB.FAMILY and src.extra_step_bytes({}, None)["tensors_per_step"] == 18
 
 
+def test_a_weight_add_made_once_is_evaluated_into_every_steps_body(tmp_path):
+    """Gemma-2's Build makes each norm's `weight + 1` once, at step 0: a later step's body reads it across the step and evaluates it from
+    the weights, committing the reference's words."""
+    b, at = dense_program(weight_add_once=True)
+    doc = b.doc(LP)
+    assert sum(r["spec"].startswith("AddScalarBf16_v1") for r in doc["rows"]) == 2
+    fields = dense_fields()
+    world = types.SimpleNamespace(b=b, at=at, doc=doc, fields=fields, vals=reference(doc, PROMPT, fields, [n for n, *_ in DENSE]))
+    world.pdir, world.man = build_dir(tmp_path, doc, [PF[len("model."):]])
+    ids = CB.manifest_sites(world.man)
+    plan = CB.plan_of(world.man, world.pdir)
+    assert not plan.uncovered and plan.covered == plan.identities == len(ids) == 18 + T * 16
+    com, src = _dense_source(world)
+    _drive(world, com, src)
+    assert not com.errors and len(com.acquired) == len(ids)
+    got = {(s, n): t for s, n, t in com.acquired}
+    for r in ids:
+        w = CB.words(torch, got[(r["engine_step"], f"{r['op_path']}/{r['output_member']}")]).reshape(r["rows"], r["width"]).astype(np.uint64)
+        assert np.array_equal(w, ir_words(doc, world.vals, b.step, r)), (r["engine_step"], r["op_path"])
+
+
 def test_edge_words_through_the_norm_chains_are_the_ir_words(dense):
     """The prompt rows are the edge vectors: the chains' committed words are the reference's, NaN payloads, infinities and signed zeros
     included."""
@@ -356,6 +377,8 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
+    from verity_vllm.program.kernels import kernel_registry
+    monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why
 

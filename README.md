@@ -233,6 +233,7 @@ tools/
   check/                 The one check a merge requires
   circuit_check/         The property checks every circuit passes
   lean/                  The Lean audit
+  cluster/               The shared machines' description, scheduling rules and allocation ledger
 ~~~
 
 ## Python packaging
