@@ -131,6 +131,7 @@ resources:
   cpus: 4          # 4 per GPU (submit.sh's tp2 class: 8), the GPU queue's fixed share; a Commit uses ~2-4 cores and bursts
   labels:
     budget-line: nebius-config-run
+    verity.dev/stage: commit   # the commit pacer gates this task (commit_pacer.py); a copy of the Job keeps it
   memory: 64         # below batch 8 (a Commit uses ~6 GiB); batch 8+ ~130 GiB: VY_GPU_MEMORY=170 (the class table above)
 
 envs:

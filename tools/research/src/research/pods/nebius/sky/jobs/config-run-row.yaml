@@ -25,6 +25,7 @@ resources:
   cpus: 4
   labels:
     budget-line: nebius-config-run
+    verity.dev/stage: commit   # the whole row runs its Commit in this pod, so the commit pacer gates it (commit_pacer.py)
   memory: 512
 
 envs:
