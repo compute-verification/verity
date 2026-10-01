@@ -48,49 +48,156 @@
       "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
-      "usergroup": "S0C5APDSYF9"
+      "usergroup": "S0C5APDSYF9",
+      "lanes": [
+        "infra",
+        "nebius-infra",
+        "node1-dispatcher",
+        "node2-ops",
+        "cluster-build",
+        "kueue-fold",
+        "mps-pack",
+        "resource-steward",
+        "steward",
+        "skypilot"
+      ],
+      "agents": [
+        "bc-17cc41f1",
+        "bc-c0738ef6",
+        "bc-fd19a2fe",
+        "bc-96a2e856",
+        "bc-c445c55b",
+        "bc-70706bc3",
+        "bc-c2e4c12a",
+        "bc-d5ffe46d"
+      ]
     },
     {
       "handle": "proofs",
       "holder": "the proofs coordinator (bc-8416bc72-c4cc-5551-93a8-b14a6e5f95d4); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
-      "usergroup": "S0C5Q6KJZTQ"
+      "usergroup": "S0C5Q6KJZTQ",
+      "lanes": [
+        "proofs",
+        "proofs-*",
+        "flock-*",
+        "red-team-*",
+        "lean-*",
+        "ligero-*",
+        "ligerito-*",
+        "agkr-*",
+        "sp1-*",
+        "backend-sweep",
+        "backend-sweep-*",
+        "verify",
+        "verify-*",
+        "reverify-*",
+        "assumption-sweeps",
+        "audit-lean",
+        "consolidation"
+      ],
+      "agents": [
+        "bc-8416bc72",
+        "bc-8ece7cde"
+      ]
     },
     {
       "handle": "circuits",
       "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
-      "usergroup": "S0C5U3LHMFT"
+      "usergroup": "S0C5U3LHMFT",
+      "lanes": [
+        "circuits",
+        "circuits-*",
+        "vllm-*",
+        "n2-build",
+        "n2-commits"
+      ],
+      "agents": [
+        "bc-b8aaadaa",
+        "bc-698052e1"
+      ]
     },
     {
       "handle": "compute-accounting",
       "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
       "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5U3Q04JD"
+      "usergroup": "S0C5U3Q04JD",
+      "lanes": [
+        "compute-accounting",
+        "pouw",
+        "pouw-*",
+        "fill-*"
+      ],
+      "agents": [
+        "bc-e90634dd",
+        "bc-2aa33ad8",
+        "bc-e6a46970",
+        "bc-18346d9c",
+        "bc-7442ca43",
+        "bc-0f3f8a2f",
+        "bc-36186951",
+        "bc-71c6ab78",
+        "bc-dbc19788",
+        "bc-0de2d624",
+        "bc-6da61042",
+        "bc-df4a6ef1",
+        "bc-dd22acf8",
+        "bc-ccd30e80",
+        "bc-f4e8ae34",
+        "bc-6289d8b0",
+        "bc-f5bf55c8",
+        "bc-8412d697",
+        "bc-d7d4b0d1"
+      ]
     },
     {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
       "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5VRGBZFE"
+      "usergroup": "S0C5VRGBZFE",
+      "lanes": [
+        "memory-accounting",
+        "pous",
+        "pous-*"
+      ],
+      "agents": [
+        "bc-15ada664"
+      ]
     },
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
       "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C6LGGSY6L"
+      "usergroup": "S0C6LGGSY6L",
+      "lanes": [
+        "network-accounting"
+      ],
+      "agents": [
+        "bc-ecea50f6"
+      ]
     },
     {
       "handle": "console",
       "holder": "the console coordinator (bc-ddee017b-705a-5429-a92e-fed2ba6ea491)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
-      "usergroup": "S0C5LSDENA1"
+      "usergroup": "S0C5LSDENA1",
+      "lanes": [
+        "console",
+        "verity-panels",
+        "docs-site",
+        "overnight-dashboard"
+      ],
+      "agents": [
+        "bc-ddee017b",
+        "bc-26712550"
+      ]
     },
     {
       "handle": "old-accounting",

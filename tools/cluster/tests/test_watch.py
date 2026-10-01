@@ -36,6 +36,17 @@ def test_an_owner_routes_by_its_parts_last_first_to_an_agent_prefix_or_the_longe
     assert watch.usergroup("circuits", HANDLES) == "S0CIRC" and watch.usergroup("gone", HANDLES) == ""
 
 
+def test_the_repositorys_registry_routes_the_owners_the_nodes_run_today():
+    handles = watch.load_registry(watch.REGISTRY)
+    for owner, want in (("vllm-epoch-run", "circuits"), ("n2-build", "circuits"), ("proofs-flock-fp", "proofs"),
+                        ("proofs-verify-overlap", "proofs"), ("backend-sweep", "proofs"), ("fill:bc-2aa33ad8", "compute-accounting"),
+                        ("fill:bc-dbc19788-573d-5ba4-b3b2-d6551c1c60ef", "compute-accounting"), ("bc-7442ca43", "compute-accounting"),
+                        ("verity:bc-698052e1-cov-g217-proof", "circuits"), ("lean-audit:proofs-w", "proofs"), ("skypilot", "infra"),
+                        ("-", "infra"), ("research", "infra")):
+        assert watch.route(owner, handles)[0] == want, owner
+    assert all(re.fullmatch(r"S[0-9A-Z]+", watch.usergroup(h["handle"], handles)) for h in handles if h.get("lanes"))
+
+
 def node1() -> dict:
     snap = node1_snapshot()
     for it in snap["k8s"]:

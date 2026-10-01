@@ -175,6 +175,29 @@ def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
         slack.load_registry(registry)
 
 
+def test_a_handles_lanes_and_agents_are_well_formed_and_never_owned_twice(registry):
+    reg = json.loads(registry.read_text())
+    assert slack.load_registry(REAL_REGISTRY)["handles"][2]["agents"][0] == "bc-b8aaadaa"
+    for i, k, v, want in ((0, "lanes", "infra-*x", "lane names"), (0, "lanes", "Infra", "lane names"), (0, "agents", "bc-17cc", "agent id"),
+                          (0, "agents", "17cc41f1", "agent id"), (0, "lanes", "vllm-*", "both own lane 'vllm-\\*'"),
+                          (0, "agents", "bc-b8aaadaa-aefd", "@infra and @circuits both own agent 'bc-b8aaadaa'")):
+        bad = json.loads(json.dumps(reg))
+        bad["handles"][i][k] = [v]
+        registry.write_text(json.dumps(bad))
+        with pytest.raises(slack.SlackError, match=want):
+            slack.load_registry(registry)
+    bad = json.loads(json.dumps(reg))
+    bad["handles"][0]["lanes"] = "infra"
+    registry.write_text(json.dumps(bad))
+    with pytest.raises(slack.SlackError, match="must be a list"):
+        slack.load_registry(registry)
+    for h in reg["handles"]:
+        for k in ("lanes", "agents"):
+            h.pop(k, None)
+    registry.write_text(json.dumps(reg))
+    assert slack.load_registry(registry), "both are optional"
+
+
 def test_handles_and_subscriptions(registry, capsys):
     rc, out, _ = run(capsys, "handles")
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out

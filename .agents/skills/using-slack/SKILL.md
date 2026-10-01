@@ -43,8 +43,8 @@ an ask or an alert, which has one owner, the owner's `pickup`, `done` and `decli
 or `❌ declined — ...`), with no reaction: every handle posts through one bot, which can place each reaction only once.
 `roster` reads those lines.
 
-`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id), the channels and the named
-humans; `research slack handles` prints it. The tool is `research slack` (`tools/research/src/research/slack.py`); every
+`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, and the lanes and agents it
+owns), the channels and the named humans; `research slack handles` prints it. The tool is `research slack` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
 ## Setup
@@ -211,6 +211,11 @@ Add or change a handle in `registry.json` (the tests check it loads). Then, with
 research slack groups sync            # the plan: which user groups it would create, update or re-enable
 research slack groups sync --apply    # makes the changes; writes each group's id, and the bot's, into registry.json; commit that
 ~~~
+
+A handle's `lanes` (lane or workstream names, or prefixes ending in `*`) and `agents` (agent id prefixes, `bc-` and at
+least 8 hex digits) say whose jobs it owns: `cluster watch` (`tools/cluster/src/cluster/watch.py`) tags its user group in
+#agent-alerts when one of them stalls on a node. Each belongs to one handle; an owner nobody claims is @infra's. When a lane
+starts submitting to the nodes, add it to its coordinator's handle.
 
 A sync sets each group's name to its handle and its description to the remit, and leaves its members alone. Channel ids,
 alert bots' ids and the humans' Slack user ids are recorded by hand. An entry without an id allows nobody.

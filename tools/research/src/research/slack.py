@@ -74,6 +74,8 @@ ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
+LANE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}\*?$")                 # a handle's `lanes`: the jobs `cluster watch` routes to it
+AGENT_RE = re.compile(r"^bc-[0-9a-f]{8}[0-9a-f-]*$")                   # and its `agents`, by agent id prefix
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 DATE_TOKEN_RE = re.compile(r"<!date\^\d+\^[^|>]*\|([^>]*)>")          # `read` and `roster` show a date token as its fallback
 ANNOUNCE = "\U0001f4e3"                                            # 📣
@@ -124,6 +126,7 @@ def load_registry(path: Path) -> dict:
     if reg.get("schema") != SCHEMA:
         raise SlackError(f"registry {path}: schema {reg.get('schema')!r}, expected {SCHEMA!r}")
     handles = set()
+    owned: dict[str, dict[str, str]] = {"lanes": {}, "agents": {}}
     for h in reg.get("handles", []):
         name = h.get("handle", "")
         if not NAME_RE.match(name) or name in handles:
@@ -134,6 +137,16 @@ def load_registry(path: Path) -> dict:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
         if len(h["remit"]) > DESCRIPTION_MAX:
             raise SlackError(f"registry {path}: @{name}'s remit is {len(h['remit'])} characters; its user group's description takes {DESCRIPTION_MAX}")
+        for k, pat, what in (("lanes", LANE_RE, "lane names, or prefixes ending in *"),
+                             ("agents", AGENT_RE, "agent id prefixes (bc- and at least 8 hex digits)")):
+            v = h.get(k, [])
+            if not isinstance(v, list) or not all(isinstance(x, str) and pat.match(x) for x in v):
+                raise SlackError(f"registry {path}: @{name}'s {k} must be a list of {what}")
+            for x in v:
+                other = next((o for y, o in owned[k].items() if y == x or k == "agents" and (y.startswith(x) or x.startswith(y))), None)
+                if other is not None:
+                    raise SlackError(f"registry {path}: @{other} and @{name} both own {k[:-1]} {x!r}, so its jobs have no one owner")
+                owned[k][x] = name
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
