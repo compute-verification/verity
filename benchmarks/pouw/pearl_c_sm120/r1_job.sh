@@ -61,19 +61,24 @@ EOF
 LOGGER=$!
 
 . benchmarks/pouw/harness/jobs/env.sh "${INPUTS:-$RESEARCH_RUN_DIR/inputs}"
-# One harness run per arm and shape, each its own harness-<arm>-<shape>.json, so a preemption loses only the one it stopped.
+# One harness run per arm, split and shape, each its own harness-<arm>-<shape>[-s<S>].json, so a preemption loses only the one
+# it stopped.  SPLITS: R1-H's decode split-K values to sweep (R1H_SPLIT); "auto" is the arm's own choice.
 ARMS="${ARMS:-r1_arm:R1ChainSm120}"
+SPLITS="${SPLITS:-auto}"
 SHAPES="${SHAPES:-llama3.1-8b-o-decode llama3.1-8b-o-prefill llama3.1-8b-qkv-decode llama3.1-8b-qkv-prefill
   llama3.1-8b-down-decode llama3.1-8b-down-prefill llama3.1-8b-gate_up-decode llama3.1-8b-gate_up-prefill}"
 rc=0
 for arm in $ARMS; do
-  for shape in $SHAPES; do
-    tag="${arm%%:*}-$shape"
-    PEARLC_SHIP="$SHIP" CUDA_DEVICE_ORDER=PCI_BUS_ID POUW_SASS_GATE_CACHE="$SCRATCH/sass-gate" \
-      "$PY" benchmarks/pouw/harness/bench.py --gpu lease --expect-uuid "${GPU_LEASE_UUID:?no GPU lease}" \
-      --arm-path benchmarks/pouw/pearl_c_sm120 --arm "$arm" --families fp8-e4m3 --shapes "$shape" \
-      --out "$OUT/harness-$tag.json" > "$OUT/bench-$tag.log" 2>&1 && r=0 || { r=$?; rc=$r; tail -20 "$OUT/bench-$tag.log" >&2; }
-    echo "$(date -u +%H:%M:%SZ) $tag: rc $r" | tee -a "$OUT/progress.txt" >&2
+  for split in $SPLITS; do
+    for shape in $SHAPES; do
+      tag="${arm%%:*}-$shape"
+      [[ "$split" == auto ]] || tag="$tag-s$split"
+      R1H_SPLIT="${split#auto}" PEARLC_SHIP="$SHIP" CUDA_DEVICE_ORDER=PCI_BUS_ID POUW_SASS_GATE_CACHE="$SCRATCH/sass-gate" \
+        "$PY" benchmarks/pouw/harness/bench.py --gpu lease --expect-uuid "${GPU_LEASE_UUID:?no GPU lease}" \
+        --arm-path benchmarks/pouw/pearl_c_sm120 --arm "$arm" --families fp8-e4m3 --shapes "$shape" \
+        --out "$OUT/harness-$tag.json" > "$OUT/bench-$tag.log" 2>&1 && r=0 || { r=$?; rc=$r; tail -20 "$OUT/bench-$tag.log" >&2; }
+      echo "$(date -u +%H:%M:%SZ) $tag: rc $r" | tee -a "$OUT/progress.txt" >&2
+    done
   done
 done
 exit "$rc"
