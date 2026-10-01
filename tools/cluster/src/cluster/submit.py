@@ -12,8 +12,8 @@ The executors, as they stand:
 - **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools.
 - **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
   `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
-  GPU. Only with `CLUSTER_N1_GPU_EXECUTOR=n1-lease` in the brain's environment (the cutover's switch); without it such a job goes
-  to node 2 or is refused. A timed job never runs there: node 1 has no window protocol.
+  GPU. Only with `gpu_executor = "n1-lease"` on the node in the description (the cutover's one-line switch); without it such
+  a job goes to node 2 or is refused. A timed job never runs there: node 1 has no window protocol.
 
 A job asks for `max_s` of its own. A CPU job's allocation also covers `custody_s` (the runner's publish), so its `max_s` in the
 model is their sum; a GPU job's lease covers the workload alone, and custody runs in its CPU allocation after the lease ends.
@@ -21,7 +21,6 @@ model is their sum; a GPU job's lease covers the workload alone, and custody run
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import replace
 from typing import Any
 
@@ -36,9 +35,6 @@ GPU_LEASE_N1 = "/workspace/verity-guest/bin/gpu-lease"
 N1_LEASE_ENV = ["GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus"]
 NODE1, NODE2 = "vy-nebius-1", "vy-nebius-2"
 
-
-def n1_gpus() -> bool:
-    return os.environ.get("CLUSTER_N1_GPU_EXECUTOR") == "n1-lease"
 
 
 class Refused(Exception):
@@ -59,8 +55,8 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     A kind is named in the lease's holder, `who=<kind>:<submitter>`, as the fill runner's leases are `fill:<owner>`."""
     if node not in (NODE1, NODE2):
         raise Refused(f"no executor on {node}")
-    if j.gpus and node == NODE1 and not n1_gpus():
-        raise Refused(f"{node}'s GPUs are Kueue's, and its lease executor isn't switched on (CLUSTER_N1_GPU_EXECUTOR)")
+    if j.gpus and node == NODE1 and cluster.nodes[node].gpu_executor != "n1-lease":
+        raise Refused(f"{node}'s GPUs are Kueue's, and its lease executor isn't switched on (gpu_executor = \"n1-lease\")")
     if j.gpus and node == NODE1 and j.quiet:
         raise Refused(f"{node} has no timed windows")
     guest = cluster.standing(j.project, node) != OWNER

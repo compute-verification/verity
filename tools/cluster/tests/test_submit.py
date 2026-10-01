@@ -1,5 +1,6 @@
 """`cluster submit`, the queue's side of `research run --queue`: a declared job is placed and gets its node executor's wrapper."""
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -65,11 +66,11 @@ def test_a_pinned_node_is_the_only_one_tried():
     assert "vy-nebius-2" not in str(e.value)
 
 
-def test_node_1s_gpus_take_a_job_through_its_own_gpu_lease_only_with_the_executor_switched_on(monkeypatch):
+def test_node_1s_gpus_take_a_job_through_its_own_gpu_lease_only_with_the_executor_switched_on():
     c = model.load(NEBIUS)
-    with pytest.raises(submit.Refused, match="CLUSTER_N1_GPU_EXECUTOR"):
+    with pytest.raises(submit.Refused, match="gpu_executor"):
         submit.resolve(c, _job(gpus=1, node="vy-nebius-1"), "r1", T)
-    monkeypatch.setenv("CLUSTER_N1_GPU_EXECUTOR", "n1-lease")
+    c = replace(c, nodes={**c.nodes, "vy-nebius-1": replace(c.nodes["vy-nebius-1"], gpu_executor="n1-lease")})
     out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64, node="vy-nebius-1"), "r1", T)
     assert out["node"] == "vy-nebius-1" and "systemd-run" in out["wrap"] and submit.GPU_LEASE_N1 not in out["wrap"]
     assert out["workload_wrap"] == ["env", "GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus",
