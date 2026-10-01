@@ -64,7 +64,7 @@ class Options:
     X: int = 16
     W: int = 32
     extras: int = 0
-    partition_max_gates: int = 1_000_000
+    partition_max_gates: int = 2_000_000
     lower_max_gates: int = 256
     lower_max_ands: int = 60_000
     input_budget: int = 1 << 22

@@ -259,6 +259,14 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
+def test_every_call_the_suite_checks_is_partitioned():
+    """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
+    at T = 17 are about 1.9M gates)."""
+    calls = TG.call_families()
+    over = {k: fn.gates for k, fn in SUITE.items() if TG.family(fn) in calls and getattr(fn, "gates", 0) > OPTS.partition_max_gates}
+    assert not over
+
+
 def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding():
     """The suite keeps a family's smallest specialization over `MAX_GATES`; a Boolean norm's smallest binds the word MUFU, so its
     smallest Boolean binding (the one the Program on bits calls) is checked too."""
