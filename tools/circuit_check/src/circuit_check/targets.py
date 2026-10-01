@@ -310,7 +310,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ir.defs import bind
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
-    from verity_vllm.program.registry import boolean_attention
+    from verity_vllm.program.registry import boolean_attention, boolean_fp8
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -342,6 +342,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("ScaledMmFp8NoSwap_v1", lambda: bind(fp8.ScaledMmFp8NoSwap, K=64, N=2, BIAS=True, DOT=BlackwellE4m3QmmaDot32)),
         ("QuantLinearNvfp4_v1", lambda: bind(nvfp4.QuantLinearNvfp4, K=64, N=2, DOT=BlackwellNvf4OmmaDot64)),
         ("ScaledMmFp8BlockSharedScale_v1", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=256, G=128)),
+        ("QuantLinearFp8_v2", lambda: bind(boolean_fp8.QuantLinearFp8V2, K=256, N=2, BIAS=True)),
+        ("ScaledMmFp8_v2", lambda: bind(boolean_fp8.ScaledMmFp8V2, K=32, N=2, BIAS=False)),
+        ("Fp8GroupQuant_v2", lambda: bind(boolean_fp8.Fp8GroupQuantV2, K=64, G=32)),
+        ("ScaledMmFp8Block_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockV2, K=32, N=32, G=32)),
+        ("ScaledMmFp8BlockSharedScale_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV2, K=64, N=32, G=32)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
