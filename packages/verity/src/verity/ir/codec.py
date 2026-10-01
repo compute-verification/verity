@@ -32,7 +32,7 @@ from typing import Callable, Any
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
                    SpecializedDefinition, bind)
 from .program import INPUT_ID, input_prim
-from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, refs_from_json
+from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
 from .types import type_from_json
 
 SCHEMA_V0 = "verity-ir/descriptor/v0"
@@ -58,17 +58,28 @@ class _Tables:
         self.callees: dict[str, int] = {}
         self.types: dict[str, int] = {}
         self.type_json: list[Any] = []
+        self._seen: dict[int, tuple[Any, int]] = {}  # id(type or definition) -> (it, its index), so each object is keyed once
 
     def callee(self, fid: str) -> int:
         return self.callees.setdefault(fid, len(self.callees))
 
+    def callee_of(self, f: FunctionDefinition) -> int:
+        hit = self._seen.get(id(f))
+        if hit is None or hit[0] is not f:
+            hit = self._seen[id(f)] = (f, self.callee(_spec_id(f)))
+        return hit[1]
+
     def type(self, t) -> int:
+        hit = self._seen.get(id(t))
+        if hit is not None and hit[0] is t:
+            return hit[1]
         j = t.to_json()
         key = json.dumps(j, sort_keys=True, separators=(",", ":"))
         i = self.types.get(key)
         if i is None:
             i = self.types[key] = len(self.type_json)
             self.type_json.append(j)
+        self._seen[id(t)] = (t, i)
         return i
 
     def to_json(self) -> dict:
@@ -136,6 +147,20 @@ def _part_key(p: Refs) -> tuple:
     return ("e", p.items)
 
 
+def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
+    """`_flat_parts(r)` and their `_part_key`s. A `Concat` cut from a `PartLog` reuses the keys of the log's parts."""
+    if r.prefix is not None:
+        log, j = r.prefix
+        tail = r.parts[j:]
+        if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
+            memo = log.memo.setdefault("codec.part_keys", [])
+            if len(memo) < j:
+                memo.extend(_part_key(p) for p in log.parts[len(memo):j])
+            return r.parts, tuple(memo[:j]) + tuple(_part_key(p) for p in tail)
+    parts = _flat_parts(r)
+    return parts, tuple(_part_key(p) for p in parts)
+
+
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
     (see `SCHEMA_V1`): the whole reference sequence of every encoded node argument is remembered, and a later
@@ -152,8 +177,7 @@ class _BodyEncoder:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
     def fn(self, f: FunctionDefinition) -> Any:
-        fid = _spec_id(f)
-        return fid if self.tables is None else self.tables.callee(fid)
+        return _spec_id(f) if self.tables is None else self.tables.callee_of(f)
 
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
@@ -161,8 +185,7 @@ class _BodyEncoder:
     def refs(self, r: Refs, at: tuple[int, int] | None = None) -> Any:
         if self.schema == SCHEMA_V0 or not isinstance(r, Concat):
             return r.to_json()
-        parts = _flat_parts(r)
-        keys = tuple(_part_key(p) for p in parts)
+        parts, keys = _flat_keys(r)
         n = len(keys)
         out: list | None = None
         for m in range(n, max(1, n - ALIAS_WINDOW - 1), -1):  # m >= 2, suffix <= ALIAS_WINDOW parts
@@ -285,8 +308,12 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
     # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
     dup_objects: set[tuple[str, int]] = set()
+    visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
 
     def visit(fn: FunctionDefinition) -> None:
+        if visited.get(id(fn)) is fn:
+            return
+        visited[id(fn)] = fn
         fid = _spec_id(fn)
         prev = seen.get(fid)
         if prev is not None:
@@ -520,11 +547,26 @@ def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int],
             raise ValueError(f"alias to argument {a} of node {k}: aliases name an argument of an earlier node")
         return nodes[k].args[a].refs
     if "concat" in j:
+        items = j["concat"]
+        log = None
+        if items and "alias" in items[0]:
+            p = _decode_refs(items[0], nodes, schema, leaves)
+            if isinstance(p, Concat) and p.prefix is not None and p.prefix[1] == len(p.prefix[0]) == len(p.parts):
+                log = p.prefix[0]  # the alias is the whole log so far (a key sequence one row longer than the call before)
+            elif isinstance(p, Concat):
+                log = PartLog(p.parts)
+            else:
+                log = PartLog([p])
+            items = items[1:]
         parts: list[Refs] = []
-        for x in j["concat"]:
+        for x in items:
             p = _decode_refs(x, nodes, schema, leaves)
             parts.extend(p.parts if isinstance(p, Concat) else [p])
-        return Concat(parts)
+        if log is None:
+            return Concat(parts)
+        for p in parts:
+            log.append(p)
+        return log.raw_cut(len(log))
     return _checked_refs(refs_from_json(j), leaves)
 
 
