@@ -80,7 +80,9 @@ structure Finder (γ : Type) : Type 1 where
 noncomputable def Finder.ev {γ : Type} (Fd : Finder γ) (f : γ → ℝ) : ℝ := expect f Fd.g Fd.s
 
 /-- **`SHA512CRStrict` for one finder**, at the budget `q` on every outcome: `q` bounds the SHA-512 evaluations of the
-prover's runs the finder plays and of its verifications. -/
+prover's runs the finder plays and of its verifications. The cost is `q` itself (`fun _ => q`), so Lean doesn't check
+that the finder stays within it: a budget below the finder's real count makes this a claim about SHA-512 that
+`cr/sha-512` doesn't make. Whoever instantiates it states an honest `q` (`ASSUMPTIONS.md`). -/
 def Finder.CR (Fd : Finder Pair) (q : ℝ) : Prop :=
   Assumptions.SHA512CRStrict H Fd.g Fd.s id (fun _ => q) q
 

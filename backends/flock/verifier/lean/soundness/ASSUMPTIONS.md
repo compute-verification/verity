@@ -47,11 +47,20 @@ hash, nor false of every hash.
 
 - **Statement.** A collision finder that makes at most `q` SHA-512 evaluations on every outcome succeeds with probability
   at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
+- **The budgets are not checked.** `StrictCR.Finder.CR H F q` takes `SHA512CRStrict` with the cost `q` on every outcome,
+  so nothing in Lean ties `q` to the evaluations the finder makes. Each budget must bound its finder's real SHA-512
+  evaluations, for `t′` one session run's (as in `LinkCR`) and `v` one opening's verification:
+  - `qF ≥ 2t′ + 2v`, for the rewinding finders (two runs after a cap, and the two conflicting openings verified);
+  - `qS ≥ t′ + v`, for the self-clash finder (one run, one further verification);
+  - `qT ≥ 2t′ + 2v`, for `tr`'s finder (`TreeRewind.finder`: two runs after the registration).
+
+  A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
+  is unsupported. Tying the three to one per-run count in the signatures would check this in Lean; it is a follow-up.
 - **Where it is used.** The compiled term's rewinding finders (`Adv_{r,ℓ}`: two continuations after a rep's level-`ℓ`
   cap) and its self-clash finder (one run that opens a position two ways), the knowledge term's level-0 finder (`Adv₀`:
   two runs after the level-0 cap), and the serving roots' Merkle binding (`δ_tree`: two continuations after the
-  registration). A rewinding finder makes `2t` evaluations plus two verifications, a one-run finder `t` plus one.
-  `FlockSoundness/StrictCR.lean` restates each term at those finders (What is restated over the two forms, below).
+  registration), at the budgets above. `FlockSoundness/StrictCR.lean` restates each term at those finders (What is
+  restated over the two forms, below).
 
 **`SHA512CRExpected`. Expected-time collision resistance of SHA-512** (A2, `ecr/sha-512`; in CDGSY24's expected-time
 sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant corrected the same day).
