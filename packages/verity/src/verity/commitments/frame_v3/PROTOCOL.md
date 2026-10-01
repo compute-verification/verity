@@ -156,8 +156,8 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   binding: the input set, its content digest, the range, the port and the leaf schema. In a class statement the public file is the
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
-  id from its own derivation of the binding, and refuses a root whose recorded domain differs (`verity_one_stage.registration`'s
-  R3-domain does).
+  id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
+  `verity_sampled_proofs.one_stage.registration` does).
 - **Reference and conformance.** `verity.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
