@@ -22,6 +22,7 @@ from dataclasses import replace
 from typing import Any
 
 from . import cpuset
+from .kinds import Kind, warnings
 from .model import OWNER, Cluster, Job, job_to_dict
 from .plan import allowed_cpus, static_refusal
 from .route import place
@@ -42,16 +43,17 @@ def job(*, run_id: str, project: str, submitter: str, priority: str = "work", gp
                node=node, gpu_ids=gpu_ids, submitted=submitted)
 
 
-def wrappers(cluster: Cluster, j: Job, node: str, run_id: str) -> tuple[list[str], list[str]]:
+def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None = None) -> tuple[list[str], list[str]]:
     """The runner's wrapper (the job's CPU allocation, which holds the run through custody) and the workload's (a GPU phase's
-    lease, around the workload alone, so the GPU is booked for the GPU phase only); Refused when the node has no executor."""
+    lease, around the workload alone, so the GPU is booked for the GPU phase only); Refused when the node has no executor.
+    A kind is named in the lease's holder, `who=<kind>:<submitter>`, as the fill runner's leases are `fill:<owner>`."""
     if node not in (NODE1, NODE2):
         raise Refused(f"no executor on {node}")
     if j.gpus and node != NODE2:
         raise Refused(f"{node}'s GPUs are Kueue's, and its executor (kueue-fold's) isn't built yet")
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
-    runner = ["env", f"GPU_LEASE_WHO={j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
+    runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
               "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "--",
               "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
@@ -64,7 +66,7 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str) -> tuple[list[str
     return runner, [*lease, "--"]
 
 
-def resolve(cluster: Cluster, j: Job, run_id: str, now: int) -> dict[str, Any]:
+def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = None) -> dict[str, Any]:
     """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`. The router's node first, then any other node
     that could run it (only the pinned one when `j.node` is set); Refused with each node's reason when none can."""
     first = place(cluster, j, {}, now)
@@ -78,7 +80,7 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int) -> dict[str, Any]:
             reasons.append(f"{name}: {why}")
             continue
         try:
-            wrap, workload_wrap = wrappers(cluster, pinned, name, run_id)
+            wrap, workload_wrap = wrappers(cluster, pinned, name, run_id, kind)
         except Refused as e:
             reasons.append(f"{name}: {e}")
             continue
@@ -87,4 +89,29 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int) -> dict[str, Any]:
     raise Refused("; ".join(reasons))
 
 
-__all__ = ["GPU_LEASE", "Refused", "job", "wrappers", "resolve"]
+def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int, kind: str = "adhoc", question: str = "",
+           gpus: int | None = None, cpus: int | None = None, memory_gib: int | None = None, max_s: int | None = None,
+           quiet: bool | None = None, preempt: str = "requeue", **declared: Any) -> dict[str, Any]:
+    """`resolve` for a job of `kind`: what the job leaves unsaid comes from its registered kind (else 0 GPUs, 1 CPU, 8 GiB),
+    and the placement also names the kind, its question, the registry file it came from, and the held rules it breaks."""
+    k = registry.get(kind)
+    shape = k.shape if k else {}
+    gpus = gpus if gpus is not None else int(shape.get("gpus", 0))
+    cpus = cpus if cpus is not None else int(shape.get("cpus", 1))
+    memory_gib = memory_gib if memory_gib is not None else int(shape.get("memory_gib", 8))
+    quiet = quiet if quiet is not None else bool(shape.get("quiet", False))
+    if max_s is None:
+        if k is None:
+            raise Refused(f"give the job's longest run: kind {kind!r} isn't registered, so it has no max_wall_min")
+        max_s = k.max_wall_min * 60
+    question = question or (k.question if k else "")
+    j = job(run_id=run_id, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s, quiet=quiet, preempt=preempt,
+            submitted=now, **declared)
+    out = resolve(cluster, j, run_id, now, kind)
+    out.update(kind=kind, question=question, max_s=max_s, kind_source=k.source if k else None,
+               warnings=warnings(k, kind, question=question, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s,
+                                 preempt=preempt))
+    return out
+
+
+__all__ = ["GPU_LEASE", "Refused", "job", "wrappers", "resolve", "submit"]

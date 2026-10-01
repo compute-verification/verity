@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cluster import cli, model, submit
+from cluster import cli, kinds, model, submit
 
 NEBIUS = str(Path(__file__).parents[1] / "descriptions" / "nebius.toml")
 T = 1_790_000_000
@@ -73,3 +73,53 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     assert out["machine"] == "vy-nebius-2" and out["job"]["gpu_model"] == "rtx-pro-6000"
     assert cli.main([*base, "--gpus", "1", "--preempt", "never"]) == 3
     assert "refused" in json.loads(capsys.readouterr().out)
+    assert cli.main(["submit", NEBIUS, "--run-id", "r2", "--now", str(T), "--project", "verity", "--submitter", "w",
+                     "--kind", "lean-audit"]) == 0
+    assert json.loads(capsys.readouterr().out)["max_s"] == 1200
+
+
+KINDS = Path(__file__).parents[1] / "kinds"
+
+
+def test_the_repos_kinds_load_and_lean_audit_is_proofs_cpu_m():
+    reg = kinds.load(KINDS)
+    k = reg["lean-audit"]
+    assert (k.owner, k.phase, k.max_wall_min, k.restart) == ("proofs", "cpu-m", 20, "idempotent") and k.question
+    assert k.source["file"] == "kinds/proofs.toml" and len(k.source["sha256"]) == 64
+    assert kinds.kinds_dir(NEBIUS) == KINDS.resolve()
+
+
+def test_a_registered_kind_supplies_what_the_job_leaves_unsaid_and_names_itself_in_the_lease():
+    out = submit.submit(model.load(NEBIUS), kinds.load(KINDS), run_id="r1", now=T, kind="lean-audit", project="verity",
+                        submitter="proofs-w", custody_s=900)
+    assert (out["node"], out["max_s"], out["job"]["cpus"], out["job"]["memory_gib"], out["job"]["max_s"]) == \
+        ("vy-nebius-1", 1200, 8, 32, 2100)
+    assert out["kind"] == "lean-audit" and out["question"].startswith("Do core's Lean proofs") and out["warnings"] == []
+    assert out["kind_source"]["file"] == "kinds/proofs.toml" and "GPU_LEASE_WHO=lean-audit:proofs-w" in out["wrap"]
+
+
+def test_the_held_rules_warn_and_never_refuse(tmp_path):
+    reg = kinds.load(KINDS)
+    c = model.load(NEBIUS)
+    with pytest.raises(submit.Refused, match="longest run"):
+        submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w")
+    out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600)
+    assert any("adhoc" in w for w in out["warnings"]) and any("no research question" in w for w in out["warnings"])
+    out = submit.submit(c, reg, run_id="r1", now=T, kind="lean-audit", project="verity", submitter="w", cpus=4, max_s=3600)
+    assert any("not its phase cpu-m" in w for w in out["warnings"]) and any("over its max_wall_min" in w for w in out["warnings"])
+    (tmp_path / "x.toml").write_text('[kinds.big]\nphase = "gpu1"\nmax_wall_min = 90\nquestion = "q"\n')
+    w = kinds.warnings(kinds.load(tmp_path)["big"], "big", question="q", gpus=1, cpus=8, memory_gib=64, max_s=5400, preempt="never")
+    assert w == ["a GPU job over 60 min: split it into chunks", "a GPU kind that isn't preemptible", "declares no outputs"]
+
+
+def test_a_malformed_registry_names_its_file(tmp_path):
+    for body, want in (('[kinds.a]\nphase = "gpu9"\nmax_wall_min = 5\n', "phase must be one of"),
+                       ('[kinds.a]\nphase = "cpu-s"\n', "max_wall_min"),
+                       ('[kinds.a]\nphase = "cpu-s"\nmax_wall_min = 5\nnext = "b"\n', "isn't registered")):
+        (tmp_path / "o.toml").write_text(body)
+        with pytest.raises(ValueError, match=want):
+            kinds.load(tmp_path)
+    (tmp_path / "o.toml").write_text('[kinds.a]\nphase = "cpu-s"\nmax_wall_min = 5\n')
+    (tmp_path / "p.toml").write_text('[kinds.a]\nphase = "cpu-s"\nmax_wall_min = 5\n')
+    with pytest.raises(ValueError, match="already o's"):
+        kinds.load(tmp_path)

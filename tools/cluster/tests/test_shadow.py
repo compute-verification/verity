@@ -128,3 +128,22 @@ def test_quiet_agreement_flags_a_pause_outside_every_window_and_a_late_resume():
     late = ok[:1] + [{"t": "1970-01-01T00:08:00Z", "event": "resume", "pgid": 9, "why": "window over"}]
     stray = [{"t": "1970-01-01T00:20:00Z", "event": "pause", "pgid": 3, "holder": 6}]
     assert len(shadow.quiet_agreement(wins, late + stray, 30)) == 2
+
+
+def test_a_windows_quiet_record_is_found_by_its_run_id_and_names_what_ran_beside_it(c, tmp_path, capsys):
+    """PoUW's conditions: quiet is recorded per window and looked up by the window's run id, and a session a timed lease
+    started beside is named (holder, GPUs, pid in its allocation id), so the panel can mark that window's rows noisy."""
+    from cluster import cli
+    sh = shadow.Shadow(c, tmp_path)
+    t = epoch("2026-09-30T10:00:00Z")
+    sess = _line(11, "2026-09-30T09:59:00Z").replace("run=-", "run=r-sess")
+    win = _line(12, "2026-09-30T10:00:05Z", "until=2026-09-30T10:05:05Z timed=1").replace("run=-", "run=r-win")
+    sh.step(nebius2.Observation(t, {0: sess}))
+    sh.step(nebius2.Observation(t + 10, {0: sess, 1: win}))
+    sh.step(nebius2.Observation(t + 20, {0: sess}))
+    assert cli.main(["ledger", "quiet", str(tmp_path / "ledger.jsonl"), "r-win"]) == 2
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["run"] == "r-win" and rep["gpus"] == [1] and not rep["quiet"]
+    [o] = [o for o in rep["overlaps"] if o["state"] == "running"]
+    assert (o["alloc"].split("@")[0], o["who"], o["gpus"], o["run"], o["preempt"]) == ("gl-11", "w11", [0], "r-sess", "never")
+    assert cli.main(["ledger", "quiet", str(tmp_path / "ledger.jsonl"), "r-none"]) == 1
