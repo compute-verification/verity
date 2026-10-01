@@ -3,8 +3,8 @@ checkers and the manifest build.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
 (1) the env contract in fresh interpreters, (2) that "default" leaves the interpreter alone, (3) that the fold's
-digest, instances, steps and report are identical under the interpreter defaults and the tuned thresholds, and
-(4) that the entry points call it.
+digest, instances, steps and report are identical under the interpreter defaults and the tuned thresholds,
+(4) that the entry points call it, and (5) that a tuned process's heap is frozen at exit, once, and "default"'s is not.
 """
 from __future__ import annotations
 
@@ -50,6 +50,41 @@ def test_env_contract_in_a_fresh_interpreter(value, expect):
         assert r["ret"] is None and r["after"] == r["before"]
     else:
         assert r["ret"] == expect and r["after"] == expect
+
+
+EXIT_PROBE = ("import atexit, gc\n"
+              "from verity_vllm.pipeline.gc_tuning import tune\n"
+              "n0 = gc.get_freeze_count()\n"
+              "atexit.register(lambda: print('frozen' if gc.get_freeze_count() > n0 else 'unfrozen', flush=True))\n"
+              "tune(); tune()\n")
+
+
+@pytest.mark.parametrize("value,expect", [(None, "frozen"), ("50000,20,100", "frozen"), ("default", "unfrozen")])
+def test_a_tuned_process_freezes_its_heap_at_exit(value, expect):
+    """atexit runs its hooks last-registered first, so a hook registered before `tune` sees the heap as the shutdown collections will."""
+    env = dict(os.environ)
+    env.pop(gc_tuning.ENV, None)
+    if value is not None:
+        env[gc_tuning.ENV] = value
+    out = subprocess.run([sys.executable, "-c", EXIT_PROBE], env=env, capture_output=True, text=True, check=True).stdout
+    assert out.split() == [expect]
+
+
+def test_the_exit_freeze_is_registered_once(monkeypatch):
+    hooks = []
+    monkeypatch.setattr(gc_tuning.atexit, "register", hooks.append)
+    monkeypatch.setattr(gc_tuning, "_freeze_registered", False)
+    saved = gc.get_threshold()
+    try:
+        monkeypatch.setenv(gc_tuning.ENV, "default")
+        gc_tuning.tune()
+        assert hooks == []
+        monkeypatch.setenv(gc_tuning.ENV, "")
+        gc_tuning.tune()
+        gc_tuning.tune()
+    finally:
+        gc.set_threshold(*saved)
+    assert hooks == [gc.freeze]
 
 
 @pytest.mark.parametrize("bad", ["1,2", "a,b,c", "1,2,3,4", "-1,2,3"])
