@@ -1014,6 +1014,7 @@ class Options:
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
     replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="[R16 sys, rev M-0051] reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key " "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and " "evaluated_here=0 (default OFF until coord rules)")
+    replay_bundle_overlap: int = option("--replay-bundle-overlap", type=int, default=1, choices=(0, 1), help="--replay-deferred: 1 writes the bundle's store from the moment the run root is fixed, beside the binding and manifest coverage (replay_bundle.start; the same files and digests); 0 writes it at the C2 site, after them")
     replay_deferred: bool = option("--replay-deferred", default=False, action="store_true", help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
@@ -1285,9 +1286,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     plan_rec: dict | None = None
     if required_manifest is not None and kinds:
         from verity_vllm.check import oracle_compare as _OCP
-        TL.start("prep.producer_facts")
-        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling)
-        TL.end("prep.producer_facts", source="plan" if (plan_rec or {}).get("used") else "derived", members=len(oracle_producers[0] or {}))
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling, tl=TL)
         print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
         if oracle_producers[0]:
             _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
@@ -1919,6 +1918,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
                 # R14 BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
+                _rb_started = RB.start(out, pair, com, rc, args)
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))
@@ -2214,7 +2214,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
                 if args.replay_deferred:
                     row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"], deferred[pair] = RB.defer(
-                        out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result)
+                        out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, started=_rb_started)
                 elif getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     C2.run(C2.Site(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest,
                                    stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result,
@@ -2418,8 +2418,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "moe_source": {"mode": args.moe_source, "attached": moe_attached},
                "negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None),        # NEGATIVE TEST flags armed on this run, by name
                "run_roots": [r["commit"]["run_root"] for r in rows if r["arm"] != "control" and r.get("commit")]}
-    if args.plan:
-        verdict["plan"] = plan_rec or {"path": args.plan, "used": False, "plan_recomputed": False, "why": "no producer facts read (no manifest or no committer)"}
+    verdict.update(CP.verdict_entry(args, plan_rec))
     # [R16 sys / coord M-0090 (5)] replay cache of record: the ORIGINAL pair's artifact lists the pairs that share its replay (root equality
     # explicit); the verdict carries the evaluated-vs-reused count so a reader sees at once that C2 ran once per distinct root
     if getattr(args, "replay_cache", False):
