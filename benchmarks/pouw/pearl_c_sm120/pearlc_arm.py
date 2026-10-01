@@ -226,7 +226,7 @@ class _Call:
         self.enqueue([f for _, p, f in steps if p == "epoch"], None)
         rd.sync()
         root_b, beacon = self.root_b(), arm.beacon(sh, self.ops)
-        epoch = Epoch.start(Workload((mm,)), {mm.weight: root_b}, beacon)
+        epoch = Epoch.unverified(Workload((mm,)), {mm.weight: root_b}, beacon)
         seed_b = C._labelled(epoch.salt + root_b, "seed-B")
         for name, x in F.keys_of(arm.scheme, epoch, mm, seed_b).items():
             self.put(name, x)
@@ -420,7 +420,7 @@ class PearlCSm120:
                        "digests hashed from registers (C~, U never stored), gemm_pearlc_s y alone without hashing; else "
                        "gemm_pearlc(_d) stores C~, U, y and hash_msg_v digests them",
                "epoch": "per operand set: B's frame-b3 row tree on the device, the salt from its root and os.urandom(32) as "
-                        "the beacon (verity_pouw.audit.Epoch.start), matmul index 0 on the set's weight",
+                        "the beacon (verity_pouw.audit.Epoch.unverified), matmul index 0 on the set's weight",
                "gate": f"all: a second, unfused launch word for word (A's tree and seed_A, gemm_ct, gemm_pearlc on {REF_GRID} "
                        "CTAs storing C~ and U, hash_msg_v over them and the other hashes), so fused digests are held to "
                        "hash_msg_v's; gemm_ct's C~ against the call's or, unstored, the second launch's; seed_A and E_A's line "

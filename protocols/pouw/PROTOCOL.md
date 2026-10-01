@@ -422,8 +422,21 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+  - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
+    record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
+    the same in every unit of the weight).
+    - They are committed in `records_root` beside the excluded rows, before the draws' beacon. A record without them
+      encodes exactly as before.
+    - A voluntary row earns no credit, and its words are still checked on every drawn tile that holds it.
+    - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
+    - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
+    - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
+      tile under, before the beacon.
   - A cell's draw weight is its row's share of `wrefOf` at the kept width. An accepted unit is credited
     (1 − ρ)·`creditOf` over its credited cells.
+  - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
+    never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
+    which is exactly the bound claimed.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit, with ρ = 1/400.
@@ -464,6 +477,175 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   group's word the next.
 - Only forming v1 runs on a non-H100 record (v0 is #311's H100 port).
 - The work law aligns `k_unit` to 128, so it requires 32·G ∣ 128.
+
+## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
+
+GPU 5's RTX PRO 6000 design (research store `internal/pouw/rtx-pro/fp4-design.md`). It is Pearl-C with the FP8 product
+replaced by `mma.sync kind::mxf4nvf4`, on NVFP4 (UE4M3 scales per 16).
+- **MXFP4 is a contrast line, not in the claimed domain** (Daniel, 15:34Z). The module keeps it (UE8M0 scales per 32,
+  `pearl-c-mxfp4-v0`), unregistered in `schemes.get`, with a certificate that claims nothing.
+- **Why it is excluded:** its int8 closure holds under F2, but F1′ below puts 9.5–57% of honest MXFP4 credit over the
+  cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
+  scales make honest zero codes reliable.
+The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane
+(`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2) and proposed, not proved, so the certificate names no γ_0. The
+module's docstring states every step and rounding.
+
+~~~text
+rows      k BF16 words per row of either operand
+stats     s, ρ as pearl-c-h100-v1; σ = ρ/4; α = 2688/max(s + 4σ, 2^−32) (mxfp4: floored to a power of two);
+          β_row = (σ·α)·f32(16/√2346.125), a_E = ue4m3(β_row)
+lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes; seed labels pearl-c4/v0/seed-*
+forming   D_t = NVF4.step(C = α·x_t, E ‖ 0 at a_E, F_t ‖ 0 at 2^−4); per scale block s_b from amax|D|/6 (nvfp4: UE4M3
+          nearest even, at least 2^−9; mxfp4: UE8M0 rounded up); code = e2m1(D·(1/s_b))
+chain     C̃ = the scheme's atom chained from +0 over k/64 steps, no promotion
+peel      Ẽ = E·a_E·2^−4 (exact in BF16); P_A = [Ẽ_A ‖ bf16(A′·F_B)], P_B = [bf16(Ẽ_B·G − B̃·F_A) ‖ −Ẽ_B], G = F_Bᵀ·F_A;
+          U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_M16N8K16 steps (sm_120 mma.sync) into C̃'s word
+leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃
+useful    U/(α_A·α_B), glue
+~~~
+
+- **The chain is exact on benign families:** there each C̃ word is the exact dot product rounded once toward zero (a
+  test), so rounding binds no word to its order. D₄ doesn't guarantee it (`Fp4Freeze.noLoss_gap`, an in-domain step
+  that drops a bit), so no claim rests on exactness: the debit's terms are replayed per run. The design's defense
+  against a salt-free precomputation is that every code and every block scale depends on the salt.
+- **B̃ is keyed by this job's salt (D-SK):** seed_B = H(salt ‖ root_B) (`seed_b`), and the verifier forms B̃ itself from
+  it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its checked
+  values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
+  (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
+  stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+- **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
+  floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
+- **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
+  §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
+  - β = 3.42 / 2.00 / 1.11 / 0.49 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
+  - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
+    fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
+  - β is measured, not derived. It is the worst net saving that annealing plus exact block optimisation found over the
+    families R1 admits at 10×, after A0's gather and ρ, with a 1.5× margin on the gain, made non-increasing in n.
+    The evidence is research store `cheap-binding/pearlc4-fix/beta_table.py --mu 1.5` on `strong.jsonl` and
+    `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256 and 512 (`exact256.jsonl`).
+  - R1's per-row bound and the tile cap read `credit_of`, so both tighten with it. The fork (`tt-out-aw`) takes the same
+    discount.
+  - Honest cost, from shapes alone: 0.50% of credit on Qwen2.5-0.5B, 0.23% on 1.5B, about 0.1% on 3B, 7B and
+    Llama-3.2-1B/3B, and at most 0.019% from 8B up.
+- **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
+  strictly row-relative). It reads (`dnf`) 0 ≤ β and v in 0x08–0x7E, where v is β's E4M3 byte with its sign; these
+  are the bytes Lean accepts. The pinned stats never make β negative or NaN, but the rule states both cases:
+  - A negative β would cast to a byte with bit 7 set. At β = −1/4096 the byte 0x80 passes 8 ≤ v alone, and sm_120
+    reads it from its low 7 bits as a zero scale, so the row would carry no noise (bc-824e54a2's post-M4 rebuild).
+  - A NaN β with its sign clear would cast to 0x7F (bc-22298e90's review).
+- **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
+  (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge the
+  reference's witness (`salt_dead`) per element, not every element of a screened block (`server.md` 11:32Z; item 3's
+  per-element form, the assessor's B at 17:25Z), so a row with many screened blocks is rejected only when its tile's
+  debit passes the cap, and neither item charges more than its block form. F1′ charges a screened block's near-certain
+  codes at their own p_t. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
+- **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
+  are the base-split and flatness fix: research store `internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §6.2, §6.3 and
+  §6.8, under the assessor's FP4 conditions (`internal/pouw/red-team/ratings.md` 15:18Z).
+  1. **F1′, the base split's expected saving,** per row and aligned 128-window of A′ and of B̃, on every word the row
+     feeds:
+     - p_t = P(code ≠ its modal code) at the block's modal scale byte, under the exact law of the row's noise given
+       this salt's E line (`noise_law`);
+     - the charge is 128·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]), where R_24 is one 2:4 pass plus a
+       CUDA-core patch of the excess, and R_skip is a skip or patch per k64 atom;
+     - it is taken at the cheater's sorted layout inside each block, with κ = min(c·M_w, 0.125) inside the expectation,
+       where c = 16.92/128 and M_w counts the window's blocks whose realised byte isn't their modal byte;
+     - B̃'s rows are charged `F1_B_OVERFIT` = 10 times it per window, capped at the window's MACs. That factor is
+       measured, not derived (`btilde_mirror.py`, `btilde_honest.py`); at n ≤ 1,024 a stronger search pays past it,
+       which B-OVF covers.
+
+  1b. **F2, the masked int8 route's saving,** per tile on both operands: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain
+      MAC.
+      - f is read at the tile's modal byte, per row and per block-column class, taking the largest reading.
+      - c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
+        20:00Z ruling; `fast-matmul-catalogue-audit.md` §4). It is pinned per shape (`pearl_c4_c_L`), and a shape
+        between table points reads the next point up in m, k and n, whose c_L is the lower.
+        - The routes: Perminov's catalogue at `ac13ca88`, every orientation, rational levels included, nested with
+          Strassen–Winograd levels; W1's int8 leaf 2.0; 4.25 FP4 slots per pre-add element-op; A′'s pre-adds amortised
+          over n and B's over m.
+        - The table is never above the Strassen formula pinned before (min over 1 ≤ L ≤ log₂(k/16) of
+          2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75).
+        - Values: 0.661, 0.579, 0.507 and 0.408 at 8,192³ to 65,536³, where the formula gave 0.808 to 0.542.
+        - Honest tiles are unaffected: F2 fires only past f_A + f_B = 2 − (1 − c_L)/4, 1.915 at 8,192³, against their
+          0.13–0.30.
+
+  R1. **A row whose own F1′ per word passes ρ·(its cell credit) is uncredited.**
+      - The prover declares it (`pearl_c_work.declare` with the transcript).
+      - The verifier checks the declaration on every drawn tile (`check_opened`): a credited row over the bound, or an
+        excluded row under it that passes the per-row rules, fails the tile.
+      - The row is still formed, checked and hashed.
+  2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
+  3. per word and position whose A code and B code are both salt-dead (`salt_dead`, replayed per element on both
+     sides from the drawn tile's own forming), one MAC; a fully dead atom is charged its 64;
+  4. per salt-dead A element (the reference's witness, `salt_dead`) or unneeded one (every credited B code at its
+     position is zero), f_s·|cols|/n;
+  5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
+     adds exactly 0), one block of MACs;
+  - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC
+    on every word it feeds. It is charged per row window rather than per 16-row span, since a cheaper computation may
+    gather any 16 such rows; the literal spans are counted.
+  - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
+    F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
+    high.
+  - D-SS's spread bound (2^15.8, implied by D-NF) is counted, not enforced: items 2 and 5 charge what it would exclude.
+  - D-SB is enforced on every formed side before hashing (`check_scale_bytes`): every block scale in 0x01–0x7E (UE8M0:
+    short of 0xFF) and every a_E at most 0x7E, so no UE4M3 byte has bit 7 set, which sm_120 reads from its low 7 bits (a
+    second encoding of the same C̃), none is 0x7F (NaN), and no block scale is zero. Every committed word is finite
+    (`parse_row`). An a_E of 0x00 is D-NF's exclusion, not a rejection, since a zero row (decode's filler) forms it. The
+    verifier forms every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware
+    does (`hw_scales`).
+    The decode is the Lean `scaleDyadic` proposal's.
+    - Its `nvf4Specials` table has 28 rows: research store `internal/pouw-fp8/pearl-c4-scale-decode/`, bc-5a715b19's
+      review.
+    - Four of those rows are NaN accumulators whose scale bytes set bit 7. They are valid scales under the hardware
+      decode, and outside the model through the accumulator (a test); the card writes 0x7FFFFFFF.
+    - The pinned model (`verity.ml.tc.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
+      vectors on the RTX PRO 6000 (run `r20260930-161935-83a8`), and every word matched.
+  - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
+- **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
+  - W_ref = mnk + 32·mk + 256·mn + 117·mk;
+  - creditOf = mnk + 32·mk + 256·mn + f_s·mk, f_s = 98 (the steps that read the salt at their cheapest bit-exact price:
+    the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
+    ρ's accumulate, 2);
+  - the weight side is `job_cost`.
+- **Registered weights (`check_registration`):**
+  - **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep). An unrotated checkpoint
+    registers only from the curated list, the fallback.
+  - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
+    5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
+    heads. They are never applied on an unrotated checkpoint, curated or not.
+  - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
+    V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
+    because the two were measured only together, after the rotation (research store `internal/pouw/keyed-transforms/`).
+  - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
+    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded (research store
+    `docs/pouw/keyed-transforms.md` §14). The rotation folds γ, so its stacks pass as they are. An unrotated, curated
+    checkpoint declares `gamma-fold` (every RMSNorm scale folded into the linears it feeds), and takes no V/O or
+    interleave.
+  - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
+    registration's own.
+- **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
+- **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
+  row needs:
+  - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
+  - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
+    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SB's range;
+  - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
+    accept line.
+
+  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
+  once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
+  sharing, at twice that). Its shortcuts
+  are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
+  the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
+  not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).
+- **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
+  PTX ISA.
+- **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
+  and one 64 × 1,024 × 64 NVFP4 tile, each with its replayed debit and cap, and A row 0's F1′ inputs (the noise law's
+  digest, the modal bytes, p_t) and charge.
 
 ## Not here yet
 
