@@ -1,17 +1,22 @@
-"""PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from.
+"""PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, and the three Pearl-C4's tile check
+(`pc4`) adds to core's FP32, cast and tensor-core primitives.
 
 Every primitive returns one value of at most 32 bits, so every unit of any `Q_word` cut of these Definitions meets the width
 rule, and a 64-bit hash word is carried as two 32-bit halves: SHA-512's words as (hi, lo), Keccak's lanes as (lo, hi).
 Encodings: `U32` = `Value<32>`; `I7` = `Value<7>`, a two's-complement int7 (A's and B's entries: the type is the int7 domain
-check); `U8` = `Value<8>`, a byte read as u8 (X + β) or s8 (the noise, Y) as each primitive says.  Every evaluator is total on
-encodings.
+check); `U8` = `Value<8>`, a byte read as u8 (X + β) or s8 (the noise, Y) as each primitive says; `F32`, `BF16` and `E2M1`
+the float encodings.  Every evaluator is total on encodings.
 """
 from __future__ import annotations
 
+import struct
+
 from verity.ir.defs import primitive
 from verity.ir.types import Array, Value
+from verity.ml.tc import cast as _cast
+from verity.ml.tc import fp32 as _fp32
 
-U32, U8, I7, F32 = Value(32), Value(8), Value(7), Value(32)
+U32, U8, I7, F32, BF16, E2M1 = Value(32), Value(8), Value(7), Value(32), Value(16), Value(4)
 M32 = (1 << 32) - 1
 M64 = (1 << 64) - 1
 #: route U's bias: X + β is u8 on the int7 domain (Lean `biasU8Iff`); `schemes.ncp.BETA`
@@ -199,5 +204,41 @@ def PouwI32ToF32Rn(z: int) -> int:
     return i32_to_f32_rn(z)
 
 
-__all__ = ["A16", "BETA", "F32", "I7", "M32", "U32", "U8", "sx", "i32_to_f32_rn",
+# ---- Pearl-C4 (`pc4`) ----------------------------------------------------------------------------------------------------
+
+@primitive("PouwF32SqrtRn", 1, [("a", F32)], F32, conformance="protocol-defined")
+def PouwF32SqrtRn(a: int) -> int:
+    """sqrt.rn.f32 (`verity.ml.tc.fp32.sqrt`, ρ's root in Pearl's statistics): nearest even, √−0 = −0, √+inf = +inf; a NaN
+    or a negative nonzero operand gives the GPU's NaN word 0x7FFFFFFF."""
+    a &= M32
+    if (a >> 23) & 0xFF == 0xFF:
+        return a if a == 0x7F800000 else 0x7FFFFFFF
+    if a >> 31 and a & 0x7FFFFFFF:
+        return 0x7FFFFFFF
+    return _fp32.sqrt(a)
+
+
+_E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
+
+
+@primitive("PouwETilde", 1, [("e", E2M1), ("ae", U8)], BF16, conformance="protocol-defined")
+def PouwETilde(e: int, ae: int) -> int:
+    """Ẽ = bf16(E · a_E · 2^-4) for one E2M1 noise code and a row's UE4M3 byte, exactly (`schemes.pearl_c4.e_tilde`: at most
+    six significant bits, so no rounding), the product's sign or-ed with E's (code 0x8 is −0); 0x7FFF where a_E's low seven
+    bits are 0x7F, the E4M3 NaN."""
+    ae &= 0xFF
+    if ae & 0x7F == 0x7F:
+        return 0x7FFF
+    v = _E2M1_HALVES[e & 7] / 2 * struct.unpack("<f", struct.pack("<I", _cast.e4m3_to_f32_word(ae)))[0] / 16
+    word = struct.unpack("<I", struct.pack("<f", v))[0] >> 16 if v else 0
+    return word | (0x8000 if e & 8 else 0)
+
+
+@primitive("PouwBf16Neg", 1, [("a", BF16)], BF16, conformance="protocol-defined")
+def PouwBf16Neg(a: int) -> int:
+    """−a on a BF16 encoding: the sign bit flipped (−Ẽ_B in P_B)."""
+    return (a ^ 0x8000) & 0xFFFF
+
+
+__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "U32", "U8", "sx", "i32_to_f32_rn",
            *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
