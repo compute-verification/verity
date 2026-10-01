@@ -1,6 +1,6 @@
-"""The beacon's three use conditions for `beacon-unpredictability` (the assessor's B, ratings.md), on recorded drand
-quicknet rounds: each round verified against the pinned key, the salt's round after the weight roots, and the round rule
-read from the verifier's clock, never from a lagging view."""
+"""The beacon's three use conditions for `beacon-unpredictability` (the assessor's A for the verifier path, ratings.md
+21:48Z), on recorded drand quicknet rounds: each round verified against the pinned key, the salt's round after the weight
+roots, and the round rule read from the verifier's clock, never from a lagging view."""
 
 from __future__ import annotations
 

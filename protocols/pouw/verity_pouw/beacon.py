@@ -1,5 +1,6 @@
-"""The public beacon: drand's quicknet, pinned and verified (Daniel named it; `beacon-unpredictability`, the assessor's B
-in research store internal/pouw/red-team/ratings.md with its three use conditions).
+"""The public beacon: drand's quicknet, pinned and verified (Daniel named it; `beacon-unpredictability`, the assessor's A
+for the verifier path, `audit.Epoch.start` and `pearl_c_work.audit`, on its three use conditions below: research store
+internal/pouw/red-team/ratings.md 21:48Z).
 
 - **Verify each round.** A `Round` carries drand's threshold BLS signature on the round number, and `verify` checks it
   against the pinned group key (`QUICKNET`). No relay's word is trusted. A round's value is SHA-256 of its signature,
