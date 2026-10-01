@@ -621,14 +621,19 @@ def nvme_probe(directory: str, c: bytes, block_bytes: int, samples: int) -> dict
     return {"directory": directory, "direct": direct, "authoritative": direct, "bytes": len(c), "block_read_s": quantiles(times)}
 
 
+def stopped_reason(gates: dict[str, Any]) -> str:
+    bad = [g for g, v in gates.items() if not v.get("passed")]
+    if bad:
+        return f"kernel gate(s) failed, so nothing was timed: {', '.join(bad)}"
+    return "--gates-only: the kernels built and their gates passed; nothing was timed"
+
+
 def _failed(gates: dict[str, Any], facts: dict[str, Any], scheme: Any, n: int, total: int, used: int,
             kernels: dict[str, Any], commit: str | None) -> dict[str, Any]:
-    bad = [g for g, v in gates.items() if not v.get("passed")]
     return {"implementation": {"name": "band-gpu", "commit": commit, "harness": "benchmarks/pous/band_gpu/harness.py",
                                "kernels": kernels}, "device": facts, "segments": n, "segments_of_weight_set": total,
             "blocks": scheme.params.blocks, "weight_bytes": used, "gates": gates, "metrics": None, "scheme_obj": scheme,
-            "extra_gaps": (), "tag_rows": [], "measurements": [],
-            "stopped": f"kernel gate(s) failed, so nothing was timed: {', '.join(bad)}"}
+            "extra_gaps": (), "tag_rows": [], "measurements": [], "stopped": stopped_reason(gates)}
 
 
 def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], tag_segments: int,
@@ -662,7 +667,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                              "reference_encode": reference_gate(scheme, c_host, w_host, picks, a.workers) if picks
                              else {"passed": True, "segments": []},
                              "round_trip": {"passed": bool(torch.equal(backend.decode(c, tags), w))}}
-    if not all(g["passed"] for g in gates.values()):        # P4: a failed kernel gate stops the run and times nothing
+    if not all(g["passed"] for g in gates.values()) or getattr(a, "gates_only", False):   # P4: a failed gate times nothing
         facts["after"] = backend.facts()
         return _failed(gates, facts, scheme, n, total, used, kernels, a.impl_commit)
 

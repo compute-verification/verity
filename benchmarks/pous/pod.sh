@@ -10,9 +10,13 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then p2-v1-gpu, and the table
+#   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #
-# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM and the L40S are known, and any other GPU, or
-# none, needs HW=<census/hardware.json id>.
+# GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
+# on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
+#
+# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000 are
+# known, and any other GPU, or none, needs HW=<census/hardware.json id>.
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
@@ -28,16 +32,40 @@ case "$GPU" in                                            # the census id is the
   *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
+  *"RTX PRO 6000"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120: the Blackwell Server Edition
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}
+GO=$([ "${GATES_ONLY:-0}" = 1 ] && echo --gates-only)
 mkdir -p "$W" "$O/bench"
-# band-gpu's Python: torch pinned (TORCH_VERSION) from the PyTorch index for the pod's nvcc (cu126 below CUDA 12.8, cu128 from it)
+nvcc_release() { "$1/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1 \2/p'; }
+# A CUDA 12 toolkit for torch's JIT build (torch's wheels are CUDA 12; a CUDA 13 nvcc does not match them), at least 12.8 on a
+# Blackwell GPU (sm_100, sm_120): CUDA_HOME if it is one, else an installed /usr/local/cuda-12.x, else 12.8 from NVIDIA's apt
+# repository (the Nebius image ships CUDA 13.0)
+cuda12_home() {
+  local need=0 cc home major minor
+  cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
+  [ "${cc%%.*}" -ge 10 ] 2>/dev/null && need=8
+  for home in ${CUDA_HOME:-/usr/local/cuda} /usr/local/cuda-12.9 /usr/local/cuda-12.8 /usr/local/cuda; do
+    read -r major minor <<< "$(nvcc_release "$home")"
+    [ "${major:-0}" = 12 ] && [ "${minor:-0}" -ge "$need" ] && { echo "$home"; return 0; }
+  done
+  if [ ! -x /usr/local/cuda-12.8/bin/nvcc ]; then
+    . /etc/os-release; local repo=ubuntu${VERSION_ID/./}
+    dpkg -s cuda-keyring >/dev/null 2>&1 || { wget -q "https://developer.download.nvidia.com/compute/cuda/repos/$repo/x86_64/cuda-keyring_1.1-1_all.deb" \
+      && dpkg -i cuda-keyring_1.1-1_all.deb >/dev/null; } || return 3
+    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cuda-nvcc-12-8 \
+      cuda-cudart-dev-12-8 cuda-cccl-12-8 >/dev/null || return 3
+  fi
+  echo /usr/local/cuda-12.8
+}
+# band-gpu's Python: torch pinned (TORCH_VERSION) from the PyTorch index for the CUDA 12 toolkit (cu126 below 12.8, cu128 from it)
 gpu_env() {
-  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
-  local minor
-  minor=$(nvcc --version 2>/dev/null | sed -n 's/.*release 12\.\([0-9]*\).*/\1/p')
+  local home major minor
+  home=$(cuda12_home) || { echo "no CUDA 12 toolkit for this GPU, and none could be installed"; return 3; }
+  export CUDA_HOME=$home PATH=$home/bin:$PATH
+  read -r major minor <<< "$(nvcc_release "$CUDA_HOME")"
   TORCH_CUDA=${TORCH_CUDA:-$([ "${minor:-8}" -ge 8 ] && echo cu128 || echo cu126)}
   TORCH_VERSION=${TORCH_VERSION:-2.7.1}
   local venv=$W/gpu312-torch$TORCH_VERSION-$TORCH_CUDA
@@ -95,7 +123,7 @@ elif [ "$IMPL" = band-gpu ]; then
   record_host
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
     --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu "$VCPU" \
-    --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
+    --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO
   RC=$?
   nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
   exit $RC
@@ -115,16 +143,21 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
       --workers "$(nproc)" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
-      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"
     arm band-gpu "$O/bench/band" sub; RB=$?
     nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-between.txt" 2>&1 || true
     arm p2-v1-gpu "$O/bench/p2" sub; RP=$?
-    "$PY" benchmarks/pous/side_by_side.py "$O/bench/band/bench-result.json" "$O/bench/p2/bench-result.json" \
-      --out "$O/bench/side-by-side.json" --markdown "$O/bench/side-by-side.md"
-    RC=$?; [ $RB -ne 0 ] || [ $RP -ne 0 ] && RC=1
+    if [ -n "$GO" ]; then   # gates only: no measurements to table
+      RC=0
+    else
+      "$PY" benchmarks/pous/side_by_side.py "$O/bench/band/bench-result.json" "$O/bench/p2/bench-result.json" \
+        --out "$O/bench/side-by-side.json" --markdown "$O/bench/side-by-side.md"
+      RC=$?
+    fi
+    [ $RB -ne 0 ] || [ $RP -ne 0 ] && RC=1
   else
     arm p2-v1-gpu "$O/bench"; RC=$?
   fi

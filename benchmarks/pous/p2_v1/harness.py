@@ -198,11 +198,9 @@ def seqroot_block(dropped: list[int]) -> int:
 
 def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments: int, total: int, used: int,
             commit: str | None) -> dict[str, Any]:
-    bad = [g for g, v in gates.items() if not v.get("passed")]
     return {"implementation": {"name": "p2-v1-gpu", "commit": commit, "harness": "benchmarks/pous/p2_v1/harness.py"},
             "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": P.blocks, "weight_bytes": used,
-            "gates": gates, "metrics": None, "profile": None, "measurements": [],
-            "stopped": f"kernel gate(s) failed, so nothing was timed: {', '.join(bad)}"}
+            "gates": gates, "metrics": None, "profile": None, "measurements": [], "stopped": H.stopped_reason(gates)}
 
 
 def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes],
@@ -243,7 +241,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     c_host = c.cpu().numpy().tobytes()
     gates["reference_decode"] = reference_gate(bound, P, salt, model, c_host, bound.decode(c, 0), picks(encoded, blocks))
     gates["kernel_flags"] = {"passed": bound.raised() == 0}
-    if not all(g["passed"] for g in gates.values()):
+    if not all(g["passed"] for g in gates.values()) or getattr(a, "gates_only", False):
         facts["after"] = backend.facts()
         return _failed(gates, facts, P, segments, total, used, a.impl_commit)
 

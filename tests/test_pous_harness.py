@@ -189,6 +189,14 @@ def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
     assert "timed_audit" not in body["gates"] and body["profile"] is None
 
 
+def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
+    params = _small()
+    body = _bench().BandGpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(params), base=params,
+                                  vectors=_vectors(params))
+    assert set(body["gates"]) == {"vector", "reference_encode", "round_trip"} and all(g["passed"] for g in body["gates"].values())
+    assert body["metrics"] is None and body["measurements"] == [] and "--gates-only" in body["stopped"]
+
+
 def _challenge(conn, i: int, width: int) -> tuple[int, int, bytes]:
     conn.sendall(struct.pack("<QQ", 1, i))
     want, got = 24 + width, b""

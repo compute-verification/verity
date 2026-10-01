@@ -497,6 +497,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
                     help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+    ap.add_argument("--gates-only", action="store_true",
+                    help="band-gpu, p2-v1-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -529,7 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     if run_dir:
         rows = []
-        if doc["passed"]:        # a failed gate publishes no measurement, so no table can show a number from a wrong kernel
+        if doc["passed"] and doc.get("metrics"):   # a failed gate publishes no measurement, nor does a --gates-only run
             rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
                     else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
             rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}, *measurements]

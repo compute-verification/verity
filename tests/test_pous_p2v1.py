@@ -206,6 +206,13 @@ def test_a_wrong_p2_kernel_stops_the_run_before_anything_is_timed(tmp_path):
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]
 
 
+def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
+    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
+    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags"}
+    assert all(g["passed"] for g in body["gates"].values())
+    assert body["metrics"] is None and body["measurements"] == [] and "--gates-only" in body["stopped"]
+
+
 def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monkeypatch):
     import json
 

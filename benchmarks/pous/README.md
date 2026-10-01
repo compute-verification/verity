@@ -85,4 +85,10 @@ research run --on <RTX 4090 pod> --project verity --source . --cwd source --camp
   -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]      # band and P2 v1, then the table
+research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
+  -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2              # build check: both arms' kernel gates
 ~~~
+
+On an sm_120 (RTX PRO 6000) `pod.sh` builds with a CUDA 12.8 toolkit (installed from NVIDIA's apt repository when the image
+ships only CUDA 13, which torch's cu128 wheel does not match), `pous_native` for the device's capability (`native.arch_list`), and
+`libp2v1.so` for `ARCH=sm_120`.
