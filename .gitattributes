@@ -1,0 +1,2 @@
+# each side's pins, reads and dependencies, merged without a rebuild (tools/lean/merge.py; `merge.py --install` once per clone)
+lean-audit.json merge=lean-audit

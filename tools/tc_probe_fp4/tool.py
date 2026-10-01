@@ -45,6 +45,7 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--golden-per-family", type=int, default=60)
     ap.add_argument("--families", default=None)
     ap.add_argument("--sass-check", action="store_true")
+    ap.add_argument("--library", default=None)                  # a prebuilt library; its sha256 is in the result's nvcc identity
     ap.add_argument("--chain2", action="store_true")            # lane tcgen05: K=128 chains on the TMEM accumulator
     ap.add_argument("--smem-strides", default=None)             # lane tcgen05: shared-memory descriptor strides
     ap.add_argument("--chain", type=int, default=1)             # mma.sync: in-register chains of L dependent MMAs
@@ -65,6 +66,7 @@ def parse(argv: list[str]) -> dict:
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     out.pop("prebuilt")
+    out.pop("library")
     out["collect"] = out["collect"] is not None
     if out["arch"] is None:  # probe.py's default: sm_120a for the mma.sync instructions, sm_100a for the tcgen05 ones
         out["arch"] = "sm_100a" if str(out["instruction"]).startswith("tcgen05") else "sm_120a"

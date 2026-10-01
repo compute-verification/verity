@@ -12,6 +12,7 @@ weight arrays O(1) in the descriptor.
 
 from __future__ import annotations
 
+import bisect
 from typing import Iterator
 
 from .types import Array, Record, Tuple, Type, Value, remove_axis
@@ -131,9 +132,11 @@ class Strided(Refs):
 
 
 class Concat(Refs):
-    """Concatenation of reference sequences (binary search on `[j]`); descriptor size = number of parts."""
+    """Concatenation of reference sequences (binary search on `[j]`); descriptor size = number of parts.
 
-    __slots__ = ("parts", "starts", "count")
+    `prefix` is `(log, j)` when the first `j` parts are `log.parts[:j]` (a `Concat` cut from a `PartLog`), else None."""
+
+    __slots__ = ("parts", "starts", "count", "prefix")
 
     def __init__(self, parts: list[Refs]) -> None:
         self.parts = list(parts)
@@ -143,23 +146,27 @@ class Concat(Refs):
             self.starts.append(pos)
             pos += p.count
         self.count = pos
+        self.prefix = None
 
     def __getitem__(self, j: int) -> Ref:
         if j < 0:
             j += self.count
         if not (0 <= j < self.count):
             raise IndexError(j)
-        import bisect
         k = bisect.bisect_right(self.starts, j) - 1
         return self.parts[k][j - self.starts[k]]
 
     def slice(self, lo: int, hi: int) -> Refs:
         lo, hi = max(lo, 0), min(hi, self.count)
         out: list[Refs] = []
-        for st, p in zip(self.starts, self.parts):
+        starts, parts = self.starts, self.parts
+        k, n = max(bisect.bisect_right(starts, lo) - 1, 0), len(parts)
+        while k < n and starts[k] < hi:
+            st, p = starts[k], parts[k]
             a, b = max(lo, st) - st, min(hi, st + p.count) - st
             if b > a:
                 out.append(p.slice(a, b))
+            k += 1
         return concat(out)
 
     def to_json(self):
@@ -231,39 +238,162 @@ def concat(parts: list[Refs]) -> Refs:
     return Explicit(tuple(items))
 
 
+class PartLog:
+    """Parts in order, cut into `Concat`s that share them as a prefix. The key rows an attention call reads are the rows
+    the call before read plus one: cut from one log, each call's sequence costs O(1) parts of work, not O(rows).
+
+    `cut(j, extra)` is exactly `concat(parts[:j] + extra)`. The `Concat` it returns records `prefix = (log, j)`, so a
+    consumer that walks parts (`runs`, the descriptor encoder, liveness, the correspondence emitter) keeps what it
+    computed for `parts[:j]` in the log and pays only for the parts past the longest cut it has seen. `memo` holds those
+    consumers' per-log state (keyed by consumer); a log is append-only, so a prefix never changes once cut."""
+
+    __slots__ = ("parts", "starts", "memo", "_bad", "_chain", "_explicit", "_leaf", "_affine", "_runs", "_run_n", "_run_last")
+
+    def __init__(self, parts: list[Refs] = ()) -> None:
+        self.parts: list[Refs] = []
+        self.starts: list[int] = [0]   # starts[i] = leaves before part i; starts[len] = all leaves
+        self.memo: dict = {}
+        self._bad: int | None = None   # first i with parts[:i + 1] not in `concat`'s normal form (an empty part, a broadcast merge)
+        self._chain = 0                # parts[:_chain] is one contiguous run of `Affine`s (`concat` merges it into one `Affine`)
+        self._explicit = 0             # parts[:_explicit] are all `Explicit`
+        self._leaf = 0                 # parts[:_leaf] are not `Concat`s
+        self._affine = 0               # parts[:_affine] are all `Affine`
+        self._runs: list[tuple[str, int, int, int]] = []    # runs of parts[:len(_run_n) - 1]
+        self._run_n: list[int] = [0]                        # _run_n[j] = len(runs(parts[:j]))
+        self._run_last: list = [None]                       # _run_last[j] = runs(parts[:j])[-1]
+        for p in parts:
+            self.append(p)
+
+    def __len__(self) -> int:
+        return len(self.parts)
+
+    def append(self, p: Refs) -> None:
+        parts, i = self.parts, len(self.parts)
+        if self._bad is None and (p.count == 0 or (i and is_broadcast(p) and is_broadcast(parts[-1])
+                                                   and (p.space, p.idx, p.base) == (parts[-1].space, parts[-1].idx, parts[-1].base))):
+            self._bad = i
+        if self._chain == i and isinstance(p, Affine) and (i == 0 or (p.space, p.idx, p.base) == (
+                parts[0].space, parts[0].idx, parts[0].base + self.starts[i])):
+            self._chain = i + 1
+        if self._explicit == i and isinstance(p, Explicit):
+            self._explicit = i + 1
+        if self._leaf == i and not isinstance(p, Concat):
+            self._leaf = i + 1
+        if self._affine == i and isinstance(p, Affine):
+            self._affine = i + 1
+        parts.append(p)
+        self.starts.append(self.starts[-1] + p.count)
+
+    def cut(self, j: int, extra: list[Refs] = ()) -> Refs:
+        """`concat(parts[:j] + extra)`."""
+        parts = self.parts
+        if j < 2 or (self._bad is not None and self._bad < j) or j <= self._explicit:
+            return concat(parts[:j] + list(extra))
+        if j <= self._chain:
+            if not extra:
+                a0 = parts[0]
+                return Affine(a0.space, a0.idx, a0.base, self.starts[j])
+            return concat(parts[:j] + list(extra))
+        tail = [p for p in extra if p.count]
+        if tail:
+            merged = _merge_broadcasts([parts[j - 1]] + tail)
+            if merged[0] is not parts[j - 1]:
+                return concat(parts[:j] + list(extra))
+            tail = merged[1:]
+        c = Concat.__new__(Concat)
+        c.parts = parts[:j] + tail
+        c.starts = self.starts[:j]
+        pos = self.starts[j]
+        for p in tail:
+            c.starts.append(pos)
+            pos += p.count
+        c.count, c.prefix = pos, (self, j)
+        return c
+
+    def raw_cut(self, j: int, extra: list[Refs] = ()) -> Concat:
+        """`Concat(parts[:j] + extra)`: the parts as they are, not in `concat`'s normal form (what the descriptor decoder builds)."""
+        c = Concat.__new__(Concat)
+        c.parts, c.starts, pos = self.parts[:j], self.starts[:j], self.starts[j]
+        for p in extra:
+            c.parts.append(p)
+            c.starts.append(pos)
+            pos += p.count
+        c.count, c.prefix = pos, (self, j)
+        return c
+
+    def leaf_parts(self, j: int) -> bool:
+        """No part of `parts[:j]` is a `Concat`."""
+        return j <= self._leaf
+
+    def affine_parts(self, j: int) -> bool:
+        """Every part of `parts[:j]` is an `Affine`."""
+        return j <= self._affine
+
+    def runs(self, j: int) -> tuple[list[tuple[str, int, int, int]], int]:
+        """`(runs(Concat(parts[:j])), s)`: a fresh list, whose first `s` runs are also the first `s` runs of every longer cut."""
+        n = self._run_n
+        for k in range(len(n) - 1, j):
+            _walk_runs(self._runs, self.parts[k])
+            n.append(len(self._runs))
+            self._run_last.append(self._runs[-1] if self._runs else None)
+        c = n[j]
+        if not c:
+            return [], 0
+        out = self._runs[:c]
+        out[-1] = self._run_last[j]
+        return out, c - 1
+
+    def shared_runs(self, lo: int, hi: int) -> list[tuple[str, int, int, int]]:
+        """Shared runs `lo..hi` (`hi` at most an `s` that `runs` returned): final, whatever is appended later."""
+        return self._runs[lo:hi]
+
+
+def _push_run(out, space, idx, lo, hi):
+    if out and out[-1][0] == space and out[-1][1] == idx and out[-1][3] == lo:
+        out[-1] = (space, idx, out[-1][2], hi)
+    else:
+        out.append((space, idx, lo, hi))
+
+
+def _walk_runs(out, r):
+    if isinstance(r, Affine):
+        if r.count:
+            _push_run(out, r.space, r.idx, r.base, r.base + r.count)
+    elif isinstance(r, Strided):
+        if r.inner_stride == 1 or r.inner == 1:
+            rows = r.count // r.inner
+            for i in range(rows):
+                b = r.base + i * r.outer_stride
+                _push_run(out, r.space, r.idx, b, b + r.inner)
+        else:
+            for space, idx, leaf in r:
+                _push_run(out, space, idx, leaf, leaf + 1)
+    elif isinstance(r, Concat):
+        for p in r.parts:
+            _walk_runs(out, p)
+    else:
+        for space, idx, leaf in r:
+            _push_run(out, space, idx, leaf, leaf + 1)
+
+
+def prefix_runs(refs: Refs) -> tuple[list[tuple[str, int, int, int]], PartLog | None, int]:
+    """`(runs(refs), log, s)`: for a `Concat` cut from a `PartLog`, the first `s` runs are `log`'s shared runs (the same for
+    every cut at least as long); otherwise `log` is None and `s` is 0."""
+    if isinstance(refs, Concat) and refs.prefix is not None:
+        log, j = refs.prefix
+        out, s = log.runs(j)
+        for p in refs.parts[j:]:
+            _walk_runs(out, p)
+        return out, log, min(s, len(out))
+    out = []
+    _walk_runs(out, refs)
+    return out, None, 0
+
+
 def runs(refs: Refs) -> list[tuple[str, int, int, int]]:
     """Maximal contiguous runs `(space, idx, lo, hi)` of a reference sequence, in sequence order (pure; used by
     the derivation frontend, program families and the capture fold — none of which need torch for it)."""
-    out: list[tuple[str, int, int, int]] = []
-
-    def push(space, idx, lo, hi):
-        if out and out[-1][0] == space and out[-1][1] == idx and out[-1][3] == lo:
-            out[-1] = (space, idx, out[-1][2], hi)
-        else:
-            out.append((space, idx, lo, hi))
-
-    def walk(r):
-        if isinstance(r, Affine):
-            if r.count:
-                push(r.space, r.idx, r.base, r.base + r.count)
-        elif isinstance(r, Strided):
-            if r.inner_stride == 1 or r.inner == 1:
-                rows = r.count // r.inner
-                for i in range(rows):
-                    b = r.base + i * r.outer_stride
-                    push(r.space, r.idx, b, b + r.inner)
-            else:
-                for space, idx, leaf in r:
-                    push(space, idx, leaf, leaf + 1)
-        elif isinstance(r, Concat):
-            for p in r.parts:
-                walk(p)
-        else:
-            for space, idx, leaf in r:
-                push(space, idx, leaf, leaf + 1)
-
-    walk(refs)
-    return out
+    return prefix_runs(refs)[0]
 
 
 def strided_view(c, base: int, inner: int, outer_stride: int, inner_stride: int, count: int) -> Refs:

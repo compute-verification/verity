@@ -95,6 +95,8 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
             # built its engine with target=None (engine ARGS still travelled through engine_args_required; environment knobs such as
             # VLLM_USE_DEEP_GEMM have no other channel, and the header carried no `profile.target`).  None when the row declares none.
             "target": dict(doc["target"]) if isinstance(doc.get("target"), dict) and doc.get("target") else None,
+            # each enabled protocol's settings (`protocol_options.load_settings`), never hashed: the capture and the Commit install from it
+            "protocols_config": dict(doc["protocols_config"]) if isinstance(doc.get("protocols_config"), dict) else None,
             "sha256": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
 
 
@@ -194,12 +196,21 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
     return tokens, timing
 
 
+#: Per-request sampling fields a warm-up request keeps from the request it stands in for.  The collector stages per-request sampler
+#: tensors only under some of them (`runner.sampler/seed` only for an explicitly seeded batch), so a bounded warm-up that dropped them
+#: learned plans every seeded record step overran (SmolLM2-135M Gumbel sm_120: +8 B past a chunk boundary = +256 B, failed closed).
+THROWAWAY_SAMPLING_FIELDS = ("seed", "n", "variant", "temperature", "top_p", "top_k")
+
+
 def throwaway_requests(engine: Engine, like: list[dict], seed: int = 0x5EED_7A9B) -> list[dict]:
-    """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway)."""
+    """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway), with the same per-request
+    sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
     vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
     rng = np.random.default_rng(seed)
     out = []
     for i, r in enumerate(like):
-        out.append({"request_id": f"warmup-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist(),
-                    "max_tokens": int(r["max_tokens"]), "arrive_step": int(r.get("arrive_step") or 0)})   # same schedule shape (D87)
+        w = {"request_id": f"warmup-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist(),
+             "max_tokens": int(r["max_tokens"]), "arrive_step": int(r.get("arrive_step") or 0)}   # same schedule shape (D87)
+        w.update({k: r[k] for k in THROWAWAY_SAMPLING_FIELDS if k in r})
+        out.append(w)
     return out

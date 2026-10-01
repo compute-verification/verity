@@ -29,9 +29,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
                  that is not a constant of an `assumptions` module, or no longer says what its record says: signature,
-                 named assumptions, type hash, and (under `reads`) the definitions the pinned statements read, per module;
-                 the hashes are SHA-256 over a canonical form of the term that ignores what `Expr.hash` ignores (records
-                 written with its 32 bits are checked as they are until `--update` rewrites them)
+                 named assumptions, type hash, and (under `reads`, per module) the definitions the pinned statements read,
+                 the pins that read them and the digest of those definitions; the hashes are SHA-256 over a canonical form
+                 of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
+                 are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
                  only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
@@ -42,7 +43,7 @@ environment extension loaded, so none of the package's code runs), and replays t
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
-                 audited earlier in the run changed during it; the Lean files are run from a copy taken before the first build
+                 built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
 
 `--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
 everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
@@ -56,6 +57,9 @@ handoff; `--update` records them, it does not approve them.  A pin whose stateme
 (same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer.  `--all` first runs the controls (`controls`): a
 fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
 check once a violation is added.
+The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
+package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
+too; its reading and replay run beside the builds that follow.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -73,7 +77,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -99,6 +105,10 @@ COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|pro
                           r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
                           r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
                           r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
+#: held by the first `setup.sh` of each toolchain in a run (`setup`)
+SETUP = threading.Lock()
+#: the toolchains a `setup.sh` of this run has installed
+_INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 #: the controls' own packages; `--all` does not audit them as the repository's
@@ -149,9 +159,13 @@ def layout(v, pad: str = "") -> str:
     return "[\n" + ",\n".join(f"{pad} {layout(x, pad + ' ')}" for x in v) + f"\n{pad}]"
 
 
+def text(policy: dict) -> str:
+    """A policy as `lean-audit.json` holds it: its sections in `ORDER`, laid out by `layout`."""
+    return layout({k: policy[k] for k in ORDER if k in policy} | {k: v for k, v in policy.items() if k not in ORDER}) + "\n"
+
+
 def dump(pkg: Path, policy: dict) -> None:
-    doc = {k: policy[k] for k in ORDER if k in policy} | {k: v for k, v in policy.items() if k not in ORDER}
-    (pkg / POLICY).write_text(layout(doc) + "\n")
+    (pkg / POLICY).write_text(text(policy))
 
 
 def under(prefixes, name: str) -> bool:
@@ -336,18 +350,27 @@ def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
     return facts
 
 
-#: records written before SHA-256: a pin's `type_hash` is Lean's 32-bit `Expr.hash` (16 hex digits), and a read group's
-#: `digest` has 32 (its definitions' 16); such a record is still checked against those hashes until `--update` rewrites it
-OLD = {"type_hash": 16, "digest": 32}
+#: hex digits of the hashes in records written before SHA-256: a pin's `type_hash` (Lean's 32-bit `Expr.hash`) and a read
+#: group's definitions (a digest over those, cut short); such a record is checked as it is until `--update` rewrites it
+OLD = 16
 
 
 def digest(entries: list[dict], old: bool = False) -> str:
-    """A SHA-256 digest of definitions by name, kind and content hash: their SHA-256 hashes, or (``old``) the 32-bit ones
-    and the digest's first 32 hex digits, as records written before SHA-256 have it."""
+    """A SHA-256 digest of definitions by name, kind and content hash: their SHA-256 hashes, or (``old``) the 32-bit ones."""
     key = "hash" if old else "sha256"
-    h = hashlib.sha256("".join(f"{e['name']} {e['kind']} {e[key]}\n" for e in sorted(entries, key=lambda e: e["name"]))
-                       .encode()).hexdigest()
-    return h[:32] if old else h
+    return hashlib.sha256("".join(f"{e['name']} {e['kind']} {e[key]}\n" for e in sorted(entries, key=lambda e: e["name"]))
+                          .encode()).hexdigest()
+
+
+def module_digest(defs: dict) -> str:
+    """A `reads` record's `digest`: a SHA-256 of its `definitions` map, which already hashes everything read in the module.
+    The record's other fields determine it, so a merge of two records recomputes it (`merge.py`)."""
+    return hashlib.sha256("".join(f"{d} {h}\n" for d, h in sorted(defs.items())).encode()).hexdigest()
+
+
+def old_group(record: dict) -> bool:
+    """Whether a `reads` record was written before SHA-256 (its definitions' hashes have `OLD` hex digits)."""
+    return any(isinstance(h, str) and len(h) == OLD for h in definitions(record).values())
 
 
 def pinned_reads(facts: dict) -> dict[str, dict[str, dict]]:
@@ -361,15 +384,15 @@ def pinned_reads(facts: dict) -> dict[str, dict[str, dict]]:
 
 
 def read_groups(reads: dict[str, dict[str, dict]], old: bool = False) -> dict:
-    """The `reads` records: per module, a digest of everything read there and one per definition (generated constants with
-    their declaration), with the pins that read it; in SHA-256, or (``old``) as records written before it."""
+    """The `reads` records: per module, a digest per definition read there (generated constants with their declaration), the
+    module's digest of those, and the pins that read it; in SHA-256, or (``old``) as records written before it."""
     out = {}
     for m, es in sorted(reads.items()):
         groups: dict[str, list] = {}
         for n, e in es.items():
             groups.setdefault(parent(n), []).append(e)
-        out[m] = {"digest": digest(list(es.values()), old),
-                  "definitions": {p: digest(g, old)[:16] if old else digest(g) for p, g in sorted(groups.items())},
+        defs = {p: digest(g, old)[:OLD] if old else digest(g) for p, g in sorted(groups.items())}
+        out[m] = {"digest": module_digest(defs), "definitions": defs,
                   "pins": sorted(set().union(*(e["pins"] for e in es.values())))}
     return out
 
@@ -461,7 +484,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(f"pins: {name} has no record; run `audit.py --update` and commit the record")
             continue
         for k in ("signature", "assumptions", "type_hash"):
-            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD[k] else now[k]
+            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
             if rec.get(k) != built:
                 diff = "\n".join(difflib.unified_diff(rec.get("signature", []), now["signature"], "recorded", "built", lineterm="",
                                                       n=1)) if k == "signature" else f"{rec.get(k)} -> {built}"
@@ -473,18 +496,23 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         old = policy.get("reads", {})
         for m in sorted(set(old) | set(now_reads)):
             a = old.get(m)
-            b = (old_reads if a is not None and len(a.get("digest", "")) == OLD["digest"] else now_reads).get(m)
+            b = (old_reads if a is not None and old_group(a) else now_reads).get(m)
             if a is None:
                 fails.append(f"pins: the pinned statements now read definitions in {m} ({', '.join(b['pins'])})")
             elif b is None:
                 fails.append(f"pins: the pinned statements no longer read {m}")
-            elif a["digest"] != b["digest"]:
-                x, y = definitions(a), definitions(b)
+            elif (x := definitions(a)) != (y := b["definitions"]):
                 change = "; ".join(s for s in (
                     f"changed: {', '.join(d for d in sorted(set(x) & set(y)) if x[d] is not None and x[d] != y[d])}",
                     f"new: {', '.join(sorted(set(y) - set(x)))}", f"gone: {', '.join(sorted(set(x) - set(y)))}")
                     if not s.endswith(": ")) or "a definition's content"
                 fails.append(f"pins: definitions in {m} that {', '.join(b['pins'])} read changed ({change})")
+            elif a.get("pins") != b["pins"]:
+                fails.append(f"pins: the pinned statements that read {m} are {', '.join(b['pins'])}; the record lists "
+                             f"{', '.join(a.get('pins', [])) or 'none'}; run `audit.py --update`")
+            elif a.get("digest") != b["digest"]:
+                fails.append(f"pins: the digest recorded for {m} is not the SHA-256 of its definitions; "
+                             f"`python tools/lean/merge.py --normalize` recomputes it")
     out = dict(policy)
     if pins:
         out["pins"], out["reads"] = pins, now_reads
@@ -515,7 +543,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
         a, b = op.get(name) or {}, np.get(name) or {}
         if a == b:
             continue
-        rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD["type_hash"] and \
+        rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD and \
             a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
         if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and a.get("assumptions") == b.get("assumptions"):
             out.append(f"pin {name}: {REHASHED if rehashed else REPRINTED}")
@@ -532,10 +560,10 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
     regrouped = 0
     for m in sorted(set(oreads) | set(nreads)):
         a, b = oreads.get(m), nreads.get(m)
-        if a and b and a.get("digest") == b.get("digest"):
+        if a and b and definitions(a) == definitions(b):
             continue
-        c = before.get(m) if a and len(a.get("digest", "")) == OLD["digest"] else b
-        if a and c and a.get("digest") == c.get("digest"):
+        c = before.get(m) if a and old_group(a) else b
+        if a and c and definitions(a) == definitions(c):
             regrouped += 1
             continue
         x, y = definitions(a or {}), definitions(c or {})
@@ -557,6 +585,20 @@ def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review a named reviewer must read: all but the pins and read groups whose statements and definitions
     are unchanged (printed differently, or rehashed with SHA-256 while the 32-bit hashes still match)."""
     return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED))]
+
+
+def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
+    """`setup.sh` for ``pkg``: alone until one has installed ``toolchain``, since they install into one elan home; then beside
+    the others (Mathlib's `cache get`, which they share a download directory for, writes each download to a file of its own
+    process's first)."""
+    argv = ["bash", str(TOOL / "setup.sh"), str(pkg)]
+    with SETUP:
+        if toolchain not in _INSTALLED:
+            rc, text = run(argv, pkg, log)
+            if rc == 0:
+                _INSTALLED.add(toolchain)
+            return rc, text
+    return run(argv, pkg, log)
 
 
 def killed(rc: int) -> bool:
@@ -605,8 +647,6 @@ def olean_files(lib: Path) -> list[Path]:
 
 
 def olean_digest(lib: Path, files: list[Path]) -> str:
-    from concurrent.futures import ThreadPoolExecutor
-
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as ex:
         hashes = list(ex.map(sha256, files))
     h = hashlib.sha256()
@@ -632,7 +672,7 @@ def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str
                        for p in (o, o.with_name(o.name + ".server"), o.with_name(o.name + ".private")) if p.is_file())
         if files:
             out[name] = olean_digest(lib, files)
-    return out
+    return dict(sorted(out.items()))
 
 
 def template(pkg: Path) -> dict:
@@ -645,8 +685,9 @@ def template(pkg: Path) -> dict:
 
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
-          log=print) -> dict:
-    """Audit one package; returns its report (`failures` empty when it passes)."""
+          log=print, built=lambda: None) -> dict:
+    """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
+    passed, before anything reads it."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, pin the theorems your documents cite "
@@ -663,15 +704,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t = time.monotonic()
     if build:
         rep["sandbox"] = sandboxed()
-        for step, argv in (("setup", ["bash", str(TOOL / "setup.sh"), str(pkg)]),
+        for step, argv in (("setup", None),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
             s = time.monotonic()
-            rc, text = run(argv, pkg, work / f"{step}.log")
+            rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
             rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
                 return rep
+    built()
     s = time.monotonic()
     try:
         facts = facts_of(pkg, policy, work)
@@ -744,8 +786,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             else "") + (
             "; a named reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
-    weak = sum(len((r or {}).get("type_hash", "")) == OLD["type_hash"] for r in policy.get("pins", {}).values()) + \
-        sum(len(g.get("digest", "")) == OLD["digest"] for g in policy.get("reads", {}).values())
+    weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("pins", {}).values()) + \
+        sum(old_group(g) for g in policy.get("reads", {}).values())
     if weak and not update:
         rep["notes"] = [f"{weak} pin and read records use Lean's 32-bit hashes, checked as they are; `audit.py --update` "
                         f"rewrites them with SHA-256, without review where the 32-bit hash still matches"]
@@ -771,8 +813,7 @@ def packages(root: Path) -> list[Path]:
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
     """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`: the controls run before any package's
-    own setup does."""
+    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -780,7 +821,7 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
     if install:
-        rc, text = run(["bash", str(TOOL / "setup.sh"), str(pkg)], pkg, work / "setup.log")
+        rc, text = setup(pkg, toolchain, work / "setup.log")
         if rc:
             return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
@@ -883,36 +924,63 @@ def main(argv: list[str]) -> int:
     toolchains = sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs if (p / "lean-toolchain").exists()})
     bins = [b for tc in toolchains for b in toolchain_bins(tc)]
     seals = {str(p): sha256(p) for p in [*(p for d in (HERE, TOOL) for p in sorted(d.iterdir())), *bins] if p.is_file()}
-    failed = []
-    reports = []
-    if a.all:
+    lock = threading.Lock()
+    if a.build or a.all:
+        sandboxed()                                     # probed once, before anything runs beside the probe
+    built = {p: threading.Event() for p in pkgs}
+    needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
+    by_controls: list[str] = []
+    reports: dict[Path, dict] = {}
+
+    def seal(pkg: Path) -> None:
+        """After ``pkg``'s build: seal its `.olean` files, then let the packages that require it build."""
+        if (lib := pkg / ".lake" / "build" / "lib" / "lean").is_dir():
+            got = {str(p): sha256(p) for p in olean_files(lib)}
+            with lock:
+                seals.update(got)
+        built[pkg].set()
+
+    def check_controls() -> None:
         for tc in toolchains:
             if fs := controls(tc, out, install=a.build):
-                failed.append(f"controls ({tc})")
-                print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
-        if moved := tampered(seals, bins):
-            failed.append("controls (tamper)")
-            print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
-    for pkg in pkgs:
-        rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh)
-        rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
-        if (lib := pkg / ".lake" / "build" / "lib" / "lean").is_dir():
-            seals |= {str(p): sha256(p) for p in olean_files(lib)}
-        reports.append(rep)
-        n = sum(rep.get("declarations", {}).values())
-        head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
-        if "modules" in rep:
-            head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
-                     f"{len(rep['pins'])} pinned theorems; {rep['seconds']}")
-        if "sandbox" in rep:
-            head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
-        print(head, flush=True)
-        for f in rep["failures"]:
-            print("  " + f.replace("\n", "\n    "), flush=True)
-        for n in rep.get("notes", []):
-            print(f"  note: {n}", flush=True)
-        if rep["failures"]:
-            failed.append(str(pkg))
+                with lock:
+                    by_controls.append(f"controls ({tc})")
+                    print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
+        with lock:
+            if moved := tampered(seals, bins):
+                by_controls.append("controls (tamper)")
+                print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
+
+    def one(pkg: Path) -> None:
+        for d in needs[pkg]:
+            built[d].wait()
+        try:
+            rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh, built=lambda: seal(pkg))
+        finally:
+            if not built[pkg].is_set():
+                seal(pkg)
+        with lock:
+            rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
+            reports[pkg] = rep
+            n = sum(rep.get("declarations", {}).values())
+            head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
+            if "modules" in rep:
+                head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
+                         f"{len(rep['pins'])} pinned theorems; {rep['seconds']}")
+            if "sandbox" in rep:
+                head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
+            print(head, flush=True)
+            for f in rep["failures"]:
+                print("  " + f.replace("\n", "\n    "), flush=True)
+            for n in rep.get("notes", []):
+                print(f"  note: {n}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
+        jobs = ([ex.submit(check_controls)] if a.all else []) + [ex.submit(one, p) for p in pkgs]
+        for j in jobs:
+            j.result()
+    reports = [reports[p] for p in pkgs]
+    failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: pinned statements, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: the merge handoff must name the reviewer who read the changes above (review.txt in "

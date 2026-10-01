@@ -9,10 +9,9 @@ An adapter is one module of this package (`sampled_proofs`, `pous`, `pouw`) that
 * ``install(scheme, target) -> Installed``: install it on the built model;
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`);
-* optionally ``traced_as(scheme, ctx) -> str | None``: the Definition sampled proofs traces an executed site as (for
-  ``ncp-v1``, the declared int7 linear: quantize, exact int32 GEMM, dequantize), None when the Program has none.  An
-  executor without one is refused beside sampled proofs: it would be traced as the stock computation;
+  outside (`protocol_options.SITES`).  What sampled proofs traces an executed site as is not the adapter's to say: it
+  is the protocol package's circuit (`protocol_options.CIRCUITS`, `protocol_options.traced_as`), and an executor whose
+  scheme has none is refused beside sampled proofs, since it would be traced as the stock computation;
 * optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
   (PoUW's prepared int7 or FP10 operands) resident across forwards.  With POUS enabled, the selector refuses such an
   option (`protocol_options.refusals`): its GEMMs would read the copy, not what POUS stores.  Absent means False;
@@ -33,8 +32,9 @@ from typing import Any, Protocol, runtime_checkable
 
 from verity_vllm.engine.hooks import Hooks
 
-#: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``commit`` is the Commit stage of a row.
-STAGES = ("serve", "commit")
+#: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
+#: observed run executes what the Commit serves); ``commit`` is the Commit stage of a row.
+STAGES = ("serve", "capture", "commit")
 
 
 @dataclass(frozen=True)
