@@ -13,10 +13,13 @@
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
   cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
+  cluster watch [--node N] [--json] [--window-min 30] [--registry R] [--local NODE] [--ssh NODE=DEST] [--out FILE]
+                                                        # jobs with no progress for 30 min and waiting goal jobs, each with
+                                                        # its Slack handle (watch.py); exit 1 if a node can't be read
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
-Only `agent` reads a clock or touches a node (`agent.py`), and `status`, which only reads them; `shadow replay` runs the
+Only `agent` reads a clock or touches a node (`agent.py`), and `status` and `watch`, which only read them; `shadow replay` runs the
 same planner over a day's copied logs.
 """
 from __future__ import annotations
@@ -114,11 +117,31 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
     st.add_argument("--json", action="store_true")
+    wa = sub.add_parser("watch", help="running jobs with no progress for 30 min, and goal jobs waiting 30 min, with their handle")
+    wa.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
+    wa.add_argument("--json", action="store_true")
+    wa.add_argument("--window-min", type=int, default=30)
+    wa.add_argument("--registry", help="the Slack registry (default: the checkout's .agents/skills/using-slack/registry.json)")
+    wa.add_argument("--local", choices=("nebius-1", "nebius-2"), help="this machine is that node: read it without SSH")
+    wa.add_argument("--ssh", action="append", default=[], metavar="NODE=DEST", help="reach NODE as DEST (ssh config, e.g. vy-n2)")
+    wa.add_argument("--out", help="also write the JSON here, whole (the exporter's --watch file)")
     a = ap.parse_args(argv)
 
     if a.cmd == "status":
         from . import status
         return status.main(list(status.NODES.values()) if a.node == "all" else [status.NODES[a.node]], a.owner, a.json)
+
+    if a.cmd == "watch":
+        from . import status, watch
+        dests = {status.NODES[k]: v for k, _, v in (s.partition("=") for s in a.ssh)}
+        local = status.NODES.get(a.local or "")
+
+        def runner(node: str):
+            return watch.local() if node == local else status.ssh(dests[node], None) if node in dests \
+                else status.ssh(status.HOSTS[node])
+        return watch.main(list(status.NODES.values()) if a.node == "all" else [status.NODES[a.node]], a.json,
+                          window_s=60 * a.window_min, registry=Path(a.registry) if a.registry else watch.REGISTRY,
+                          out=Path(a.out) if a.out else None, runner=runner)
 
     if a.cmd == "submit":
         from . import kinds, submit
