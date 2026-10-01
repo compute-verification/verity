@@ -53,14 +53,28 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
    `bash backends/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
    mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
-3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the
-   PATH; `T` is the run's tree):
+3. Once the attempt is in the store, cite its arts. A roll-up other lanes read (`/workspace/usage/hillclimb/*.json`) is
+   never edited: its points take labels on the attempt, written where `research` is on the PATH (node 1's
+   `/workspace/jobs/store` refuses a lane's writes):
+
+   ~~~sh
+   research data label RUN preflight_art art:... --by LANE --ref RUN --off-vocab   # output `preflight`
+   research data label RUN session_art art:... --by LANE --ref RUN --off-vocab     # output `result`, a `hillclimb-session/v0`
+   research data label RUN point_arts '["art:...", ...]' --value-json --by LANE --ref RUN --off-vocab   # `hillclimb-<i>`, i = 0, 1, ...
+   ~~~
+
+   The ids are the attempt's `outputs` (`research data show RUN --json`). The points' arts are one list, indexed by a row's
+   `point.index`, because a reader takes the latest label per key and asserter. `--off-vocab` stays until `store/vocab.py`
+   learns the three keys.
+
+   A roll-up its writer owns can carry the arts in its rows instead. On node 1 (no `research` on the PATH; `T` is the run's
+   tree):
 
    ~~~sh
    RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
    RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
      python3 $T/backends/flock/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
-       --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
+       --file ROLLUP.json
    ~~~
 
    Each point lands with `arts`: its own record's art (`point`), the attempt's `result.json` (`session`, a
