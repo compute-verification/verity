@@ -7,6 +7,7 @@ import pytest
 from verity.ir import codec
 from verity.ir import constants as K
 from verity.ir import partition_object as PO
+from verity.ir.boolean import is_boolean
 from verity.ir.evaluate import evaluate_region
 from verity.ir.defs import REGISTRY, CompositeDefinition, bind
 from verity.ir.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
@@ -88,9 +89,11 @@ def test_registered_inputs_evaluate_and_cut_as_inputs(new):
     a = (x + TEMP + EPS) & 0xFFFFFFFF
     assert list(got) == [(a + POS + EPS) & 0xFFFFFFFF, (x + TOP_P) & 0xFFFFFFFF]
     assert [k for k, _fn in PO.calls(new)] == [5, 6, 7]
-    PO.evaluate(new, PO.call_query())
-    obj = PO.build(new, PO.call_query())
-    assert PO.verify(obj, new).ok and PO.verify(PO.build(new), new).ok
+    run_only = Program(New)
+    for q in (PO.query(), PO.call_query()):
+        a, b = PO.evaluate(new, q), PO.evaluate(run_only, q)
+        assert a.population == b.population and [a.locate(i) for i in range(a.population)] == [b.locate(i) for i in range(b.population)]
+        assert PO.verify(PO.build(new, q), new).ok
 
 
 def test_registered_inputs_round_trip_and_bind_the_digest(new):
@@ -107,6 +110,7 @@ def test_registered_ids():
         assert bool(REGISTERED_ID.match(fid)) is ok, fid
     assert is_registered(input_prim(16, K.REGISTRATION)) and not is_registered(input_prim(16))
     assert is_input(input_prim(16, K.REGISTRATION)) and input_prim(16, K.REGISTRATION).binding == K.REGISTRATION
+    assert is_boolean(input_prim(1, K.REGISTRATION)) and not is_boolean(input_prim(2, K.REGISTRATION))
     with pytest.raises(ValueError):
         Program(New, registered=("weights",))
     with pytest.raises(ValueError):
