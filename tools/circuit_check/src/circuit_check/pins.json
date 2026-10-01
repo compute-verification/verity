@@ -12,9 +12,6 @@
   "DotBf16_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 31220
   },
-  "Embedding_v2{V=1100,H=2}": {
-   "and": 36032
-  },
   "Embedding_v2{V=64,H=16}": {
    "and": 22784
   },

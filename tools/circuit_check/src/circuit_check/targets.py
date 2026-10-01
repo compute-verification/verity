@@ -224,12 +224,12 @@ def _boolean_roots() -> list[Any]:
 
 
 def _boolean_gather_roots() -> list[Any]:
-    """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over a gather traced whole (V = 64) and over a tree
-    of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
+    """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
+    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
     from verity.ir.defs import bind
     from verity_vllm.program.registry import boolean_gather as BGA
 
-    return [bind(BGA.Embedding, V=64, H=16), bind(BGA.Embedding, V=1100, H=2)]
+    return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
 
 
 def _kernel_roots() -> list[Any]:
