@@ -1,4 +1,5 @@
-"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the fold worker, the Match checkers and the manifest build.
+"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
+checkers and the manifest build.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
 (1) the env contract in fresh interpreters, (2) that "default" leaves the interpreter alone, (3) that the fold's
@@ -89,6 +90,9 @@ def test_the_entry_points_call_tune():
     from verity_vllm.pipeline import match as run_config
     from verity_vllm.check.match import batch_decomp
     from verity_vllm.check.match import global_match
+    from verity_vllm.pipeline import build, global_program
+    assert "gc_tuning import tune" in inspect.getsource(build.main)
+    assert "gc_tuning import tune" in inspect.getsource(global_program.main)
     assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)
     assert "gc_tuning import tune" in inspect.getsource(global_match.main)
     assert "gc_tuning import tune" in inspect.getsource(batch_decomp.main)
