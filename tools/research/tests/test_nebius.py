@@ -838,7 +838,8 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
     usage = tmp_path / "lease-usage.jsonl"
     rec = {"schema": "gpu-lease/usage/v1", "end": "2026-09-30T20:30:00Z"}
     usage.write_text("".join(json.dumps(r) + "\n" for r in [
-        {**rec, "who": "fill:bc-a", "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh", "gpus": [{"held_s": 3600, "busy_s": 1800}]},
+        {**rec, "who": "fill:bc-a", "since": "2026-09-30T20:00:00Z", "rc": 0, "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh",
+         "gpus": [{"held_s": 3600, "busy_s": 1800}]},
         {**rec, "who": "fill:bc-b", "cmd": "bash /workspace/pouw/fill/running/pad-x.sh", "gpus": [{"held_s": 360, "busy_s": 360}]},
         {**rec, "who": "session:bc-c", "cmd": "python3 bench.py", "gpus": [{"held_s": 720, "busy_s": 720}]},
         {**rec, "who": "bc-d", "timed": True, "cmd": "python3 audit.py", "gpus": [{"held_s": 360, "busy_s": 360}]},
@@ -857,6 +858,10 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
     assert [(k["kind"], k["leased_gpu_h"], k["useful_gpu_h"], k["idle_gpu_h"], k["efficiency"]) for k in n2["kinds"]] == [
         ("pouw-kt-gpu1", 1.0, 0.5, 0.5, 0.5), ("unlabeled:pad-x", 0.1, 0.0, 0.1, 0.0), ("direct:session:bc-c", 0.2, 0.2, 0.0, 1.0),
         ("timed:bc-d", 0.1, 0.1, 0.0, 1.0)]
+    d = n2["delivered_by_hour"]
+    assert [r["hour"] for r in d] == ["2026-09-30T18:00:00Z", "2026-09-30T19:00:00Z", "2026-09-30T20:00:00Z", "2026-09-30T21:00:00Z"]
+    assert (d[2]["leased_gpu_s"], d[2]["delivered_gpu_s"], d[2]["delivered_share"], d[2]["provisional"]) == (2400, 1800, 0.75, True)
+    assert d[3]["leased_gpu_s"] == 0 and d[3]["delivered_share"] is None and d[0]["delivered_share"] is None
     pp.alert(n2["monitors"], now)
     pp.alert(n2["monitors"], now + datetime.timedelta(minutes=5))
     assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 2
