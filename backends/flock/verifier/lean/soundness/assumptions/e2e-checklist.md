@@ -2,11 +2,13 @@
 
 `FlockSoundness/E2E.lean` states the end-to-end theorem as a skeleton:
 - `flock_e2e_count`, the integrity profile's count curve;
-- `flock_e2e_drawn`, the drawn units.
+- `flock_e2e_drawn`, the drawn units;
+- `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`, both on the circuit of the statement's rows (`Prog.circuit`).
 
 **What it says.** Suppose the audit accepts a batched session's proofs for the drawn units under the partition. Then,
 except with `ε_ks(σ) + δ_link` (plus `miss_L(K)` for the count), the integrity profile holds for the committed circuit
-(the program's Boolean circuit, as circuit types) at the committed values. Those are public on the constants (1) and on
+(the circuit the statement's rows make, chosen on the untrusted side; the lowering does no optimizing, Daniel, Sep 30) at
+the committed values. Those are public on the constants (1) and on
 the statement's zero (0), and the plurality of the prover's openings elsewhere (`Xpub`, `Audit/FlockPublic.lean`).
 
 **What it doesn't say yet.** Two links to the executable are carried by hypotheses, not by the statement:
@@ -14,9 +16,11 @@ the statement's zero (0), and the plurality of the prover's openings elsewhere (
   theorems are the model-level ones.
   - `flock-verify`'s verdict on the run's transcript is not an event on that outcome.
   - Discharging `hExec` therefore changes the statement's shape, not only the proof.
-- "Each unit's rows derived by the verifier" is not in it either. `unitRows` appears in neither the conclusion nor
-  `RowsL1`, and `dp.rows` says only that a unit's rows don't depend on the draw or the registration. S4's discharge of `dp`
-  and `hL1` carries it.
+- "Each unit's rows derived by the verifier" is not in the generic forms: `unitRows` appears only in `dp`, and `dp.rows`
+  says only that a unit's rows don't depend on the draw or the registration. In the `Prog` forms the units' rows are the
+  program's (`Prog.rows`), and `ProgPlaces.placed` carries it.
+- What a correct unit computes is not a hypothesis: when its rows are `GateRows.rows G L` (`RowsCert`) and `G` computes
+  `D`, a unit that is not wrong computes `D` (`IsRowsUnit.computes_of_cert`, `FlockSoundness/Certificate.lean`).
 
 **What it assumes, cryptographically:** A2, SHA-512 expected-time collision resistance, for the link finders built from
 the prover bounded (`hCR : LinkCR … (reg σ) (cont σ) …`, `ASSUMPTIONS.md`), and nothing else. The `_hm96` forms' bounds
@@ -34,8 +38,7 @@ time.
 | Hypothesis | What it says | Owner | Discharged by |
 |---|---|---|---|
 | `hExec` | the audit's acceptance event implies the model's: `∀ o, execAccept o → o.1 = true` | the refinement lane, "Prove verifier refines Lean model" (bc-159ce83b) | its refinement theorem, game-level (R11), which restates the pins with the executable's verdict on the run's transcript |
-| `dp : DerivedPlaces` | each drawn unit's place in its table (`UnitPlace`), with its rows the verifier's: `(place S R u h).R = unitRows u`. Its input columns on one gate carry one value in every satisfying witness (`UnitPlace.aliased`) | audit-lean (1d); flock-verifier (1e); flock-soundness (S4) | 1d's `placement_compose` from `setupH`; 1e, the verifier folding `deriveChecked`'s rows; S4, `unitRows u = Rows.compose (deriveChecked …)` for the partition's units. `aliased` from each slot input's copy position and the forced-zero rows as the verifier's Δ writes them, both kinds (the unit's own and the range's first slot's): inputs on one source copy one position, and the zero's inputs copy forced-zero rows. It is sound because Δ has one source per destination, which the verifier's exactly-once checks keep |
-| `hL1 : RowsL1 … ones` | at values carrying 1 on `ones` (the gates the units' constants read), a unit wrong on the program's Boolean circuit is wrong on its rows: `PB.wrong (proj X) ⊆ P.wrong X` | flock-soundness | `compose_sound` (#205, flat types) and `Types.Dag.unit_sound` (#247, type DAGs), both at the constant 1; `flatten_eval` and W6 (S4) |
+| `dp : DerivedPlaces` (`pp : ProgPlaces` in the `Prog` forms) | each drawn unit's place in its table (`UnitPlace`), with its rows the verifier's: `(place S R u h).R = unitRows u`. Its input columns on one gate carry one value in every satisfying witness (`UnitPlace.aliased`; `ProgPlaces.aliased`, `Layout.Aliased`). In the `Prog` forms, `ProgPlaces.placed`: the table's statement holds the program's rows, which `placement_of_setupH` gives for the rows `Rows.ofNet` reads off setupH's net; that those are the program's (W6) is open | audit-lean (1d); flock-verifier (1e); flock-soundness (S4) | 1d's `placement_compose` from `setupH`; 1e, the verifier folding `deriveChecked`'s rows; S4, `unitRows u = Rows.compose (deriveChecked …)` for the partition's units. `aliased` from each slot input's copy position and the forced-zero rows as the verifier's Δ writes them, both kinds (the unit's own and the range's first slot's): inputs on one source copy one position, and the zero's inputs copy forced-zero rows. It is sound because Δ has one source per destination, which the verifier's exactly-once checks keep |
 | `hConst : ConstCols … ones` | at each drawn unit's place, only the constant's column sits on a gate of `ones`: no unit's input column reads a constant. With it every satisfying message decodes `ones` to 1 (`UnitPlace.decode_one`, `pubDecodes_of_place`), so the committed transcript is 1 there | flock-soundness (S4) | for a program of units placed at its tables' classes, `UProg.constCols_of_classes` (proved: each unit's constant column is wired to `one`, `pairs_oneGate`, and an instance shares a gate only between input columns, `constCols_singleton`); for another partition, its places |
 | `hZero : ZeroCols … zeros` | at each drawn unit's place, every column on a gate of `zeros` (the statement's zero) carries 0 in every satisfying witness, so the committed transcript is 0 there | audit-lean (1d); flock-verifier (1e); flock-soundness (S4) | the forced-zero rows as the verifier's Δ writes them: each slot input that reads the zero copies a row of `TableClass.zeros`, which `TableClass.zero` holds at 0. For a program placed at its tables' classes, `UProg.zeroCols_of_classes` proves it for the program input `zer` (#316's zero) from one more fact of the class data, `hzr`: each slot input that reads `zer` copies a forced-zero row, which 1d and 1e give from Δ. `UProg.flock_e2e_count_classes_zero` and `_drawn_classes_zero` apply it; the `_classes` forms leave the zero at the plurality (`zeros = ∅`) |
 | `vb : ValueBinding` | the wires bind to their registered commit strings (already named on `main`) | lean-value-binding; M0's `hm96-sha512` leaf layout | built from the serving rows by `Binding.HmRows.binding` (`FlockSoundness/Binding/`), with `collide_spec` proved (`ExplicitLeaf.hm96`: an explicit SHA-512 collision). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms take, in its place, `HmRowComputes` and the layout's facts (the next row) |
@@ -45,16 +48,17 @@ time.
 
 **Why the constant is public.** The rows multiply outputs by the constant: each output is a copy row `(form) · 1`, and
 the constant's row is `1 · 1`. At a transcript whose constant is 0, a unit's rows hold with every output 0 while the
-Boolean circuit's outputs are the forms. So `RowsL1` can hold only where the constant is 1 (red-team review of #207).
+Boolean circuit's outputs are the forms. So rows compute their gates only where the constant is 1, and
+`computes_of_cert` takes it (`h1`; red-team review of #207).
 - **The committed transcript is 1 on `ones`.** The plurality of the prover's openings (`Xplur`) can't carry that on its
   own: for a strategy whose trials never read the constant's commit string, `Xval` is an arbitrary argmax. But every
   satisfying message of a drawn unit's table decodes the constant to 1, so the link event never fires on it
   (`linkEvB_of_pub`), and the link bound holds unchanged at `Xpub` for every strategy.
-- **One `ones` for both.** `hL1` and `hConst` constrain the same parameter from opposite sides: a set too small makes
-  `hL1` false, and a set too large makes `hConst` false (an input column would sit on a gate of it). S4 discharges both
-  for exactly the gates the units' constants read.
+- **One `ones`.** It must hold the gates the units' constants read, for the certificate's `h1` to hold at `Xpub`, and no
+  more: a set too large makes `hConst` false (an input column would sit on a gate of it). S4 discharges it for exactly
+  the gates the units' constants read.
 
-**Why the zero is different.** The zero multiplies no row, so `RowsL1` holds at any value of it (#316). But "wrong at
+**Why the zero is different.** The zero multiplies no row, so rows compute their gates at any value of it (#316). But "wrong at
 the committed values" judges a unit that reads the zero at the zero's committed value: at a committed zero of 1, a padded
 attention unit would be judged against `b = 1` (red-team review of #316, C1). At `Xpub` the committed zero is 0, which
 `hZero` makes sound: every satisfying message decodes it to 0. So a claim may read the profile as being about the zero

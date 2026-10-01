@@ -4,11 +4,13 @@ For the expert reviewer and for Table 1. This file states every named assumption
 soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
 and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations.
 
-**The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `FlockSoundness/E2E.lean`. They
-state the chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a
-named hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners. Two of those carry what the statement
-doesn't say yet: that the acceptance is the executable verifier's (`hExec`), and that the units' rows are the ones the
-verifier derives (`dp`, `hL1`).
+**The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `FlockSoundness/E2E.lean`, and
+`Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` on the circuit of the statement's rows (`Prog.circuit`). They state the
+chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a named
+hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
+make, chosen on the untrusted side, and the lowering does no optimizing (Daniel, Sep 30). So no hypothesis relates the
+rows to another circuit: what a correct unit computes is its certificate's (The circuit and the certificate, below). One
+hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`).
 
 ## Soundness's assumptions (taken without proof)
 
@@ -82,7 +84,6 @@ prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSound
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
   (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
-`README.md` §1.5 names one more, L1, about the lowering, stated below.
 
 **A4. `verity.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
 (`prf/sha-256`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
@@ -154,17 +155,19 @@ not cryptographic, and to be proved: verified-lowering design, phase 2i).
   chain's wiring (`HmRow.rowWires`), which the model does not read yet.
 - **Upstream:** watch entry `hm-row-computes`.
 
-- **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
-  the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
-  about the program's Boolean circuit only through L1.
-  - **Proved for RoPE** (`rope-head/neox-bf16/pair`): `Rope.rope_sound`, for the pinned file's rows.
-  - **The evidence for it, the proof for RoPE, and the path for the rest:** `assumptions/l1-template-rows.md`.
-
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
 ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 
 ## Named hypotheses of the proof
 
+- **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
+  the statement's rows make, each unit its template's rows; "wrong" is measured there. What a correct unit computes is a
+  separate theorem, `IsRowsUnit.computes_of_cert` (`FlockSoundness/Certificate.lean`): when the unit's rows are the rows
+  `GateRows.rows G L` derives from a gate circuit `G` (`RowsCert`) and `G` computes a definition `D`
+  (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in Python, not Lean), a unit that is not wrong, with its
+  constant 1, carries on each committed output wire `D`'s output on its input wires (`GateRows.rows_sound`). Both
+  premises are equalities a checker evaluates, not assumptions. `Rope.rope_sound` is `RowsCert.sound`'s conclusion for
+  RoPE's pinned rows, checked in the kernel.
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
   statements of PROTOCOL.md §16 satisfy it.
@@ -199,7 +202,7 @@ before the session's first coin, not bounds state by state.
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
 | `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under `SHA512CRExpected` for each commit string's finder and `ValueBinding` (named; for the serving rows it is `HmRows.binding`, from `HmRowComputes` and the layout's facts); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
-| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3) and L1. `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3). `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
 
 ## Cryptographic assumptions and coins
 
@@ -254,8 +257,7 @@ watch list is the `upstream` section of `lean-audit.json`, one entry per stateme
 `python tools/lean/upstream.py backends/flock/verifier/lean/soundness` prints each entry's status at the pinned
 revisions: the upstream theorems about it, which are proved, and which nobody has acknowledged. The audit runs that pass
 over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the
-exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump. L1 has no entry: no
-dependency states this repository's rows.
+exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump.
 
 ## Trusted components
 
