@@ -227,7 +227,7 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_moe as BMOE
 
     rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
-                                   BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
+                                   BDN.MulVecF32, BDN.Bf16MulScalarTensor, BDN.Bf16Tanh)]
     rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
              bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8),
              bind(BMOE.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4)]

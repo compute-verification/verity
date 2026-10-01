@@ -33,12 +33,21 @@ F32 = Array<32, Value<1>>; each word view is its _v1 at the same statics, `Bf16M
     MulVecF32_v2{N}                               (x, w: Array<N, F32>) -> Array<N, F32>      F32Mul_v3(x_j, w_j)
     Bf16DivScalar_v2{N,C}, Bf16MulScalar_v2{N,C}  (x: Array<N, BF16>) -> Array<N, BF16>       Bf16MulF32_v1(x_j, K)
     Bf16MulScalarTensor_v2{N}                     (x: Array<N, BF16>, s: Array<1, BF16>) -> Array<N, BF16>
+    Bf16Tanh_v2{N}                                (x: Array<N, BF16>) -> Array<N, BF16>       cvt.rn.bf16.f32(tanhf(f32(x_j)))
 
 Each is a batch of one element Definition per member, traced from `verity.ml.boolean.fp`'s builders with the IR's NaN words,
 and computes no value twice (`Q_word`'s no-recompute rule): ``x * x`` decodes x once (`SquareF32Element_v1`, not
 ``F32Mul_v3(x, x)``); a constant static is folded into the gates (`elementwise.specialized`; `Bf16DivScalar`'s K is ATen's
 RN32(1 / C), `dense.reciprocal_bits`, `Bf16MulScalar`'s f32(C)); a scalar every member shares has its own gates once per row
 (`elementwise.shared_operand`). None reads a MUFU, and no sub-Call is a word Definition.
+
+The softcap's tanh element (`Bf16TanhElement_v1`, `tanh_bf16`) is, like the activation, a function of one bf16 word whose word
+Definition reads no MUFU (`TanhF32Rn_v1`), exact on x's fields off a band and the table of `tanh_bf16_bits` on it:
+
+    x NaN                          0x7FFF
+    e < TANH_BAND_LO               x  (tanh(x) rounds to x; zeros and subnormals included)
+    e > TANH_BAND_HI[sign]         x's sign and 1.0  (infinities included)
+    on the band                    x's sign, and the 15 magnitude bits of the table
 """
 from __future__ import annotations
 
@@ -57,9 +66,9 @@ from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import prims as P
 
 __all__ = ["AddScalarBf16", "AddScalarBf16Element", "AddScalarF32", "AddWidenedBf16", "AddWidenedBf16Element", "Bf16DivScalar",
-           "Bf16MulScalar", "Bf16MulScalarTensor", "GELU_BAND_HI", "GELU_BAND_LO", "GeluTanhMul", "GeluTanhMulBf16", "MulVecF32",
-           "ScaleRowBf16", "ScaleRowBf16Element", "ScaleRowF32", "SquareBf16", "SquareBf16Element", "SquareF32", "gelu_tanh_bf16",
-           "gelu_tanh_mul"]
+           "Bf16MulScalar", "Bf16MulScalarTensor", "Bf16Tanh", "Bf16TanhElement", "GELU_BAND_HI", "GELU_BAND_LO", "GeluTanhMul",
+           "GeluTanhMulBf16", "MulVecF32", "ScaleRowBf16", "ScaleRowBf16Element", "ScaleRowF32", "SquareBf16", "SquareBf16Element",
+           "SquareF32", "TANH_BAND_HI", "TANH_BAND_LO", "gelu_tanh_bf16", "gelu_tanh_mul", "tanh_bf16", "tanh_bf16_bits"]
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
@@ -225,3 +234,38 @@ Bf16DivScalar = _on_bits("Bf16DivScalar", ("N", "C"), _row(BF16, BF16), _bf16_di
 Bf16MulScalar = _on_bits("Bf16MulScalar", ("N", "C"), _row(BF16, BF16), _bf16_mul_scalar, D.Bf16MulScalar)
 Bf16MulScalarTensor = _on_bits("Bf16MulScalarTensor", ("N",), _row(BF16, BF16, ("s", (1, BF16))), _bf16_mul_scalar_tensor,
                                b1.Bf16MulScalarTensor)
+
+
+#: the exponent fields `tanh_bf16` reads from its table, per sign
+TANH_BAND_LO = 123
+TANH_BAND_HI = (128, 128)
+
+
+def tanh_bf16_bits(h: int) -> int:
+    """`Bf16Tanh_v1`'s element on one bf16 word: ``cvt.rn.bf16.f32(tanhf(f32(h)))``."""
+    return P.f32_to_bf16_rn_bits(D.tanh_f32_bits(P.bf16_to_f32_bits(h)), NAN_F2FP)
+
+
+def tanh_bf16(C, x):
+    """`Bf16Tanh_v1`'s element for a 16-bit x (LSB first): x for e < TANH_BAND_LO (zeros and subnormals included), x's sign and 1
+    for e > TANH_BAND_HI (infinities included), NaN 0x7FFF, and on the band x's sign and the 15 magnitude bits of the table."""
+    m, e, s = list(x[:7]), list(x[7:15]), x[15]
+    nan = C.AND(and_reduce(C, e), or_reduce(C, m))
+    _, below = sub(C, e, const_bits(TANH_BAND_LO, 8), 8)
+    _, under = sub(C, e, const_bits(TANH_BAND_HI[0] + 1, 8), 8)
+    one = C.AND(NOT(under), NOT(nan))
+    band = bf16_band(C, x, tanh_bf16_bits, TANH_BAND_LO, TANH_BAND_HI)
+    mag = [b ^ C.AND(below, w) ^ (one if 0x3F80 >> i & 1 else ZERO) ^ nan for i, (b, w) in enumerate(zip(band, x[:15]))]
+    return mag + [C.AND(s, NOT(nan))]
+
+
+Bf16TanhElement = definition("Bf16TanhElement", 1, tanh_bf16, (("x", BF16),), BF16,
+                             doc="cvt.rn.bf16.f32(tanhf(f32(x))) on bits, NaN 0x7FFF: Bf16Tanh_v1's element")
+
+
+def _bf16_tanh(B, S, x):
+    """`out_j = cvt.rn.bf16.f32(tanhf(f32(x_j)))` on bits."""
+    return B.batch(Bf16TanhElement, x, axes=(0,))
+
+
+Bf16Tanh = _on_bits("Bf16Tanh", ("N",), _row(BF16, BF16), _bf16_tanh, D.Bf16Tanh)

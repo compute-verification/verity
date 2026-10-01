@@ -33,6 +33,12 @@
   "Bf16MulScalar_v2{N=8,C=30.0}": {
    "and": 5032
   },
+  "Bf16TanhElement_v1": {
+   "and": 443
+  },
+  "Bf16Tanh_v2{N=8}": {
+   "and": 3544
+  },
   "DivFullRcp_v2": {
    "and": 1152
   },
