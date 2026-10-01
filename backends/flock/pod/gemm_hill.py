@@ -309,6 +309,18 @@ def _commit(root: Path) -> dict:
         return {"commit": os.environ.get("COMMIT"), "dirty": None, "via": "env COMMIT"}
 
 
+def verifier_flags(root: Path, lincheck: str | None) -> list[str]:
+    """The unreviewed verifier changes a tree's prover binary is built with (red-team-proofs-554's Q3), read from the sources it
+    compiles, since a synced tree has no history: the column-major fold (d1775df80; flock-fp's cde1c7ac1) and the structured
+    lincheck (8db1cb550; flock-fp's f7d1e297d) when FC_LINCHECK leaves it on (unset or partial; `both` rejects unless it equals
+    upstream's flat fold, `flat` is upstream's)."""
+    live = root / "backends/flock/live/src"
+    def has(f: str, s: str) -> bool:
+        return (live / f).exists() and s in (live / f).read_text()
+    return (["verifier-fold-unreviewed"] if has("circuit.rs", "CscCircuit") else []) + \
+        (["lincheck-partial-unreviewed"] if has("session_verify.rs", "pub enum Lincheck") and (lincheck or "partial") == "partial" else [])
+
+
 def _phases(path: Path) -> dict[str, list[float]]:
     out: dict[str, list[float]] = {}
     for ln in path.read_text().splitlines() if path.exists() else []:
@@ -389,7 +401,7 @@ def metrics(a) -> None:
         })
         if lv.get("dense_m") != M:
             flags.append(f"m-{lv.get('dense_m')}-not-{M}")
-        if st.get("tile") and a.K == 2048:
+        if st.get("tile"):
             flags.append("tile-statement-unreviewed")
         out["session"]["label"] = f"batched-J{out['session']['tables']}"
         # another job on the job's own cores for more than half a core over the timed sessions
@@ -398,8 +410,11 @@ def metrics(a) -> None:
         # the GPU held while this job staged the statement itself (74-gemm-hill.sh STAGE_ONLY=1 stages it in a job without one)
         if not rec.get("stage_cached"):
             flags.append("staged-on-gpu")
-    # #554 is a draft, its statements unreviewed: these are costs, not claims, and a changed statement digest starts a new curve
-    flags.append("draft-554-unreviewed")
+    # #554's non-tile statements are granted (note:proofs/20261001T0805Z-reply-from-red-team-proofs-554-nontile-statements); a tiled
+    # one, or a record that can't say, is still a cost, not a claim
+    if st.get("tile") or not rec.get("stage"):
+        flags.append("draft-554-unreviewed")
+    flags.extend(verifier_flags(Path(a.root), os.environ.get("FC_LINCHECK")))
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
     if out.get("accepted") and not rec.get("domain"):
