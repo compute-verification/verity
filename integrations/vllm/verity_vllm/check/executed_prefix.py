@@ -25,7 +25,8 @@ assigned the canonical inactive representation tau(e) = bot; there is no not-req
 
 A config run has no Match stage.  Its linked serving transcript is the Commit's own token record (`check.commit_tokens`): the driver's
 served tokens beside the commitment, each opened from the run root and verified equal to the committed sampled id it was served from
-(`link_to_commit_account`).  The prefix then rests on committed values, not on the committer's count; with a Match record too, both hold.
+(`link_to_commit_account`).  The prefix then rests on committed values, not on the committer's count; with a Match record too, both hold
+when the row committed its sampled ids, and the Match record alone when it committed none.
 
 PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -- how far each request actually ran)
   Purpose: per request, derive the two lengths every Commit consumer counts on -- served_output_len (tokens served, EOS included) and
@@ -42,8 +43,8 @@ PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -
   Invariants: LAG is never defaulted to 0 or 1 -- an early stop with no declared EOS set / LAG, a non-EOS last token, or served > cap
     is a problem and the population stays the cap's; a prefix reduced from its cap on the committer's own count alone is never
     accepted (R17-27 (a)): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
-    Commit; the lag must agree on every leg (declared == tokens.json == G6, or declared == the token record's == the engine's read-back);
-    the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
+    Commit and the row committed its sampled ids; the lag must agree on every leg (declared == tokens.json == G6, or declared == the
+    token record's == the engine's read-back); the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
@@ -305,7 +306,8 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
     With no Match record beside the Commit (no `match_dir`) the account is the Commit's token record (binding.coverage.commit_account_link,
     check.commit_tokens): `a_r` is its served length, `linked` = that link held, every served token of the request was opened from the
     run root equal to the committed sampled id, the C2 boundary linkage passed AND ran over exactly the request's executed prefix, and
-    `lag_attested` is that link's.  With both, both must hold wherever the token record places a shorter prefix."""
+    `lag_attested` is that link's, and `a_r_source` says so as a note, not a missing leg.  With both, both must hold wherever the token
+    record places a shorter prefix; a token-record link not applied (a row that committed no sampled id) places none."""
     cov = (binding or {}).get("coverage") or {}
     link = cov.get("match_account_link") or {}
     tj = link.get("tokens_json") or {}
@@ -334,7 +336,9 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
             a_r, src = int(g_len), f"match record {g6.get('path')} (sha256 {str(g6.get('sha256'))[:16]}): G6 lengths_by_request.served_output_len"
         elif by_commit and (cl.get("served_by_request") or {}).get(rid) is not None:
             _rec = cl.get("record") or {}
-            a_r, src = int(cl["served_by_request"][rid]), f"commit token record {_rec.get('path')} (sha256 {str(_rec.get('sha256'))[:16]}): generated_token_ids opened from the run root"
+            a_r, src = int(cl["served_by_request"][rid]), (f"commit token record {_rec.get('path')} (sha256 {str(_rec.get('sha256'))[:16]}): generated_token_ids opened "
+                                                           "from the run root; no Match record beside the Commit (a config run has no Match stage): the prefix is "
+                                                           "linked to the Commit's token record")
         else:
             a_r, src = int(served_commit if served_commit is not None else rec["cap"]), "the Commit's OWN served tokens (no Match record beside the Commit: NOT linked)"
         if account_missing:
