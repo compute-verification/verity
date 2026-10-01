@@ -55,8 +55,11 @@ def inputs(circuit: Circuit) -> dict[str, list[int]]:
 
 def program_data(root: Any, operation: Callable[[str], bool] = lambda _id: False) -> dict[str, list[tuple[int, str]]]:
     """The constants `root` (a Program's root Definition) still holds as data, by the Definition that holds them: descriptor id
-    -> [(local gate, constant id)], each Definition once, in first-reached order. A Definition `operation(id)` names, and
-    everything inside it, holds none. Empty when the Program holds no data."""
+    -> [(local gate, constant id)], each Definition once, in first-reached order. Empty when the Program holds no data.
+
+    A Definition `operation(id)` names, and everything inside it when reached only through operations, holds none: a
+    Definition reached first under an operation is not visited there, nor marked seen, so a path to it outside any operation
+    still lists its constants."""
     out: dict[str, list[tuple[int, str]]] = {}
     seen: set[str] = set()
 

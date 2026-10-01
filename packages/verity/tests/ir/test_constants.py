@@ -69,6 +69,22 @@ def test_a_program_holding_literals_holds_data():
     assert K.program_data(p.root, lambda fid: fid == Scale.id) == {p.root.id: data[p.root.id]}
 
 
+#: an operation whose body calls KScale, and two programs: one reaching KScale only through it, one reaching it again outside
+Op = _c("KOp", (("x", I32), ("t", I32)), I32, lambda B, S, x, t: B.call(Scale, x, t))
+OnlyOp = _c("KOnlyOp", (("x", I32), ("t", I32)), I32, lambda B, S, x, t: B.call(Op, x, t))
+Both = _c("KBoth", (("x", I32), ("t", I32)), Tuple(I32, I32), lambda B, S, x, t: tuple_of(B.call(Op, x, t), B.call(Scale, x, t)))
+
+
+def test_a_definition_reached_first_under_an_operation_is_listed_on_a_later_path():
+    """KScale is reached first inside the operation KOp, which the walk does not visit, and then from the root: that path
+    lists its constant. Reached only through KOp, it holds none."""
+    is_op = lambda fid: fid == Op.id  # noqa: E731
+    assert K.program_data(Program(OnlyOp).root, is_op) == {}
+    both = Program(Both)
+    assert [n.fn.id for n in both.root.body.nodes if not is_input(n.fn)] == [Op.id, Scale.id]
+    assert K.program_data(both.root, is_op) == {Scale.id: [(1, const(32, SEVEN).id)]}
+
+
 def test_inputs_carry_the_values_and_the_program_holds_none(new):
     assert K.program_data(new.root) == {}
     assert new.bindings == (K.RUN, K.REGISTRATION, K.RUN, K.RUN, K.RUN)
