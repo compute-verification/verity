@@ -72,7 +72,7 @@ import torch  # noqa: E402
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -1158,6 +1158,28 @@ def main(args: Options, argv: list[str] | None = None) -> None:
              hot_job=(_HOT or {}).get("jobs"))
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
                 target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=wl.get("protocols_config")), execution=va.execution_of_workload(wl))
+    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
+    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
+    # (a control-only process has no committer at all: nothing installed, nothing compiled in)
+    kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
+    multi = bool(args.arms)
+    coms: dict[str, Any] = {}
+    # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
+    # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
+    # at their first consumer's input, not the module's forward output (oracle_compare.promote_handed_down); form (B) reads them every pair
+    oracle_producers: tuple[dict | None, dict] | None = None
+    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
+    if required_manifest is not None and kinds:
+        from verity_vllm.check import oracle_compare as _OCP
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, wl["requests"], wl["sampling"], tl=TL)
+        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
+        if oracle_producers[0]:
+            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
+            oracle_producers[1]["handed_down"] = _hd
+            if _hd["rows"]:
+                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
+                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
+                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1176,6 +1198,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] HOT: engine reused (job {_HOT['jobs']} of this worker; saves the {eng.build_s:.1f}s build; engine age "
               f"{time.time() - _HOT.get('t_built', time.time()):.0f}s; {eng.cp['repo']} max_num_seqs {eng.kwargs.get('max_num_seqs')})", flush=True)
     else:
+        GL.acquire(TL)                                       # a leased Commit's GPU from here to its exit (pipeline.gpu_lease)
         TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
         eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
                               target=_ekw["target"], execution=_ekw["execution"])     # [R15 EXEC-02 M-0078] the row's execution decides enforce_eager (header: versions.json)
@@ -1267,34 +1290,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
 
     run_id = f"{Path(args.workload).stem}"
-    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
-    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
-    kinds = [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
-    multi = bool(args.arms)
-    coms: dict[str, Any] = {}
-    if args.only_arm == "control":
-        kinds = []                                           # control-only process: no committer at all (nothing installed, nothing compiled in)
     if os.environ.get("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
         import sys as _sys
 
         _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
         print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
-    # the Programs' producer facts for a v2-query manifest (which carries none), derived once BEFORE the committer is armed: the members
-    # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
-    # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
-    oracle_producers: tuple[dict | None, dict] | None = None
-    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
-    if required_manifest is not None and kinds:
-        from verity_vllm.check import oracle_compare as _OCP
-        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling, tl=TL)
-        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
-        if oracle_producers[0]:
-            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
-            oracle_producers[1]["handed_down"] = _hd
-            if _hd["rows"]:
-                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
-                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
-                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
