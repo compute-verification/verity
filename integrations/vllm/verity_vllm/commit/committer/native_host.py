@@ -51,7 +51,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
 
 from verity_vllm.commit import hiding, scheme
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
-from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
+from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration, split_step_names
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline.spans import Spans
 
@@ -2139,7 +2139,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         padded_run = bool(getattr(self, "_padding", None))
         padding_only_steps: list[int] = []
         padding_tensors_n = 0
-        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names")), None)   # per-step fx names: its targets, not rule (4)
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
@@ -2215,7 +2214,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            mod_names, cb_bad = split_step_names(self.sources, mod_names, step, padding_only)   # per-step fx names: their targets, not rule (4)
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) ^ set(ref_names)}

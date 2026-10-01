@@ -167,6 +167,29 @@ def test_call_boundary_names_are_checked_against_the_steps_targets_not_step_0():
     assert r["violations_n"] == 2 and r["violations"][0]["multiplicity_vs_step0"]["logits_processor/div_1/out"] == (1, 0)
 
 
+class _LogitsTap(_CallBoundaries):
+    """The logits tap's names (acquire.sources.logits_tap_source), attached before the call-boundary source."""
+    short_name = "logits_tap"
+
+    def __init__(self, steps: int):
+        self.at = {s: [f"logits_processor/triton_launch_{s}/out"] for s in range(steps)}
+
+
+def test_every_source_of_per_step_names_is_checked_against_its_own_targets():
+    """With the logits tap beside the call-boundary source, the rule read the first one's targets only: the other's names fell to rule
+    (4) and every later step differed from step 0.  Each source's names are checked against its own targets."""
+    com, cb = _cb_com()
+    tap = _LogitsTap(3)
+    com.sources.insert(0, tap)
+    for s in range(3):
+        com._layouts[s] = _layout(_good_step() + ["logits_processor"] + tap.at[s] + cb.at[s])
+    r = com.identity_check()
+    assert r["ok"] is True, r["violations"]
+    com._layouts[1] = _layout(_good_step() + ["logits_processor"] + cb.at[1])                         # the tap's name dropped at step 1
+    r = com.identity_check()
+    assert r["violations_n"] == 1 and r["violations"][0]["call_boundaries_bad"] == {"logits_processor/triton_launch_1/out": (0, 1)}
+
+
 def test_a_dropped_doubled_or_foreign_call_boundary_tensor_still_fails():
     com, cb = _cb_com()
     com._layouts[0] = _layout(_good_step() + ["logits_processor"] + cb.at[0])
