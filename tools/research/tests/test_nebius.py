@@ -1068,6 +1068,10 @@ def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_b
     assert started(fr, cmds, "b.sh", "gpus=0")[:2] == ["numactl", "--membind=1"]
     assert started(fr, cmds, "c.sh", "gpus=0 project=verity")[0] == "nice"
     assert started(fr, cmds, "d.sh", "gpus=1")[0] == fr.GPU_LEASE
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("Node 0 MemFree:        2097152 kB\nNode 0 Inactive(file): 6291456 kB\nNode 0 AnonPages:      1048576 kB\n")
+    monkeypatch.setattr(fr, "NODE_MEMINFO", str(meminfo))
+    assert fr.numa0_gb() == {"numa0_reclaimable_gb": 8.0, "numa0_anon_gb": 1.0}
 
 
 @pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")

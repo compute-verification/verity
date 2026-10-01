@@ -338,6 +338,23 @@ def verity_pool(queued: list) -> None:
         slots -= 1
 
 
+NODE_MEMINFO = os.environ.get("FILL_NODE_MEMINFO", "/sys/devices/system/node/node0/meminfo")
+
+
+def numa0_gb() -> dict:
+    """NUMA 0's reclaimable (MemFree + Inactive(file)) and anonymous memory in GB, logged beside each window's freeze."""
+    kb = {}
+    try:
+        for line in Path(NODE_MEMINFO).read_text().splitlines():
+            parts = line.split()
+            if len(parts) >= 4 and parts[2].rstrip(":") in ("MemFree", "Inactive(file)", "AnonPages"):
+                kb[parts[2].rstrip(":")] = int(parts[3])
+    except (OSError, ValueError):
+        return {}
+    return {"numa0_reclaimable_gb": round((kb.get("MemFree", 0) + kb.get("Inactive(file)", 0)) / 2**20, 1),
+            "numa0_anon_gb": round(kb.get("AnonPages", 0) / 2**20, 1)}
+
+
 def cpu_frozen(timed: bool, window: bool) -> bool:
     return timed or (FREEZE_ON_WAIT and window)
 
@@ -368,13 +385,16 @@ def tick(n: int) -> str:
                 break
             stop(k, f"free {free} < needed {need}")
             deficit -= 1
+    frozen = cpu_frozen(timed, window)
+    if frozen and any(not j["h"]["gpus"] and not j.get("stopping") and not j["paused"] for j in running.values()):
+        event("freeze-memory", "-", timed=timed, waiting=window, **numa0_gb())
     for k, j in running.items():
         if not j["h"]["gpus"] and not j.get("stopping"):
             try:
-                if cpu_frozen(timed, window) and not j["paused"]:
+                if frozen and not j["paused"]:
                     scope(j, "freeze")
                     os.killpg(j["pid"], signal.SIGSTOP); j["paused"], j["paused_at"] = True, time.monotonic(); event("pause", k)
-                elif not cpu_frozen(timed, window) and j["paused"]:
+                elif not frozen and j["paused"]:
                     scope(j, "thaw")
                     os.killpg(j["pid"], signal.SIGCONT)
                     j["paused_s"] = j.get("paused_s", 0.0) + time.monotonic() - j["paused_at"]; j["paused"] = False
