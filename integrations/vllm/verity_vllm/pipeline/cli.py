@@ -218,7 +218,7 @@ def process_settings(environ: MutableMapping[str, str]) -> None:
     if environ.get(DENSE_THREADS_ENV):
         from verity_vllm.program.kernels import dense_rows
         dense_rows.use_threads(environ[DENSE_THREADS_ENV])
-    if environ.get("GPU_LEASE_STARTED"):
+    if environ.get("VERITY_LEASE_STARTED"):
         from verity_vllm.pipeline import gpu_lease
         gpu_lease.use_environ(environ)
 
