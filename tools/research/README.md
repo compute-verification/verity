@@ -80,8 +80,8 @@ research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = mac
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
-research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
-research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
+research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
+research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
@@ -111,8 +111,10 @@ After a merge or a train lands, `research merge` sweeps the pull requests (`gh`)
 It fetches the remote's copy of the target, closes every open pull request whose head is on it with a one-line comment naming
 the commit it landed in, and retargets onto the target every open pull request whose base branch's tip is on it. That covers
 the stacked pull requests GitHub never closes because their base isn't the target. The remote's branch is the truth, not the
-checkout, and `research merge` doesn't push: after `git push`, run `research merge --sweep` to close what the merge landed. It
-is idempotent, and `--dry-run` prints what it would close and retarget. Without the remote the sweep is skipped, and a
+checkout. With `--push`, a merge that lands is pushed (never forced) and then swept, and a refused push sweeps nothing and exits
+1; without it the sweep runs before anyone pushes and closes nothing the merge landed, so after `git push`, run `research merge
+--sweep`. Whoever lands a train passes `--push` (Daniel, 1 Oct). The sweep also deletes each closed pull request's head branch
+unless an open pull request still uses it. It is idempotent, and `--dry-run` prints what it would close and retarget. Without the remote the sweep is skipped, and a
 failure (no `gh`, no network) is reported without changing the merge's exit code.
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
