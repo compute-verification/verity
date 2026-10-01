@@ -124,6 +124,30 @@ if [ "${NSYS:-0}" = 1 ]; then
   fi
   mkdir -p $R/out/nsys; NSW="$NS profile -t cuda,nvtx --sample=none --cpuctxsw=none -o $R/out/nsys/prove-%p"
 fi
+# NCU=1: a profile, not a point: one kernel (NCU_KERNEL, default zerocheck's round 1) under Nsight Compute, from NCU_ROOT (an ncu
+# CLI tree, default FLOCK_WORK/ncu-root). A kernel replayed over several passes has every allocation it can reach saved first, to
+# host memory once the GPU's is full, so the full section set runs on the gate's B = 16 statement (two launches, one per rep) and
+# the step's statement gets only NCU_M35_METRICS, single-pass counters (no save: its 70+ GiB would not fit the job's memory), on
+# the two launches after the warm session's. out/ncu/{b16,m35}-<pid>.ncu-rep and their CSV pages. Pass GATE=0; not with NSYS=1
+NCW=
+if [ "${NCU:-0}" = 1 ]; then
+  [ -n "$NSW" ] && { echo "NCU=1 and NSYS=1: one profiler at a time"; exit 1; }
+  NC=${NCU_ROOT:-$FLOCK_WORK/ncu-root}/ncu; [ -x $NC ] || { echo "no ncu at $NC"; exit 1; }
+  mkdir -p $R/out/ncu; NCW="$NC --kernel-name regex:${NCU_KERNEL:-zerocheck_first_round_cpu_structured} --clock-control none"
+  if [ $ok = 1 ]; then
+    ph ncu-b16 start
+    OUT=$S/b16 RESEARCH_RUN_DIR=$S/b16 \
+      WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps-b16.tsv -- $NCW --set full --launch-count 2 -o $R/out/ncu/b16-%p" \
+      bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=0 PORT=7720 > $R/out/b16.log 2>&1 || ok=0
+    ph ncu-b16 end
+    keep b16
+    for f in $R/out/ncu/b16-*.ncu-rep; do
+      [ -f "$f" ] && { $NC --import $f --page details --csv > ${f%.ncu-rep}.details.csv; $NC --import $f --page raw --csv > ${f%.ncu-rep}.raw.csv; }
+    done
+  fi
+  M35=${NCU_M35_METRICS:-gpu__time_duration.sum,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed.sum,sm__cycles_elapsed.avg}
+  NSW="$NCW --metrics $M35 --launch-skip ${NCU_SKIP:-2} --launch-count 2 -o $R/out/ncu/m35-%p"
+fi
 if [ $ok = 1 ]; then
   ph sweep start
   OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps.tsv -- $NSW" \
@@ -134,6 +158,10 @@ if [ $ok = 1 ]; then
   cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
 fi
 kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null
+if [ -n "$NCW" ]; then
+  for f in $R/out/ncu/m35-*.ncu-rep; do [ -f "$f" ] && $NC --import $f --page raw --csv > ${f%.ncu-rep}.raw.csv; done
+  [ $ok = 1 ] && ls $R/out/ncu/b16-*.ncu-rep $R/out/ncu/m35-*.ncu-rep > /dev/null; exit
+fi
 if [ -n "$NSW" ]; then
   for f in $R/out/nsys/*.nsys-rep; do
     [ -f "$f" ] && $NS stats -q -r cuda_gpu_kern_sum,cuda_gpu_mem_time_sum,cuda_gpu_mem_size_sum,cuda_api_sum -f csv -o ${f%.nsys-rep} $f \
