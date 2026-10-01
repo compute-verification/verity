@@ -17,6 +17,9 @@ It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at 
 so it resumes from checkpoints in its own output directory.  Its exit status says what happened:
     0 done (moved to done/);  99 more chunks remain (requeued at once);  143 preempted by a waiter (requeued);
     anything else failed (failed/, after 2 tries).
+A wrapper in the job's own scope writes that status to running/.<job>.rc as the job exits, so a job that ends while a restarted
+runner has adopted it is filed by it too.  A job whose status the runner can't learn goes to held-unknown-exit/, never back to the
+queue: it may have finished, and rerunning a finished job can delete its result.  Exit 0 is done even when a stop raced it.
 It runs with FILL=1, FILL_JOB=<name>, GPU_LEASE_WHO=fill:<owner>; a GPU job through `gpu-lease 1 --preemptible`, so the
 oldest waiter can stop it, and a CPU job in a systemd user scope with its memory cap.
 
@@ -87,6 +90,10 @@ COMMIT_PREFIX = "verity-commit-"
 # a Commit reruns from the top when stopped, and a Gemma-2 Commit's CPU phases alone outlast 30 min; booked windows still bound it
 COMMIT_MAX_MIN = int(os.environ.get("FILL_COMMIT_MAX_MIN", "120"))
 CGROUP_ROOT = os.environ.get("FILL_CGROUP_ROOT", "/sys/fs/cgroup")
+HELD = "held-unknown-exit"
+# runs `bash JOB` and writes its exit status to RC; the trap (a handler, so the job doesn't inherit an ignored signal) keeps the
+# wrapper alive through a stop until the job itself exits
+RC_WRAP = 'trap : TERM INT HUP; bash "$2"; c=$?; echo "$c" > "$1"; exit "$c"'
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -232,7 +239,9 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     unit_name = None
     own = h.get("cpuset") if not h["gpus"] else None
     cpus = own or (VERITY_CPU_SET if in_pool else CPU_SET)
-    cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "bash", str(run)]
+    rc_file = FILL / "running" / f".{name}.rc"
+    rc_file.unlink(missing_ok=True)
+    cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "bash", "-c", RC_WRAP, "fill-rc", str(rc_file), str(run)]
     if own:
         cmd = ["ionice", "-c3", *cmd]
     if CPU_MEMBIND and not h["gpus"] and not verity:
@@ -335,15 +344,24 @@ def tries(name: str) -> int:
     return d[name]
 
 
+def exit_status(name: str) -> int | None:
+    """The status a job's wrapper wrote as it exited (RC_WRAP), or None when there is none."""
+    try:
+        return int((FILL / "running" / f".{name}.rc").read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
 def reap() -> None:
     global backoff_until
     for name, j in list(running.items()):
-        if j["proc"] is None:                       # adopted from an earlier runner: no exit status, only whether it lives
+        if j["proc"] is None:                       # adopted from an earlier runner: its status is only what its wrapper wrote
             try:
                 os.killpg(j["pid"], 0)
                 rc = None
             except ProcessLookupError:
-                rc = "adopted-exit"
+                rc = exit_status(name)
+                rc = "unknown" if rc is None else rc
         else:
             rc = j["proc"].poll()
         if rc is None and j.get("unit") and not j["h"]["gpus"]:
@@ -363,14 +381,14 @@ def reap() -> None:
         run = FILL / "running" / name
         mins = round((time.monotonic() - j["t0"]) / 60, 1)
         paused_min = round((j.get("paused_s", 0.0) + (time.monotonic() - j["paused_at"] if j["paused"] else 0.0)) / 60, 1)
-        (FILL / "running" / f".{name}.pgid").unlink(missing_ok=True)
-        (FILL / "running" / f".{name}.unit").unlink(missing_ok=True)
-        if rc == "adopted-exit":
-            dest, kind = "queue", "adopted-exit"      # its own checkpoint makes the rerun a no-op if it finished
+        for side in ("pgid", "unit", "rc"):
+            (FILL / "running" / f".{name}.{side}").unlink(missing_ok=True)
+        if rc == 0:
+            dest, kind = "done", "done"
         elif j.get("stopping") and j.get("requeue"):
             dest, kind = "queue", "requeued"
-        elif rc == 0:
-            dest, kind = "done", "done"
+        elif rc == "unknown":
+            dest, kind = HELD, "unknown-exit"
         elif rc in (99, 75, 124, 143, -15):
             dest, kind = "queue", {99: "more", 75: "no-gpu", 124: "max_min"}.get(rc, "preempted")
             if rc == 75:
@@ -576,7 +594,8 @@ def tick(n: int) -> str:
              f"window waiting {window}, "
              f"backfill {backfill}, queued {len(queued)} "
              f"(gpu {sum(1 for x in queued if x[1]['gpus'])}, cpu {sum(1 for x in queued if not x[1]['gpus'])}), "
-             f"done {sum(1 for _ in (FILL / 'done').glob('*'))}, failed {sum(1 for _ in (FILL / 'failed').glob('*'))}"]
+             f"done {sum(1 for _ in (FILL / 'done').glob('*'))}, failed {sum(1 for _ in (FILL / 'failed').glob('*'))}, "
+             f"held for an unknown exit {sum(1 for _ in (FILL / HELD).glob('*'))}"]
     for k, j in running.items():
         lines.append(f"  running {k} owner={j['h']['owner']} gpus={j['h']['gpus']} since={j['started']}"
                      f"{' PAUSED' if j['paused'] else ''}{' stopping: ' + j['why'] if j.get('stopping') else ''}")
@@ -584,20 +603,19 @@ def tick(n: int) -> str:
     return lines[0]
 
 
-def main() -> None:
-    for d in ("queue", "running", "done", "failed", "logs"):
-        (FILL / d).mkdir(parents=True, exist_ok=True)
+def adopt() -> None:
+    """Take over the jobs an earlier runner left in running/."""
     for p in (FILL / "running").glob("*"):
         if p.name.startswith("."):
             continue
         side = FILL / "running" / f".{p.name}.pgid"
         try:
             pgid = int(side.read_text().strip())
-            os.killpg(pgid, 0)
         except (OSError, ValueError):
-            side.unlink(missing_ok=True)
-            shutil.move(str(p), FILL / "queue" / p.name)
+            shutil.move(str(p), FILL / HELD / p.name)
+            event("unknown-exit", p.name, why="no process group recorded")
             continue
+        # a job that ended while no runner ran is adopted too: the first tick files it by its wrapper's status
         try:
             stopped = Path(f"/proc/{pgid}/stat").read_text().rsplit(")", 1)[1].split()[0] == "T"
         except OSError:
@@ -616,6 +634,12 @@ def main() -> None:
         running[p.name] = {"pid": pgid, "proc": None, "h": h, "t0": time.monotonic(), "started": now(),
                            "paused": stopped, "paused_at": time.monotonic(), "unit": unit}
         event("adopted", p.name, pgid=pgid)
+
+
+def main() -> None:
+    for d in ("queue", "running", "done", "failed", "logs", HELD):
+        (FILL / d).mkdir(parents=True, exist_ok=True)
+    adopt()
     n = gpu_count()
     while True:
         try:
