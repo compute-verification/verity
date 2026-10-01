@@ -2,7 +2,7 @@
  "source": "tests/lean/ExfiltrationVectors.lean via tests/lean/generate.sh",
  "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
  "inputs": {
-  "protocols/one_stage/tests/lean/ExfiltrationVectors.lean": "ad6ac96e87a84bd5dd1580c00581f9a0e6ed83c57a91689d76cd8e4f4fad8409",
+  "protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean": "ad6ac96e87a84bd5dd1580c00581f9a0e6ed83c57a91689d76cd8e4f4fad8409",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Influence.lean": "ae7a432ea29a44932dc63272e60def5e560557a33ed40a0e353d7c3f8f618c7e",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Law.lean": "335f8f760b29addd5738cff190d56955508686b083e9a180d752b9037b1188a2",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean": "2f082213f11c8512655af91c04511ad054b53eeac8f60e446f21faad40790a4f",
