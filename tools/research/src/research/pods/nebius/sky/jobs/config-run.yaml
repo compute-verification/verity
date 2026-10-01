@@ -331,6 +331,10 @@ run: |
     grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   if [ "$REPLAY_DEFERRED" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
+  # a Commit dispatched on an older template replayed on its GPU, and its verdict has no replay_deferred (a deferred one always does)
+  verdict=$SWEEP_DIR/$ROW/commit/verdict.json rc=0
+  [ ! -s "$verdict" ] || python3 -c 'import json,sys; sys.exit(0 if "replay_deferred" in json.load(open(sys.argv[1])) else 3)' "$verdict" || rc=$?
+  if [ "$rc" = 3 ]; then echo "replay: the Commit's verdict has no replay_deferred, so it replayed on its GPU; nothing to replay"; exit 0; fi
   export PATH=/workspace/jobs/venv312/bin:$PATH
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH
