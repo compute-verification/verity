@@ -19,7 +19,9 @@ of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont �
 `hZero`) are the skeleton's, unchanged (`assumptions/e2e-checklist.md`).
 
 **The two forms of SHA-512's collision resistance.** The link term `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
-`hCR`). The knowledge term and `δ_tree` are under `SHA512CRStrict` (`cr/sha-512`), each at its finders' budgets:
+through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
+`SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
+be SHA-512; each at its finders' budgets:
 * the knowledge term is `ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), for tables whose rewinding finders satisfy
   `SHA512CRStrict` at budget `qF` and whose self-clash finders at `qS` (`hKS`);
 * `δ_tree` is `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1), for a rewinding at the serving roots (`tr`)
@@ -29,7 +31,12 @@ of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont �
 acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event that the
 executable accepts and the model rejects by runs that open a serving root off its plurality (`TreeRewind.covers`). That
 cover is the link from the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis. The
-skeleton's `hExec` (every accept is the model's) gives a cover with no positions, at `δ_tree = 0`.
+skeleton's `hExec` (every accept is the model's) gives a cover with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
+
+**A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every law `L`, the live
+draw `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
+outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
+A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
 -/
 
 namespace FlockSoundness.Binding
@@ -58,9 +65,11 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
 
 /-- **The end-to-end count curve, with the rows' value binding**: `flock_e2e_count` at `vb := HmRows.binding rs hHm`.
 If `execAccept` holds, the probability that at least `K` units of the committed circuit are wrong at the committed values
-is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` (`hKS`, `hT`), `δ_link`
-under `SHA512CRExpected` (`hCR`). Beyond the skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`,
-`rs`), `HmRowComputes` (`hHm`) and the serving roots' rewinding (`tr`). -/
+is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
+through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
+skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
+roots' rewinding (`tr`). It takes no A3: `miss_L` is the law's own, and `Prog.flock_headline` bounds the live draw's by
+`Law.stratified`'s under A3. -/
 theorem flock_e2e_count_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -87,7 +96,9 @@ theorem flock_e2e_count_hm96
     (tr.le hT))
 
 /-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_drawn` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96`. -/
+`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
+and `hT`, `ecr/sha-512` through `hCR`). It reads the law only through `ε_ks` and `δ_link`, both at `L`, so it holds as
+stated at the live draw (`L := Law.execOS …`), with no A3. -/
 theorem flock_e2e_drawn_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -116,7 +127,9 @@ theorem flock_e2e_drawn_hm96
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
 /-- **The e2e drawn-unit bound at the executable's law, with the rows' value binding**: `flock_e2e_drawn_exec` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96`. -/
+`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
+and `hT`, `ecr/sha-512` through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; the live
+verifier's bytes are `flock_e2e_drawn_hm96`'s at `L := Law.execOS …`. -/
 theorem flock_e2e_drawn_exec_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -146,7 +159,9 @@ theorem flock_e2e_drawn_exec_hm96
 
 /-- **The e2e count curve at the executable's law, with the rows' value binding**: `flock_e2e_count_exec` at
 `vb := HmRows.binding rs hHm`, its count curve bounded by `Law.stratified`'s `miss`, at most
-`miss(K) + ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96`. -/
+`miss(K) + ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
+through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes
+the same curve is `Prog.flock_headline`'s, under A3. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (hks : ∀ s, ks s ≤ (Law.stratum σs s).card) (hS : Law.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop}

@@ -141,13 +141,24 @@ executable accept is the model's) gives one with no positions, at `δ_tree = 0` 
 - **the draw** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), whose count
   curve is at most `Law.stratified`'s under A3 (`Law.execOS_miss_le`).
 
-Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`. Its signature takes the three assumptions, each for the finders
-built from the prover bounded, and nothing else cryptographic: `SHA512CRStrict` (`hKS`, `hT`), `SHA512CRExpected`
-(`hCR`) and A3 (`hA3`). The rest are the named obligations of `assumptions/e2e-checklist.md`:
-- W6 (`pp.placed`: the table's statement holds the program's rows) and `Layout.Aliased` (`pp.aliased`);
-- `HmRowComputes` (`hHm`) and the layout's facts (`lay`, `rs`), in place of `vb`;
-- the serving roots' rewinding (`tr`), in place of `hExec`, which gives one at `δ_tree = 0` (`TreeRewind.ofNever`);
-- `hConst` and `hZero`.
+It is a working theorem, not proved: its obligations are open. Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`.
+
+**Its footprint.** Every hypothesis of its signature is one of the following.
+
+| Hypothesis | What it is |
+|---|---|
+| `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each draw at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
+| `hCR` (`LinkCR`) | `SHA512CRExpected` of SHA-512 (`ecr/sha-512`), for the prover's link finders |
+| `hA3` (`UniformRandomBytes`) | A3 (`uniform/io-getrandombytes`), for the unit draw's byte source |
+| `pp.placed`, `pp.aliased` | open: W6 (the table's statement holds the program's rows) and `Layout.Aliased` |
+| `hHm`; `lay`, `rs` | open: `HmRowComputes`, and the layout's facts (in place of `vb`) |
+| `tr` | open: the serving roots' rewinding, in place of `hExec`, which gives one at `δ_tree = 0` (`TreeRewind.ofNever`) |
+| `hConst`, `hZero` | open: the constants' and the zero's columns |
+| `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht` | numeric conditions, and the executable's strata matching `Law.stratified`'s |
+| `qF`, `qS`, `qT` | numeric conditions Lean doesn't check: `qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`, `qT ≥ 2t′ + 2v` (`SHA512CRStrict`, above) |
+
+Nothing else in it is cryptographic. A6 (`uniform/flock-coin-server`) is not a hypothesis: the model's session draws
+its round coins itself.
 
 **What it bounds.** The headline bounds wrong units of the pinned rows circuit; "computes the Definition" additionally
 needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).

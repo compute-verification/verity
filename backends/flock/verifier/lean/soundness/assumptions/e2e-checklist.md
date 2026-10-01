@@ -7,12 +7,15 @@
 
 **The headline** is `Prog.flock_headline` (`FlockSoundness/Headline.lean`; `ASSUMPTIONS.md`, The headline): the count
 curve on `p.circuit outs` with `pp : ProgPlaces`, SHA-512 as the session's hash and the rows' (`flock_e2e_count_hm96`),
-at the live draw `Law.execOS` composed with A3 (`Law.execOS_miss_le`). Its signature takes `SHA512CRStrict` (`hKS`,
-`hT`), `SHA512CRExpected` (`hCR`) and A3 (`hA3`), and the obligations below: `pp.placed` (W6), `pp.aliased`
-(`Layout.Aliased`), `hHm`, `lay` and `rs` (for `vb`), `tr` (for `hExec`), `hConst` and `hZero`. It bounds wrong units of
-the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
-Boolean semantics in Lean, which a generic Boolean-semantics lemma replaces once lane proofs-ir lands. It is for live
-uniform OS coins drawn each round, so it is cited only for runs that use them (`ASSUMPTIONS.md`, its coins).
+at the live draw `Law.execOS` composed with A3 (`Law.execOS_miss_le`). It is a working theorem, not proved, until the
+obligations below are discharged. Its signature takes `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`),
+`SHA512CRExpected` (`ecr/sha-512`, through `hCR`) and A3 (`uniform/io-getrandombytes`, through `hA3`), and the
+obligations below: `pp.placed` (W6), `pp.aliased` (`Layout.Aliased`), `hHm`, `lay` and `rs` (for `vb`), `tr` (for
+`hExec`), `hConst` and `hZero`. It bounds wrong units of the pinned rows circuit; "computes the Definition"
+additionally needs `RowsCert` per template and the Definition's Boolean semantics in Lean, which a generic
+Boolean-semantics lemma replaces once lane proofs-ir lands. Its round coins are A6's (`uniform/flock-coin-server`), which
+the model embodies: live uniform OS coins drawn each round, so it is cited only for runs that use them (`ASSUMPTIONS.md`,
+its coins).
 
 **What it says.** Suppose the audit accepts a batched session's proofs for the drawn units under the partition. Then,
 except with `ε_ks(σ) + δ_link` (plus `miss_L(K)` for the count), the integrity profile holds for the committed circuit

@@ -12,17 +12,24 @@ import FlockSoundness.ExecDrawOS
 * the live draw (`Law.execOS`, `Flock.Draw.drawOS`'s stratified draw on a byte source), its count curve at most
   `Law.stratified`'s under A3 (`Law.execOS_miss_le`).
 
-Its cryptographic hypotheses are instances of the three assumptions, each for the finders built from the prover bounded:
-`SHA512CRStrict` (`hKS`, through `StrictCR.TableCR`; `hT`, through `StrictCR.Finder.CR`), `SHA512CRExpected` (`hCR`,
-through `LinkCR`) and A3 (`hA3`). The others are the named obligations `assumptions/e2e-checklist.md` lists: W6 and
-`Layout.Aliased` (`pp.placed`, `pp.aliased`), `HmRowComputes` (`hHm`), the layout's facts (`lay`, `rs`, in place of
-`vb`), the serving roots' rewinding (`tr`, in place of `hExec`; `TreeRewind.ofNever` builds it from `hExec` at
-`δ_tree = 0`), `hConst` and `hZero`.
+Its cryptographic hypotheses are instances of three assumptions, each for the finders built from the prover bounded:
+* `SHA512CRStrict` (`cr/sha-512`) through `hKS` (`StrictCR.TableCR`) and `hT` (`StrictCR.Finder.CR`);
+* `SHA512CRExpected` (`ecr/sha-512`) through `hCR` (`LinkCR`);
+* A3 (`uniform/io-getrandombytes`) through `hA3` (`UniformRandomBytes`).
+
+The others are the named obligations `assumptions/e2e-checklist.md` lists: W6 and `Layout.Aliased` (`pp.placed`,
+`pp.aliased`), `HmRowComputes` (`hHm`), the layout's facts (`lay`, `rs`, in place of `vb`), the serving roots' rewinding
+(`tr`, in place of `hExec`; `TreeRewind.ofNever` builds it from `hExec` at `δ_tree = 0`), `hConst` and `hZero`. The rest
+(`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`) are numeric conditions and the strata's match. The budgets must bound
+their finders' real SHA-512 evaluations, `qF, qT ≥ 2t′ + 2v` and `qS ≥ t′ + v` for `t′` one session run's and `v` one
+opening's verification, which Lean doesn't check (`ASSUMPTIONS.md`).
 
 It bounds wrong units of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
-certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean. Its proof coins
-are the model's: uniform, drawn each round after the prover's message, as the verifier's `os` coins are
-(`ASSUMPTIONS.md`, Cryptographic assumptions and coins).
+certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean.
+
+Its proof coins are the model's: uniform, drawn each round after the prover's message. That the coin server's round
+coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
+states, and which covers only per-round OS coins: M0's seed-derived coins are outside the headline.
 -/
 
 namespace FlockSoundness.Audit
@@ -43,10 +50,11 @@ source `src` that A3 makes uniform (`hA3`), and run the batched session with SHA
 `execAccept` holds, the probability that at least `K` units of the program's rows circuit are wrong at the committed
 values (1 on `ones`, 0 on `zeros`, the plurality of the prover's openings elsewhere) is at most
 `miss(K) + ε_ks + δ_link + δ_tree`:
-* `miss(K)`, `Law.stratified`'s count curve, which `stratified_miss_eq_greedy` computes;
-* `ε_ks = ksAvgStrict`, under `SHA512CRStrict` for each table's knowledge finders at budgets `qF`, `qS` (`hKS`);
-* `δ_link = linkBoundE`, under `SHA512CRExpected` for the prover's link finders (`hCR`);
-* `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` for the serving roots' rewinding finder (`hT`). -/
+* `miss(K)`, `Law.stratified`'s count curve, which `stratified_miss_eq_greedy` computes, under A3 (`hA3`);
+* `ε_ks = ksAvgStrict`, under `SHA512CRStrict` (`cr/sha-512`) for each table's knowledge finders at budgets `qF`, `qS`
+  (`hKS`);
+* `δ_link = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`);
+* `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` (`cr/sha-512`) for the serving roots' rewinding finder (`hT`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
