@@ -909,6 +909,23 @@ def _pool_n1(monkeypatch, **env):
     return m
 
 
+def test_pool_n1_covers_node_2s_timed_window_pause_in_the_merged_file_for_at_most_3_hours(monkeypatch, tmp_path):
+    m = _pool_n1(monkeypatch)
+    merged = tmp_path / "infra-pool.json"
+    t0 = 1_800_000_000.0
+    merged.write_text(json.dumps({"generated_at": m.iso(t0), "nodes": {"n1": {"old": 1}, "n2": {"gpu_busy_1h": 0.5}}}))
+    assert not m.cover_pause(merged, {"new": 1}, t0 + 300)
+    assert m.cover_pause(merged, {"new": 1}, t0 + 900)
+    doc = json.loads(merged.read_text())
+    assert doc["generated_at"] == m.iso(t0 + 900) and doc["n2_generated_at"] == m.iso(t0)
+    assert doc["nodes"]["n1"] == {"new": 1} and doc["nodes"]["n2"]["paused_since"] == m.iso(t0) and "gpu_busy_1h" not in doc["nodes"]["n2"]
+    assert m.cover_pause(merged, {"new": 2}, t0 + 3 * 3600 - 60)
+    assert not m.cover_pause(merged, {"new": 3}, t0 + 3 * 3600 + 60)
+    assert json.loads(merged.read_text())["nodes"]["n1"] == {"new": 2}
+    merged.write_text(json.dumps({"generated_at": m.iso(t0 + 4 * 3600), "nodes": {"n2": {"gpu_busy_1h": 0.4}}}))
+    assert not m.cover_pause(merged, {"new": 4}, t0 + 4 * 3600 + 120)
+
+
 def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiting_workloads(monkeypatch):
     m = _pool_n1(monkeypatch)
     t = datetime.datetime(2026, 9, 30, 22, 0, tzinfo=datetime.timezone.utc).timestamp()
