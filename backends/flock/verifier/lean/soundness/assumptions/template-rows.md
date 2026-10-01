@@ -1,6 +1,10 @@
-# L1: the evidence, the proof for RoPE, and the path for the rest
+# A template's rows compute its gates: the evidence, the proof for RoPE, and the path for the rest
 
-The statement is in `../ASSUMPTIONS.md`.
+This is not a hypothesis of the end-to-end theorem (L1 was dropped, Daniel, Sep 30): the theorem is about the circuit of
+the statement's rows, and what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
+`../FlockSoundness/Certificate.lean`; `../ASSUMPTIONS.md`, The circuit and the certificate). The certificate's premises
+are that a unit's rows are `GateRows.rows G L` for its gate circuit `G`, and that `G` computes the unit's definition. This
+file is the evidence for those premises, template by template.
 
 - **Evidence today:** the IR comparison tests in `backends/flock/tests/test_ir_lowering.py`, on sampled inputs.
   - They evaluate the pinned rows against the IR's primitives:
@@ -15,10 +19,9 @@ The statement is in `../ASSUMPTIONS.md`.
 - **Proved for RoPE** (`FlockSoundness/GateRows.lean`, `FlockSoundness/Rope/`). `Rope.rope_sound`: column values that
   satisfy the pinned `rope-head/neox-bf16/pair` rows (sha256 `9cbdef19…`), with the constant at 1, carry on output
   column `6016 + o` the gate circuit's output `o` on input columns `0 … 63`. The gate circuit is the unit's Boolean
-  export (`verity_flock.boolean_export`: 64 inputs; 5,828 AND, 9,747 XOR and 1,717 NOT gates; 32 outputs). That is L1
-  for this template, for the pinned file's rows. The proof shows that RoPE's rows compute the unit's Boolean gate
-  circuit; that the gate circuit computes the IR's bf16 RoPE is outside L1 and still tested on samples (the IR
-  comparison tests above), not proved.
+  export (`verity_flock.boolean_export`: 64 inputs; 5,828 AND, 9,747 XOR and 1,717 NOT gates; 32 outputs). The proof
+  shows that RoPE's rows compute the unit's Boolean gate circuit; that the gate circuit computes the IR's bf16 RoPE (the
+  certificate's second premise) is still tested on samples (the IR comparison tests above), not proved.
   - `GateRows.rows` derives rows from any gate circuit and layout, by the v2 lowering rule: the input region, one row
     per AND in order, the output copy rows, the constant. `GateRows.rows_sound` proves that satisfied derived rows
     compute the circuit, for every circuit and layout.

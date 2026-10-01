@@ -2,13 +2,14 @@ import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Audit.FlockPublic
 
 /-!
-# The end-to-end theorem on a program of units, with `hL1` discharged (verified-lowering phase 1, S4d)
+# The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)
 
 `flock_e2e_count` and `flock_e2e_drawn` (`E2E.lean`) on a program of units (`Types.Program`):
-- the committed circuit is the program's rows circuit, `p.C`, and "wrong" is measured on its Boolean circuit, `p.CB`,
-  read off the rows through `p.mapG`;
-- `hL1` is `UProg.rowsL1`, the committed values are 1 on the constant's gate `one` and the plurality elsewhere (`Xpub`),
-  and `hConst` says that only a unit's constant column sits on `one`.
+- the committed circuit is the program's rows circuit, `p.C`, where those theorems measure "wrong"; these forms measure it
+  on its Boolean circuit, `p.CB`, read off the rows through `p.mapG`;
+- `UProg.rowsL1` (proved) carries one to the other: at values 1 on the constant's gate `one`, a unit wrong on the Boolean
+  circuit is wrong on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
+  says that only a unit's constant column sits on `one`.
 
 The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_classes` forms build `dp` from each drawn
 unit's table class (`UProg.derivedPlaces_of_classes`), what 1d and 1e give for an accepted statement, and discharge
@@ -47,7 +48,7 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
   (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
   {L : Law p.n}
 
-/-- **The end-to-end count curve on a program of units.** `flock_e2e_count` with `hL1` discharged by `UProg.rowsL1`:
+/-- **The end-to-end count curve on a program of units.** `flock_e2e_count`, carried by `UProg.rowsL1`:
 if `execAccept` holds, the probability that at least `K` units are wrong on the program's Boolean circuit, at the
 committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + δ_link`, when only a unit's constant column sits
 on the constant's gate. -/
@@ -66,10 +67,12 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (p.P hone).flock_e2e_count H E plan tab hExec dp (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone}
-    (p.rowsL1 hone) hConst ∅ (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR
+  (prob_mono (fun _ h => ⟨h.1, h.2.trans (Finset.card_le_card (p.rowsL1 hone _ fun _ hg => Xpub_of_mem_ones hg))⟩) _
+    σ).trans
+    ((p.P hone).flock_e2e_count H E plan tab hExec dp {p.oneOf hone} hConst ∅
+      (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR)
 
-/-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_drawn` with `hL1` discharged by
+/-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_drawn`, carried by
 `UProg.rowsL1`: if `execAccept` holds, the probability that a drawn unit is wrong on the program's Boolean circuit is at
 most `ε_ks(σ) + δ_link`, when only a unit's constant column sits on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
@@ -87,8 +90,10 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (p.P hone).flock_e2e_drawn H E plan tab hExec dp (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone}
-    (p.rowsL1 hone) hConst ∅ (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht σ hCR
+  (prob_mono (fun _ h => ⟨h.1, fun hd => h.2 (Finset.disjoint_of_subset_left
+    (p.rowsL1 hone _ fun _ hg => Xpub_of_mem_ones hg) hd)⟩) _ σ).trans
+    ((p.P hone).flock_e2e_drawn H E plan tab hExec dp {p.oneOf hone} hConst ∅
+      (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht σ hCR)
 
 /-- **Only a unit's constant column sits on `one`**, at the places built from the tables' classes: each unit's instance
 wires its constant column to `one` (`pairs_oneGate`). -/
@@ -229,10 +234,11 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (p.P hone).flock_e2e_count H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
-    (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone} (p.rowsL1 hone)
-    (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
-    (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht K σ hCR
+  (prob_mono (fun _ h => ⟨h.1, h.2.trans (Finset.card_le_card (p.rowsL1 hone _ fun _ hg => Xpub_of_mem_ones hg))⟩) _
+    σ).trans
+    ((p.P hone).flock_e2e_count H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
+      {p.oneOf hone} (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
+      (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes, with its zero public.**
 `UProg.flock_e2e_drawn_classes` with the program input `zer` public at 0, as in `UProg.flock_e2e_count_classes_zero`. -/
@@ -258,10 +264,11 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes_zero
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (p.P hone).flock_e2e_drawn H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
-    (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone} (p.rowsL1 hone)
-    (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
-    (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht σ hCR
+  (prob_mono (fun _ h => ⟨h.1, fun hd => h.2 (Finset.disjoint_of_subset_left
+    (p.rowsL1 hone _ fun _ hg => Xpub_of_mem_ones hg) hd)⟩) _ σ).trans
+    ((p.P hone).flock_e2e_drawn H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
+      {p.oneOf hone} (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
+      (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht σ hCR)
 
 end Partition
 
