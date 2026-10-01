@@ -985,6 +985,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
+    ap.add_argument("--no-controls", action="store_true", help="--all without the controls (check's audit: the `tools/lean` "
+                    "suite runs them, when the auditor changes)")
     ap.add_argument("--repo", type=Path, default=ROOT, help="the checkout a test's `generate` reads as {repo} (default: the "
                     "one this file is in)")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
@@ -1055,7 +1057,7 @@ def main(argv: list[str]) -> int:
                 print(f"  note: {n}", flush=True)
 
     with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
-        jobs = ([ex.submit(check_controls)] if a.all else []) + [ex.submit(one, p) for p in pkgs]
+        jobs = ([ex.submit(check_controls)] if a.all and not a.no_controls else []) + [ex.submit(one, p) for p in pkgs]
         for j in jobs:
             j.result()
     reports = [reports[p] for p in pkgs]

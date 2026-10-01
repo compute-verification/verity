@@ -70,7 +70,8 @@ through the kernel into an empty environment. It needs one module per root and a
 every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
 ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
-`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain (`--build`
+`--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/lean` suite runs them, only
+when `tools/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
 installs it first, so a machine without elan works), must pass clean and fail once for each violation in
 `tests/fixtures/violations.json`. Among them:
 
