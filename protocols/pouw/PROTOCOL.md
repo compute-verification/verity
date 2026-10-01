@@ -655,15 +655,17 @@ useful    U/(α_A·α_B), glue
   units are four templates:
 
   ~~~text
-  template      per                      reads                                   returns
-  Pc4Gram{K}    column p of F_B          F_B[:, p], F_A                          G_p
-  Pc4RowB{K}    row j of B               B_j, E_B,j, F_B, F_A, G                 B̃_j's codes and scale bytes, P_B,j, ok
-  Pc4RowA{K}    row i of A               A_i, E_A,i, F_A, F_B                    A′_i's codes and scale bytes, P_A,i, ok
-  Pc4Word{K}    word (i, j)              A′_i, B̃_j, P_A,i, P_B,j                 C̃_ij, U_ij
+  template          per                      reads                                   returns
+  Pc4Gram{K}        column p of F_B          F_B[:, p], F_A                          G_p
+  Pc4RowB{K}        row j of B               B_j, E_B,j, F_B, F_A, G                 B̃_j's codes and scale bytes, P_B,j, ok
+  Pc4RowA{K}        row i of A               A_i, E_A,i, F_A, F_B                    A′_i's codes and scale bytes, P_A,i, ok
+  Pc4Tile{K,TM,TN}  tile of TM × TN words    its rows' A′, P_A, B̃, P_B               C̃ and U of its words
   ~~~
 
-  - `Pc4Weight{K,N}` holds G and the B rows, once per job and weight. `Pc4Call{M,K,N}` reads their outputs as committed
-    inputs. `Pc4Check{M,K,N}` is both in one root.
+  - `Pc4Weight{K,N}` holds G and the B rows, once per job and weight. `Pc4Call{M,K,N,TM,TN}` reads their outputs as
+    committed inputs. `Pc4Check{M,K,N,TM,TN}` is both in one root. The scheme's tile is 64 × 64.
+  - A unit is a tile, not a word, because a unit reads its rows through their commitments. Once rows are hidden it
+    hashes them, and a word unit would hash about 4.9 KiB of rows for each word.
   - ``ok`` is the row's admission (`parse_row`'s finiteness, then `row_passes`).
   - The noise lines are anchored inputs: TurboSHAKE128 of seeds the verifier derives.
   - The Programs evaluate to the pinned ``test-16-nvfp4`` vector, and every partition computes each value in exactly one

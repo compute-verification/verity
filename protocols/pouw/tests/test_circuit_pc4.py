@@ -106,12 +106,13 @@ def _pinned():
     ops = s.encode(ctx, noise, a, b, tile)
     fa, fb = F.basis(noise.seed_b, F.ROLE_FA, k), F.basis(noise.seed_b, F.ROLE_FB, k)
     words = lambda rows: [x >> 16 for row in rows for x in F.parse_row(row, k)]  # noqa: E731
-    return pc4.Shape(m, k, n), ops, words(a), _flat(ops.e_a), words(b), _flat(ops.e_b), _flat(fa), _flat(fb)
+    return pc4.Shape(m, k, n, tile=(4, 8)), ops, words(a), _flat(ops.e_a), words(b), _flat(ops.e_b), _flat(fa), _flat(fb)
 
 
 def test_the_programs_evaluate_to_the_pinned_vector():
     """`Pc4Weight` gives B̃'s codes, scale bytes and P_B as the scheme forms them, `Pc4Call` reads them and gives the
-    vector's C̃ and U, and `Pc4Check` is the two in one root; every row of the honest tile is admitted."""
+    vector's C̃ and U, and `Pc4Check` is the two in one root; every row of the honest tile is admitted.  The 16 × 16 block
+    is cut into 4 × 8 tiles, so a word placed in the wrong tile or transposed within one changes the digests."""
     shape, ops, a, ea, b, eb, fa, fb = _pinned()
     m, k, n = shape.m, shape.k, shape.n
     wout = evaluate(pc4.weight(shape), b, eb, fa, fb)
@@ -187,25 +188,26 @@ def test_the_row_units_admission_is_row_passes_and_their_outputs_the_schemes(sid
 
 @pytest.mark.parametrize("side", ["check", "weight", "call"])
 def test_the_partition_computes_every_value_in_exactly_one_unit(side):
-    """One unit per column of F_B (G), per row of B and of A, and per word; `validate_unit_cut` certifies every gate once
+    """One unit per column of F_B (G), per row of B and of A, and per tile; `validate_unit_cut` certifies every gate once
     with no recompute, and the partition object verifies."""
-    shape = pc4.Shape(2, 64, 3)
+    shape = pc4.Shape(4, 64, 6, tile=(2, 3))
     fn = {"check": pc4.check, "weight": pc4.weight, "call": pc4.call}[side](shape)
     prog, q = Program(fn), pc4.query(shape, side)
-    us = pc4.units(fn, shape.k)
-    full = {"gram": F.R, "row_b": shape.n, "row_a": shape.m, "word": shape.m * shape.n}
+    us = pc4.units(fn)
+    full = {"gram": F.R, "row_b": shape.n, "row_a": shape.m, "tile": 2 * 2}
     assert Counter(u.role for u in us) == {r: full[r] for r in pc4.ROLES[side]}
     part = PO.evaluate(prog, q)
-    tm = pc4.templates(shape.k)
-    assert [t for _k, t, _a, n in part.ranges for _ in range(n)] == [tm[u.role].id for u in us]
+    tp = pc4.templates(shape.k, shape.tile)
+    assert [t for _k, t, _a, n in part.ranges for _ in range(n)] == [tp[u.role].id for u in us]
     assert PO.verify(PO.build(prog, q), prog).ok
-    _g, _owner, verdict = pc4.unit_cut(fn, shape.k)
+    _g, _owner, verdict = pc4.unit_cut(fn)
     assert verdict.ok, verdict.codes
     assert verdict.detail["certified"] == verdict.detail["computed_gates"]
 
 
 def test_shapes_outside_the_circuit_are_refused():
-    for shape in (pc4.Shape(1, 96, 1), pc4.Shape(0, 64, 1), pc4.Shape(1, 64, 0)):
+    for shape in (pc4.Shape(1, 96, 1), pc4.Shape(0, 64, 1), pc4.Shape(1, 64, 0), pc4.Shape(2, 64, 2, tile=(4, 1)),
+                  pc4.Shape(4, 64, 3, tile=(2, 2)), pc4.Shape(1, 64, 1, tile=(0, 1))):
         for build in (pc4.check, pc4.weight, pc4.call):
             with pytest.raises(DomainError):
                 build(shape)

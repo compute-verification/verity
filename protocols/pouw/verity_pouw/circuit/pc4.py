@@ -3,10 +3,10 @@ units, so sampled proofs can establish a drawn tile's checked words (C̃ and U) 
 reading a row.
 
 A weight's side is formed once per job and weight, by `Pc4Weight{K,N}`, whose root body holds the `Pc4Gram` and `Pc4RowB`
-instances.  One call's side is `Pc4Call{M,K,N}`, which reads that weight's B̃ codes, scale bytes and P_B rows as committed
-inputs.  `Pc4Check{M,K,N}` is both in one root: the whole check of an M × N block, recompute-free.  Each root body holds
-only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`), and every value
-is computed in exactly one of them.
+instances.  One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, scale bytes and P_B rows as
+committed inputs.  `Pc4Check{M,K,N,TM,TN}` is both in one root: the whole check of an M × N block, recompute-free.  Each
+root body holds only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`),
+and every value is computed in exactly one of them.
 
     template          one instance per        reads                                    computes and returns
     Pc4Gram{K}        column p of F_B         F_B[:, p], F_A                            G_p = (chain(F_B[:, p], F_A[:, q]))_q
@@ -14,7 +14,11 @@ is computed in exactly one of them.
     Pc4RowB{K}        row j of B              B_j, E_B,j, F_B, F_A, G                   B̃_j's codes and scale bytes, P_B,j, ok
       (in Pc4Weight, once per job and weight)
     Pc4RowA{K}        row i of A              A_i, E_A,i, F_A, F_B                      A′_i's codes and scale bytes, P_A,i, ok
-    Pc4Word{K}        word (i, j)             A′_i, B̃_j (codes, scales), P_A,i, P_B,j   C̃_ij, U_ij
+    Pc4Tile{K,TM,TN}  tile of TM × TN words   its TM rows A′, P_A and TN rows B̃, P_B    C̃ and U of its words
+
+A tile unit, not a word unit: a unit reads another unit's rows through their commitments, which under hiding it hashes in
+the circuit, and a word unit would hash about 4.9 KiB of rows for one word; a tile (64 × 64 in the scheme, `TILE`) hashes
+each of its rows once.
 
 A row unit computes the row's statistics, its noise atoms, block scales and casts (the forming), Ẽ, and its half of the
 clean-up: P_A,i = [Ẽ_A,i ‖ RNE_bf16(A′_i·F_B)], P_B,j = [RNE_bf16(Ẽ_B,j·G − B̃_j·F_A) ‖ −Ẽ_B,j].  ``ok`` is the row's
@@ -60,6 +64,11 @@ P_ROW = Array(PEEL, BF16)
 F32_MAX = 0x7F7FFFFF
 DNF_LOW = 0x3C700000               # 7.5·2^-9: β at or above it casts to a UE4M3 byte of at least 0x08 (the tie rounds up)
 UE4M3_MIN_WORD = 0x3B000000        # 2^-9, whose UE4M3 byte is 0x01
+TILE = (64, 64)                    # the scheme's tile: rows of A, rows of B
+
+BASIS = lambda k: Array(k, LINE)                                                    # noqa: E731
+CODES = lambda n, k: Array(n, Array(k, E2M1))                                       # noqa: E731
+SCALES = lambda n, k: Array(n, Array(k // BLOCK, U8))                               # noqa: E731
 
 
 def _f32(x: float) -> int:
@@ -214,48 +223,57 @@ Pc4RowBDef = CompositeDefinition(
     conformance="protocol-defined")
 
 
-def _word_body(B, S_, ac, as_, bc, bs, pa, pb):
+def _tile_body(B, S_, ac, as_, bc, bs, pa, pb):
     e, k = _Emit(B), S_.K
-    c = _chain(e, ac, bc, as_, bs, k)
-    u = c
-    for s in range(0, PEEL, 16):
-        u = e.call(HopperBF16WgmmaDot16, u, pa[s:s + 16], pb[s:s + 16])
-    return tuple_of(c, u)
+    cs, us = [], []
+    for i in range(S_.TM):
+        crow, urow = [], []
+        for j in range(S_.TN):
+            c = _chain(e, ac[i], bc[j], as_[i], bs[j], k)
+            u = c
+            for s in range(0, PEEL, 16):
+                u = e.call(HopperBF16WgmmaDot16, u, pa[i][s:s + 16], pb[j][s:s + 16])
+            crow.append(c)
+            urow.append(u)
+        cs.append(array_of(crow))
+        us.append(array_of(urow))
+    return tuple_of(array_of(cs), array_of(us))
 
 
-Pc4WordDef = CompositeDefinition(
-    "Pc4Word", 1, ("K",),
-    lambda S_: ((("ac", Array(S_.K, E2M1)), ("as", Array(S_.K // BLOCK, U8)), ("bc", Array(S_.K, E2M1)),
-                 ("bs", Array(S_.K // BLOCK, U8)), ("pa", P_ROW), ("pb", P_ROW)), Tuple(F32, F32)), _word_body,
-    doc="One checked word pair: C̃_ij, the NVF4 atom chained from +0 over A′_i·B̃_j, and U_ij, four sm_120 BF16 m16n8k16 "
-        "steps from C̃_ij over P_A,i·P_B,j (`pearl_c4.chain`, `pearl_c4.peel`).", conformance="protocol-defined")
+def _tile_sig(S_):
+    k, tm, tn = S_.K, S_.TM, S_.TN
+    return ((("ac", CODES(tm, k)), ("as", SCALES(tm, k)), ("bc", CODES(tn, k)), ("bs", SCALES(tn, k)),
+             ("pa", Array(tm, P_ROW)), ("pb", Array(tn, P_ROW))), Tuple(Array(tm, Array(tn, F32)), Array(tm, Array(tn, F32))))
+
+
+Pc4TileDef = CompositeDefinition(
+    "Pc4Tile", 1, ("K", "TM", "TN"), _tile_sig, _tile_body,
+    doc="One TM x TN tile's checked words: C̃_ij, the NVF4 atom chained from +0 over A′_i·B̃_j, and U_ij, four sm_120 BF16 "
+        "m16n8k16 steps from C̃_ij over P_A,i·P_B,j (`pearl_c4.chain`, `pearl_c4.peel`).", conformance="protocol-defined")
 
 
 @lru_cache(maxsize=16)
-def templates(k: int) -> dict[str, SpecializedDefinition]:
-    """The unit templates at depth ``k``, by role."""
+def templates(k: int, tile: tuple[int, int] = TILE) -> dict[str, SpecializedDefinition]:
+    """The unit templates at depth ``k`` and tile ``tile`` (rows, columns), by role."""
     return {"gram": bind(Pc4GramDef, K=k), "row_b": bind(Pc4RowBDef, K=k), "row_a": bind(Pc4RowADef, K=k),
-            "word": bind(Pc4WordDef, K=k)}
+            "tile": bind(Pc4TileDef, K=k, TM=tile[0], TN=tile[1])}
 
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Shape:
-    """M rows of A and N rows of B (a tile's rows and columns, 64 x 64 in the scheme), depth k."""
+    """M rows of A and N rows of B at depth k, cut into tiles of ``tile`` (rows of A, rows of B; the scheme's is 64 x 64)."""
 
     m: int
     k: int
     n: int
+    tile: tuple[int, int] = TILE
 
     def check(self) -> None:
-        if self.k % ATOM or min(self.m, self.k, self.n) <= 0:
-            raise DomainError(f"Pearl-C4's circuit needs 64 | k and at least one row on each side: {self}")
-
-
-BASIS = lambda k: Array(k, LINE)                                                    # noqa: E731
-CODES = lambda n, k: Array(n, Array(k, E2M1))                                       # noqa: E731
-SCALES = lambda n, k: Array(n, Array(k // BLOCK, U8))                               # noqa: E731
+        tm, tn = self.tile
+        if self.k % ATOM or min(self.m, self.k, self.n, tm, tn) <= 0 or self.m % tm or self.n % tn:
+            raise DomainError(f"Pearl-C4's circuit needs 64 | k and whole tiles on each side: {self}")
 
 
 def _weight_units(B, k: int, b, eb, fa, fb):
@@ -266,15 +284,20 @@ def _weight_units(B, k: int, b, eb, fa, fb):
     return [array_of([rows[j][f] for j in range(n)]) for f in range(4)]
 
 
-def _call_units(B, k: int, a, ea, fa, fb, bc, bs, pb):
-    tm = templates(k)
-    rows = B.batch(tm["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
-    m = len(a)
-    words = [B.batch(tm["word"], rows[i][0], rows[i][1], bc, bs, rows[i][2], pb, axes=(None, None, 0, 0, None, 0))
-             for i in range(m)]
-    n = len(bc)
-    cw = array_of([array_of([words[i][j][0] for j in range(n)]) for i in range(m)])
-    uw = array_of([array_of([words[i][j][1] for j in range(n)]) for i in range(m)])
+def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb):
+    tm, tn = tile
+    tp = templates(k, tile)
+    rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
+    m, n = len(a), len(bc)
+    ms, ns = m // tm, n // tn
+    ac, as_, pa = (array_of([rows[i][f] for i in range(m)]) for f in range(3))
+    blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
+    acs, ass, pas = blocks(ac, ms, tm), blocks(as_, ms, tm), blocks(pa, ms, tm)
+    bcs, bss, pbs = blocks(bc, ns, tn), blocks(bs, ns, tn), blocks(pb, ns, tn)
+    tiles = [B.batch(tp["tile"], acs[rs], ass[rs], bcs, bss, pas[rs], pbs, axes=(None, None, 0, 0, None, 0))
+             for rs in range(ms)]
+    cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])
+              for f in range(2))
     return cw, uw, array_of([rows[i][3] for i in range(m)])
 
 
@@ -298,9 +321,11 @@ def _call_sig(S_):
 
 
 Pc4CallDef = CompositeDefinition(
-    "Pc4Call", 1, ("M", "K", "N"), _call_sig, lambda B, S_, *a: tuple_of(*_call_units(B, S_.K, *a)),
-    doc="One call's side of an M x N block: its A rows formed, C̃ and U for every word, and each A row's admission; its "
-        "weight's B̃ codes, scale bytes and P_B rows are committed inputs (`Pc4Weight`).", conformance="protocol-defined")
+    "Pc4Call", 1, ("M", "K", "N", "TM", "TN"), _call_sig,
+    lambda B, S_, *a: tuple_of(*_call_units(B, S_.K, (S_.TM, S_.TN), *a)),
+    doc="One call's side of an M x N block: its A rows formed, C̃ and U for every word, tile by tile, and each A row's "
+        "admission; its weight's B̃ codes, scale bytes and P_B rows are committed inputs (`Pc4Weight`).",
+    conformance="protocol-defined")
 
 
 def _check_sig(S_):
@@ -312,12 +337,12 @@ def _check_sig(S_):
 
 def _check_body(B, S_, a, ea, b, eb, fa, fb):
     bc, bs, pb, ok_b = _weight_units(B, S_.K, b, eb, fa, fb)
-    cw, uw, ok_a = _call_units(B, S_.K, a, ea, fa, fb, bc, bs, pb)
+    cw, uw, ok_a = _call_units(B, S_.K, (S_.TM, S_.TN), a, ea, fa, fb, bc, bs, pb)
     return tuple_of(cw, uw, ok_a, ok_b)
 
 
 Pc4CheckDef = CompositeDefinition(
-    "Pc4Check", 1, ("M", "K", "N"), _check_sig, _check_body,
+    "Pc4Check", 1, ("M", "K", "N", "TM", "TN"), _check_sig, _check_body,
     doc="The check of an M x N block in one root: the weight's units, then the call's, reading them.",
     conformance="protocol-defined")
 
@@ -329,23 +354,24 @@ def weight(shape: Shape) -> SpecializedDefinition:
 
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
-    return bind(Pc4CallDef, M=shape.m, K=shape.k, N=shape.n)
+    return bind(Pc4CallDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0], TN=shape.tile[1])
 
 
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
-    return bind(Pc4CheckDef, M=shape.m, K=shape.k, N=shape.n)
+    return bind(Pc4CheckDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0], TN=shape.tile[1])
 
 
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
-ROLES = {"weight": ("gram", "row_b"), "call": ("row_a", "word"), "check": ("gram", "row_b", "row_a", "word")}
+ROLES = {"weight": ("gram", "row_b"), "call": ("row_a", "tile"), "check": ("gram", "row_b", "row_a", "tile")}
+_ROLE_OF = {id(Pc4GramDef): "gram", id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile"}
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
     """`Q_template_instances` over the side's unit templates (`ROLES`), in the order its root body first uses them."""
-    tm = templates(shape.k)
-    return PO.template_instances_query([tm[r] for r in ROLES[side]])
+    tp = templates(shape.k, shape.tile)
+    return PO.template_instances_query([tp[r] for r in ROLES[side]])
 
 
 @dataclass(frozen=True)
@@ -356,21 +382,20 @@ class Unit:
     member: int                 # its member of that batch node
 
 
-def units(fn: SpecializedDefinition, k: int) -> tuple[Unit, ...]:
+def units(fn: SpecializedDefinition) -> tuple[Unit, ...]:
     """Every unit of a Program built from the unit templates, in the partition's numbering (node order, then member)."""
-    roles = {id(v): r for r, v in templates(k).items()}
     out: list[Unit] = []
     for j, nd in enumerate(fn.body.nodes):
         for m in range(nd.n if nd.form == "batch" else 1):
-            out.append(Unit(len(out), roles[id(nd.fn)], j, m))
+            out.append(Unit(len(out), _ROLE_OF[id(nd.fn.defn)], j, m))
     return tuple(out)
 
 
-def unit_cut(fn: SpecializedDefinition, k: int) -> tuple[CallGraph, list[int], CutVerdict]:
+def unit_cut(fn: SpecializedDefinition) -> tuple[CallGraph, list[int], CutVerdict]:
     """The whole Program's cut with each computing gate owned by its root node's member, checked by `cut.check_cut`
     (every gate certified once, reads across units only through committed values, no value computed in two units), with no
     width rule: no unit here reaches a served output."""
-    body, us = fn.body, units(fn, k)
+    body, us = fn.body, units(fn)
     first, at = [], 0
     for nd in body.nodes:
         first.append(at)
@@ -386,5 +411,5 @@ def unit_cut(fn: SpecializedDefinition, k: int) -> tuple[CallGraph, list[int], C
     return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "LINE", "P_ROW", "ROLES", "Shape", "Unit", "call", "check", "query", "templates", "unit_cut", "units",
-           "weight"]
+__all__ = ["BASIS", "LINE", "P_ROW", "ROLES", "TILE", "Shape", "Unit", "call", "check", "query", "templates", "unit_cut",
+           "units", "weight"]
