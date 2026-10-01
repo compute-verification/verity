@@ -28,10 +28,16 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `annotations` is `verity/annotations/v0`: names, descriptions, formats and
     groupings keyed by descriptor ids, validated against a descriptor's
     structure, never inside a digest.
+    `boolean` is the Boolean profile of descriptor v1 (PROTOCOL §9): the gates
+    `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
+    `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
+    `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
+    `evaluate_words` through the word view); `evaluate_batch` uses it for one
+    without a kernel.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
@@ -39,7 +45,12 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
     hardware and protocol objects core owns (`library`), and numpy kernels
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
-    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.tc.relation`
+    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
+    the word library as Boolean Definitions: C-Flock's linear-form builder and
+    pieces (`forms`, `fp`, `tc_step`, `softmax`), `trace.definition` (a builder
+    traced into And/Xor/Not gates, with `word_of` its word Definition), the BF16
+    dot and coordinate on bits (`gemm`: `DotBf16_v3`, `GemmCoordinate_v3`) and
+    attention's softmax operations on bits (`attention`). `verity.ml.tc.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
