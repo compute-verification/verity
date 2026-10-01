@@ -1094,7 +1094,8 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
 def fences(tmp_path):
     yield
     for line in Path("/proc/locks").read_text().splitlines():
-        pid = int(line.split()[4])
+        fields = [f for f in line.split() if f != "->"]   # a blocked waiter's line reads "N: -> TYPE ...", one field longer
+        pid = int(fields[4])
         if "n1-lease-fence" in " ".join(Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")) \
                 if Path(f"/proc/{pid}").exists() else False:
             if str(tmp_path) in Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace"):
