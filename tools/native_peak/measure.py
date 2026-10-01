@@ -56,7 +56,7 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
     (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
      "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved), "
-     "FP32 accumulate at full rate (RTX PRO Blackwell whitepaper Table 4); census rtx-pro-6000-bse/{bf16,e4m3,e2m1}"),
+     "FP32 accumulate at full rate (RTX PRO Blackwell whitepaper Table 4); census rtx-pro-6000-server/{bf16,e4m3,e2m1}"),
     (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
      "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]

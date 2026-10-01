@@ -53,7 +53,7 @@ M = 35
 #: instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's row
 #: slot and its rows' hashing): 24, 24, 25, 26. K = 16384 is at Stmt.InRange's k_log <= 26
 INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512}
-PEAK_ID = "rtx-pro-6000-bse/bf16"
+PEAK_ID = "rtx-pro-6000-server/bf16"
 QUESTION = ("what is BF16 GemmCoordinate_v2{K} proving overhead against the RTX PRO 6000 spec peak, its throughput and its GPU "
             "utilization, at this step?")
 #: the campaign target whose operands and accumulator these are (verity_flock.bench.PROFILES["bf16-hopper"])
