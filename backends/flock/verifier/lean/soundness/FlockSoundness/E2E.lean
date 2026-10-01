@@ -14,7 +14,9 @@ no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there
 table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
 gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
 `Certificate.lean`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
-the theorem bounds (`hCR : LinkCR … (reg σ) (cont σ) …`), not from every prover at once.
+the theorem bounds (`hCR : LinkCR … (reg σ) (cont σ) …`), not from every prover at once. `ε_ks(σ)` is the prover's
+collision advantages; under `SHA512CRStrict` it is at most `StrictCR.ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), which
+the `_hm96` forms state (`Binding/E2E.lean`).
 
 **What the statement carries today.**
 * "Accept" is `execAccept`, any event on the audit's outcome that implies the model's acceptance (`hExec`). So as pinned,

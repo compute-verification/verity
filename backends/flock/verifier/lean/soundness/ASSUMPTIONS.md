@@ -10,7 +10,8 @@ chain from the audit's acceptance to the integrity profile on the committed circ
 hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
 make, chosen on the untrusted side, and the lowering does no optimizing (Daniel, Sep 30). So no hypothesis relates the
 rows to another circuit: what a correct unit computes is its certificate's (The circuit and the certificate, below). One
-hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`).
+hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`; in the
+`_hm96` forms, the serving roots' rewinding `tr`, which adds `δ_tree`).
 
 ## Soundness's assumptions (taken without proof)
 
@@ -74,6 +75,27 @@ unit draw.
   grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take uniform streams
   as their probability space, the same assumption.
 - **Upstream:** watch entry `A3-uniform-bytes`.
+
+## What is restated over the two forms
+
+Each term of the audit's bound is under one form, at the finders built from the prover it bounds
+(`FlockSoundness/StrictCR.lean` for the strict form). A rewinding finder's budget `qF` counts its two runs of the prover
+and two verifications; a one-run finder's `qS` one run and one verification; `qT` is the serving roots' rewinding finder's.
+
+| Term | Form | Theorem | Bound |
+|---|---|---|---|
+| the compiled theorem | `SHA512CRStrict` | `table_sound_compiled_strict` (`CompiledCR`) | `tableError + √(2^{log N₀}·2Q₀·qF²/2^513) + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513` |
+| `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each draw averaged over the draw |
+| `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
+| `δ_link`, the link term | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
+
+The four `flock_e2e_*_hm96` theorems (`FlockSoundness/Binding/E2E.lean`) add the four:
+`miss_L(K) + ksAvgStrict + δ_link + δ_tree` for the count curve, the same without `miss_L(K)` for a drawn unit. `δ_tree`
+enters through `tr : StrictCR.TreeRewind`, a rewinding at the serving roots (the prover after its registration, with the
+unit draw in place of the proof coins) whose `covers` says that the executable accepting while the model at the
+registered leaves rejects is no likelier than a run opening a serving root off its plurality. That cover is the link from
+the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis; the skeleton's `hExec` (every
+executable accept is the model's) gives one with no positions, at `δ_tree = 0`.
 
 ## Other named assumptions
 
@@ -145,9 +167,10 @@ not cryptographic, and to be proved: verified-lowering design, phase 2i).
   witness's rows have the registered leaves. Then `ValueBinding` (`HmRows.binding`) and `registered_weights` hold with
   `SHA512CRExpected` as the only cryptographic assumption, and `collide` an explicit SHA-512 collision
   (`ExplicitLeaf.hm96`).
-- **At the registered leaves.** The `_hm96` bounds are bounds at the leaves the registration commits to
-  (`Layout.regLeaf`). An audit bound read from registered roots also needs the roots' Merkle binding, `δ_tree` under
-  SHA-512 collision resistance (`cr/sha-512`; `DESIGN.md` §1), which those bounds leave out (red-team review of #513, C2).
+- **At the registered leaves, and `δ_tree`.** The `_hm96` bounds count the executable's acceptance (`execAccept`, read
+  from the registered roots) with the model's at the leaves the registration commits to (`Layout.regLeaf`). Where the two
+  differ is `δ_tree`, the roots' Merkle binding (red-team review of #513, C2), under `SHA512CRStrict` (What is restated
+  over the two forms, below).
 - **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing (red-team review of #513, C3).
@@ -239,7 +262,9 @@ pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec`
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
 and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
-`flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
+`flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
+`flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
+`flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
 
@@ -249,7 +274,8 @@ Whether a dependency proves what these theorems assume, or what they prove by ha
 watch list is the `upstream` section of `lean-audit.json`, one entry per statement:
 
 - `A1-johnson-mca` and `udr-mca`: A1 (proved here from DKT26) and its unique-decoding fallback;
-- `collision-resistance`, `keyed-cr` and `rom-cr`: SHA-512's collision resistance, in three forms;
+- `collision-resistance`, `keyed-cr` and `rom-cr`: `SHA512CRStrict` and `SHA512CRExpected`, against upstream's generic,
+  keyed and random-oracle statements of collision resistance;
 - `list-size` and `list-size-code`: the Johnson list bound (`ListSize.closeMsgs_card_le`);
 - `tensor-fold`: the fold union in `LigeritoLevels`;
 - `novel-basis`: the novel basis (`Arith.Correct.xhat_poly`, `L ≤ 40`).
