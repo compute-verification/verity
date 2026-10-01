@@ -86,6 +86,12 @@ def event(kind: str, job: str, **kw) -> None:
         f.write(json.dumps({"t": now(), "event": kind, "job": job, **kw}) + "\n")
 
 
+# one-job exceptions to the 30-min GPU cap, each approved by infra by name
+MAX_MIN_EXCEPTIONS = {
+    "pn2g-q-1936-r0.sh": 60,   # proofs' K=8192 gate: 20 statements plus the GPU selftest, 22 min on node 1 (infra, 30 Sep 3:31 PM PDT)
+}
+
+
 def header(p: Path) -> dict:
     h = {"owner": "unknown", "gpus": 1, "max_min": 25, "cpus": 8, "project": "pous", "on": None, "prio": 0}
     for line in p.read_text(errors="replace").splitlines()[:20]:
@@ -95,7 +101,8 @@ def header(p: Path) -> dict:
                 h[k] = int(v) if v.isdigit() else v
     h["gpus"] = 1 if int(h["gpus"]) >= 1 else 0
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
-    h["max_min"] = min(int(h["max_min"]), 360 if h["project"] == "verity" and not h["gpus"] else 30)
+    cap = MAX_MIN_EXCEPTIONS.get(p.name, 360 if h["project"] == "verity" and not h["gpus"] else 30)
+    h["max_min"] = min(int(h["max_min"]), cap)
     return h
 
 

@@ -630,6 +630,9 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
                        ("gpus=1 max_min=300 project=verity", 30), ("gpus=0 max_min=300 project=pous", 30)):
         job.write_text(f"#!/usr/bin/env bash\n# fill: owner=t {head}\n")
         assert fr.header(job)["max_min"] == want, head
+    gate = tmp_path / "pn2g-q-1936-r0.sh"
+    gate.write_text("# fill: owner=t gpus=1 max_min=90 project=verity\n")
+    assert fr.header(gate)["max_min"] == 60
     calls = []
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
     assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
