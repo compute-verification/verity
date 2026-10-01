@@ -1030,11 +1030,12 @@ __device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
 // Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
 // nothing on the squeezer.  U unrolls the Keccak round loop.  IL: the state, the slots and the sponges in the bit-interleaved
 // form (il_const): X is converted as it is read and W as it is written; the slots' initial contents are the caller's to
-// convert (chunked_interleave_kernel).
+// convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads each chunk back from its slot one chunk late,
+// so round 9 of a call that another follows writes every chunk of half 0.
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 
-template <int U, bool IL>
+template <int U, bool IL, bool LAG>
 __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
     uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
     const int64_t* __restrict__ base, const int64_t* __restrict__ blk, const int64_t* __restrict__ len,
@@ -1100,10 +1101,12 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
     for (int i = i0; i <= i1; ++i) {
       const int h = (i & 1) ? 0 : 1;
       const bool sq = role == ((i & 1) ? 0 : 1), x_in = i == 1, to_out = fin && i == 9;
-      const bool st_all = act && (i <= 8 || (i == 10 && more)), st_tail = more && i == 9;
+      const bool st = act && (LAG ? i <= 8 || (i >= 9 && more) : i <= 8 || (i == 10 && more)), st_tail = more && i == 9;
       const uint64_t m = sq ? 0 : ~0ull;
+      if (!LAG) {
 #pragma unroll
-      for (int w = 0; w < 25; ++w) x[w] &= ~m;
+        for (int w = 0; w < 25; ++w) x[w] &= ~m;
+      }
       uint64_t carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i == 10 ? 1 : i + 1) << 8)) << 48;
       if (IL) carry = il64(carry);
       auto xword = [&](int64_t jj) -> uint64_t {  // the pad's two words are their own interleaved forms
@@ -1131,7 +1134,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       };
       uint64_t* p = CHUNK_AT(h, 0);  // chunk cc's slot, then (once stored) cc + 1's
       if (sq && act) src(0, p, v);
-      for (int64_t cc = 0; cc < nch; ++cc) {
+      auto produce = [&](int64_t cc) {  // the squeezer's chunk cc, written
 #pragma unroll
         for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
         if (sq && act) {
@@ -1141,17 +1144,49 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
               const int64_t jj = cc * RATE_WORDS + w;
               if (jj < xwords) orow[jj] = (IL ? de_il64(chunk_word(v, w)) : chunk_word(v, w)) ^ __ldg(crow + jj);
             }
-          } else if (st_all || (st_tail && cc >= xch)) {
+          } else if (st || (st_tail && cc >= xch)) {
             slot_store_cg(p, v);
           }
         }
-        p += cstride;
+      };
+      if constexpr (LAG) {
+        // The absorber takes chunk cc - 1 in step cc, reading back the slot the squeezer wrote a Keccak-f earlier (in the
+        // same load instructions as the squeezer's chunk cc + 1), so a round is nch + 1 steps; its sponge starts in step 1.
+        for (int64_t cc = 0; cc <= nch; ++cc) {
+          if (cc == 1) {
 #pragma unroll
-        for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) = __shfl_xor_sync(ALL, chunk_word(v, w), 16);
-        if (cc < full) absorb_masked<false, IL>(x, v, carry, m);
-        else absorb_masked<true, IL>(x, v, carry, m);
-        if (sq && act && cc + 1 < nch) src(cc + 1, p, v);
-        keccak_f_pairs<U, IL>(x);
+            for (int w = 0; w < 25; ++w) x[w] &= ~m;
+          }
+          if (cc > 0) {
+            if (cc - 1 < full) absorb_masked<false, IL>(x, v, carry, m);
+            else absorb_masked<true, IL>(x, v, carry, m);
+          }
+          if (cc < nch) {
+            produce(cc);
+            __syncwarp();
+            if (x_in) {
+              if (act) {
+                if (!sq) slot_load_cg(p, v);
+                else if (cc + 1 < nch) src(cc + 1, p + cstride, v);
+              }
+            } else if (act && (!sq || cc + 1 < nch)) {
+              slot_load_cg(sq ? p + cstride : p, v);
+            }
+            p += cstride;
+          }
+          keccak_f_pairs<U, IL>(x);
+        }
+      } else {
+        for (int64_t cc = 0; cc < nch; ++cc) {
+          produce(cc);
+          p += cstride;
+#pragma unroll
+          for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) = __shfl_xor_sync(ALL, chunk_word(v, w), 16);
+          if (cc < full) absorb_masked<false, IL>(x, v, carry, m);
+          else absorb_masked<true, IL>(x, v, carry, m);
+          if (sq && act && cc + 1 < nch) src(cc + 1, p, v);
+          keccak_f_pairs<U, IL>(x);
+        }
       }
     }
 #undef CHUNK_AT
@@ -1182,7 +1217,7 @@ __global__ void chunked_interleave_kernel(uint64_t* st_words, int64_t pitch, int
 // every word of the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.
 void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t warps_per_sm, int64_t calls,
                       torch::Tensor c, torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest,
-                      torch::Tensor out, int64_t unroll, int64_t interleave_from) {
+                      torch::Tensor out, int64_t unroll, int64_t interleave_from, bool lag) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
               "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
@@ -1209,18 +1244,19 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
   const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, PAIRS_WARPS_PER_BLOCK);
   const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / PAIRS_WARPS_PER_BLOCK, 1);
-  auto pick = [&](auto il) {
-    constexpr bool IL = decltype(il)::value;
-    return unroll == 24 ? band_chain_pairs_kernel<24, IL>
-           : unroll == 12 ? band_chain_pairs_kernel<12, IL>
-           : unroll == 8 ? band_chain_pairs_kernel<8, IL>
-           : unroll == 6 ? band_chain_pairs_kernel<6, IL>
-           : unroll == 4 ? band_chain_pairs_kernel<4, IL>
-           : unroll == 3 ? band_chain_pairs_kernel<3, IL>
-           : unroll == 2 ? band_chain_pairs_kernel<2, IL>
-                         : band_chain_pairs_kernel<1, IL>;
+  auto pick = [&](auto il, auto lag) {
+    constexpr bool IL = decltype(il)::value, LAG = decltype(lag)::value;
+    return unroll == 24 ? band_chain_pairs_kernel<24, IL, LAG>
+           : unroll == 12 ? band_chain_pairs_kernel<12, IL, LAG>
+           : unroll == 8 ? band_chain_pairs_kernel<8, IL, LAG>
+           : unroll == 6 ? band_chain_pairs_kernel<6, IL, LAG>
+           : unroll == 4 ? band_chain_pairs_kernel<4, IL, LAG>
+           : unroll == 3 ? band_chain_pairs_kernel<3, IL, LAG>
+           : unroll == 2 ? band_chain_pairs_kernel<2, IL, LAG>
+                         : band_chain_pairs_kernel<1, IL, LAG>;
   };
-  auto kernel = interleave_from >= 0 ? pick(std::true_type{}) : pick(std::false_type{});
+  auto pick_il = [&](auto lag) { return interleave_from >= 0 ? pick(std::true_type{}, lag) : pick(std::false_type{}, lag); };
+  auto kernel = lag ? pick_il(std::true_type{}) : pick_il(std::false_type{});
   if (interleave_from >= 0 && interleave_from < state.size(1))
     chunked_interleave_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()),
                                                                     state.size(2), row0, rows, state.size(1), interleave_from);
@@ -1796,7 +1832,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("warps_per_sm"),
         pybind11::arg("calls"), pybind11::arg("c"), pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"),
         pybind11::arg("dest"), pybind11::arg("out"), pybind11::arg("unroll") = 1,
-        pybind11::arg("interleave_from") = -1);
+        pybind11::arg("interleave_from") = -1, pybind11::arg("lag") = false);
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
