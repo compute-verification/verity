@@ -103,12 +103,14 @@ def _session(R: Path, monkeypatch, points: int, point_fc: list[dict]) -> list[di
         (P / "results.jsonl").write_text(json.dumps({"definition": DEF2048, "shape": "s", "live": live, "stage": {"n": 2048},
                                                      "stage_cached": True, "domain": "total", "stage_s": 5.0}) + "\n")
         t = 1043 + 40 * i
-        recs = [{"warm": True}, *({"warm": False, "prove_total_s": 1.0, "verdict": {"verify_s": 2.0, "session_s": 3.0, "coin_seed": "ab"},
-                                    "tables": [None]} for _ in range(2))]
+        recs = [{"run": 0, "warm": True, "accepted": True},
+                *({"run": 1 + j, "warm": False, "accepted": True, "prove_total_s": 1.0,
+                   "verdict": {"verify_s": 2.0, "session_s": 3.0, "coin_seed": "ab"}, "tables": [None]} for j in range(2))]
         (P / "stamps.tsv").write_text(f"{t}.0\tSTART\t[\"prove\"]\n" + "".join(f"{t + 5 + 4 * j}.0\tLIVE\t{json.dumps(x)}\n" for j, x in enumerate(recs))
                                       + f"{t + 20}.0\tEXIT\t0\n")
         monkeypatch.setattr(sys, "argv", ["gemm_hill.py", "metrics", "--K", "2048", "--preflight", str(R / "out/preflight/classes/results.jsonl"),
-                                          "--sweep", str(P / "results.jsonl"), "--stamps", str(P / "stamps.tsv"), "--dmon", str(R / "out/dmon.tsv"),
+                                          "--sweep", str(P / "results.jsonl"), "--stamps", str(P / "stamps.tsv"), "--warm", "1", "--runs", "2",
+                                          "--dmon", str(R / "out/dmon.tsv"),
                                           "--phases", str(R / "out/phases.tsv"), "--census", str(census), "--root", str(R), "--point", str(i),
                                           "--points", str(points), "--preflight-key", pk, "--point-key", _key(P / "key.json", point_fc[i]),
                                           "--out", str(P / "metrics.json"), "--result", str(P / "result.json"),
