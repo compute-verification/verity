@@ -162,6 +162,44 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     assert {"encode_GBps", "decode_overhead_T1", "audit_margin_min_s", "recompute_margin_min_s", "seqroot_root_s"} <= names
 
 
+def test_the_recompute_control_covers_c_past_its_encoded_head(tmp_path):
+    """With only the first 64 of 192 blocks encoded (the rest random canonical, as on the device), every dropped block, in the
+    head or past it, is re-encoded from its decoded row and answers correctly; the margin is the limit minus each recomputed
+    answer's device time."""
+    body = _bench().P2V1Gpu().run(_args(tmp_path, p2_encode_blocks=64, audits=6), WS, tmp_path, backend=_backend(),
+                                  params=_small())
+    m, gates = body["metrics"], body["gates"]
+    assert m["encoded_blocks"] == 64 and gates["round_trip"]["blocks"] == 64
+    rec = m["recompute_control"]
+    assert rec["wrong"] == 0 and gates["recompute_control"]["passed"], gates["recompute_control"]
+    limit = m["calibration"]["limit_ns"]
+    recomputed = [a for r in rec["records"] for a in r["answers"] if a["index"] % 10 == 0]
+    assert rec["recomputed_answers"] == len(recomputed) > 0 and all(a["device_ns"] == 1_000_000 for a in recomputed)
+    assert rec["device_margin_s"]["min"] == rec["device_margin_s"]["max"] == (limit - 1_000_000) / 1e9      # the timer's 1 ms
+    rows = {r["name"]: r["value"] for r in body["measurements"]}
+    assert rows["recompute_margin_min_s"] == rows["recompute_margin_max_s"] == (limit - 1_000_000) / 1e9
+    assert m["seqroot"]["block"] % 10 == 0 and len(m["seqroot"]["encode_one_block_reps_s"]) == 3
+
+
+def test_the_p2_recompute_adversary_reencodes_every_dropped_block_of_c():
+    """`plaintext_rows` + `_recomputer` give back `C_i` for dropped blocks in the encoded head and past it."""
+    _, harness, _ = _p2()
+    P = _small().with_segments(1)
+    salt, model = b"s" * 32, b"m" * 32
+    bound = _Bound(P, salt, model, False)
+    blocks, nb = P.blocks, P.width_bytes
+    m = torch.zeros(blocks, nb, dtype=torch.uint8)
+    m[:, nb - P.payload_bytes:] = torch.randint(0, 256, (blocks, P.payload_bytes), generator=torch.Generator().manual_seed(1),
+                                                dtype=torch.uint8)
+    c = torch.cat([bound.encode(m[:8], 0), torch.randint(0, 128, (blocks - 8, nb), generator=torch.Generator().manual_seed(2),
+                                                         dtype=torch.uint8)])
+    dropped = [0, 7, 8, 30, blocks - 1]
+    rc = harness._recomputer(_backend(), bound, harness.plaintext_rows(bound, c, dropped), dropped)
+    for i in dropped:
+        block, device_ns = rc(i)
+        assert block == bytes(c[i].numpy()) and device_ns == 1_000_000, i
+
+
 def test_a_wrong_p2_kernel_stops_the_run_before_anything_is_timed(tmp_path):
     body = _bench().P2V1Gpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small())
     assert body["gates"]["vector"]["passed"] and not body["gates"]["round_trip"]["passed"]

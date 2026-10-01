@@ -169,6 +169,7 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     assert late["audits_accepted"] == 0 and late["late"] > 0 and late["wrong"] == 0                           # rejects on time
     assert rec["wrong"] == 0 and rec["late"] > 0 and rec["dropped_blocks"] == 3                               # recomputed right, late
     assert rec["margin_s"]["min"] < 0 and "cliff" in rec["pattern"]
+    assert rec["recomputed_answers"] > 0 and rec["device_margin_s"]["max"] == (limit - 1_000_000) / 1e9     # the timer's 1 ms
     assert m["loop"]["plain_graphed"][1] == {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
     assert all(len(r) == 1 for r in m["loop"]["plain_reps_s"].values())                                      # every rep kept
     assert m["step_floor"] is None and m["nvme"]["block_read_s"]["n"] == 8 and not list(nvme.iterdir())
@@ -186,6 +187,84 @@ def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
     assert not body["gates"]["round_trip"]["passed"]
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]   # a failed gate stops
     assert "timed_audit" not in body["gates"] and body["profile"] is None
+
+
+def _challenge(conn, i: int, width: int) -> tuple[int, int, bytes]:
+    conn.sendall(struct.pack("<QQ", 1, i))
+    want, got = 24 + width, b""
+    while len(got) < want:
+        chunk = conn.recv(want - len(got))
+        assert chunk, "the responder closed the connection"
+        got += chunk
+    _, device_ns, server_ns = struct.unpack_from("<QQQ", got)
+    return device_ns, server_ns, got[24:]
+
+
+def test_the_control_responder_holds_only_the_late_controls_answers():
+    """On the wall clock (`real_delay`) the responder holds an answer only when the late control asks it to: a recomputed
+    answer has already spent its device time and goes out at once, never waited again (the red team's B2).  The wait is
+    injected and recorded, so nothing here reads a clock."""
+    harness = _harness()
+    width = 8
+    c_host = bytes(range(20 * width))
+    answer = harness.control_answers(c_host, width, late_every=4, late_ns=999_000, dropped={3},
+                                     recompute=lambda i: (b"R" * width, 777_000))
+    waits: list[int] = []
+    r = harness.ControlResponder(width, answer, real_delay=True, wait=waits.append)
+    conn = socket.create_connection(("127.0.0.1", r.port()))
+    try:
+        got = [_challenge(conn, i, width) for i in (3, 1, 2, 5, 3, 6, 7, 8)]
+    finally:
+        conn.sendall(struct.pack("<QQ", 3, 0))
+        conn.close()
+        r.stop()
+    assert waits == [999_000, 999_000]                                                 # the 4th and 8th answers alone
+    assert got[0] == got[4] == (777_000, 777_000, b"R" * width)                         # recomputed: reported, not held
+    assert got[3] == (0, 999_000, c_host[5 * width:6 * width]) and got[7][1] == 999_000
+    assert got[1] == (0, 1_000, c_host[width:2 * width])
+
+
+def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
+    """The band's recompute adversary decodes the dropped block's key and XORs `W`'s block in within the one timed call, so
+    its reported device time covers the whole answer and nothing is computed on the host after it."""
+    harness = _harness()
+    width, bps = 4, 8
+    c = torch.arange(2 * bps * width, dtype=torch.uint8).view(2, bps, width)
+    w_host = bytes(range(100, 100 + 2 * bps * width))
+    key = torch.tensor([1, 2, 3, 4], dtype=torch.uint8)
+    state = {"timing": False, "calls": []}
+
+    def recompute(store, tags, i):
+        assert int(store.view(-1, width)[i].sum()) == 0 and int(store.view(-1, width)[i - 1].sum()) > 0   # only it is dropped
+
+        def call():
+            state["calls"].append(state["timing"])
+            return key.clone()
+        return call
+
+    def timer(fn):
+        state["timing"] = True
+        fn()
+        state["timing"] = False
+        return 2.5e-6
+
+    rc = harness._recomputer(harness.Backend("cpu", None, None, None, None, None, timer, recompute=recompute), c, None, [5, 13],
+                             w_host, bps, width)
+    assert rc(13) == (bytes(k ^ w for k, w in zip([1, 2, 3, 4], w_host[13 * width:14 * width])), 2_500)
+    assert state["calls"] == [True]
+    untimed = harness._recomputer(harness.Backend("cpu", None, None, None, None, None, lambda fn: 0.0, recompute=recompute), c,
+                                  None, [5, 13], w_host, bps, width)
+    with pytest.raises(IndexError):                                       # a timer that skips the call leaves no answer
+        untimed(5)
+
+
+def test_the_recompute_margin_is_the_limit_minus_each_recomputed_answers_device_time():
+    harness = _harness()
+    doc = {"records": [{"answers": [{"index": 1, "device_ns": 0}, {"index": 10, "device_ns": 400_000}]},
+                       {"answers": [{"index": 20, "device_ns": 700_000}]}]}
+    got = harness.recompute_margins(doc, {10, 20}, 600_000)
+    assert got["recomputed_answers"] == 2 and got["recompute_device_s"]["min"] == 4e-4
+    assert got["device_margin_s"]["min"] == -1e-4 and got["device_margin_s"]["max"] == 2e-4    # the fastest beats the limit
 
 
 def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_is_flagged():
