@@ -274,16 +274,6 @@ theorem sessionZK_eq (A : Arith F K) (ts : List (TabZK F mPts)) :
   simp only [List.map_ofFn]
   rfl
 
-/-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point draw, then
-every table's compiled reps and openings concurrently. -/
-noncomputable def sessionZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
-    Game (List (OutZC F D Sl)) :=
-  sessionZG (tabAfterZC A Hs) ts
-
-/-- The compiled session accepts when every table accepts. -/
-def acceptedZC [Inhabited D] [Inhabited Sl] (ts : List (TabZK F mPts)) (outs : List (OutZC F D Sl)) : Prop :=
-  ∀ i : Fin ts.length, (outs.getD i dfltOutZC).accepted = true
-
 /-- The compiled tables' runs after `Commit`, with the caps it sent. -/
 noncomputable def gamesZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) (caps : Fin ts.length → Cap D) :
     List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)) :=
@@ -294,10 +284,21 @@ noncomputable def sessAfterZC (fs : List ((Fin 2 → Fin mPts → F) → Game (O
     Game (List (OutZC F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
+/-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point draw, then
+every table's compiled reps and openings concurrently. -/
+noncomputable def sessionZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
+    Game (List (OutZC F D Sl)) :=
+  Game.send (Fin ts.length → Cap D) fun caps => sessAfterZC (gamesZC A Hs ts caps)
+
 omit [Fintype K] in
+/-- The compiled session is `sessionZG` at `tabAfterZC`, as `sessionZK` is at `TabZK.after`. -/
 theorem sessionZC_eq (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
-    sessionZC A Hs ts = Game.send (Fin ts.length → Cap D) fun caps => sessAfterZC (gamesZC A Hs ts caps) :=
+    sessionZC A Hs ts = sessionZG (tabAfterZC A Hs) ts :=
   rfl
+
+/-- The compiled session accepts when every table accepts. -/
+def acceptedZC [Inhabited D] [Inhabited Sl] (ts : List (TabZK F mPts)) (outs : List (OutZC F D Sl)) : Prop :=
+  ∀ i : Fin ts.length, (outs.getD i dfltOutZC).accepted = true
 
 section Batched
 
