@@ -10,6 +10,7 @@ import FlockSoundness.Discharge.Layout.Site
 import FlockSoundness.Discharge.Layout.OutSite
 import FlockSoundness.Discharge.Layout.OfRows
 import FlockSoundness.Discharge.Layout.KeyProg
+import FlockSoundness.Discharge.Layout.OutPin
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -41,5 +42,8 @@ from the decoder's places and the executable's regions:
 * `KeyProg`: those readers at [e2e-placed]'s places of the circuit's program on Δ's source keys (`Placed.keyProg`),
   with rows the message-keyed inputs (`keyRowOf`): Δ's copies (`keyProg_copies`), the rows' `b ‖ c`
   (`keyProg_bcPinned`), the single gates' bits (`keyProg_valPinned`), and `lay` and `rs` there (`keyLayout`,
-  `keyRows`).
+  `keyRows`);
+* `OutPin`: the units' committed gates at those places hold the population's returned outputs (`keyProg_hout`, with the
+  registration's bit `outBitOf`), when they are the returned outputs' bits (`OutsOut`) of the shape region "out" packs
+  (`OutShape`), and `rs` with them (`keyRowsOut`).
 -/
