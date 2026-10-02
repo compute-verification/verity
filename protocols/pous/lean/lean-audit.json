@@ -1,30 +1,66 @@
 {
- "roots": ["Pous", "PousProofs"],
+ "roots": ["Pous"],
  "exempt": {
   "PousTargets": "open targets: every pinned statement as a sorry stub",
   "CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
- "assumptions": ["Pous.Assumptions", "Pous.P2.Assumptions"],
+ "assumptions": ["Pous.Assumptions", "Pous.Assumptions.P2"],
+ "meaning": ["Pous.Protocol", "Pous.Assumptions", "Pous.Guarantees"],
  "layers": {
-  "Pous.Game": {
-   "imports": ["Mathlib", "Pous.Game"],
+  "Pous.Assumptions": {
+   "imports": ["Mathlib", "Pous.Protocol", "Pous.Assumptions"],
+   "except": [],
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
+  },
+  "Pous.Assumptions.P2": {
+   "imports": [
+    "Mathlib",
+    "Pous.Protocol.Game",
+    "Pous.Protocol.Model",
+    "Pous.Protocol.Accounting",
+    "Pous.Protocol.P2",
+    "Pous.Assumptions.P2"
+   ],
+   "except": [],
+   "why": "P2's pins and its cost model read only the game, the models and the parameters"
+  },
+  "Pous.Guarantees": {
+   "imports": ["Mathlib", "Pous.Protocol", "Pous.Assumptions", "Pous.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+  },
+  "Pous.Guarantees.P2": {
+   "imports": [
+    "Mathlib",
+    "Pous.Protocol.Game",
+    "Pous.Protocol.Model",
+    "Pous.Protocol.Accounting",
+    "Pous.Protocol.P2",
+    "Pous.Assumptions.P2",
+    "Pous.Guarantees.P2"
+   ],
+   "except": [],
+   "why": "P2's pins and its cost model read only the game, the models and the parameters"
+  },
+  "Pous.Protocol": {
+   "imports": ["Mathlib", "Pous.Protocol"],
+   "except": [],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Pous.Protocol.Game": {
+   "imports": ["Mathlib", "Pous.Protocol.Game"],
    "except": [],
    "why": "the probability and oracle model"
   },
-  "Pous.Model": {
-   "imports": ["Mathlib", "Pous.Game", "Pous.Model"],
+  "Pous.Protocol.Model": {
+   "imports": ["Mathlib", "Pous.Protocol.Game", "Pous.Protocol.Model"],
    "except": [],
-   "why": "definitions import no proofs"
+   "why": "the models import the game and each other, not the parameters or a proof"
   },
-  "Pous": {
-   "imports": ["Mathlib", "Pous"],
-   "except": [],
-   "why": "the trusted layer imports no proofs"
-  },
-  "Pous.P2": {
-   "imports": ["Mathlib", "Pous.Game", "Pous.Model", "Pous.Accounting", "Pous.P2"],
+  "Pous.Protocol.P2": {
+   "imports": ["Mathlib", "Pous.Protocol.Game", "Pous.Protocol.Model", "Pous.Protocol.Accounting", "Pous.Protocol.P2"],
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   }
@@ -47,6 +83,301 @@
    ],
    "assumptions": [],
    "type_hash": "c2740af40bb88160cac02caae7c55e7403e9cfa14849e7b49145085c88f10952"
+  },
+  "Pous.SecurityProofs.A1CompressionCard": {
+   "signature": ["Pous.SecurityProofs.A1CompressionCard : Pous.Guarantees.A1CompressionCard"],
+   "assumptions": [],
+   "type_hash": "bcce451de650582db1a7342672c015d252853850194ee692ad94efabf2e893a2"
+  },
+  "Pous.SecurityProofs.A1CompressionPr": {
+   "signature": ["Pous.SecurityProofs.A1CompressionPr : Pous.Guarantees.A1CompressionPr"],
+   "assumptions": [],
+   "type_hash": "92ffa8f01619a10050cca1d5b5bc3738de42b6fc83c20817916856ef32fa53ea"
+  },
+  "Pous.SecurityProofs.A3Prime": {
+   "signature": ["Pous.SecurityProofs.A3Prime : Pous.Guarantees.A3Prime"],
+   "assumptions": [],
+   "type_hash": "27d6ff4b83dc8518d1d672d2f51c05d0c2991f9a8106a54b42ca49ee1db4f086"
+  },
+  "Pous.SecurityProofs.A3PrimeLam": {
+   "signature": ["Pous.SecurityProofs.A3PrimeLam : Pous.Guarantees.A3PrimeLam"],
+   "assumptions": [],
+   "type_hash": "806bfd9dde39c6223c218809444ae5b9a29dcdea49a8ceaaa5b7d5a1a1eac66c"
+  },
+  "Pous.SecurityProofs.A6RederiveTimed": {
+   "signature": ["Pous.SecurityProofs.A6RederiveTimed : Pous.Guarantees.A6RederiveTimed"],
+   "assumptions": [],
+   "type_hash": "01e906170f4d12eb639f30431aefc8618a2de79dd87cde39bf0d91273a1ee6ba"
+  },
+  "Pous.SecurityProofs.A6RederiveUntimed": {
+   "signature": ["Pous.SecurityProofs.A6RederiveUntimed : Pous.Guarantees.A6RederiveUntimed"],
+   "assumptions": [],
+   "type_hash": "b5ea157c2007636c71b7259512bbd404435686238a27d555cea443d6a85433de"
+  },
+  "Pous.SecurityProofs.B1IndepSet": {
+   "signature": ["Pous.SecurityProofs.B1IndepSet : Pous.Guarantees.B1IndepSet"],
+   "assumptions": [],
+   "type_hash": "a99dc1c5e2e167537941e6cd6a0b6f68ecaa9fe92e374d9986bfa7f851b21bdc"
+  },
+  "Pous.SecurityProofs.B2Stacking": {
+   "signature": ["Pous.SecurityProofs.B2Stacking : Pous.Guarantees.B2Stacking"],
+   "assumptions": [],
+   "type_hash": "ece7e452eb4c95b61ae2832e13a6fc0eb918004cfda36440d27cafa12367f77a"
+  },
+  "Pous.SecurityProofs.B3Chain": {
+   "signature": ["Pous.SecurityProofs.B3Chain : Pous.Guarantees.B3Chain"],
+   "assumptions": [],
+   "type_hash": "4907b6a7e774445f4555a084fc135e7af7105a37fe9276a9a7ed12956133fab7"
+  },
+  "Pous.SecurityProofs.B5ExPostFacto": {
+   "signature": ["Pous.SecurityProofs.B5ExPostFacto : Pous.Guarantees.B5ExPostFacto"],
+   "assumptions": [],
+   "type_hash": "4eb38e93e639450c241c7bf25fe6f34c45c2269fc8004f1c627563318c86eebf"
+  },
+  "Pous.SecurityProofs.B5ExPostFactoBounded": {
+   "signature": ["Pous.SecurityProofs.B5ExPostFactoBounded : Pous.Guarantees.B5ExPostFactoBounded"],
+   "assumptions": [],
+   "type_hash": "3ea0e489f56c8fe367266c42ebcc826a6708d2d5c40161c85d8d0815ce52853c"
+  },
+  "Pous.SecurityProofs.B5Stacked": {
+   "signature": ["Pous.SecurityProofs.B5Stacked : Pous.Guarantees.B5Stacked"],
+   "assumptions": [],
+   "type_hash": "cfc192feb8ba73093a1788a0b447b6b47c3e6d430fabef628c45cc3fb5239a22"
+  },
+  "Pous.SecurityProofs.BandChainMeets64": {
+   "signature": ["Pous.SecurityProofs.BandChainMeets64 : Pous.Guarantees.BandChainMeets64"],
+   "assumptions": [],
+   "type_hash": "1fe0e6a4158e468afef71a8004b550c1bb5004e891f44d9e25e7134670783072"
+  },
+  "Pous.SecurityProofs.BandChainMeets64D12": {
+   "signature": ["Pous.SecurityProofs.BandChainMeets64D12 : Pous.Guarantees.BandChainMeets64D12"],
+   "assumptions": [],
+   "type_hash": "12bd035765ab2d9593527a0d77a735e01f1fcfb3722c780688ccb6f2c08b1efc"
+  },
+  "Pous.SecurityProofs.BandChainMeets64D5": {
+   "signature": ["Pous.SecurityProofs.BandChainMeets64D5 : Pous.Guarantees.BandChainMeets64D5"],
+   "assumptions": [],
+   "type_hash": "2b2cf7ae3e39ca92ae4d607253f72a45d97f5a0b32a614705ed69bab54aa818e"
+  },
+  "Pous.SecurityProofs.BandMultiMeets14": {
+   "signature": ["Pous.SecurityProofs.BandMultiMeets14 : Pous.Guarantees.BandMultiMeets14"],
+   "assumptions": [],
+   "type_hash": "596379708c14b340a8bda80fa94dc3414a3f40caa45239c424bd0bce47d0f64a"
+  },
+  "Pous.SecurityProofs.BandMultiMeets14K106": {
+   "signature": ["Pous.SecurityProofs.BandMultiMeets14K106 : Pous.Guarantees.BandMultiMeets14K106"],
+   "assumptions": [],
+   "type_hash": "26ecf5d8961045e6efe7ecb43fc47a1492f70ddf5a7f7c99fffbef4eb1fd4f86"
+  },
+  "Pous.SecurityProofs.BandMultiMeetsFamily": {
+   "signature": ["Pous.SecurityProofs.BandMultiMeetsFamily : Pous.Guarantees.BandMultiMeetsFamily"],
+   "assumptions": [],
+   "type_hash": "70f0a16a45c46e19133b2f90e56b20f7bd1d27ca6064c8f667ec65d5bd209423"
+  },
+  "Pous.SecurityProofs.BandPubMeets14": {
+   "signature": ["Pous.SecurityProofs.BandPubMeets14 : Pous.Guarantees.BandPubMeets14"],
+   "assumptions": [],
+   "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9"
+  },
+  "Pous.SecurityProofs.BandPubMeets14Global": {
+   "signature": ["Pous.SecurityProofs.BandPubMeets14Global : Pous.Guarantees.BandPubMeets14Global"],
+   "assumptions": [],
+   "type_hash": "c6339d61d58538bdee3dfd430d8eb58fb714ba7c635b54a1300d7d20ff438066"
+  },
+  "Pous.SecurityProofs.BandPubMeets64": {
+   "signature": ["Pous.SecurityProofs.BandPubMeets64 : Pous.Guarantees.BandPubMeets64"],
+   "assumptions": [],
+   "type_hash": "99d05166c08d953c29cb6dd7051f0e470b15b7423a24fcc738dd2d5684949edb"
+  },
+  "Pous.SecurityProofs.BandTwoWay220_12": {
+   "signature": ["Pous.SecurityProofs.BandTwoWay220_12 : Pous.Guarantees.BandTwoWay220_12"],
+   "assumptions": [],
+   "type_hash": "a5399ea6eb756f728342487abe0648aa20b0e5c1afdc54162d6e53e41cb6efb9"
+  },
+  "Pous.SecurityProofs.BandTwoWay220_12D11": {
+   "signature": ["Pous.SecurityProofs.BandTwoWay220_12D11 : Pous.Guarantees.BandTwoWay220_12D11"],
+   "assumptions": [],
+   "type_hash": "b65a79327c3fd14296deffd893b61f303914fe2a225b365227214e4c02980aeb"
+  },
+  "Pous.SecurityProofs.BandTwoWay220_16": {
+   "signature": ["Pous.SecurityProofs.BandTwoWay220_16 : Pous.Guarantees.BandTwoWay220_16"],
+   "assumptions": [],
+   "type_hash": "a454333f6e331274e94186d77991e169a49889e9cb422a234bb07b2b9131bd2d"
+  },
+  "Pous.SecurityProofs.ChainDenseMeets111": {
+   "signature": ["Pous.SecurityProofs.ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111"],
+   "assumptions": [],
+   "type_hash": "ea1fb5ebe876b00006be90dac1a77981fa9b2ccb14297d16112d8e176f644363"
+  },
+  "Pous.SecurityProofs.ChainDenseMeets64": {
+   "signature": ["Pous.SecurityProofs.ChainDenseMeets64 : Pous.Guarantees.ChainDenseMeets64"],
+   "assumptions": [],
+   "type_hash": "f3438832e610286d546e7304364d649d9ccd4406d71b453af26635837203032d"
+  },
+  "Pous.SecurityProofs.DenseMeets": {
+   "signature": ["Pous.SecurityProofs.DenseMeets : Pous.Guarantees.DenseMeets"],
+   "assumptions": [],
+   "type_hash": "1f862af4acecebf810baa0ad6c4962135c1328dc0087f2d270c42ef921b74b47"
+  },
+  "Pous.SecurityProofs.DenseMeets64": {
+   "signature": ["Pous.SecurityProofs.DenseMeets64 : Pous.Guarantees.DenseMeets64"],
+   "assumptions": [],
+   "type_hash": "560ed1990f5de6f57790315c444cee8b3cfc454b0ef9520275c93c4b19262b16"
+  },
+  "Pous.SecurityProofs.DomainSepEquiv": {
+   "signature": ["Pous.SecurityProofs.DomainSepEquiv : Pous.Guarantees.DomainSepEquiv"],
+   "assumptions": [],
+   "type_hash": "f457ed48006348ea6c823dbc038d9f203e6321482d74e28cc516ac1b5dd0f644"
+  },
+  "Pous.SecurityProofs.FibreCount": {
+   "signature": ["Pous.SecurityProofs.FibreCount : Pous.Guarantees.FibreCount"],
+   "assumptions": [],
+   "type_hash": "149c78283720a4bf1e2dde6b13e48eaa4ca146d6fc963ede1003c4791c5f4341"
+  },
+  "Pous.SecurityProofs.FischClaim13": {
+   "signature": ["Pous.SecurityProofs.FischClaim13 : Pous.Guarantees.FischClaim13"],
+   "assumptions": [],
+   "type_hash": "61066ed4c877d5b87edbbcb8072862139d7e96638baddcfd7452c07954ce7126"
+  },
+  "Pous.SecurityProofs.FischClaim14": {
+   "signature": ["Pous.SecurityProofs.FischClaim14 : Pous.Guarantees.FischClaim14"],
+   "assumptions": [],
+   "type_hash": "7956335b9edd4bd7cdc2c8e0f1b0db4904b77390169312a5cb7a32d695556b6a"
+  },
+  "Pous.SecurityProofs.KFloor": {
+   "signature": ["Pous.SecurityProofs.KFloor : Pous.Guarantees.KFloor"],
+   "assumptions": [],
+   "type_hash": "4be81e1f9a21b88f061987a1182c00605a207252afb9776aab7931f9aa8f6a45"
+  },
+  "Pous.SecurityProofs.N10Refuted": {
+   "signature": ["Pous.SecurityProofs.N10Refuted : Pous.Guarantees.N10Refuted"],
+   "assumptions": [],
+   "type_hash": "d795b04cb223c3de9fdf6abc6750eaf8fa0816ac218b31064aecdaebf9df2b68"
+  },
+  "Pous.SecurityProofs.P2ErrorSplitB19Uncond": {
+   "signature": ["Pous.SecurityProofs.P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond"],
+   "assumptions": [],
+   "type_hash": "24db4835c02d1b80f3217ecf343b19616c1f46f262d50e9e869939b76e099a2f"
+  },
+  "Pous.SecurityProofs.P2MeetsM1pB19Uncond": {
+   "signature": ["Pous.SecurityProofs.P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond"],
+   "assumptions": [],
+   "type_hash": "4d4ff9658957c0a85d1f7dbea2a4f66be4653c80419c2cc843810d2d9d273aad"
+  },
+  "Pous.SecurityProofs.P2MeetsM1pFamilyUncond": {
+   "signature": ["Pous.SecurityProofs.P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond"],
+   "assumptions": [],
+   "type_hash": "454d653c8acacd2f87a5c9f78fbb1cbb575962b2419e60037482ab362f1de459"
+  },
+  "Pous.SecurityProofs.P2MeetsM1pW8192Uncond": {
+   "signature": ["Pous.SecurityProofs.P2MeetsM1pW8192Uncond : Pous.Guarantees.P2MeetsM1pW8192Uncond"],
+   "assumptions": [],
+   "type_hash": "19fea98f31d0c4fd87f36ee71e63c88b1f3d84b76c5ff3db77e73bc79e710f34"
+  },
+  "Pous.SecurityProofs.P2SlackB19Uncond": {
+   "signature": ["Pous.SecurityProofs.P2SlackB19Uncond : Pous.Guarantees.P2SlackB19Uncond"],
+   "assumptions": [],
+   "type_hash": "2e5de015453b9c78a5ff10f69aba49dbb40f087a61fddf40ae32afda6393927d"
+  },
+  "Pous.SecurityProofs.P2SlackFamilyUncond": {
+   "signature": ["Pous.SecurityProofs.P2SlackFamilyUncond : Pous.Guarantees.P2SlackFamilyUncond"],
+   "assumptions": [],
+   "type_hash": "a7362ea74a7037fe8af6f390997f4cf697055cf410f55bde27c35526c4b2b7c4"
+  },
+  "Pous.SecurityProofs.P3ConcreteMeets14GB": {
+   "signature": ["Pous.SecurityProofs.P3ConcreteMeets14GB : Pous.Guarantees.P3ConcreteMeets14GB"],
+   "assumptions": [],
+   "type_hash": "2fe3b76c26a4e54dc8e1ac6c40a76abd0ce2bf62d0344c1d2962c315adda8fba"
+  },
+  "Pous.SecurityProofs.P3ConcreteMeets64": {
+   "signature": ["Pous.SecurityProofs.P3ConcreteMeets64 : Pous.Guarantees.P3ConcreteMeets64"],
+   "assumptions": [],
+   "type_hash": "11ccb1f7b9f58272eef6cd5d9936dff9f0b231ed5ccf43bf9ec3331f4b5bff97"
+  },
+  "Pous.SecurityProofs.P3ConcreteMeets64D12": {
+   "signature": ["Pous.SecurityProofs.P3ConcreteMeets64D12 : Pous.Guarantees.P3ConcreteMeets64D12"],
+   "assumptions": [],
+   "type_hash": "3ed31232024990431903fe4c620f6d25eca2f8d6b2e0ec876ad0089a1a8c53e5"
+  },
+  "Pous.SecurityProofs.ReverseNeedsAllChildren": {
+   "signature": ["Pous.SecurityProofs.ReverseNeedsAllChildren : Pous.Guarantees.ReverseNeedsAllChildren"],
+   "assumptions": [],
+   "type_hash": "d12480b464f856f50933735ee0fb0cb1ac76ce8eb88f0ad1d551dcf96fadb638"
+  },
+  "Pous.SecurityProofs.SampledAuditProd": {
+   "signature": ["Pous.SecurityProofs.SampledAuditProd : Pous.Guarantees.SampledAuditProd"],
+   "assumptions": [],
+   "type_hash": "7fbcf6f8e0bcadd769e39ba82c6a735db97e8a874011370e4bfa1759fdeeab94"
+  },
+  "Pous.SecurityProofs.SampledAuditSeq": {
+   "signature": ["Pous.SecurityProofs.SampledAuditSeq : Pous.Guarantees.SampledAuditSeq"],
+   "assumptions": [],
+   "type_hash": "2e2a602c3bfca4f9966dc96fc5a73c3d4c5bb95fecb6da6941adbdd85de2437d"
+  },
+  "Pous.SecurityProofs.SampledAuditSim": {
+   "signature": ["Pous.SecurityProofs.SampledAuditSim : Pous.Guarantees.SampledAuditSim"],
+   "assumptions": [],
+   "type_hash": "bc36b8d9a4dcc19fc045a910b719983b13c6e418fdbee2cb295aa5616103b356"
+  },
+  "Pous.SecurityProofs.SegMeets14": {
+   "signature": ["Pous.SecurityProofs.SegMeets14 : Pous.Guarantees.SegMeets14"],
+   "assumptions": [],
+   "type_hash": "e8c7db9341d3f8b3f36411d00bfad3c7c678ae88f72a83441d8c264a47c59435"
+  },
+  "Pous.SecurityProofs.SegTagAuditSecure": {
+   "signature": ["Pous.SecurityProofs.SegTagAuditSecure : Pous.Guarantees.SegTagAuditSecure"],
+   "assumptions": [],
+   "type_hash": "11477aee8405e8304f9de7448c455a025e9d031ce8e2d1f5bd8cad2981234b94"
+  },
+  "Pous.SecurityProofs.SegTagMeets14": {
+   "signature": ["Pous.SecurityProofs.SegTagMeets14 : Pous.Guarantees.SegTagMeets14"],
+   "assumptions": [],
+   "type_hash": "2e77fb239fa74898926e096ad501674a523e7a90980fa8146860d259070978ad"
+  },
+  "Pous.SecurityProofs.StackedAuditOnePercent": {
+   "signature": ["Pous.SecurityProofs.StackedAuditOnePercent : Pous.Guarantees.StackedAuditOnePercent"],
+   "assumptions": [],
+   "type_hash": "f072112dfbeef0575cc7fc90ec4422d29c50036062029a0e1eda57efa442d6d6"
+  },
+  "Pous.SecurityProofs.StackedAuditSeq": {
+   "signature": ["Pous.SecurityProofs.StackedAuditSeq : Pous.Guarantees.StackedAuditSeq"],
+   "assumptions": [],
+   "type_hash": "3af88260807268373174df3aa1a73cfd8faf9397f8a714ca31452003a490f4fd"
+  },
+  "Pous.SecurityProofs.TagInjective14": {
+   "signature": ["Pous.SecurityProofs.TagInjective14 : Pous.Guarantees.TagInjective14"],
+   "assumptions": [],
+   "type_hash": "0745a2facb60dbc52d7d93ef32df9f77c6c058cdd9bcab106ee278bbdb1baf8a"
+  },
+  "Pous.SecurityProofs.Theorem1iTimed": {
+   "signature": ["Pous.SecurityProofs.Theorem1iTimed : Pous.Guarantees.Theorem1iTimed"],
+   "assumptions": [],
+   "type_hash": "ec57434fd1e580dc01cefd3018b984f22d3a8f9cc700e199c9317345f3ccf008"
+  },
+  "Pous.SecurityProofs.Theorem1ii": {
+   "signature": ["Pous.SecurityProofs.Theorem1ii : Pous.Guarantees.Theorem1ii"],
+   "assumptions": [],
+   "type_hash": "26029d9d1c64dd3df12ea725cafee29c40acf1a0e7c7bffb8018222bada58d94"
+  },
+  "Pous.SecurityProofs.Theorem1iiSeq": {
+   "signature": ["Pous.SecurityProofs.Theorem1iiSeq : Pous.Guarantees.Theorem1iiSeq"],
+   "assumptions": [],
+   "type_hash": "3f012443b2cf861eef36c020cbb5dbe7162ef43bbbad13f60a66a584c39bd42d"
+  },
+  "Pous.SecurityProofs.Theorem1iiTimed": {
+   "signature": ["Pous.SecurityProofs.Theorem1iiTimed : Pous.Guarantees.Theorem1iiTimed"],
+   "assumptions": [],
+   "type_hash": "80b8ddc16f7765829b8713cf75d040f4d0ec54fdb84d36c68937527fdfd9ef78"
+  },
+  "Pous.SecurityProofs.Theorem1iiiTimed": {
+   "signature": ["Pous.SecurityProofs.Theorem1iiiTimed : Pous.Guarantees.Theorem1iiiTimed"],
+   "assumptions": [],
+   "type_hash": "4a5730490add59b684a049908762d0e701efbc64b74f9c7394d1286b6cd86287"
+  },
+  "Pous.SecurityProofs.TransposeMixing": {
+   "signature": ["Pous.SecurityProofs.TransposeMixing : Pous.Guarantees.TransposeMixing"],
+   "assumptions": [],
+   "type_hash": "7d4c6bc654b2fa5a8df3afeb4f34ccc3101f67b8bc26fe817558ea1d7191505e"
   },
   "Pous.honest_seq_accepted": {
    "signature": [
@@ -135,107 +466,6 @@
    ],
    "assumptions": [],
    "type_hash": "3c76052ab3f9ea6abd575006dd2fc06826be9f42a0d5ff62d7c0f1c5eea4d1d1"
-  },
-  "PousBridge.b5_stacked": {
-   "signature": [
-    "PousBridge.b5_stacked {ℓ n N : Nat} {V : Type} [Fintype V] [DecidableEq V] (α β ε : Real) (node : Fin ℓ → Fin n → V)",
-    "  (level : V → Fin ℓ) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)",
-    "  (hnode : ∀ (i : Fin ℓ), Function.Injective (node i)) (hlevel : ∀ (i : Fin ℓ) (a : Fin n), Eq (level (node i a)) i)",
-    "  (hdr : ∀ (i : Fin ℓ), Pous.DRG.DepthRobust n (drg i) α β)",
-    "  (hsc : ∀ (i j : Fin ℓ), Eq j.val (instHAdd.hAdd i.val 1) → Pous.DRG.DisjointPaths node level green i j)",
-    "  (hn : instLTNat.lt 0 n) (hε : Real.instLT.lt 0 ε) (hε1 : Real.instLE.le ε 1)",
-    "  (hℓ : Real.instLE.le 1 (instHMul.hMul (instHSub.hSub 1 α) ℓ.cast)) (hβ : Real.instLE.le 1 (instHMul.hMul β n.cast))",
-    "  (e : Equiv V (Fin N)) (G : Pous.Labelling.TopoDAG N)",
-    "  (hG :",
-    "    ∀ (u v : V),",
-    "      Iff (SetLike.instMembership.mem (G.par (EquivLike.toFunLike.coe e v)) (EquivLike.toFunLike.coe e u))",
-    "        (Pous.DRG.StackedEdge node drg green u v))",
-    "  (t : Fin ℓ) (ht : Eq (instHAdd.hAdd t.val 1) ℓ) (w m Q : Nat) (d : Fin N → Pous.Bits w)",
-    "  (A₁ : (Pous.Labelling.LabelQry N w → Pous.Bits w) → Pous.Bits m)",
-    "  (A₂ :",
-    "    Pous.Bits m →",
-    "      Fin N → Pous.Prog (Pous.IdealModel.randomOracle (Pous.Labelling.LabelQry N w) (Pous.Bits w)) (Pous.Bits w))",
-    "  (hA₂ :",
-    "    ∀ (σ : Pous.Bits m) (c : Fin N),",
-    "      Pous.Prog.Bounded (instHSub.hSub (Nat.floor (instHMul.hMul β n.cast)) 1) Q (A₂ σ c)) :",
-    "  ENNReal.instLE.le",
-    "    (Pous.pr fun H =>",
-    "      instLENat.le (instHAdd.hAdd (instHSub.hSub n (Nat.ceil (instHMul.hMul (instHDiv.hDiv ε 2) n.cast))) 1)",
-    "        (Finset.filter (fun c => Eq (Pous.Prog.run H (A₂ (A₁ H) c)) (Pous.Labelling.label G d H c))",
-    "            (Finset.image (fun b => EquivLike.toFunLike.coe e (node t b)) Finset.univ)).card)",
-    "    (instHMul.hMul (instHMul.hMul N.cast (instHPow.hPow 2 m))",
-    "      (instHPow.hPow",
-    "        (instHDiv.hDiv (instHPow.hPow (instHAdd.hAdd (instHMul.hMul n (instHAdd.hAdd Q 1)) N) 2).cast",
-    "          (instHPow.hPow 2 w))",
-    "        (instHAdd.hAdd (Nat.floor (instHMul.hMul (instHSub.hSub 1 ε) n.cast)) 1)))"
-   ],
-   "assumptions": [],
-   "type_hash": "407f9dd55399ea1f3cbf84a04bfe0cd603afc85700d3c53280c6002d61340c98"
-  },
-  "PousDenseReCert.dense_meets_64": {
-   "signature": [
-    "PousDenseReCert.dense_meets_64 :",
-    "  Pous.Meets (Pous.Dense.denseScheme (instHPow.hPow 2 9) 524288) Pous.Reveal.sequential 5 (instHPow.hPow 2 20) 106",
-    "    (instHPow.hPow (ENNReal.instInv.inv 2) 128)"
-   ],
-   "assumptions": [],
-   "type_hash": "6ccdb99d475a98b4ea96d59d3aa06989f4d4d9c3ab041828f15f2322b913bba9"
-  },
-  "PousDenseReCert.domainSep_equiv": {
-   "signature": [
-    "PousDenseReCert.domainSep_equiv (N B : Nat) (hN : instLENat.le N (instHPow.hPow 2 64)) (salt : Pous.Bits 192) :",
-    "  Exists fun t =>",
-    "    And (Function.Injective t)",
-    "      (∀ (p : Prod (Fin N) (Fin B)),",
-    "        Eq { fst := Pous.Dense.tag salt p.fst.val, snd := p.snd }",
-    "          (t (EquivLike.toFunLike.coe (Pous.Dense.segIndexEquiv N B) p)))"
-   ],
-   "assumptions": [],
-   "type_hash": "4f759e307c4d885e75410486b37bb7df705b61b5b96d493b540b5a8426188ad3"
-  },
-  "PousDenseReCert.segTag_auditSecure": {
-   "signature": [
-    "PousDenseReCert.segTag_auditSecure {N B ℓ : Nat} [NeZero (instHMul.hMul N B)] (salt : Pous.Bits 192)",
-    "  (f :",
-    "    Prod (Pous.Bits (instHAdd.hAdd 192 64)) (Pous.Labelling.LabelQry B ℓ) →",
-    "      Pous.Labelling.LabelQry (instHMul.hMul N B) ℓ)",
-    "  (hf : Function.Injective f)",
-    "  (htag :",
-    "    ∀ (s : Fin N) (i : Fin B) (p : Fin B → Option (Pous.Bits ℓ)),",
-    "      Eq (f { fst := Pous.Dense.tag salt s.val, snd := { fst := i, snd := p } })",
-    "        { fst := EquivLike.toFunLike.coe (Pous.Dense.segIndexEquiv N B) { fst := s, snd := i },",
-    "          snd := PousDenseReCert.liftPar N B ℓ s p })",
-    "  {S D Q k : Nat} {δ ε : ENNReal}",
-    "  (h : Pous.AuditSecure (Pous.Dense.segScheme N B ℓ) Pous.Reveal.sequential S D Q k δ ε) :",
-    "  Pous.AuditSecure (Pous.Dense.segTagScheme N B ℓ salt) Pous.Reveal.sequential S D Q k δ ε"
-   ],
-   "assumptions": [],
-   "type_hash": "5e34457c8a58bacd118e542fbfb8943a7833c5eb432c74c0c95b074e798580df"
-  },
-  "PousDenseReCert.segTag_meets_14": {
-   "signature": [
-    "PousDenseReCert.segTag_meets_14 (salt : Pous.Bits 192) :",
-    "  Pous.Meets (Pous.Dense.segTagScheme 448 (instHPow.hPow 2 9) 524288 salt) Pous.Reveal.sequential 5 (instHPow.hPow 2 20)",
-    "    106 (instHPow.hPow (ENNReal.instInv.inv 2) 128)"
-   ],
-   "assumptions": [],
-   "type_hash": "c699c5391a58a661fdcce84bb5b4d30cbed76ab989d902873e1fdd0fcf2b4c37"
-  },
-  "PousDenseReCert.seg_meets_14": {
-   "signature": [
-    "PousDenseReCert.seg_meets_14 :",
-    "  Pous.Meets (Pous.Dense.segScheme 448 (instHPow.hPow 2 9) 524288) Pous.Reveal.sequential 5 (instHPow.hPow 2 20) 106",
-    "    (instHPow.hPow (ENNReal.instInv.inv 2) 128)"
-   ],
-   "assumptions": [],
-   "type_hash": "9b439f3cbec8caf7c3cbdbccde8def8203f39b128231004c766f377a3db1e20e"
-  },
-  "PousDenseReCert.tag_injective_14": {
-   "signature": [
-    "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 192) : Function.Injective fun s => Pous.Dense.tag salt s.val"
-   ],
-   "assumptions": [],
-   "type_hash": "78a3b5c4a214c89de8600e205823606d0e21b31f5b470228bf221252454f51c3"
   },
   "PousMargin.raw_b19_128": {
    "signature": [
@@ -342,279 +572,157 @@
    ],
    "assumptions": [],
    "type_hash": "2ab62120a27e6db327a196277e5f4f37a697391f1ccc08f4b51262e6bdbdd1d4"
-  },
-  "PousP3Column.band_twoWay_220_12": {
-   "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
-   "assumptions": [],
-   "type_hash": "f23cbb6e5cc76f9ecb6828b174b2f0c1df7a965164a171c3e72771d329c51ff8"
-  },
-  "PousP3Column.band_twoWay_220_12_d11": {
-   "signature": [
-    "PousP3Column.band_twoWay_220_12_d11 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 11 220 3"
-   ],
-   "assumptions": [],
-   "type_hash": "69493da706e23fde14da6dee8432b546a39b2a00e6c91fb496e95b370b5e6a8c"
-  },
-  "PousP3Column.band_twoWay_220_16": {
-   "signature": ["PousP3Column.band_twoWay_220_16 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3"],
-   "assumptions": [],
-   "type_hash": "cb3abdd39c30d43acc51dc1c646bcdd5a813193b86cf120e0c3f11928753dde1"
-  },
-  "PousProofs.A1CompressionCard": {
-   "signature": ["PousProofs.A1CompressionCard : Pous.Pinned.A1CompressionCard"],
-   "assumptions": [],
-   "type_hash": "7b2beb602aa15974945f3c55ba994989a05cf73e73c165059fd54c8cae620206"
-  },
-  "PousProofs.A1CompressionPr": {
-   "signature": ["PousProofs.A1CompressionPr : Pous.Pinned.A1CompressionPr"],
-   "assumptions": [],
-   "type_hash": "3eed3c877291a66dbc3a83bbd191f8154f919fc5466d4411efa342c1d9d0ef8f"
-  },
-  "PousProofs.A3Prime": {
-   "signature": ["PousProofs.A3Prime : Pous.Pinned.A3Prime"],
-   "assumptions": [],
-   "type_hash": "4bcc6c859f73632b3654fcc13d314a9aea3741f6d2c8c795eb24f78649f72e79"
-  },
-  "PousProofs.A3PrimeLam": {
-   "signature": ["PousProofs.A3PrimeLam : Pous.Pinned.A3PrimeLam"],
-   "assumptions": [],
-   "type_hash": "4de541c1d947bf033203892ea1b08af7090de34b46f2604bbc3e94257282b68e"
-  },
-  "PousProofs.A6RederiveTimed": {
-   "signature": ["PousProofs.A6RederiveTimed : Pous.Pinned.A6RederiveTimed"],
-   "assumptions": [],
-   "type_hash": "4e5fa56666b2c00eeb57e4d0a6ee728bd673ebe909b91b097236145da7be62e5"
-  },
-  "PousProofs.A6RederiveUntimed": {
-   "signature": ["PousProofs.A6RederiveUntimed : Pous.Pinned.A6RederiveUntimed"],
-   "assumptions": [],
-   "type_hash": "e091942a65637dec897125180820939aa5196dc7fe1ddca940762edc81727a56"
-  },
-  "PousProofs.B1IndepSet": {
-   "signature": ["PousProofs.B1IndepSet : Pous.Pinned.B1IndepSet"],
-   "assumptions": [],
-   "type_hash": "74583dee2052710bc9e5a67a844a0d3b854274c50d80d5ffa2bbe368f7b26e8e"
-  },
-  "PousProofs.B2Stacking": {
-   "signature": ["PousProofs.B2Stacking : Pous.Pinned.B2Stacking"],
-   "assumptions": [],
-   "type_hash": "1be5be2f759d0bbb21b92a53c68e22c9c6a073aa05133796f7cf634e164ce1d5"
-  },
-  "PousProofs.B3Chain": {
-   "signature": ["PousProofs.B3Chain : Pous.Pinned.B3Chain"],
-   "assumptions": [],
-   "type_hash": "dcb2bde0c5351d7ef24c92eaed4fa9713c97126ceae3466963846020daf7eda3"
-  },
-  "PousProofs.B5ExPostFacto": {
-   "signature": ["PousProofs.B5ExPostFacto : Pous.Pinned.B5ExPostFacto"],
-   "assumptions": [],
-   "type_hash": "4044d61a315aa84b7d80103f2504c53a0ea26c57e532a6005f63a3bba707180e"
-  },
-  "PousProofs.B5ExPostFactoBounded": {
-   "signature": ["PousProofs.B5ExPostFactoBounded : Pous.Pinned.B5ExPostFactoBounded"],
-   "assumptions": [],
-   "type_hash": "6dd56ad705c557d7ca801f704402b64ac373ee60173ef94bfe7f18e16221a401"
-  },
-  "PousProofs.BandChainMeets64": {
-   "signature": ["PousProofs.BandChainMeets64 : Pous.Pinned.BandChainMeets64"],
-   "assumptions": [],
-   "type_hash": "459cb04c1108b2d8f99c90e85639a5fd6d35e93ff12876146047b31356e00cc7"
-  },
-  "PousProofs.BandChainMeets64D12": {
-   "signature": ["PousProofs.BandChainMeets64D12 : Pous.Pinned.BandChainMeets64D12"],
-   "assumptions": [],
-   "type_hash": "0b3fe9ecaa84619a78e95b50dd6a85ab17fd0fd260a1324430dfede6b27ec8ec"
-  },
-  "PousProofs.BandChainMeets64D5": {
-   "signature": ["PousProofs.BandChainMeets64D5 : Pous.Pinned.BandChainMeets64D5"],
-   "assumptions": [],
-   "type_hash": "dff2c9ba1cca41c0846af54474895c5f32f288b85db39400186821b7a267a640"
-  },
-  "PousProofs.BandMultiMeets14": {
-   "signature": ["PousProofs.BandMultiMeets14 : Pous.Pinned.BandMultiMeets14"],
-   "assumptions": [],
-   "type_hash": "2a1690f14f07ce6a84683dbfde80e6e15a4761f8d5e0eb59b804764f0e1a07bd"
-  },
-  "PousProofs.BandMultiMeets14K106": {
-   "signature": ["PousProofs.BandMultiMeets14K106 : Pous.Pinned.BandMultiMeets14K106"],
-   "assumptions": [],
-   "type_hash": "cbfd12eccdf675c90431cafe42ab7609756f1bb8b93748f2480142b452c7664b"
-  },
-  "PousProofs.BandMultiMeetsFamily": {
-   "signature": ["PousProofs.BandMultiMeetsFamily : Pous.Pinned.BandMultiMeetsFamily"],
-   "assumptions": [],
-   "type_hash": "00cdf920b400492ba16844f29e476f408bcadeb61ccccf2e29a4876ad2f43716"
-  },
-  "PousProofs.BandPubMeets14": {
-   "signature": ["PousProofs.BandPubMeets14 : Pous.Pinned.BandPubMeets14"],
-   "assumptions": [],
-   "type_hash": "012e327aa84c64a5c1268961e7129993dcaab76b9e57899212938f3db886bcb0"
-  },
-  "PousProofs.BandPubMeets14Global": {
-   "signature": ["PousProofs.BandPubMeets14Global : Pous.Pinned.BandPubMeets14Global"],
-   "assumptions": [],
-   "type_hash": "fdc285703195e2c7aaddd2099bbf064ef9ecde2580d90a574e1225141c229007"
-  },
-  "PousProofs.BandPubMeets64": {
-   "signature": ["PousProofs.BandPubMeets64 : Pous.Pinned.BandPubMeets64"],
-   "assumptions": [],
-   "type_hash": "473ae3e31141495319e546f32186fbb48e99bcfe269af0b795ce256b259ae5dc"
-  },
-  "PousProofs.ChainDenseMeets111": {
-   "signature": ["PousProofs.ChainDenseMeets111 : Pous.Pinned.ChainDenseMeets111"],
-   "assumptions": [],
-   "type_hash": "8cda61f55870f5ede65b1fbba05dc86bd48bac9920604224853130bfb9f5beb9"
-  },
-  "PousProofs.ChainDenseMeets64": {
-   "signature": ["PousProofs.ChainDenseMeets64 : Pous.Pinned.ChainDenseMeets64"],
-   "assumptions": [],
-   "type_hash": "636cd313c7f9189e0308668303f719ae3fc5e40493aa0c57f27faecbfb8391ac"
-  },
-  "PousProofs.DenseMeets": {
-   "signature": ["PousProofs.DenseMeets : Pous.Pinned.DenseMeets"],
-   "assumptions": [],
-   "type_hash": "4563a4aeca50cbe9c2e825c86ce6fdd3ab3f9c9186625286ac417f849bf98805"
-  },
-  "PousProofs.FibreCount": {
-   "signature": ["PousProofs.FibreCount : Pous.Pinned.FibreCount"],
-   "assumptions": [],
-   "type_hash": "2fbb2d2597f97ecdbc3df386a32afe0ab7107e53f50dc355eb727b87c3f296ba"
-  },
-  "PousProofs.FischClaim13": {
-   "signature": ["PousProofs.FischClaim13 : Pous.Pinned.FischClaim13"],
-   "assumptions": [],
-   "type_hash": "231d8b8827ceea39d7f6b824b549fb7d01145cdae3494c0de2e69161aeea8277"
-  },
-  "PousProofs.FischClaim14": {
-   "signature": ["PousProofs.FischClaim14 : Pous.Pinned.FischClaim14"],
-   "assumptions": [],
-   "type_hash": "dfb01f52e3ab41a5af9d8596e6bc87237c95cdc5da482c601d212168c4da9455"
-  },
-  "PousProofs.KFloor": {
-   "signature": ["PousProofs.KFloor : Pous.Pinned.KFloor"],
-   "assumptions": [],
-   "type_hash": "537bcc1500f3fae623e9123d847d55a6fd52fbeb323157b578298f72e5a818f1"
-  },
-  "PousProofs.N10Refuted": {
-   "signature": ["PousProofs.N10Refuted : Pous.Pinned.N10Refuted"],
-   "assumptions": [],
-   "type_hash": "58c8e580dd827db0c95acb367b31d26822be7a4e9e3168080a25cad7c446ab2e"
-  },
-  "PousProofs.P2ErrorSplitB19Uncond": {
-   "signature": ["PousProofs.P2ErrorSplitB19Uncond : Pous.Pinned.P2ErrorSplitB19Uncond"],
-   "assumptions": [],
-   "type_hash": "3e147eb20d6c92c3053bedcd352dafd4a3d7df90b4894ff2328a8195f65f28f4"
-  },
-  "PousProofs.P2MeetsM1pB19Uncond": {
-   "signature": ["PousProofs.P2MeetsM1pB19Uncond : Pous.Pinned.P2MeetsM1pB19Uncond"],
-   "assumptions": [],
-   "type_hash": "f6fbc02194d4c5d573e5301c6550a1a84a6303577ba46ae56e2371a837b9ed43"
-  },
-  "PousProofs.P2MeetsM1pFamilyUncond": {
-   "signature": ["PousProofs.P2MeetsM1pFamilyUncond : Pous.Pinned.P2MeetsM1pFamilyUncond"],
-   "assumptions": [],
-   "type_hash": "628b65a77dc2bc779a1ec47d0040daa58043b235362e292bd9003b0b3876d158"
-  },
-  "PousProofs.P2MeetsM1pW8192Uncond": {
-   "signature": ["PousProofs.P2MeetsM1pW8192Uncond : Pous.Pinned.P2MeetsM1pW8192Uncond"],
-   "assumptions": [],
-   "type_hash": "6d4c3e3ca9db6af1177ad5154091ae88f68a6e753c334fc474d8653e789e1bd5"
-  },
-  "PousProofs.P2SlackB19Uncond": {
-   "signature": ["PousProofs.P2SlackB19Uncond : Pous.Pinned.P2SlackB19Uncond"],
-   "assumptions": [],
-   "type_hash": "f107184d54214d86f12415ee61d1981d32f3a85353eb8024b18a9ca1b4f9a7b5"
-  },
-  "PousProofs.P2SlackFamilyUncond": {
-   "signature": ["PousProofs.P2SlackFamilyUncond : Pous.Pinned.P2SlackFamilyUncond"],
-   "assumptions": [],
-   "type_hash": "3bbeb1e1bc7ac61fd47e74f0a751f74f02c586ab8d5c3104768b2ae9da538cbc"
-  },
-  "PousProofs.P3ConcreteMeets14GB": {
-   "signature": ["PousProofs.P3ConcreteMeets14GB : Pous.Pinned.P3ConcreteMeets14GB"],
-   "assumptions": [],
-   "type_hash": "8236a2aee5f3eaff9b25fd3f57f8d144a23e2d9b63c9aa0c5de0158d443893d1"
-  },
-  "PousProofs.P3ConcreteMeets64": {
-   "signature": ["PousProofs.P3ConcreteMeets64 : Pous.Pinned.P3ConcreteMeets64"],
-   "assumptions": [],
-   "type_hash": "d532074710d29c5b53aaf970ef85f0c8f628a724a109eb852a0b2526b1dc9697"
-  },
-  "PousProofs.P3ConcreteMeets64D12": {
-   "signature": ["PousProofs.P3ConcreteMeets64D12 : Pous.Pinned.P3ConcreteMeets64D12"],
-   "assumptions": [],
-   "type_hash": "42ed4538ee051918de0a449ab882ad83ac4b4c8e1e01df4da9141e5437500323"
-  },
-  "PousProofs.ReverseNeedsAllChildren": {
-   "signature": ["PousProofs.ReverseNeedsAllChildren : Pous.Pinned.ReverseNeedsAllChildren"],
-   "assumptions": [],
-   "type_hash": "aa5e8b9947b7021e75aa0cebbf9c5610c6da7cb0cfd02ea9b3e6263c3d2fc3dd"
-  },
-  "PousProofs.SampledAuditProd": {
-   "signature": ["PousProofs.SampledAuditProd : Pous.Pinned.SampledAuditProd"],
-   "assumptions": [],
-   "type_hash": "e1854a2c287fe6367b7bcdf8d2c337725df14b7123dc894072c925096715a22a"
-  },
-  "PousProofs.SampledAuditSeq": {
-   "signature": ["PousProofs.SampledAuditSeq : Pous.Pinned.SampledAuditSeq"],
-   "assumptions": [],
-   "type_hash": "0fb51312629e96cccb90d21e9271881fe435e9c5c1272c411cdf402af3d1263e"
-  },
-  "PousProofs.SampledAuditSim": {
-   "signature": ["PousProofs.SampledAuditSim : Pous.Pinned.SampledAuditSim"],
-   "assumptions": [],
-   "type_hash": "2bdc6882d7578f6b92ee0cfb773642fdabeb63eaf1207e3a031993372785b2eb"
-  },
-  "PousProofs.StackedAuditOnePercent": {
-   "signature": ["PousProofs.StackedAuditOnePercent : Pous.Pinned.StackedAuditOnePercent"],
-   "assumptions": [],
-   "type_hash": "c741e162d7515087892a0e3d70c49c1b9b934e452ee2e4ef3f9e763df5557f47"
-  },
-  "PousProofs.StackedAuditSeq": {
-   "signature": ["PousProofs.StackedAuditSeq : Pous.Pinned.StackedAuditSeq"],
-   "assumptions": [],
-   "type_hash": "dc0b6de6f84ab8646b2b4a35e9b832c787cbbe1b013c767353a39c7f12c63c5e"
-  },
-  "PousProofs.Theorem1iTimed": {
-   "signature": ["PousProofs.Theorem1iTimed : Pous.Pinned.Theorem1iTimed"],
-   "assumptions": [],
-   "type_hash": "90f886dde662ff2c8ad849e5238e6da9775747bec7705ca09cead38ef6a245d2"
-  },
-  "PousProofs.Theorem1ii": {
-   "signature": ["PousProofs.Theorem1ii : Pous.Pinned.Theorem1ii"],
-   "assumptions": [],
-   "type_hash": "e0a45f43ce6898c3653df0a4f338349b9ea24402cb25163c7602809d0ac65cf1"
-  },
-  "PousProofs.Theorem1iiSeq": {
-   "signature": ["PousProofs.Theorem1iiSeq : Pous.Pinned.Theorem1iiSeq"],
-   "assumptions": [],
-   "type_hash": "a9af9d23aa35a4a5ce665a1129787185dda2e7de399e34f15b15967d3c298464"
-  },
-  "PousProofs.Theorem1iiTimed": {
-   "signature": ["PousProofs.Theorem1iiTimed : Pous.Pinned.Theorem1iiTimed"],
-   "assumptions": [],
-   "type_hash": "776de014cc58dd808e559b6b7096ca6ebd9006fe1a00bc6bcb819bdb1fa62128"
-  },
-  "PousProofs.Theorem1iiiTimed": {
-   "signature": ["PousProofs.Theorem1iiiTimed : Pous.Pinned.Theorem1iiiTimed"],
-   "assumptions": [],
-   "type_hash": "d671df1e70792ab080e5be1979f793f08c3dd4dac53d7a21eb1b64b10d018bdd"
-  },
-  "PousProofs.TransposeMixing": {
-   "signature": ["PousProofs.TransposeMixing : Pous.Pinned.TransposeMixing"],
-   "assumptions": [],
-   "type_hash": "e94f8f3ccca2b6da0a0e6cd9e91039ecb2947ece93dd7b20fd3ce99d5e44f934"
   }
  },
  "reads": {
-  "Pous.Accounting.Numbers": {
-   "digest": "c3e0e039ee4f67955e1ec7df458e92c10ee04d5cdc34ccb108696be0762cb008",
+  "Pous.Assumptions": {
+   "digest": "e83e8268388becda0664b632b2211456a277ebd793dfc4106a0a74ed5385a59b",
    "definitions": {
-    "Pous.Accounting.reportP₀": "792d2f0ec476e68286d2c1fd38054eb741163a97c24f18b8d49843a0143240de"
+    "Pous.Assumptions.LemmaA": "443085b332aa09cadfa71231d70da316fb946789f2a8eefc024e04651911d8e6"
    },
-   "pins": ["Pous.Accounting.p₀_at_report", "Pous.Accounting.report_k214"]
+   "pins": ["Pous.SecurityProofs.A3Prime", "Pous.SecurityProofs.A3PrimeLam"]
   },
-  "Pous.Accounting.Params": {
+  "Pous.Assumptions.P2": {
+   "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
+   "definitions": {
+    "Pous.P2.Assumptions.PrimeP16448": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
+   },
+   "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
+  },
+  "Pous.Guarantees": {
+   "digest": "18fea7447129c623daf565e9f9985a06384a6a0483676b1c09ccd89596363fd0",
+   "definitions": {
+    "Pous.Guarantees.A1CompressionCard": "4bdc9218360926b7313e50a5882d2d7c72bf905191984cb666c8cad07a435774",
+    "Pous.Guarantees.A1CompressionPr": "45e347c38d963ece9d1f073c9efb190b752629dc1364ddeee128432ee1e5fd9d",
+    "Pous.Guarantees.A3Prime": "5d644a1677bf14519becb78c8bb0e72d24b590f6d66ad0680c02fcc50b1ff735",
+    "Pous.Guarantees.A3PrimeLam": "d29848baf0197d2ad389d0329dbb96fa13bbbfb45a233480b49db30002730b24",
+    "Pous.Guarantees.A6RederiveTimed": "e908487d4ac2efd89a68b0039c03b9e928a693ba52cfc616e881f2a3447bc314",
+    "Pous.Guarantees.A6RederiveUntimed": "edd33739cc713af91294954094f7330bad8682add8641a79d57c776a2c293958",
+    "Pous.Guarantees.B1IndepSet": "ed0174021759b7df18538c973f7b068732ce3a54893d410a9d1e404dc129520a",
+    "Pous.Guarantees.B2Stacking": "49a88628cd03f6247a280514ab8baf6ce11cd9b7df0c749193aa831eaba7dd65",
+    "Pous.Guarantees.B3Chain": "766ad6e88bc328d75c5caf123091cd047efe1a812535a6f1aed4f0acee3c6329",
+    "Pous.Guarantees.B5ExPostFacto": "e9a75ccddae46f863761961efe2c43564b677fdbfdfa459cd58097894100194c",
+    "Pous.Guarantees.B5ExPostFactoBounded": "d60858c44b67e58af3923289797c49a64c004852fe44013b7ebbe4cc911643cf",
+    "Pous.Guarantees.B5Stacked": "47bfc91aefce91c241e90b9bd81adaea04b287a8b971b700cc4dc7357791a9ad",
+    "Pous.Guarantees.BandChainMeets64": "22dd0d516e4f3f192d3f6606dcc4408cd1ebcfa5e1a3410cb644207c5af7cd1b",
+    "Pous.Guarantees.BandChainMeets64D12": "ae12298add53e78c3e077ad1db74dcc464d943a7d1af1704cde9291692772373",
+    "Pous.Guarantees.BandChainMeets64D5": "0d4eb049d79e6c42fe35dadf0746b0d8634782cd9b2fd9f4a55c1fdbd59f10ae",
+    "Pous.Guarantees.BandMultiMeets14": "ee4d8b855ec67b97b91433094ddcb5b0075cb8373125dce1327e0ad58c7d4b01",
+    "Pous.Guarantees.BandMultiMeets14K106": "e6d4bc050a0ab8957694ca111b89f29bebb0d215c24e6e6c189021772b08eb75",
+    "Pous.Guarantees.BandMultiMeetsFamily": "38acde34b71bbb04a7d19f031fb26b8c3586f95d76e7ede42c36742d4861336f",
+    "Pous.Guarantees.BandPubMeets14": "d986825aeeed19e9422df88ca8bcd2d01b95fe4147cceca5412279d90f9321fa",
+    "Pous.Guarantees.BandPubMeets14Global": "a279ff8ba14f46c38b8e8751adc9ca4e0f781fc132a6b10837492eaf97b1074a",
+    "Pous.Guarantees.BandPubMeets64": "9118584bd9722ad14a6f6325b7e9acef17410397a4917fbc59cf874a98688305",
+    "Pous.Guarantees.BandTwoWay220_12": "b7723d24831829dc11c0e0341550982a8312331ebde778df91b12660fec0a268",
+    "Pous.Guarantees.BandTwoWay220_12D11": "1f422bedf14d7b6f18bb8bfee213aa92cb4267370b99beef08ffe5afc3ef7714",
+    "Pous.Guarantees.BandTwoWay220_16": "128958f4a8fd31803c1531184bc74723e90d0035c1a712c588ac9a0f78682d41",
+    "Pous.Guarantees.ChainDenseMeets111": "e2f80f784dab4073296ccf21dcfeeab4962dbaf9312237b0b4d404a185304e27",
+    "Pous.Guarantees.ChainDenseMeets64": "2ef2d27764e6e2a07de8d53ad5468b24a51c0764f5f542ce9b6a8f6376761534",
+    "Pous.Guarantees.DenseMeets": "ae410cc915f475fbfc894407bc5b37b4bcc5a21daa32d7be6658620435a92d1f",
+    "Pous.Guarantees.DenseMeets64": "7ffbf0f40508684766b3598f3b667a315d29714e3c2d57451ad439adc5dd929d",
+    "Pous.Guarantees.DomainSepEquiv": "4ed5b72fc608eace59a335839503dd1b63a2695afdfcba9952331c7e6adc1dbd",
+    "Pous.Guarantees.FibreCount": "54c1aae67578464c8192304357c19f38c46f47305c8a7fe8ef9f72c9d22bc877",
+    "Pous.Guarantees.FischClaim13": "506a640a0a1e2bdd85c56a7f085201c0d5ef6ef33a40d39ee2c712009af93999",
+    "Pous.Guarantees.FischClaim14": "1154ce04e1145a1ad2b3e4245a8d3756ddf07db6fa9dde7efe7b8f27f1bfcf6c",
+    "Pous.Guarantees.InvExPostFactoTwoLayer": "c566afb555ea3ccb8194d1d6cfa1885cd8cb1d958c48ed1f1f7f5eb3eff4dd88",
+    "Pous.Guarantees.KFloor": "a0b2a54cc77450abc295d858b9daa54e2cac46e265c0be6a6216be339354346c",
+    "Pous.Guarantees.N10Refuted": "76dcb32573baa69fed6e0c9322764916069d1039c490877a5fe989a3ac6a1a6c",
+    "Pous.Guarantees.P3ConcreteMeets14GB": "0827df83faebcf8414b0f9fbd81cf495f50984ea444dcc6c28da769c27cba224",
+    "Pous.Guarantees.P3ConcreteMeets64": "cd9907c68bfe392a1da3fb405c72efda0ed6be7b61262c1eeb5139d41b5be817",
+    "Pous.Guarantees.P3ConcreteMeets64D12": "a52c473ccf6bd82b97712b92d2487e49291f5a524db2e57e8cef15391e7ccb4b",
+    "Pous.Guarantees.ReverseNeedsAllChildren": "25cf8e756e5a134409021c95e0ea9244bc0e90e04669d5a338b617c3103a9ce0",
+    "Pous.Guarantees.SampledAuditProd": "c8fcc7b5ae4c2d4cb2da113933752c68c25511f881983392189d79e45404aeb5",
+    "Pous.Guarantees.SampledAuditSeq": "fc77e4b69828e63df8639573ff35377253031a204e3a47f77732100eaa639402",
+    "Pous.Guarantees.SampledAuditSim": "b36f05ce27918bddc7ac71f5a6ea373359c8ef9b2cf8eac9804d4644cd04f917",
+    "Pous.Guarantees.SegMeets14": "8fe92e829fe58f339a73c2620ec1d8a40d68badb7d917986732865eb1cb542e7",
+    "Pous.Guarantees.SegTagAuditSecure": "27b9cfdc879f21da57d0a96d1fefe2f879c841e27c392003f9c6fff51beadf37",
+    "Pous.Guarantees.SegTagMeets14": "8fa9fcd811144ad865e5bb8206ec6d5f89010e690b5e2cf59b5e89e9db20640e",
+    "Pous.Guarantees.StackedAuditOnePercent": "f1e2e53b101aee141a9d8b8076adcb4510a28228d9783b06827ba8be663b2ad2",
+    "Pous.Guarantees.StackedAuditSeq": "28dfb595ad457f65c35bd28f7bf7ab3dc1ed33446e403f4b54de55c5210a74ae",
+    "Pous.Guarantees.TagInjective14": "8d75ca5ae30bbbe75586b7a05e8babeefb46d9ccd4bbacb96828182594ea99e1",
+    "Pous.Guarantees.Theorem1iTimed": "fa2bc6bf0d08952e8be7ba625eb5ecb8480f46a7bed71edb9bff575532f6af1a",
+    "Pous.Guarantees.Theorem1ii": "406479778aab3d17691ed778bbf2d28850f14c5ca85a4040e0af059063628f9c",
+    "Pous.Guarantees.Theorem1iiSeq": "977f737c01f74adb6cfc00e16efa19ed205c69f06f1fb44501630a8a47f3ff8c",
+    "Pous.Guarantees.Theorem1iiTimed": "3ed6762b30f1e85c9e5b47ab704b4bcac88ce3a7a994777f88162580fc031c81",
+    "Pous.Guarantees.Theorem1iiiTimed": "4ae192107eb0bd3402320ed1689398e0a825e8c18f1c900cdbf0c1a942f2546b",
+    "Pous.Guarantees.TransposeMixing": "9eaff8140f5e9acda9cebe6cc5f9c72fa11aec4b06f9f85a583c8f2d7d2a923c"
+   },
+   "pins": [
+    "Pous.SecurityProofs.A1CompressionCard",
+    "Pous.SecurityProofs.A1CompressionPr",
+    "Pous.SecurityProofs.A3Prime",
+    "Pous.SecurityProofs.A3PrimeLam",
+    "Pous.SecurityProofs.A6RederiveTimed",
+    "Pous.SecurityProofs.A6RederiveUntimed",
+    "Pous.SecurityProofs.B1IndepSet",
+    "Pous.SecurityProofs.B2Stacking",
+    "Pous.SecurityProofs.B3Chain",
+    "Pous.SecurityProofs.B5ExPostFacto",
+    "Pous.SecurityProofs.B5ExPostFactoBounded",
+    "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandTwoWay220_12",
+    "Pous.SecurityProofs.BandTwoWay220_12D11",
+    "Pous.SecurityProofs.BandTwoWay220_16",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.DomainSepEquiv",
+    "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.FischClaim13",
+    "Pous.SecurityProofs.FischClaim14",
+    "Pous.SecurityProofs.KFloor",
+    "Pous.SecurityProofs.N10Refuted",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.ReverseNeedsAllChildren",
+    "Pous.SecurityProofs.SampledAuditProd",
+    "Pous.SecurityProofs.SampledAuditSeq",
+    "Pous.SecurityProofs.SampledAuditSim",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.StackedAuditOnePercent",
+    "Pous.SecurityProofs.StackedAuditSeq",
+    "Pous.SecurityProofs.TagInjective14",
+    "Pous.SecurityProofs.Theorem1iTimed",
+    "Pous.SecurityProofs.Theorem1ii",
+    "Pous.SecurityProofs.Theorem1iiSeq",
+    "Pous.SecurityProofs.Theorem1iiTimed",
+    "Pous.SecurityProofs.Theorem1iiiTimed",
+    "Pous.SecurityProofs.TransposeMixing"
+   ]
+  },
+  "Pous.Guarantees.P2": {
+   "digest": "e80e07f40fd1098421ea885e98094f6fd9a679f9dd03b889a91a1523a804be87",
+   "definitions": {
+    "Pous.Guarantees.P2ErrorSplitB19Uncond": "33dbfe54712b1673b846f461fba5102a07cc39e17bebd04c496626e5e20f0ce8",
+    "Pous.Guarantees.P2MeetsM1pB19Uncond": "5e6b9f544f812c9cf559bc3393bb707c226713af948f5fcec94709ca6d0c7df1",
+    "Pous.Guarantees.P2MeetsM1pFamilyUncond": "5f4e1f3cf63263edb6acb56a5da36ca73d16667357cbb6ba17fabda31cb67754",
+    "Pous.Guarantees.P2MeetsM1pW8192Uncond": "87ff711708725424195e0b6b38057a66fa3e21dd18c34471574dfd3ad74e05c7",
+    "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
+    "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
+   },
+   "pins": [
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond"
+   ]
+  },
+  "Pous.Protocol.Accounting.Params": {
    "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
    "definitions": {
     "Pous.Meets": "96a592d5e07347aaff0460d04510f493eac26566205bf78910bba7f3a0c11943",
@@ -626,14 +734,36 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "pins": [
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.KFloor",
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagMeets14",
     "Pous.junk_not_meets",
     "Pous.junk_spaceBound",
     "Pous.k_ge_86",
     "Pous.not_meets_eps_one",
     "Pous.not_meets_of_lt_eps",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -643,46 +773,21 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.KFloor",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.Accounting.PubMeets": {
+  "Pous.Protocol.Accounting.PubMeets": {
    "digest": "9d73682b058fde2221effd1541ad95fec48155acc3279fe87c04bc495caa6ee5",
    "definitions": {
     "Pous.PubMeets": "ab8d37a96a8969b4ed4b1836f7d6b1004ee009c78e21d6d9010a0f0fae532827"
    },
-   "pins": ["PousProofs.BandPubMeets14", "PousProofs.BandPubMeets14Global", "PousProofs.BandPubMeets64"]
+   "pins": [
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64"
+   ]
   },
-  "Pous.Assumptions": {
-   "digest": "e83e8268388becda0664b632b2211456a277ebd793dfc4106a0a74ed5385a59b",
-   "definitions": {
-    "Pous.Assumptions.LemmaA": "443085b332aa09cadfa71231d70da316fb946789f2a8eefc024e04651911d8e6"
-   },
-   "pins": ["PousProofs.A3Prime", "PousProofs.A3PrimeLam"]
-  },
-  "Pous.Game.Oracle": {
+  "Pous.Protocol.Game.Oracle": {
    "digest": "3d3028385cd2a63e503b4bbce467b1f191203e9fbe059b8dbaffd10c8af7646d",
    "definitions": {
     "Pous.IdealModel": "9d7b6702a9651293498fba88662b0a07a5a4895043fe04c7dcb576631b27b8c3",
@@ -705,6 +810,51 @@
     "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
    "pins": [
+    "Pous.SecurityProofs.A3Prime",
+    "Pous.SecurityProofs.A3PrimeLam",
+    "Pous.SecurityProofs.A6RederiveTimed",
+    "Pous.SecurityProofs.A6RederiveUntimed",
+    "Pous.SecurityProofs.B3Chain",
+    "Pous.SecurityProofs.B5ExPostFacto",
+    "Pous.SecurityProofs.B5ExPostFactoBounded",
+    "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.N10Refuted",
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.SampledAuditProd",
+    "Pous.SecurityProofs.SampledAuditSeq",
+    "Pous.SecurityProofs.SampledAuditSim",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.StackedAuditOnePercent",
+    "Pous.SecurityProofs.StackedAuditSeq",
+    "Pous.SecurityProofs.Theorem1iTimed",
+    "Pous.SecurityProofs.Theorem1ii",
+    "Pous.SecurityProofs.Theorem1iiSeq",
+    "Pous.SecurityProofs.Theorem1iiTimed",
+    "Pous.SecurityProofs.Theorem1iiiTimed",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_correct",
@@ -716,11 +866,6 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
-    "PousBridge.b5_stacked",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -730,56 +875,65 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.A3Prime",
-    "PousProofs.A3PrimeLam",
-    "PousProofs.A6RederiveTimed",
-    "PousProofs.A6RederiveUntimed",
-    "PousProofs.B3Chain",
-    "PousProofs.B5ExPostFacto",
-    "PousProofs.B5ExPostFactoBounded",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.FibreCount",
-    "PousProofs.N10Refuted",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.SampledAuditProd",
-    "PousProofs.SampledAuditSeq",
-    "PousProofs.SampledAuditSim",
-    "PousProofs.StackedAuditOnePercent",
-    "PousProofs.StackedAuditSeq",
-    "PousProofs.Theorem1iTimed",
-    "PousProofs.Theorem1ii",
-    "PousProofs.Theorem1iiSeq",
-    "PousProofs.Theorem1iiTimed",
-    "PousProofs.Theorem1iiiTimed"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.Game.Prob": {
+  "Pous.Protocol.Game.Prob": {
    "digest": "423437181081ecd73c837e7d9ddc404d2fc1be7ec8e7b9ff0fd94500071c39f5",
    "definitions": {
     "Pous.Bits": "9290fa20f06bfe4423f67acf59109a8e4d14d7a87a9aa1e5085b43ee795a0f68",
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "pins": [
+    "Pous.SecurityProofs.A1CompressionPr",
+    "Pous.SecurityProofs.A3Prime",
+    "Pous.SecurityProofs.A3PrimeLam",
+    "Pous.SecurityProofs.A6RederiveTimed",
+    "Pous.SecurityProofs.A6RederiveUntimed",
+    "Pous.SecurityProofs.B3Chain",
+    "Pous.SecurityProofs.B5ExPostFacto",
+    "Pous.SecurityProofs.B5ExPostFactoBounded",
+    "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.DomainSepEquiv",
+    "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.N10Refuted",
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.SampledAuditProd",
+    "Pous.SecurityProofs.SampledAuditSeq",
+    "Pous.SecurityProofs.SampledAuditSim",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.StackedAuditOnePercent",
+    "Pous.SecurityProofs.StackedAuditSeq",
+    "Pous.SecurityProofs.TagInjective14",
+    "Pous.SecurityProofs.Theorem1iTimed",
+    "Pous.SecurityProofs.Theorem1ii",
+    "Pous.SecurityProofs.Theorem1iiSeq",
+    "Pous.SecurityProofs.Theorem1iiTimed",
+    "Pous.SecurityProofs.Theorem1iiiTimed",
+    "Pous.SecurityProofs.TransposeMixing",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_correct",
@@ -791,13 +945,6 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
-    "PousBridge.b5_stacked",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.domainSep_equiv",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
-    "PousDenseReCert.tag_injective_14",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -807,52 +954,10 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.A1CompressionPr",
-    "PousProofs.A3Prime",
-    "PousProofs.A3PrimeLam",
-    "PousProofs.A6RederiveTimed",
-    "PousProofs.A6RederiveUntimed",
-    "PousProofs.B3Chain",
-    "PousProofs.B5ExPostFacto",
-    "PousProofs.B5ExPostFactoBounded",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.FibreCount",
-    "PousProofs.N10Refuted",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.SampledAuditProd",
-    "PousProofs.SampledAuditSeq",
-    "PousProofs.SampledAuditSim",
-    "PousProofs.StackedAuditOnePercent",
-    "PousProofs.StackedAuditSeq",
-    "PousProofs.Theorem1iTimed",
-    "PousProofs.Theorem1ii",
-    "PousProofs.Theorem1iiSeq",
-    "PousProofs.Theorem1iiTimed",
-    "PousProofs.Theorem1iiiTimed",
-    "PousProofs.TransposeMixing"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.Model.Audit": {
+  "Pous.Protocol.Model.Audit": {
    "digest": "0deff8459141d944b07a9e477dc0ab655b87774c1ed016929a8f1c84b2bc82e3",
    "definitions": {
     "Pous.AuditSecure": "ef3659099abbe356183c134990bd1edac4d9933a8197ba7cce6d9a98e3e8616a",
@@ -870,6 +975,44 @@
     "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
    "pins": [
+    "Pous.SecurityProofs.A3Prime",
+    "Pous.SecurityProofs.A3PrimeLam",
+    "Pous.SecurityProofs.A6RederiveTimed",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.SampledAuditProd",
+    "Pous.SecurityProofs.SampledAuditSeq",
+    "Pous.SecurityProofs.SampledAuditSim",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.StackedAuditOnePercent",
+    "Pous.SecurityProofs.StackedAuditSeq",
+    "Pous.SecurityProofs.Theorem1iTimed",
+    "Pous.SecurityProofs.Theorem1ii",
+    "Pous.SecurityProofs.Theorem1iiSeq",
+    "Pous.SecurityProofs.Theorem1iiTimed",
+    "Pous.SecurityProofs.Theorem1iiiTimed",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_not_meets",
@@ -879,10 +1022,6 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -892,44 +1031,10 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.A3Prime",
-    "PousProofs.A3PrimeLam",
-    "PousProofs.A6RederiveTimed",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.SampledAuditProd",
-    "PousProofs.SampledAuditSeq",
-    "PousProofs.SampledAuditSim",
-    "PousProofs.StackedAuditOnePercent",
-    "PousProofs.StackedAuditSeq",
-    "PousProofs.Theorem1iTimed",
-    "PousProofs.Theorem1ii",
-    "PousProofs.Theorem1iiSeq",
-    "PousProofs.Theorem1iiTimed",
-    "PousProofs.Theorem1iiiTimed"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.Model.BandChain": {
+  "Pous.Protocol.Model.BandChain": {
    "digest": "33abfec78631bb06d487dcd4e10b15a1914a11f3d7fe58afbf02849f059f7634",
    "definitions": {
     "Pous.BandChain.absorbedG": "e4b32e44d82743bbdce88b5d81e2b1304caaa8ff147de335b18631cf3df45eb3",
@@ -950,20 +1055,32 @@
     "Pous.Sponge.parentsNF": "51d3bef2ec734d993123fef15fb08b38752fd81f2371023def33918aed8590e9"
    },
    "pins": [
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64"
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64"
    ]
   },
-  "Pous.Model.ColumnGame": {
+  "Pous.Protocol.Model.BandGraph": {
+   "digest": "60a338189f53ebbffb4708d5e3f04b52ca741a5edd3a9cea5828d3456b2de0ca",
+   "definitions": {
+    "PousP3Column.bandExtra": "926b6bbb6cfba369ffd7d983ab345e93c68d173e31fa0bc54c575a35c9080323",
+    "PousP3Column.bandGraph": "a5ae49163821e67404587ed7150029cd4a8ad5afedb2ae8edf9038e989775884"
+   },
+   "pins": [
+    "Pous.SecurityProofs.BandTwoWay220_12",
+    "Pous.SecurityProofs.BandTwoWay220_12D11",
+    "Pous.SecurityProofs.BandTwoWay220_16"
+   ]
+  },
+  "Pous.Protocol.Model.ColumnGame": {
    "digest": "0bda4d5f739385b6ac93a17aacf2a5e2cc2c482d473b02d22bde0df5de86eaab",
    "definitions": {
     "Pous.ColumnGame.ColState": "9d563c0af5fc5812d6a0ce713ad2959f63fd0bb94de7d8de1a56de6399c41ec4",
@@ -977,12 +1094,12 @@
     "Pous.ColumnGame.colRound": "80a8f82080990c7ba7da02b3a97dba9bca3d3a65a5dfc328a829463fb2bfb0ff"
    },
    "pins": [
-    "PousP3Column.band_twoWay_220_12",
-    "PousP3Column.band_twoWay_220_12_d11",
-    "PousP3Column.band_twoWay_220_16"
+    "Pous.SecurityProofs.BandTwoWay220_12",
+    "Pous.SecurityProofs.BandTwoWay220_12D11",
+    "Pous.SecurityProofs.BandTwoWay220_16"
    ]
   },
-  "Pous.Model.Dense": {
+  "Pous.Protocol.Model.Dense": {
    "digest": "7324349bf03cf46d87bcdba6f3a6563da13b1f2dc90504cf04533b2de506d429",
    "definitions": {
     "Pous.Dense.blocks": "7ec004a481c1997e70cc5f077ecd5f9bd0b7105cfd849982b52d64448cc13960",
@@ -999,34 +1116,34 @@
     "Pous.Dense.u64": "f087af4cdf02fed056eab22fed4abd149af1284835f2ee7d90996b77649d71d8"
    },
    "pins": [
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.domainSep_equiv",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
-    "PousDenseReCert.tag_injective_14",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets"
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.DomainSepEquiv",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.TagInjective14"
    ]
   },
-  "Pous.Model.HashChain": {
+  "Pous.Protocol.Model.HashChain": {
    "digest": "e5a856998d00a7c438418f62831a53ccbaf75e94ea767358fe03814aaca2f858",
    "definitions": {
     "Pous.HashChain.chain": "affcd1bc396153ec2ab98fd700f822f7c4ad6f8410cbe21f991f36f16cf0d70b"
    },
-   "pins": ["PousProofs.B3Chain"]
+   "pins": ["Pous.SecurityProofs.B3Chain"]
   },
-  "Pous.Model.Inc": {
+  "Pous.Protocol.Model.Inc": {
    "digest": "9352a36a027abdda16eb029eaf0018bccc8853371a51393a70026febf2273918",
    "definitions": {
     "Pous.INC": "bb50d5b827695932e1efeb2b22c342dfedec18b2d86f9e52c04478a78c2ccbc1",
@@ -1040,19 +1157,19 @@
    },
    "pins": [
     "Pous.Accounting.p₀_at_report",
-    "PousProofs.A3Prime",
-    "PousProofs.A3PrimeLam",
-    "PousProofs.A6RederiveUntimed",
-    "PousProofs.FibreCount",
-    "PousProofs.SampledAuditProd",
-    "PousProofs.Theorem1iTimed",
-    "PousProofs.Theorem1ii",
-    "PousProofs.Theorem1iiSeq",
-    "PousProofs.Theorem1iiTimed",
-    "PousProofs.Theorem1iiiTimed"
+    "Pous.SecurityProofs.A3Prime",
+    "Pous.SecurityProofs.A3PrimeLam",
+    "Pous.SecurityProofs.A6RederiveUntimed",
+    "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.SampledAuditProd",
+    "Pous.SecurityProofs.Theorem1iTimed",
+    "Pous.SecurityProofs.Theorem1ii",
+    "Pous.SecurityProofs.Theorem1iiSeq",
+    "Pous.SecurityProofs.Theorem1iiTimed",
+    "Pous.SecurityProofs.Theorem1iiiTimed"
    ]
   },
-  "Pous.Model.Invertible": {
+  "Pous.Protocol.Model.Invertible": {
    "digest": "af5def84abb731a604cc49c242883fefdc2fc6fa9040fc9e7ad7f7f3886dc198",
    "definitions": {
     "Pous.Invertible.KQ": "5a21b8573be690cdeff126868e58f8f7e40832fbfef79d291166bdecd8c0aaad",
@@ -1072,15 +1189,15 @@
     "Pous.Invertible.transpose": "61a65308a340351b2169d5cfebe2872c952f5019fddff4c68b5750495e1c4e77"
    },
    "pins": [
-    "PousProofs.N10Refuted",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.ReverseNeedsAllChildren",
-    "PousProofs.TransposeMixing"
+    "Pous.SecurityProofs.N10Refuted",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.ReverseNeedsAllChildren",
+    "Pous.SecurityProofs.TransposeMixing"
    ]
   },
-  "Pous.Model.Labelling": {
+  "Pous.Protocol.Model.Labelling": {
    "digest": "586153788720c61a2317fa973dd0f83534aeceae0f8f7f2f0d2f180e3a427d95",
    "definitions": {
     "Pous.Labelling.LabelQry": "483a44587e5c1a37e0d2a44b81aec873534609cbf56dcba313f2ac184ea4a007",
@@ -1092,52 +1209,69 @@
     "Pous.Labelling.reach": "b203a14adb42ec04bf6fa23cd704174b83eb61688ec5210ae9c7483d8d5af707"
    },
    "pins": [
-    "PousBridge.b5_stacked",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
-    "PousP3Column.band_twoWay_220_12",
-    "PousP3Column.band_twoWay_220_12_d11",
-    "PousP3Column.band_twoWay_220_16",
-    "PousProofs.B5ExPostFacto",
-    "PousProofs.B5ExPostFactoBounded",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.N10Refuted",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.ReverseNeedsAllChildren",
-    "PousProofs.StackedAuditOnePercent",
-    "PousProofs.StackedAuditSeq",
-    "PousProofs.TransposeMixing"
+    "Pous.SecurityProofs.B5ExPostFacto",
+    "Pous.SecurityProofs.B5ExPostFactoBounded",
+    "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.BandTwoWay220_12",
+    "Pous.SecurityProofs.BandTwoWay220_12D11",
+    "Pous.SecurityProofs.BandTwoWay220_16",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.N10Refuted",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.ReverseNeedsAllChildren",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.StackedAuditOnePercent",
+    "Pous.SecurityProofs.StackedAuditSeq",
+    "Pous.SecurityProofs.TransposeMixing"
    ]
   },
-  "Pous.Model.M1": {
+  "Pous.Protocol.Model.M1": {
    "digest": "7ce6dced316dccdb1a7c33a4355000aed05bb14df2d6356fc14edc03581b5112",
    "definitions": {
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "pins": [
-    "Pous.honest_seq_accepted",
-    "Pous.honest_sim_accepted",
-    "Pous.raw_seq_accepted",
-    "Pous.raw_sim_accepted",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1146,31 +1280,10 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.Model.M1p": {
+  "Pous.Protocol.Model.M1p": {
    "digest": "f4278a53bf16f28e3cd41aad23c22e58200fff7e6e7c96a36f6ae9bcbf6ba59d",
    "definitions": {
     "Pous.bitsEquiv": "a4e75c31de09e59b059dddb3dd85f0e7a9923f12aa6eae716dcb4c973a0041fa",
@@ -1181,6 +1294,12 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "pins": [
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1190,16 +1309,10 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.Model.P3Chain": {
+  "Pous.Protocol.Model.P3Chain": {
    "digest": "78faf5e7f23c2ef302b36981b95b6723e6dd3e0e2b95cae1aec7d0c1f215fa23",
    "definitions": {
     "Pous.ColumnAware.basePath": "f735fa63a538aa449510c33e8e9359ace187c51300488c662558b236f8ddb7b3",
@@ -1233,23 +1346,23 @@
     "Pous.Sponge.topLabelC": "54d4a1ff4b10263de1e6301967dddc8cd6af6187582485dcc71538541fa7d1e8"
    },
    "pins": [
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12"
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12"
    ]
   },
-  "Pous.Model.Pebbling": {
+  "Pous.Protocol.Model.Pebbling": {
    "digest": "864b3448b88daff3f3f8b9252eca5333451b34c8a78c500664a6fbbe70db2ac9",
    "definitions": {
     "Pous.DRG.Available": "9068c55096440718e39e399c586fdfdb9afd43b77865f72ff14f11ac56170076",
@@ -1260,17 +1373,17 @@
     "Pous.DRG.Unpebbled": "ce43ef80457223032674fe507da539b4e1baf5500e5bfa32b413b849e98927a6"
    },
    "pins": [
-    "PousBridge.b5_stacked",
-    "PousProofs.B2Stacking",
-    "PousProofs.FischClaim13",
-    "PousProofs.FischClaim14",
-    "PousProofs.N10Refuted",
-    "PousProofs.ReverseNeedsAllChildren",
-    "PousProofs.StackedAuditOnePercent",
-    "PousProofs.StackedAuditSeq"
+    "Pous.SecurityProofs.B2Stacking",
+    "Pous.SecurityProofs.B5Stacked",
+    "Pous.SecurityProofs.FischClaim13",
+    "Pous.SecurityProofs.FischClaim14",
+    "Pous.SecurityProofs.N10Refuted",
+    "Pous.SecurityProofs.ReverseNeedsAllChildren",
+    "Pous.SecurityProofs.StackedAuditOnePercent",
+    "Pous.SecurityProofs.StackedAuditSeq"
    ]
   },
-  "Pous.Model.PubEncoder": {
+  "Pous.Protocol.Model.PubEncoder": {
    "digest": "589bf2820f212f1a21efb4ca39e2627b5b699b4ccdf2d27c08614775caf4e8c2",
    "definitions": {
     "Pous.PubAuditSecure": "bd6a33c8945a27703419ec841056034bbd1dd633f406cf272557cda4b274703b",
@@ -1286,16 +1399,20 @@
     "Pous.pubSeqAccepts": "108d79bc61b4e7373dffe7b8f1cd40ceb835da12f42d8b3b76b6e163f36e10f4",
     "Pous.pubSimAccepts": "dac6b02c5feb99bfd73bdda4e8a29aedf6706a6f598e542a3f366a1ab4b81fe7"
    },
-   "pins": ["PousProofs.BandPubMeets14", "PousProofs.BandPubMeets14Global", "PousProofs.BandPubMeets64"]
+   "pins": [
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64"
+   ]
   },
-  "Pous.Model.SampledAudit": {
+  "Pous.Protocol.Model.SampledAudit": {
    "digest": "b2197a6faf0004dcef1f5f71a8dff752780b8b5295852b27f430de9757ae928a",
    "definitions": {
     "Pous.Sampled.seqState": "88adbf0e6305a1e08df7cbb57d91ffac4191d6f56651083fcc554f67b9dd9231"
    },
-   "pins": ["PousProofs.SampledAuditSeq"]
+   "pins": ["Pous.SecurityProofs.SampledAuditSeq"]
   },
-  "Pous.Model.Scheme": {
+  "Pous.Protocol.Model.Scheme": {
    "digest": "4c2daf388f74e6bbba183a9fe2508c77043e8149d219698b42b37210453cc3d5",
    "definitions": {
     "Pous.Scheme": "1c6f1f50eb3e547e7aa61dc10ef68c4d5d5970fbc62fff0b378fb16702b0eb0f",
@@ -1313,6 +1430,44 @@
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
    "pins": [
+    "Pous.SecurityProofs.A3Prime",
+    "Pous.SecurityProofs.A3PrimeLam",
+    "Pous.SecurityProofs.A6RederiveTimed",
+    "Pous.SecurityProofs.A6RederiveUntimed",
+    "Pous.SecurityProofs.BandChainMeets64",
+    "Pous.SecurityProofs.BandChainMeets64D12",
+    "Pous.SecurityProofs.BandChainMeets64D5",
+    "Pous.SecurityProofs.BandMultiMeets14",
+    "Pous.SecurityProofs.BandMultiMeets14K106",
+    "Pous.SecurityProofs.BandMultiMeetsFamily",
+    "Pous.SecurityProofs.BandPubMeets14",
+    "Pous.SecurityProofs.BandPubMeets14Global",
+    "Pous.SecurityProofs.BandPubMeets64",
+    "Pous.SecurityProofs.ChainDenseMeets111",
+    "Pous.SecurityProofs.ChainDenseMeets64",
+    "Pous.SecurityProofs.DenseMeets",
+    "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.FibreCount",
+    "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
+    "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
+    "Pous.SecurityProofs.P2MeetsM1pW8192Uncond",
+    "Pous.SecurityProofs.P2SlackB19Uncond",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P3ConcreteMeets14GB",
+    "Pous.SecurityProofs.P3ConcreteMeets64",
+    "Pous.SecurityProofs.P3ConcreteMeets64D12",
+    "Pous.SecurityProofs.SampledAuditProd",
+    "Pous.SecurityProofs.SampledAuditSeq",
+    "Pous.SecurityProofs.SampledAuditSim",
+    "Pous.SecurityProofs.SegMeets14",
+    "Pous.SecurityProofs.SegTagAuditSecure",
+    "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.Theorem1iTimed",
+    "Pous.SecurityProofs.Theorem1ii",
+    "Pous.SecurityProofs.Theorem1iiSeq",
+    "Pous.SecurityProofs.Theorem1iiTimed",
+    "Pous.SecurityProofs.Theorem1iiiTimed",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_correct",
@@ -1324,10 +1479,6 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
-    "PousDenseReCert.dense_meets_64",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.seg_meets_14",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1337,51 +1488,17 @@
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
-    "PousP2p.not_meets_m1p_b19_k85",
-    "PousProofs.A3Prime",
-    "PousProofs.A3PrimeLam",
-    "PousProofs.A6RederiveTimed",
-    "PousProofs.A6RederiveUntimed",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.FibreCount",
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.SampledAuditProd",
-    "PousProofs.SampledAuditSeq",
-    "PousProofs.SampledAuditSim",
-    "PousProofs.Theorem1iTimed",
-    "PousProofs.Theorem1ii",
-    "PousProofs.Theorem1iiSeq",
-    "PousProofs.Theorem1iiTimed",
-    "PousProofs.Theorem1iiiTimed"
+    "PousP2p.not_meets_m1p_b19_k85"
    ]
   },
-  "Pous.P2.Assumptions": {
-   "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
+  "Pous.Protocol.Model.SegLift": {
+   "digest": "a15e23b70da91809dc27f2c5bd9fd390739b36a9cdc4072b5453cec91e9e4026",
    "definitions": {
-    "Pous.P2.Assumptions.PrimeP16448": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
+    "PousDenseReCert.liftPar": "ad4ea847e7e3cd0cb4196503f44b974fc22fcf490d8e5dd3ef20bf17dc115715"
    },
-   "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
+   "pins": ["Pous.SecurityProofs.SegTagAuditSecure"]
   },
-  "Pous.P2.Cost": {
+  "Pous.Protocol.P2.Cost": {
    "digest": "5abba780cc73de0811c80ce3bf600d3225649b2d99da669b1143fbebe1fe4e11",
    "definitions": {
     "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
@@ -1432,163 +1549,6 @@
     "PousP2Ring.not_meetsOn_b19_k88",
     "PousP2Ring.tight",
     "PousP2Ring.tight_p16448"
-   ]
-  },
-  "Pous.P2.Pinned": {
-   "digest": "ff09e0a2e145578094fc4ac768a58c764f3fe3c59a72cbc4814c140aeaee4047",
-   "definitions": {
-    "Pous.Pinned.P2ErrorSplitB19Uncond": "007dae42a4ad66ef04ce0e2ce8c97293b4abfefc4d2e54cc790d6c87196f1631",
-    "Pous.Pinned.P2MeetsM1pB19Uncond": "84165c025bc0e8d28c43c941dae8f3025b0b41997640877b4693c6a08d06c0d2",
-    "Pous.Pinned.P2MeetsM1pFamilyUncond": "25c31c994d2e2da4ba70647eb26b4211c76776e2fbf9ea957854b053d679f084",
-    "Pous.Pinned.P2MeetsM1pW8192Uncond": "2b3be3b5842d67a90f63b4ef8c44af0b41c6a173971f7dafa0bcee267cef7bc2",
-    "Pous.Pinned.P2SlackB19Uncond": "31cc874a7a48a3425de2a9d2fd6d93c6ce40069436eecb4fbeaacdaaefc852c2",
-    "Pous.Pinned.P2SlackFamilyUncond": "affd5a9e0587b4724146a4e87d847195f8779303912535414c8505450ddb3b30"
-   },
-   "pins": [
-    "PousProofs.P2ErrorSplitB19Uncond",
-    "PousProofs.P2MeetsM1pB19Uncond",
-    "PousProofs.P2MeetsM1pFamilyUncond",
-    "PousProofs.P2MeetsM1pW8192Uncond",
-    "PousProofs.P2SlackB19Uncond",
-    "PousProofs.P2SlackFamilyUncond"
-   ]
-  },
-  "Pous.Pinned": {
-   "digest": "500f1c2902abd3d2fc5b6b67ec5c4f803c2d0d5fcc235eb7d3a12b1417375232",
-   "definitions": {
-    "Pous.Pinned.A1CompressionCard": "949657881bd32b3e7c053dc714f5d3f93abcdd473a5508918efdcd001fc9d863",
-    "Pous.Pinned.A1CompressionPr": "b3aa0709a98bd322230b22da7252e4b082cd44670b74d82b6e62a2e8a417a924",
-    "Pous.Pinned.A3Prime": "5b72606d2b8713d4acc8944532866283d23e5326f6075ae10b0f03202e5aeaf1",
-    "Pous.Pinned.A3PrimeLam": "ff368fc7101918953bdef423b240531c99e9703ab69b24a368e80e1bef3c55d1",
-    "Pous.Pinned.A6RederiveTimed": "297a30c45c06b7e9af071e0f0f900c0df7dcdc291a43255a668451ddb271d2e4",
-    "Pous.Pinned.A6RederiveUntimed": "1396ff95d0a1efb1f508c8c28925440443a94d8f33dcaa279b994f47a2f75ec7",
-    "Pous.Pinned.B1IndepSet": "207b65a33a8f389065273ddd682b8b627d4ee8258d5fa5020ab6d9e3ba27417c",
-    "Pous.Pinned.B2Stacking": "cf4f89cf001103492e1ce2f324930e4b2401f5abf59d31bc131255e7b0a57144",
-    "Pous.Pinned.B3Chain": "f07816a7e07634cd278ac6cf9e3f5c619ba95e0a70f0e78b4e21e8b3c6a88b59",
-    "Pous.Pinned.B5ExPostFacto": "6b37dee6bfb9a76ccb56b68aae1d1d0d6d21ce8fc459dbc9e2455dbd77662698",
-    "Pous.Pinned.B5ExPostFactoBounded": "47a8497b8194507ab4077a04d9a8aa9ec38bd3ec82771075cf926c1f35fbd817",
-    "Pous.Pinned.BandChainMeets64": "c65f0d0a309f87f8fcde7249e1e09b10e30921983ce175bc869c140a44fc5338",
-    "Pous.Pinned.BandChainMeets64D12": "f673d84ab65ab26ccf2eaab316a1545d78e1dcb0e933738d2beb6212da4edba5",
-    "Pous.Pinned.BandChainMeets64D5": "34ba52e7f1254ae5c30c5ed72bd598d4ad13db20c3fc25479343228f90713d40",
-    "Pous.Pinned.BandMultiMeets14": "c110d6e381aaeeab3c4ec09a8b575bd21801b7150d2e80d83cf715a32cb9e476",
-    "Pous.Pinned.BandMultiMeets14K106": "fd937596baecc8a20d2fc5fbf0383b0598982d758dc5df9118de74afc252c61f",
-    "Pous.Pinned.BandMultiMeetsFamily": "8d46051f801c1971c7686fadb7021d7f4b686fc0dcf7510d51f4230d6726ce7a",
-    "Pous.Pinned.BandPubMeets14": "317659b4fe6e3b7abfcf3bb69a22fc788d94bad876d95c7dfc097eaaa435fbf3",
-    "Pous.Pinned.BandPubMeets14Global": "9f64d17b9e89a31d4fd12ec3cf9e7ac3915d40a83be0ff20856c356e5d5db9f5",
-    "Pous.Pinned.BandPubMeets64": "5cab08a92f0ddd8329472f6e29a7543bf94790171e6e663ab766040ab7ed2636",
-    "Pous.Pinned.ChainDenseMeets111": "df0bb906c84b09afd2a98a1008cfc91a97f858ac7c9eb3141a0b5e041567f18c",
-    "Pous.Pinned.ChainDenseMeets64": "f54a07385120c1335801ed6e0fb037239513faf9c50ff2c1083f5c767343129f",
-    "Pous.Pinned.DenseMeets": "2fcf3c0b4ceea09dcbaef09f1dd91203b342a5b078e12f95473147c14f8d84f8",
-    "Pous.Pinned.FibreCount": "feaa76c1e2e96a35c9428d0317eefb571d2d927d798eab25544a0f3a4ee2cfa0",
-    "Pous.Pinned.FischClaim13": "7e157b6dc544ae5c5dcbe74d48e3eebe4f5b4fe54c0f07ff9d0eb4f5a83ffc40",
-    "Pous.Pinned.FischClaim14": "a91017176c6ea250b2fb770015e467ba2bed11edf8537f0f452558d34171ce7a",
-    "Pous.Pinned.InvExPostFactoTwoLayer": "472f346f9eff9b797124356348b9a2df959eb959b9f116aabd05f80229212992",
-    "Pous.Pinned.KFloor": "d60d7c13853caa24d27c0a8e9280e5d6e2669d1247b3e09fd73d38392bb5a33b",
-    "Pous.Pinned.N10Refuted": "c427a31be532e30b7965eda3c1aed29bf13e1890e8d558fb3b4aed8492217fb5",
-    "Pous.Pinned.P3ConcreteMeets14GB": "f0222f4c6401a235fa4671d764e1e249be02dc8bad9c60323bd1f9cc519e9b05",
-    "Pous.Pinned.P3ConcreteMeets64": "78263399a9e7ddf5125b1b07da085176fcfe532eac19586c27492b26e2e4afe5",
-    "Pous.Pinned.P3ConcreteMeets64D12": "11590dcdfef0bd7e37d870575c251c77d62cae2e4ef4d683dd67f41acf2549f3",
-    "Pous.Pinned.ReverseNeedsAllChildren": "75acd0284d7929e119ba405c1485c80b1358b2bbec7ff6f9f81f780970adba5c",
-    "Pous.Pinned.SampledAuditProd": "4aea4abffb1ebf80512c873b9c5f8ef69efbabfaa42a7955b746705b3351ea4b",
-    "Pous.Pinned.SampledAuditSeq": "cfc33a0db75fe6d3c4284b81da6795b28e8a42ffbc984e784d68fdb6e3895752",
-    "Pous.Pinned.SampledAuditSim": "5e31593f66b66eb9e18a8bad43edac080db49f74afa533f689ade6d053c7fbfd",
-    "Pous.Pinned.StackedAuditOnePercent": "da9a447df3bc464fca23012bfa6611ac552ca6443516ea7d9a5d77f10f44bd39",
-    "Pous.Pinned.StackedAuditSeq": "894a07ece13d44bb0cfcb520435bc31dcec577d6b6d651a5e5cdfeb5086b3d51",
-    "Pous.Pinned.Theorem1iTimed": "ed4261b18c7b79c9ea5a91e4a1b3d04aaf925b6f658252cbb2e9bb0d5e23468d",
-    "Pous.Pinned.Theorem1ii": "e8dfff0e55af18270c85bc2d67170a1cb9c9e10b1a9fad2a0fd36523bd4937ff",
-    "Pous.Pinned.Theorem1iiSeq": "14d3091134e1e3fe393a5a34588e3df6af028781e2e3e997de5670efc005c64a",
-    "Pous.Pinned.Theorem1iiTimed": "ccb454cd0b99b99b60efe8ad65ebb60359cb9b88f1f74fe882312c60cc6c2c78",
-    "Pous.Pinned.Theorem1iiiTimed": "403b2a2f99673b13de892f38c7b69bed974c8a6f99b97a2a5e84f23f989ed982",
-    "Pous.Pinned.TransposeMixing": "1f3c5043b68a033e71ec24efc6f18c347bcce0cd7d363d8730d52f274be50e40"
-   },
-   "pins": [
-    "PousProofs.A1CompressionCard",
-    "PousProofs.A1CompressionPr",
-    "PousProofs.A3Prime",
-    "PousProofs.A3PrimeLam",
-    "PousProofs.A6RederiveTimed",
-    "PousProofs.A6RederiveUntimed",
-    "PousProofs.B1IndepSet",
-    "PousProofs.B2Stacking",
-    "PousProofs.B3Chain",
-    "PousProofs.B5ExPostFacto",
-    "PousProofs.B5ExPostFactoBounded",
-    "PousProofs.BandChainMeets64",
-    "PousProofs.BandChainMeets64D12",
-    "PousProofs.BandChainMeets64D5",
-    "PousProofs.BandMultiMeets14",
-    "PousProofs.BandMultiMeets14K106",
-    "PousProofs.BandMultiMeetsFamily",
-    "PousProofs.BandPubMeets14",
-    "PousProofs.BandPubMeets14Global",
-    "PousProofs.BandPubMeets64",
-    "PousProofs.ChainDenseMeets111",
-    "PousProofs.ChainDenseMeets64",
-    "PousProofs.DenseMeets",
-    "PousProofs.FibreCount",
-    "PousProofs.FischClaim13",
-    "PousProofs.FischClaim14",
-    "PousProofs.KFloor",
-    "PousProofs.N10Refuted",
-    "PousProofs.P3ConcreteMeets14GB",
-    "PousProofs.P3ConcreteMeets64",
-    "PousProofs.P3ConcreteMeets64D12",
-    "PousProofs.ReverseNeedsAllChildren",
-    "PousProofs.SampledAuditProd",
-    "PousProofs.SampledAuditSeq",
-    "PousProofs.SampledAuditSim",
-    "PousProofs.StackedAuditOnePercent",
-    "PousProofs.StackedAuditSeq",
-    "PousProofs.Theorem1iTimed",
-    "PousProofs.Theorem1ii",
-    "PousProofs.Theorem1iiSeq",
-    "PousProofs.Theorem1iiTimed",
-    "PousProofs.Theorem1iiiTimed",
-    "PousProofs.TransposeMixing"
-   ]
-  },
-  "Pous.Sanity": {
-   "digest": "78ad317f409b18274d975e800afef43767c9761ae6573f5d0ffca5299e749a6f",
-   "definitions": {
-    "Pous.honestPre": "3f33df7ea214100c605bf5ba0d4f2a945cf8451f31c20fe02e9940df7d1a4838",
-    "Pous.honestSeq": "6a1ca1645cb77d0e34c2543b45ab0cf888186aac3938588e3a16c10eea65be56",
-    "Pous.honestSim": "5d335482f360349965bdeb466d9b1f4bdb799264667d53c49b4d7b25102418bd",
-    "Pous.junk": "23c58d691b8617bb875b7b9e142b0f1aeedcfc7384d7e7f94e8eb7c8fdc180df",
-    "Pous.pad": "939852b64a832be63b00b97e5a7882472228b5e592e6d2ba904f5e16f7808206",
-    "Pous.rawAnswer": "2388c0ee6a92d442e27a34764fa7b5d368046ac52f37684d16ff3a22a16357d8",
-    "Pous.rawPre": "a4b600e88d207530a2dfdfd20d33391b766dc1dbd47381180612d2887ee35e6b",
-    "Pous.rawSeq": "73ac19715a666295eee7f777c32709634c08f4fc5f79fc01b8c370e8bc47ff70",
-    "Pous.rawSim": "ac7add4d21efad06362370b32c5d02533666b0b6aadd997fe0652448d773dd36",
-    "Pous.trunc": "2a0d354abf15043fd47a57f93beba7364912e26f2c47045c1bc0c1a65ef5c673"
-   },
-   "pins": [
-    "Pous.honest_seq_accepted",
-    "Pous.honest_sim_accepted",
-    "Pous.junk_correct",
-    "Pous.junk_not_meets",
-    "Pous.junk_spaceBound",
-    "Pous.raw_seq_accepted",
-    "Pous.raw_sim_accepted",
-    "PousP2Ring.complete"
-   ]
-  },
-  "PousProofs.Dense.SegTagged": {
-   "digest": "a15e23b70da91809dc27f2c5bd9fd390739b36a9cdc4072b5453cec91e9e4026",
-   "definitions": {
-    "PousDenseReCert.liftPar": "ad4ea847e7e3cd0cb4196503f44b974fc22fcf490d8e5dd3ef20bf17dc115715"
-   },
-   "pins": ["PousDenseReCert.segTag_auditSecure"]
-  },
-  "PousProofs.P3.Column.BandComb": {
-   "digest": "60a338189f53ebbffb4708d5e3f04b52ca741a5edd3a9cea5828d3456b2de0ca",
-   "definitions": {
-    "PousP3Column.bandExtra": "926b6bbb6cfba369ffd7d983ab345e93c68d173e31fa0bc54c575a35c9080323",
-    "PousP3Column.bandGraph": "a5ae49163821e67404587ed7150029cd4a8ad5afedb2ae8edf9038e989775884"
-   },
-   "pins": [
-    "PousP3Column.band_twoWay_220_12",
-    "PousP3Column.band_twoWay_220_12_d11",
-    "PousP3Column.band_twoWay_220_16"
    ]
   }
  },

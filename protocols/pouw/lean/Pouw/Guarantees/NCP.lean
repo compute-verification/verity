@@ -1,4 +1,5 @@
 import Pouw.Protocol.NCP.Pinned
+import Pouw.Protocol.NCP.Protocol
 import Pouw.Protocol.NCP.Relation
 import Pouw.Protocol.NCP.RouteU
 import Pouw.Assumptions.NCP.RouteUGame
@@ -9,10 +10,12 @@ import Pouw.Assumptions.NCP.RouteUWord
 
 Each guarantee is a `def G : Prop`, stated over `Pouw.Protocol`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G`. The
-lead's algebra (`Pouw.Protocol.NCP.Pinned`), the rejection rule's witness (`Pouw.Protocol.NCP.Relation`), route U's
-checked values (`Pouw.Protocol.NCP.RouteU`), its game instance (`Pouw.Assumptions.NCP.RouteUGame`) and its word layer
-(`Pouw.Assumptions.NCP.RouteUWord`). Each keeps the text, the docstring and the `open`s of the statement it was in its
-source module.
+lead's algebra (`Pouw.Protocol.NCP.Pinned`), the shift by 24 under the rejection rule (`Pouw.Protocol.NCP.Protocol`),
+the rejection rule's witness (`Pouw.Protocol.NCP.Relation`), route U's checked values (`Pouw.Protocol.NCP.RouteU`), its
+game instance (`Pouw.Assumptions.NCP.RouteUGame`) and its word layer (`Pouw.Assumptions.NCP.RouteUWord`). Each keeps
+the text, the docstring and the `open`s of the statement it was in its source module. `ShiftBy24Admissible` is the type
+of the theorem `Pouw.NCP.GameProofs.shiftBy24_admissible`, its binders written as a `∀`, in that theorem's `open`s but
+`Pouw.Proofs`, which only proof modules declare.
 
 `Pouw.NCP.RouteU.GammaFromTTNCP_U`, which `GammaFromTTNCP_U_v1` and `GammaFromTTNCP_U_C2` instantiate, keeps its name
 and namespace and comes just before them, as in its source: `GammaFromTTNCP_U_C2` reuses the auxiliary proof Lean makes
@@ -48,6 +51,19 @@ def Range : Prop :=
     (∀ i, ∀ l < k, InInt7 (A i l)) → (∀ l < k, ∀ j, InInt7 (B l j)) →
     (∀ i l, l < 3 * k → -126 ≤ stackX k A E1 R i l ∧ stackX k A E1 R i l ≤ 126) ∧
       (∀ l j, l < 3 * k → -126 ≤ stackY k B R F1 l j ∧ stackY k B R F1 l j ≤ 126)
+
+end
+
+/-! ## The shift by 24 under the rejection rule (`Pouw.Protocol.NCP.Protocol`) -/
+
+section
+
+open Pouw.NCP Pouw.NCP.GameProofs Finset QTree
+
+/-- **The shift by `24` passes the rejection rule at `d = 16`**, for every `k ≥ 1024` with `16 ∣ k`: step `t`'s image
+`[16t + 24, 16t + 40) mod k` is disjoint from it, columns `16t + 7` and `16t + 8` land in different steps, and `R²` (the
+shift by `48`) has `0` at `(0, 0)`. -/
+def ShiftBy24Admissible : Prop := ∀ {k : ℕ}, 1024 ≤ k → 16 ∣ k → Admissible k 16 (shiftBy 24 k)
 
 end
 
