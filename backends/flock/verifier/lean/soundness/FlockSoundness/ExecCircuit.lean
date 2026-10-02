@@ -5,7 +5,8 @@ import FlockSoundness.ExecParse
 
 `parse_facts`: a circuit file `HmRow.parse` accepted has only nets `Net.ofRows` built (its text nets, and a typed flat
 class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), ports of whole SHA-512
-blocks, the unit, `sha512x3` and `hm96` nets and every range's net among its nets, and passed `HmRow.check`. The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
+blocks, the unit, `sha512x3` and `hm96` nets and every range's net among its nets, passed `HmRow.check`, and its
+`sha512x3` and `hm96` nets are the verifier's (`HmNets.check`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
 -/
 
@@ -92,6 +93,8 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
   check : ∃ ls, HmRow.check c tags ls = .ok ()
+  /-- the `sha512x3` and `hm96` nets are the verifier's (`HmNets.check_ok`) -/
+  rowNets : HmNets.check c = .ok ()
   /-- not a typed template: `parse`'s `tmpl` is `none` -/
   typed : c.typed = none
 
@@ -229,6 +232,7 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
   simp (config := { zeta := false }) only [pure_bind] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hnetOf : ∀ nm i, netOf nm = .ok i → i < nets2.size := by
@@ -386,7 +390,8 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
     · cases hi
   refine ⟨?_, ⟨more, hm⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
   exact { nets := hbuilt, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
-          hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩, typed := rfl }
+          hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩,
+          rowNets := by cases w'; exact hrows, typed := rfl }
 
 theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c :=
