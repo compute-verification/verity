@@ -31,6 +31,7 @@ regenerate the values to answer a challenge; the bytes are reported as `values_r
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import math
 import json
@@ -133,9 +134,73 @@ class _StepJob:
 
 PINNED_EXACT = os.environ.get("VERITY_PINNED_EXACT", "1") != "0"
 _PAGE = 4096
+# Growing the exact pool is page faulting: every page of a fresh shared mapping is allocated and zeroed when it is first touched, which
+# `cudaHostRegister` does one page at a time on the calling thread.  On vy-nebius-1 (a VM: first touch also faults on the host) that ran
+# 0.4-2.9 s/GiB, so the instrumented warm-up of a leased Commit grew its ~105 GiB pool in 40-270 s with the GPU idle (gm329: 266 s of
+# 271).  POPULATE_THREADS helper threads fault the pages in first (MADV_POPULATE_WRITE, in pieces); the registration then pins pages that
+# are present.  Faults on one mapping (one shmem inode) scale less over threads than faults on separate mappings: 8 threads on the
+# node's 32-CPU dispatch slice, one 8 GiB mapping 0.15-0.2 s/GiB, 32 mappings 0.085-0.105, one thread 0.5.  0 = no population.
+POPULATE_THREADS = int(os.environ.get("VERITY_PINNED_POPULATE_THREADS", "8"))
+_POPULATE_PIECE = 32 << 20
+_MADV_POPULATE_WRITE = 23                   # Linux >= 5.14; EINVAL before
+_POPULATE: dict[str, Any] = {"ok": True}
+os.register_at_fork(after_in_child=lambda: _POPULATE.pop("pool", None))   # a forked child has none of the parent's helper threads
 
 
-def _pinned_block(nbytes: int, exact: bool) -> tuple[Any, Any, str]:
+def _page_round(nbytes: int) -> int:
+    return (int(nbytes) + _PAGE - 1) // _PAGE * _PAGE
+
+
+def _populate(ranges: list[tuple[int, int]], times: dict[str, float] | None = None) -> bool:
+    """Write-fault every page of the page-aligned (address, bytes) ranges, split in `_POPULATE_PIECE`s over the helper threads.  The
+    helpers make no CUDA call: a thread that used the device and outlives the lease's context reset opens a context again on a GPU
+    the lease gave back (`gpu_lease.release`), so only the caller registers.  False when nothing was populated (disabled, or the kernel
+    has no MADV_POPULATE_WRITE): the registration then faults the pages in itself."""
+    if POPULATE_THREADS <= 0 or not _POPULATE["ok"] or not ranges:
+        return False
+    t0 = time.perf_counter()
+    if "madvise" not in _POPULATE:
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.madvise.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+        _POPULATE["madvise"] = libc.madvise
+    madvise = _POPULATE["madvise"]
+
+    def one(job: tuple[int, int]) -> int:
+        return 0 if madvise(job[0], job[1], _MADV_POPULATE_WRITE) == 0 else ctypes.get_errno() or -1
+
+    jobs = [(a + o, min(_POPULATE_PIECE, n - o)) for a, n in ranges for o in range(0, n, _POPULATE_PIECE)]
+    if POPULATE_THREADS == 1 or len(jobs) == 1:
+        errs = [one(j) for j in jobs]
+    else:
+        if "pool" not in _POPULATE:
+            _POPULATE["pool"] = ThreadPoolExecutor(max_workers=POPULATE_THREADS, thread_name_prefix="pinned-populate")
+        errs = list(_POPULATE["pool"].map(one, jobs))
+    if errno.EINVAL in errs:
+        _POPULATE["ok"] = False
+    if times is not None:
+        times["populate_s"] = times.get("populate_s", 0.0) + time.perf_counter() - t0
+    return not any(errs)
+
+
+def _shared_map(nbytes: int) -> tuple[Any, Any]:
+    """A fresh MAP_SHARED|MAP_ANONYMOUS mapping of the page-rounded size and its uint8 view (see `_pinned_block` for why shared)."""
+    import mmap
+
+    mm = mmap.mmap(-1, _page_round(nbytes), flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
+    return torch.frombuffer(mm, dtype=torch.uint8), mm
+
+
+def _register(blk: Any, mm: Any, times: dict[str, float] | None = None) -> None:
+    t0 = time.perf_counter()
+    rc = torch.cuda.cudart().cudaHostRegister(blk.data_ptr(), blk.numel(), 0)
+    if int(rc) != 0:
+        mm.close()
+        raise RuntimeError(f"cudaHostRegister({blk.numel()} B) failed: {rc}")
+    if times is not None:
+        times["register_s"] = times.get("register_s", 0.0) + time.perf_counter() - t0
+
+
+def _pinned_block(nbytes: int, exact: bool, times: dict[str, float] | None = None) -> tuple[Any, Any, str]:
     """One page-locked host block of `nbytes`.  Returns (block view, its owner tensor, mode).
 
     [R17 fp8, F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
@@ -153,15 +218,9 @@ def _pinned_block(nbytes: int, exact: bool) -> tuple[Any, Any, str]:
     -> +336, the child's RssShmem 2,048 = the shared pages).  Shared mappings are never copy-on-write, so children read the committed
     store in place, as they did on torch's (also MAP_SHARED) blocks; the cgroup accounts them as shmem, like torch's."""
     if exact and torch is not None and torch.cuda.is_available():
-        import mmap
-
-        n = (int(nbytes) + _PAGE - 1) // _PAGE * _PAGE
-        mm = mmap.mmap(-1, n, flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
-        blk = torch.frombuffer(mm, dtype=torch.uint8)
-        rc = torch.cuda.cudart().cudaHostRegister(blk.data_ptr(), n, 0)
-        if int(rc) != 0:
-            mm.close()
-            raise RuntimeError(f"cudaHostRegister({n} B) failed: {rc}")
+        blk, mm = _shared_map(nbytes)
+        _populate([(blk.data_ptr(), blk.numel())], times)
+        _register(blk, mm, times)
         return blk, mm, "exact-registered-shared"
     return (b := torch.empty(int(nbytes), dtype=torch.uint8, pin_memory=True)), b, "torch-pinned-pow2"
 
@@ -187,15 +246,58 @@ class _PinnedPool:
         self.in_use: list[Any] = []
         self.allocs = 0
         self.alloc_s = 0.0
+        self.times: dict[str, float] = {}     # populate_s, register_s: the two parts of alloc_s for exact blocks
+        self._ready: list[Any] = []           # blocks `reserve` made, in the order the takes after it allocate them
+        self.reserved_bytes = 0
+        self.reserve_unused = 0               # reserved blocks no take asked for (folded into the free list by `reset`): 0 when exact
 
     def _alloc(self, nbytes: int) -> Any:
-        blk, owner, mode = _pinned_block(max(int(nbytes), self.block_bytes), self.exact)
+        want = max(int(nbytes), self.block_bytes)
+        if self._ready and self._ready[0].numel() == _page_round(want):
+            return self._ready.pop(0)
+        blk, owner, mode = _pinned_block(want, self.exact, self.times)
         if self.mode is None:
             self.mode = mode
         self.all.append(blk)
         self._owners.append(owner)
         self.allocs += 1
         return blk
+
+    def reserve(self, sizes: list[int]) -> int:
+        """Make now, faulted in together, the blocks that `take(n)` for each n of `sizes` in turn would allocate one at a time (the
+        same first fit over the free list, the same `cur`/`off`), so those takes find them ready: a burst of pool growth -- the warm-up's
+        priming of a step's levels and retained windows -- costs its page faults over every helper thread and mapping at once, not
+        block by block.  Exact mode only (else a no-op).  Returns the bytes made."""
+        if not (self.exact and torch is not None and torch.cuda.is_available()) or POPULATE_THREADS <= 0:
+            return 0
+        free = [int(b.numel()) for b in self.free]
+        cur = None if self.cur is None else int(self.cur.numel())
+        off, new = self.off, []
+        for n in map(int, sizes):
+            if cur is None or off + n > cur:
+                i = next((k for k, f in enumerate(free) if f >= n), -1)
+                if i >= 0:
+                    cur = free.pop(i)
+                else:
+                    cur = _page_round(max(n, self.block_bytes))
+                    new.append(cur)
+                off = 0
+            off = (off + n + 255) // 256 * 256
+        if not new:
+            return 0
+        t0 = time.perf_counter()
+        maps = [_shared_map(n) for n in new]
+        _populate([(b.data_ptr(), b.numel()) for b, _mm in maps], self.times)
+        for b, mm in maps:
+            _register(b, mm, self.times)
+            self.all.append(b)
+            self._owners.append(mm)
+            self._ready.append(b)
+        self.mode = self.mode or "exact-registered-shared"
+        self.allocs += len(new)
+        self.alloc_s += time.perf_counter() - t0
+        self.reserved_bytes += sum(new)
+        return sum(new)
 
     def release(self) -> int:
         """Unregister and drop every block (the pool's memory goes back to the OS in exact mode; torch's cache keeps it otherwise).
@@ -207,6 +309,7 @@ class _PinnedPool:
                 rt.cudaHostUnregister(b.data_ptr())
         owners = self._owners
         self.free, self.all, self._owners, self.in_use, self.cur, self.off, self.mode = [], [], [], [], None, 0, None
+        self._ready = []
         self.deferred_unmaps = 0
         import sys
 
@@ -251,6 +354,9 @@ class _PinnedPool:
 
     def reset(self) -> None:
         self.free.extend(self.in_use)
+        self.reserve_unused += len(self._ready)
+        self.free.extend(self._ready)
+        self._ready = []
         self.in_use = []
         self.cur = None
         self.off = 0
@@ -2038,6 +2144,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                              weight_registration=self.weights,
                              extra={"values_retained_bytes": sum(s.n_bytes for s in steps), "pinned_pool_bytes": self.pool.bytes_total,
                                     "pinned_allocs": self.pool.allocs, "pinned_alloc_s": self.pool.alloc_s, "pinned_pool_mode": self.pool.mode,
+                                    "pinned_populate_s": self.pool.times.get("populate_s", 0.0),
+                                    "pinned_register_s": self.pool.times.get("register_s", 0.0), "pinned_populate_threads": POPULATE_THREADS,
+                                    "pinned_reserved_bytes": self.pool.reserved_bytes, "pinned_reserve_unused": self.pool.reserve_unused,
                                     "pinned_pool_blocks": len(self.pool.all), "errors": self.errors[:10],
                                     "errors_n": len(self.errors),
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
