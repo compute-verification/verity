@@ -1443,8 +1443,9 @@ run in CI on every change to the Lean verifier, the statements or the pinned fil
 2. **Fuzzing.** Mutations of honest vectors (a byte of a proof, a coin, a round digest, a record field, the public input)
    are generated with a fixed seed per CI run and a rolling seed per nightly run. Both verifiers must return the same
    verdict on each, and no mutation of a proof byte or of a round digest may be accepted by either.
-3. **Coverage.** The corpus covers every statement and layout in §16, `m` from 22 to 35 where a statement reaches it,
-   both coin sources (§7), and every check id of §5.3 and every rejection listed in §8–§14 at least once.
+3. **Coverage.** The corpus covers every statement and layout in §16 except `--zk` (§16.13), `m` from 22 to 35 where a
+   statement reaches it, `os` and `seed` coins (§7), and every check id of §5.3 and every rejection in §8–§14 at least
+   once.
 
 A disagreement fails CI and is resolved against the paper and this spec, never by copying upstream's behaviour into the
 Lean verifier without a spec change. After the gate passes, production runs only the Lean verifier; upstream's verifier
@@ -1462,8 +1463,8 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
 - **D3:** `link.sigma = Σ` (S4). Closed upstream at PR #83 `b3baabd8`; before it `from_record` ignored the field, and Σ
   was bound through `Hello` (S2) and `root_F` (S6).
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`, where
-  `from_record`, which ignored them before, requires `msg` on every round of a statement whose `Hello` says
-  `"rounds": "bytes retained"` and checks its length and digest.
+  `from_record` requires `msg` on every round of a statement whose `Hello` says `"rounds": "bytes retained"` and checks
+  its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root (set 16).
 - **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
