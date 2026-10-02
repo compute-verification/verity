@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Exec.Setup
 import FlockSoundness.Discharge.Exec.Tables
+import FlockSoundness.Refine.Frames
 
 /-!
 # The production statements retain every round's bytes
@@ -14,8 +15,9 @@ only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze
 * `setupH_tags`, `setupTables_retain`: the session's spec retains rounds when its tags do.
 * `decode_retained`: when the spec retains rounds, `Record.decode` gives every round of every stream its bytes (S12).
 * `accepts_retained`: so every round of a record flock-verify accepts under such tags carries its bytes.
-* `squeeze_retained`: a squeeze of `n ≠ 0` coins at a round with retained bytes `b` succeeds only when the framed
-  bytes are `b`, and then returns the round's coins, clears `pending` and moves to the next round.
+* `accepts_allRetained`: the same as `Refine.AllRetained` for every stream, the hypothesis of `Refine/Frames.lean`'s
+  squeeze and sampling lemmas and of `Refine/FramesPiop.lean`'s `zerocheck_frames`, whose text says "on the unsalted
+  path": these tags retain too, so those lemmas apply to the production statements.
 -/
 
 set_option Elab.async false
@@ -131,27 +133,14 @@ theorem accepts_retained {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds
   have hsr : spec.retainRounds = true := (setupTables_retain hs).trans hr
   exact ⟨spec, sts, sess, hs, hd, hsr, decode_retained hsr hd⟩
 
-/-- **A squeeze at a retained round compares the framed bytes exactly** (§6.2, R2): `n ≠ 0` coins at round `t.k`,
-whose bytes the server retained as `b`, are returned only when everything absorbed since the last coin, framed with the
-squeeze's header, is `b`; then they are the round's coins, and the transcript moves to round `t.k + 1` with nothing
-pending. -/
-theorem squeeze_retained {t t' : Flock.Transcript} {kind : UInt8} {n : ℕ} {cs : Array F128} {r : Round}
-    {b : ByteArray} (hn : n ≠ 0) (hk : t.rounds[t.k]? = some r) (hb : r.bytes = some b)
-    (h : Flock.Transcript.squeeze kind n t = .ok (cs, t')) :
-    Flock.Transcript.framed t kind n = b ∧ r.n = n ∧ cs = r.coins ∧
-      t' = { t with pending := ByteArray.empty, k := t.k + 1 } := by
-  unfold Flock.Transcript.squeeze at h
-  simp only [hn, ↓reduceIte, hk] at h
-  split at h
-  · cases h
-  rename_i hrn
-  split at h
-  · cases h
-  rename_i ha
-  simp only [Except.ok.injEq, Prod.mk.injEq] at h
-  obtain ⟨rfl, rfl⟩ := h
-  unfold Round.answers at ha
-  rw [hb] at ha
-  exact ⟨not_not.1 ha, not_not.1 hrn, rfl, rfl⟩
+/-- **flock-verify's acceptance under retaining tags gives `AllRetained`** (`Refine/Frames.lean`) for every stream of
+the record it decodes: the hypothesis `squeeze_bindA`, `sample_bindA`, `forIn_answers` and `zerocheck_frames` take. -/
+theorem accepts_allRetained {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds = true) (h : Accepts I t) :
+    ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
+      ∀ s ∈ sess.streams.toList, AllRetained s.rounds := by
+  obtain ⟨spec, sts, sess, hs, hd, -, hb⟩ := accepts_retained hr h
+  refine ⟨spec, sts, sess, hs, hd, fun s hs' i hi => ?_⟩
+  rw [getElem!_pos s.rounds i hi]
+  exact hb s hs' _ (Array.getElem_mem_toList hi)
 
 end FlockSoundness.Discharge.Exec
