@@ -493,6 +493,15 @@ def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port]
     return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": words}
 
 
+def coins(live: list[dict]) -> str | None:
+    """The coins M0's sessions ran on, as their LIVE records name them: ``os-seed-prf`` when the verdict opens the step-0 seed (the
+    binary's default), ``live-os`` when the identity names per-round OS coins (``FC_COINS=os``); None for anything else (a
+    ``--zk`` session's committed coin tree) and for sessions that differ."""
+    modes = {"os-seed-prf" if (x.get("verdict") or {}).get("coin_seed") else
+             "live-os" if str((x.get("identity") or {}).get("coins", "")).startswith("live-os") else None for x in live}
+    return modes.pop() if len(modes) == 1 else None
+
+
 def digest(text: str) -> str:
     """The circuit's pin: SHA-512 of the file (every identity and binding digest of the statement is SHA-512)."""
     return hashlib.sha512(text.encode()).hexdigest()

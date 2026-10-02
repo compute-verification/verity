@@ -273,6 +273,8 @@ bytes for the link points after recording `Commit`. Each 16-byte group is one F1
 `hi = le64(bytes[8..16])`). Soundness assumes only that these bytes are uniform and unknown to the prover before it sent
 the round.
 
+M0 draws `os` coins under `FC_COINS=os`; `verify --coins os` binds its live-OS identity (`Tags.withCoins`).
+
 ### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`, `coin-commit/sha256`, `coin-commit/sha512`)
 
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
@@ -298,10 +300,10 @@ handled them. The verdict reveals `seed`, `nonce`, `commitment` and the request 
 
 For the verifier of record the seed changes nothing it checks: the coins are still read from the record. It adds two
 optional checks that a prover (or an auditor) runs: the commitment opens to the revealed seed and nonce, and each
-round's coins equal `coins_q`. The second needs the global request index `q` of every round, which the record does not
-store (rounds are grouped by stream, and interleaved reps are allowed). Recommendation for PR #83: record `q` per round.
-Until then an auditor recomputes `q` only for sessions whose reps ran sequentially (points, then all of rep 0, then all
-of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
+round's coins equal `coins_q`. The second needs every round's global request index `q`: M0's records carry it as `g`
+since `34c3d0815`, and `flock-circuit replay-coins` runs both checks. Older ones lack it (rounds are grouped by stream,
+and reps may interleave), so an auditor recomputes `q` only if the reps ran sequentially (points, then all of rep 0,
+then all of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
 pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
 
 ### 7.3 The unit draw

@@ -21,7 +21,7 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 ~~~text
 cd backends/flock/verifier/lean && lake build          # .lake/build/bin/flock-verify
 flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
-flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR]   # digest, Σ, Hello
+flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
 ~~~
 
 `ID` names a version:
@@ -38,7 +38,10 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
   statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10), with
-  public outputs. Runs staged from `68ae79f2` until hidden outputs use this name.
+  public outputs. Runs staged from `68ae79f2` until hidden outputs use this name. A proving build's session of this
+  statement or a later one (the hidden-output and typed ones) on per-round OS coins (`FC_COINS=os`) needs `--coins os`,
+  which binds the identity that mode writes, not who drew the coins (PROTOCOL.md §7.1, §17.2); a seeded one needs
+  `--coins seed`, the default.
 - `verity/flock-circuit@e51e2b86` (and `+seed-injection`): PR #83 from `e51e2b86`, for the runs staged before `68ae79f2`.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
