@@ -79,8 +79,11 @@ def _env_dir() -> Path:
 
 def ssh_key() -> Path:
     """The private key file: `SSH_KEY` when it exists, else `RUNPOD_SSH_KEY_B64` written once (mode 600, named by its content
-    hash so a rotated secret gets a new file).  Neither set: `SSH_KEY`, so ssh names the missing file as before."""
+    hash so a rotated secret gets a new file).  Neither set: `SSH_KEY`, so ssh names the missing file as before, except on a Cursor
+    VM that injects the secret this shell lost (`research.secret_hint`, spelled out: this file runs standalone on a pod)."""
     b64 = os.environ.get("RUNPOD_SSH_KEY_B64")
+    if not SSH_KEY.is_file() and not b64 and "RUNPOD_SSH_KEY_B64" in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(","):
+        raise PodError("RUNPOD_SSH_KEY_B64 not in this shell though this VM injects it: rerun from a fresh tmux login shell")
     if SSH_KEY.is_file() or not b64:
         return SSH_KEY
     try:
