@@ -51,7 +51,8 @@ theorem rep_rounds_retained {spec : SessionSpec} {st : Setup} {sch : Flock.Sched
 /-- **flock-verify's acceptance, round by round** (§6, §9–§13): under tags that retain rounds, the record decodes
 against the session's spec, and for every table `j`, at its `fast100` schedule, both reps satisfy `RepRounds` on their
 proof files. -/
-theorem accepts_rep_rounds {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds = true) (h : Accepts I t) :
+theorem accepts_rep_rounds {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
+    (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
@@ -59,7 +60,7 @@ theorem accepts_rep_rounds {I : Inputs} {t : Transcript} (hr : I.tags.retainRoun
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 1 t.proofs[2 * j + 1]! := by
   obtain ⟨spec, sts, hs, hv⟩ := h
   obtain ⟨sess, schs, hsess, hsz, -, -, hall⟩ := verify_ok_tables hv
-  have hret := decode_allRetained ((setupTables_retain hs).trans hr) hsess
+  have hret := decode_allRetained ((setupTables_retain hh hs).trans hr) hsess
   rw [Array.size_map] at hsz
   refine ⟨spec, sts, sess, hs, hsess, hsz, fun j hj => ?_⟩
   obtain ⟨hs', c, hf, h0, h1⟩ := hall j (by rw [Array.size_map]; exact hj)

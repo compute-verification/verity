@@ -121,12 +121,13 @@ theorem drawSetup_of_setupH {st : Stmt}
 /-- **A draw flock-verify accepts sets up.** A one-table acceptance whose record's draw is `d`: setupH accepted its
 inputs at `d` (`st`), the draw decodes (`D`), and whenever `D` proves `S` and `st`'s link points are `mPts`, a
 `DrawSetup` at `d` has statement `st`. -/
-theorem drawSetup_of_accepts (hc1 : I.count ≤ 1) {t : Exec.Transcript} (h : Accepts I t)
+theorem drawSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
+    (h : Accepts I t)
     (hd : recordDraw t.record = some d) :
     ∃ st D, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st ∧
       Draw.UnitDraw.ofJson d = .ok D ∧
       ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : DrawSetup I mPts S d, x.st = st) := by
-  obtain ⟨st, hst, hv⟩ := accepts_one hc1 h
+  obtain ⟨st, hst, hv⟩ := accepts_one hh hc1 h
   rw [hd] at hst
   obtain ⟨-, sch, -, -, hf, -, -⟩ := verify_one_ok hv
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
@@ -136,7 +137,8 @@ theorem drawSetup_of_accepts (hc1 : I.count ≤ 1) {t : Exec.Transcript} (h : Ac
 /-- **At a draw flock-verify accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
 session's record carries the coin server's draw `dj S`, that draw proves `S`, and setupH's statement at it has link
 points `mPts`. -/
-theorem tableAt_of_accepts (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+theorem tableAt_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
+    {S₀ : Finset (Fin n)}
     (x₀ : DrawSetup I mPts S₀ (dj S₀)) {t : Exec.Transcript} (h : Accepts I t)
     (hd : recordDraw t.record = some (dj S))
     (hS : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved)
@@ -144,7 +146,7 @@ theorem tableAt_of_accepts (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.J
       .ok st → st.mPts = mPts) :
     ∃ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program = .ok st ∧
       ∃ hwf : StmtWF st, (tableAt ht dj x₀ S).T.S = stmtOf st hwf (regionsOf st) := by
-  obtain ⟨st, D, hst, hD, hx⟩ := drawSetup_of_accepts ht hc ho hc1 h hd
+  obtain ⟨st, D, hst, hD, hx⟩ := drawSetup_of_accepts ht hc ho hh hc1 h hd
   obtain ⟨x, rfl⟩ := hx (hS D hD) (hmPts _ hst)
   obtain ⟨y, hy, e⟩ := tableAt_stmtOf ht dj x₀ x
   exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, e⟩⟩

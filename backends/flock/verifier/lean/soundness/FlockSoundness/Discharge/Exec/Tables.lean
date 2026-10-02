@@ -170,7 +170,7 @@ theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement
 whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the statement `stmtOf sts[j]` read off its
 layout and the record's link points, one run of the salted table game `tableAfterL` on the table's two streams' coins,
 with the proof files' openings and salts, accepts. -/
-theorem accepts_tables_hm96 {I : Inputs} {t : Transcript} (h : Accepts I t) :
+theorem accepts_tables_hm96 {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
@@ -192,8 +192,8 @@ theorem accepts_tables_hm96 {I : Inputs} {t : Transcript} (h : Accepts I t) :
             out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch ∧ out.salts = saltsOf p₀ p₁ sch := by
   obtain ⟨spec, sts, hs, hv⟩ := h
   obtain ⟨sess, schs, hsess, hsz, hpos, hschsz, hall⟩ := verify_ok_tables hv
-  obtain ⟨-, hsetup⟩ := setupTables_setupH hs
-  obtain ⟨hp2, hmp⟩ := setupTables_points hs
+  obtain ⟨-, hsetup⟩ := setupTables_setupH hh hs
+  obtain ⟨hp2, hmp⟩ := setupTables_points hh hs
   have hpts := decode_points hsess
   rw [Array.size_map] at hsz hpos hschsz
   refine ⟨spec, sts, sess, hs, hsess, hsz, hpos, fun j hj => ⟨hsetup j hj, ?_⟩⟩
