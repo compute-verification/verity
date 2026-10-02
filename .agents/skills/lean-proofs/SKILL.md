@@ -98,7 +98,8 @@ simp with that.
 - **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
   (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
   The entry lists the dependency's constants that the statement is about. An assumption stated over the package's own
-  definitions gets none: no upstream theorem can mention them, so the entry could never fire. The audit fails when the
+  definitions gets none: no upstream theorem can mention them, so the entry could never fire. Nor does one about a single
+  number (PoUS's `PrimeP16448`): its entry would fire on every theorem about primes. The audit fails when the
   pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3

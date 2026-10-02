@@ -190,7 +190,8 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 - A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
   that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
   dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
-  package's own definitions (PoUS's `LemmaA`) gets no entry, since no upstream theorem can mention them. A document's
+  package's own definitions (PoUS's `LemmaA`) gets no entry, since no upstream theorem can mention them, and neither does
+  one about a single number (PoUS's `PrimeP16448`), whose entry would match every theorem about primes. A document's
   "status upstream" cites that output; it is never written by hand.
 - Two agents never share a writable Lake build directory (`.lake`): parallel Lean work uses separate checkouts.
 - How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
