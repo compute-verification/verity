@@ -41,10 +41,12 @@ class BandParams:
     segments: int = 1
 
     def __post_init__(self) -> None:
-        for name in ("blocks_per_segment", "m", "d", "segments"):
+        for name in ("blocks_per_segment", "m", "segments"):
             value = getattr(self, name)
             if type(value) is not int or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
+        if type(self.d) is not int or self.d < 0:
+            raise ValueError("d must be a non-negative integer")
         if self.blocks_per_segment > 1 << 16:
             raise ValueError("block indices within a segment are 16 bits (the verifier's leaves)")
         if self.segments > 1 << 64:
@@ -123,9 +125,10 @@ def _checked(d: int, fn):
 
 @lru_cache(maxsize=None)
 def codec_for(d: int) -> Codec:
-    """The band codec for in-degree `d`: the dense chain's encoder and decoder, with the band's parents."""
-    if type(d) is not int or d < 1:
-        raise ValueError("the in-degree is a positive integer")
+    """The band codec for in-degree `d`: the dense chain's encoder and decoder, with the band's parents.  At `d = 0` no
+    block has a parent: each key is one pad call from its own `h_0`."""
+    if type(d) is not int or d < 0:
+        raise ValueError("the in-degree is a non-negative integer")
     return Codec(f"band-chain/d{d}/v1", _checked(d, dense.encode_segment), _checked(d, dense.decode_segment))
 
 

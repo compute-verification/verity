@@ -39,12 +39,13 @@ def test_round_trip(backend):
     assert len(set(blocks)) == len(blocks)
 
 
-def test_construction_is_lean_chain_band():
+@pytest.mark.parametrize("params", [PARAMS, band.BandParams(16, 64, 0, 3)], ids=["d4", "d0"])
+def test_construction_is_lean_chain_band(params):
     """C_v = r of the pad call of the overwrite chain from h_0 = 0^ℓ ‖ tag_s ‖ u256(v), absorbing C_{v-1}, ...,
-    C_{max(0, v-d)} (Lean `labelG`, `absorbedG`, `parentsDesc (bandDAG B d)`), xor W_v."""
-    prims = band.reference(PARAMS)
-    mb, d, s = PARAMS.m // 8, PARAMS.d, 2
-    seg = list(split(PARAMS, _w(PARAMS, 2)))[s]
+    C_{max(0, v-d)} (Lean `labelG`, `absorbedG`, `parentsDesc (bandDAG B d)`), xor W_v; at d = 0 the pad call alone."""
+    prims = band.reference(params)
+    mb, d, s = params.m // 8, params.d, 2
+    seg = list(split(params, _w(params, 2)))[s]
     tag_s = tag(salt_value(SALT), s).to_bytes(32, "little")
     pad = b"\x01" + bytes(mb - 2) + b"\x80"
     c: list[bytes] = []
@@ -54,7 +55,7 @@ def test_construction_is_lean_chain_band():
             out = prims.h.pi2.forward(int.from_bytes(b + h, "little")).to_bytes(2 * mb + 64, "little")
             r, h = out[:mb], out[mb:]
         c.append(bytes(x ^ y for x, y in zip(r, seg[v * mb:(v + 1) * mb])))
-    assert PARAMS.codec.encode_segment(PARAMS, prims, SALT, s, seg) == c
+    assert params.codec.encode_segment(params, prims, SALT, s, seg) == c
 
 
 def test_costs():
@@ -68,6 +69,23 @@ def test_costs():
     assert cost.depth == cost.work == calls == 70
     back, cost = run(dense.decode_segment_prog(params, prims.h, t, c), prims)
     assert back == w and cost.depth == 5 and cost.work == calls
+
+
+def test_d0_has_no_parents_and_one_call_per_block():
+    """At d = 0 (Lean `bandDAG B 0`, `par v = ∅`) every key is one pad call from its own h_0: 16 calls for 16 blocks, and
+    decode is one round; a negative in-degree is refused."""
+    params = band.BandParams(16, 64, 0)
+    prims = band.reference(params)
+    t = tag(salt_value(SALT), 0)
+    w = [random.Random(4).getrandbits(64) for _ in range(16)]
+    assert all(list(params.parents(v)) == [] for v in range(16)) and band.codec_for(0).name == "band-chain/d0/v1"
+    c, cost = run(dense.encode_segment_prog(params, prims.h, t, w), prims)
+    assert cost.work == 16
+    back, cost = run(dense.decode_segment_prog(params, prims.h, t, c), prims)
+    assert back == w and cost.depth == 1 and cost.work == 16
+    for refused in (lambda: band.BandParams(16, 64, -1), lambda: band.codec_for(-1)):
+        with pytest.raises(ValueError, match="non-negative"):
+            refused()
 
 
 def test_wide_band_is_dense():
