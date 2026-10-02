@@ -165,6 +165,62 @@ def test_the_file_is_the_contract(doc):
     assert len(json.dumps(doc)) < 1_000_000
 
 
+def _soak() -> dict:
+    """A small `pous-soak/v1`: per block, a loaded cell of 3,000 answers and one of 1,000, an idle cell and a
+    timestamping-off row that the presets must leave out."""
+    grid = [10 ** (k / 40) for k in range(201)]
+    params = {"link_bps": 4e11, "setting": "tuned", "nic": "mlx5_core", "mtu": 1500, "mss_bytes": 1448,
+              "frame_overhead_bytes": 90, "header_bytes": 192, "b_pcie_bytes_per_s": 25e9, "rx_usecs": 0.0,
+              "nic_rx_base_us": 2.0, "tx_fixed_us": 1.0, "request_frame_bytes": 106, "prop_ns_per_m": 5.0, "cable_m": 3.0,
+              "t_nic_rx_us": 2.0}
+    metrics = [{"id": "tor_400_tuned", "label": "400", "params": params},
+               {"id": "tor_100_default", "label": "100", "params": {**params, "link_bps": 1e11, "setting": "default",
+                                                                    "rx_usecs": 8.0, "t_nic_rx_us": 10.0}}]
+    cells, survival = [], []
+
+    def s_of(times: list[float]) -> list[float]:
+        return [sum(x >= t for x in times) / len(times) for t in grid]
+
+    for j, b in enumerate(E.BLOCK_BYTES):
+        for k, (load, rate, n, slow) in enumerate((("decode", 1000, 3000, 900.0), ("mixed", 10, 1000, 3000.0),
+                                                    ("idle", 100, 2000, 50_000.0))):
+            cid = 4 * j + k
+            cells.append({"cell": cid, "load": load, "rate_hz": rate, "block_bytes": b, "config": "tuned"})
+            times = [100.0 + j] * (n - 1) + [slow]
+            for metric in ("tor_400_tuned", "tor_100_default"):
+                survival.append({"cell": cid, "metric": metric, "op": "challenge", "timestamping": True, "n": n,
+                                 "max_us": slow, "s": s_of(times)})
+        survival.append({"cell": 4 * j, "metric": "tor_400_tuned", "op": "challenge", "timestamping": False, "n": 10,
+                         "max_us": 1e5, "s": s_of([1e5] * 10)})
+    return {"run": {"host": "node", "gpu": "gpu"}, "t_us": grid, "metrics": metrics, "cells": cells, "survival": survival}
+
+
+def test_the_tor_presets_pool_the_loaded_cells_by_answers():
+    soak = _soak()
+    built = E.build(generated_at="x", commit="test", soak=(soak, "art:soak"))
+    models = {m["id"]: m for m in built["honest_models"]}
+    assert list(models) == ["hardened", "measured", "rack", "rack-100g", "datacenter", "heavy-tail"]
+    rack = models["rack"]["curves"][0]
+    at = lambda m, t: E.survival_at(models[m]["curves"][0]["t_us"], models[m]["curves"][0]["survival_fraction"], t)
+    i900 = max(i for i, t in enumerate(rack["t_us"]) if t <= 900.0)
+    assert rack["survival_fraction"][i900] == pytest.approx(2 / 4000, rel=1e-5)        # idle and ts-off rows left out
+    i3000 = max(i for i, t in enumerate(rack["t_us"]) if t <= 3000.0)
+    assert rack["survival_fraction"][i3000] == pytest.approx(1 / 4000, rel=1e-5)
+    t_last = rack["t_us"][i3000]
+    assert at("rack", 2 * t_last) == pytest.approx((1 / 4000) / 2 ** E.SOAK_TAIL_ALPHA, rel=1e-4)   # the Pareto past the data
+    assert all(a <= b for a, b in zip(models["rack-100g"]["curves"][0]["survival_fraction"],
+                                      models["datacenter"]["curves"][0]["survival_fraction"]))
+    assert "rx-usecs 0" in models["rack"]["description"] and "400 Gb/s" in models["rack"]["description"]
+    assert "rx-usecs 8" in models["rack-100g"]["description"] and "median 120 µs" in models["datacenter"]["description"]
+    assert all(m["sources"] == ["art:soak"] for k, m in models.items() if k in E.SOAK_PRESETS)
+    assert models["measured"] == next(m for m in E.build(generated_at="x", commit="test")["honest_models"]
+                                      if m["id"] == "measured")
+    for v in built["vectors"]:
+        got = E.evaluate(built, v["inputs"])
+        assert got["f0_count"] == v["expected"]["f0_count"]
+    assert {v["inputs"]["model"] for v in built["vectors"]} == set(models) and 40 <= len(built["vectors"]) <= 60
+
+
 def test_measured_from_pooled_histograms():
     edges = [10 ** (k / 40) for k in range(201)]
 
