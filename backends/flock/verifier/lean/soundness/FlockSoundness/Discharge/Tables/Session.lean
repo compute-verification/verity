@@ -35,7 +35,13 @@ theorem sessionBL_eq_modelSession (A : Arith 𝔽 K) (H : List UInt8 → D) (E :
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (ts : List (TabSpec mPts)) :
     modelSession (J := ts.length) (fun _ cap pend os => tableOutL H E Lf cap pend os)
       (fun j => repsOf (D := D) A (ts.get j)) = sessionBL A H E Lf ts := by
-  sorry
+  unfold modelSession sessionBL sessAfterBL posOf
+  congr 1
+  funext caps
+  congr 1
+  funext pts
+  simp only [gamesBL, List.map_ofFn]
+  rfl
 
 variable [Nonempty D] [Inhabited D] [Inhabited Sl]
 
@@ -68,7 +74,9 @@ theorem live_le_sessionBLJ (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle
     (Pr : Strategy (liveSession dg ts.length mPts N)) :
     prob pL (liveSession dg ts.length mPts N) Pr ≤
       prob (acceptedBL ts) (sessionBL A H E Lf ts) (simSessJ A H E Lf ts pL opn dg dec one fin capOf N hdec Pr) := by
-  sorry
+  unfold simSessJ
+  rw [prob_cast]
+  exact live_le_session _ _ _ pL opn dg dec one fin capOf N _ _ hdec Pr
 
 /-! ## The audit -/
 
@@ -123,6 +131,25 @@ theorem execRefines_tables (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin c
     (τ : Strategy (auditLive L Reg (liveOfJ dg plan N wr))) :
     ExecRefines (auditLive L Reg (liveOfJ dg plan N wr)) τ (LiveAccepts I) (fun _ => False)
       (audit L Reg (batchedSessionL H E Lf plan)) (simAuditJ H E Lf plan I wr opn dg dec one fin capOf N hdec τ) := by
-  sorry
+  have h0 : prob (fun _ => False) (auditLive L Reg (liveOfJ dg plan N wr)) τ = 0 :=
+    prob_eq_zero_of_out (fun _ _ h => h) τ
+  unfold ExecRefines
+  rw [h0, add_zero]
+  show ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (LiveAccepts I) ((liveOfJ dg plan N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) ≤
+    ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (fun o => o.1 = true) ((batchedSessionL H E Lf plan (L.draw ω) τ.1).map
+        fun ok => (ok, L.draw ω)) ((simAuditJ H E Lf plan I wr opn dg dec one fin capOf N hdec τ).2 ω)
+  refine Finset.sum_le_sum fun ω _ => mul_le_mul_right ?_ _
+  unfold simAuditJ batchedSessionL
+  rw [prob_strategy_map, prob_strategy_map, prob_map]
+  unfold liveOfJ
+  rw [prob_map]
+  refine (live_le_sessionBLJ execArith H E Lf (plan (L.draw ω) τ.1) _ (opn (L.draw ω) τ.1) dg (dec (L.draw ω) τ.1)
+    (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (hdec ω τ.1) _).trans_eq ?_
+  congr 1
+  funext outs
+  classical
+  exact propext decide_eq_true_iff.symm
 
 end FlockSoundness.Discharge.Tables
