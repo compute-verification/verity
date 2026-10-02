@@ -13,8 +13,8 @@ many fall outside D-SB's byte range (`device_scales`).
 
 * the epoch: B's root as the device committed it, and the salt from the epoch beacon (`audit.Epoch.start`);
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
-* the records: one unit, no channel split, its real rows, and the rows that fail `row_passes` (D-NF) as excluded, as
-  `pearl_c_work.declare` has them;
+* the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
+  rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `pearl_c_work.declare` has them;
 * the draws' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
   there: t draws by the records' credit and one tile per excluded row.
 
@@ -51,7 +51,7 @@ from pathlib import Path
 from verity.commitments import Commitment, MerkleTree, Opening
 
 from .. import audit as au
-from ..protocol import Matmul, Shape, tagged
+from ..protocol import Context, Matmul, Shape, tagged
 from . import get
 from . import pearl_c4 as F
 from . import pearl_c_work as W
@@ -64,9 +64,8 @@ SHORTCUTS = (
     "the draws' beacon is Fiat-Shamir over the transcript root and the records root (draw_beacon), not a public beacon "
     "round after the commitment",
     "the epoch beacon is a label of the benchmark's operand set, not a public beacon round after the weights",
-    "the transcript tree over the tile leaves and the records (row_passes per row) are computed on the host after timing",
-    "the records exclude D-NF's rows only, not R1's (r1_rows over the whole unit is not run); the verifier checks R1 on "
-    "every opened row, so an undeclared row over R1 rejects its tile",
+    "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
+    "timing",
 )
 
 
@@ -134,6 +133,10 @@ def _passes(fmt: str, k: int, row: bytes) -> bool:
     return F.row_passes(F.FORMATS[fmt], F.parse_row(row, k))
 
 
+def _over_r1(s: F.PearlC4, ctx: Context, k_kept: int, row: tuple[str, int, bytes]) -> bool:
+    return s.r1_row(ctx, *row, k_kept)
+
+
 def _scheme(t: dict, scheme: F.PearlC4 | None) -> F.PearlC4:
     s = scheme or get(t["scheme"])
     if not isinstance(s, F.PearlC4) or s.name != t["scheme"]:
@@ -175,10 +178,14 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     fmap, done = _pool(workers, max(1, (real + n) // (4 * max(workers, 1))))
     try:
         passes = list(fmap(partial(_passes, s.fmt.name, k), rows_a[:real] + rows_b))
+        live = [("A", i, rows_a[i]) for i in range(real) if passes[i]]
+        live += [("B", j, rows_b[j]) for j in range(n) if passes[real + j]]
+        r1 = partial(_over_r1, s, Context(epoch.salt, unit, root_a, root_b), k)
+        over = {(side, i) for (side, i, _), o in zip(live, fmap(r1, live)) if o}
     finally:
         done()
-    record = W.UnitRecord(unit, real, k, tuple(i for i in range(real) if not passes[i]),
-                          tuple(j for j in range(n) if not passes[real + j]))
+    record = W.UnitRecord(unit, real, k, tuple(i for i in range(real) if not passes[i] or ("A", i) in over),
+                          tuple(j for j in range(n) if not passes[real + j] or ("B", j) in over))
     splits = {unit.weight: W.Split(k)}
     digest = W.records_root(epoch.salt, epoch.weights_root, splits, [record])
     beacon = draw_beacon(tree.commitment.root, digest)

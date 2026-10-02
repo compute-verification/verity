@@ -5,7 +5,7 @@
 #      a loopback verifier process) LISTEN=0.0.0.0:7300 SESSIONS=N (serve) OPERATOR=lane  GPU=1 (0: CPU-only build)  SM=90
 set -uxo pipefail
 SRC=$(pwd); SM=${SM:-90}; MODE=${MODE:-all}; GPU=${GPU:-1}
-W=/workspace/flock-gpu-link; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/fgl}/out; mkdir -p $W $O
+W=${FLOCK_WORK:-/workspace}/flock-gpu-link; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/fgl}/out; mkdir -p $W $O
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null; free -g | head -2
 read -r Q PER < /sys/fs/cgroup/cpu.max 2>/dev/null || { read -r Q < /sys/fs/cgroup/cpu/cpu.cfs_quota_us && read -r PER < /sys/fs/cgroup/cpu/cpu.cfs_period_us; } 2>/dev/null || { Q=max; PER=100000; }; [ "$Q" = -1 ] && Q=max
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER ))); export RAYON_NUM_THREADS=$TH

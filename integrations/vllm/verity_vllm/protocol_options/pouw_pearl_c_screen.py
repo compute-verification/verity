@@ -1,6 +1,7 @@
-"""The records' liveness screen of the Pearl-C device path (`pouw_pearl_c_device`), and the copy its CUDA graphs scatter a call's
-outputs with.  `screen` is the per-row rules in torch; `screen_into` runs them as one fused Triton program a row on the GPU (or
-as `screen`'s torch operations elsewhere); `excluded` gives the rows the rules exclude, deciding the band's rows exactly.
+"""The records' liveness screen of the Pearl-C device path (`pouw_pearl_c_device`), and the kernel its CUDA graphs scatter a
+call's outputs with.  `screen` is the per-row rules in torch; `screen_into` runs them as one fused Triton program a row on the GPU (or
+as `screen`'s torch operations elsewhere); `scatter_into` runs the same programs into the pass, with a graph's copies of its
+leaves and A root in the same launch; `excluded` gives the rows the rules exclude, deciding the band's rows exactly.
 """
 from __future__ import annotations
 
@@ -38,67 +39,22 @@ def screen(x: Any, alpha: Any, aux: Any, chunk: int = 1 << 26) -> tuple[Any, Any
     return fails, unsure
 
 
-_SCREEN_KERNEL: list = []
+#: elements a program of the screen reads at once, and bytes a program of the scatter copies
+SCATTER_BLOCK = 1024
 
 
-def _screen_kernel():
-    """`screen` as one Triton program a row: FP64 sum of the squares at positions ≡ 0 (mod 8), the band's bounds rounded to
-    FP32 as `screen` rounds them, the dead and in-band counts, and the noise floor from the row's α and ρ.  Its sum's order is
-    not torch's, so a row can come out unsure in one and decided in the other; both leave only rows within the band undecided,
-    and `excluded` decides those exactly, so the records are the same."""
-    if not _SCREEN_KERNEL:
-        import triton
-        import triton.language as tl
+def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves: Any, leaves_to: Any, root: Any, roots_to: Any,
+                 offs: Any) -> None:
+    """A graph's scatter into the pass, one launch: the first `rows` rows of x screened (`screen_into`'s flags) into
+    `flags_to`, and the `leaves` and A's 32-byte `root` copied to `leaves_to` and `roots_to`, each at the byte offset
+    `offs[1]`, `offs[0]`, `offs[2]` read on the device.  Its first `rows` programs screen a row each, the next
+    ⌈len(leaves) / SCATTER_BLOCK⌉ copy the leaves, the last one the root."""
+    import torch
 
-        @triton.jit
-        def kernel(x, alpha, aux, out, k, k8, sigma, band, BLOCK: tl.constexpr):
-            row = tl.program_id(0)
-            base = x + row.to(tl.int64) * k
-            acc = tl.zeros([BLOCK], dtype=tl.float64)
-            for s in range(0, k, BLOCK):
-                offs = s + tl.arange(0, BLOCK)
-                v = tl.load(base + offs, mask=offs < k, other=0.0).to(tl.float32)
-                acc += tl.where(offs % 8 == 0, (v * v).to(tl.float64), 0.0)
-            thr = 64.0 * tl.sum(acc, axis=0) / k8
-            hi = (thr * (1.0 + band)).to(tl.float32)
-            lo = (thr * (1.0 - band)).to(tl.float32)
-            dead = tl.zeros([BLOCK], dtype=tl.int32)
-            near = tl.zeros([BLOCK], dtype=tl.int32)
-            for s in range(0, k, BLOCK):
-                offs = s + tl.arange(0, BLOCK)
-                live = offs < k
-                v = tl.load(base + offs, mask=live, other=0.0).to(tl.float32)
-                sq = v * v
-                dead += tl.where(live & (sq > hi), 1, 0)
-                near += tl.where(live & (sq >= lo) & (sq <= hi), 1, 0)
-            d = tl.sum(dead, axis=0)
-            b = tl.sum(near, axis=0)
-            floor = tl.where(tl.load(aux + 2 * row + 1).to(tl.float64) * tl.load(alpha + row).to(tl.float64) < sigma, 1, 0)
-            sure_fail = tl.where(64 * d > k, 1, 0)
-            sure_pass = tl.where(64 * (d + b) <= k, 1, 0)
-            tl.store(out + 2 * row, tl.maximum(floor, sure_fail).to(tl.uint8))
-            tl.store(out + 2 * row + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
-        _SCREEN_KERNEL.append(kernel)
-    return _SCREEN_KERNEL[0]
-
-
-_COPY_KERNEL: list = []
-
-
-def copy_kernel():
-    """n bytes from src to dst at the byte offset `offs[which]`, read on the device (a graph's scatter into the pass)."""
-    if not _COPY_KERNEL:
-        import triton
-        import triton.language as tl
-
-        @triton.jit
-        def copy_at(src, dst, offs, which, n, BLOCK: tl.constexpr):
-            o = tl.load(offs + which)
-            i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-            live = i < n
-            tl.store(dst + o + i, tl.load(src + i, mask=live), mask=live)
-        _COPY_KERNEL.append(copy_at)
-    return _COPY_KERNEL[0]
+    from .pouw_pearl_c_triton import scatter
+    k, n, B = x.shape[1], leaves.numel(), SCATTER_BLOCK
+    scatter[(rows - (-n // B) + 1,)](x, alpha.view(torch.float32), aux.view(torch.float32), rows, k, len(range(0, k, C.S5_STRIDE)),
+                                     P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, BLOCK=B)
 
 
 def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
@@ -107,8 +63,9 @@ def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
     import torch
     rows, k = x.shape
     if fused:
-        _screen_kernel()[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)),
-                                  P.SIGMA_MIN, BAND, BLOCK=1024)
+        from .pouw_pearl_c_triton import screen as kernel
+        kernel[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)), P.SIGMA_MIN,
+                        BAND, BLOCK=SCATTER_BLOCK)
     else:
         fails, unsure = screen(x, alpha, aux)
         out[:, 0].copy_(fails)

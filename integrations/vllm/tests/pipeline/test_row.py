@@ -395,7 +395,7 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
 
     for name, fn in (("gpu_exclusive", lambda why: None), ("follow_compose", follow_compose), ("derive_all", derive_all),
                      ("guarded", lambda what, fn, *a: summary), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
-                     ("required_manifest", required_manifest), ("run_tl", run_tl), ("call_boundaries", lambda to: None)):
+                     ("required_manifest", required_manifest), ("run_tl", run_tl), ("call_boundaries", lambda to, cmd=None: None)):
         monkeypatch.setattr(r, name, fn)
     monkeypatch.setattr(R, "build_line", lambda d: ("d" * 16, "m" * 16))
     return r, seen
