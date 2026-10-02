@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.Partitioning.Guarantees
+import FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
 
 /-!
 # Optimal partitioning against free compute: the proofs
@@ -196,8 +197,7 @@ theorem ConverseAsymptotic : Guarantees.ConverseAsymptotic := by
         field_simp
     _ ≤ ((n : ℝ) - K + 1) * (1 - Real.exp (-(Λ / K))) := mul_le_mul_of_nonneg_left (by linarith) hM
 
-theorem Achievability : Guarantees.Achievability := by
-  sorry
+theorem Achievability : Guarantees.Achievability := Unequal.achievability
 
 theorem GranularityOptimum : Guarantees.GranularityOptimum := by
   sorry
