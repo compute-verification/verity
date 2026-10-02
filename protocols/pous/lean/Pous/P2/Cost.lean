@@ -29,8 +29,9 @@ queries (`add`, `mul`, `one`) in total. `Q` counts key queries, not Keccak-f cal
 key expander's cost per query. Hardware enters only through the certificate's numbers, never here: `D` from the
 claim `ring-mul-floor` (no device in scope completes one multiplication in `Z/p` at the scheme's width faster than
 `t_mul`, using all of its resources; ASICs and FPGAs are out of its scope), `Q` from `keccak-rate-ceiling`, and `L`
-from `ring-op-ceiling` (no device in scope performs more than `L` ring operations within one answer's deadline). The
-model itself is the claim `generic-ring`. Every statement over these is parametric in `D`, `Q` and `L`.
+from `ring-op-ceiling` (no responder, with whatever devices it uses, performs more than `L` ring operations within one
+answer's deadline; throughput adds up across devices, so the certificate prices `L` from a device count or a budget).
+The model itself is the claim `generic-ring`. Every statement over these is parametric in `D`, `Q` and `L`.
 
 `SeqResponderOn`, `SimResponderOn`, `AuditSecureOn` and `MeetsOn` are `SeqResponder`, `SimResponder`, `AuditSecure`
 and `Meets` with `RingBounded D Q L` in place of `Bounded D Q`. `Bounded`, `AuditSecure` and `Meets` are unchanged.
