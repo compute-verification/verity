@@ -88,6 +88,7 @@ theorem findIdx?_lt {α : Type} {xs : Array α} {p : α → Bool} {i : ℕ} (h :
 structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
+  portWords : ∀ p ∈ c.ports.toList, 2 * p.words = 128 * p.chunks
   unitNet : c.unitNet < c.nets.size
   shaNet : c.shaNet < c.nets.size
   hmNet : c.hmNet < c.nets.size
@@ -326,7 +327,7 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
   -- the ports
-  have hports : ∀ p ∈ ports.toList, 0 < p.chunks := by
+  have hports : ∀ p ∈ ports.toList, 0 < p.chunks ∧ 2 * p.words = 128 * p.chunks := by
     intro p hp
     have := forIn_array_yield_ok (fun a s hs => by
       split at hs
@@ -389,7 +390,8 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
       simpa using hp
     · cases hi
   refine ⟨?_, ⟨more, hm⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
-  exact { nets := hbuilt, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
+  exact { nets := hbuilt, ports := fun p hp => (hports p hp).1, portWords := fun p hp => (hports p hp).2,
+          unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩,
           rowNets := by cases w'; exact hrows, typed := rfl }
 
