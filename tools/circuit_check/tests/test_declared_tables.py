@@ -16,6 +16,7 @@ import itertools
 import pkgutil
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -28,7 +29,7 @@ from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_vllm.program.registry import lifted as L
-from verity_vllm.program.registry import quarantine as Q
+from verity_vllm.program import registry as R
 
 #: the fewest entries an indexable constant has to be a table
 MIN_ENTRIES = 16
@@ -173,11 +174,15 @@ def undeclared(p: PrimitiveDefinition) -> list[str]:
 
 
 def _primitives() -> list[PrimitiveDefinition]:
-    """Every primitive Verity defines, the same in any session: the registries, the vLLM registry's quarantine, and both lifts of
-    each (made on demand, so a session holds only those its tests asked for); never one a test module registered."""
+    """Every primitive Verity defines, the same in any session: the registries, every module of the vLLM registry (its quarantine
+    too: a quarantined primitive is still registered and callable), and both lifts of each (made on demand, so a session holds
+    only those its tests asked for); never one a test module registered."""
     TG.load_registries()
-    for m in pkgutil.walk_packages(Q.__path__, f"{Q.__name__}."):
-        importlib.import_module(m.name)
+    root = Path(R.__path__[0])
+    loaded = sorted(importlib.import_module(m.name).__name__ for m in pkgutil.walk_packages(R.__path__, f"{R.__name__}."))
+    on_disk = {".".join((R.__name__, *f.relative_to(root).with_suffix("").parts)).removesuffix(".__init__")
+               for f in root.rglob("*.py")}
+    assert loaded == sorted(on_disk - {R.__name__}), "a module of the vLLM registry was skipped"
     for p in [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition) and TG._authored(d)]:
         if not p.id.startswith("Lifted[") and not hasattr(p, "ordinary_of"):
             L.lifted_prim(p)
