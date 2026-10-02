@@ -14,17 +14,18 @@ value is computed in exactly one of them.
     Pc4RowA{K}        row i of A              A_i, E_A,i, F_A, F_B                      A′_i's codes and scale bytes, P_A,i, ok
     Pc4Tile{K,TM,TN}  tile of TM × TN words   its TM rows A′, P_A and TN rows B̃, P_B    C̃ and U of its words
 
-A tile unit, not a word unit: a unit reads another unit's rows through their commitments, which under hiding it hashes in
-the circuit, and a word unit would hash about 4.9 KiB of rows for one word; a tile (64 × 64 in the scheme, `TILE`) hashes
-each of its rows once.
+A tile unit, not a word unit: a unit reads another unit's rows through their commitments, which under hiding the proof
+hashes, and a word unit would hash about 4.9 KiB of rows for one word; a tile (64 × 64 in the scheme, `TILE`) hashes each of
+its rows once.
 
-The hiding Programs (``Shape.hidden``: `Pc4WeightHidden`, `Pc4CallHidden`, `Pc4CheckHidden`) have the same units, each its
-plain unit (a `Pc4RowAHidden` holds a `Pc4RowA`) and the hm96-sha512 commit strings (`leaves`) of the rows it reads and
-writes, so a root publishes only admission bits and commit strings: a row unit's of its input row (bf16) and of its nvfp4-p
-row (A′_i ‖ P_A,i or B̃_j ‖ P_B,j), a tile unit's of the nvfp4-p rows it reads and of its tile digest (`pearl_c.leaf` of C̃
-and U).  Every salt is an input (``ya``, ``yam`` per row of A, ``yb``, ``ybm`` per row of B, ``yt`` per tile).  A tile's
-string for row i is row i's own, one salt, which is how the verifier links the two units, so each such string is computed in
-both (`unit_cut`'s ``recompute``).
+The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ only in the tile: `Pc4TileHidden` is
+`Pc4Tile` and its tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U), which it returns in place of C̃ and U.
+The weight's Program is `Pc4Weight` under hiding too.  The hiding is C-Flock's: every row a unit reads or writes is a
+committed port, which C-Flock commits as an hm96-sha512 row and hashes in the proof, so these Programs hold no leaf and no
+value is computed in two units.  `PORTS` names each unit's committed rows by schema (`leaves.SCHEMAS`): a row unit's input
+row (bf16) and the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j), and a tile unit's TM + TN nvfp4-p rows and its
+tile digest.  A tile reads each row as its row unit wrote it, the same words under the same schema, so the units link by
+equal commit strings.  The rest is public: the anchored inputs and each row's ``ok``.
 
 A row unit computes the row's statistics, its noise atoms, block scales and casts (the forming), Ẽ, and its half of the
 clean-up: P_A,i = [Ẽ_A,i ‖ RNE_bf16(A′_i·F_B)], P_B,j = [RNE_bf16(Ẽ_B,j·G − B̃_j·F_A) ‖ −Ẽ_B,j].  ``ok`` is the row's
@@ -36,22 +37,23 @@ Three of the scheme's integer operations are written as float operations they eq
 ``max |D|`` is an `F32Fmaxf` reduction (D is finite on an admitted row), and ``ue4m3(β)``'s mask of bit 7 is dropped (β is
 non-negative there).  ``max |x|`` stays the integer maximum, so a non-finite word reaches ``ok``.
 
-The noise lines (E_A, E_B, F_A, F_B) are inputs, anchored like `ncp2`'s salt: they are TurboSHAKE128 of seeds the
-verifier derives from public values (the salt, the commitments' roots, the unit index), so they carry no row's value.  G =
-F_Bᵀ·F_A (`pearl_c4.gram`) is a function of F_A and F_B alone, so it is anchored too: the verifier computes it, and no unit
-does.
+The noise lines (E_A, E_B, F_A, F_B) and G = F_Bᵀ·F_A (`pearl_c4.gram`) are verifier-derived public inputs, as `ncp2`'s
+anchored inputs are (`anchors.TileAnchors`, `Shape.anchored`): the lines are TurboSHAKE128 of the scheme's seeds, which read
+public values alone (seed_A the salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), so
+they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.
 """
 from __future__ import annotations
 
 import bisect
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any
+from typing import Any, Sequence
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ir import partition_object as PO
-from verity.ir.cut import RECOMPUTE, CallGraph, check_cut
+from verity.ir.codec import descriptor_id
+from verity.ir.cut import CallGraph, check_cut
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.partition import CutVerdict
 from verity.ir.refs import array_of, tuple_of
@@ -251,63 +253,37 @@ Pc4TileDef = CompositeDefinition(
         "m16n8k16 steps from C̃_ij over P_A,i·P_B,j (`pearl_c4.chain`, `pearl_c4.peel`).", conformance="protocol-defined")
 
 
-# ---- the hiding units: each the plain unit and the leaves of the rows it reads and writes (`leaves`) --------------------
+# ---- the hiding tile: its checked words behind its digest --------------------------------------------------------------
 
-def _row_hidden_sig(S_, second: str, extra: tuple = ()):
-    params, out = _row_sig(S_, second, extra)
-    return params + (("y_row", L.SALT), ("y_mid", L.SALT)), Tuple(*out.fields, L.BC, L.BC)
-
-
-def _row_hidden_body(plain, role: int):
-    def body(B, S_, x, *rest):
-        e, k, (*args, y_row, y_mid) = _Emit(B), S_.K, rest
-        out = B.call(bind(plain, K=k), x, *args)
-        codes, scales, p, ok = (out[f] for f in range(4))
-        return tuple_of(codes, scales, p, ok, L.leaf(e, role, L.bf16_row(e, x, k), y_row),
-                        L.leaf(e, role, L.nvfp4_p_row(e, codes, scales, p, k), y_mid))
-    return body
-
-
-Pc4RowAHiddenDef = CompositeDefinition(
-    "Pc4RowAHidden", 1, ("K",), lambda S_: _row_hidden_sig(S_, "fb"), _row_hidden_body(Pc4RowADef, ROLE_X),
-    doc="`Pc4RowA` and the commit strings of A_i (bf16, role X, salt y_row) and of A′_i ‖ P_A,i (nvfp4-p, role X, salt "
-        "y_mid).", conformance="protocol-defined")
-
-Pc4RowBHiddenDef = CompositeDefinition(
-    "Pc4RowBHidden", 1, ("K",), lambda S_: _row_hidden_sig(S_, "fa", (("g", GRAM),)), _row_hidden_body(Pc4RowBDef, ROLE_W),
-    doc="`Pc4RowB` and the commit strings of B_j (bf16, role W, salt y_row) and of B̃_j ‖ P_B,j (nvfp4-p, role W, salt "
-        "y_mid).", conformance="protocol-defined")
-
-
-def _tile_hidden_body(B, S_, ac, as_, bc, bs, pa, pb, ya, yb, yt):
-    e, k, tm, tn = _Emit(B), S_.K, S_.TM, S_.TN
+def _tile_hidden_body(B, S_, ac, as_, bc, bs, pa, pb):
+    k, tm, tn = S_.K, S_.TM, S_.TN
     out = B.call(templates(k, (tm, tn))["tile"], ac, as_, bc, bs, pa, pb)
-    reads_a = [L.leaf(e, ROLE_X, L.nvfp4_p_row(e, ac[i], as_[i], pa[i], k), ya[i]) for i in range(tm)]
-    reads_b = [L.leaf(e, ROLE_W, L.nvfp4_p_row(e, bc[j], bs[j], pb[j], k), yb[j]) for j in range(tn)]
-    return tuple_of(array_of(reads_a), array_of(reads_b), L.tile_leaf(e, tm, tn, out[0], out[1], yt))
-
-
-def _tile_hidden_sig(S_):
-    params, _ = _tile_sig(S_)
-    return (params + (("ya", Array(S_.TM, L.SALT)), ("yb", Array(S_.TN, L.SALT)), ("yt", L.SALT)),
-            Tuple(Array(S_.TM, L.BC), Array(S_.TN, L.BC), L.BC))
+    return B.call(L.tile_digest(tm, tn), out[0], out[1])
 
 
 Pc4TileHiddenDef = CompositeDefinition(
-    "Pc4TileHidden", 1, ("K", "TM", "TN"), _tile_hidden_sig, _tile_hidden_body,
-    doc="`Pc4Tile` with its checked words hidden: the commit strings of the nvfp4-p rows it reads (A′_i ‖ P_A,i under ya_i, "
-        "B̃_j ‖ P_B,j under yb_j) and of its tile digest (`leaves.PearlTileDigest`, role X, salt yt).",
+    "Pc4TileHidden", 1, ("K", "TM", "TN"), lambda S_: (_tile_sig(S_)[0], L.DIGEST), _tile_hidden_body,
+    doc="`Pc4Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
+
+#: each unit's ports under hiding, by role: its C-Flock-committed rows, each (schema, role, ports) whose words are its ports'
+#: in order (`leaves.words_*`; parameters by name, outputs by index, row r of each where a tile reads TM or TN), its anchored
+#: inputs and its public outputs.  Every port is in exactly one of the three.
+PORTS = {
+    "row_b": {"rows": (("bf16", ROLE_W, ("x",)), ("nvfp4-p", ROLE_W, (0, 1, 2))), "anchors": ("e", "fb", "fa", "g"),
+              "public": (3,)},
+    "row_a": {"rows": (("bf16", ROLE_X, ("x",)), ("nvfp4-p", ROLE_X, (0, 1, 2))), "anchors": ("e", "fa", "fb"),
+              "public": (3,)},
+    "tile": {"rows": (("nvfp4-p", ROLE_X, ("ac", "as", "pa")), ("nvfp4-p", ROLE_W, ("bc", "bs", "pb")),
+                      ("tile", ROLE_X, (0,))), "anchors": (), "public": ()},
+}
 
 
 @lru_cache(maxsize=16)
 def templates(k: int, tile: tuple[int, int] = TILE, hidden: bool = False) -> dict[str, SpecializedDefinition]:
-    """The unit templates at depth ``k`` and tile ``tile`` (rows, columns), by role; ``hidden``, the hiding units."""
-    if hidden:
-        return {"row_b": bind(Pc4RowBHiddenDef, K=k), "row_a": bind(Pc4RowAHiddenDef, K=k),
-                "tile": bind(Pc4TileHiddenDef, K=k, TM=tile[0], TN=tile[1])}
+    """The unit templates at depth ``k`` and tile ``tile`` (rows, columns), by role; ``hidden``, the hiding tile."""
     return {"row_b": bind(Pc4RowBDef, K=k), "row_a": bind(Pc4RowADef, K=k),
-            "tile": bind(Pc4TileDef, K=k, TM=tile[0], TN=tile[1])}
+            "tile": bind(Pc4TileHiddenDef if hidden else Pc4TileDef, K=k, TM=tile[0], TN=tile[1])}
 
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
@@ -328,6 +304,17 @@ class Shape:
         if self.k % ATOM or min(self.m, self.k, self.n, tm, tn) <= 0 or self.m % tm or self.n % tn:
             raise DomainError(f"Pearl-C4's circuit needs 64 | k and whole tiles on each side: {self}")
 
+    def anchored(self, seed_a: bytes, seed_b: bytes, rows: Sequence[int], cols: Sequence[int],
+                 names: Sequence[str]) -> dict[str, list[int]]:
+        """The anchored inputs ``names`` by parameter, from the scheme's seeds (`pearl_c4`'s `noise`): E_A's lines for A's
+        rows ``rows``, E_B's for B's rows ``cols``, F_A, F_B and G."""
+        k, flat = self.k, lambda lines: [c for ln in lines for c in ln]                # noqa: E731
+        derive = {"ea": lambda: flat(S.line(seed_a, S.ROLE_EA, i) for i in rows),
+                  "eb": lambda: flat(S.line(seed_b, S.ROLE_EB, j) for j in cols),
+                  "fa": lambda: flat(S.basis(seed_b, S.ROLE_FA, k)), "fb": lambda: flat(S.basis(seed_b, S.ROLE_FB, k)),
+                  "g": lambda: flat(S.gram(S.NVFP4, seed_b, k))}
+        return {p: derive[p]() for p in names}
+
 
 def _weight_units(B, k: int, b, eb, fa, fb, g):
     rows = B.batch(templates(k)["row_b"], b, eb, fb, fa, g, axes=(0, 0, None, None, None))
@@ -335,9 +322,10 @@ def _weight_units(B, k: int, b, eb, fa, fb, g):
     return [array_of([rows[j][f] for j in range(n)]) for f in range(4)]
 
 
-def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb):
+def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hidden: bool = False):
+    """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok)."""
     tm, tn = tile
-    tp = templates(k, tile)
+    tp = templates(k, tile, hidden)
     rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
     m, n = len(a), len(bc)
     ms, ns = m // tm, n // tn
@@ -347,9 +335,12 @@ def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb):
     bcs, bss, pbs = blocks(bc, ns, tn), blocks(bs, ns, tn), blocks(pb, ns, tn)
     tiles = [B.batch(tp["tile"], acs[rs], ass[rs], bcs, bss, pas[rs], pbs, axes=(None, None, 0, 0, None, 0))
              for rs in range(ms)]
+    ok = array_of([rows[i][3] for i in range(m)])
+    if hidden:
+        return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(ms)]), ok
     cw, uw = (array_of([array_of([tiles[i // tm][j // tn][f][i % tm][j % tn] for j in range(n)]) for i in range(m)])
               for f in range(2))
-    return cw, uw, array_of([rows[i][3] for i in range(m)])
+    return cw, uw, ok
 
 
 def _weight_sig(S_):
@@ -398,89 +389,33 @@ Pc4CheckDef = CompositeDefinition(
     conformance="protocol-defined")
 
 
-# ---- the hiding Programs: each unit publishes its rows' commit strings, and a tile's C̃ and U only as its tile's ---------
+# ---- the hiding Programs: a tile's C̃ and U only as its tile digest --------------------------------------------------------
 
-SALTS = lambda n: Array(n, L.SALT)                                                  # noqa: E731
-BCS = lambda n: Array(n, L.BC)                                                      # noqa: E731
-
-
-def _weight_hidden_units(B, k: int, b, eb, fa, fb, g, yb, ybm):
-    rows = B.batch(templates(k, TILE, True)["row_b"], b, eb, fb, fa, g, yb, ybm, axes=(0, 0, None, None, None, 0, 0))
-    return [array_of([rows[j][f] for j in range(len(b))]) for f in range(6)]
+DIGESTS = lambda S_: Array(S_.M // S_.TM, Array(S_.N // S_.TN, L.DIGEST))          # noqa: E731
 
 
-def _call_hidden_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, ya, yam, ybm, yt):
-    tm, tn = tile
-    tp = templates(k, tile, True)
-    rows = B.batch(tp["row_a"], a, ea, fa, fb, ya, yam, axes=(0, 0, None, None, 0, 0))
-    m, n = len(a), len(bc)
-    ms, ns = m // tm, n // tn
-    ac, as_, pa, ok, bca, bcam = (array_of([rows[i][f] for i in range(m)]) for f in range(6))
-    blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
-    acs, ass, pas, yams = blocks(ac, ms, tm), blocks(as_, ms, tm), blocks(pa, ms, tm), blocks(yam, ms, tm)
-    bcs, bss, pbs, ybms = blocks(bc, ns, tn), blocks(bs, ns, tn), blocks(pb, ns, tn), blocks(ybm, ns, tn)
-    tiles = [B.batch(tp["tile"], acs[rs], ass[rs], bcs, bss, pas[rs], pbs, yams[rs], ybms, yt[rs],
-                     axes=(None, None, 0, 0, None, 0, None, 0, 0)) for rs in range(ms)]
-    reads_a, reads_b, tile_bc = (array_of([array_of([tiles[rs][cs][f] for cs in range(ns)]) for rs in range(ms)])
-                                 for f in range(3))
-    return ok, bca, bcam, reads_a, reads_b, tile_bc
+def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g):
+    bc, bs, pb, ok_b = _weight_units(B, S_.K, b, eb, fa, fb, g)
+    digests, ok_a = _call_units(B, S_.K, (S_.TM, S_.TN), a, ea, fa, fb, bc, bs, pb, hidden=True)
+    return tuple_of(digests, ok_a, ok_b)
 
-
-def _weight_hidden_sig(S_):
-    params, _ = _weight_sig(S_)
-    return params + (("yb", SALTS(S_.N)), ("ybm", SALTS(S_.N))), Tuple(Array(S_.N, BIT), BCS(S_.N), BCS(S_.N))
-
-
-def _call_hidden_out(S_) -> tuple:
-    m, ms, ns = S_.M, S_.M // S_.TM, S_.N // S_.TN
-    return (Array(m, BIT), BCS(m), BCS(m), Array(ms, Array(ns, BCS(S_.TM))), Array(ms, Array(ns, BCS(S_.TN))),
-            Array(ms, BCS(ns)))
-
-
-def _call_hidden_salts(S_) -> tuple:
-    return (("ya", SALTS(S_.M)), ("yam", SALTS(S_.M)), ("ybm", SALTS(S_.N)),
-            ("yt", Array(S_.M // S_.TM, SALTS(S_.N // S_.TN))))
-
-
-def _call_hidden_sig(S_):
-    params, _ = _call_sig(S_)
-    return params + _call_hidden_salts(S_), Tuple(*_call_hidden_out(S_))
-
-
-def _check_hidden_sig(S_):
-    params, _ = _check_sig(S_)
-    ya, yam, ybm, yt = _call_hidden_salts(S_)
-    return (params + (ya, yam, ("yb", SALTS(S_.N)), ybm, yt),
-            Tuple(*_call_hidden_out(S_), Array(S_.N, BIT), BCS(S_.N), BCS(S_.N)))
-
-
-def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g, ya, yam, yb, ybm, yt):
-    bc, bs, pb, ok_b, bcb, bcbm = _weight_hidden_units(B, S_.K, b, eb, fa, fb, g, yb, ybm)
-    out = _call_hidden_units(B, S_.K, (S_.TM, S_.TN), a, ea, fa, fb, bc, bs, pb, ya, yam, ybm, yt)
-    return tuple_of(*out, ok_b, bcb, bcbm)
-
-
-Pc4WeightHiddenDef = CompositeDefinition(
-    "Pc4WeightHidden", 1, ("K", "N"), _weight_hidden_sig,
-    lambda B, S_, *a: tuple_of(*_weight_hidden_units(B, S_.K, *a)[3:]),
-    doc="`Pc4Weight` hiding: per row of B its admission and the commit strings of B_j and of B̃_j ‖ P_B,j.",
-    conformance="protocol-defined")
 
 Pc4CallHiddenDef = CompositeDefinition(
-    "Pc4CallHidden", 1, ("M", "K", "N", "TM", "TN"), _call_hidden_sig,
-    lambda B, S_, *a: tuple_of(*_call_hidden_units(B, S_.K, (S_.TM, S_.TN), *a)),
-    doc="`Pc4Call` hiding: per row of A its admission and the commit strings of A_i and of A′_i ‖ P_A,i; per tile the "
-        "commit strings of the rows it reads (each equal to its row unit's) and of its tile digest.",
+    "Pc4CallHidden", 1, ("M", "K", "N", "TM", "TN"),
+    lambda S_: (_call_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, BIT))),
+    lambda B, S_, *a: tuple_of(*_call_units(B, S_.K, (S_.TM, S_.TN), *a, hidden=True)),
+    doc="`Pc4Call` hiding: each tile's digest of C̃ and U by tile row and column, and each A row's admission.",
     conformance="protocol-defined")
 
 Pc4CheckHiddenDef = CompositeDefinition(
-    "Pc4CheckHidden", 1, ("M", "K", "N", "TM", "TN"), _check_hidden_sig, _check_hidden_body,
-    doc="`Pc4Check` hiding: `Pc4CallHidden`'s outputs, then `Pc4WeightHidden`'s.", conformance="protocol-defined")
+    "Pc4CheckHidden", 1, ("M", "K", "N", "TM", "TN"),
+    lambda S_: (_check_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, BIT), Array(S_.N, BIT))), _check_hidden_body,
+    doc="`Pc4Check` hiding: `Pc4CallHidden`'s outputs, then each B row's admission.", conformance="protocol-defined")
 
 
 def weight(shape: Shape) -> SpecializedDefinition:
     shape.check()
-    return bind(Pc4WeightHiddenDef if shape.hidden else Pc4WeightDef, K=shape.k, N=shape.n)
+    return bind(Pc4WeightDef, K=shape.k, N=shape.n)
 
 
 def call(shape: Shape) -> SpecializedDefinition:
@@ -498,8 +433,7 @@ def check(shape: Shape) -> SpecializedDefinition:
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
 ROLES = {"weight": ("row_b",), "call": ("row_a", "tile"), "check": ("row_b", "row_a", "tile")}
-_ROLE_OF = {id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile", id(Pc4RowBHiddenDef): "row_b",
-            id(Pc4RowAHiddenDef): "row_a", id(Pc4TileHiddenDef): "tile"}
+_ROLE_OF = {id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile", id(Pc4TileHiddenDef): "tile"}
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
@@ -514,6 +448,8 @@ class Unit:
     role: str                   # a key of `templates`
     node: int                   # its root-body node
     member: int                 # its member of that batch node
+    template: str = ""          # its template's descriptor id (`plan.template_strata`'s stratum)
+    where: tuple[int, ...] = field(default=())    # a row unit's row; a tile unit's (tile row, tile column)
 
 
 def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[Unit, ...]:
@@ -521,19 +457,19 @@ def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> t
     ``role_of`` maps each template's Definition (by id) to its role, Pearl-C4's by default."""
     role_of = _ROLE_OF if role_of is None else role_of
     out: list[Unit] = []
+    tile_rows = 0
     for j, nd in enumerate(fn.body.nodes):
+        role, tid = role_of[id(nd.fn.defn)], descriptor_id(nd.fn)
         for m in range(nd.n if nd.form == "batch" else 1):
-            out.append(Unit(len(out), role_of[id(nd.fn.defn)], j, m))
+            out.append(Unit(len(out), role, j, m, tid, (tile_rows, m) if role == "tile" else (m,)))
+        tile_rows += role == "tile"
     return tuple(out)
 
 
-def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None,
-             recompute: str = RECOMPUTE[1]) -> tuple[CallGraph, list[int], CutVerdict]:
+def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[CallGraph, list[int], CutVerdict]:
     """The whole Program's cut with each computing gate owned by its root node's member, checked by `cut.check_cut`
     (every gate certified once, reads across units only through committed values, no value computed in two units), with no
-    width rule: no unit here reaches a served output.  A hiding Program computes a row's commit string in its row unit and
-    again in each tile that reads the row (the units link by b ‖ c), so it passes only ``recompute`` = `Q_word` v2's
-    report (`cut.RECOMPUTE[2]`)."""
+    width rule: no unit here reaches a served output."""
     body, us = fn.body, units(fn, role_of)
     first, at = [], 0
     for nd in body.nodes:
@@ -547,8 +483,8 @@ def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None,
         nd = body.nodes[node]
         owner.append(first[node] + ((j - body.offsets[node]) // nd.fn.gates if nd.form == "batch" else 0))
     assert len(us) == at
-    return g, owner, check_cut(g, owner, limits=None, recompute=recompute)
+    return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "GRAM", "LINE", "P_ROW", "ROLES", "TILE", "Shape", "Unit", "call", "check", "query", "templates", "unit_cut",
-           "units", "weight"]
+__all__ = ["BASIS", "GRAM", "LINE", "PORTS", "P_ROW", "ROLES", "TILE", "Shape", "Unit", "call", "check", "query", "templates",
+           "unit_cut", "units", "weight"]

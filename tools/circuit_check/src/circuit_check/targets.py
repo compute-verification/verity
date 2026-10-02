@@ -199,8 +199,8 @@ def _pouw_roots() -> list[Any]:
     bias (`verity_vllm.program.registry.pouw_rows`), and Pearl-C4's tile check (`verity_pouw.circuit.pc4`): its unit
     templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
     one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
-    on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding units and roots (``hidden``: their
-    rows' hm96-sha512 leaves and tile digests, `verity_pouw.circuit.leaves`) at the same shapes."""
+    on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
+    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes."""
     from dataclasses import replace
 
     from verity.ir.defs import bind
@@ -218,8 +218,9 @@ def _pouw_roots() -> list[Any]:
     out += [*pc8.templates(128, tile8.tile, "h100").values(), *pc8.templates(128, tile8.tile, "sm120").values(),
             pc8.weight(tile8), pc8.call(tile8), pc8.check(tile8)]
     h4, h8 = replace(tile, hidden=True), replace(tile8, hidden=True)
-    out += [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4)]
-    out += [*pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
+    out += [t for t in [*pc4.templates(64, h4.tile, True).values(), pc4.weight(h4), pc4.call(h4), pc4.check(h4),
+                        *pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
+            if t not in out]
     return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
                   bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
