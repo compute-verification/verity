@@ -67,7 +67,9 @@ skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tes
 dir (`research run --custody-r2`, the default with --on: a delete-free key with GetObject), which `store_io` hands to its store
 CLI only.  So `--record --on` must be launched where the parent R2 key is (the Cursor secrets, or `~/.config/verity/r2.env` when it
 holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE=1
-is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.
+is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.  Under
+VERITY_STORE_REQUIRED=1 the suites' guard fails any skip whose reason says "the evidence store is not reachable", whichever helper
+fetched (C-Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 """
 from __future__ import annotations
 
