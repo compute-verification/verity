@@ -58,6 +58,69 @@ pub const INNER_LOG_INV_RATE: usize = 3;
 pub const STREAM_PADS: u64 = 4;
 pub const STREAM_DOT_MASK: u64 = 5;
 
+// --- the verifier's phase clocks (wall-clock seconds on the verifier's thread; nothing they read enters a transcript) ------
+
+thread_local! {
+    static VTIME: std::cell::RefCell<Option<Vec<(&'static str, f64)>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Start this thread's phase list (a verification's): until [`take_vtime`], [`vtime`] records into it.
+pub fn vtime_begin() {
+    VTIME.with(|v| *v.borrow_mut() = Some(Vec::new()));
+}
+
+/// `secs` under `name`, when this thread's list is on.
+pub fn vtime_s(name: &'static str, secs: f64) {
+    VTIME.with(|v| if let Some(l) = v.borrow_mut().as_mut() { l.push((name, secs)) });
+}
+
+/// The seconds since `t` under `name`.
+pub fn vtime(name: &'static str, t: std::time::Instant) {
+    vtime_s(name, t.elapsed().as_secs_f64());
+}
+
+/// This thread's phase list, which stops recording.
+pub fn take_vtime() -> Vec<(&'static str, f64)> {
+    VTIME.with(|v| v.borrow_mut().take().unwrap_or_default())
+}
+
+/// How the verifier's replayed lincheck computes `comb_partial` (`FC_ZK_LINCHECK`, default `flat`): upstream's flat fold, from
+/// the block's structure after the rounds (`session_verify`'s `partial`), or both, rejecting when they differ.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZkLincheck {
+    Flat,
+    Partial,
+    Both,
+}
+
+static ZK_LINCHECK: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(u8::MAX);
+
+impl ZkLincheck {
+    pub fn get() -> Self {
+        use std::sync::atomic::Ordering;
+        let m = match ZK_LINCHECK.load(Ordering::Relaxed) {
+            u8::MAX => {
+                let m = match std::env::var("FC_ZK_LINCHECK").as_deref() {
+                    Err(_) | Ok("flat") => 0,
+                    Ok("partial") => 1,
+                    Ok("both") => 2,
+                    Ok(x) => panic!("FC_ZK_LINCHECK={x}: flat, partial or both"),
+                };
+                ZK_LINCHECK.store(m, Ordering::Relaxed);
+                m
+            }
+            m => m,
+        };
+        [ZkLincheck::Flat, ZkLincheck::Partial, ZkLincheck::Both][m as usize]
+    }
+    pub fn set(self) {
+        ZK_LINCHECK.store(self as u8, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn name(self) -> &'static str {
+        ["flat", "partial", "both"][self as usize]
+    }
+}
+
 /// Ligerito level 0's padding per lane for `q0` queries per rep: every distinct level-0 position the session opens (both
 /// reps' queries), so those positions of a lane are uniform. Nothing else evaluates the padded lanes: the OOD value, the
 /// lane-round messages and each pair's sums are masked by the algebraic pads, and each rep's `ybar` by its own pair's padding.
@@ -638,6 +701,18 @@ pub struct Replayed {
 pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
                               circuit: &dyn LincheckCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch)
                               -> Result<Replayed, String> {
+    replay_with(r1cs, c0_identity, zc, lc, circuit, None, lay, root, own_comb, ch)
+}
+
+/// [`replay`], with the verifier's `comb_partial` computed from `structured`'s block structure after the rounds (as
+/// `session_verify`'s `partial`) where it covers it: `(block, both)`, and with `both` the flat fold too, rejecting when the
+/// two differ.
+#[allow(clippy::too_many_arguments)]
+pub fn replay_with<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
+                                   circuit: &dyn LincheckCircuit, structured: Option<(&crate::circuit::BlockCircuit, bool)>, lay: &Layout,
+                                   root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch)
+                                   -> Result<Replayed, String> {
+    let t_zc = std::time::Instant::now();
     let s = lay.len();
     let m = r1cs.m;
     if !*c0_identity.get_or_init(|| r1cs.c0_is_identity()) || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
@@ -698,6 +773,7 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
     ch.observe_f128(zc.final_b_eval);
     let r_rest: Vec<F128> = r[K_SKIP..].to_vec();
     let x_ab = r1cs.x_ab_from_multilinear_values(SkipPoint::Phi8(z), &rhos);
+    vtime("replay_zerocheck", t_zc);
     // ---- lincheck
     ch.observe_label(b"flock-lincheck-v0");
     let alpha = ch.sample_f128();
@@ -705,20 +781,38 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
         return Err("zk: the prover's folded comb has the wrong length".into());
     }
     let own = own_comb.is_some();
-    let mut comb_vec = if own {
-        Vec::new()
+    let ws = x_ab.z_skip.weights(K_SKIP);
+    let xr = &x_ab.x_inner_rest;
+    let structured = structured.filter(|(c, _)| {
+        !own && matches!(x_ab.z_skip, SkipPoint::Phi8(_)) && crate::session_verify::structured_covers(c, K_SKIP)
+            && !crate::session_verify::first_slot_vanishes(c, &ws, xr, K_SKIP)
+    });
+    let flat = !own && structured.map_or(true, |(_, both)| both);
+    let mut comb_vec = if flat {
+        let t = std::time::Instant::now();
+        let eq_inner = build_quirky_eq_table_from_weights(&ws, xr);
+        vtime("lc_flat_eq_table", t);
+        let t = std::time::Instant::now();
+        let c = circuit.fold_alpha_batched(alpha, &eq_inner);
+        vtime("lc_flat_fold", t);
+        let t = std::time::Instant::now();
+        drop(eq_inner);
+        vtime("lc_flat_eq_drop", t);
+        c
     } else {
-        let eq_inner = build_quirky_eq_table_from_weights(&x_ab.z_skip.weights(K_SKIP), &x_ab.x_inner_rest);
-        circuit.fold_alpha_batched(alpha, &eq_inner)
+        Vec::new()
     };
+    let t_lc = std::time::Instant::now();
     let mut running = a.scale(alpha).add(&b);
+    let mut beta = F128::ZERO;
     if let Some(col) = circuit.const_pin_col() {
-        let beta = ch.sample_f128();
-        if !own {
+        beta = ch.sample_f128();
+        if flat {
             comb_vec[col] += beta;
         }
         running = running.add_const(beta);
     }
+    let mut binds_s = 0.0;
     let mut r_rounds = Vec::with_capacity(lay.n_lc);
     for (j, &(e1v, einfv)) in lc.rounds.iter().enumerate() {
         ch.observe_f128(e1v);
@@ -729,18 +823,38 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
         let e0 = running.add(&e1);
         let c1 = e0.add(&e1).add(&einf);
         running = einf.scale(rr * rr).add(&c1.scale(rr)).add(&e0);
-        if !own {
+        if flat {
+            let t = std::time::Instant::now();
             let half = comb_vec.len() / 2;
             for i in 0..half {
                 comb_vec[i] = comb_vec[i] + rr * (comb_vec[i + half] + comb_vec[i]);
             }
             comb_vec.truncate(half);
+            binds_s += t.elapsed().as_secs_f64();
         }
         r_rounds.push(rr);
+    }
+    if flat {
+        vtime_s("lc_flat_binds", binds_s);
+    }
+    vtime("lc_rounds", t_lc);
+    if let Some((c, both)) = structured {
+        let t = std::time::Instant::now();
+        let rr: Vec<F128> = r_rounds.iter().rev().copied().collect();
+        let mut parts = Vec::new();
+        let cp = crate::session_verify::on_fold_pool(c.n_cols(), || {
+            crate::session_verify::comb_partial_structured(c, alpha, beta, &ws, xr, &rr, &mut parts)
+        });
+        vtime("lc_partial", t);
+        if both && cp != comb_vec {
+            return Err("FC_ZK_LINCHECK=both: the structured comb_partial differs from the flat".into());
+        }
+        comb_vec = cp;
     }
     if let Some(c) = own_comb {
         comb_vec = c.to_vec();
     }
+    let t_tail = std::time::Instant::now();
     ch.observe_f128_slice(&lc.z_partial);
     let zp: Vec<Lin> = (0..SKIP).map(|i| Lin::masked(lc.z_partial[i], lay.zp(i), s)).collect();
     cons.push(("lincheck final", running.add(&Lin::combo(&comb_vec, &zp))));
@@ -751,6 +865,7 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
     r_inner_rest.reverse();
     let ab_point = r1cs.ab_claim_point(r_inner_skip, &r_inner_rest, &x_ab.x_outer);
     let c_point = r1cs.c_claim_point(SkipPoint::Phi8(z), &r_rest);
+    vtime("lc_tail", t_tail);
     Ok(Replayed { ab_point, c_point, ab_value: w, c_value: fc, cons, a_value: a, b_value: b })
 }
 
@@ -992,12 +1107,15 @@ pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, mut cons: Vec
     {
         return Err("zk inner: malformed proof".into());
     }
+    let t_batch = std::time::Instant::now();
     ch.observe_label(LABEL_INNER);
     let eps = ch.sample_f128();
     ch.observe_f128_slice(&[pr.rho, pr.sigma]);
     cons.extend(triple_constraints(lay, eps, pr.rho, pr.sigma));
     let gammas = ch.sample_f128_vec(cons.len());
     let (c, t) = batch(&cons, &gammas);
+    vtime("inner_batch", t_batch);
+    let t_cols = std::time::Instant::now();
     ch.observe_bytes(&pr.tau_commit);
     let beta = ch.sample_f128();
     if beta == F128::ZERO {
@@ -1031,6 +1149,7 @@ pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, mut cons: Vec
             return Err(format!("zk inner: column {j}'s path does not reach the pads' root"));
         }
     }
+    vtime("inner_columns", t_cols);
     Ok(())
 }
 

@@ -363,7 +363,27 @@ impl StatementVerifier for CircuitVerifier {
     fn verify(&self, t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let tb = self.tabs.list.iter().find(|x| x.name == t).ok_or(format!("no table {t} in the statement"))?;
         if is_zk(&tb.st) {
-            return Self::verify_zk(tb, rep, proof, ch, link);
+            let (t0, ns0) = (Instant::now(), flock_core::pcs::ligerito::verify_phase_ns());
+            zkv::vtime_begin();
+            let r = Self::verify_zk(tb, rep, proof, ch, link);
+            let total_s = t0.elapsed().as_secs_f64();
+            let ns = flock_core::pcs::ligerito::verify_phase_ns();
+            let s = |i: usize| (ns[i] - ns0[i]) as f64 * 1e-9;
+            use flock_core::pcs::ligerito::{VERIFY_LEVEL_OPENS, VERIFY_RESIDUAL, VERIFY_RING_SWITCH};
+            let mut phases = serde_json::Map::new();
+            let mut timed = 0.0;
+            for (k, v) in zkv::take_vtime() {
+                if !k.starts_with("lc_") && !k.starts_with("inner_") && !k.starts_with("replay_") {
+                    timed += v;
+                }
+                let e = phases.entry(k.to_string()).or_insert(json!(0.0));
+                *e = json!(e.as_f64().unwrap_or(0.0) + v);
+            }
+            *self.phases.lock().unwrap_or_else(PoisonError::into_inner) = Some(json!({
+                "zk": phases, "lincheck_mode": zkv::ZkLincheck::get().name(), "opening_ring_switch_s": s(VERIFY_RING_SWITCH),
+                "opening_merkle_s": s(VERIFY_LEVEL_OPENS), "opening_residual_s": s(VERIFY_RESIDUAL), "other_s": total_s - timed, "total_s": total_s,
+            }));
+            return r;
         }
         let t0 = Instant::now();
         let mut ph = sverify::Phases::default();
@@ -416,7 +436,9 @@ impl CircuitVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
+        let t = Instant::now();
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
+        zkv::vtime("decode", t);
         verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
@@ -430,20 +452,33 @@ impl CircuitVerifier {
 fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
                                                                  root: &[u8; 64], points: &[Vec<F128>], rep: usize, ch: &mut Ch)
     -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
+    let t = Instant::now();
     let pcs = params(st.m, LigeritoProfile::Fast100);
     if commitment.params != pcs {
         return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
     }
     let lay = zk_layout(st);
+    zkv::vtime("params_layout", t);
+    let t = Instant::now();
     bind_statement(ch, &st.r1cs, commitment);
-    let rp = zkv::replay(&st.r1cs, &zk_c0(st), &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, ch)?;
+    zkv::vtime("bind", t);
+    let t = Instant::now();
+    let mode = zkv::ZkLincheck::get();
+    let structured = (mode != zkv::ZkLincheck::Flat).then_some((&st.circuit, mode == zkv::ZkLincheck::Both));
+    let rp = zkv::replay_with(&st.r1cs, &zk_c0(st), &proof.zerocheck, &proof.lincheck, &st.circuit, structured, &lay, root, None, ch)?;
+    zkv::vtime("replay", t);
+    let t = Instant::now();
     let extra = st.extra_claims(points, inst);
+    zkv::vtime("regions", t);
+    let t = Instant::now();
     let rs = &proof.pcs_open.ring_switches;
     if rs.len() != 2 + extra.len() {
         return Err("zk: the opening's ring switches are not one per claim".into());
     }
     let (cc_ab, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &rs[0].s_hat_v, &rp.ab_value);
     let (cc_c, con_c) = zkv::ring_switch_constraint(&rp.c_point, &rs[1].s_hat_v, &rp.c_value);
+    zkv::vtime("ring_switch_constraints", t);
+    let t = Instant::now();
     let (pab, pc) = (zkv::point_parts(&rp.ab_point), zkv::point_parts(&rp.c_point));
     let mut values = vec![cc_ab, cc_c];
     let mut skips = vec![pab.0, pc.0];
@@ -456,17 +491,22 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
     let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
     let cfg = flock_core::pcs::ligerito::zk::verifier_config(pcs.ligerito_verifier_config()?, zk_queries0(st.m)?);
+    zkv::vtime("opening_setup", t);
+    let t = Instant::now();
     let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
                                                                    pcs.opening_grinding(),
                                                                    Some(flock_core::pcs::ligerito::zk::Level0Params { t_pad: zk_t_pad(st.m), rep }), ch)
         .map_err(|e| format!("opening: {e:?}"))?
         .ok_or("zk: the opening has no level-0 record")?;
+    zkv::vtime("opening", t);
+    let t = Instant::now();
     let lg = &proof.pcs_open.ligerito;
     let t_prime = lg.zk_level0.as_ref().ok_or("zk: level 0's hiding messages are missing")?.t_prime;
     let mut cons = rp.cons;
     cons.push(("ring switch ab", con_ab));
     cons.push(("ring switch c", con_c));
     cons.extend(zkv::ligerito_constraints(&lay, &rec, &zkv::ligerito_exposed(lg, &lay), t_prime)?);
+    zkv::vtime("ligerito_constraints", t);
     Ok((cons, rec))
 }
 
@@ -477,7 +517,10 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
         let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
-        zkv::verify_inner(inner, &zk_layout(st), cons, ch)
+        let t = Instant::now();
+        let r = zkv::verify_inner(inner, &zk_layout(st), cons, ch);
+        zkv::vtime("inner", t);
+        r
     }))
     .map_err(|_| "verifier panicked".to_string())?
     .map_err(|e| e.chars().take(200).collect::<String>())
@@ -1500,6 +1543,40 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
         }
     }
     (t, masked, rs)
+}
+
+/// `zkvtime --zk`: where M1's session verifier spends its time. One session on this host's prover (`--gpu`: the device's)
+/// against an in-process verifier, then its record and proofs verified offline `--reverify N` times (default 3) under each
+/// `FC_ZK_LINCHECK` mode (flat, partial, both), the modes interleaved. A `ZKVTIME` line per verification: the verdict,
+/// `verify_s` and each rep's phases.
+fn zkvtime(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    let s0 = Arc::new(Mutex::new(server(st, inst)));
+    let t = Instant::now();
+    let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu: flag("--gpu"), ..Plan::default() }, ProverSeed::from_os());
+    let session_s = t.elapsed().as_secs_f64();
+    let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+    drop(s0);
+    let line = |what: &str, mode: &str, v: &Value| {
+        let f = if v["verdict"].is_object() { &v["verdict"] } else { v };
+        println!("ZKVTIME\t{}", json!({"what": what, "mode": mode, "accepted": f["accepted"], "why": f["why"], "verify_s": f["verify_s"],
+            "reps": f["reps"].as_array().map(|r| r.iter().map(|x| x["timing"].clone()).collect::<Vec<_>>())}));
+    };
+    println!("ZKVTIME\t{}", json!({"what": "session", "session_s": session_s, "proof_bytes": proofs.iter().map(Vec::len).collect::<Vec<_>>()}));
+    line("live", zkv::ZkLincheck::get().name(), &v);
+    if v["accepted"] != true || proofs.len() != 2 {
+        return;
+    }
+    let map = proofs.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
+    let n: usize = arg("--reverify", "3").parse().unwrap();
+    for i in 0..n {
+        for m in [zkv::ZkLincheck::Flat, zkv::ZkLincheck::Partial, zkv::ZkLincheck::Both] {
+            m.set();
+            match Server::from_record(config(st, inst), Box::new(CircuitVerifier::one(st, inst)), &rec, map.clone()) {
+                Ok(mut s) => line(&format!("offline {i}"), m.name(), &s.finish()),
+                Err(e) => line(&format!("offline {i}"), m.name(), &json!({"accepted": false, "why": e})),
+            }
+        }
+    }
 }
 
 /// `zkaudit --zk`: nothing leaves the prover but committed, masked or public data. One real session and one control session
@@ -4126,6 +4203,7 @@ fn main() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
+        "zkvtime" => zkvtime(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
         "zkgk" => zkgk(&st, &inst),
         "serve" => {
