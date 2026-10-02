@@ -259,6 +259,21 @@ theorem zeroCols_keyIdx (si : Placed.Sites plan tab)
     exact (srcKey_zero_iff (lt_of_lt_of_le h1 (Nat.mul_le_mul_left _ (Nat.min_le_left _ _)))).1
       ((Aliased.keyIdx_eq_none x).1 hx)
 
+/-- **`hZero` at `Placed.progPlaces`** with the program's own instance, for the program whose input gates are indexed by
+Δ's source keys: `zeroCols_keyIdx` with its place hypotheses discharged. -/
+theorem zeroCols_progPlaces (si : Placed.Sites plan tab)
+    (hrows : si.RowsOf (Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
+      (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)))
+    (hparse : ∀ S R u (h : u ∈ S),
+      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+    (outs : Finset (Fin (Placed.gates (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU) n)))
+    {hal : _} :
+    ((Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
+        (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)).partition outs).ZeroCols plan tab
+      (Placed.progPlaces si hrows outs (Const.Prog.instC _ outs) hal).derived.place
+      {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
+  zeroCols_keyIdx si hrows hparse _ (fun _ => rfl) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl)
+
 end circuit
 
 end FlockSoundness.Discharge.Zero
