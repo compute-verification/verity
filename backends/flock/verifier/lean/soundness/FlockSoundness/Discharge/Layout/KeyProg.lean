@@ -14,8 +14,8 @@ gate. At [e2e-placed]'s places (`Placed.Sites.progPlaces_keyProg`):
 
 * `keyRowOf_wire`: a column of unit `u`'s own instance on a row bit of unit `u'` is an input column of `u = u'` with that
   message key;
-* `keyProg_copies`: Δ's copies (`copy_site` at each drawn unit's VU and block), when each message column is in the block
-  (`MsgInBlock`);
+* `keyProg_copies`: Δ's copies (`copy_site` at each drawn unit's VU and block; each message column is in the block by
+  the parse, `msgCol_lt_of_parse`);
 * `keyProg_bcPinned`: the rows' `b ‖ c` is the registration's, the population's public file (`bc_site`), at each drawn
   unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions);
 * `keyProg_valPinned`: the single gates hold the registration's bits: 1 at the constant, 0 at the zero, and at the units'
@@ -62,6 +62,60 @@ theorem oneAt_uniform_val : ∀ (n : ℕ) (u : Fin n),
       simp [oneAt_uniform_val n v]
 
 end uniform
+
+/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted: message bit `b < 8` of byte `byte` of row
+port `p` at VU `g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
+theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
+    (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
+  have P := parse_facts h
+  obtain ⟨ls, hls⟩ := P.check
+  have C := check_facts P.typed hls
+  have hne : 0 < c.ports.size := lt_of_le_of_lt (Nat.zero_le _) hp
+  obtain ⟨hws, hw0⟩ := rowSlots_spec c.ports P.ports
+  have hall := rowSlots_all c.ports
+  have hns : 0 < (HmRow.rowSlots c.ports).1 := by
+    have hw : (HmRow.rowSlots c.ports).2[0]! ∈ (HmRow.rowSlots c.ports).2.toList :=
+      getElem_mem_toList' (by rw [hws]; exact hne)
+    exact lt_of_le_of_lt (Nat.zero_le _) (hw0 _ hw).1
+  have hent : ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.1 < (HmRow.rowSlots c.ports).1 ∧
+      ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.2 < 3 := by
+    rcases nested_getElem! (HmRow.rowSlots c.ports).2 p (byte / 128) with h | ⟨w, hw, he⟩
+    · rw [h]; exact ⟨hns, by decide⟩
+    · exact hall w hw _ he
+  obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
+  have hc := C.count _ hm _ hk
+  have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
+  obtain ⟨-, hW, hports⟩ := (nets_ok P c.shaNet).1
+  have hpv := C.perVu_sha
+  obtain ⟨hsz, hsin⟩ := C.sha_in
+  unfold Typed.msgCol
+  generalize hrs : HmRow.rowSlots c.ports = rs at hent hns hpv
+  obtain ⟨nSha, where_⟩ := rs
+  simp only at hent hpv ⊢
+  generalize hE : (where_[p]!)[byte / 128]! = e at hent ⊢
+  obtain ⟨slot, sub⟩ := e
+  simp only at hent ⊢
+  have hsub : 2 * sub + 1 < 6 := by omega
+  have hq : ((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).2 = 1024 := by
+    rw [hsin _ hsub]
+    have : (2 * sub + 1) % 2 = 1 := by omega
+    simp [this]
+  have hqm := hports _ (getElem_mem_toList' (by rw [hsz]; exact hsub))
+  have hat : AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + slot)
+      (((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).1 + 64 * (byte % 128 / 8) +
+        (56 - 8 * (byte % 128 % 8)) + b)
+      (c.slotCol c.shaNet g slot + ((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).1 +
+        64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + b) := by
+    refine ⟨by rw [hc, hpv]; exact Rows.mul_add_lt hg hent.1, ?_, ?_⟩
+    · rw [hsl]
+      have h1 : 64 * (byte % 128 / 8) ≤ 960 := by omega
+      have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+      omega
+    · unfold Circuit.slotCol
+      have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+      omega
+  exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
@@ -201,13 +255,6 @@ def KeysRow : Prop :=
   ∀ x < keyB c hU, Aliased.srcKey c x = .zero ∨ ∃ q byte bit, Aliased.srcKey c x = .msg q byte bit ∧
     ∃ hq : q < c.ports.size, 8 * byte + bit < rowW ⟨q, hq⟩ ∧ bit < 8
 
-variable (c hU) in
-/-- **Every message column is in the block**: at every VU, the message column of each input's message key. A circuit
-condition, which `copy_site` reads. -/
-def MsgInBlock : Prop :=
-  ∀ g < c.g, ∀ x < keyB c hU, ∀ q byte bit, Aliased.srcKey c x = .msg q byte bit →
-    Typed.msgCol c g q byte bit < 2 ^ c.kLog
-
 /-- The constant's gate of `keyProg`. -/
 noncomputable def oneG : Fin (keyN c hU n) := Fin.castLE (Placed.le_gates _ _ n) (Placed.oneGate n (keyB c hU))
 
@@ -281,8 +328,8 @@ variable {rowW}
 
 include hparse in
 /-- **Δ's copies at `keyProg`'s sites**: each column of a drawn unit on a row bit holds the witness's bit at the
-message column of its key (`copy_site`), when every message column is in the block. -/
-theorem keyProg_copies (hin : MsgInBlock c hU) :
+message column of its key (`copy_site`), in the block by the parse (`msgCol_lt_of_parse`). -/
+theorem keyProg_copies :
     (keyReaders rowW hparse outs saltCol popOf outBit).Copies (keyPlace hparse outs) := by
   refine ofRows_copies _ fun S R u hu M hM x hx u' q k hr => ?_
   obtain ⟨-, hxn, hkey⟩ := keyRowOf_wire outs x hr
@@ -297,7 +344,7 @@ theorem keyProg_copies (hin : MsgInBlock c hU) :
       2 ^ (si.acc S R u hu).st.c.kLog := by
     have hv := si.hvu S R u hu
     rw [hc] at hv ⊢
-    exact hin _ hv _ hxB _ _ _ hkey
+    exact msgCol_lt_of_parse (hparse S R u hu) hv q.isLt _ _ (Nat.mod_lt _ (by norm_num))
   have := copy_site (si.acc S R u hu) hM (si.o S R u hu) (si.hvu S R u hu)
     (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) (lt_of_lt_of_eq hxn (congrArg FlockSoundness.Rows.nIn hrw))
     hk' hin'
@@ -416,15 +463,13 @@ theorem keyProg_valPinned (hkeys : KeysRow c hU rowW)
   · rw [hout S R u hu M hM g hg hm]
     simp only [keyGate, h1, h2, ↓reduceIte]
 
-variable (hin : MsgInBlock c hU)
-
 variable (rowW) in
 /-- **`lay` at `keyProg`'s places**: the readers' layout (`Readers.layout`), with Δ's copies from `keyProg_copies`. -/
 noncomputable def keyLayout (encO : (Fin (Finset.univ.sup rowW + 1) → Bool) → List UInt8) :
     Binding.Layout ((keyProg c hU n).partition outs) plan tab
       (((keyProg c hU n).partition outs).placeDecoder plan tab (keyPlace hparse outs)) :=
   (keyReaders rowW hparse outs saltCol popOf outBit).layout (keyPlace hparse outs) encO
-    (keyProg_copies hparse outs saltCol popOf outBit hin)
+    (keyProg_copies hparse outs saltCol popOf outBit)
 
 variable (rowW) in
 /-- **`rs` at `keyProg`'s places**: the readers' rows (`Readers.rows`), from `keyProg_copies`, `keyProg_bcPinned` and
@@ -441,9 +486,9 @@ noncomputable def keyRows (enc : (Fin (Finset.univ.sup rowW + 1) → Bool) → L
     (hout : ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ ((keyProg c hU n).partition outs).io u,
       (keyProg c hU n).unit g = some u →
         bit (Binding.wit plan tab S R u M (gateAt (keyPlace hparse outs) S R u g)) = outBit R g) :
-    Binding.HmRows (keyLayout rowW hparse outs saltCol popOf outBit hin encO) :=
+    Binding.HmRows (keyLayout rowW hparse outs saltCol popOf outBit encO) :=
   (keyReaders rowW hparse outs saltCol popOf outBit).rows (keyPlace hparse outs) enc enc_inj encO encO_inj
-    (keyProg_copies hparse outs saltCol popOf outBit hin)
+    (keyProg_copies hparse outs saltCol popOf outBit)
     (keyProg_bcPinned hparse outs saltCol popOf outBit hsite)
     (keyProg_valPinned hparse outs saltCol popOf outBit hkeys hc1 hz1 hout)
 
