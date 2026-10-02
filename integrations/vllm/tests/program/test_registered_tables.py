@@ -85,6 +85,20 @@ def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
     assert len(reads) == 2 * len(words)
 
 
+def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
+    """The lift of `TableRead27x2_v1` holds one width run per parameter, not a list of 2^28; the lift of `TableRead16x1_v1` (past
+    the layout's wide fan-in too) still maps an active, a ⊥ and an invalid table word as the flat widths do."""
+    from verity_vllm.program.registry import lifted as L
+
+    assert L._WidthRuns(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
+    lp = L.lifted_prim_v1(T.table_read(16, 1))
+    words = list(range(1 << 16))
+    assert lp.evaluate(5, *words) == 5
+    assert lp.evaluate(5, *words[:9], L.enc_bot(16), *words[10:]) == L.enc_bot(16)
+    assert lp.evaluate(5, *words[:-1], L.inv(16)) == L.inv(16)
+    assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
+
+
 def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
     """One batch over all 65,536 bf16 gate words (random up words), plus the special up words, against `GeluTanhMulBf16_v1`."""
     rng = np.random.default_rng(13)
