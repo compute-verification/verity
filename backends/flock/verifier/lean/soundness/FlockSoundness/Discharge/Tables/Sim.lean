@@ -173,7 +173,8 @@ noncomputable def follow : Game α → List Msg → Option (Game α)
   | g, [] => some g
   | g, ⟨M', m'⟩ :: ms => match g with
     | .send M k => if h : M' = M then follow (k (cast h m')) ms else none
-    | _ => none
+    | .ret _ => none
+    | @Game.coin _ _ _ _ _ => none
 
 theorem follow_plays : ∀ (g : Game α) (ms : List Msg) {t : List Step} {a : α},
     PlaysT g (ms.map .inl ++ t) a → ∃ g', follow g ms = some g' ∧ PlaysT g' t a
