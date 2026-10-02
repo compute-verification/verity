@@ -3,9 +3,12 @@
 returns its output), flat GEMM (a tail stage returns it, one BF16 word in a 64-word row), typed RoPE (a flat class) and typed
 GEMM (a template). Each public file holds only roots, hiding leaves and structure.
 
-Only the cases about the public statement are verified here (the honest session, which pins the statement digest and Σ to
-the prover's, and the false statements, each under its own public file): a whole set takes minutes. `vectors.json`'s
-`live.sets` carry every case of the same records (`ci.py --live`)."""
+It is the one test in `check` of the default statements against the prover's sessions: check's agreement step replays only
+upstream's pinned builds, none of which has hidden outputs. So it catches a verifier that disagrees with the prover on the
+output rows (their Δ copies, regions, public file or identity), which no statement-only test sees. Only the cases about the
+public statement are verified (the honest session, which pins the statement digest and Σ to the prover's, and the false
+statements, each under its own public file): a whole set takes minutes. `vectors.json`'s `live.sets` carry every case of
+the same records (`ci.py --live`)."""
 from __future__ import annotations
 
 import json
