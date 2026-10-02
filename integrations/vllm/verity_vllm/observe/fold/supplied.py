@@ -77,6 +77,24 @@ class SuppliedInputs:
         return out
 
 
+def program_registered_values(program_dirs) -> bool:
+    """Whether the Build's Program dirs register the program's values (`result.json` `program.supplied.registration`, a
+    `registered_values` derive's), so the fold the Match compares against them folds under `Profile.registered_values` too.  Dirs
+    that disagree, or one without a readable result.json, are refused by name (SystemExit)."""
+    import json
+    import os
+    got = set()
+    for d in program_dirs:
+        try:
+            prog = json.load(open(os.path.join(d, "result.json"))).get("program") or {}
+        except (OSError, ValueError, AttributeError) as e:
+            raise SystemExit(f"{d}: no readable result.json ({type(e).__name__}): whether its Program registers its values is unknown") from None
+        got.add(bool((prog.get("supplied") or {}).get("registration")))
+    if len(got) > 1:
+        raise SystemExit(f"{list(program_dirs)}: some Programs register their values and some hold them as constants")
+    return got == {True}
+
+
 def input_nodes(program) -> dict[str, list[int]]:
     """Each root parameter's Input nodes (root body node indices, ascending), by parameter name, from the lowered root itself."""
     from verity.ir.refs import runs
