@@ -36,8 +36,8 @@ import FlockSoundness.Discharge.Exec.Decode
   every `hm96Rows` tag pinned today (`setupH_hm96`), and `accepts_tables_hm96` without `hms`
   (`accepts_tables_hm96_of_leaf`);
 * `Retained`: every `hm96Rows` tag pinned today retains round bytes, so every round of a record flock-verify accepts
-  carries its framed bytes (`accepts_retained`), and a squeeze at such a round compares them exactly
-  (`squeeze_retained`), as `liveTable`'s rounds do;
+  carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every stream satisfies
+  `Refine/Frames.lean`'s `AllRetained` (`accepts_allRetained`);
 * `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of
