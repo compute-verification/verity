@@ -2,8 +2,8 @@
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
 `verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
 numerator scaling), the sampler lane's compare, selects and integer add, and PoUW's row units (`verity_pouw.circuit.pc4`: the
-NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and; `pc8`: the exact sums of squares; `leaves`: the
-byte packing). Each is its IR primitive bit for bit
+NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and; `pc8`: the exact sums of squares). Each is its
+IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
@@ -628,7 +628,7 @@ def pouw_f32_sqrt_rn(C, a):
     return mux(C, OR(C, A.nan, C.AND(A.s, NOT(A.zero))), const_bits(QNAN_MUFU, 32), word)
 
 
-# --- Pearl-C's sums of squares (`verity_pouw.circuit.pc8`) and the hiding leaves' byte packing (`verity_pouw.circuit.leaves`) ---
+# --- Pearl-C's sums of squares (`verity_pouw.circuit.pc8`) ------------------------------------------------------------------
 
 def _square(C, m):
     """m² at twice m's width: each cross product m_i m_j (i < j) once, at weight i + j + 1, and m_i at 2i, in one carry-save tree."""
@@ -698,10 +698,6 @@ def pouw_sq_ceil(C, t, n):
     enc = m[:47] + [m[47] ^ m[48]] + add(C, E, [m[48]], width=16)
     n_zero = NOT(or_reduce(C, n))
     return [OR(C, b, n_zero) for b in enc]
-
-
-def _bswap32(w):
-    return list(w[24:32]) + list(w[16:24]) + list(w[8:16]) + list(w[0:8])
 
 
 #: primitive -> piece(C, *operand words)
@@ -777,10 +773,6 @@ PIECES = {
     "PouwSqAcc_v1": pouw_sq_acc,
     "PouwSqCeil_v1": pouw_sq_ceil,
     "PouwSqGe_v1": pouw_sq_ge,
-    "PouwBswap32_v1": lambda C, x: _bswap32(x),
-    "PouwPack16x2_v1": lambda C, a, b: _bswap32(list(a) + list(b)),
-    "PouwPack8x4_v1": lambda C, *b: [v for w in reversed(b) for v in w],
-    "PouwPack4x8_v1": lambda C, *c: _bswap32([v for w in c for v in w]),
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}

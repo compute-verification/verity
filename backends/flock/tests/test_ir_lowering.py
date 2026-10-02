@@ -372,29 +372,7 @@ def test_the_sqrt_rn_piece_matches_the_ir():
     assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwF32SqrtRn_v1"], (32,), 32, vecs)) if g != ref(*v)] == []
 
 
-# --- Pearl-C's sums of squares (verity_pouw.circuit.pc8) and the hiding leaves' byte packing (verity_pouw.circuit.leaves) ----
-
-#: (id, operand widths) of the packings into a big-endian half
-POUW_PACK = [("PouwBswap32_v1", (32,)), ("PouwPack16x2_v1", (16, 16)), ("PouwPack8x4_v1", (8,) * 4), ("PouwPack4x8_v1", (4,) * 8)]
-
-
-@pytest.mark.parametrize("name,widths", POUW_PACK, ids=[p[0] for p in POUW_PACK])
-def test_the_byte_packings_are_wiring_and_match_the_ir(name, widths):
-    """A packing commits no AND, so its piece is an affine map of the 32 input bits, which zero and the 32 unit vectors fix;
-    the reference agrees on them, on every value of each operand up to 16 bits with the others random, and on random words."""
-    C = gf2.Circuit()
-    C.output("o", IL.PIECES[name](C, *[C.input(f"i{k}", w) for k, w in enumerate(widths)]))
-    assert C.counts()["ands"] == 0
-    rng = random.Random(47)
-    lo = [sum(widths[:k]) for k in range(len(widths))]
-    vecs = [[(u >> lo[k]) & ((1 << w) - 1) for k, w in enumerate(widths)]
-            for u in [0, *(1 << b for b in range(32)), *(rng.getrandbits(32) for _ in range(2000))]]
-    for k, w in enumerate(widths):
-        if w <= 16:
-            vecs += [[v if j == k else rng.getrandbits(wj) for j, wj in enumerate(widths)] for v in range(1 << w)]
-    ref = _pouw(name).evaluate
-    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
-
+# --- Pearl-C's sums of squares (verity_pouw.circuit.pc8) ---------------------------------------------------------------------
 
 def _f32_grid(rng: random.Random, n_random: int) -> list[int]:
     """Every exponent field of both signs (255 included: the squares decode it as a normal exponent) with the mantissa's edges,
