@@ -27,7 +27,8 @@ there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SH
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
-statement that is a `Prop` definition under `meaning` also with that definition unfolded, so that `audit.py` can compare
+statement that is a `Prop` definition under `meaning` also with that definition unfolded and the proofs elaboration took
+out of its value put back inline (`inlineProofs`), as the theorem it restates kept them, so that `audit.py` can compare
 them with records made before the move. `moved_conflicts` lists each constant of those texts (or pin) whose old name
 would be another one's too: there the comparison would not tell the two apart. A constant that keeps its name stands for
 itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a lemma) is no
@@ -153,6 +154,26 @@ def statementOf (env : Environment) (meaning : Array Name) (t : Expr) : Option (
   let i ← env.getModuleIdxFor? g
   guard (v.type.isProp && under meaning env.header.moduleNames[i.toNat]!)
   return (g, v.value.instantiateLevelParams v.levelParams us)
+
+/-- Whether `n` is a theorem that elaboration made of a proof nested in a definition's value (`abstractNestedProofs`, or a
+tactic's `mkAuxTheorem`): named `<declaration>._proof_<i>` (`_<j>`… in a nested branch), with no declaration range, which
+every declaration written in a source file has. The cache that lets a later definition reuse one is not in the `.olean`. -/
+def auxProof (env : Environment) (ranges : Std.HashMap Name DeclarationRanges) (n : Name) : Bool :=
+  match n, env.find? n with
+  | .str _ s, some (.thmInfo _) =>
+    s.startsWith "_proof_" && s.length > 7 && (s.toList.drop 7).all (fun c => c.isDigit || c == '_') && !ranges.contains n
+  | _, _ => false
+
+/-- `e` with each application of an auxiliary proof (`auxProof`) replaced by that theorem's value applied to its arguments,
+beta-reduced: the term as written, its nested proofs inline, as a theorem's type keeps them. An auxiliary proof inside an
+inlined value stays (a tactic's own, which the theorem's type would name too). Unfolding a theorem is definitional. -/
+partial def inlineProofs (env : Environment) (aux : Name → Bool) (e : Expr) : Expr :=
+  e.replace fun x => match x.getAppFn with
+    | .const n us => match aux n, env.find? n with
+      | true, some (.thmInfo v) =>
+        some ((v.value.instantiateLevelParams v.levelParams us).beta (x.getAppArgs.map (inlineProofs env aux)))
+      | _, _ => none
+    | _ => none
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
 def uses : ConstantInfo → Array Name
@@ -329,7 +350,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       let some ci := env.find? p | continue
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
       if !back.isEmpty then
-        let head := statementOf env meaning ci.type
+        let head := (statementOf env meaning ci.type).map fun (g, s) => (g, inlineProofs env (auxProof env ranges) s)
         named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
         let unfolded := match head with
           | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]

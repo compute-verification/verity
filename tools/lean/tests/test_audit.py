@@ -203,6 +203,44 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     assert [f.split(":")[0] for f in rep["failures"]] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_statement_with_proofs_in_it_restated_as_a_prop_definition_is_the_same_statement(tmp_path):
+    """A theorem's type keeps the proofs in its statement inline (a `decide`, a numeral's instance), and a `def G : Prop`'s
+    value names each as a theorem elaboration made (`G._proof_1`, or one an earlier definition of the module made), which
+    `Facts.lean` puts back inline before the comparison; a definition read under a new name keeps its own under the old
+    names, and a statement restated differently prints as changed."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Nested\n")
+    nested = pkg / "Control" / "Nested.lean"
+    nested.write_text("namespace Control\ndef f (_ : Nat) : Fin 3 := ⟨0, by decide⟩\n"
+                      "theorem a (n : Nat) : (⟨0, by decide⟩ : Fin 3).val + (f n).val = 0 := rfl\n"
+                      "theorem b : (3 : Fin 5).val = 3 := rfl\n"
+                      "theorem c (n : Nat) : (⟨1, by decide⟩ : Fin 3).val + n = n + 1 := Nat.add_comm 1 n\nend Control\n")
+    A.dump(pkg, A.load(pkg) | {"pins": {"Control.main_thm": {}, "Control.a": {}, "Control.b": {}, "Control.c": {}}})
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    assert audit(update=True)["failures"] == []
+    nested.write_text("def Control.Protocol.f (_ : Nat) : Fin 3 := ⟨0, by decide⟩\n"
+                      "def Control.Guarantees.A : Prop := ∀ n, (⟨0, by decide⟩ : Fin 3).val + (Control.Protocol.f n).val = 0\n"
+                      "def Control.Guarantees.B : Prop := (3 : Fin 5).val = 3\n"
+                      "def Control.Guarantees.C : Prop := ∀ n, (⟨1, by decide⟩ : Fin 3).val + n = 1 + n\n"
+                      "theorem Control.SecurityProofs.a : Control.Guarantees.A := fun _ => rfl\n"
+                      "theorem Control.SecurityProofs.b : Control.Guarantees.B := rfl\n"
+                      "theorem Control.SecurityProofs.c : Control.Guarantees.C := fun _ => rfl\n")
+    build()
+    moved = {f"Control.{n}": f"Control.SecurityProofs.{n}" for n in "abc"} | {"Control.f": "Control.Protocol.f"}
+    rep = audit(update=True, moved=moved)
+    assert rep["failures"] == [] and audit()["failures"] == []
+    must = A.statement_changes(rep["review"])
+    assert set(rep["review"]) - set(must) == {
+        f"pin Control.SecurityProofs.{n}: moved from Control.{n}, restated as Control.Guarantees.{n.upper()}: {A.MOVED}"
+        for n in "ab"} | {f"reads: 1 {A.MOVED_READS}"}
+    assert must[0] == "pin Control.SecurityProofs.c: changed (moved from Control.c)"
+    assert must[-1] == "    def Control.Guarantees.C : Prop := ∀ n, (⟨1, by decide⟩ : Fin 3).val + n = 1 + n"
+
+
 def test_generated_constants_belong_to_their_declaration():
     assert [A.parent(n) for n in ("P.f.match_1", "P.walk._f", "P.Enc.mk", "P.instDecidableFits", "mk")] == [
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]

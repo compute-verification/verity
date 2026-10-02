@@ -155,12 +155,14 @@ namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` prov
 old names to new ones, each a declaration or a namespace (the longest prefix applies), and run
 `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's pins are renamed, and
 `Facts.lean` writes each pin's statement and each definition it reads once more with the build's names mapped back to
-the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded. The review
-compares those texts with the records of the old names: a pin that says what its record says gets one line, "the same
-statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own, while
-its record gains `G`'s value as its `statement`), and the definitions the same under their old names are counted on one
-line; neither needs a reviewer. Everything else prints as
-without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
+the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded and the
+proofs elaboration took out of its value (`G._proof_1`, or an earlier definition's that it reused) put back inline, as the
+theorem it restates kept them. A statement with a proof a tactic made a lemma of (`omega`'s), and a definition whose old
+value reused another definition's `_proof_N`, still print as changed. The review compares those texts with the records of
+the old names: a pin that says what its record says gets one line, "the same statement under its old names" (moved from
+its old name, or restated as `G`, which then needs no reading of its own, while its record gains `G`'s value as its
+`statement`), and the definitions the same under their old names are counted on one line; neither needs a reviewer.
+Everything else prints as without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
 constants of those texts (or two pins) would have one old name, since the comparison could not tell them apart; an old
 theorem kept under its old name as the lemma behind a new pin is no conflict.
 

@@ -337,7 +337,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
     runs): the facts document it writes.  With ``moved`` ({old name: new name}), each pin and read definition also gets
     `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a pin whose type is a
-    `Prop` definition (`head`) that of its type with the definition unfolded (`unfolded_sha256`)."""
+    `Prop` definition (`head`) that of its type with the definition unfolded and its proofs inline (`unfolded_sha256`)."""
     out, canon = work / "facts.json", work / "canon.jsonl"
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
