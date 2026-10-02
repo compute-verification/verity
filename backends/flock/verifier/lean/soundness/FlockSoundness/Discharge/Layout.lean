@@ -16,7 +16,6 @@ import FlockSoundness.Discharge.Layout.RowEnc
 import FlockSoundness.Discharge.Layout.KeysRow
 import FlockSoundness.Discharge.Layout.Outs
 import FlockSoundness.Discharge.Layout.Keyed
-import FlockSoundness.Discharge.Layout.Computes
 import FlockSoundness.Discharge.Layout.Tables
 
 /-!
@@ -64,10 +63,8 @@ from the decoder's places and the executable's regions:
   committed gate it computes is an output, `computed_committed_output`, since no unit reads a gate another computes,
   `keyProg_reads`);
 * `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
-  `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates;
-* `Computes`: `rs.Computes` there from [e2e-hm]'s `port_commit` at the drawn units' sites (`keyedRows_computes`,
-  `keyedRowsOuts_computes`, from `PortCommits`; `bcAddr_eq_bcSlotCol`: the address the regions pin is the `hm96` slot's
-  output);
+  `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates; `rs.Computes`
+  there is [e2e-hm]'s `Discharge.Hm.keyedRowsOuts_computes`;
 * `Tables`: a population without shared rows (`pop.tables = none`, which `bc_drawn` and `BcSite` read) under any tag
   without shared-row files, M0's `verity/flock-circuit` among them (`loadPublic_tables`, `circuit_sharedRows`).
 -/
