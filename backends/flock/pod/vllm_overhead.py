@@ -16,7 +16,8 @@
         one config of the rollup as an attempt's result (measurement `overhead`, x-native)
 
 PATH is a timing.json, a 73-sweep-shape.sh SUMMARY (its `timings`), or a directory searched for either. A shape measured more than
-once in a mode takes its latest accepted timing whose label matches --label (default: unlabelled, the baseline).
+once in a mode takes its latest accepted timing under the first --label (repeatable, in priority order; default: unlabelled) it
+has one under, so a hill-climb step's rollup is `--label <step> --label baseline`.
 """
 from __future__ import annotations
 
@@ -222,18 +223,21 @@ def rollup(a) -> dict:
     nat = json.loads(Path(a.native).read_text())
     shapes = {sh: s | {"row_units": s["row_units"] or 0, "gates": s["word_gates"] * (s["row_units"] or 0)} for sh, s in c["shapes"].items()}
     total = sum(s["gates"] for s in shapes.values())
-    tims = [t for t in _timings(a.timings) if (t.get("label") or None) == (a.label or None)]
+    labels = a.label or [None]
+    tims = _timings(a.timings)
     modes = {}
     for mode in MODES:
         best: dict[str, dict] = {}
-        for t in sorted((t for t in tims if t.get("mode") == mode and t.get("accepted") and t.get("shape") in shapes), key=lambda t: t["t"]):
-            best[t["shape"]] = t
+        for lab in reversed(labels):
+            for t in sorted((t for t in tims if (t.get("label") or None) == lab and t.get("mode") == mode and t.get("accepted")
+                             and t.get("shape") in shapes), key=lambda t: t["t"]):
+                best[t["shape"]] = t
         if not best:
             continue
         m = {b: _weigh(a, c, sd, shapes, total, nat, best, b) for b in BASES}
         modes[mode] = m[a.basis] | {"flags": FLAGS[mode], "other_bases": {b: {"prover_s": v["prover_s"], "overhead": v["overhead"],
                                                                               "phases": v["phases"]} for b, v in m.items() if b != a.basis}}
-    out = {"schema": "vllm-overhead/v0", "row": a.row, "basis": a.basis, "label": a.label or None, "native": nat, "counts": a.counts,
+    out = {"schema": "vllm-overhead/v0", "row": a.row, "basis": a.basis, "label": labels[0], "labels": labels, "native": nat, "counts": a.counts,
            "gates": total, "shapes_n": len(shapes), "modes": modes,
            "flags": ["outputs-public"] + (a.flag or []), "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     if a.census and Path(a.census).exists():
@@ -359,7 +363,8 @@ def main(argv=None) -> int:
     r.add_argument("--native", required=True, help="JSON: all_s, prefill_s, decode_s and where they came from")
     r.add_argument("--row", required=True)
     r.add_argument("--basis", choices=BASES, default="prove")
-    r.add_argument("--label", default=None)
+    r.add_argument("--label", action="append", help="the timings' VO_LABEL; repeated, in priority order: a shape takes the first "
+                   "label it has an accepted timing under (a hill-climb step's label, then baseline)")
     r.add_argument("--flag", action="append")
     r.add_argument("--prompt", type=int, default=1024)
     r.add_argument("--generated", type=int, default=128)
