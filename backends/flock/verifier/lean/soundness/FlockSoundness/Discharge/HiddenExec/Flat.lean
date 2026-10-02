@@ -22,7 +22,7 @@ open FlockSoundness.Discharge.Exec
 open Lean (Json)
 
 /-- **The flat twin**: the statement with `HmRow.delta`'s Δ for its own. -/
-def flat (st : Stmt) : Stmt :=
+abbrev flat (st : Stmt) : Stmt :=
   { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 }
 
 /-- **The hidden statement reads its flat twin's rows at every unit slot's row**, in `A` and in `B`. -/

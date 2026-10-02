@@ -3,6 +3,7 @@ import FlockSoundness.Discharge.HiddenExec.Tables
 import FlockSoundness.Discharge.HiddenExec.Statements
 import FlockSoundness.Discharge.HiddenExec.Setup
 import FlockSoundness.Discharge.HiddenExec.Flat
+import FlockSoundness.Discharge.HiddenExec.Copies
 import FlockSoundness.Discharge.HiddenExec.Accepts
 import FlockSoundness.Discharge.HiddenExec.Accepted
 import FlockSoundness.Discharge.HiddenExec.Headline
