@@ -4911,6 +4911,11 @@
    "assumptions": [],
    "type_hash": "dbf234e8054555699d2da52c094cc2cfb59494f9f240a2711826b588bfdc2338"
   },
+  "FlockSoundness.Discharge.Layout.circuit_sharedRows": {
+   "signature": ["FlockSoundness.Discharge.Layout.circuit_sharedRows : Eq Flock.Tags.circuit.sharedRows Bool.false"],
+   "assumptions": [],
+   "type_hash": "b1b8bb5f0346f08bca969e534e84b13814291ecb73e2759e03be5b2c229a3b9a"
+  },
   "FlockSoundness.Discharge.Layout.col_val_comp": {
    "signature": [
     "FlockSoundness.Discharge.Layout.col_val_comp {T : FlockSoundness.Model.Statement}",
@@ -5410,6 +5415,15 @@
    ],
    "assumptions": [],
    "type_hash": "b96fffbd5040ce18dba587a1e7e2aa6d91342374b8e244ebf930d7b5aa187e68"
+  },
+  "FlockSoundness.Discharge.Layout.loadPublic_tables": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.loadPublic_tables {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray}",
+    "  {pop : Flock.Public} (h : Eq (Flock.HmRow.loadPublic tags c file) (Except.ok pop))",
+    "  (hs : Eq tags.sharedRows Bool.false) : Eq pop.tables Option.none"
+   ],
+   "assumptions": [],
+   "type_hash": "b4c8cd3af4d378f3b65ff2e2967bf04d880171ac987244b39607ca3529063fcf"
   },
   "FlockSoundness.Discharge.Layout.msgCol_lt_of_parse": {
    "signature": [
