@@ -131,6 +131,7 @@ import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
 import FlockSoundness.Binding
 import FlockSoundness.Headline
+import FlockSoundness.Discharge.Aliased
 import FlockSoundness.ZK.Masking
 import FlockSoundness.ZK.Adaptivity
 import FlockSoundness.ZK.CoinBinding
@@ -140,3 +141,5 @@ import FlockSoundness.ZK.RealLeaves
 import FlockSoundness.ZK.Session
 import FlockSoundness.ZK.AdaptivePrefinal
 import FlockSoundness.Discharge.Layout
+import FlockSoundness.Discharge.Placed
+import FlockSoundness.Discharge.Const
