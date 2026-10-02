@@ -71,11 +71,11 @@ from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
+from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon, splits_of_record
 
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
+           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "splits_of_record", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"

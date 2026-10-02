@@ -840,7 +840,7 @@ class TP2CaptureWorkerExtension:
                             "caps": dict(caps or {}), "match_tokens": dict(match_tokens) if match_tokens else None, "swap_requests": swapped, "swap_rule": swap_rule,
                             "match_capture_dir": (str(match_capture_dir) if match_capture_dir else None), "weights_pin": st_pin,
                             # [TP-08] per-rank sampled replay config: {"programs": {"<rank>": <build dir>}, "of_record": {"<rank>": [digests]},
-                            # "requests": [{request_id r<i>, arrive_step, prompt_len, max_tokens, prompt_token_ids}], per_stratum, max_evaluate, seed, workers}
+                            # "requests": [{request_id r<i>, arrive_step, prompt_len, max_tokens, prompt_token_ids, seed (declared)}], per_stratum, max_evaluate, seed, workers}
                             "replay": (dict(replay) if replay else None),
                             # workload request_id -> r<declared index> (COORD R15 ruling 2); the driver's map when given, else declaration order
                             "request_ids": rid_map}
@@ -1227,9 +1227,9 @@ class TP2CaptureWorkerExtension:
             sr["tp_context"] = tp_ctx
             sr["programs"] = {k: {"dir": loaded[k].get("dir"), "program_digest": digs[k]} for k in loaded}
             sr["rank"] = rank                    # [MAN-06c] the strata carry this rank's label (a per-rank map: every entry identity.rank == rank)
-            wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []),
+            wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
                      "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in reqs]
-            lk = SR.boundary_linkage(bmap, rd, wreq, embed_op_path=pi0.embed_op_path())
+            lk = SR.boundary_linkage(bmap, rd, wreq, embed_op_path=pi0.embed_op_path(), splits_of_record=SR.splits_of_record(loaded))
             lk["rank"] = rank
             sr["value_source"] = dict(rd.record(), forked_children=sr.pop("value_reads_in_children", None))
         except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
