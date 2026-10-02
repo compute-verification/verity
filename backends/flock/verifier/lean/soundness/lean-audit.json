@@ -10000,7 +10000,7 @@
    ]
   },
   "FlockSoundness.Audit.Partitioning.Guarantees": {
-   "digest": "ed6a2c5a496d7023bf4483a735062c311d544faefbc494e31a0a51ff3220a2af",
+   "digest": "725f72e59f5231e82c95c10ef93c1dfbca1740a3842e5396aa172d69e2c92dd2",
    "definitions": {
     "FlockSoundness.Audit.Partitioning.Guarantees.Achievability": "9e37a388e95a5cb246f7d564bcb23224666809059af20b755d16ebc7395f13cd",
     "FlockSoundness.Audit.Partitioning.Guarantees.Concentration": "d6b5c57356f7ad8772fe535a77b9a6f4ba12b52802bb8e0b4054392f083a5e09",
@@ -10013,7 +10013,7 @@
     "FlockSoundness.Audit.Partitioning.Guarantees.NestedEscape": "2ccae08b057e3779cb8dde9c4233186f3c2947cc190740cbcf07dfb5845abbc4",
     "FlockSoundness.Audit.Partitioning.Guarantees.RefinementRule": "9a15ae2f648b879b982b13eb503cc85e5728a070b210befb00abf4626f4f4af5",
     "FlockSoundness.Audit.Partitioning.Guarantees.RiskConcave": "8d27ceab664e271c5c036cb611ac232e2f085c7a8369e49b40f23e8b46f1d01c",
-    "FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost": "621b92ddb4620199a6d7d4096974efe6e2c95aec9e607402018fc5649f4fccbe",
+    "FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost": "01f2e098445ca5140fe75fe7bdbca5c3484df46e1df71b2af18c64051582911f",
     "FlockSoundness.Audit.Partitioning.Guarantees.UnequalDraws": "fe02f8114d672999bdca769ff25b6d441fa5748ecd8522342d827d914c1625c0"
    },
    "pins": [
