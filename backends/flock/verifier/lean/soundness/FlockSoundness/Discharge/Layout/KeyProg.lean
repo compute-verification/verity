@@ -73,28 +73,51 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
   have P := parse_facts h
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
-  have hne : 0 < c.ports.size := lt_of_le_of_lt (Nat.zero_le _) hp
-  obtain ⟨hws, hw0⟩ := rowSlots_spec c.ports P.ports
+  have hws := rowSlots_spec c.ports
   have hall := rowSlots_all c.ports
-  have hns : 0 < (HmRow.rowSlots c.ports).1 := by
-    have hw : (HmRow.rowSlots c.ports).2[0]! ∈ (HmRow.rowSlots c.ports).2.toList :=
-      getElem_mem_toList' (by rw [hws]; exact hne)
-    exact lt_of_le_of_lt (Nat.zero_le _) (hw0 _ hw).1
-  have hent : ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.1 < (HmRow.rowSlots c.ports).1 ∧
-      ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.2 < 3 := by
-    rcases nested_getElem! (HmRow.rowSlots c.ports).2 p (byte / 128) with h | ⟨w, hw, he⟩
-    · rw [h]; exact ⟨hns, by decide⟩
-    · exact hall w hw _ he
+  have hpv := C.perVu_sha
+  unfold Typed.msgCol
+  generalize hrs : HmRow.rowSlots c.ports = rs at hws hall hpv
+  obtain ⟨nSha, where_⟩ := rs
+  simp only at hws hall hpv ⊢
+  split
+  swap
+  · obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.hmNet)
+    have hc := C.count _ hm _ hk
+    have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
+    obtain ⟨-, hW, hports⟩ := (nets_ok P c.hmNet).1
+    have hin := C.hm_in
+    have hsz : (portCols (c.nets.getD c.hmNet default).2.inGroups).size = 3 := by
+      simpa using congrArg Array.size hin
+    have hq : ((portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!).2 = 1024 := by
+      have h1 := congrArg (fun a => a[1]!) hin
+      rw [getElem!_pos _ 1 (by rw [Array.size_map, hsz]; decide), Array.getElem_map] at h1
+      rw [getElem!_pos _ 1 (by rw [hsz]; decide), h1]
+      rfl
+    have hqm := hports _ (getElem_mem_toList' (xs := portCols (c.nets.getD c.hmNet default).2.inGroups) (i := 1)
+      (by rw [hsz]; decide))
+    have hat : AtSlot c c.hmNet (g * c.perVu.getD c.hmNet 0 + p)
+        (((portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!).1 + 64 * (byte % 128 / 8) +
+          (56 - 8 * (byte % 128 % 8)) + b)
+        (c.slotCol c.hmNet g p + ((portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!).1 +
+          64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + b) := by
+      refine ⟨by rw [hc, C.perVu_hm]; exact Rows.mul_add_lt hg (lt_of_lt_of_le hp (le_nextPow2 _)), ?_, ?_⟩
+      · rw [hsl]
+        have h1 : 64 * (byte % 128 / 8) ≤ 960 := by omega
+        have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+        omega
+      · unfold Circuit.slotCol
+        have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+        omega
+    exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
+  rename_i hkw
+  have hent : (where_[p]!)[byte / 128]!.1 < nSha ∧ (where_[p]!)[byte / 128]!.2 < 3 :=
+    hall _ (getElem_mem_toList' (by rw [hws]; exact hp)) _ (getElem_mem_toList' hkw)
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
   have hc := C.count _ hm _ hk
   have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
   obtain ⟨-, hW, hports⟩ := (nets_ok P c.shaNet).1
-  have hpv := C.perVu_sha
   obtain ⟨hsz, hsin⟩ := C.sha_in
-  unfold Typed.msgCol
-  generalize hrs : HmRow.rowSlots c.ports = rs at hent hns hpv
-  obtain ⟨nSha, where_⟩ := rs
-  simp only at hent hpv ⊢
   generalize hE : (where_[p]!)[byte / 128]! = e at hent ⊢
   obtain ⟨slot, sub⟩ := e
   simp only at hent ⊢
