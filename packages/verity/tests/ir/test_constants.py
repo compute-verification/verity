@@ -81,6 +81,31 @@ def test_inputs_carry_the_values_and_the_program_holds_none(new):
         "Input32_v1", "RegisteredInput32_v1", "Input32_v1", "Input32_v1", "Input32_v1"]
 
 
+@pytest.mark.parametrize("binding", K.BINDING_TIMES)
+def test_an_input_node_appears_only_in_the_root(binding):
+    """Red-team's L1 (`RgInner(x) = (x + In, x + In)`): an input node inside a Definition is a gate no parameter binds, so
+    `inputs` would miss it while `binding_time` names it. The builder refuses it, directly under the root or deeper; the
+    program function's own body is the root's, so there it is an input of the root."""
+    inp = input_prim(32, binding)
+    inner = _c(f"KInner_{binding}", (("x", I32),), Tuple(I32, I32),
+               lambda B, S, x: tuple_of(B.call(I32Add, x, B.call(inp)), B.call(I32Add, x, B.call(inp))))
+    outer = _c(f"KOuter_{binding}", (("x", I32),), Tuple(I32, I32), lambda B, S, x: B.call(inner, x))
+    for fn in (outer, _c(f"KTop_{binding}", (("x", I32),), Tuple(I32, I32), lambda B, S, x: B.call(outer, x))):
+        with pytest.raises(ValueError, match=rf"definition '{inner.id}' node 0: an input node \({inp.id}\) appears only in the root"):
+            Program(fn)
+    want = {K.REGISTRATION: [1, 3], K.RUN: [0]} if binding == K.REGISTRATION else {K.REGISTRATION: [], K.RUN: [0, 1, 3]}
+    assert K.inputs(Program(inner).circuit) == want
+
+
+@pytest.mark.parametrize("make", [lambda: Program(Old), lambda: Program(New), lambda: Program(New, registered=("eps",)),
+                                  lambda: codec.decode_program(codec.encode_program(Program(New, registered=("eps",))), REGISTRY)])
+def test_inputs_and_binding_time_agree(make):
+    p = make()
+    ins = K.inputs(p.circuit)
+    assert {g: K.binding_time(p.circuit, g) for g in range(p.circuit.size) if K.binding_time(p.circuit, g)} == {
+        g: when for when, gs in ins.items() for g in gs}
+
+
 def test_registered_inputs_evaluate_and_cut_as_inputs(new):
     x = 5
     C = new.circuit
