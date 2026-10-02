@@ -44,8 +44,9 @@ class _Operands:
 EVALUATION_TAPS: list[Callable[..., None]] = []
 
 #: the evaluation of every row on another IR, the last one installed: evaluator(pi, row, describe(row), operands) -> {member or port:
-#: words}, with optional ``prewarm(picked)`` (run in the parent before the replay forks) and ``seconds_per_vu`` (the pool's time per
-#: pick).  Empty on every record; the Boolean re-verification (`verity_vllm.pipeline.boolean_replay`) installs one around its replay.
+#: words}, with optional ``prewarm(picked)`` (run in the parent before the replay forks), ``seconds_per_vu`` (the pool's time per
+#: pick) and ``peak_bytes(vu)`` (the bytes one pick's evaluation allocates, which `driver.fit_pool` fits the pool to).  Empty on every
+#: record; the Boolean re-verification (`verity_vllm.pipeline.boolean_replay`) installs one around its replay.
 ROW_EVALUATORS: list[Callable[..., dict[str, np.ndarray]]] = []
 
 

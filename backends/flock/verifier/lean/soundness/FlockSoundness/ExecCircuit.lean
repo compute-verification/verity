@@ -4,8 +4,8 @@ import FlockSoundness.ExecParse
 # What `HmRow.parse` accepted
 
 `parse_facts`: a circuit file `HmRow.parse` accepted has only nets `Net.ofRows` built (its text nets, and a typed flat
-class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), ports of whole SHA-512
-blocks, the unit, `sha512x3` and `hm96` nets and every range's net among its nets, and passed `HmRow.check`. The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
+class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), the unit, `sha512x3` and
+`hm96` nets and every range's net among its nets, and passed `HmRow.check`. The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
 -/
 
@@ -86,7 +86,6 @@ theorem findIdx?_lt {α : Type} {xs : Array α} {p : α → Bool} {i : ℕ} (h :
 /-- **What `HmRow.parse` accepted.** -/
 structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
   unitNet : c.unitNet < c.nets.size
   shaNet : c.shaNet < c.nets.size
   hmNet : c.hmNet < c.nets.size
@@ -97,10 +96,12 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
 
 set_option maxHeartbeats 4000000 in
 /-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net, #307): its nets are `pre`'s,
-then the file's own, and its unit is the first named `unit`. -/
-theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
+theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
-    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
+      (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∧
+      c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
       (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
@@ -154,19 +155,7 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
   simp (config := { zeta := false }) only [jpL] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨s2, hlook, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets2 at h)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpS at h)
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpS] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨ports, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, hpcheck, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨listed, -, h⟩ := hh)
-  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpR] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h)
   replace h := ite_throw_ok h
@@ -321,18 +310,6 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
         cases hw
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
-  -- the ports
-  have hports : ∀ p ∈ ports.toList, 0 < p.chunks := by
-    intro p hp
-    have := forIn_array_yield_ok (fun a s hs => by
-      split at hs
-      · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
-      · cases hs; rfl) hpcheck p hp
-    split at this
-    · obtain ⟨_, hx, -⟩ := except_bind_ok this; cases hx
-    · rename_i hbad
-      simp only [Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, not_or, not_not] at hbad
-      omega
   -- the ranges' nets
   have hkinds : ∀ r ∈ ranges.toList, ∀ i, r.kind = .net i → i < nets2.size := by
     intro r hr i hi
@@ -384,9 +361,18 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
       simpa using hp
     · cases hi
-  refine ⟨?_, ⟨more, hm⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
-  exact { nets := hbuilt, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
+  refine ⟨?_, ⟨more, hm, hmore⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
+  exact { nets := hbuilt, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩, typed := rfl }
+
+/-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
+the first named `unit`. -/
+theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
+      (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET :=
+  let ⟨P, ⟨more, hm, _⟩, hu, hs, hh⟩ := parse_facts_nets hpre h
+  ⟨P, ⟨more, hm⟩, hu, hs, hh⟩
 
 theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c :=

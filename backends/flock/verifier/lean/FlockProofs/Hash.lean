@@ -29,7 +29,7 @@ theorem ByteArray.eq_of_get!_64 {x x' : ByteArray} (hx : x.size = 64) (hx' : x'.
   · intro i h1 h2
     have hi : i < 64 := by rw [ByteArray.size_data, hx] at h1; exact h1
     have := h i hi
-    simp only [ByteArray.get!] at this
+    change x.data[i]! = x'.data[i]! at this
     rwa [getElem!_pos x.data i h1, getElem!_pos x'.data i h2] at this
 
 namespace Hm96

@@ -2,21 +2,26 @@
 every read of one at a public position opened against that commitment.
 
 A *registered value* is a root parameter of the program, read row by row: row `r` is its `words` leaves from
-`r * words`, in the parameter's leaf order. Each row is committed as the circuit statement commits an input row
-(`hm96-sha512/row/v1`): `x = SHA-512(sha512_row_prefix(ROLE_X, 16, words) || row)` with the row's words u16 LE, a 192-byte
-salt `y` drawn from the operating system once, at registration, `b || c = hm96.SHA512.commit_string(default_key, x, y)`,
-and the frame-v3-sha512 leaf `row_leaf(D, r, hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The
-value's root is the frame-v3-sha512 root over its rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2,
-RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
-{"program", "value", "schema", "words", "leaves"})`. The prover keeps the rows and salts; the registration names the root.
+`r * words`, in the parameter's leaf order, each leaf `word_bits` bits (16 or 32: the parameter's leaf width rounded up
+to whole u16 words, `width`). Each row is committed as the circuit statement commits that port's row
+(`hm96-sha512/row/v1`): its u16 words (`row_words`: each leaf `word_bits / 16` words, low first, zero-padded to whole
+SHA-512 blocks of 64 words, as a C-Flock port row and its `values` row are laid out), `x = SHA-512(sha512_row_prefix(ROLE_X,
+16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` drawn from the operating system once, at registration,
+`b || c = hm96.SHA512.commit_string(default_key, x, y)`, and the frame-v3-sha512 leaf `row_leaf(D, r,
+hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The value's root is the frame-v3-sha512 root over its
+rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes
+of `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})`, with
+`"word_bits"` beside them when it is not 16 (16 is the default, so a 16-bit value's domain, entry and root are what they
+were before `word_bits`). The prover keeps the rows and salts; the registration names the root.
 
 A read is at a *public position* when the verifier derives it from its own program (`reads`): a unit's parameter whose
 leaves are exactly row `r` of a registered value reads row `r`, for every unit, before anything is served. A statement
 that reads row `r` commits it with the registration's salt, so its `b || c` is the registered one, and opens it: header
 `registered: {port: {"value", "positions", "paths"}}`, each of the port's table rows its position and its frame-v3 path
-(the siblings, leaf level first, 64 bytes each, hex). The verifier checks each path to the registered root and each
-instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`); a statement that
-commits a registered row under fresh salts has no path and is refused.
+(the siblings, leaf level first, 64 bytes each, hex). The verifier checks the port's row width, each path to the
+registered root and each instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`,
+all from its own program but the root); a statement that commits a registered row under fresh salts has no path and is
+refused.
 """
 from __future__ import annotations
 
@@ -35,16 +40,63 @@ from . import partition as P
 REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
 READS = "verity/registered-reads/v0"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
+#: the default leaf width, which the domain and the entry name only by leaving `word_bits` out
 WORD_BITS = 16
+WIDTHS = (16, 32)
+#: u16 words per SHA-512 block: a statement's row port is whole blocks
+BLOCK = 64
 OWNER = -2
 ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
+#: the entry key a value of another width than `WORD_BITS` adds
+WIDTH_KEY = "word_bits"
 _INST = hm96.SHA512
 
 
-def domain(program: str, value: str, words: int, leaves: int) -> CommitmentDomain:
+def _width(word_bits: int) -> int:
+    if word_bits not in WIDTHS:
+        raise ValueError(f"a registered value's leaves are {' or '.join(map(str, WIDTHS))} bits, not {word_bits!r}")
+    return int(word_bits)
+
+
+def width_entry(word_bits: int) -> dict[str, int]:
+    """`{"word_bits": word_bits}`, or nothing for the default 16: what a domain binding and an entry add."""
+    return {} if _width(word_bits) == WORD_BITS else {WIDTH_KEY: int(word_bits)}
+
+
+def domain(program: str, value: str, words: int, leaves: int, word_bits: int = WORD_BITS) -> CommitmentDomain:
     binding = identity_digest(REGISTERED_DOMAIN, {"program": program, "value": value, "schema": SCHEMA, "words": int(words),
-                                                  "leaves": int(leaves)})
+                                                  "leaves": int(leaves), **width_entry(word_bits)})
     return CommitmentDomain(bytes.fromhex(binding), OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
+
+
+def row_words(row: Sequence[int], word_bits: int = WORD_BITS) -> list[int]:
+    """A registered row as the statement's port row: each leaf's `word_bits / 16` u16 words, low first, zero-padded to
+    whole SHA-512 blocks (`BLOCK` words)."""
+    k, bound = _width(word_bits) // 16, 1 << word_bits
+    out: list[int] = []
+    for v in row:
+        if not 0 <= int(v) < bound:
+            raise ValueError(f"registered leaf {v} does not fit {word_bits} bits")
+        out += [(int(v) >> (16 * i)) & 0xFFFF for i in range(k)]
+    return out + [0] * (-len(out) % BLOCK)
+
+
+def row_digest(row: Sequence[int], word_bits: int = WORD_BITS) -> bytes:
+    """The row's `x`: `sha512/row/v1` over its u16 words (`row_words`), role x, as the statement hashes the port's row."""
+    return sha512_row_digest(row_words(row, word_bits), 16, ROLE_X)
+
+
+def width(program: Program, value: str) -> int:
+    """The registered parameter `value`'s `word_bits`: its leaf width rounded up to whole u16 words, one width, at most
+    32 bits."""
+    t = dict(program.fn.signature()[0]).get(value)
+    if t is None:
+        raise ValueError(f"{value!r} is not a parameter of the program")
+    w = t.homogeneous_width()
+    if w is None or not 0 < w <= max(WIDTHS):
+        raise ValueError(f"parameter {value!r}: its leaves are not one width of at most {max(WIDTHS)} bits "
+                         f"({sorted(t.width_set())})")
+    return 16 * -(-w // 16)
 
 
 def parameter_gates(program: Program, value: str) -> range:
@@ -77,14 +129,17 @@ class Registered:
     program: str
     value: str
     words: int
+    word_bits: int
     rows: tuple[tuple[int, ...], ...]
     salts: tuple[bytes, ...]
     bcs: tuple[bytes, ...]
     levels: tuple[tuple[bytes, ...], ...]
 
     @classmethod
-    def commit(cls, program: str, value: str, rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None) -> "Registered":
-        """`salts`: one per row, drawn once (default: fresh from the operating system) and never used for any other row."""
+    def commit(cls, program: str, value: str, rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None,
+               word_bits: int = WORD_BITS) -> "Registered":
+        """`salts`: one per row, drawn once (default: fresh from the operating system) and never used for any other row.
+        `word_bits`: every leaf's width (the verifier's `width` of the parameter)."""
         rows = tuple(tuple(int(w) for w in r) for r in rows)
         words = len(rows[0]) if rows else 0
         if not rows or not words or any(len(r) != words for r in rows):
@@ -94,9 +149,10 @@ class Registered:
             raise ValueError(f"one {_INST.salt_bytes}-byte salt per row")
         if len(set(salts)) != len(salts):
             raise ValueError("a salt is never reused: equal salts on two rows reveal the XOR of their digests")
-        bcs = tuple(_INST.commit_string(_INST.default_key, sha512_row_digest(r, WORD_BITS, ROLE_X), s) for r, s in zip(rows, salts))
-        dom = domain(program, value, words, len(rows))
-        return cls(program, value, words, rows, salts, bcs, tree_levels(dom, [leaf(dom, i, bc) for i, bc in enumerate(bcs)]))
+        bcs = tuple(_INST.commit_string(_INST.default_key, row_digest(r, word_bits), s) for r, s in zip(rows, salts))
+        dom = domain(program, value, words, len(rows), word_bits)
+        return cls(program, value, words, int(word_bits), rows, salts, bcs,
+                   tree_levels(dom, [leaf(dom, i, bc) for i, bc in enumerate(bcs)]))
 
     @property
     def leaves(self) -> int:
@@ -108,12 +164,13 @@ class Registered:
 
     @property
     def domain(self) -> CommitmentDomain:
-        return domain(self.program, self.value, self.words, self.leaves)
+        return domain(self.program, self.value, self.words, self.leaves, self.word_bits)
 
     def entry(self) -> dict[str, Any]:
-        """What the registration names: `{"value", "root", "leaves", "words", "domain"}`."""
+        """What the registration names: `{"value", "root", "leaves", "words", "domain"}`, and `"word_bits"` when it is not
+        16."""
         return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
-                "domain": self.domain.domain_id.hex()}
+                **width_entry(self.word_bits), "domain": self.domain.domain_id.hex()}
 
     def path(self, position: int) -> bytes:
         out, i = b"", position
@@ -193,21 +250,35 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int])
     return out
 
 
-def reads_file(entries: Sequence[Mapping[str, Any]], read_map: Mapping[str, Mapping[str, Any]],
-               ports: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """The Lean verifier's `--registered` file: per registered port, the value it reads, its registered root, leaf count
-    and domain, and each unit's position. `entries` are the registration's (R7-checked against the verifier's own),
-    `read_map` is `reads`', and `ports` names a template parameter's circuit port when they differ."""
-    by_value = {e["value"]: e for e in entries}
+def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+    """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered
+    (`values`: `{parameter: words}`), from its own program (`word_bits`: `width`)."""
+    prog = P.program_sha512(program)
     out = {}
-    for name, r in read_map.items():
-        e = by_value.get(r["value"])
-        if e is None:
-            raise ValueError(f"parameter {name!r} reads {r['value']!r}, which the registration does not name")
-        out[(ports or {}).get(name, name)] = {"value": e["value"], "root": e["root"], "leaves": int(e["leaves"]),
-                                              "domain": e["domain"], "reads": list(r["rows"])}
+    for v, w in values.items():
+        n, b = shape(program, v, w), width(program, v)
+        out[v] = {"leaves": n, "words": int(w), "word_bits": b, "domain": domain(prog, v, w, n, b).domain_id.hex()}
+    return out
+
+
+def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
+               ports: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
+    it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
+    unit's position (`reads`), and the value's root from `roots` (`{value: root}`, of a registration the verifier
+    accepted). `ports` names a template parameter's circuit port when they differ."""
+    mine = registered_entries(program, values)
+    out = {}
+    for name, r in reads(program, query, values).items():
+        root = roots.get(r["value"])
+        if root is None:
+            raise ValueError(f"parameter {name!r} reads {r['value']!r}, whose registered root the verifier does not hold")
+        e = mine[r["value"]]
+        out[(ports or {}).get(name, name)] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
+                                              "word_bits": e["word_bits"], "domain": e["domain"], "reads": list(r["rows"])}
     return {"format": READS, "ports": out}
 
 
-__all__ = ["ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "WORD_BITS", "domain", "leaf",
-           "parameter_gates", "reads", "reads_file", "shape", "table", "verify_read"]
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "WIDTHS", "WIDTH_KEY",
+           "WORD_BITS", "domain", "leaf", "parameter_gates", "reads", "reads_file", "registered_entries", "row_digest",
+           "row_words", "shape", "table", "verify_read", "width", "width_entry"]

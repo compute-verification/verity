@@ -743,3 +743,45 @@ def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
     (tmp_path / "calls").write_text("0\n")
     rc, row_log = watch(f"cat {fifo}", CALLS=str(tmp_path / "calls"), FIFO=str(fifo), COMMIT_STALL_GRACE_S="0")
     assert rc == "rc=0" and row_log == "" and not called.exists()
+
+
+def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fails_on_a_tool_error(tmp_path):
+    """vy-store-evict: cluster_up.sh installs it hourly as ubuntu (the job store's owner); it runs `research data evict --runs`
+    against the job store and runs dir toward its free-space mark, logs one line, treats a mark it can't reach as done (nothing
+    more is preserved), and fails only when the tool's output isn't its JSON."""
+    import subprocess
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "store_evict.sh\" /usr/local/bin/vy-store-evict" in up and "User=ubuntu" in up and "OnUnitActiveSec=1h" in up
+    assert "vy-store-evict-research.timer" in up and "User=research" in up
+    assert "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in up
+    tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
+    (tool / "research").mkdir(parents=True)
+    bin_dir.mkdir()
+    (tool / "research" / "__init__.py").write_text("")
+    (tool / "research" / "__main__.py").write_text(
+        "import json, os, sys\n"
+        "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps({'argv': sys.argv[1:], 'store': os.environ.get('RESEARCH_STORE')}))\n"
+        "mode = os.environ['FAKE_MODE']\n"
+        "if mode == 'error':\n    print('research data evict: [Errno 1] Operation not permitted'); sys.exit(1)\n"
+        "print(json.dumps({'store': {'evicted_bytes': 184.6e9, 'reached_target': mode == 'reached'}, 'runs': {'evicted_bytes': 3e9}}))\n"
+        "sys.exit(0 if mode == 'reached' else 1)\n")
+    (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 2161"\n')
+    (bin_dir / "df").chmod(0o755)
+
+    def run(mode: str, **extra):
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_MODE": mode, "FAKE_ARGV": str(tmp_path / "argv.json"),
+               **extra}
+        return subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
+
+    r = run("reached")
+    assert r.returncode == 0 and "evicted 184.6 GB of store blobs, 3.0 GB of run files; target reached: True" in r.stdout
+    seen = json.loads((tmp_path / "argv.json").read_text())
+    assert seen["store"] == "/workspace/jobs/store"
+    assert seen["argv"] == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir", "/workspace/jobs/runs", "--json"]
+    r = run("short")
+    assert r.returncode == 0 and "target reached: False" in r.stdout
+    r = run("error")
+    assert r.returncode == 1 and "Operation not permitted" in r.stderr
+    r = run("reached", VY_EVICT_STORE="/workspace/research/store", VY_EVICT_RUNS="/workspace/research/runs")   # research's own instance
+    seen = json.loads((tmp_path / "argv.json").read_text())
+    assert r.returncode == 0 and seen["store"] == "/workspace/research/store" and seen["argv"][6] == "/workspace/research/runs"

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,11 @@ role = "statement-reviewer"
 lean_audit = ["pins", "reads"]
 """
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
+
+
+def PASS(pr: PR) -> None:
+    """A quick tier that passes."""
+    return None
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -328,7 +334,7 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     world.gh.put(1, h1, ready=False)
     labels = StoreGrants(world.store, log=world.logs.append)
     assert labels.ready(1, h1) is False
-    assert ready(world.gh, world.store, 1, "lane-1") == 0
+    assert ready(world.gh, world.store, 1, "lane-1", PASS) == 0
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
     assert labels.ready(1, h1) is True
     q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, grants=labels, ready=labels.ready,
@@ -340,7 +346,62 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     members, entries = q.sync()
     assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1`"
     world.gh.put(1, h2, labels=("hold",), ready=False)
-    assert ready(world.gh, world.store, 1, "lane-1") == 0
+    assert ready(world.gh, world.store, 1, "lane-1", PASS) == 0
     members, entries = q.sync()
     assert members == [] and entries[1].why == "held (`hold` label)"   # hold wins over ready
-    assert ready(world.gh, world.store, 99, "lane-1") == 2
+    assert ready(world.gh, world.store, 99, "lane-1", PASS) == 2
+
+
+#: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
+FAKE_SUITES = """\
+# it knows "--changed"
+import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
+                                                     "pythonpath": os.environ.get("PYTHONPATH")}))
+fail = os.environ.get("FAKE_FAIL")
+Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
+                                                       "failed_tests": [fail] if fail else None}]))
+sys.exit(1 if fail else 0)
+"""
+
+
+def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_its_head_and_a_failure_refuses(world, monkeypatch, capsys):
+    from research import queue as Q
+
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    seen = world.tmp / "seen.json"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen))
+    monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert tier(world.gh.prs[1]) is None
+    s = json.loads(seen.read_text())
+    assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None   # from the PR's merge base, in its own tree
+    [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
+    assert _git(wt, "rev-parse", "HEAD") == h1
+    (wt / "stray.txt").write_text("left by the last PR\n")
+    (wt / ".venv").mkdir()
+
+    monkeypatch.setenv("FAKE_FAIL", "tests/test_a.py::test_a")
+    assert tier(world.gh.prs[1]) == "pkg: tests/test_a.py::test_a"
+    assert {"stray.txt", ".venv"} & set(json.loads(seen.read_text())["files"]) == {".venv"}     # cleaned, its environment kept
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
+    assert "the quick tier failed: pkg: tests/test_a.py::test_a" in capsys.readouterr().err
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False             # no label without a pass
+
+    monkeypatch.delenv("FAKE_FAIL")
+    h2 = world.change({"b.txt": "b2\n"})
+    world.gh.put(1, h2, ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and _git(wt, "rev-parse", "HEAD") == h2
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
+    h3 = world.change({"tools/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
+    world.gh.put(1, h3, ready=False)
+    assert tier(world.gh.prs[1]) is None
+    assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
