@@ -24,8 +24,8 @@ from verity_pouw.schemes import pearl_c as C
 
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
 ROLES = {"x": ROLE_X, "w": ROLE_W}
-#: (case, row, role, k or (TM, TN)): each per-call row's schema in both trees at k = 64 and 4,096 (a row-seg row of one
-#: short segment and of several), the tile digests and the ok rows
+#: (case, row, role, k or (TM, TN)): the four element rows in both trees at k = 64 and 4,096 (in role X a row-seg row of
+#: one short segment and of several), the tile digests and the ok rows
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (
     ("tile-2x33", "tile", "x", (2, 33)), ("tile-64x64", "tile", "x", (64, 64)), ("ok-x", "ok", "x", 64), ("ok-w", "ok", "w", 4096))
