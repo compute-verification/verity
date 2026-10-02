@@ -1264,10 +1264,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     population's tables, every refs and every output word.
   A file without `shared_rows` is read exactly as before, and the earlier statement names refuse a file that has it (their
   upstream builds reject its length). `@967b8d06` is also the identity text of `68ae79f2`: `round_digest`, `statement_digest`
-  and `sigma` read `sha512`. Set 14 (a shared-row RoPE file whose six instances repeat three rows) agrees 23 of 23 with
-  upstream on M0's selftest records, `row_ref_claim_false` included; set 15 (the same instances per instance) agrees 22 of 22.
-  The `967b8d06` vectors patch writes each false statement as the verifier's file (`<case>.pub.bin`) under its real public
-  digest, so replaying those negatives reaches the proof's openings rather than the session parameters.
+  and `sigma` read `sha512`.
 - **Digests.** The circuit pin is `SHA-512(circuit file)`. The statement digest is `SHA-512(TAG ‖ circuit SHA-512 ‖
   canon(identity) ‖ le64[n, blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ le64|Δ_A| ‖ Δ_A (le32, le32) ‖ le64|Δ_B| ‖
   Δ_B)`; Flock's 32-byte statement slot (round 0's R1CS digest) is its first 32 bytes. `Σ = SHA-512("verity/flock-circuit/sigma"
@@ -1295,7 +1292,6 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
     the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
     wires.
-  - Set 13 (GEMM k1024, recorded on a CPU pod) agrees 27 of 27.
 - **The template queries** (`Flock.TemplateQuery`; core's `TemplatePartition`, #131): `Q_template_instance` v0 (`{template}`, a
   string) and `Q_template_instances` v0 (`{templates}`, a non-empty list of distinct strings). With the verifier's own copy of
   the program (`--program`, its `verity-ir/descriptor/v1` bytes, by path or archive digest), whose SHA-512 over the canonical
@@ -1304,9 +1300,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   by the descriptor id in the program's bytes. Each call is one unit and each batch member one unit, in node then member
   order, and a unit's gates are its instance's interval. Every listed template has an instance, or the query refuses. The
   circuit's template (the one key of META `program_digests`) must be listed, and every unit the header's `units.indices`
-  claims must be an instance of it: then the statement's units are derived. `template_query_agree.py` checks the decoding
-  against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
-  the refusals word for word, the malformed parameters).
+  claims must be an instance of it: then the statement's units are derived.
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
   `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
   queries (above), and for `Q_word` v1 and v2 (§16.7) when the program is the object's, the query applies, every claimed unit is
@@ -1342,8 +1336,6 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - The circuit digest and the class are the typed file's own: its SHA-512, and `classOf` over its bytes.
   - The unit's computed columns (its order after its inputs) must lie past its input rows, and its input columns must be
     its net's input port bits, in order (`Typed.flatNet`).
-  - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte
-    (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
 - **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).
   - **Circuits:** `root`, the unit's own region with its entries at part columns left out, one slot per VU. Then each
     placed layout's rows, named by its digest, one slot of its range per part. A part's circuit is its own layout's, by
@@ -1360,8 +1352,6 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
     2. each part's bound input rows, `(i, i)` and each source, in item order;
     3. the root rows' cross entries: A's in `Δ_A` and B's in `Δ_B`.
   - **Regions:** the digests, then `Out` over the root's output group.
-  - **Tested** on #273's GEMM (`test_lean_typed_template.py`): of the prover's 20 recorded CPU selftest sessions, the
-    verifier accepts the 3 honest ones, so its statement digest and Σ are the prover's, and it refuses the 17 negatives.
 - **Reads** (attention): a placed read is a part whose layout `table/v2` generates (`own: {gen: "table/v2", …}`), placed
   and bound as a call is.
   - **Tables:** the statement names each table by the SHA-512 of its raw `u32` LE words and never carries them. The
@@ -1373,7 +1363,6 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - A read inside the root's own region, or inside a placed call, is refused.
   - **Rows only through `deriveChecked`,** whose check covers reads (#263): a placed read is a segment of a generated
     layout for its table, and a generated layout's rows are `table/v2`'s (`genOk`).
-  - **Tested** on typed attention (`test_lean_typed_reads.py`): the derived rows are the writer's `rows/` byte for byte.
 - **Not yet:** `unit_in`'s constant bindings.
 
 ### 16.12 Sessions of several tables (#306, `--session-tables J`)
@@ -1408,46 +1397,26 @@ statements define such a session; any other statement refuses `J > 1`.
 
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
-Every value a program or request brings is committed under a hiding leaf and touched only inside a proof, its outputs
-included (Daniel, Oct 1). So these statements publish roots, hiding leaves and structure only: no output word, and no
-unsalted digest of the set's values. `verity/flock-circuit` is `@967b8d06` (§16.10, shared rows included) and
-`verity/flock-circuit/types` is `@210d32e1` (§16.11), each with its outputs as rows; `+seed-injection` names the selftest
-build of each. `Flock.HmOut` is the statement (`Tags.hiddenOutputs`, `Stmt.setupHidden`): it reads §16.10's definitions over
-every row and leaves them as they are.
+`@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows, so the public file holds roots, hiding leaves
+and structure only (Daniel, Oct 1); `+seed-injection` is the selftest build. `Flock.HmOut` (`Stmt.setupHidden`) applies
+§16.10's definitions to every row.
 
-- **Rows.** META `ports` lists the input rows (META `input_ports` of them), then one output row per `out_ports` entry, in
-  order: the port's name, and its `w` words zero-padded to whole SHA-512 blocks (`⌈w / 64⌉ · 64` words). Every name occurs
-  once. An output row is an `hm96-sha512/row/v1` row like an input row, with its own 192-byte salt: its prefix, midstate and
-  padding block in META `rows`, its compressions numbered on after the input rows', and its own `hm96` slot
-  (`per_vu[hm96] = next_pow2(rows)`).
-- **The circuit hashes the outputs.** Δ is §16.10's (a typed statement's, §16.11's), then per VU, output row `j`, word `k`
-  and bit `t < 16`: the message bit of row byte `2k + t / 8`, bit `t % 8`, is a copy of output word `k`'s bit `t` where the
-  circuit computes it (the unit that returns it, the last tail stage's output port, or a typed root's output group); past the
-  port's `w` words, it is the unit range's first slot's forced-zero row. A unit leaf and a leaf cut read input rows only.
-  For a template, `HmRow.checkTyped` holds the instance's inputs to every row, the output rows after the input rows.
-- **Regions.** `Digest(p)` per row, the output rows included; no `Out` region. With no partial region, the region-word check
-  (§16.10) has no shared word to check: 0 on RoPE and on the GEMM coordinate.
-- **Public file.** §16.10's header, without the set's content digest in any domain binding; the body is every row's `b ‖ c`
-  (instance-major, the input rows then the output rows), and nothing else: no output word. The frame-v3-sha512 roots are one
-  `hm96-sha512/row/v1` tree per row, the output rows included; no output tree. With `shared_rows`, it names every row; an
-  output row's table is the instances' output rows in order (`R_p` is the instance count, never deduplicated) and instance
-  `i`'s ref to it is `i`, so equal outputs stay apart.
-- **Padding.** A padding instance's output rows hold the zero instance's outputs (META `dummy.outputs`), zero-padded, under
-  zero salts; each row's `dummy.bc` must be that row's `SHA-512(prefix ‖ row) ‖ SHA-512(salt_prefix ‖ 0^192)`.
-- **Identity.** §16.10's (`@967b8d06`'s text, naming the statement), with `outputs`: `"hidden: each output port an
-  hm96-sha512/row/v1 row hashed in the circuit; the public file has no output word"`. A new identity means a new statement
-  digest and Σ.
-- **Linking.** An output row is committed exactly as an input row of the same words. A unit that reads another unit's
-  output commits that row under that salt, so its input leaf `b ‖ c` is the producer's output leaf: a consumer links the two
-  statements by equal leaves, without opening either. The verifier checks each statement alone.
-- **Agreement.** Upstream's pinned build (PR #83) has no hidden-output statement, so the replayed sets (§18) stay on the
-  statements they were recorded under, and check's agreement step replays none of these. The hidden-output statements agree
-  with M0 on its live selftest records (`vectors.json` `live.sets` 2 to 5, `ci.py --live`): of each set's recorded sessions
-  the verifier accepts the honest ones (so its statement digest and Σ are the prover's) and refuses every negative,
-  `output_row_committed_false` (an output row's committed `b ‖ c` not the circuit's outputs) included. `check` verifies four
-  cases of each set (`test_lean_hidden_outputs.py`). A replayable set needs an upstream build that replays these sessions
-  offline (`flock-circuit replay`; the selftest's `record_replays_offline` already does so in process), pinned in
-  `upstream.json`.
+- **Rows.** META `ports`: the `input_ports` input rows, then one `hm96-sha512/row/v1` row per `out_ports` entry (its name,
+  its `w` words zero-padded to `⌈w / 64⌉ · 64`), each with its own salt, `rows` entry and compressions after the input
+  rows'. `per_vu[hm96] = next_pow2(rows)`.
+- **Δ** then copies, per VU, output word `k`'s bit `t` (from the returning unit, the last tail stage's port or a typed
+  root's output group) into its row's message bit at byte `2k + t / 8`, bit `t % 8`; past `w` words, the forced-zero row.
+  Unit leaves and leaf cuts read input rows only; `HmRow.checkTyped` puts a template's output rows after its input rows.
+- **Regions.** `Digest(p)` per row and no `Out`, so the region-word check has no shared word.
+- **Public file.** §16.10's header without the content digest; the body is every row's `b ‖ c` (instance-major, inputs
+  then outputs) and nothing else; one frame-v3-sha512 tree per row. Under `shared_rows` an output row's table is the
+  instances' rows in order (`R_p = n`, never deduplicated) and instance `i`'s ref is `i`. A padding instance's output rows
+  are the zero instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
+- **Identity** adds `outputs`: `"hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file
+  has no output word"`.
+- **Linking.** An output row is committed as an input row of the same words, so a reader committing it under the same salt
+  has the producer's output leaf as its input leaf.
+- **Agreement:** README, "Agreement with upstream".
 
 ## 17. Acceptance, assumptions and trust
 

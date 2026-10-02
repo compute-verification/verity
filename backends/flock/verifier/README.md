@@ -143,3 +143,24 @@ inputs from the store, regenerates the mutants, retained-bytes sessions and fuzz
 research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean flock-verify \
     --upstream fd02e847=flock-circuit --upstream 9294e161=flock-netlist --work DIR --seed S --fuzz N
 ~~~
+
+### The statements' own tests and sets
+
+- Typed statement (§16.11): on RoPE (`D = 64`) and SiLU·mul (`I = 8192`) the derived rows are the old statement's unit
+  section byte for byte (`flock-verify typed-expand`, `test_lean_typed_statement.py`); on #273's GEMM the verifier accepts
+  the prover's 3 honest recorded CPU selftest sessions of 20 and refuses the 17 negatives (`test_lean_typed_template.py`);
+  on typed attention the derived rows are the writer's `rows/` byte for byte (`test_lean_typed_reads.py`).
+- Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's `template_instance_vectors.json`
+  (16 of 16: the population, the ranges, every unit's node, member and gates, the refusals word for word, the malformed
+  parameters).
+- Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
+  instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
+  (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
+  file (`<case>.pub.bin`) under its real public digest, so those negatives reach the proof's openings, not the session
+  parameters.
+- Hidden outputs (§16.13): PR #83's pinned build has none of these statements, so check's agreement step replays none.
+  `vectors.json` `live.sets` 2 to 5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate;
+  `ci.py --live`: 20/20, 21/21, 20/20, 21/21), the honest sessions accepted, so digest and Σ are the prover's, and every
+  negative refused, `output_row_committed_false` (an output row's `b ‖ c` not the circuit's outputs) included. `check`
+  verifies four cases of each (`test_lean_hidden_outputs.py`). A replayable set needs a pinned upstream build with
+  `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
