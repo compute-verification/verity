@@ -237,8 +237,8 @@ def test_the_hiding_programs_publish_the_commit_strings_of_every_row_and_tile():
               for j in range(n)]
     rows = lambda x, r: [L.words_bf16(x[i * k:(i + 1) * k]) for i in range(r)]   # noqa: E731
     s = CF.salts(m, n, HIDDEN.tile)
-    want_call, want_weight = CF.hidden_outputs(HIDDEN.tile, cout[2 * m * n:], rows(a, m), mids_a, ok_b, rows(b, n), mids_b,
-                                               c, u, s)
+    want_call, want_weight = CF.hidden_outputs(HIDDEN.tile, ("bf16", "nvfp4-p"), cout[2 * m * n:], rows(a, m), mids_a,
+                                               ok_b, rows(b, n), mids_b, c, u, s)
     y = CF.salt_args(s)
     assert evaluate(pc4.weight(HIDDEN), b, eb, fa, fb, g, y["yb"], y["ybm"]) == want_weight
     assert evaluate(pc4.call(HIDDEN), a, ea, fa, fb, bc, bs, pb, y["ya"], y["yam"], y["ybm"], y["yt"]) == want_call

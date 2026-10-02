@@ -1,6 +1,7 @@
 """The tile checks' hiding leaves in gates (`verity_pouw.circuit.leaves`): the row schemas' words and leaves are the pinned
 vectors (``pouw_rows_vectors``), the gates compute them, hm96's mask is core's `hm96.SHA512.mask`, a row's leaf is core's
-commit string at every padding edge, and the tile digest is `pearl_c.leaf`."""
+commit string over `sha512/row/v1` (role X) or `sha512/row/v2` at every padding edge, and the tile digest is
+`pearl_c.leaf`.  C-Flock's tests recompute the vectors through its own ports (``backends/flock/tests/test_pouw_rows.py``)."""
 from __future__ import annotations
 
 import json
@@ -10,7 +11,7 @@ import types
 import pytest
 
 import pouw_rows_vectors as V
-from verity.commitments.rowleaf import ROLE_W, ROLE_X, nvfp4_row_bytes, row_bytes
+from verity.commitments.rowleaf import ROLE_X, bit_row, nvfp4_row_bytes, row_bytes, sha512_row_digest, sha512_row_v2_digest
 from verity.evaluation import evaluate
 from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.types import Array
@@ -54,7 +55,7 @@ _ROWS = {
 def test_the_gates_compute_the_pinned_leaves(case):
     """Each schema's encoder and `Hm96Sha512` (a tile's: `PearlTileDigest` then `Hm96Sha512`) give the pinned b ‖ c from
     the case's elements and salt."""
-    row, k, role = case["row"], case["k"], case["role"]
+    row, k = case["row"], case["k"]
     x = V.inputs(case["case"], row, tuple(k) if row == "tile" else k)
     salt = V.shake(case["case"], "salt", L.INST.salt_bytes)
     if row == "tile":
@@ -69,14 +70,15 @@ def test_the_gates_compute_the_pinned_leaves(case):
 
         def body(B, S, *a):
             e = H.Emit(B)
-            return L.leaf(e, role, encode(e, dict(zip(names, a)), k), a[-1])
+            return L.leaf(e, row, encode(e, dict(zip(names, a)), k), a[-1])
     got = _be(evaluate(_definition(f"TLeaf_{case['case']}", params, 32, body), *args, L.halves(salt)))
     assert got.hex() == case["bc"]
 
 
 def test_the_rows_are_the_tensors_bytes():
     """Packed in gates, each row's bytes are `rowleaf.row_bytes` of its reference words, nvfp4-p's codes and scales are
-    `rowleaf.nvfp4_row_bytes`', and fp8-p's codes are the codes' bytes."""
+    `rowleaf.nvfp4_row_bytes`', fp8-p's codes are the codes' bytes, and each packed row's bytes are `rowleaf.bit_row`'s of
+    its elements (the bytes `sha512/row/v2` hashes)."""
     rng, k = random.Random(3), 128
     x = {"x": [rng.getrandbits(16) for _ in range(k)], "codes": [rng.getrandbits(4) for _ in range(k)],
          "scales": [rng.getrandbits(8) for _ in range(k // 16)], "p": [rng.getrandbits(16) for _ in range(L.P_WORDS)]}
@@ -93,6 +95,9 @@ def test_the_rows_are_the_tensors_bytes():
     assert row_bytes(L.words_nvfp4_p(x["codes"], x["scales"], x["p"]), 16) == \
         nvfp4_row_bytes(x["codes"], x["scales"]) + row_bytes(x["p"], 16)
     assert row_bytes(L.words_fp8_p(c8, x["p"]), 16) == bytes(c8) + row_bytes(x["p"], 16)
+    nv = L.words_nvfp4_p(x["codes"], x["scales"], x["p"])
+    assert bit_row((x["codes"], 4), (x["scales"], 8), (x["p"], 16)) == (row_bytes(nv, 16), 16 * len(nv))
+    assert bit_row((c8, 8), (x["p"], 16)) == (row_bytes(L.words_fp8_p(c8, x["p"]), 16), 16 * (k // 2 + L.P_WORDS))
 
 
 def test_the_mask_is_hm96s():
@@ -120,15 +125,18 @@ def test_the_hankel_block_is_the_gf2_product():
         assert W.PouwHm96Hankel.evaluate(y, k0, k1) == int.from_bytes(want, "big")
 
 
-@pytest.mark.parametrize("role", [ROLE_X, ROLE_W])
-def test_a_rows_leaf_is_cores_commit_string_at_every_padding_edge(role):
-    """`Hm96Sha512{ROLE,WORDS}` is `hm96.SHA512.commit_string` of the row's `sha512/row/v1` digest: rows that pad into one
-    block after the prefix (54 words), into two (56), and across the next edge (118, 120)."""
-    rng = random.Random(role)
+@pytest.mark.parametrize("version", [1, 2])
+def test_a_rows_leaf_is_cores_commit_string_at_every_padding_edge(version):
+    """`Hm96Sha512{ROW,WORDS}` is `hm96.SHA512.commit_string` of the row's `sha512/row/v1` digest (role X, ROW 1) or its
+    `sha512/row/v2` digest (ROW 2): rows that pad into one block after the prefix (54 words), into two (56), and across the
+    next edge (118, 120)."""
+    rng = random.Random(version)
     for n in (2, 16, 54, 56, 118, 120):
         words, y = [rng.getrandbits(16) for _ in range(n)], _bits(rng, 192)
-        got = _be(evaluate(L.hm96_leaf(role, n), L.halves(row_bytes(words, 16)), L.halves(y)))
-        assert got == L.commit(role, words, y), n
+        raw = row_bytes(words, 16)
+        x = sha512_row_digest(words, 16, ROLE_X) if version == 1 else sha512_row_v2_digest(raw, 16 * n)
+        got = _be(evaluate(L.hm96_leaf(version, n), L.halves(raw), L.halves(y)))
+        assert got == L.INST.commit_string(L.KEY, x, y), n
 
 
 @pytest.mark.parametrize("tm, tn", [(1, 1), (2, 3), (3, 33), (2, 64)])
@@ -141,9 +149,14 @@ def test_the_tile_digest_is_pearl_cs_leaf(tm, tn):
 
 
 def test_out_of_schema_rows_are_refused():
-    for role, words in ((3, 16), (ROLE_X, 15), (ROLE_W, 0)):
-        with pytest.raises(ValueError):
-            L.hm96_leaf(role, words)
+    for version, words in ((3, 16), (1, 15), (2, 0)):
+        with pytest.raises(ValueError, match="an hm96 row here"):
+            L.hm96_leaf(version, words)
+    for row, words in (("bf16", 32), ("fp32", 96)):
+        with pytest.raises(ValueError, match="whole SHA-512 blocks"):
+            L.commit(row, [0] * words, bytes(192))
+    with pytest.raises(ValueError, match="positive number of words"):
+        L.row_leaf("tile", 0)
     with pytest.raises(ValueError):
         L.words_nvfp4_p([0] * 64, [0] * 3, [0] * L.P_WORDS)
     with pytest.raises(ValueError):

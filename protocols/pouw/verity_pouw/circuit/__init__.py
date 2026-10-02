@@ -3,8 +3,8 @@
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
-* `leaves`: the tile checks' hiding leaves, hm96-sha512/row/v1 of each row schema and of Pearl-C's tile digest, and their
-  native reference.
+* `leaves`: the tile checks' hiding leaves, each row schema's and Pearl-C's tile digest's as C-Flock commits the row
+  (hm96-sha512/row/v1 or v2), and their native reference.
 * `ncp2`: the unit templates; `weight(shape, kind)`, a weight's Y units once per run; `linear(shape, kind)`, one call's
   Program, reading them; `window(shape, calls, kind)`, calls on one weight in one root.
 * `reference`: the native reference those must evaluate to.

@@ -6,7 +6,6 @@ import random
 import struct
 import types
 
-from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import reference as R
 from verity_pouw.schemes import pearl_c as C
@@ -55,24 +54,27 @@ def salt_args(s: dict[str, list]) -> dict[str, list[int]]:
     return {name: [h for y in flat(v) for h in L.halves(y)] for name, v in s.items()}
 
 
-def hidden_outputs(tile: tuple[int, int], ok_a, rows_a, mids_a, ok_b, rows_b, mids_b, c, u, s) -> tuple[tuple, tuple]:
+def hidden_outputs(tile: tuple[int, int], schemas: tuple[str, str], ok_a, rows_a, mids_a, ok_b, rows_b, mids_b, c, u,
+                   s) -> tuple[tuple, tuple]:
     """A hiding Program's call side and weight side outputs, flat as `evaluate` returns them, by `leaves.commit` and
-    `pearl_c.leaf`: from the admission bits, each row's 16-bit words (input rows ``rows_*``, nvfp4-p or fp8-p rows
-    ``mids_*``), the checked words C̃ ``c`` and U ``u`` (M rows of N) and the salts ``s``."""
+    `pearl_c.leaf`: from the admission bits, each row's 16-bit words (input rows ``rows_*`` and packed rows ``mids_*``, of
+    the two ``schemas``: bf16 and nvfp4-p, or fp32 and fp8-p), the checked words C̃ ``c`` and U ``u`` (M rows of N) and the
+    salts ``s``."""
     tm, tn = tile
     ms, ns = len(rows_a) // tm, len(rows_b) // tn
-    bc = lambda role, w, y: L.halves(L.commit(role, w, y))                             # noqa: E731
-    am = [bc(ROLE_X, w, y) for w, y in zip(mids_a, s["yam"])]
-    bm = [bc(ROLE_W, w, y) for w, y in zip(mids_b, s["ybm"])]
-    out = list(ok_a) + [h for w, y in zip(rows_a, s["ya"]) for h in bc(ROLE_X, w, y)] + [h for v in am for h in v]
+    row, mid = schemas
+    bc = lambda schema, w, y: L.halves(L.commit(schema, w, y))                         # noqa: E731
+    am = [bc(mid, w, y) for w, y in zip(mids_a, s["yam"])]
+    bm = [bc(mid, w, y) for w, y in zip(mids_b, s["ybm"])]
+    out = list(ok_a) + [h for w, y in zip(rows_a, s["ya"]) for h in bc(row, w, y)] + [h for v in am for h in v]
     out += [h for rs in range(ms) for _cs in range(ns) for v in am[rs * tm:(rs + 1) * tm] for h in v]
     out += [h for _rs in range(ms) for cs in range(ns) for v in bm[cs * tn:(cs + 1) * tn] for h in v]
     for rs in range(ms):
         for cs in range(ns):
             part = lambda x: [list(x[rs * tm + i][cs * tn:(cs + 1) * tn]) for i in range(tm)]   # noqa: E731
             digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)))
-            out += bc(ROLE_X, L.words_tile(digest), s["yt"][rs][cs])
-    weight = list(ok_b) + [h for w, y in zip(rows_b, s["yb"]) for h in bc(ROLE_W, w, y)] + [h for v in bm for h in v]
+            out += bc("tile", L.words_tile(digest), s["yt"][rs][cs])
+    weight = list(ok_b) + [h for w, y in zip(rows_b, s["yb"]) for h in bc(row, w, y)] + [h for v in bm for h in v]
     return tuple(out), tuple(weight)
 
 

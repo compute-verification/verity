@@ -706,18 +706,22 @@ useful    U/(α_A·α_B), glue
     unit's of the nvfp4-p rows it reads and of its tile digest. Every salt is an input. A tile's string for a row is the
     row unit's, under one salt, which is how the verifier links the two units; so each such string is computed in both,
     which `Q_word` v1 refuses and v2 reports (`unit_cut`'s ``recompute``), and the tests check that nothing else is.
-  - The rows are `hm96-sha512/row/v1` rows of 16-bit words: `sha512/row/v1`'s prefix block names the role, the word
-    width (16) and the word count, and a registration domain binds the schema id and the word count. Every narrower
-    element is packed low bits first, so a row's bytes are the tensor's memory:
+  - Each row is the row C-Flock commits from the same 16-bit words (`verity_flock.circuit.Port`; `leaves.ROW_SCHEMA`).
+    A row of 16-bit elements is an `hm96-sha512/row/v1` row: `sha512/row/v1`'s prefix block names role X, the word
+    width (16) and the word count, as every C-Flock v1 port's does, and the row is whole SHA-512 blocks. A packed row
+    and the tile digest are `hm96-sha512/row/v2` bit rows: `sha512/row/v2`'s prefix block names only the length in bits,
+    16 a word. Neither digest names the role or the schema, so the registration domain of the tree a row sits in binds
+    the schema id, the word count and the role. Every narrower element is packed low bits first, so a row's bytes are
+    the tensor's memory (`rowleaf.bit_row`'s of its elements):
 
     ~~~text
-    schema id            words                                                     count             role
-    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)
-    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W
-    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),
+    schema id            words                                                     count             role               C-Flock row
+    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   v1, 64 | k
+    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               v1, 32 | k
+    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
-    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W
-    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X
+    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               v2
+    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     ~~~
 
     nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
@@ -727,7 +731,8 @@ useful    U/(α_A·α_B), glue
     22 for the nvfp4-p row), and a 64 × 64 tile adds 2,819 (22 for each of its 128 rows, 3 for the tile digest's string)
     and 281 Keccak-p[1600, 12] for the digest. Packing, hm96's mask and b's XOR are wiring and XORs.
   - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's words, digest, commit
-    string and tree leaf at k = 64 and 4,096, and the digest of two tiles. The gates compute them.
+    string and tree leaf at k = 64 and 4,096, and the digest of two tiles. The gates compute them, and C-Flock's ports
+    commit them (`backends/flock/tests/test_pouw_rows.py`).
   - Not in it yet: the debit and the cap, R1, D-24, and a plan and closure that draw a tile (`circuit.plan` is
     `ncp-v2`'s). Until those land, runs are checked by the replay above, a development shortcut that opens rows, and
     every report says so.

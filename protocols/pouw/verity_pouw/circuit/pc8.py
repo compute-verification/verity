@@ -42,7 +42,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ir import partition_object as PO
 from verity.ir.cut import RECOMPUTE
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
@@ -215,33 +214,33 @@ def _row_hidden_sig(S_, second: str, extra: tuple = ()):
     return params + (("y_row", L.SALT), ("y_mid", L.SALT)), Tuple(*out.fields, L.BC, L.BC)
 
 
-def _row_hidden_body(plain, role: int):
+def _row_hidden_body(plain):
     def body(B, S_, x, *rest):
         e, k, (*args, y_row, y_mid) = pc4._Emit(B), S_.K, rest
         out = B.call(bind(plain, K=k, DEV=S_.DEV), x, *args)
         codes, p, ok = (out[f] for f in range(3))
-        return tuple_of(codes, p, ok, L.leaf(e, role, L.fp32_row(e, x, k), y_row),
-                        L.leaf(e, role, L.fp8_p_row(e, codes, p, k), y_mid))
+        return tuple_of(codes, p, ok, L.leaf(e, "fp32", L.fp32_row(e, x, k), y_row),
+                        L.leaf(e, "fp8-p", L.fp8_p_row(e, codes, p, k), y_mid))
     return body
 
 
 Pc8RowAHiddenDef = CompositeDefinition(
-    "Pc8RowAHidden", 1, ("K", "DEV"), lambda S_: _row_hidden_sig(S_, "fb"), _row_hidden_body(Pc8RowADef, ROLE_X),
-    doc="`Pc8RowA` and the commit strings of A_i (fp32, role X, salt y_row) and of A′_i ‖ P_A,i (fp8-p, role X, salt "
-        "y_mid).", conformance="protocol-defined")
+    "Pc8RowAHidden", 1, ("K", "DEV"), lambda S_: _row_hidden_sig(S_, "fb"), _row_hidden_body(Pc8RowADef),
+    doc="`Pc8RowA` and the commit strings of A_i (fp32, salt y_row) and of A′_i ‖ P_A,i (fp8-p, salt y_mid), each the row "
+        "C-Flock commits (`leaves.ROW_SCHEMA`).", conformance="protocol-defined")
 
 Pc8RowBHiddenDef = CompositeDefinition(
     "Pc8RowBHidden", 1, ("K", "DEV"), lambda S_: _row_hidden_sig(S_, "fa", (("g", GRAM),)),
-    _row_hidden_body(Pc8RowBDef, ROLE_W),
-    doc="`Pc8RowB` and the commit strings of B_j (fp32, role W, salt y_row) and of B̃_j ‖ P_B,j (fp8-p, role W, salt "
-        "y_mid).", conformance="protocol-defined")
+    _row_hidden_body(Pc8RowBDef),
+    doc="`Pc8RowB` and the commit strings of B_j (fp32, salt y_row) and of B̃_j ‖ P_B,j (fp8-p, salt y_mid), each the row "
+        "C-Flock commits (`leaves.ROW_SCHEMA`).", conformance="protocol-defined")
 
 
 def _tile_hidden_body(B, S_, ac, bc, pa, pb, ya, yb, yt):
     e, k, tm, tn = pc4._Emit(B), S_.K, S_.TM, S_.TN
     out = B.call(templates(k, (tm, tn), S_.DEV)["tile"], ac, bc, pa, pb)
-    reads_a = [L.leaf(e, ROLE_X, L.fp8_p_row(e, ac[i], pa[i], k), ya[i]) for i in range(tm)]
-    reads_b = [L.leaf(e, ROLE_W, L.fp8_p_row(e, bc[j], pb[j], k), yb[j]) for j in range(tn)]
+    reads_a = [L.leaf(e, "fp8-p", L.fp8_p_row(e, ac[i], pa[i], k), ya[i]) for i in range(tm)]
+    reads_b = [L.leaf(e, "fp8-p", L.fp8_p_row(e, bc[j], pb[j], k), yb[j]) for j in range(tn)]
     return tuple_of(array_of(reads_a), array_of(reads_b), L.tile_leaf(e, tm, tn, out[0], out[1], yt))
 
 
@@ -254,7 +253,7 @@ def _tile_hidden_sig(S_):
 Pc8TileHiddenDef = CompositeDefinition(
     "Pc8TileHidden", 1, ("K", "TM", "TN", "DEV"), _tile_hidden_sig, _tile_hidden_body,
     doc="`Pc8Tile` with its checked words hidden: the commit strings of the fp8-p rows it reads (A′_i ‖ P_A,i under ya_i, "
-        "B̃_j ‖ P_B,j under yb_j) and of its tile digest (`leaves.PearlTileDigest`, role X, salt yt).",
+        "B̃_j ‖ P_B,j under yb_j) and of its tile digest (`leaves.PearlTileDigest`, a tile row, salt yt).",
     conformance="protocol-defined")
 
 
