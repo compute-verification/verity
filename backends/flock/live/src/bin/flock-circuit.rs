@@ -224,6 +224,10 @@ fn identity(c: &Composite) -> Value {
     if c.ports.iter().any(|p| p.segs.is_some()) {
         id["hashes"]["row_leaf_in_circuit"] = json!(ROW_LEAF_SEG_IDENTITY);
     }
+    // only with runs of output ports (META `out_row_ports`): a statement of one output row per port keeps its digest
+    if c.meta.get("out_row_ports").is_some() {
+        id["outputs"] = json!(OUT_ROWS_SEG_IDENTITY);
+    }
     id
 }
 

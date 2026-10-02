@@ -601,6 +601,16 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     let a ← J.asArr p "out port"
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
+  let outRowPorts ← match mj.getObjVal? "out_row_ports" with
+    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .ok v => do
+      let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
+      let r ← (← J.asArr v "out_row_ports").mapM fun x => do
+        let k ← J.asNat x "out_row_ports"
+        if k < 1 || k > outPorts.size then throw bad
+        pure k
+      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
   | .ok (Json.obj kvs) =>
@@ -637,7 +647,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let leafScheme ← J.get mj "leaf_scheme" ctx
   let leafId ← J.str leafScheme "id" ctx
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
-  let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
+  let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
@@ -1268,6 +1278,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
+  let identity := if J.has c.metaJ "out_row_ports" then Tags.outRowsIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -1283,30 +1294,41 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
 PROTOCOL.md §16.13: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
 The rows are the input rows (META `input_ports` of them), then one output row per output port: its name, its words
 zero-padded to whole SHA-512 blocks, an `hm96-sha512/row/v1` row (in a statement of bit rows, a `v2` row of all their bits)
-hashed in the circuit like an input row. Δ adds each output row's message bits, copies of the output bits the circuit
+hashed in the circuit like an input row; or, per run of output ports in META `out_row_ports`, one `hm96-sha512/row-seg/v1`
+row of exactly their words in port order, which is the row a unit reading it as one input port commits
+(`frame_v3/PROTOCOL.md` §6). Δ adds each output row's message bits, copies of the output bits the circuit
 computes; the regions are every row's `b ‖ c`, and the public file holds nothing else of the outputs. The rows' parse, checks and Δ are `HmRow`'s over every row.
 -/
 namespace HmOut
 
 open HmRow
 
-/-- The input rows: the rows before one output row per output port. -/
-def nIn (c : Circuit) : Nat := c.ports.size - c.outPorts.size
+/-- The input rows: the rows before one output row per run of output ports (`outRowPorts`). -/
+def nIn (c : Circuit) : Nat := c.ports.size - c.outRowPorts.size
 
 def inWords (c : Circuit) : Nat := (c.ports.extract 0 (nIn c)).foldl (· + ·.words) 0
 
+/-- Output row `j`'s run of output ports: its first port, their count, the output word it starts at and their words. -/
+def outGroup (c : Circuit) (j : Nat) : Nat × Nat × Nat × Nat :=
+  let first := (c.outRowPorts.extract 0 j).foldl (· + ·) 0
+  let k := c.outRowPorts.getD j 0
+  (first, k, (c.outPorts.extract 0 first).foldl (· + ·.2) 0, (c.outPorts.extract first (first + k)).foldl (· + ·.2) 0)
+
 /-- What makes the rows inputs then outputs: META `input_ports` is the rows before one output row per output port, each
-named after its port with its words zero-padded to whole SHA-512 blocks (a bit row of all their bits), every row's name once;
+named after its port with its words zero-padded to whole SHA-512 blocks (a bit row of all their bits), or per run of output
+ports (META `out_row_ports`) a `sha512/row-seg/v1` row of exactly their words named after its first, every row's name once;
 a unit's leaves and leaf cuts read input rows only. -/
 def checkRows (c : Circuit) : V Unit := do
   let k ← J.nat c.metaJ "input_ports" "circuit META"
   let names := (c.ports.map (·.name)).qsort (· < ·)
-  if k + c.outPorts.size != c.ports.size || (List.range (names.size - 1)).any (fun i => names[i]! == names[i + 1]!)
-      || (List.range c.outPorts.size).any (fun j =>
-        let (nm, w) := c.outPorts[j]!
+  if k + c.outRowPorts.size != c.ports.size || (List.range (names.size - 1)).any (fun i => names[i]! == names[i + 1]!)
+      || (List.range c.outRowPorts.size).any (fun j =>
+        let (first, n, _, w) := outGroup c j
         let p := c.ports.getD (k + j) default
-        p.name != nm || p.words != (w + 63) / 64 * 64 || p.bits != 16 * p.words || p.segs.isSome) then
-    throw "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits), each name once"
+        (c.outPorts[first]?.map (·.1)) != some p.name || match p.segs with
+          | some _ => p.bits != 16 * w
+          | none => n != 1 || p.words != (w + 63) / 64 * 64 || p.bits != 16 * p.words) then
+    throw "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports: a sha512/row-seg/v1 row of exactly their words, named after the first), each name once"
   let w := inWords c
   if c.leavesIn.any (·.any (· ≥ (w : Int))) || c.leafCuts.any (·.2.2 ≥ w) then
     throw "a unit's leaf or leaf cut reads an output row: units read the input rows only"
@@ -1329,8 +1351,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
 def dummyRow (c : Circuit) (p : Nat) : ByteArray := Id.run do
   let words := (c.ports.getD p default).words
   let k := nIn c
-  let at_ := (c.outPorts.extract 0 (p - k)).foldl (· + ·.2) 0
-  let w := if p < k then 0 else (c.outPorts.getD (p - k) default).2
+  let (_, _, at_, w) := if p < k then (0, 0, 0, 0) else outGroup c (p - k)
   let mut row := ByteArray.empty
   for i in [0:words] do
     let v := if i < w then c.dummyOutputs.getD (at_ + i) 0 else 0
@@ -1365,8 +1386,10 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
   let (da, db) := HmRow.delta c pin
   let (_, where_) := rowSlots c.ports
   let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
+  -- an output row's bytes all sit in its compressions before the hm96 slot's block (a v1 row's last block is padding, a
+  -- segmented row's is its outer message's)
   let msgCol := fun (g p byte t : Nat) =>
-    let (k, o) := (byte / 128, byte % 128)
+    let (k, o) := byteAt (c.ports.getD p default) byte
     let (slot, sub) := where_[p]![k]!
     c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
   let forcedZero := c.unitRange.slot 0 + c.unit.useful
@@ -1374,14 +1397,12 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
   let k0 := nIn c
   let mut d : Array (Nat × Nat) := #[]
   for g in [0:c.g] do
-    let mut at_ := 0
-    for j in [0:c.outPorts.size] do
-      let w := c.outPorts[j]!.2
+    for j in [0:c.outRowPorts.size] do
+      let (_, _, at_, w) := outGroup c j
       for k in [0:(c.ports.getD (k0 + j) default).words] do
         for t in [0:16] do
           let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
           d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
-      at_ := at_ + w
   return (da ++ d, db ++ d)
 
 /-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
@@ -1481,6 +1502,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
+  let identity := if J.has c.metaJ "out_row_ports" then Tags.outRowsIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do

@@ -211,6 +211,14 @@ def rowSegIdentity (id : Json) : Json :=
   id.setObjVal! "hashes" ((id.getObjValD "hashes").setObjVal! "row_leaf_in_circuit"
     (s "hm96-sha512/row/v2 over sha512/row/v2, hm96-sha512/row-seg/v1 over sha512/row-seg/v1, per port"))
 
+/-- A hidden-output statement with runs of output ports (META `out_row_ports`): `outputs` names their segmented rows, as the
+prover's does; a statement of one output row per port keeps its identity. -/
+def outRowsIdentity (id : Json) : Json :=
+  if (id.getObjVal? "outputs").toOption.isSome then
+    id.setObjVal! "outputs" (s ("hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META " ++
+      "out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word"))
+  else id
+
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=

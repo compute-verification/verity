@@ -93,6 +93,8 @@ structure Circuit where
   ranges : Array Range
   ports : Array Port
   outPorts : Array (String × Nat)
+  /-- each output row's run of output ports, in port order (META `out_row_ports`; absent: one each) -/
+  outRowPorts : Array Nat := #[]
   g : Nat
   kLog : Nat
   upv : Nat

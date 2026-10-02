@@ -285,14 +285,43 @@ def out_row(name: str, words: int, bit_row: bool = False) -> Port:
     return Port(name, w, 16 * w if bit_row else None)
 
 
-def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port]) -> dict:
-    """Each output port's words ``{port: (n, words)}`` as its output row's (zero past the port's words)."""
-    out = {}
-    for (nm, w), p in zip(out_ports, rows):
-        v = np.asarray(outs[nm], dtype=np.uint16).reshape(-1, w)
-        out[nm] = np.zeros((len(v), p.words), dtype=np.uint16)
-        out[nm][:, :w] = v
+def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port], counts: list[int] | None = None) -> dict:
+    """Each output port's words ``{port: (n, words)}`` as its output row's (zero past the port's words); ``counts`` (META
+    ``out_row_ports``): each row's run of output ports, their words concatenated in port order."""
+    counts = counts or [1] * len(out_ports)
+    out, at = {}, 0
+    for k, p in zip(counts, rows, strict=True):
+        run = out_ports[at:at + k]
+        v = np.concatenate([np.asarray(outs[nm], dtype=np.uint16).reshape(-1, w) for nm, w in run], axis=1)
+        out[p.name] = np.zeros((len(v), p.words), dtype=np.uint16)
+        out[p.name][:, :v.shape[1]] = v
+        at += k
     return out
+
+
+def _out_ports(outs: list, bit_rows: bool, seg_out_rows) -> tuple[list[Port], list[int]]:
+    """The output rows and each one's run of output ports: one row per port (``out_row``), and each run in ``seg_out_rows``
+    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, named after its first."""
+    names = [nm for nm, _ in outs]
+    starts, covered = {}, set()
+    for run in seg_out_rows:
+        i = names.index(run[0]) if run and run[0] in names else -1
+        if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
+            raise ValueError(f"segmented output row {list(run)}: a run of consecutive output ports, each in one row")
+        starts[i] = len(run)
+        covered |= set(run)
+    rows, counts, j = [], [], 0
+    while j < len(outs):
+        if j in starts:
+            w = sum(x for _, x in outs[j:j + starts[j]])
+            rows.append(Port(outs[j][0], w, 16 * w, True))
+            counts.append(starts[j])
+            j += starts[j]
+        else:
+            rows.append(out_row(*outs[j], bit_row=bit_rows))
+            counts.append(1)
+            j += 1
+    return rows, counts
 
 
 def _row_consts(p: Port) -> dict:
@@ -407,14 +436,17 @@ def _row_wires(ports: list[Port]) -> list:
 
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
-            program: str | None = None, statics: dict | None = None, port_bits: list | None = None, seg_ports: frozenset[str] = frozenset()) -> str:
+            program: str | None = None, statics: dict | None = None, port_bits: list | None = None, seg_ports: frozenset[str] = frozenset(),
+            seg_out_rows: tuple = ()) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
     partition names, else :func:`program_sha512` of the subcircuit. ``port_bits``: each input port's bit row length (its
     ``sha512/row/v2`` rows; the output rows then bit rows of all their words), which META names per port (``row_schemas``)
     in place of the one ``row_schema``; ``seg_ports``: the input ports among them that are segmented rows (``sha512/row-seg/v1``,
-    PoUW's per-call role-X rows)."""
+    PoUW's per-call role-X rows); ``seg_out_rows``: runs of consecutive output ports each committed as one segmented row of
+    exactly their words, named after its first (META ``out_row_ports``), so that a unit reading the row as one input port
+    has the writer's leaf."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -439,7 +471,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise ValueError(f"{low.name}: segmented rows are bit rows of input ports: {sorted(seg_ports)}")
     ins = [_port(p.name, w, b, p.name in seg_ports) for p, (w, _), b in zip(sub.inputs, lv["in_ports"], bits_of, strict=True)]
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
-    ports = ins + [out_row(nm, w, bit_row=bool(port_bits)) for nm, w in outs]
+    if seg_out_rows and port_bits is None:
+        raise ValueError(f"{low.name}: segmented output rows are bit rows (row_schemas)")
+    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows)
+    ports = ins + orows
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -488,7 +523,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
             "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"],
-            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, ins, outs, ports[len(ins):], sub), "leaf_scheme": LEAF_SCHEME,
+            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
+            **({"out_row_ports": counts} if seg_out_rows else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
@@ -525,7 +561,7 @@ def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, lis
     return out
 
 
-def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port], sub=None) -> dict:
+def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port], sub=None, counts: list[int] | None = None) -> dict:
     """The all-zero instance's output words (every output leaf) and every row's ``b || c`` under zero salts (its zero input rows,
     then its output rows), as the padding instances hold (a tail that returns the outputs: the template's reference evaluation of
     the zero instance)."""
@@ -539,7 +575,7 @@ def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port]
     words = [int(x) for x in outs[0]]
     at = np.cumsum([0] + [w for _, w in out_ports])
     rows = {p.name: np.zeros((1, p.words), np.uint16) for p in ins}
-    rows.update(out_rows({nm: words[at[j]:at[j + 1]] for j, (nm, _) in enumerate(out_ports)}, [tuple(x) for x in out_ports], orows))
+    rows.update(out_rows({nm: words[at[j]:at[j + 1]] for j, (nm, _) in enumerate(out_ports)}, [tuple(x) for x in out_ports], orows, counts))
     ports = ins + orows
     bc = _commit_strings(ports, rows, {p.name: [bytes(SALT_BYTES)] for p in ports})
     return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": words}
@@ -680,7 +716,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         refs = None
         if share_rows:
             rows, refs = share({p.name: rows[p.name] for p in ins})
-    rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows)}
+    rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows, meta.get("out_row_ports"))}
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
     if salts is None:

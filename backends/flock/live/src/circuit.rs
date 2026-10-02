@@ -160,6 +160,10 @@ const SHA512_ROW_SEG_TAG: &[u8] = b"verity/sha512-row-seg/v1\0";
 const SHA512_ROW_SEG_SEGMENT_TAG: &[u8] = b"verity/sha512-row-seg/v1/segment\0";
 /// a `sha512/row-seg/v1` segment, in bits (1 KiB; the last may be shorter)
 pub const ROW_SEG_BITS: usize = 8192;
+/// a statement's `outputs` identity with runs of output ports (META `out_row_ports`), the Lean verifier's `Tags.outRowsIdentity`
+pub const OUT_ROWS_SEG_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word";
+/// what `Composite::check` refuses of the output rows, word for word the Lean verifier's (`HmOut.checkRows`)
+pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports: a sha512/row-seg/v1 row of exactly their words, named after the first), each name once";
 const ROLE_X: u8 = 1;
 /// a port's compressions, at most: each reads 1024 message columns of a block of at most 2^IN_RANGE_K_LOG
 const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
@@ -374,12 +378,15 @@ pub struct Composite {
     pub meta: Value,
     pub nets: Vec<(String, IrUnitNet)>,
     pub ranges: Vec<Range>,
-    /// every row: the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks)
+    /// every row: the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks), or per
+    /// run of output ports (`out_row_ports`) a segmented row of exactly their words
     pub ports: Vec<Port>,
     /// the input rows (META `input_ports`): `ports[..n_in]`
     pub n_in: usize,
     /// each output port's words
     pub out_words: Vec<usize>,
+    /// each output row's output ports, a run in port order (META `out_row_ports`; absent: one each)
+    pub out_row_ports: Vec<usize>,
     pub g: usize,
     pub k_log: usize,
     pub upv: usize,
@@ -815,7 +822,13 @@ impl Composite {
         let dummy_bc = meta["dummy"]["bc"].as_array().ok_or("META: dummy bc")?.iter()
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "b || c length".to_string()))).collect::<Result<Vec<[u8; BC_BYTES]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
-        let out_words = meta["out_ports"].as_array().ok_or("META: out_ports")?.iter().map(|p| p[1].as_u64().unwrap_or(0) as usize).collect();
+        let out_words: Vec<usize> = meta["out_ports"].as_array().ok_or("META: out_ports")?.iter().map(|p| p[1].as_u64().unwrap_or(0) as usize).collect();
+        let out_row_ports: Vec<usize> = match meta.get("out_row_ports") {
+            None => vec![1; out_words.len()],
+            Some(v) => v.as_array().and_then(|a| a.iter().map(|x| x.as_u64().filter(|&k| k >= 1 && k <= out_words.len() as u64).map(|k| k as usize)).collect())
+                .filter(|r: &Vec<usize>| r.iter().sum::<usize>() == out_words.len())
+                .ok_or("META: out_row_ports is not each output row's run of output ports, in order, covering every output port once")?,
+        };
         let net_of = |nm: &str| nets.iter().position(|n| n.0 == nm).ok_or(format!("META: unknown circuit {nm}"));
         let mut per_vu = vec![0usize; nets.len()];
         per_vu[unit_net] = upv;
@@ -849,7 +862,7 @@ impl Composite {
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
-            out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
+            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(), typed: None,
         };
         let typed = instance.map(|inst| {
@@ -910,11 +923,16 @@ impl Composite {
         let out_names: Vec<&str> = self.meta["out_ports"].as_array().map(|a| a.iter().map(|p| p[0].as_str().unwrap_or("")).collect()).unwrap_or_default();
         let mut names: Vec<&str> = self.ports.iter().map(|p| p.name.as_str()).collect();
         names.sort_unstable();
-        if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_words.len() || names.windows(2).any(|w| w[0] == w[1])
-            || self.out_rows().iter().zip(&self.out_words).zip(&out_names)
-                .any(|((p, &w), &nm)| p.name != nm || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words || p.segs.is_some())
+        if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_row_ports.len() || names.windows(2).any(|w| w[0] == w[1])
+            || self.out_rows().iter().enumerate().any(|(j, p)| {
+                let (first, k, _, w) = self.out_group(j);
+                out_names.get(first) != Some(&p.name.as_str()) || match p.segs {
+                    Some(_) => p.bits != 16 * w,
+                    None => k != 1 || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words,
+                }
+            })
         {
-            return Err("the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits), each name once".into());
+            return Err(OUT_ROWS_REFUSED.into());
         }
         let (sha, hm) = (&self.nets[self.sha_net].1, &self.nets[self.hm_net].1);
         if port_cols(&sha.in_groups) != (0..2 * PER_SLOT).map(|i| (port_cols(&sha.in_groups)[i].0, if i % 2 == 0 { 512 } else { 1024 })).collect::<Vec<_>>()
@@ -1123,13 +1141,19 @@ impl Composite {
         &self.ports[self.n_in.min(self.ports.len())..]
     }
 
+    /// Output row `j`'s run of output ports: its first port, their count, the output word it starts at and their words.
+    pub fn out_group(&self, j: usize) -> (usize, usize, usize, usize) {
+        let first: usize = self.out_row_ports[..j].iter().sum();
+        let k = self.out_row_ports[j];
+        (first, k, self.out_words[..first].iter().sum(), self.out_words[first..first + k].iter().sum())
+    }
+
     /// Row `p` of the all-zero instance (u16 LE): zero, or for an output row the zero instance's outputs, zero-padded.
     pub fn dummy_row(&self, p: usize) -> Vec<u8> {
         let mut row = vec![0u8; 2 * self.ports[p].words];
         if p >= self.n_in {
-            let j = p - self.n_in;
-            let at: usize = self.out_words[..j].iter().sum();
-            for (k, v) in self.dummy_outputs[at..at + self.out_words[j]].iter().enumerate() {
+            let (_, _, at, w) = self.out_group(p - self.n_in);
+            for (k, v) in self.dummy_outputs[at..at + w].iter().enumerate() {
                 row[2 * k..2 * k + 2].copy_from_slice(&v.to_le_bytes());
             }
         }
@@ -1357,15 +1381,14 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     // 2k + t / 8), zero past its port's words
     let out_col = c.out_col();
     for g in 0..c.g {
-        let mut at = 0;
         for (j, port) in c.out_rows().iter().enumerate() {
+            let (_, _, at, w) = c.out_group(j);
             for k in 0..port.words {
                 for t in 0..16 {
-                    let src = if k < c.out_words[j] { out_col(g, at + k) + t } else { zero };
+                    let src = if k < w { out_col(g, at + k) + t } else { zero };
                     both(&mut da, &mut db, msg_col(g, c.n_in + j, 2 * k + t / 8, t % 8), src);
                 }
             }
-            at += c.out_words[j];
         }
     }
     (da, db)

@@ -810,11 +810,13 @@ def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     assert p.stdout.splitlines() == want
 
 
-def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset = frozenset()) -> str:
-    """A statement of bit-row ports of lengths ``bits``, staged in ``d`` (``circuit.txt``, ``pub.bin``): one unit reads every
-    leaf, its output the XOR of all leaves with AND(bit 0, bit 1) of the first added at bit 0; the rows random below their
-    lengths (seed 0), the salts under key ``k`` × 32. The ports named in ``seg`` are `hm96-sha512/row-seg/v1` rows. ``edit``
-    changes META before the public file is staged for it."""
+def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset = frozenset(), rows: dict | None = None,
+                 salts: dict | None = None) -> str:
+    """A statement of bit-row ports of lengths ``bits``, staged in ``d`` (``circuit.txt``, ``pub.bin``, the prover's
+    ``inst.bin``): one unit reads every leaf, its output the XOR of all leaves with AND(bit 0, bit 1) of the first added at
+    bit 0; the rows random below their lengths (seed 0; ``rows``: these), the salts under key ``k`` × 32 (``salts``: these,
+    each row port's or none). The ports named in ``seg`` are `hm96-sha512/row-seg/v1` rows. ``edit`` changes META before the
+    public file is staged for it."""
     import numpy as np
 
     from verity_flock import circuit as FC
@@ -842,18 +844,85 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset
         meta = json.loads(meta_line[5:])
         edit(meta)
         text = f"{head}\nMETA {json.dumps(meta)}\n{rest}"
-    rng, rows = np.random.default_rng(0), {}
-    for i, (b, w) in enumerate(zip(bits, words)):
-        r = rng.integers(0, 1 << 16, (n, w), dtype=np.uint64).astype(np.uint16)
-        if w and b % 16:
-            r[:, -1] &= np.uint16((1 << (b % 16)) - 1)
-        rows[f"p{i}"] = r
+    if rows is None:
+        rng, rows = np.random.default_rng(0), {}
+        for i, (b, w) in enumerate(zip(bits, words)):
+            r = rng.integers(0, 1 << 16, (n, w), dtype=np.uint64).astype(np.uint16)
+            if w and b % 16:
+                r[:, -1] &= np.uint16((1 << (b % 16)) - 1)
+            rows[f"p{i}"] = r
     got, _cut, ok = low.evaluate(np.concatenate([rows[f"p{i}"] for i in range(len(bits))], axis=1).astype(np.uint64))
     assert int(ok) == (1 << n) - 1
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs={"out": got.astype(np.uint16)})
+    if salts is not None:
+        meta = json.loads(text.split("\n", 2)[1][5:])
+        salts = {nm: salts.get(nm) or FC.stage_salts(iset, 0, n, [p], b"k" * 32)[nm] for nm, p in
+                 ((p.name, p) for p in FC._meta_ports(meta))}
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs={"out": got.astype(np.uint16)}, salts=salts)
     return text
+
+
+def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4) -> tuple[str, dict, dict]:
+    """A statement whose one unit writes output ports ``a0, a1, …`` of ``out_words`` words, committed as one
+    `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``), staged in ``d`` like `_bit_row_toy`:
+    one 1024-bit input row ``p0`` (seed 1), output word ``o`` the XOR of input word ``o mod 64`` and input word ``o + 1 mod
+    64`` rotated by ``o mod 16``, with AND(bit 0, bit 1) of the first added at word 0's bit 0. The salts are SHAKE-256 of
+    ``row-seg-pair`` and the row. Returns the circuit text, the row's words per instance and its salts."""
+    import hashlib
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from verity.ir.types import Array, Tuple, Value
+    from verity_flock import circuit as FC
+    from verity_flock import class_statement as CS
+    from verity_flock import gf2
+    from verity_flock import ir_lower as IL
+
+    C = gf2.Circuit()
+    ins = [C.input(f"in{j}", 16) for j in range(64)]
+    W = sum(out_words)
+    for o in range(W):
+        a, b, r = ins[o % 64], ins[(o + 1) % 64], o % 16
+        out = [a[t] ^ b[(t + r) % 16] for t in range(16)]
+        if o == 0:
+            out[0] = out[0] ^ C.AND(ins[0][0], ins[0][1])
+        C.output(f"out{o}", out)
+    units = IL.Units(target=None, in_widths=[16] * 64, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(64)]],
+                     out_src=[[("ret", o) for o in range(W)]], signature=("toy",), gates=[], arg_gates=[], ret_gates=[])
+    sig = ((("p0", Array(64, Value(16))),), Tuple(tuple(Array(w, Value(16)) for w in out_words)))
+    definition = SimpleNamespace(id="unit-class/seg-writer", signature=lambda: sig)
+    low = IL.Lowering("unit-class/seg-writer", definition, units, C, IL.layout(C, [f"in{j}" for j in range(64)], [f"out{o}" for o in range(W)]))
+    CS.cache_slot_circuits()
+    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+    content = json.dumps(out_words).encode()
+    sub = SimpleNamespace(id="unit-class/seg-writer", template=SimpleNamespace(id="unit-class"), inputs=[port("p0")],
+                          outputs=[port(f"a{i}") for i in range(len(out_words))],
+                          program_digests=lambda statics: {"unit-class/seg-writer": hashlib.sha256(content).hexdigest()})
+    iset = SimpleNamespace(subcircuit=sub, name="unit-class-seg-writer", content_digest=hashlib.sha256(content).hexdigest())
+    names = tuple(f"a{i}" for i in range(len(out_words)))
+    text = FC.compose(low, sub, port_bits=[1024], seg_out_rows=(names,))
+    rows = {"p0": np.random.default_rng(1).integers(0, 1 << 16, (n, 64), dtype=np.uint64).astype(np.uint16)}
+    got, _cut, ok = low.evaluate(rows["p0"].astype(np.uint64))
+    assert int(ok) == (1 << n) - 1
+    got = got.astype(np.uint16)
+    at = np.cumsum([0] + out_words)
+    outs = {nm: got[:, at[i]:at[i + 1]] for i, nm in enumerate(names)}
+    salts = {"a0": [hashlib.shake_256(b"row-seg-pair\0" + got[i].tobytes()).digest(192) for i in range(n)]}
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    salts["p0"] = FC.stage_salts(iset, 0, n, FC._meta_ports(meta)[:1], b"k" * 32)["p0"]
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "circuit.txt").write_text(text)
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs=outs, salts=salts)
+    return text, got, salts["a0"]
+
+
+def _public_bcs(pub: Path, rows: int) -> list[list[bytes]]:
+    """A non-shared public file's ``b || c``, per instance per row."""
+    head, body = pub.read_bytes().split(b"\n", 1)
+    n = json.loads(head)["instances"]
+    return [[body[128 * (i * rows + p):128 * (i * rows + p + 1)] for p in range(rows)] for i in range(n)]
 
 
 @pytest.mark.slow
@@ -985,6 +1054,91 @@ def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differ
         change(meta)
         p = statement(d, f"{head}\nMETA {json.dumps(meta)}\n{rest}")
         assert p.returncode != 0 and why in p.stdout + p.stderr, (name, p.stdout + p.stderr)
+
+
+#: the row-seg writer/reader pairs: each case's output ports' words (PoUW's A′ ‖ P_A: nvfp4-p at k = 4096, its codes, scales
+#: and P; fp8-p at k = 1024, its codes and P), instance 0's row digest and hm96 tree leaf, and the writer's and reader's
+#: statement digests (`flock-circuit statement`'s, seeded and under `FC_COINS=os`)
+ROW_SEG_PAIRS = {
+    "row-seg-pair/nvfp4-p-k4096": ([1024, 128, 64], {
+        "x": "16d8057b621b6658f26fecb25b40198d94d23c8a4fd0bf76b134400bde35c7cf8eb4ab3741a6c99bcb84489ed4c7d0fb4cd14c9732bcf6e3da448740beaf1c41",
+        "tree_leaf": "002d453763e96ffadb7264dddbffcb9f21acdb15d9f77ba7d9af2c3132993143c2d454622247f2a032f4ece37c89f8428f9801397bdadb6a2528545e852575bc",
+        ("writer", "seed"): "ca0072508c9a32bfa2fc2c685c9ecea2cc17ef9f6400a87c2b6e8fb089d9124991f0d5a13dd958241ac4d7958a2a4c7f3e613cfbf39e7cb9a5a4f90b79257fd8",
+        ("writer", "os"): "c0705aab599d65b26d47505deec97940ead97733371a56a180951aede0f48f6425c6ad3509ee9d9be567c5cf4673143fd6934bfd9e4c131f464310a3a10de3f0",
+        ("reader", "seed"): "5416a2921ec7677a60ce25bb5b3fe5cf071b1f08e872955acc156d31675d0b56b1b64e7913e4d859c908a639e16763e481c34f7baf40060818cbc19d4ea6721d",
+        ("reader", "os"): "7c6de494a0e39341ebbb80d5058753c2a3dc8e086475ab4f0c0e8b291351631e9bf97f1fdad53bdec6fbbed33472171b442b2b12ea55758c20cd10095281ebc4"}),
+    "row-seg-pair/fp8-p-k1024": ([512, 64], {
+        "x": "85b8da5a6bc9542ab5eb4c07f54226866b64d8616fa957a2ba0bcb5f8d3f16170749a88095e67c7ec02ad6086fef1f356c15b77bd3f20118477cf3146952c534",
+        "tree_leaf": "16ca66a6e6c34877c7fc2b82d1a2fb57b7d90120244012c969b5f80221fd52e402a41c98cb8d1c8192d3abab8ff87dc8715fbf3693861fa27e2b08a48e1e7848",
+        ("writer", "seed"): "75404b6cf9193db4bd521f6a74174a564bdefa7b72279fefb0e3c7f93693a3b3b66ea3664867785145c881a5b94bce7a66c4d6f75db32a27c4677a7e1786347d",
+        ("writer", "os"): "16b5a0b69375602be8668506c396cf384c046ad7de613a26430b69c24a1af6be4b3d7160d9abe816175cabd211be183eb77405ee7d96397e4a2ce55c24ecfde3",
+        ("reader", "seed"): "a9f559a7aceb18a7d35610edca8dcad9f64e805b7ce5f888dda8475ed03eb8201ac674dd635feeb641d2dbb1db951eb7fe252fe7995eb5d65ffb20a7e8b3bd81",
+        ("reader", "os"): "49fc573f216a6661850183f6b5b1a843c2402c0a7be532729dffcce9a6e7c0205932a738d7576be4fedb834f784dfa81e168346c504bcd3fff64093af196acfa"}),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_commits(tmp_path):
+    """One row written by one unit as several output ports (META `out_row_ports`: one `hm96-sha512/row-seg/v1` row of exactly
+    their words) and read by another as one input port has, on both sides, the same row digest (core's
+    `sha512_row_seg_word_digest`), commitment ``b || c`` and hm96 tree leaf, so their frame leaves agree under one domain; each
+    side's statement digest is the one `flock-circuit statement` gives it, seeded and under `FC_COINS=os`. A writer's META
+    that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
+    don't match the row's length, no runs (one row per port), a row named after another port, and its length or schema
+    changed. The composer refuses a run that isn't consecutive output ports."""
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import sha512_row_seg_word_digest
+    from verity_flock import circuit as FC
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    inst = hm96.SHA512
+
+    def statement(d, text, *extra):
+        (d / "c.txt").write_text(text)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
+
+    for vid, (out_words, want) in ROW_SEG_PAIRS.items():
+        dw, dr = tmp_path / vid / "writer", tmp_path / vid / "reader"
+        text, got, salts = _seg_writer_toy(out_words, dw)
+        rtext = _bit_row_toy([16 * sum(out_words)], dr, seg=frozenset({"p0"}), rows={"p0": got}, salts={"p0": salts})
+        bw, br = _public_bcs(dw / "pub.bin", 2), _public_bcs(dr / "pub.bin", 2)
+        for i in range(len(got)):
+            x = sha512_row_seg_word_digest([int(v) for v in got[i]], 16)
+            assert bw[i][1] == br[i][0] == inst.commit_string(inst.default_key, x, salts[i]), (vid, i)
+        assert sha512_row_seg_word_digest([int(v) for v in got[0]], 16).hex() == want["x"], vid
+        assert inst.tree_leaf(inst.default_key, bw[0][1]).hex() == want["tree_leaf"] == inst.tree_leaf(inst.default_key, br[0][0]).hex()
+        for side, d, t in (("writer", dw, text), ("reader", dr, rtext)):
+            for coins in ("seed", "os"):
+                p = statement(d, t, "--coins", coins)
+                assert p.returncode == 0, p.stdout + p.stderr
+                assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[side, coins], (vid, side, coins)
+
+    d = tmp_path / "row-seg-pair/nvfp4-p-k4096" / "writer"
+    head, meta_line, rest = (d / "circuit.txt").read_text().split("\n", 2)
+    rows_bad = "the rows are not the input rows, then one output row per output port"
+    runs_bad = "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
+    cases = {
+        "runs of another length": (lambda m: m.__setitem__("out_row_ports", [2, 1]), rows_bad),
+        "runs past the ports": (lambda m: m.__setitem__("out_row_ports", [4]), runs_bad),
+        "an empty run": (lambda m: m.__setitem__("out_row_ports", [0, 3]), runs_bad),
+        "no runs": (lambda m: m.pop("out_row_ports"), rows_bad),
+        "named after another port": (lambda m: m["ports"][1].__setitem__(0, "a1"), rows_bad),
+        "its length": (lambda m: m["row_schemas"][1].__setitem__(1, 19440),
+                       "port a0: a row of 19440 bits is 1215 u16 leaves and 23 compressions, not META's 1216 and 23"),
+        "read as v2": (lambda m: m["row_schemas"][1].__setitem__(0, "hm96-sha512/row/v2"),
+                       "port a0: a row of 19456 bits is 1216 u16 leaves and 19 compressions, not META's 1216 and 23"),
+    }
+    for name, (change, why) in cases.items():
+        meta = json.loads(meta_line[5:])
+        change(meta)
+        p = statement(d, f"{head}\nMETA {json.dumps(meta)}\n{rest}")
+        assert p.returncode != 0 and why in p.stdout + p.stderr, (name, p.stdout + p.stderr)
+    with pytest.raises(ValueError, match="a run of consecutive output ports"):
+        FC._out_ports([["a0", 4], ["a1", 4], ["a2", 4]], True, (("a0", "a2"),))
+    with pytest.raises(ValueError, match="a run of consecutive output ports"):
+        FC._out_ports([["a0", 4], ["a1", 4], ["a2", 4]], True, (("a0", "a1"), ("a1", "a2")))
 
 
 TOY_EXTRACTOR = r"""import FlockProofs
