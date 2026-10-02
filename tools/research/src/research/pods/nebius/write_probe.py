@@ -289,7 +289,7 @@ def relay(ns: argparse.Namespace) -> int:
                 last = state["posted"].get(row["key"], 0)
                 if time.time() - last >= 3600:
                     slack._post(slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=ns.dry_run), channel, ns.handle,
-                                alert_text(row), ns.agent_url)
+                                alert_text(row))
                     state["posted"][row["key"]] = time.time()
                     state["lines"][host] = min(n, total)
                     state_path.write_text(json.dumps(state))   # a later post that raises must not repeat this one
@@ -316,7 +316,6 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--every", type=float, default=120.0)
     r.add_argument("--state", default=str(Path.home() / ".research" / "write-probe-relay.json"))
     r.add_argument("--handle", default="infra")
-    r.add_argument("--agent-url", default=os.environ.get("RESEARCH_AGENT_URL"))
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--once", action="store_true")
     r.set_defaults(fn=relay)
