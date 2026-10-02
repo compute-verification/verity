@@ -3,17 +3,23 @@
 // length, a per-connection configuration and the kernel's software RX/TX timestamps) and the tuned verifier's hot loop.
 //
 // Wire (little-endian).  Request = u64 op | nbytes << 8, u64 arg.  op 2 = ping, op 3 = close, op 4 = `nbytes` contiguous bytes of
-// C from block `arg`, op 5 = configure the connection (arg bit 0: tuned).  Response = HEADER_WORDS u64, then `nbytes` bytes (0 for
-// ping and configure):
+// C from block `arg`, op 5 = configure the connection (arg bit 0: tuned, bit 1: timestamping off).  Response = HEADER_WORDS u64,
+// then `nbytes` bytes (configure: none; a ping's are the staging buffer's, no device work):
 //   0 status (0 ok, 1 out of range, 2 CUDA error, 3 bad op)   1 device_ns (copy start to end event; configure: mlock call ns)
 //   2 server_ns (request read to response ready, steady clock; configure: effective SO_SNDBUF)
 //   3 kernel RX timestamp of the request (CLOCK_REALTIME ns, SO_TIMESTAMPING software; 0 when none)
 //   4 realtime when the request was read   5 realtime just before the response's first send
-//   6 the newest kernel TX timestamp read from the error queue   7 its key (the TCP byte offset, SOF_TIMESTAMPING_OPT_ID)
+//   6 the newest kernel TX timestamp read from the error queue   7 its key (the TCP byte offset mod 2^32, SOF_TIMESTAMPING_OPT_ID)
 //   8 send calls of the previous response  9 realtime when the previous response's last send returned
 //   10 flags: 1 tuned, 2 mlockall in effect, 4 RX timestamp seen, 8 TX timestamps on, 16 the last QUICKACK set held
 //   11 the core that answered (sched_getcpu)   12 answers on this connection   13 nbytes
 //   14 the key of the previous response's last byte (configure: effective SO_RCVBUF)   15 MAGIC
+//   16 realtime before the copy's first event   17 realtime when the copy's end event first queried done
+//   18 EAGAINs of the previous response's sends   19 op   20 TX timestamps read from the error queue since the last header
+//   21 SCHED_FIFO: 1 in effect, else the errno of the last attempt << 8
+//   22 the kernel TX timestamp of the previous response's last byte, matched by key (0 when not yet read)
+//   23 the same for the response before it (a timestamp read only after the next request arrived)
+//   flags also: 32 timestamping off (the twin cells), 64 SCHED_FIFO in effect
 // The kernel TX timestamp of a response is only known after its send, so a header reports the newest one read so far; the error
 // queue is drained while the thread waits for the next request, never between a request and its response.
 #ifdef SOAK_FAKE_CUDA
@@ -65,10 +71,12 @@ static inline cudaError_t cudaFreeHost(void* p) { std::free(p); return cudaSucce
 #include <cstring>
 #include <string>
 #include <thread>
+#include <algorithm>
+#include <vector>
 
 namespace {
 
-constexpr int HEADER_WORDS = 16;
+constexpr int HEADER_WORDS = 24;
 constexpr size_t HEADER_BYTES = HEADER_WORDS * 8;
 constexpr uint64_t MAGIC = 0x534f414b00000001ull;  // "SOAK", version 1
 constexpr uint64_t BLOCK = 65536;
@@ -123,13 +131,6 @@ inline int read_tx(int fd, int64_t* ts, uint64_t* key) {
   *ts = t;
   *key = k;
   return 1;
-}
-
-// Drain the error queue; returns how many TX timestamps were read, the newest in (*ts, *key).
-inline int drain_tx(int fd, int64_t* ts, uint64_t* key) {
-  int got = 0, r;
-  while ((r = read_tx(fd, ts, key)) != 0) got += r == 1;
-  return got;
 }
 
 class SoakResponder {
@@ -190,6 +191,18 @@ class SoakResponder {
     auto* p = reinterpret_cast<uint8_t*>(req);
     size_t n = 16;
     *krx = 0;
+    if (ts_off_) {
+      while (n) {
+        ssize_t r = ::recv(fd, p, n, MSG_DONTWAIT);
+        if (r > 0) {
+          p += r;
+          n -= (size_t)r;
+        } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) || !running_.load(std::memory_order_relaxed)) {
+          return false;
+        }
+      }
+      return true;
+    }
     while (n) {
       char ctrl[256];
       iovec iov{p, n};
@@ -206,14 +219,40 @@ class SoakResponder {
       } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) || !running_.load(std::memory_order_relaxed)) {
         return false;
       } else if (*tx_pending && n == 16) {
-        if (drain_tx(fd, ktx, kkey) && *kkey >= tx_key_) *tx_pending = false;
+        int64_t t;
+        uint64_t k;
+        int r2;
+        while ((r2 = read_tx(fd, &t, &k)) != 0) {
+          if (r2 != 1) continue;
+          ++errq_reads_;
+          *ktx = t;
+          *kkey = k;
+          for (int j = 0; j < 2; ++j)
+            if (k == want_key_[j] && !want_ts_[j]) want_ts_[j] = t;
+          if ((uint32_t)(k - tx_key_) < 0x80000000u) *tx_pending = false;
+        }
       }
     }
     return true;
   }
 
-  void configure(int fd, bool tuned, uint64_t* head) {
+  void configure(int fd, bool tuned, bool ts_off, uint64_t* head) {
     tuned_ = tuned;
+    if (ts_off && !ts_off_) {
+      int zero = 0;
+      ::setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &zero, sizeof(zero));
+      ts_off_ = true;
+    }
+    if (tuned) {
+      sched_param sp{};
+      sp.sched_priority = 1;
+      int e = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+      fifo_ = e == 0 ? 1 : (uint64_t)e << 8;
+    } else if (fifo_ == 1) {
+      sched_param sp{};
+      pthread_setschedparam(pthread_self(), SCHED_OTHER, &sp);
+      fifo_ = 0;
+    }
     int64_t t0 = realtime_ns();
     if (tuned && !mlocked_.load()) {
       mlocked_.store(::mlockall(MCL_CURRENT | MCL_ONFAULT) == 0 ? 1 : 0);
@@ -276,8 +315,12 @@ class SoakResponder {
       ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
       conn_fd_.store(fd);
       tuned_ = false;
+      ts_off_ = false;
       tx_key_ = 0;
-      uint64_t sent = 0, seq = 0, prev_calls = 0;
+      errq_reads_ = 0;
+      want_key_[0] = want_key_[1] = ~0ull;
+      want_ts_[0] = want_ts_[1] = 0;
+      uint64_t sent = 0, seq = 0, prev_calls = 0, prev_eagain = 0;
       int64_t prev_end = 0, ktx = 0;
       uint64_t kkey = 0;
       bool tx_pending = false, quick_ok = false;
@@ -290,6 +333,7 @@ class SoakResponder {
         if (op == 3) break;
         std::memset(head, 0, HEADER_BYTES);
         if (op == 4) {
+          head[16] = (uint64_t)realtime_ns();
           if (nbytes == 0 || nbytes > max_bytes_ || req[1] > total_ / BLOCK || req[1] * BLOCK + nbytes > total_) {
             head[0] = 1;
           } else {
@@ -299,6 +343,7 @@ class SoakResponder {
             cudaError_t st;
             while ((st = cudaEventQuery(ev1)) == cudaErrorNotReady) {
             }
+            head[17] = (uint64_t)realtime_ns();
             if (st != cudaSuccess) {
               head[0] = 2;
               errors_.fetch_add(1);
@@ -310,12 +355,12 @@ class SoakResponder {
           }
           answered_.fetch_add(1);
         } else if (op == 5) {
-          configure(fd, req[1] & 1, head);
+          configure(fd, req[1] & 1, req[1] & 2, head);
           nbytes = 0;
         } else {
           if (op != 2) head[0] = 3;
           pings_.fetch_add(1);
-          nbytes = 0;
+          if (op != 2 || nbytes > max_bytes_) nbytes = 0;
         }
         head[3] = (uint64_t)krx;
         head[4] = (uint64_t)urx;
@@ -323,19 +368,27 @@ class SoakResponder {
         head[7] = kkey;
         head[8] = prev_calls;
         head[9] = (uint64_t)prev_end;
-        head[10] = (tuned_ ? 1 : 0) | (mlocked_.load() ? 2 : 0) | (krx ? 4 : 0) | (ts_on ? 8 : 0) | (quick_ok ? 16 : 0);
+        head[10] = (tuned_ ? 1 : 0) | (mlocked_.load() ? 2 : 0) | (krx ? 4 : 0) | (ts_on && !ts_off_ ? 8 : 0) | (quick_ok ? 16 : 0) |
+                   (ts_off_ ? 32 : 0) | (fifo_ == 1 ? 64 : 0);
         head[11] = (uint64_t)sched_getcpu();
         head[12] = seq++;
         head[13] = nbytes;
         if (op != 5) head[14] = tx_key_;
         head[15] = MAGIC;
+        head[18] = prev_eagain;
+        head[19] = op;
+        head[20] = errq_reads_;
+        errq_reads_ = 0;
+        head[21] = fifo_;
+        head[22] = (uint64_t)want_ts_[0];
+        head[23] = (uint64_t)want_ts_[1];
         size_t want = HEADER_BYTES + nbytes;
         head[2] = op == 5 ? head[2]
                           : (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
         head[5] = (uint64_t)realtime_ns();
         const uint8_t* p = host;
         size_t left = want;
-        uint64_t calls = 0;
+        uint64_t calls = 0, eagain = 0;
         bool ok = true;
         while (left) {
           iovec iov{const_cast<uint8_t*>(p), left};
@@ -350,13 +403,20 @@ class SoakResponder {
           } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
             ok = false;
             break;
+          } else {
+            ++eagain;
           }
         }
         prev_end = realtime_ns();
+        prev_eagain = eagain;
         if (!ok) break;
         sent += want;
-        tx_key_ = sent - 1;
-        tx_pending = ts_on;
+        tx_key_ = (sent - 1) & 0xffffffffu;
+        want_key_[1] = want_key_[0];
+        want_ts_[1] = want_ts_[0];
+        want_key_[0] = tx_key_;
+        want_ts_[0] = 0;
+        tx_pending = ts_on && !ts_off_;
         prev_calls = calls;
         if (tuned_) quick_ok = ::setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &one, sizeof(one)) == 0;
       }
@@ -378,8 +438,10 @@ class SoakResponder {
   int cpu_;
   uint64_t max_bytes_;
   int listen_fd_ = -1;
-  bool tuned_ = false;
-  uint64_t tx_key_ = 0;
+  bool tuned_ = false, ts_off_ = false;
+  uint64_t tx_key_ = 0, errq_reads_ = 0, fifo_ = 0;
+  uint64_t want_key_[2] = {~0ull, ~0ull};  // the last-byte keys of the last two responses, newest first
+  int64_t want_ts_[2] = {0, 0};             // their TX timestamps, once read
   std::atomic<int> conn_fd_{-1};
   std::atomic<bool> running_{false};
   std::atomic<int64_t> answered_{0}, pings_{0}, tid_{0}, connections_{0}, errors_{0}, mlocked_{0}, ready_err_{0};
@@ -402,9 +464,9 @@ void on_term(int sig) {
 // Record columns (int64), shared with pous_soak.REC (the Python baseline fills the same columns, 5-7 left 0):
 enum {
   R_SCHED, R_SEND0, R_SEND1, R_FIRST, R_RECV, R_KRX_FIRST, R_KRX_LAST, R_KTX, R_RECV_CALLS, R_RING_WAIT, R_SEQ, R_BLK, R_NBYTES,
-  R_HEAD, R_N = R_HEAD + HEADER_WORDS
+  R_OP, R_HEAD, R_N = R_HEAD + HEADER_WORDS
 };
-// Ring slot: 64 bytes of metadata (seq, blk, nbytes, cell), then the response as received.
+// Ring slot: 64 bytes of metadata (seq, blk, nbytes, cell, op), then the response as received.
 constexpr size_t SLOT_META = 64;
 
 extern "C" {
@@ -434,10 +496,12 @@ int soak_mlockall(int on) { return on ? ::mlockall(MCL_CURRENT | MCL_ONFAULT) : 
 
 // Socket options of a tuned client connection: SO_TIMESTAMPING (its TX timestamps are drained by the C loop only), the 1 MiB
 // buffers; returns the effective SO_RCVBUF.
-int soak_client_tune(int fd, int tuned) {
-  if (tuned) {
+int soak_client_tune(int fd, int tuned, int ts) {
+  if (tuned && ts) {
     int tsf = TS_FLAGS;
     ::setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &tsf, sizeof(tsf));
+  }
+  if (tuned) {
     int b = TUNED_BUF;
     ::setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &b, sizeof(b));
     ::setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &b, sizeof(b));
@@ -452,9 +516,9 @@ int soak_client_tune(int fd, int tuned) {
 // received into ring slot seq % nslots and published through ctl[0] (head); ctl[1] is the checker's tail, ctl[2] its halt flag.
 // `*reqs` counts requests sent on this connection (for the TX timestamps' keys) and is advanced.  Returns the records written;
 // *status: 0 done, 1 the connection failed, 2 the checker halted, 3 SIGTERM, 4 the deadline passed.
-int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t* blk, int64_t nbytes, uint8_t* ring,
-                        int64_t slot_bytes, int64_t nslots, volatile int64_t* ctl, int64_t* rec, int64_t deadline_ns,
-                        int64_t cell, int tuned, int64_t* reqs, int64_t* status) {
+int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t* blk, const int64_t* ops, int64_t nbytes,
+                        uint8_t* ring, int64_t slot_bytes, int64_t nslots, volatile int64_t* ctl, int64_t* rec, int64_t deadline_ns,
+                        int64_t cell, int tuned, int ts, int64_t* reqs, int64_t* status) {
   const int one = 1;
   const size_t want = HEADER_BYTES + (size_t)nbytes;
   int64_t r0 = *reqs;
@@ -485,7 +549,7 @@ int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t
       int64_t now = realtime_ns();
       if (now >= t_sched[i]) break;
       if (now > deadline_ns) { *status = 4; return i; }
-      drain();
+      if (ts) drain();
     }
     uint8_t* slot = ring + (seq % nslots) * slot_bytes;
     auto* meta = reinterpret_cast<int64_t*>(slot);
@@ -493,12 +557,14 @@ int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t
     meta[1] = blk[i];
     meta[2] = nbytes;
     meta[3] = cell;
+    meta[4] = ops[i];
     uint8_t* resp = slot + SLOT_META;
-    uint64_t q[2] = {4 | ((uint64_t)nbytes << 8), (uint64_t)blk[i]};
+    uint64_t q[2] = {(uint64_t)ops[i] | ((uint64_t)nbytes << 8), (uint64_t)blk[i]};
     r[R_SCHED] = t_sched[i];
     r[R_SEQ] = seq;
     r[R_BLK] = blk[i];
     r[R_NBYTES] = nbytes;
+    r[R_OP] = ops[i];
     if (tuned) ::setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &one, sizeof(one));
     iovec qv{q, sizeof(q)};
     msghdr qm{};
@@ -518,10 +584,10 @@ int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t
       m.msg_iovlen = 1;
       m.msg_control = ctrl;
       m.msg_controllen = sizeof(ctrl);
-      ssize_t k = ::recvmsg(fd, &m, MSG_DONTWAIT);
+      ssize_t k = ts ? ::recvmsg(fd, &m, MSG_DONTWAIT) : ::recv(fd, resp + got, want - got, MSG_DONTWAIT);
       if (k > 0) {
         int64_t t = realtime_ns();
-        int64_t kt = cmsg_ts(&m);
+        int64_t kt = ts ? cmsg_ts(&m) : 0;
         if (!got) {
           r[R_FIRST] = t;
           r[R_KRX_FIRST] = kt;
@@ -539,8 +605,25 @@ int64_t soak_client_run(int fd, int64_t n, const int64_t* t_sched, const int64_t
     __atomic_store_n(&ctl[0], seq + 1, __ATOMIC_RELEASE);
     if (tuned) ::setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &one, sizeof(one));
   }
-  drain();
+  if (ts) drain();
   return i;
+}
+
+// The cost of reading `clk` back to back: min, p50 and p99.9 of n successive differences (ns).
+int soak_clock_cost(int clk, int64_t n, int64_t* out) {
+  std::vector<int64_t> d((size_t)n);
+  timespec a, b;
+  clock_gettime(clk, &a);
+  for (int64_t i = 0; i < n; ++i) {
+    clock_gettime(clk, &b);
+    d[(size_t)i] = (int64_t)(b.tv_sec - a.tv_sec) * 1000000000 + (b.tv_nsec - a.tv_nsec);
+    a = b;
+  }
+  std::sort(d.begin(), d.end());
+  out[0] = d[0];
+  out[1] = d[(size_t)(n / 2)];
+  out[2] = d[(size_t)(n * 999 / 1000)];
+  return 0;
 }
 
 // The TX timestamps still queued after a cell (its last requests'), into the cell's records.

@@ -25,7 +25,10 @@ def test_cells_are_the_whole_cross_once():
 def test_schedule_is_passes_of_permutations_fixed_by_the_seed():
     a, b = S.draw_schedule(b"x" * 32), S.draw_schedule(b"x" * 32)
     assert a == b and len(a) == S.PASSES
-    assert all(sorted(p) == list(range(72)) for p in a)
+    for p in a:
+        assert sorted(c for c, ts in p if ts) == list(range(72))
+        twins = [c for c, ts in p if not ts]
+        assert len(twins) == len(set(twins)) == S.TWINS_PER_PASS
     assert a != S.draw_schedule(b"y" * 32)
 
 
@@ -72,30 +75,43 @@ def fake(tmp_path_factory):
     resp.stop()
 
 
+def _run(fake, tuned, ts, t_sched, blk, ops, nbytes, ring):
+    rec = np.zeros((len(t_sched), len(S.REC)), np.int64)
+    c = S.Client(fake.lib, fake.resp.port, tuned, ts)
+    assert c.config[15] == S.MAGIC and int(c.config[10]) & 1 == int(tuned) and bool(int(c.config[10]) & 32) == (not ts)
+    if tuned:
+        done, status = S.run_tuned(fake.lib, c, ring, t_sched, blk, ops, nbytes, rec, 2**62, 5)
+    else:
+        done, status = S.run_baseline(c, ring, t_sched, blk, ops, nbytes, rec, 2**62, 5, [False])
+    ping = c.exchange(S.OP_PING, 0)
+    c.close()
+    final = {"srv_ktx_newest": int(ping[6]), "srv_ktx_key": int(ping[7]), "srv_prev_send_calls": int(ping[8]),
+             "srv_prev_send_end": int(ping[9]), "srv_prev_last_key": int(ping[14])}
+    return done, status, rec, ping, final
+
+
 @pytest.mark.parametrize("tuned", [True, False])
 @pytest.mark.parametrize("kib", [64, 144, 384])
-def test_loops_answer_every_read_and_the_checker_accepts_them(fake, tuned, kib):
+def test_loops_answer_every_read_and_ping_and_the_checker_accepts_them(fake, tuned, kib):
     ring = S.Ring(nslots=32)
     n, nbytes = 20, kib * 1024
     rng = np.random.default_rng(kib)
     t_sched = np.zeros(n, np.int64)
     blk = S.block_starts(rng, n, fake.blocks, nbytes)
-    rec = np.zeros((n, len(S.REC)), np.int64)
-    c = S.Client(fake.lib, fake.resp.port, tuned)
-    assert c.config[15] == S.MAGIC and int(c.config[10]) & 1 == int(tuned)
-    if tuned:
-        done, status = S.run_tuned(fake.lib, c, ring, t_sched, blk, nbytes, rec, 2**62, 5)
-    else:
-        done, status = S.run_baseline(c, ring, t_sched, blk, nbytes, rec, 2**62, 5, [False])
-    ping = c.exchange(S.OP_PING, 0)
-    c.close()
+    ops = np.full(n, S.OP_READ, np.int64)
+    ops[[3, 11]] = S.OP_PING
+    done, status, rec, ping, final = _run(fake, tuned, True, t_sched, blk, ops, nbytes, ring)
     assert (done, status) == (n, 0)
     col = S.COL
     assert np.all(rec[:, col["magic"]] == S.MAGIC) and np.all(rec[:, col["status"]] == 0)
     assert np.all(rec[:, col["nbytes"]] == nbytes) and np.all(rec[:, col["srv_nbytes"]] == nbytes)
+    assert rec[:, col["op"]].tolist() == ops.tolist() and rec[:, col["srv_op"]].tolist() == ops.tolist()
     assert rec[:, col["blk"]].tolist() == blk.tolist()
     assert np.all(rec[:, col["t_recv"]] >= rec[:, col["t_send0"]])
     assert np.all(rec[:, col["srv_utx"]] >= rec[:, col["srv_urx"]])
+    reads = ops == S.OP_READ
+    assert np.all(rec[reads, col["srv_s2"]] >= rec[reads, col["srv_s1"]]) and np.all(rec[reads, col["srv_s1"]] > 0)
+    assert np.all(rec[~reads, col["srv_s1"]] == 0), "a ping does no device work"
     assert rec[:, col["srv_seq"]].tolist() == list(range(1, n + 1))
     assert np.all(rec[:, col["srv_krx"]] > 0), "the responder's kernel RX timestamps"
     assert int(ping[6]) > 0 and int(ping[7]) == int(ping[14]), "the last answer's kernel TX timestamp, by its key"
@@ -107,7 +123,48 @@ def test_loops_answer_every_read_and_the_checker_accepts_them(fake, tuned, kib):
     checker.__init__(fake.vk)
     checked = [S.check_slot(ring, checker, seq) for seq in range(n)]
     assert all(why is None for _, why in checked)
-    assert sum(k for k, _ in checked) == n * (nbytes // S.BLOCK)
+    assert sum(k for k, _ in checked) == (n - 2) * (nbytes // S.BLOCK)
+    runs = [{"cell": 0, "ts": True, "final_ping": final}]
+    ktx, s4 = S.response_tx(rec, np.zeros(n, np.int64), runs)
+    assert np.all(ktx > 0) and np.all(s4 > 0), "every answer's server TX timestamp and send end, from a later header"
+    assert np.all(ktx >= rec[:, col["srv_utx"]]) and np.all(ktx <= rec[:, col["t_recv"]] + 1000)
+    v = S.validate(rec, np.zeros(n, np.int64), runs, np.zeros((0, 8), np.int64), {}, (n - 2) * (nbytes // S.BLOCK), 60.0)
+    assert v["blocks"]["equal"] and v["pings"] == 2 and v["status_nonzero"] == {}
+    assert v["absent"]["K_rx_req"] == v["absent"]["K_tx_resp"] == v["absent"]["S4"] == v["absent"]["S1_S2_reads"] == 0
+    assert v["gpu_span_violations"] == 0
+    # The kernel may transmit a response's tail after sendmsg returns (pushed on the receiver's ACK): K_tx_resp > S4 is counted,
+    # not an error.
+    bad = {k: x for k, x in v["order_violations"].items() if x and k != "..<=S4"}
+    assert not bad, bad
+
+
+@pytest.mark.parametrize("tuned", [True, False])
+def test_a_timestamping_off_twin_carries_no_kernel_stamps(fake, tuned):
+    ring = S.Ring(nslots=8)
+    n = 6
+    done, status, rec, _, final = _run(fake, tuned, False, np.zeros(n, np.int64), np.zeros(n, np.int64),
+                                       np.full(n, S.OP_READ, np.int64), S.BLOCK, ring)
+    assert (done, status) == (n, 0)
+    col = S.COL
+    assert np.all(rec[:, col["srv_krx"]] == 0) and np.all(rec[:, col["c_ktx"]] == 0) and np.all(rec[:, col["c_krx_last"]] == 0)
+    assert np.all(rec[:, col["srv_flags"]] & 32) and not np.any(rec[:, col["srv_flags"]] & 8)
+    v = S.validate(rec, np.zeros(n, np.int64), [{"cell": 0, "ts": False, "final_ping": final}], np.zeros((0, 8), np.int64), {},
+                   n, 60.0)
+    assert v["absent"]["timestamping_on"] == 0 and v["absent"]["K_rx_req"] == 0
+
+
+def test_validate_counts_an_order_violation_and_a_clock_step():
+    rec = np.zeros((2, len(S.REC)), np.int64)
+    col = S.COL
+    for i, base in enumerate((10_000_000, 20_000_000)):
+        rec[i, [col["t_sched"], col["t_send0"], col["srv_krx"], col["srv_urx"], col["srv_utx"], col["t_recv"]]] = \
+            [base, base + 10, base + 20, base + 30, base + 40, base + 100]
+        rec[i, col["op"]] = S.OP_PING
+    rec[1, col["srv_urx"]] = rec[1, col["srv_krx"]] - 5000
+    tri = np.array([[0, 10**9, 10], [10**8, 10**9 + 10**8, 10**8 + 10], [2 * 10**8, 10**9 + 2 * 10**8 + 50_000, 2 * 10**8 + 10]])
+    v = S.validate(rec, np.zeros(2, np.int64), [{"cell": 0, "ts": True}], np.zeros((0, 8), np.int64), {"clock_triple": tri}, 0, 60.0)
+    assert v["order_violations"]["..<=S0"] == 1 and v["order_violations"]["..<=S3"] == 0
+    assert v["clock_offset"]["steps_over_1us"] == 1 and v["clock_offset"]["max_step_ns"] == 50_000
 
 
 def test_the_checker_catches_a_wrong_block(fake):
@@ -116,7 +173,8 @@ def test_the_checker_catches_a_wrong_block(fake):
     rec = np.zeros((1, len(S.REC)), np.int64)
     fake.data[3 * S.BLOCK + 100] ^= 1
     try:
-        done, status = S.run_tuned(fake.lib, c, ring, np.zeros(1, np.int64), np.array([2], np.int64), 2 * S.BLOCK, rec, 2**62, 0)
+        done, status = S.run_tuned(fake.lib, c, ring, np.zeros(1, np.int64), np.array([2], np.int64), np.full(1, S.OP_READ),
+                                   2 * S.BLOCK, rec, 2**62, 0)
     finally:
         fake.data[3 * S.BLOCK + 100] ^= 1
         c.close()
@@ -129,8 +187,8 @@ def test_out_of_range_reads_are_refused(fake):
     c = S.Client(fake.lib, fake.resp.port, False)
     ring = S.Ring(nslots=4)
     rec = np.zeros((1, len(S.REC)), np.int64)
-    done, status = S.run_baseline(c, ring, np.zeros(1, np.int64), np.array([fake.blocks - 1], np.int64), 2 * S.BLOCK, rec, 2**62, 0,
-                                  [False])
+    done, status = S.run_baseline(c, ring, np.zeros(1, np.int64), np.array([fake.blocks - 1], np.int64), np.full(1, S.OP_READ),
+                                  2 * S.BLOCK, rec, 2**62, 0, [False])
     c.close()
     assert (done, status) == (1, 0) and rec[0, S.COL["status"]] == 1
     assert S.check_slot(ring, S.Checker(fake.vk), 0)[1] is not None
@@ -140,12 +198,12 @@ def test_write_chunk_round_trips(tmp_path):
     soak = SimpleNamespace(job=tmp_path, runs=[{"cell": 3}], recs=[np.arange(2 * len(S.REC), dtype=np.int64).reshape(2, -1)],
                            rec_meta=[np.array([[3, 0, 0], [3, 0, 0]], np.int64)])
     (tmp_path / "steps.bin").write_bytes(S.STEP.pack(0, 0, 0, 10**12, 8, 8, 0, 8))
-    doc = S.write_chunk(tmp_path / "chunk.npz", soak, {"wrong": 0})
+    doc = S.write_chunk(tmp_path / "chunk.npz", soak, {"wrong": 0, "checked_blocks": 0})
     with np.load(tmp_path / "chunk.npz") as z:
         assert z["rec"].shape == (2, len(S.REC)) and z["rec_columns"].tolist() == list(S.REC)
         assert z["rec_vllm_state"].tolist() == [S.STATE_DECODE, S.STATE_DECODE]
         assert json.loads(str(z["meta_json"]))["summary"] == doc["summary"]
-    assert doc["summary"]["3"]["answers"] == 2
+    assert doc["summary"]["3"]["answers"] == 2 and doc["validation"]["answers"] == 2
 
 
 def test_record_layout_matches_the_library(fake):

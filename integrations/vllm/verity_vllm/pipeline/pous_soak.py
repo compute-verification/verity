@@ -41,7 +41,7 @@ from typing import Any
 import numpy as np
 
 BLOCK = 65536
-HEADER_WORDS = 16
+HEADER_WORDS = 24
 HEADER_BYTES = 8 * HEADER_WORDS
 MAGIC = 0x534F414B00000001
 SLOT_META = 64
@@ -58,12 +58,15 @@ CONFIGS = ("baseline", "tuned")
 CELL_S = 60.0
 SETTLE_S = 2.0
 PASSES = 6
+TWINS_PER_PASS = 7          # timestamping-off twins of random cells in each pass (about 10%): the instrument's own cost
+PING_FRACTION = 0.1         # requests that are pings (op 2: the full payload from the staging buffer, no device work)
 KIND = "pous-soak-chunk/v1"
 
 HEAD = ("status", "device_ns", "server_ns", "srv_krx", "srv_urx", "srv_utx", "srv_ktx_newest", "srv_ktx_key", "srv_prev_send_calls",
-        "srv_prev_send_end", "srv_flags", "srv_cpu", "srv_seq", "srv_nbytes", "srv_prev_last_key", "magic")
+        "srv_prev_send_end", "srv_flags", "srv_cpu", "srv_seq", "srv_nbytes", "srv_prev_last_key", "magic", "srv_s1", "srv_s2",
+        "srv_prev_send_eagain", "srv_op", "srv_errq_reads", "srv_fifo", "srv_ktx_prev", "srv_ktx_prev2")
 REC = ("t_sched", "t_send0", "t_send1", "t_first", "t_recv", "c_krx_first", "c_krx_last", "c_ktx", "recv_calls", "ring_wait_ns",
-       "seq", "blk", "nbytes", *HEAD)
+       "seq", "blk", "nbytes", "op", *HEAD)
 COL = {n: i for i, n in enumerate(REC)}
 STEP = struct.Struct("<qqqqiiii")
 STEP_FIELDS = ("cpu_t0", "cpu_t1", "gpu_t0", "gpu_t1", "tokens", "reqs", "new_reqs", "running")
@@ -77,11 +80,18 @@ def cells() -> list[dict[str, Any]]:
             for i, (load, rate, kib, cfg) in enumerate(itertools.product(LOADS, RATES, SIZES_KIB, CONFIGS))]
 
 
-def draw_schedule(seed: bytes, passes: int = PASSES) -> list[list[int]]:
-    """``passes`` random permutations of the cells, from ``seed``."""
-    rng = np.random.default_rng(int.from_bytes(hashlib.sha256(b"pous-soak/schedule" + seed).digest()[:8], "little"))
+def draw_schedule(seed: bytes, passes: int = PASSES, twins: int = TWINS_PER_PASS) -> list[list[list[int]]]:
+    """``passes`` random permutations of the cells, from ``seed``, as [cell, timestamping] entries; each pass also runs ``twins``
+    random cells a second time with timestamping off (0) at random places."""
+    rng = np.random.default_rng(int.from_bytes(hashlib.sha256(b"pous-soak/schedule/v2" + seed).digest()[:8], "little"))
     n = len(cells())
-    return [[int(c) for c in rng.permutation(n)] for _ in range(passes)]
+    out = []
+    for _ in range(passes):
+        entries = [[int(c), 1] for c in rng.permutation(n)]
+        for c in rng.choice(n, twins, replace=False):
+            entries.insert(int(rng.integers(0, len(entries) + 1)), [int(c), 0])
+        out.append(entries)
+    return out
 
 
 def poisson_times(rng: np.random.Generator, rate: float, duration_s: float, t0_ns: int) -> np.ndarray:
@@ -111,6 +121,13 @@ def _write(path: Path, doc: Any) -> None:
 
 def _read(path: Path) -> Any:
     return json.loads(path.read_text())
+
+
+def _text(path: str) -> str | None:
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return None
 
 
 def utc(ns: float | None = None) -> str:
@@ -155,9 +172,10 @@ def load_native(path: Path) -> ctypes.CDLL:
     lib.soak_responder_stat.argtypes = [vp, ip]
     lib.soak_responder_free.argtypes = [vp]
     lib.soak_magic.restype = u64
-    lib.soak_client_tune.argtypes = [ip, ip]
+    lib.soak_client_tune.argtypes = [ip, ip, ip]
     lib.soak_client_run.restype = i64
-    lib.soak_client_run.argtypes = [ip, i64, vp, vp, i64, vp, i64, i64, vp, vp, i64, i64, ip, vp, vp]
+    lib.soak_client_run.argtypes = [ip, i64, vp, vp, vp, i64, vp, i64, i64, vp, vp, i64, i64, ip, ip, vp, vp]
+    lib.soak_clock_cost.argtypes = [ip, i64, vp]
     lib.soak_client_drain.argtypes = [ip, vp, i64, i64]
     lib.soak_mlockall.argtypes = [ip]
     if lib.soak_header_words() != HEADER_WORDS or lib.soak_record_words() != len(REC) or lib.soak_magic() != MAGIC:
@@ -406,13 +424,15 @@ class Checker:
 def check_slot(ring: Ring, checker: Checker, seq: int) -> tuple[int, str | None]:
     """The blocks of slot ``seq``'s response checked, and why it is wrong (None when right)."""
     off = ring.slot(seq)
-    meta = np.frombuffer(ring.mm, dtype=np.int64, count=4, offset=off)
+    meta = np.frombuffer(ring.mm, dtype=np.int64, count=5, offset=off)
     head = np.frombuffer(ring.mm, dtype=np.uint64, count=HEADER_WORDS, offset=off + SLOT_META)
     if int(meta[0]) != seq:
         return 0, f"slot holds seq {int(meta[0])}, not {seq}"
-    blk, nbytes = int(meta[1]), int(meta[2])
-    if int(head[15]) != MAGIC or int(head[0]) != 0 or int(head[13]) != nbytes:
-        return 0, f"header status {int(head[0])} nbytes {int(head[13])} magic {int(head[15]):#x}"
+    blk, nbytes, op = int(meta[1]), int(meta[2]), int(meta[4])
+    if int(head[15]) != MAGIC or int(head[0]) != 0 or int(head[13]) != nbytes or int(head[19]) != op:
+        return 0, f"header status {int(head[0])} nbytes {int(head[13])} op {int(head[19])} magic {int(head[15]):#x}"
+    if op == OP_PING:
+        return 0, None
     p = off + SLOT_META + HEADER_BYTES
     n = 0
     for j, i in enumerate(contained(blk, nbytes)):
@@ -453,15 +473,77 @@ def _proc_cols(header: str, cpus: tuple[int, ...]) -> list[int]:
     return [names.index(f"CPU{c}") for c in cpus]
 
 
+NVML_FIELDS = ("t_ns", "sm_util", "mem_util", "sm_mhz", "mem_mhz", "power_mw", "temp_c", "throttle", "pcie_tx_kbs", "pcie_rx_kbs")
+
+
+class Nvml:
+    """GPU ``uuid``'s NVML readings (`NVML_FIELDS`, -1 when one fails) and every GPU's utilization; absent without pynvml."""
+
+    def __init__(self, uuid: str) -> None:
+        import pynvml as nv
+
+        nv.nvmlInit()
+        self.nv = nv
+        self.all = [nv.nvmlDeviceGetHandleByIndex(i) for i in range(nv.nvmlDeviceGetCount())]
+        self.uuids = [str(nv.nvmlDeviceGetUUID(h)) for h in self.all]
+        self.h = nv.nvmlDeviceGetHandleByUUID(uuid.encode()) if uuid else None
+
+    def _try(self, f: Any, *args: Any) -> Any:
+        try:
+            return f(*args)
+        except Exception:  # noqa: BLE001  (a reading the driver refuses is recorded as -1)
+            return None
+
+    def gpu(self) -> list[int]:
+        nv, h = self.nv, self.h
+        u = self._try(nv.nvmlDeviceGetUtilizationRates, h)
+        vals = [u.gpu if u else None, u.memory if u else None, self._try(nv.nvmlDeviceGetClockInfo, h, nv.NVML_CLOCK_SM),
+                self._try(nv.nvmlDeviceGetClockInfo, h, nv.NVML_CLOCK_MEM), self._try(nv.nvmlDeviceGetPowerUsage, h),
+                self._try(nv.nvmlDeviceGetTemperature, h, nv.NVML_TEMPERATURE_GPU),
+                self._try(nv.nvmlDeviceGetCurrentClocksThrottleReasons, h),
+                self._try(nv.nvmlDeviceGetPcieThroughput, h, nv.NVML_PCIE_UTIL_TX_BYTES),
+                self._try(nv.nvmlDeviceGetPcieThroughput, h, nv.NVML_PCIE_UTIL_RX_BYTES)]
+        return [time.time_ns()] + [-1 if v is None else int(v) for v in vals]
+
+    def utilization(self) -> list[int]:
+        out = []
+        for h in self.all:
+            u = self._try(self.nv.nvmlDeviceGetUtilizationRates, h)
+            out.append(-1 if u is None else int(u.gpu))
+        return out
+
+
+def _clock_triple() -> tuple[int, int, int]:
+    m0 = time.monotonic_ns()
+    r = time.time_ns()
+    return m0, r, time.monotonic_ns()
+
+
 def cmd_sample(a) -> int:
-    """Every ``period`` s until SIGTERM: /proc/softirqs and /proc/stat for `SAMPLE_CPUS`, /proc/interrupts' nonzero increments on
-    them, and each target thread's schedstat (run ns, wait ns, slices) with the core it last ran on; then ``samples.npz``."""
+    """Every ``period`` s until SIGTERM: a (MONOTONIC, REALTIME, MONOTONIC) clock triple; /proc/softirqs, /proc/stat (steal
+    included) and scaling_cur_freq for the sampled cores; /proc/interrupts' nonzero increments on them; each target thread's
+    schedstat (run ns, wait ns, slices), the core it last ran on, its minor and major faults and voluntary and involuntary context
+    switches.  Every second, GPU ``--gpu-uuid``'s NVML readings (`NVML_FIELDS`); every 10 s, every GPU's utilization and the
+    load average.  Then ``samples.npz``."""
     os.sched_setaffinity(0, {a.cpu})
     stop = [False]
     signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
     targets = [tuple(int(x) for x in t.split(":")) for t in a.targets.split(",") if t]
     lo, hi = (int(x) for x in a.cpus.split("-"))
     cpus = tuple(range(lo, hi + 1))
+    try:
+        nvml: Nvml | None = Nvml(a.gpu_uuid)
+        nvml_error = None
+    except Exception as e:  # noqa: BLE001  (the samples then carry no NVML readings)
+        nvml, nvml_error = None, repr(e)
+    triples, faults, ctxt, freq, nv_rows, gpus_t, gpus_util, loadavg = [], [], [], [], [], [], [], []
+
+    def freq_khz(c: int) -> int:
+        try:
+            with open(f"/sys/devices/system/cpu/cpu{c}/cpufreq/scaling_cur_freq") as f:
+                return int(f.read())
+        except (OSError, ValueError):
+            return -1
     with open("/proc/softirqs") as f:
         sh = f.readline()
     scol = [c + 1 for c in _proc_cols(sh, cpus)]
@@ -475,8 +557,18 @@ def cmd_sample(a) -> int:
     ev_t, ev_irq, ev_cpu, ev_d = [], [], [], []
     soft_names: list[str] = []
     tick = time.monotonic()
+    k = 0
     while not stop[0]:
-        t = time.time_ns()
+        triples.append(_clock_triple())
+        t = triples[-1][1]
+        freq.append([freq_khz(c) for c in cpus])
+        if nvml is not None and k % max(1, round(1.0 / a.period)) == 0:
+            nv_rows.append(nvml.gpu())
+        if k % max(1, round(10.0 / a.period)) == 0:
+            gpus_t.append(t)
+            gpus_util.append(nvml.utilization() if nvml is not None else [])
+            loadavg.append(list(os.getloadavg()))
+        k += 1
         with open("/proc/softirqs") as f:
             f.readline()
             rows = [ln.split() for ln in f]
@@ -510,22 +602,39 @@ def cmd_sample(a) -> int:
         with open("/proc/stat") as f:
             st = {ln.split()[0]: [int(x) for x in ln.split()[1:11]] for ln in f if ln.startswith("cpu")}
         cpustat.append([st.get(f"cpu{c}", [0] * 10) for c in cpus])
-        row, lc = [], []
+        row, lc, fl, cs = [], [], [], []
         for pid, tid in targets:
             try:
                 with open(f"/proc/{pid}/task/{tid}/schedstat") as f:
                     row.append([int(x) for x in f.read().split()[:3]])
                 with open(f"/proc/{pid}/task/{tid}/stat") as f:
-                    lc.append(int(f.read().rsplit(")", 1)[1].split()[36]))
-            except (FileNotFoundError, ProcessLookupError, IndexError, ValueError):
+                    st_ = f.read().rsplit(")", 1)[1].split()
+                lc.append(int(st_[36]))
+                fl.append([int(st_[7]), int(st_[9])])
+                with open(f"/proc/{pid}/task/{tid}/status") as f:
+                    d = dict(ln.split(":", 1) for ln in f if "ctxt_switches" in ln)
+                cs.append([int(d["voluntary_ctxt_switches"]), int(d["nonvoluntary_ctxt_switches"])])
+            except (FileNotFoundError, ProcessLookupError, IndexError, ValueError, KeyError):
                 row.append([-1, -1, -1])
                 lc.append(-1)
+                fl.append([-1, -1])
+                cs.append([-1, -1])
         sched.append(row)
         lastcpu.append(lc)
+        faults.append(fl)
+        ctxt.append(cs)
         t_ns.append(t)
         tick += a.period
         time.sleep(max(0.0, tick - time.monotonic()))
+    n, nt = len(t_ns), len(targets)
     np.savez_compressed(Path(a.job) / "samples.npz", t_ns=np.array(t_ns, np.int64), cpus=np.array(cpus),
+                        clock_triple=np.array(triples, np.int64).reshape(n, 3), cpu_freq_khz=np.array(freq, np.int64),
+                        thread_faults=np.array(faults, np.int64).reshape(n, nt, 2),
+                        thread_ctxt=np.array(ctxt, np.int64).reshape(n, nt, 2),
+                        nvml=np.array(nv_rows, np.int64).reshape(-1, len(NVML_FIELDS)), nvml_fields=np.array(NVML_FIELDS),
+                        nvml_error=np.array(nvml_error or ""), gpus_uuid=np.array(nvml.uuids if nvml else []),
+                        gpus_t_ns=np.array(gpus_t, np.int64), gpus_util=np.array(gpus_util, np.int64).reshape(len(gpus_t), len(nvml.all) if nvml else 0),
+                        loadavg=np.array(loadavg, np.float64).reshape(-1, 3),
                         softirq_names=np.array(soft_names), softirq=np.array(soft, np.int64),
                         cpustat=np.array(cpustat, np.int64), sched_targets=np.array(targets, np.int64).reshape(-1, 2),
                         schedstat=np.array(sched, np.int64).reshape(len(t_ns), len(targets), 3),
@@ -538,15 +647,24 @@ def cmd_sample(a) -> int:
 class Client:
     """One connection to the soak responder, configured for one cell."""
 
-    def __init__(self, lib: ctypes.CDLL, port: int, tuned: bool) -> None:
-        self.lib, self.tuned = lib, tuned
+    def __init__(self, lib: ctypes.CDLL, port: int, tuned: bool, ts: bool = True) -> None:
+        self.lib, self.tuned, self.ts = lib, tuned, ts
         self.sock = socket.create_connection(("127.0.0.1", port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.rcvbuf = int(lib.soak_client_tune(self.sock.fileno(), int(tuned)))
+        self.rcvbuf = int(lib.soak_client_tune(self.sock.fileno(), int(tuned), int(ts)))
         self.sock.setblocking(False)
         self.fd = self.sock.fileno()
         self.reqs = 0
-        self.config = self.exchange(OP_CONFIG, int(tuned))
+        self.config = self.exchange(OP_CONFIG, int(tuned) | (0 if ts else 2))
+
+    def tcp_info(self) -> dict[str, int]:
+        """The connection's TCP_INFO (struct tcp_info's u32 fields after its 8 u8 ones)."""
+        raw = self.sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104)
+        u32 = struct.unpack_from("<24I", raw, 8)
+        names = ("rto", "ato", "snd_mss", "rcv_mss", "unacked", "sacked", "lost", "retrans", "fackets", "last_data_sent",
+                 "last_ack_sent", "last_data_recv", "last_ack_recv", "pmtu", "rcv_ssthresh", "rtt", "rttvar", "snd_ssthresh",
+                 "snd_cwnd", "advmss", "reordering", "rcv_rtt", "rcv_space", "total_retrans")
+        return {"retransmits": raw[2], **dict(zip(names, u32))}
 
     def exchange(self, op: int, arg: int) -> np.ndarray:
         """A request without payload (ping, configure) and its header."""
@@ -575,23 +693,24 @@ class Client:
             self.sock.close()
 
 
-def run_tuned(lib: ctypes.CDLL, c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, nbytes: int, rec: np.ndarray,
-              deadline_ns: int, cell: int) -> tuple[int, int]:
+def run_tuned(lib: ctypes.CDLL, c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, ops: np.ndarray, nbytes: int,
+              rec: np.ndarray, deadline_ns: int, cell: int) -> tuple[int, int]:
     reqs, status = ctypes.c_int64(c.reqs), ctypes.c_int64(0)
     r0 = c.reqs
-    n = lib.soak_client_run(c.fd, len(t_sched), t_sched.ctypes.data, blk.ctypes.data, nbytes, ring.base + CTL_BYTES, SLOT_BYTES, ring.nslots,
-                            ring.ctl.ctypes.data, rec.ctypes.data, deadline_ns, cell, 1, ctypes.byref(reqs), ctypes.byref(status))
+    n = lib.soak_client_run(c.fd, len(t_sched), t_sched.ctypes.data, blk.ctypes.data, ops.ctypes.data, nbytes, ring.base + CTL_BYTES,
+                            SLOT_BYTES, ring.nslots, ring.ctl.ctypes.data, rec.ctypes.data, deadline_ns, cell, 1, int(c.ts),
+                            ctypes.byref(reqs), ctypes.byref(status))
     c.reqs = reqs.value
-    lib.soak_client_drain(c.fd, rec.ctypes.data, n, r0)
+    if c.ts:
+        lib.soak_client_drain(c.fd, rec.ctypes.data, n, r0)
     return int(n), int(status.value)
 
 
-def run_baseline(c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, nbytes: int, rec: np.ndarray, deadline_ns: int,
-                 cell: int, stopped: list[bool]) -> tuple[int, int]:
+def run_baseline(c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, ops: np.ndarray, nbytes: int, rec: np.ndarray,
+                 deadline_ns: int, cell: int, stopped: list[bool]) -> tuple[int, int]:
     """The series' verifier loop (`pous_verifier.LiveResponder.roundtrip`: a polled non-blocking socket, recv_into) on the soak's
     wire, filling the tuned loop's record columns but the client's kernel timestamps."""
     want = HEADER_BYTES + nbytes
-    op = OP_READ | (nbytes << 8)
     pack, sock, ctl, mm, view, now = struct.Struct("<QQ").pack, c.sock, ring.ctl, ring.mm, ring.view, time.time_ns
     H, T, HALT = Ring.HEAD, Ring.TAIL, Ring.HALT
     for i in range(len(t_sched)):
@@ -615,11 +734,11 @@ def run_baseline(c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, nb
             if x > deadline_ns:
                 return i, 4
         off = ring.slot(seq)
-        b = int(blk[i])
-        mm[off:off + 32] = struct.pack("<qqqq", seq, b, nbytes, cell)
+        b, o = int(blk[i]), int(ops[i])
+        mm[off:off + 40] = struct.pack("<qqqqq", seq, b, nbytes, cell, o)
         resp = view[off + SLOT_META:off + SLOT_META + want]
         s0 = now()
-        sock.send(pack(op, b))
+        sock.send(pack(o | (nbytes << 8), b))
         s1 = now()
         c.reqs += 1
         got, calls, first = 0, 0, 0
@@ -638,8 +757,8 @@ def run_baseline(c: Client, ring: Ring, t_sched: np.ndarray, blk: np.ndarray, nb
             calls += 1
         r = rec[i]
         r[0], r[1], r[2], r[3], r[4] = t, s0, s1, first, now()
-        r[8], r[9], r[10], r[11], r[12] = calls, wait, seq, b, nbytes
-        r[13:] = np.frombuffer(mm, dtype=np.int64, count=HEADER_WORDS, offset=off + SLOT_META)
+        r[8], r[9], r[10], r[11], r[12], r[13] = calls, wait, seq, b, nbytes, o
+        r[14:] = np.frombuffer(mm, dtype=np.int64, count=HEADER_WORDS, offset=off + SLOT_META)
         ctl[H] = seq + 1
     return len(t_sched), 0
 
@@ -659,19 +778,19 @@ class Soak:
         self.checking = lambda: True
 
     def schedule(self) -> dict[str, Any]:
-        path = self.state / "schedule.json"
+        path = self.state / "schedule-v2.json"
         if not path.exists():
             seed = os.urandom(32)
             _write(path, {"seed": seed.hex(), "cells": cells(), "passes": draw_schedule(seed), "cell_s": self.a.cell_s,
-                          "settle_s": SETTLE_S, "created": utc()})
+                          "settle_s": SETTLE_S, "ping_fraction": PING_FRACTION, "twins_per_pass": TWINS_PER_PASS, "created": utc()})
         return _read(path)
 
     def position(self) -> int:
-        p = self.state / "progress.json"
+        p = self.state / "progress-v2.json"
         return _read(p)["next"] if p.exists() else 0
 
     def advance(self, pos: int, run: dict[str, Any]) -> None:
-        _write(self.state / "progress.json", {"next": pos + 1, "last": run, "utc": utc()})
+        _write(self.state / "progress-v2.json", {"next": pos + 1, "last": run, "utc": utc()})
 
     def set_load(self, mode: str) -> dict[str, Any]:
         if mode == self.mode:
@@ -694,22 +813,32 @@ class Soak:
         return {"mode": mode, "switched": False, "stopped": True}
 
     def cell(self, lib: ctypes.CDLL, ring: Ring, ready: dict[str, Any], cell: dict[str, Any], pas: int, pos: int,
-             deadline_ns: int) -> dict[str, Any]:
+             deadline_ns: int, ts: bool = True) -> dict[str, Any]:
         tuned = cell["config"] == "tuned"
         nbytes = cell["kib"] * 1024
-        run: dict[str, Any] = {"cell": cell["id"], "pass": pas, "position": pos, "start_utc": utc()}
+        run: dict[str, Any] = {"cell": cell["id"], "pass": pas, "position": pos, "ts": ts, "start_utc": utc(),
+                               "start_ns": time.time_ns()}
         run["load"] = self.set_load(cell["load"])
         t_lock = time.time_ns()
         run["verifier_mlockall"] = {"rc": int(lib.soak_mlockall(1)) if tuned else None, "ns": time.time_ns() - t_lock}
-        c = Client(lib, ready["port"], tuned)
+        run["verifier_fifo"] = None
+        if tuned:
+            try:
+                os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(1))
+                run["verifier_fifo"] = "in effect"
+            except OSError as e:
+                run["verifier_fifo"] = f"refused: {e.strerror}"
+        c = Client(lib, ready["port"], tuned, ts)
         h = c.config
-        run["server_config"] = {"mlock_ns": int(h[1]), "sndbuf": int(h[2]), "rcvbuf": int(h[14]), "flags": int(h[10])}
+        run["server_config"] = {"mlock_ns": int(h[1]), "sndbuf": int(h[2]), "rcvbuf": int(h[14]), "flags": int(h[10]),
+                                "fifo": int(h[21])}
         run["client_rcvbuf"] = c.rcvbuf
         time.sleep(SETTLE_S)
         rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
         t0 = time.time_ns() + 50_000_000
         t_sched = poisson_times(rng, cell["rate"], self.a.cell_s, t0)
         blk = block_starts(rng, len(t_sched), ready["blocks"], nbytes)
+        ops = np.where(rng.random(len(t_sched)) < PING_FRACTION, OP_PING, OP_READ).astype(np.int64)
         rec = np.zeros((len(t_sched), len(REC)), np.int64)
         run["t0_ns"], run["scheduled"] = int(t0), len(t_sched)
         gc.collect()
@@ -717,9 +846,9 @@ class Soak:
         gc.disable()
         try:
             if tuned:
-                n, status = run_tuned(lib, c, ring, t_sched, blk, nbytes, rec, deadline_ns, cell["id"])
+                n, status = run_tuned(lib, c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"])
             else:
-                n, status = run_baseline(c, ring, t_sched, blk, nbytes, rec, deadline_ns, cell["id"], self.stopped)
+                n, status = run_baseline(c, ring, t_sched, blk, ops, nbytes, rec, deadline_ns, cell["id"], self.stopped)
         finally:
             gc.enable()
         run["done"], run["status"] = n, ("done", "connection", "halted", "sigterm", "deadline")[status]
@@ -727,13 +856,20 @@ class Soak:
             try:
                 ping = c.exchange(OP_PING, 0)
                 run["final_ping"] = {"srv_ktx_newest": int(ping[6]), "srv_ktx_key": int(ping[7]), "srv_prev_send_calls": int(ping[8]),
-                                     "srv_prev_send_end": int(ping[9]), "srv_prev_last_key": int(ping[14])}
+                                     "srv_prev_send_end": int(ping[9]), "srv_prev_last_key": int(ping[14]),
+                                     "srv_ktx_prev": int(ping[22]), "srv_ktx_prev2": int(ping[23])}
             except OSError as e:
                 run["final_ping"] = {"error": str(e)}
+        try:
+            run["tcp_info"] = c.tcp_info()
+        except OSError as e:
+            run["tcp_info"] = {"error": str(e)}
         c.close()
         if tuned:
             lib.soak_mlockall(0)
-        run["end_utc"] = utc()
+            if run["verifier_fifo"] == "in effect":
+                os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))
+        run["end_utc"], run["end_ns"] = utc(), time.time_ns()
         t_wait = time.monotonic()
         while int(ring.ctl[Ring.TAIL]) < int(ring.ctl[Ring.HEAD]) and not ring.ctl[Ring.HALT] and not self.stopped[0]:
             if not self.checking() or time.monotonic() - t_wait > 60:
@@ -768,15 +904,120 @@ def join_steps(t: np.ndarray, steps: np.ndarray) -> tuple[np.ndarray, np.ndarray
 
 
 def summarize(rec: np.ndarray, meta: np.ndarray) -> dict[str, Any]:
-    """Per cell: answers, and elapsed (send to last byte) p50 / p99.9 / max in µs."""
+    """Per cell: answers and pings, and the reads' elapsed (send to last byte) p50 / p99.9 / max in µs."""
     out: dict[str, Any] = {}
     if not len(rec):
         return out
     el = (rec[:, COL["t_recv"]] - rec[:, COL["t_send0"]]) / 1e3
+    reads = rec[:, COL["op"]] == OP_READ
     for c in np.unique(meta[:, 0]):
-        e = el[meta[:, 0] == c]
-        out[str(int(c))] = {"answers": len(e), "p50_us": round(float(np.percentile(e, 50)), 2),
-                            "p999_us": round(float(np.percentile(e, 99.9)), 2), "max_us": round(float(e.max()), 2)}
+        inc = meta[:, 0] == c
+        e = el[inc & reads]
+        out[str(int(c))] = {"answers": int(np.count_nonzero(inc)), "pings": int(np.count_nonzero(inc & ~reads))}
+        if len(e):
+            out[str(int(c))].update({"p50_us": round(float(np.percentile(e, 50)), 2),
+                                     "p999_us": round(float(np.percentile(e, 99.9)), 2), "max_us": round(float(e.max()), 2)})
+    return out
+
+
+def response_tx(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]]) -> tuple[np.ndarray, np.ndarray]:
+    """Each answer's server kernel TX timestamp of its last byte (`K_tx_resp`) and the end of its last send (`S4`), 0 when
+    absent.  Both come in later headers: the next answer's (or the run's final ping's) ``srv_ktx_prev`` and
+    ``srv_prev_send_end``, else the one after's ``srv_ktx_prev2``, else a newest timestamp whose key is the answer's last byte."""
+    n = len(rec)
+    ktx, s4 = np.zeros(n, np.int64), np.zeros(n, np.int64)
+    names = ("srv_ktx_prev", "srv_ktx_prev2", "srv_prev_send_end", "srv_prev_last_key", "srv_ktx_key", "srv_ktx_newest")
+    for r in np.unique(run_idx):
+        idx = np.flatnonzero(run_idx == r)
+        fp = (runs[int(r)].get("final_ping") or {}) if int(r) < len(runs) else {}
+        tail = np.array([[fp.get(k, -1 if "key" in k else 0) for k in names]], np.int64)
+        h = np.concatenate([rec[idx][:, [COL[k] for k in names]], tail, np.zeros((1, len(names)), np.int64) - 1])
+        nxt, nxt2 = h[1:-1], h[2:]
+        s4[idx] = np.maximum(nxt[:, 2], 0)
+        got = np.where(nxt[:, 0] > 0, nxt[:, 0], np.where(nxt2[:, 1] > 0, nxt2[:, 1], 0))
+        key = nxt[:, 3]
+        for lag in (1, 2, 3):
+            later = h[lag:lag + len(idx)]
+            if len(later) < len(idx):
+                later = np.concatenate([later, np.zeros((len(idx) - len(later), len(names)), np.int64) - 1])
+            hit = (got == 0) & (key >= 0) & (later[:, 4] == key) & (later[:, 5] > 0)
+            got[hit] = later[hit, 5]
+        ktx[idx] = got
+    return ktx, s4
+
+
+def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], steps: np.ndarray, samples: dict[str, np.ndarray],
+             checked_blocks: int | None, cell_s: float) -> dict[str, Any]:
+    """The chunk's §6 counts (the measurement contract): order violations along t_sched <= V0 <= K_rx_req <= S0 <= S1 <= S2 <= S3
+    <= K_tx_resp <= S4 and K_tx_resp <= V1 (every stamp REALTIME, tolerance 1 µs), G <= S2 - S1 + 1 µs, absent kernel stamps
+    (timestamping-on runs), clock offset steps, answers against verified blocks, statuses, per-run counts against rate x time,
+    loaded runs that served no tokens, and retransmits."""
+    col, tol = COL, 1000
+    out: dict[str, Any] = {"answers": len(rec)}
+    ktx, s4 = response_tx(rec, run_idx, runs)
+    ts_on = np.array([bool(runs[int(r)].get("ts", True)) for r in run_idx], bool) if len(rec) else np.zeros(0, bool)
+    ok = rec[:, col["status"]] == 0 if len(rec) else np.zeros(0, bool)
+    read = (rec[:, col["op"]] == OP_READ) & ok if len(rec) else np.zeros(0, bool)
+    st = {n: rec[:, col[c]] for n, c in (("t_sched", "t_sched"), ("V0", "t_send0"), ("K_rx_req", "srv_krx"), ("S0", "srv_urx"),
+                                          ("S1", "srv_s1"), ("S2", "srv_s2"), ("S3", "srv_utx"), ("V1", "t_recv"))}
+    st["K_tx_resp"], st["S4"] = ktx, s4
+    chain = ["t_sched", "V0", "K_rx_req", "S0", "S1", "S2", "S3", "K_tx_resp", "S4"]
+    order: dict[str, int] = {}
+    checked: dict[str, int] = {}
+    prev = np.zeros(len(rec), np.int64)
+    for b in chain:
+        present = (st[b] > 0) & ok & (read if b in ("S1", "S2") else True)
+        cmp = present & (prev > 0)
+        order[f"..<={b}"] = int(np.count_nonzero(cmp & (prev > st[b] + tol)))
+        checked[b] = int(np.count_nonzero(cmp))
+        prev = np.where(present, st[b], prev)
+    kv = (ktx > 0) & ok
+    order["K_tx_resp<=V1"] = int(np.count_nonzero(kv & (ktx > st["V1"] + tol)))
+    out["order_violations"] = order
+    out["order_checked"] = checked
+    span = st["S2"] - st["S1"]
+    out["gpu_span_violations"] = int(np.count_nonzero(read & (rec[:, col["device_ns"]] > span + tol)))
+    on = ok & ts_on
+    out["absent"] = {"K_rx_req": int(np.count_nonzero(on & (st["K_rx_req"] == 0))),
+                     "K_tx_resp": int(np.count_nonzero(on & (ktx == 0))), "S4": int(np.count_nonzero(ok & (s4 == 0))),
+                     "S1_S2_reads": int(np.count_nonzero(read & ((st["S1"] == 0) | (st["S2"] == 0)))),
+                     "timestamping_on": int(np.count_nonzero(on))}
+    out["status_nonzero"] = {str(int(s)): int(c) for s, c in zip(*np.unique(rec[~ok, col["status"]], return_counts=True))} \
+        if len(rec) else {}
+    expect = int(np.sum(rec[read, col["nbytes"]] // BLOCK)) if len(rec) else 0
+    out["blocks"] = {"expected": expect, "verified": checked_blocks, "equal": checked_blocks == expect}
+    out["pings"] = int(np.count_nonzero(rec[:, col["op"]] == OP_PING)) if len(rec) else 0
+    tri = samples.get("clock_triple")
+    if tri is not None and len(tri):
+        off = tri[:, 1] - (tri[:, 0] + tri[:, 2]) // 2
+        width = tri[:, 2] - tri[:, 0]
+        d = np.abs(np.diff(off))
+        step = d > tol + width[1:] + width[:-1]
+        out["clock_offset"] = {"samples": len(off), "range_ns": int(off.max() - off.min()), "max_bracket_ns": int(width.max()),
+                               "steps_over_1us": int(np.count_nonzero(step)), "max_step_ns": int(d.max()) if len(d) else 0}
+    else:
+        out["clock_offset"] = {"samples": 0}
+    rate_dev, loaded_idle, retrans, counted = [], [], 0, 0
+    table = cells()
+    for r, run in enumerate(runs):
+        if "cell" not in run or "error" in run:
+            continue
+        c = table[run["cell"]]
+        if run.get("status") == "done":
+            counted += 1
+            rate_dev.append(abs(run["done"] - c["rate"] * cell_s) / (c["rate"] * cell_s))
+        if c["load"] != "idle" and len(steps) and "start_ns" in run and "end_ns" in run:
+            inside = (steps[:, 2] >= run["start_ns"]) & (steps[:, 2] < run["end_ns"])
+            if int(steps[inside, 4].sum()) == 0:
+                loaded_idle.append(r)
+        elif c["load"] != "idle":
+            loaded_idle.append(r)
+        retrans += int((run.get("tcp_info") or {}).get("total_retrans", 0) or 0)
+    dev = np.array(rate_dev)
+    out["per_run_counts"] = {"runs_done": counted, "within_5pct": int(np.count_nonzero(dev <= 0.05)),
+                             "max_rel_dev": round(float(dev.max()), 4) if len(dev) else None}
+    out["loaded_runs_without_tokens"] = loaded_idle
+    out["loopback_retransmits"] = retrans
     return out
 
 
@@ -790,11 +1031,17 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
                               "rec_vllm_state": state, "rec_vllm_reqs": reqs, "rec_vllm_running": running,
                               "steps": steps, "step_columns": np.array(STEP_FIELDS)}
     sp = soak.job / "samples.npz"
+    samples: dict[str, np.ndarray] = {}
     if sp.exists():
         with np.load(sp) as s:
-            arrays.update({f"sample_{k}": s[k] for k in s.files})
+            samples = {k: s[k] for k in s.files}
+            arrays.update({f"sample_{k}": v for k, v in samples.items()})
+    arrays["rec_k_tx_resp"], arrays["rec_s4"] = response_tx(rec, meta[:, 2], soak.runs)
     summary = summarize(rec, meta)
-    doc = {"schema": KIND, "runs": soak.runs, "summary": summary, "cells": cells(), "answers": len(rec), **extra}
+    validation = validate(rec, meta[:, 2], soak.runs, steps, samples, extra.get("checked_blocks"),
+                          float(extra.get("cell_s", CELL_S)))
+    doc = {"schema": KIND, "runs": soak.runs, "summary": summary, "validation": validation, "cells": cells(), "answers": len(rec),
+           **extra}
     arrays["meta_json"] = np.array(json.dumps(doc, sort_keys=True, default=str))
     tmp = path.with_name(f".{path.name}.tmp.npz")
     np.savez_compressed(tmp, **arrays)
@@ -819,7 +1066,10 @@ def cmd_verify(a) -> int:
         time.sleep(1.0)
     ready = _read(ready_path)
     extra: dict[str, Any] = {"job": job.name, "ready": ready, "vk_root": doc["root"], "root_matches_vk": ready["root"] == doc["root"],
-                             "until_utc": utc(a.until * 1e9), "env": json.loads(a.env or "{}")}
+                             "until_utc": utc(a.until * 1e9), "env": json.loads(a.env or "{}"), "cell_s": a.cell_s,
+                             "clocks": "every stamp CLOCK_REALTIME (kernel software timestamps, clock_gettime in both processes)",
+                             "clocksource": _text("/sys/devices/system/clocksource/clocksource0/current_clocksource"),
+                             "node": _text(a.node) if a.node else None}
     if not extra["root_matches_vk"]:
         _write(job / "WRONG.json", {"why": f"server root {ready['root']} is not vk's {doc['root']}", "utc": utc()})
         write_chunk(job / f"chunk-{job.name}.npz", soak, extra)
@@ -829,11 +1079,18 @@ def cmd_verify(a) -> int:
                                 "--fd", str(ring.fd), "--cpu", str(a.checker_cpu)], pass_fds=(ring.fd,))
     targets = f"{ready['pid']}:{ready['responder_tid']},{os.getpid()}:{os.getpid()},{checker.pid}:{checker.pid}"
     sampler = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "sample", "--job", a.job, "--cpu",
-                                str(a.sampler_cpu), "--targets", targets, "--cpus", a.sample_cpus])
+                                str(a.sampler_cpu), "--targets", targets, "--cpus", a.sample_cpus, "--gpu-uuid", a.gpu_uuid])
     soak.checking = lambda: checker.poll() is None
     sched = soak.schedule()
-    order = [c for p in sched["passes"] for c in p]
+    extra["schedule_seed"] = sched["seed"]
+    order = [e for p in sched["passes"] for e in p]
+    per_pass = len(sched["passes"][0])
     table = sched["cells"]
+    extra["clock_cost_ns"] = {}
+    for name, clk in (("realtime", 0), ("monotonic", 1)):
+        out = (ctypes.c_int64 * 3)()
+        lib.soak_clock_cost(clk, 1_000_000, out)
+        extra["clock_cost_ns"][name] = {"min": out[0], "p50": out[1], "p999": out[2]}
     pos = soak.position()
     rc = 0
     try:
@@ -842,16 +1099,17 @@ def cmd_verify(a) -> int:
             deadline = int(a.until * 1e9)
             if time.time_ns() + need > deadline:
                 break
-            cell = table[order[pos]]
+            cid, ts = order[pos]
+            cell = table[cid]
             try:
-                run = soak.cell(lib, ring, ready, cell, pos // len(table), pos, deadline)
+                run = soak.cell(lib, ring, ready, cell, pos // per_pass, pos, deadline, ts=bool(ts))
             except (OSError, TimeoutError) as e:
                 soak.runs.append({"cell": cell["id"], "position": pos, "error": repr(e), "utc": utc()})
                 rc = 4
                 break
             with open(Path(a.state) / "cells.log", "a") as f:
-                f.write(json.dumps({k: run.get(k) for k in ("cell", "pass", "position", "start_utc", "end_utc", "scheduled", "done",
-                                                            "status", "wrong")}) + "\n")
+                f.write(json.dumps({k: run.get(k) for k in ("cell", "pass", "position", "ts", "start_utc", "end_utc", "scheduled",
+                                                            "done", "status", "wrong")}) + "\n")
             if run["wrong"] or ring.ctl[Ring.HALT]:
                 rc = 3
                 break
@@ -884,7 +1142,7 @@ def cmd_verify(a) -> int:
         with open(Path(a.state) / "chunks.log", "a") as f:
             f.write(json.dumps({"chunk": f"chunk-{job.name}.npz", "answers": out["answers"], "wrong": out["wrong"],
                                 "checked_blocks": out["checked_blocks"], "runs": len(out["runs"]), "rc": out["rc"],
-                                "summary": out["summary"], "utc": utc()}) + "\n")
+                                "summary": out["summary"], "validation": out["validation"], "utc": utc()}) + "\n")
     if extra["wrong"] or (job / "WRONG.json").exists():
         return 3
     return 99 if soak.stopped[0] else rc
@@ -949,6 +1207,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--sampler-cpu", type=int, default=90)
     v.add_argument("--sample-cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}", help="the cores sampled, lo-hi")
     v.add_argument("--env", default="", help="JSON recorded in the chunk (the job's environment facts)")
+    v.add_argument("--gpu-uuid", default="", help="the server's GPU, sampled through NVML")
+    v.add_argument("--node", default="", help="a text file of the node's static facts, recorded in the chunk")
     c = sub.add_parser("check")
     c.add_argument("--setup", required=True)
     c.add_argument("--job", required=True)
@@ -960,6 +1220,7 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--targets", default="", help="pid:tid,... whose schedstat is sampled")
     m.add_argument("--period", type=float, default=0.1)
     m.add_argument("--cpus", default=f"{SAMPLE_CPUS[0]}-{SAMPLE_CPUS[-1]}", help="the cores sampled, lo-hi")
+    m.add_argument("--gpu-uuid", default="", help="the GPU whose NVML readings are sampled every second")
     p = sub.add_parser("preserve")
     p.add_argument("--custody", required=True)
     p.add_argument("--soak", default="honest-latency-soak")
