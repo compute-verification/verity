@@ -6,6 +6,10 @@
 #              seconds per statement and per unit); on a GPU, the job first takes CPUS (16) cores of free 16-core slices
 #              (cpu-slices.sh, as 74-gemm-hill.sh does) and pins to them, so it never shares a pinned prover's cores
 #   SUMMARY gains timings (every shape's timing.json)
+#   PIN=1      any other mode takes and pins to its CPUS (16) cores the same way, so a no-GPU cut or stage job in the provers
+#              queue stays off the cores of a timed prover
+#   MODE=cut CUT_JOBS=<n>: the counts cut in n processes by Call Definition (cut_parallel.py, vllm-overhead-moe's), counts.json
+#              and counts-all.json at once, in place of the one-process cut and its CUT_ALL re-cut
 # proofs-rows' copy of backends/flock/pod/73-sweep-shape.sh (backend-sweep-2's, at 70e99f57), with the (b) stage/prove split:
 #   MODE=shape STAGE_ONLY=1 ...   (no GPU) the chunk's statement exactly as its GPU job would stage it (the same settings, so the
 #              same FLOCK_STAGE_CACHE key), into the cache, and a marker $FLOCK_STAGE_CACHE/staged/<ident>.json with the files' sha256
@@ -36,7 +40,7 @@
 # env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-if [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ] && [ -z "${SWEEP_PINNED:-}" ]; then
+if { { [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ]; } || [ "${PIN:-0}" = 1 ]; } && [ -z "${SWEEP_PINNED:-}" ]; then
   . backends/flock/pod/cpu-slices.sh
   hold_slices "${CPUSET:-}" "${CPUS:-16}" || exit 1
   cpus=$(taskset -c "$SLICE_CPUS" python3 -c "import os; print(','.join(map(str, sorted(os.sched_getaffinity(0)))))") || exit 1
@@ -45,7 +49,7 @@ if [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ]
   exec taskset -c $cpus bash "$0" "$@"
 fi
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/sweep-shape}; mkdir -p $R/out
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); sha256sum $HERE/73-sweep-shape.sh $HERE/stage_mark.py $HERE/vllm_overhead.py | tee $R/out/script.sha256
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); sha256sum $HERE/73-sweep-shape.sh $HERE/stage_mark.py $HERE/vllm_overhead.py $HERE/cut_parallel.py | tee $R/out/script.sha256
 SWEEP=${SWEEP:-/workspace/jobs/sweep2}; D=$SWEEP/$ROW; mkdir -p $D
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/flock-sweep2}; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} SM=${SM:-120}
@@ -67,6 +71,17 @@ cut)
   $PY -m verity_vllm.pipeline.cli program-graph $R/out/program.json $BUILD/build_request/instances.json.gz \
     --row "{\"row\": \"$ROW\"}" || exit 1
   echo "graph_s=$SECONDS" | tee $R/out/cut-timing.txt
+  if [ -n "${CUT_JOBS:-}" ]; then
+    [ "${SELECT:-units}" = units ] || { echo "CUT_JOBS cuts under --select units only"; exit 1; }
+    OMP_NUM_THREADS=1 $PY $HERE/cut_parallel.py $R/out/program.json $R/out/cut --jobs $CUT_JOBS --python $PY || exit 1
+    echo "cut_s=$SECONDS" | tee -a $R/out/cut-timing.txt
+    cp $R/out/program.json $R/out/cut/counts.json $R/out/cut/counts-all.json $R/out/cut/shapes.tsv $D/ || exit 1
+    cp $R/out/cut/shapes.tsv $R/out/ || exit 1
+    python3 $HERE/vllm_overhead.py census --counts $D/counts.json --counts-all $D/counts-all.json --out $D/census.json \
+      | tee $R/out/census.txt || exit 1
+    cp $D/census.json $R/out/
+    exit 0
+  fi
   $PY -m verity_flock.class_statement --program-graph $R/out/program.json --partition q-word --out $R/out/cut \
     --select ${SELECT:-units} --counts-only || exit 1
   echo "cut_s=$SECONDS" | tee -a $R/out/cut-timing.txt
