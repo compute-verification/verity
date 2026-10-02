@@ -3,16 +3,20 @@ with a passing `check` of that exact commit.  Every test runs on a throwaway bar
 PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
+import base64
 import json
 import os
+import shlex
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 
 from research.cli import main as research_main
-from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, grant_target
+from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -86,6 +90,11 @@ class World:
         sha = _git(self.dev, "rev-parse", "HEAD")
         _git(self.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")         # the object on the origin, as a PR's head is
         return sha
+
+    def with_store_remote(self) -> None:
+        """Give `store` a remote (a directory): `StoreGrants` answers only from labels it pulled from one."""
+        (self.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{self.tmp / "vault"}"\n')
+        self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
     def queue(self, **kw) -> Queue:
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh, grants=lambda n, h: self.grants.get((n, h), set()),
@@ -220,6 +229,108 @@ def test_the_clone_follows_the_callers_origin_so_a_url_that_stopped_working_does
     assert _git(world.tmp / "q" / "verity", "remote", "get-url", "origin") == str(moved)
 
 
+HTTP_BACKEND = Path(subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()) / "git-http-backend"
+
+
+class _GitHTTP(BaseHTTPRequestHandler):
+    """`git http-backend` over `root` behind Basic auth as `u:p`, as GitHub serves a private repository: without credentials, a 401."""
+    root: Path
+
+    def do_GET(self):
+        if self.headers.get("Authorization") != "Basic " + base64.b64encode(b"u:p").decode():
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="origin"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        path, _, query = self.path.partition("?")
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        env = {"PATH": os.environ["PATH"], "GIT_PROJECT_ROOT": str(self.root), "GIT_HTTP_EXPORT_ALL": "1", "REMOTE_USER": "u",
+               "PATH_INFO": path, "QUERY_STRING": query, "REQUEST_METHOD": self.command, "CONTENT_LENGTH": str(len(body)),
+               "CONTENT_TYPE": self.headers.get("Content-Type", ""), "HTTP_CONTENT_ENCODING": self.headers.get("Content-Encoding", ""),
+               "GIT_PROTOCOL": self.headers.get("Git-Protocol", "")}
+        cgi = subprocess.run([str(HTTP_BACKEND)], input=body, env=env, capture_output=True, check=True).stdout
+        head, _, out = cgi.partition(b"\r\n\r\n")
+        headers = [line.split(": ", 1) for line in head.decode().split("\r\n") if line]
+        self.send_response(int(next((v for k, v in headers if k == "Status"), "200").split()[0]))
+        for k, v in headers:
+            if k != "Status":
+                self.send_header(k, v)
+        self.send_header("Content-Length", str(len(out)))
+        self.end_headers()
+        self.wfile.write(out)
+
+    do_POST = do_GET
+
+    def log_message(self, *args):
+        pass
+
+
+def _no_machine_git_config(tmp: Path, monkeypatch) -> None:
+    """A cloud VM's view: no credential helper (nor prompt) from git's global or system config, only from a checkout's own."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp / "global.gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for k in ("GIT_ASKPASS", "SSH_ASKPASS"):
+        monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture
+def served(world, monkeypatch):
+    """`world`'s origin over http behind a password; its URL."""
+    _no_machine_git_config(world.tmp, monkeypatch)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), type("Handler", (_GitHTTP,), {"root": world.tmp}))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}/{world.origin.name}"
+    srv.shutdown()
+    srv.server_close()
+
+
+@pytest.mark.skipif(not HTTP_BACKEND.exists(), reason="no git-http-backend in this git")
+def test_the_clone_authenticates_as_the_callers_checkout_does_and_fails_rather_than_prompt_or_answer_stale(world, served):
+    """A cloud VM's credential helper is in its checkout's own config (one that needs the path, as the VMs' broker does), which the
+    queue's own clone never read, so `status` failed there at the clone.  It takes the checkout's settings for the remote now; and
+    with no credentials git fails at once instead of prompting, also once the clone has fetched before."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    _git(world.dev, "config", f"credential.{served}.helper", "")
+    _git(world.dev, "config", "--add", f"credential.{served}.helper",
+         "!f() { test \"$1\" = get && grep -qx path=origin.git && printf 'username=u\\npassword=p\\n'; }; f")
+    _git(world.dev, "config", f"credential.{served}.useHttpPath", "true")
+
+    def queue(auth: tuple[str, ...]) -> Queue:
+        return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, grants=lambda n, h: set(), ready=lambda n, h: True,
+                     notes=world.tmp / "notes", log=world.logs.append, auth=auth)
+
+    with pytest.raises(QueueError, match=r"git clone .*terminal prompts disabled; no credential helper applies to the remote"):
+        queue(()).status()
+    auth = credential_args(world.dev, served)
+    members, _ = queue(auth).sync()
+    assert [m.pr for m in members] == [1] and _git(world.origin, "rev-parse", "refs/heads/next") == members[0].commit
+    assert [(n, e.state) for n, e in queue(auth).status().items()] == [(1, "queued")]
+    with pytest.raises(QueueError, match=r"git fetch .*could not read Username"):
+        queue(()).status()
+
+
+def test_credential_args_take_the_checkouts_own_settings_else_gh_where_no_helper_applies(tmp_path, monkeypatch):
+    _no_machine_git_config(tmp_path, monkeypatch)
+    url, repo, bin_dir = "https://verity-agent@github.com/o/r", tmp_path / "checkout", tmp_path / "bin"
+    _git(tmp_path, "init", "-q", str(repo))
+    bin_dir.mkdir()
+    (bin_dir / "gh").write_text("#!/bin/sh\n")
+    (bin_dir / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    gh = ("-c", "credential.helper=", "-c", f"credential.helper=!{shlex.quote(str(bin_dir / 'gh'))} auth git-credential")
+    assert credential_args(repo, url) == credential_args(tmp_path, url) == gh, "no helper anywhere, in a checkout or not: gh's"
+    assert credential_args(repo, "/srv/origin.git") == credential_args(repo, "git@github.com:o/r") == (), "not http: no credentials"
+    _git(repo, "config", "credential.https://verity-agent@github.com.helper", "")
+    _git(repo, "config", "--add", "credential.https://verity-agent@github.com.helper", "!broker credential")
+    _git(repo, "config", "credential.https://verity-agent@github.com.useHttpPath", "true")
+    _git(repo, "config", "credential.https://elsewhere.example.helper", "!not-this-one")
+    assert credential_args(repo, url) == ("-c", "credential.helper=", "-c", "credential.helper=!broker credential",
+                                          "-c", "credential.usehttppath=true")
+    (tmp_path / "global.gitconfig").write_text("[credential]\n\thelper = store\n")
+    assert credential_args(tmp_path, url) == (), "a helper from git's global config serves the clone as it is"
+
+
 def test_a_rewritten_pr_head_is_fetched_by_force_and_merged(world):
     old = world.change({"a.txt": "1\n"})
     world.gh.put(1, old)
@@ -285,7 +396,9 @@ class _Unreachable:
         return fail
 
 
-def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_path, monkeypatch):
+def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
+    """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
+    answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
     from research.queue import StoreGrants
 
     head = "0123456789abcdef0123456789abcdef01234567"
@@ -300,27 +413,23 @@ def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_
     grants = StoreGrants(queue_host, log=logs.append)
     real = LocalStore.remote.fget
     monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
-    assert grants(12, head) == set() and grants.ready(12, head) is False, "a failed pull is never a grant"
-    assert len(logs) == 2 and all(x.startswith(f"research queue: labels of pr:12@{head}: pulling from fs:/unreachable failed (OSError")
-                                  for x in logs)
+    for read in (grants, grants.ready):
+        with pytest.raises(QueueError, match=rf"^STALE: the labels of pr:12@{head} weren't pulled from the store's remote "
+                                             r"\(pulling from fs:/unreachable failed \(OSError: injected"):
+            read(12, head)
     monkeypatch.setattr(LocalStore, "remote", property(real))
-    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and len(logs) == 2
-
-
-def test_grants_with_no_remote_configured_say_so_once(tmp_path, monkeypatch):
-    """A machine with no store remote sees only its own marks: `not marked ready` there may be a mark made elsewhere."""
-    from research.queue import StoreGrants
-
-    head = "0123456789abcdef0123456789abcdef01234567"
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
-    store = LocalStore(tmp_path / "store")
-    assert store.remote is None
-    logs: list[str] = []
-    grants = StoreGrants(store, log=logs.append)
-    assert grants.ready(12, head) is False and grants(12, head) == set() and grants.ready(13, head) is False
-    assert len(logs) == 1 and logs[0].startswith("research queue: no evidence-store remote is configured here")
-    store.add_label(grant_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-02T13:00:00Z")
-    assert grants.ready(12, head) is True and len(logs) == 1
+    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and logs == []
+    # the labels are on this machine now, and still don't answer without a pull
+    absent, unusable = tmp_path / "absent.toml", tmp_path / "s3.toml"
+    unusable.write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                        'access_key_id_env = "Q_AK_ABSENT"\nsecret_access_key_env = "Q_SK_ABSENT"\n')
+    with pytest.raises(QueueError, match=r"^STALE: .*\(no remote configured"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
+    with pytest.raises(QueueError, match=r"^STALE: .*Q_AK_ABSENT"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=unusable)).ready(12, head)
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", "R2_ENDPOINT,R2_BUCKET")
+    with pytest.raises(QueueError, match=r"^STALE: .*R2_ENDPOINT, R2_BUCKET not in this shell .*fresh tmux login shell"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
 
 
 def test_rules_refuse_what_they_cannot_place():
@@ -346,6 +455,7 @@ def test_until_the_move_the_rules_are_read_from_tools_check(world):
 def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(world, capsys):
     from research.queue import StoreGrants, ready
 
+    world.with_store_remote()
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     labels = StoreGrants(world.store, log=world.logs.append)
@@ -386,6 +496,7 @@ sys.exit(1 if fail else 0)
 def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_its_head_and_a_failure_refuses(world, monkeypatch, capsys):
     from research import queue as Q
 
+    world.with_store_remote()
     main = world.change({"tools/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
