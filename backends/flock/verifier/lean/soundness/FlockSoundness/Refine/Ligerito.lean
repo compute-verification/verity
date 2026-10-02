@@ -91,7 +91,7 @@ theorem fold_refines (p : LigeritoProof) (o : Opens 𝔽 D) :
         sM', qM', ?_, hsM', hqM'⟩
       have hdraw : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
         unfold Model.drawK
-        exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hcsz) (Plays.pure _) (by simp) (by simp)
+        exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hcsz (by omega)) (Plays.pure _) (by simp) (by simp)
       unfold Model.foldRoundsC
       have hcons : consumed t.rounds t.k t'.k = c :: consumed t₁.rounds t₁.k t'.k := by
         rw [hr₂, hk₂, consumed_append t.rounds (show t.k ≤ t.k + 1 by omega) (by rw [hk', hk₂]; omega),
@@ -149,7 +149,7 @@ the two contexts. -/
 theorem twoOodC_plays (o : Opens 𝔽 D) (dim split : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens 𝔽 D → Model.Quad 𝕂)
     (sE : F256) (qE : Poly) (hs : sM o = gOf sE) (hq : qM o = quadOf qE)
     (z₁ c₁ z₂ c₂ : Array F128) (hz₁ : z₁.size = dim) (hc₁ : c₁.size = 1) (hz₂ : z₂.size = dim) (hc₂ : c₂.size = 1)
-    (y₁ y₂ : F128) (m₁ m₂ : F256 × F256) :
+    (hd : dim ≠ 1) (y₁ y₂ : F128) (m₁ m₂ : F256 × F256) :
     ∃ sM' qM', Plays fOf (Model.twoOodC execArith dim split sM qM)
       [fMsg y₁, kMsg m₁, fMsg y₂, kMsg m₂] [z₁, c₁, z₂, c₂]
       (sM', qM', [oodOf ⟨z₁, c₁.getD 0 0, some split⟩, oodOf ⟨z₂, c₂.getD 0 0, some split⟩]) ∧
@@ -171,14 +171,14 @@ theorem twoOodC_plays (o : Opens 𝔽 D) (dim split : ℕ) (sM : Opens 𝔽 D �
     rw [ofFn_vecOf dim z₁ hz₁, ofFn_vecOf dim z₂ hz₂, getElem!_eq_getD c₁ 0, getElem!_eq_getD c₂ 0]
   rw [hctx]
   unfold Model.twoOodC
-  refine Plays.bind' (ms₂ := [fMsg y₁, kMsg m₁, fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.drawVec z₁ hz₁) ?_
+  refine Plays.bind' (ms₂ := [fMsg y₁, kMsg m₁, fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.drawVec z₁ hz₁ hd) ?_
     (by simp) (by simp)
   refine Plays.bind' (ms₂ := [kMsg m₁, fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.recv _ (fOf y₁)) ?_
     (by simp [fMsg]) (by simp)
   refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.recv _ (gOf m₁.1, gOf m₁.2)) ?_
     (by simp [kMsg]) (by simp)
   refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [z₂, c₂]) (Plays.drawOne c₁ hc₁) ?_ (by simp) (by simp)
-  refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [c₂]) (Plays.drawVec z₂ hz₂) ?_ (by simp) (by simp)
+  refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [c₂]) (Plays.drawVec z₂ hz₂ hd) ?_ (by simp) (by simp)
   refine Plays.bind' (ms₂ := [kMsg m₂]) (cs₂ := [c₂]) (Plays.recv _ (fOf y₂)) ?_ (by simp [fMsg]) (by simp)
   refine Plays.bind' (ms₂ := []) (cs₂ := [c₂]) (Plays.recv _ (gOf m₂.1, gOf m₂.2)) ?_ (by simp [kMsg]) (by simp)
   refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne c₂ hc₂) ?_ (by simp) (by simp)
@@ -353,13 +353,13 @@ noncomputable def qbOut (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) (star
 when there is one, and the batching coin, ends in `qbOut`. -/
 theorem queryAndBatchC_plays (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
     (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1)
-    (withMessage : Bool) (m : F256 × F256) :
+    (hq1 : lv.queries ≠ 1) (hα1 : ceilLog2 lv.queries ≠ 1) (withMessage : Bool) (m : F256 × F256) :
     Plays fOf (queryAndBatchC execArith r lv ch start stM withMessage) (if withMessage then [kMsg m] else [])
       [cw, cα, cβ] (qbOut r lv ch start stM cw cα cβ withMessage m) := by
   unfold queryAndBatchC
-  refine Plays.bind' (ms₂ := if withMessage then [kMsg m] else []) (cs₂ := [cα, cβ]) (Plays.drawVec cw hcw) ?_
+  refine Plays.bind' (ms₂ := if withMessage then [kMsg m] else []) (cs₂ := [cα, cβ]) (Plays.drawVec cw hcw hq1) ?_
     (by simp) (by simp)
-  refine Plays.bind' (ms₂ := if withMessage then [kMsg m] else []) (cs₂ := [cβ]) (Plays.drawVec cα hcα) ?_
+  refine Plays.bind' (ms₂ := if withMessage then [kMsg m] else []) (cs₂ := [cβ]) (Plays.drawVec cα hcα hα1) ?_
     (by simp) (by simp)
   cases withMessage with
   | true =>
@@ -388,6 +388,7 @@ theorem iterNL_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext :
     (htwo : Plays fOf (Model.twoOodC execArith (lv'.logCols + lv'.lanes) (stM.levels ++ [rs]).length sM' qM')
       msO csO (sT, qT, ctxs))
     (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1)
+    (hq1 : lv.queries ≠ 1) (hα1 : ceilLog2 lv.queries ≠ 1)
     (mq : F256 × F256) {msR : List Msg} {csR : List (Array F128)} {pend : PendL 𝔽 D}
     (hrec : Plays fOf (Model.recursiveRoundsC execArith r n b initial ext (lv' :: rest)
       { qbOut r lv rs (stM.levels ++ [rs]).length
@@ -397,7 +398,8 @@ theorem iterNL_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext :
       (msF ++ ⟨Cap D, C'⟩ :: msO ++ [kMsg mq] ++ msR) (csF ++ csO ++ [cw, cα, cβ] ++ csR) pend := by
   rw [Model.recursiveRoundsC]
   have hqb := queryAndBatchC_plays r lv rs (stM.levels ++ [rs]).length
-    { stM with s := sT, q := qT, levels := stM.levels ++ [rs], oods := stM.oods ++ ctxs } cw cα cβ hcw hcα hcβ true mq
+    { stM with s := sT, q := qT, levels := stM.levels ++ [rs], oods := stM.oods ++ ctxs } cw cα cβ hcw hcα hcβ hq1 hα1
+    true mq
   simp only [ite_true] at hqb
   refine Plays.bind' (ms₂ := ⟨Cap D, C'⟩ :: msO ++ [kMsg mq] ++ msR) (cs₂ := csO ++ [cw, cα, cβ] ++ csR) hfold ?_
     (by simp) (by simp)
@@ -413,7 +415,8 @@ theorem iterLast_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext
     {msF : List Msg} {csF : List (Array F128)} {rs : List 𝕂} {sM' : Opens 𝔽 D → 𝕂} {qM' : Opens 𝔽 D → Model.Quad 𝕂}
     (hfold : Plays fOf (Model.foldRoundsC execArith lv.lanes stM.s stM.q) msF csF (rs, sM', qM'))
     (yr : Fin (2 ^ (ext + 1)) → 𝔽)
-    (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1) :
+    (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1)
+    (hq1 : lv.queries ≠ 1) (hα1 : ceilLog2 lv.queries ≠ 1) :
     Plays fOf (Model.recursiveRoundsC execArith r n b initial ext [lv] stM)
       (msF ++ [⟨Fin (2 ^ (ext + 1)) → 𝔽, yr⟩]) (csF ++ [cw, cα, cβ])
       (let stF := qbOut r lv rs (stM.levels ++ [rs]).length
@@ -422,7 +425,7 @@ theorem iterLast_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext
          stF.caps, stF.reqs⟩) := by
   rw [Model.recursiveRoundsC]
   have hqb := queryAndBatchC_plays r lv rs (stM.levels ++ [rs]).length
-    { stM with s := sM', q := qM', levels := stM.levels ++ [rs] } cw cα cβ hcw hcα hcβ false (0, 0)
+    { stM with s := sM', q := qM', levels := stM.levels ++ [rs] } cw cα cβ hcw hcα hcβ hq1 hα1 false (0, 0)
   simp only [Bool.false_eq_true, ite_false] at hqb
   refine Plays.bind' (ms₂ := [⟨Fin (2 ^ (ext + 1)) → 𝔽, yr⟩]) (cs₂ := [cw, cα, cβ]) hfold ?_ (by simp) (by simp)
   refine Plays.bind' (ms₂ := []) (cs₂ := [cw, cα, cβ]) (Plays.recv _ yr) ?_ (by simp) (by simp)
