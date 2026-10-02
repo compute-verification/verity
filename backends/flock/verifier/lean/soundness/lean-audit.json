@@ -8916,19 +8916,33 @@
    "assumptions": [],
    "type_hash": "31f8c90a820690bfabe900e8c6cbdff3a1a8b7fd6a2ef2f6d5b77ed85ef057cb"
   },
-  "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny": {},
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny : FlockSoundness.Discharge.ZkExec.AcceptsZKOneAny"],
+   "assumptions": [],
+   "type_hash": "fa2283fe4727d95f38792b574c0cae362ae2fdbd15cbdc582eb23fbe5c009588"
+  },
   "FlockSoundness.Discharge.ZkExec.acceptsZK_retained": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_retained : FlockSoundness.Discharge.ZkExec.AcceptsZKRetained"],
    "assumptions": [],
    "type_hash": "7b19cb64644e63be1d78fccd0f344befb84d017dac1ca1a4c1c5d8b08e7b9be6"
   },
-  "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny": {},
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny : FlockSoundness.Discharge.ZkExec.AcceptsZKRetainedAny"
+   ],
+   "assumptions": [],
+   "type_hash": "90fc064b924495884c6333101fac63180743a3a8612cbbc2a9fe9b52e8c3fbff"
+  },
   "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_setupH : FlockSoundness.Discharge.ZkExec.AcceptsZKSetupH"],
    "assumptions": [],
    "type_hash": "f10a01b0e3f897bfad55f8a1f56bc2e0a72a9808ef9ef23183efec92cebcd8fa"
   },
-  "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne": {},
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne": {
+   "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne : FlockSoundness.Discharge.ZkExec.AcceptsZKSetupOne"],
+   "assumptions": [],
+   "type_hash": "689bb97ff66b7f49c5996380caf9ac0a687ea9d49ec73b11e39b4262fc78381b"
+  },
   "FlockSoundness.Discharge.ZkExec.execRefinesZK_one": {
    "signature": [
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one {n : Nat} {Reg : Type} {mPts : Nat}",
@@ -17999,8 +18013,11 @@
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
     "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Prog.flock_headline_exec",
@@ -18277,7 +18294,8 @@
     "FlockSoundness.Discharge.HiddenExec.accepts_setupOne",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
-    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH"
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne"
    ]
   },
   "FlockSoundness.Discharge.Exec.Shape": {
@@ -18390,7 +18408,9 @@
     "FlockSoundness.Discharge.HiddenExec.accepts_setupOne",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any",
     "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny",
-    "FlockSoundness.Discharge.HiddenExec.setupTables_okAny"
+    "FlockSoundness.Discharge.HiddenExec.setupTables_okAny",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne"
    ]
   },
   "FlockSoundness.Discharge.HiddenExec.Statements": {
@@ -19208,6 +19228,19 @@
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
   },
+  "FlockSoundness.Discharge.ZkExec.Any": {
+   "digest": "36b8e5634f5aaa761852ef295660460477d450c29bbf3885d4e2ca7b8f76f00e",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkExec.AcceptsZKOneAny": "1e20a47dff0529f3303da478200292e85889b5047dbaa7dea27f340436458b83",
+    "FlockSoundness.Discharge.ZkExec.AcceptsZKRetainedAny": "b8e145ce4bd9e0b18fd29204205f000f7c69fb14208b843a8fee6d39380d5fd9",
+    "FlockSoundness.Discharge.ZkExec.AcceptsZKSetupOne": "f69ebbea4a87470328c727158df8edb9e76b50345693b610d522fe25765e87ce"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne"
+   ]
+  },
   "FlockSoundness.Discharge.ZkExec.Event": {
    "digest": "f4c121a3a3a163068eb5575394f10f0e3fd9eb4f8267ccda71d20e4fe55f4a31",
    "definitions": {
@@ -19219,8 +19252,11 @@
    },
    "pins": [
     "FlockSoundness.Discharge.ZkExec.acceptsZK_one",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one"
    ]
@@ -22978,6 +23014,7 @@
     "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny",
     "FlockSoundness.Discharge.HiddenExec.accepts_rep_roundsAny",
     "FlockSoundness.Discharge.ZkExec.acceptsZK_retained",
+    "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny",
     "FlockSoundness.Refine.encs_inj",
     "FlockSoundness.Refine.zerocheck_frames"
    ]
