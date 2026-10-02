@@ -18,6 +18,7 @@ import gc
 import os
 import socket
 import struct
+import threading
 import time
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
@@ -127,6 +128,60 @@ def cgroup_cpu() -> dict[str, int]:
     return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
 
 
+#: the windows (µs, Δ plus an allowance) at which `tail` counts late answers and the audits that would pass
+WINDOWS_US = (150, 200, 250, 300, 350, 400, 450, 500, 551, 750)
+#: the late-but-correct answers an audit may carry and still pass, in `tail`'s counts
+LATE_TOLERANCES = (0, 1, 2)
+
+
+def tail(audits: list[tuple[audit.Answer, ...]], windows_us: tuple[int, ...] = WINDOWS_US,
+         tolerances: tuple[int, ...] = LATE_TOLERANCES, top: int = 50) -> dict[str, Any]:
+    """The honest answer tail at fixed windows, independent of the allowance the run used: per window W (µs), the answers whose
+    elapsed time exceeds W, and the audits that pass at W with at most t late answers (every answer correct, at most t of them
+    over W); and the `top` slowest answers with the responder's own server and device times."""
+    late: dict[str, int] = {}
+    passing: dict[str, dict[str, int]] = {}
+    for w in windows_us:
+        over = [sum(a.elapsed_ns > w * 1000 for a in answers) for answers in audits]
+        ok = [all(a.correct for a in answers) for answers in audits]
+        late[str(w)] = sum(over)
+        passing[str(w)] = {str(t): sum(o and n <= t for o, n in zip(ok, over)) for t in tolerances}
+    ranked = sorted(((a.elapsed_ns, i, a) for i, answers in enumerate(audits) for a in answers), key=lambda x: (-x[0], x[1], x[2].j))
+    slowest = [{"elapsed_us": e / 1e3, "audit": i, "j": a.j, "correct": a.correct,
+                "server_us": (a.report or {}).get("server_s", 0) * 1e6, "device_us": (a.report or {}).get("device_s", 0) * 1e6}
+               for e, i, a in ranked[:top]]
+    return {"windows_us": list(windows_us), "tolerances": list(tolerances), "audits": len(audits),
+            "answers": sum(len(a) for a in audits), "late_over": late, "audits_passing": passing, "slowest": slowest}
+
+
+def sched_of(pid: int | str = "self", only_cpu: int | None = None) -> dict[str, dict[str, int]]:
+    """Linux scheduler counters of a process's threads (all, or those whose affinity is the single core `only_cpu`): run-queue
+    wait and run time (`schedstat`, ns) and involuntary switches; empty where /proc has none."""
+    out = {}
+    try:
+        tids = os.listdir(f"/proc/{pid}/task")
+    except OSError:
+        return {}
+    for tid in tids:
+        try:
+            with open(f"/proc/{pid}/task/{tid}/status") as f:
+                st = dict(line.split(":", 1) for line in f if ":" in line)
+            with open(f"/proc/{pid}/task/{tid}/schedstat") as f:
+                run_ns, wait_ns, _ = (int(x) for x in f.read().split())
+        except (OSError, ValueError):
+            continue
+        if only_cpu is not None and st.get("Cpus_allowed_list", "").strip() != str(only_cpu):
+            continue
+        out[tid] = {"run_ns": run_ns, "wait_ns": wait_ns, "nonvoluntary": int(st.get("nonvoluntary_ctxt_switches", "0"))}
+    return out
+
+
+def sched_delta(before: dict[str, dict[str, int]], after: dict[str, dict[str, int]]) -> dict[str, int]:
+    """`sched_of` summed over the threads present at both readings, after minus before."""
+    keys = ("run_ns", "wait_ns", "nonvoluntary")
+    return {k: sum(after[t][k] - before[t][k] for t in before if t in after) for k in keys} | {"threads": len(set(before) & set(after))}
+
+
 def calibrate(r: LiveResponder, pings: int) -> dict[str, float]:
     """The verifier's round trip for a 64 KB answer with no device work, `pings` times (after 50 warm-up pings)."""
     for _ in range(50):
@@ -135,10 +190,14 @@ def calibrate(r: LiveResponder, pings: int) -> dict[str, float]:
 
 
 def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audits: int, pings: int, k: int | None = None,
-        cpu: int | None = None, allowance: str = "p99.9") -> dict[str, Any]:
-    """Calibrate the round trip, fix the allowance (`allowance`: a quantile of the calibration, `p99.9` or `max`), run `audits`
-    `protocol.Verifier` audits (the first is the audit of record), recalibrate.  Every audit's verdict under the other allowances
-    is recorded too.  A scheme without a certificate at these parameters audits at `k` (default `audit.CHALLENGES`) as research.
+        cpu: int | None = None, allowance: str = "p99.9", allowance_ns: int | None = None, server_pid: int | None = None,
+        responder_cpu: int | None = None) -> dict[str, Any]:
+    """Calibrate the round trip, fix the allowance (`allowance_ns` when given, a deployment's fixed allowance; else
+    `allowance`: a quantile of the calibration, `p99.9` or `max`), run `audits` `protocol.Verifier` audits (the first is the
+    audit of record), recalibrate.  Every audit's verdict under the calibration's allowances is recorded too, and the tail at
+    fixed windows (`tail`).  A scheme without a certificate at these parameters audits at `k` (default `audit.CHALLENGES`) as
+    research.  The scheduler's counters of this thread and of the server's responder thread (`server_pid`'s thread pinned to
+    `responder_cpu`) over the audits say how long either waited for its core.
 
     The verifier's own stalls count against the honest server, so the timed part runs with the garbage collector frozen and off,
     on one core (`cpu`) when given."""
@@ -154,12 +213,17 @@ def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audit
     cpu_before = cgroup_cpu()
     try:
         rtt = calibrate(r, pings)
-        allowance_ns = int(rtt[allowance] * 1e9)
+        fixed = allowance_ns is not None
+        allowance_ns = int(allowance_ns) if fixed else int(rtt[allowance] * 1e9)
         results = []
+        me = str(threading.get_native_id())
+        responder = (lambda: sched_of(server_pid, responder_cpu)) if server_pid and responder_cpu is not None else dict
+        s0, r0, t0 = sched_of(), responder(), time.time()
         for _ in range(audits):
             v = protocol.Verifier(scheme, vk, protocol.challenge_key(os.urandom(32), vk), k=k, rtt_allowance_ns=allowance_ns,
                                   research=research)
             results.append((v, v.run(r.block)))
+        t1, s1, r1 = time.time(), sched_of(), responder()
         rtt_after = calibrate(r, pings)
     finally:
         r.close()
@@ -168,7 +232,10 @@ def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audit
     first_v, first = results[0]
     under = {q: sum(all(a.correct and a.elapsed_ns <= audit.DEADLINE_NS + int(rtt[q] * 1e9) for a in res.answers) for _, res in results)
              for q in ("p50", "p99.9", "max")}
-    return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "allowance": allowance, "rtt_allowance_ns": allowance_ns,
+    return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "rtt_allowance_ns": allowance_ns,
+            "allowance": "fixed" if fixed else allowance,
+            "tail": tail([res.answers for _, res in results]), "audits_window_epoch_s": [t0, t1],
+            "sched": {"verifier": sched_delta({me: s0[me]} if me in s0 else {}, s1), "responder": sched_delta(r0, r1)},
             "limit_ns": first_v.limit_ns, "k": first_v.k, "scheme": scheme.name, "research_mode": research, "gaps": list(first_v.gaps),
             "profile": first_v.profile().to_json() if first.accepted else None,
             "audits_accepted_under_allowance": under,

@@ -237,17 +237,19 @@ def cmd_serve(a) -> None:
     doc["root"] = opt.commitment()["storage_root"]
     _write(out / f"ready-{a.tag}.json", {"port": opt.info()["responder"]["port"], "pid": os.getpid(), "root": doc["root"]})
     stop = out / f"stop-{a.tag}"
-    loops = []
+    loops, spans = [], []
     from vllm import SamplingParams
 
     while not stop.exists():
-        t = time.perf_counter()
+        t, e = time.perf_counter(), time.time()
         engine.llm.generate(PROMPTS, SamplingParams(temperature=0.0, max_tokens=a.load_tokens), use_tqdm=False)
         loops.append(time.perf_counter() - t)
+        spans.append([e, time.time()])
     doc["info_end"] = _stats(opt)
     comp.close()
     doc["responder"] = opt.responder.result
     doc["serving_loops_during_audit_s"] = loops
+    doc["serving_loops_epoch_s"] = spans
     _write(out / f"serve-{a.tag}.json", doc)
 
 
@@ -264,7 +266,8 @@ def cmd_verify(a) -> None:
                            "blocks_differing": sum(served[32 * i:32 * i + 32] != leaf for i, leaf in enumerate(vk.leaves))}
     try:
         doc.update(pv.run("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu,
-                          allowance=a.allowance))
+                          allowance=a.allowance, allowance_ns=a.allowance_ns, server_pid=ready["pid"],
+                          responder_cpu=a.responder_cpu))
     finally:
         (out / f"stop-{a.tag}").write_text("")
     _write(out / f"verify-{a.tag}.json", doc)
@@ -300,8 +303,8 @@ def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
             srv.kill()
             return {"serve_rc": srv.returncode, "verify_rc": None, "serve": None, "verify": None}
         time.sleep(2)
-    pin = [] if a.verifier_cpu is None else ["--verifier-cpu", str(a.verifier_cpu)]
-    rc_v = _sub(["verify", *common, "--audits", str(a.audits), "--pings", str(a.pings), "--allowance", a.allowance, *pin],
+    fixed = [] if a.allowance_ns is None else ["--allowance-ns", str(a.allowance_ns)]
+    rc_v = _sub(["verify", *common, "--audits", str(a.audits), "--pings", str(a.pings), "--allowance", a.allowance, *cpus, *fixed],
                 out / f"verify-{tag}.log").wait()
     rc_s = srv.wait(timeout=a.timeout)
     load = lambda p: _read(p) if p.exists() else None  # noqa: E731
@@ -314,6 +317,16 @@ def compare(plain: list[dict], pous: list[dict]) -> dict[str, Any]:
     return {"requests": len(p), "token_ids_equal": same and all(x["token_ids"] == y["token_ids"] for x, y in zip(p, q)),
             "logprobs_equal": same and all(x["logprobs"] == y["logprobs"] for x, y in zip(p, q)),
             "tokens": [len(x["token_ids"]) for x in q]}
+
+
+def serving_overlap(window: list[float] | None, spans: list[list[float]] | None) -> dict[str, Any] | None:
+    """How much of the audits' window (epoch seconds) the server's serving loop spent generating, and in how many loops."""
+    if not window or spans is None:
+        return None
+    t0, t1 = window
+    covered = [max(0.0, min(e, t1) - max(s, t0)) for s, e in spans]
+    return {"window_s": t1 - t0, "generating_s": sum(covered), "fraction": sum(covered) / (t1 - t0) if t1 > t0 else None,
+            "loops": sum(c > 0 for c in covered)}
 
 
 def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
@@ -337,6 +350,8 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
         "native_responder": {"device_s": hv.get("device_s"), "server_s": hv.get("server_s"),
                              "device_over_deadline": hv.get("device_over_deadline"), "counts": hs.get("responder")},
         "verifier_round_trip_s": {"before": hv.get("rtt"), "after": hv.get("rtt_after")},
+        "tail": hv.get("tail"), "sched": hv.get("sched"),
+        "audits_under_serving": serving_overlap(hv.get("audits_window_epoch_s"), hs.get("serving_loops_epoch_s")),
         "deadline": {k: hv.get(k) for k in ("deadline_ns", "allowance", "rtt_allowance_ns", "limit_ns", "k",
                                             "audits_accepted_under_allowance")},
         "honest": {**{k: hv.get(k) for k in keys}, "elapsed_s": hv.get("elapsed_s")},
@@ -355,6 +370,7 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
         "gpu_encode_equals_reference": bool(hv.get("server_root_matches_vk")),
         "gpu_decode_equals_reference_layer0": result["bit_exact"]["gpu_decode_equals_reference_decode_layer0"],
         "responder_device_within_deadline": hv.get("device_over_deadline") == 0 and bool(hv.get("answers")),
+        "honest_answers_correct": bool(hv.get("answers")) and hv.get("wrong") == 0,
         "honest_audit_accepted": bool(rec.get("accepted")),
         "negative_audit_rejected": bool(nv.get("audit_of_record")) and not nv["audit_of_record"]["accepted"],
     }
@@ -372,6 +388,10 @@ def research_result(result: dict[str, Any], a, passed: bool) -> dict[str, Any]:
             ("plain_generate", result["timing"]["plain_generate_s"], "s"), ("pous_generate", result["timing"]["pous_generate_s"], "s"),
             ("honest_audits_accepted", result["honest"]["audits_accepted"], "count"),
             ("negative_audits_accepted", result["negative"]["audits_accepted"], "count")]
+    t = result.get("tail") or {}
+    for w in t.get("windows_us", []):
+        rows.append((f"late_over_{w}us", t["late_over"][str(w)], "count"))
+        rows += [(f"audits_passing_{w}us_t{n}", c, "count") for n, c in t["audits_passing"][str(w)].items()]
     for config, s in (result.get("throughput") or {}).items():
         tag = config.replace(" ", "_")
         rows += [(f"slowdown_{tag}", s["slowdown"], "x"), (f"plain_{tag}", s["plain_tokens_per_s"], "token/s"),
@@ -433,6 +453,9 @@ class _Common:
     run_id: str | None = option("--run-id", default=None, help="the research run id result.json names (e2e)")
     allowance: str = option("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
                             help="the calibration quantile of the verifier's round trip added to the 0.5 ms deadline")
+    allowance_ns: int | None = option("--allowance-ns", type=int, default=None,
+                                      help="a fixed round-trip allowance (ns) added to the 0.5 ms deadline instead of --allowance's "
+                                           "quantile; the pings are still taken and recorded")
 
 
 def _cmd(name: str, doc: str):
