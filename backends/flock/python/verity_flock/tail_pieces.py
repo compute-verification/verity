@@ -2,8 +2,8 @@
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
 `verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
 numerator scaling), the sampler lane's compare, selects and integer add, and PoUW's row units (`verity_pouw.circuit.pc4`: the
-NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and; `pc8`: the exact sums of squares). Each is its
-IR primitive bit for bit
+NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and; `pc8`: the exact sums of squares; `hashes`:
+Keccak's half-lane xor, rotations and χ). Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
@@ -700,6 +700,33 @@ def pouw_sq_ceil(C, t, n):
     return [OR(C, b, n_zero) for b in enc]
 
 
+# --- Keccak's half-lane operations (`verity_pouw.circuit.hashes`: the hidden tiles' digest) --------------------------------
+
+def pouw_rotl64(C, lo, hi, c, half):
+    """``PouwRotl64Lo_v1`` (``half`` 0) and ``PouwRotl64Hi_v1`` (1): one half of hi:lo rotated left by c mod 64, a barrel
+    shift on c's low six bits, the largest stage first so that each stage builds only the bits the later ones read. A stage's
+    AND is on a pair's difference, which the 32 stage's pairs (j, j + 32) share. With c a constant, as Keccak's θ and ρ
+    offsets are, every stage's AND folds and the piece is wiring."""
+    sh = [1 << k for k in range(5, -1, -1)]
+    need = [list(range(32 * half, 32 * half + 32))]
+    for s in reversed(sh):
+        need.insert(0, sorted(set(need[0]) | {(j - s) % 64 for j in need[0]}))
+    cur = dict(enumerate(list(lo) + list(hi)))
+    for i, s in enumerate(sh):
+        d = {}
+        for j in need[i + 1]:
+            p = frozenset((j, (j - s) % 64))
+            if p not in d:
+                d[p] = C.AND(c[5 - i], cur[j] ^ cur[(j - s) % 64])
+        cur = {j: cur[j] ^ d[frozenset((j, (j - s) % 64))] for j in need[i + 1]}
+    return [cur[j] for j in need[-1]]
+
+
+def pouw_chi32(C, a, b, c):
+    """``PouwChi32_v1``: a xor (not b and c), bit by bit: one AND per bit."""
+    return [x ^ C.AND(NOT(y), z) for x, y, z in zip(a, b, c)]
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -773,6 +800,10 @@ PIECES = {
     "PouwSqAcc_v1": pouw_sq_acc,
     "PouwSqCeil_v1": pouw_sq_ceil,
     "PouwSqGe_v1": pouw_sq_ge,
+    "PouwXor32_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
+    "PouwChi32_v1": pouw_chi32,
+    "PouwRotl64Lo_v1": lambda C, lo, hi, c: pouw_rotl64(C, lo, hi, c, 0),
+    "PouwRotl64Hi_v1": lambda C, lo, hi, c: pouw_rotl64(C, lo, hi, c, 1),
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}

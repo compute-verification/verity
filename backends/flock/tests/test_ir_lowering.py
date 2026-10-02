@@ -431,6 +431,78 @@ def test_the_square_ceiling_matches_the_ir():
     assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwSqCeil_v1"], (576, 32), 64, vecs)) if g != ref(*v)] == []
 
 
+# --- Keccak's half-lane operations (verity_pouw.circuit.hashes): the hidden tiles' digest ------------------------------------
+
+def _units(rng: random.Random, widths, n_random: int) -> list[list[int]]:
+    """Zero, every unit vector of the operands' concatenated bits, and ``n_random`` random words."""
+    lo = [sum(widths[:k]) for k in range(len(widths))]
+    return [[(u >> lo[k]) & ((1 << w) - 1) for k, w in enumerate(widths)]
+            for u in [0, *(1 << b for b in range(sum(widths))), *(rng.getrandbits(sum(widths)) for _ in range(n_random))]]
+
+
+def _reads(C, f) -> set[int]:
+    """The circuit inputs the form ``f`` depends on, through its ANDs' operands."""
+    seen, todo, out = set(), list(f.s), set()
+    while todo:
+        v = todo.pop()
+        if v in seen:
+            continue
+        seen.add(v)
+        if C.kind[v] == "and":
+            todo += [x for op in C.data[v] for x in op.s]
+        else:
+            out.add(v)
+    return out
+
+
+def test_the_keccak_xor_is_wiring_and_matches_the_ir():
+    """``PouwXor32`` commits no AND, so its piece is affine in the 64 input bits and zero and the 64 unit vectors fix it; the
+    reference agrees on them and on random words."""
+    C = gf2.Circuit()
+    C.output("o", IL.PIECES["PouwXor32_v1"](C, C.input("a", 32), C.input("b", 32)))
+    assert C.counts()["ands"] == 0
+    vecs = _units(random.Random(61), (32, 32), 2000)
+    ref = _pouw("PouwXor32_v1").evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwXor32_v1"], (32, 32), 32, vecs)) if g != ref(*v)] == []
+
+
+@pytest.mark.parametrize("name", ["PouwRotl64Lo_v1", "PouwRotl64Hi_v1"])
+def test_the_keccak_rotations_match_the_ir_on_every_amount(name):
+    """``PouwRotl64Lo`` / ``Hi`` read c's low six bits only. With c a constant (Keccak's offsets) the piece commits no AND, so
+    for each c mod 64 it is affine in hi:lo and zero and the 64 unit vectors fix it; those and random words, c's bits 6-31
+    random, through the piece with c an input and with c a constant."""
+    rng = random.Random(67)
+    C = gf2.Circuit()
+    lo, hi, c = C.input("lo", 32), C.input("hi", 32), C.input("c", 32)
+    allowed = {v for w in (*lo, *hi, *c[:6]) for v in w.s}
+    assert all(_reads(C, o) <= allowed for o in IL.PIECES[name](C, lo, hi, c))
+    ref, piece = _pouw(name).evaluate, IL.PIECES[name]
+    vecs = [[x, y, k | rng.getrandbits(26) << 6] for k in range(64) for x, y in _units(rng, (32, 32), 16)]
+    assert [(v, g) for v, g in zip(vecs, run_piece(piece, (32, 32, 32), 32, vecs)) if g != ref(*v)] == []
+    for k in range(64):
+        C = gf2.Circuit()
+        C.output("o", piece(C, C.input("lo", 32), C.input("hi", 32), gf2.const_bits(k, 32)))
+        assert C.counts()["ands"] == 0
+        xs = _units(rng, (32, 32), 16)
+        assert run_piece(lambda C, x, y: piece(C, x, y, gf2.const_bits(k, 32)), (32, 32), 32, xs) == [ref(x, y, k) for x, y in xs]
+
+
+def test_the_keccak_chi_matches_the_ir_bit_by_bit():
+    """``PouwChi32``: one AND per bit, and output bit i reads only bit i of a, b and c, so the 8 values of (a_i, b_i, c_i) at
+    every position (the other bits random) cover the whole domain; also the 8 uniform words and random words."""
+    C = gf2.Circuit()
+    a, b, c = C.input("a", 32), C.input("b", 32), C.input("c", 32)
+    out = IL.PIECES["PouwChi32_v1"](C, a, b, c)
+    C.output("o", out)
+    assert C.counts()["ands"] == 32
+    assert all(_reads(C, o) == set(a[i].s) | set(b[i].s) | set(c[i].s) for i, o in enumerate(out))
+    rng, M = random.Random(71), (1 << 32) - 1
+    vecs = [[((v >> k & 1) << i) | (rng.getrandbits(32) & ~(1 << i)) for k in range(3)] for i in range(32) for v in range(8)]
+    vecs += [[x, y, z] for x in (0, M) for y in (0, M) for z in (0, M)] + [[rng.getrandbits(32) for _ in range(3)] for _ in range(2000)]
+    ref = _pouw("PouwChi32_v1").evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwChi32_v1"], (32, 32, 32), 32, vecs)) if g != ref(*v)] == []
+
+
 #: the pinned rcp table read inline: 16,712 + 584 decoder rows (14 low and 9 high index bits), 9,753 nonempty product rows and
 #: 24 copy rows, its 7 constant value bits wired to the constant; its 93,528,819 set bits
 READ_ROWS, READ_NNZ = 27_073, 93_528_819
