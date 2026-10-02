@@ -12,12 +12,17 @@ The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
-minutes: a check there would run into a whole-node timed measurement. With every slot busy it retries every POLL_S; with no
-slots file, CMD runs as it is. Stdlib only: it runs before uv.
+minutes: a check there would run into a whole-node timed measurement. With every slot busy it retries every POLL_S, reading
+SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
+with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
 lock is not in the line: it takes that slot whenever it frees.
+
+`python3 tools/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
+before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
+running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
 
 `python3 tools/check/slot.py --status`: one line per slot, with who holds its lock (the pid in /proc/locks, when that process
 started, its command) or `free`, and the window that blocks it, if any.
@@ -127,11 +132,16 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     return out
 
 
-def join(lock_dir: Path) -> tuple[Path, int]:
-    """This waiter's ticket in the line and the descriptor holding its lock; named by arrival, and locked before it is visible."""
+#: a priority waiter's ticket starts with this, which sorts before every digit (and before "." of a ticket being made)
+PRIORITY = "!"
+
+
+def join(lock_dir: Path, priority: bool = False) -> tuple[Path, int]:
+    """This waiter's ticket in the line and the descriptor holding its lock; named by arrival (after every priority ticket
+    unless it is one), and locked before it is visible."""
     d = lock_dir / LINE
     d.mkdir(exist_ok=True)
-    name = f"{time.time_ns():020d}-{os.getpid()}"
+    name = f"{PRIORITY if priority else ''}{time.time_ns():020d}-{os.getpid()}"
     fd = os.open(d / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
     fcntl.flock(fd, fcntl.LOCK_EX)
     os.rename(d / f".{name}", d / name)
@@ -160,6 +170,27 @@ def ahead(ticket: Path) -> int:
     return n
 
 
+def allowed() -> set[int]:
+    return os.sched_getaffinity(0)
+
+
+def usable(slots: list[dict]) -> list[dict]:
+    """The slots whose every core this process may run on. Pinning onto any other fails (EINVAL), so a check never takes one:
+    on vy-nebius-1 a `research run` session is held to cores 0-127, and slot d on 128-159 killed every check that took it
+    (2 Oct 07:20Z)."""
+    mine = allowed()
+    return [s for s in slots if cpulist(s["cpus"]) <= mine]
+
+
+def reread(slots: list[dict]) -> list[dict]:
+    """The slots file as it is now, so a slot added while a check waits is one it can take; the last list it read when the file
+    can't be read or lists none (mid-rewrite)."""
+    try:
+        return parse(SLOTS.read_text()) or slots
+    except OSError:
+        return slots
+
+
 def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
     if argv[:1] == ["--status"]:
         if not SLOTS.exists():
@@ -167,18 +198,26 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             return 0
         print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
+    opts = argv[:argv.index("--")] if "--" in argv else []
     cmd = argv[argv.index("--") + 1:] if "--" in argv else argv
-    if not cmd:
-        sys.exit("usage: slot.py -- CMD...")
+    if not cmd or set(opts) - {"--priority"}:
+        sys.exit("usage: slot.py [--priority] -- CMD...")
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
-    slots = parse(SLOTS.read_text())
-    if not slots:
+    listed = parse(SLOTS.read_text())
+    if not listed:
         sys.exit(f"slot: {SLOTS} lists no slots")
-    ticket, tfd = join(SLOTS.parent)
+    slots = usable(listed)
+    if len(slots) < len(listed):
+        out = ", ".join(f"{s['name']} ({s['cpus']})" for s in listed if s not in slots)
+        print(f"slot: skipping {out}: outside this process's cores", file=sys.stderr, flush=True)
+    if not slots:
+        sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores")
+    ticket, tfd = join(SLOTS.parent, priority="--priority" in opts)
     told = None
     while True:
+        slots = usable(reread(slots)) or slots
         n = ahead(ticket)
         got = None if n else take(slots, SLOTS.parent, now())
         if got:
