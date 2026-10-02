@@ -432,8 +432,7 @@ the commitment protects the prover (§7 of the spec).
 - **Freshness** (`CoinTree.checkFresh`). `verify` refuses a session whose key an earlier session of the same run used.
 - **Scope.** Only `--zk` sessions carry a coin tree (§16.13). The checks run once a statement's `Hello` names the scheme
   (`Stmt.spec`'s `coinTree`). `flock-verify coin-tree-check` runs them alone, on §9's values (`test_lean_coin_tree.py`).
-- **Not checked: the openings.** The round coins are the record's. Neither the key nor the root is opened against them,
-  so a key or root edited within its shape changes no verdict (`zk_mutants.py`'s `zk-coin-tree-key` and `-root`).
+  The round coins are the record's: the key and root are not opened against them.
 
 ## 8. The proof container
 
@@ -1408,44 +1407,10 @@ such a session; any other statement refuses `J > 1`.
 
 ### 16.13 `--zk` sessions (`verify --zk`, `Flock.Zk`)
 
-`flock-circuit --zk` proves a `verity/flock-circuit` table with the masked protocol (M1) on the keyed coin tree (M2), as
-`backends/flock/live/PROTOCOL.md` specifies. `--zk` is the verifier's setting, never the record's, and combines with
-`--session-tables J` and with a unit draw. Where the live text is unclear, upstream's `zk_veil.rs` and the Ligerito zk
-module decide. The code is its own: `Flock.ZkProof` (container), `Flock.ZkLigerito` (Ligerito with level 0's hiding) and
-`Flock.Zk` (the replay, the constraints, the inner proof, the session). `Flock.verify`, `Flock.ligerito` and §8's decoder
-stay as they are, since the soundness package's pinned theorems read them.
-
-- **Statement.**
-  - `m ≥ 25` with a mask slot of at least `128 · 4 + 64` words (`Zk.shapeOk`, upstream's `zk_shape_ok`), checked at setup.
-  - The identity's `hooks` are upstream's `zk_identity`, plus `hooks.tables` when `J > 1`. `proof_class` stays
-    `NON_ZK_PROOF`, as upstream's identity says.
-  - The statement digest covers the identity, so a `--zk` and a plain session of one circuit never verify as each other.
-- **Coins.** `Coins.tree` over the streams `session`, then `<t>/rep0`, `<t>/rep1` per table, with `rounds_log 8` and
-  `block 512` (§7.4). `Hello` must name it, and the record must carry `coin_tree`.
-- **Schedule.** fast100's (§15) with level 0's query count `q_0` = 277, 242, 229 at `m` = 25, 26, 27, then 219 to `m = 31`
-  and 218 to 35. Level 0 is restratified with its cap the first stratum, and `t_pad = 2 q_0`.
-- **Container** (§8 with three changes; `Zk.decode`).
-  - `matrix_evals` is empty.
-  - Each level-0 row is `2^lanes + 4` wide (the extra lanes, a pair per rep).
-  - The Ligerito proof ends with `zk_level0: Option<(e_0, e_1, T', ybar)>`; `None` is refused.
-  - `InnerProof` follows the pair. Bytes after it are ignored, as after §8's pair.
-- **Each rep** (`Zk.verifyRep`).
-  - §9.1's binding, then the pads' label and root, then §9.2 and §10 on the masked values, drawing exactly their coins.
-    Each of their checks becomes an affine constraint on the committed pads (`Lin`).
-  - §12 with the two masked claims' values replaced by `⟨w, s_hat_v⟩`, and their equality made a constraint.
-  - §13 with level 0's hiding. Its shape is checked: `|ybar| = t_pad` and `rep < 2`. Level 0 is opened
-    (`verity-flock-zk-l0-open-v0`). After lane round `k_0`, `e_0, e_1` are absorbed, and `ρ_0, ρ_1` are drawn and must be
-    F128-independent. Then come `verity-flock-zk-l0-close-v0`, `T'` and `ybar`, and the claim becomes `T'`. Level 0's
-    query check adds rep `r`'s pair `2r, 2r + 1` and the padding codeword `(Σ ybar_i X_i(ω)) (2 + Ŵ_{log n}(ω))`.
-  - Level 0's lane phase gives two more constraints (the claim through the `k_0` rounds, then `+ ρ_0 e_0 + ρ_1 e_1 = T'`).
-  - The inner proof (live §5) checks every constraint and the triple's three at once:
-    - `ε`, then `γ`, then `β ≠ 0`, then 168 columns;
-    - `τ` opens its hm96 commitment;
-    - `⟨c, Y⟩ = t + β τ`;
-    - each column agrees with `Y` and climbs to the pads' root.
-  - S15 and S16 as in §5.3.
-- **The session.** §5.3 and §16.12 unchanged (S17 and S18 per table), with the coin-tree checks of §7.4, and the key fresh
-  across the run's sessions.
+`--zk`, the verifier's setting, verifies `flock-circuit --zk` sessions (with `--session-tables J` and draws): the masked
+protocol on the keyed coin tree (§7.4), as `backends/flock/live/PROTOCOL.md` and upstream's `zk_veil.rs` define it.
+`Flock.ZkProof`, `Flock.ZkLigerito` and `Flock.Zk` state each check and leave §8–§13's code as it is. The identity's
+`hooks` are upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
 
 ## 17. Acceptance, assumptions and trust
 
@@ -1483,12 +1448,10 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignored the retained bytes before its
   server retained them. Closed upstream at `631567f7`, where `from_record` requires `msg` on every round of a statement
   whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
+- **D5:** a `--zk` record's `coin_tree` (§7.4), which upstream's `from_record` ignores.
 
 At `631567f7` only D1 and D2 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
 in `redigest.py` and `fuzz.py`).
-
-- **D5:** a `--zk` record's `coin_tree` (§7.4): present, exactly its four keys, the nonce `Hello`'s, the key's shape. The
-  live server builds the tree itself, and upstream's `from_record` ignores the field.
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
 unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
@@ -1650,16 +1613,8 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   layout, not the verifier's equations.
 - **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
   bytes. Phase 2 generates both.
-- **`--zk` sessions (§16.13)** are not in `vectors.json`, since the pinned upstream build (`upstream.json`) predates
-  `--zk`. `agree.py --zk` compares the Lean verifier with upstream's offline verdict, `flock-circuit replay --zk` from
-  `backends/flock/live`. Each session runs in its own Lean process, because a tampered copy keeps its original's key.
-  - The sessions are a `selftest --zk --record-dir` run (`selftest_records.py`) and `serve`/`prove --zk` pairs (several
-    tables, a draw).
-  - `zk_mutants.py` tampers with one table of an honest session. Each proof value is changed and carried into the
-    retained rounds that absorbed it; each record field is changed alone.
-  - The tampering covers the masked openings, level 0's lane messages, extra lanes, `e`, `T'` and `ybar`, the pads' root,
-    the triple, `τ`, the inner proof's columns, the coins, the coin tree, swapped reps or tables and retained bytes. A
-    session read with another table count is refused at S2/R7.
+- **`--zk` sessions (§16.13)** are not in `vectors.json`: the pinned upstream build predates `--zk`. `agree.py --zk`
+  compares them with `flock-circuit replay --zk` (`backends/flock/live`), and `zk_mutants.py` tampers with each check.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
@@ -1705,7 +1660,7 @@ Flock.Merkle          §14    verifyPath / verifyBatch
 Flock.Schedule        §15    fast100 : Nat → Option Schedule   (the table as data)
 Flock.Statement.*     §16    PureBlock, IrFrame, Circuit; Legacy (L-CV, L-ACC, L-TAIL, L-SAMPLE)
 Flock.Verify          §3     verify : Config → Record → Proofs → PublicInput → Verdict
-Flock.ZkProof, Flock.ZkLigerito, Flock.Zk   §16.13   the --zk container, Ligerito with level 0's hiding, the verifier
+Flock.Zk*             §16.13 verify --zk
 ~~~
 
 The transcript state is threaded explicitly (a state monad over `Except`), never global. Level 3's theorems attach to
