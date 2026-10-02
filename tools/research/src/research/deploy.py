@@ -484,7 +484,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     ap = argparse.ArgumentParser(prog="research deploy", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("drift", help="each node's files against REF")
-    d.add_argument("--node", nargs="+", help="default: every node in deploy.toml")
+    d.add_argument("--node", nargs="+", action="extend", help="default: every node in deploy.toml")
     d.add_argument("--ref", default="origin/main")
     d.add_argument("--json", action="store_true")
     i = sub.add_parser("install", help="install a node's files from REF")
