@@ -4,6 +4,7 @@
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
+//!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -213,6 +214,11 @@ fn identity(c: &Composite) -> Value {
         id["coins"] = json!("live-os (every round's coins the verifier's OS draws: no seed, no PRF)");
         id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
         id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
+    }
+    // only for bit rows (META `row_schemas`): a `sha512/row/v1` statement's digest must not move
+    if c.meta.get("row_schemas").is_some() {
+        id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
+        id["outputs"] = json!("hidden: each output port an hm96-sha512/row/v2 row hashed in the circuit; the public file has no output word");
     }
     id
 }
@@ -2171,6 +2177,8 @@ struct Plan {
     salt_forged: bool,
     midstate_forged: bool,
     pad_forged: bool,
+    fill_forged: bool,
+    mixed_pad_forged: bool,
     mask_random: bool,
     cut_flip: bool,
     tail_swapped: bool,
@@ -2234,7 +2242,8 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let rows = Arc::new(rows);
     let salts = Arc::new(inst.instance_salts(st.c.ports.len()).expect("the prover's instance file has the salts"));
     let (s1, r1, sa1) = (st.clone(), rows.clone(), salts.clone());
-    let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged };
+    let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged,
+                             fill_flip: plan.fill_forged, mixed_pad_flip: plan.mixed_pad_forged };
     let rowin: Arc<dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync + Send> = Arc::new(move |b| {
         if zero { s1.row_inputs(None, None, b, tamper) } else { s1.row_inputs(Some(&r1), Some(&sa1), b, tamper) }
     });
@@ -2780,6 +2789,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("row_salt_forged", false, true),
     ("row_midstate_forged", false, true),
     ("padding_block_forged", false, true),
+    ("row_fill_bit_set", false, true),
+    ("row_padding_bit_forged_beside_its_bytes", false, true),
     ("coins_before_y", false, false),
     ("reps_with_different_witness", false, false),
     ("reps_differ_prover_stops", false, false),
@@ -2840,6 +2851,8 @@ fn skipped(st: &Stmt, name: &str) -> bool {
     let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
         .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
     (name == "chaining_value_forged" && !multi_block)
+        || (name == "row_fill_bit_set" && !st.c.ports.iter().any(|p| p.v2 && p.bits % 8 != 0))
+        || (name == "row_padding_bit_forged_beside_its_bytes" && !st.c.ports.iter().any(|p| p.v2 && p.bytes() % 128 != 0))
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
         || (is_zk(st) && NOT_ZK.contains(&name))
         || (!is_zk(st) && name.starts_with("zk_"))
@@ -2861,6 +2874,8 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "row_salt_forged" => Plan { salt_forged: true, ..h },
         "row_midstate_forged" => Plan { midstate_forged: true, ..h },
         "padding_block_forged" => Plan { pad_forged: true, ..h },
+        "row_fill_bit_set" => Plan { fill_forged: true, ..h },
+        "row_padding_bit_forged_beside_its_bytes" => Plan { mixed_pad_forged: true, ..h },
         "coins_before_y" => Plan { no_y: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, skip_level0_check: true, ..h },
         "reps_differ_prover_stops" => Plan { rep1_other_witness: true, ..h },
@@ -2880,8 +2895,8 @@ fn load_composite(path: &str) -> Composite {
 }
 
 /// A row's `b || c` under its salt (the commitment scheme's own function: `b = x XOR M(key) y`, `c = SHA-512(salt_prefix || y)`).
-fn row_bc(row: &[u8], salt: &[u8]) -> [u8; BC_BYTES] {
-    let mut bc = row_bc_zero_salt(row);
+fn row_bc(port: &Port, row: &[u8], salt: &[u8]) -> [u8; BC_BYTES] {
+    let mut bc = row_bc_zero_salt(port, row);
     for (b, m) in bc[..64].iter_mut().zip(flock_merkle::hm96::mask(salt)) {
         *b ^= m;
     }
@@ -2912,7 +2927,7 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
                 None => v.rows.as_mut().expect("the prover's file"),
             };
             rows[at] ^= 1;
-            let bc = row_bc(&rows[at..at + 2 * words], &salt);
+            let bc = row_bc(&st.c.ports[n_in], &rows[at..at + 2 * words], &salt);
             let k = v.bc_index(0, n_in, np);
             v.bcs[k] = bc;
         }
@@ -4041,6 +4056,10 @@ fn main() {
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
+        "statement" => println!("STATEMENT\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "instances": st.n,
+            "vus_per_block": st.c.g, "blocks": st.blocks_real, "k_log": st.c.k_log, "nbl": st.nbl, "dense_m": st.m,
+            "regions": st.regions.len(), "circuit_sha512": hex(&st.c.sha512), "statement_digest": hex(&st.digest),
+            "public_sha512": hex(&inst.public_sha512), "identity": st.identity})),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
@@ -4067,6 +4086,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }

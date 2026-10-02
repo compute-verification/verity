@@ -9,6 +9,7 @@
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
                                                             (`tools/check/slot.py`), the lock and cores the train checks take;
+                                                            --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a pinned guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is
@@ -34,7 +35,8 @@ Then three independent groups run at once, the cores split between them (`--core
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
                     its report beside the run's result; then flock-circuit-build, `backends/flock/check_build.sh`: `cargo check` of
                     flock-circuit in every CPU feature set a pod builds, the proving builds without `seed-injection` among them (a
-                    Flock b684b12 checkout, cached under $FLOCK_CHECKOUT)
+                    Flock b684b12 checkout, cached under $FLOCK_CHECKOUT); then flock-rust-tests, `check_build.sh test` on that
+                    checkout: `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
@@ -57,6 +59,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
+    flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit, the patches, the live crate, the Rust
+                    toolchain, the environment), so only a change to those pays for the Rust tests
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
@@ -365,7 +369,7 @@ def record(argv: list[str]) -> int:
     (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway."""
     on = base = None
-    agreement = False
+    agreement = priority = False
     rest = []
     it = iter(argv)
     for x in it:
@@ -375,6 +379,8 @@ def record(argv: list[str]) -> int:
             base = next(it)
         elif x == "--agreement":
             agreement = True
+        elif x == "--priority":
+            priority = True
         else:
             rest.append(x)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
@@ -420,7 +426,8 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    cmd += ["--", *(SLOT_WRAP if on else []), *tool.CHECK.command, *rest]
+    wrap = [*SLOT_WRAP[:-1], "--priority", SLOT_WRAP[-1]] if priority else SLOT_WRAP
+    cmd += ["--", *(wrap if on else []), *tool.CHECK.command, *rest]
     try:
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
@@ -460,7 +467,9 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")]
-    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT), ("flock-circuit-build", build, ROOT)], lean]
+    rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
+    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT), ("flock-circuit-build", build, ROOT), ("flock-rust-tests", rust, ROOT)],
+            lean]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -520,6 +529,37 @@ def agreement_key(e: dict[str, str]) -> str | None:
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
     return h.hexdigest()
+
+
+def rust_tests_inputs(files: list[str]) -> list[str]:
+    """What `check_build.sh test` reads of the tree: the script (which pins the Flock commit and the order the patches go on in),
+    the patches, and the live crate it links in."""
+    pre = "backends/flock/"
+    return [f for f in files if f == pre + "check_build.sh" or f.startswith(pre + "live/")
+            or (f.startswith(pre + "flock-") and f.endswith("-b684b12.patch"))]
+
+
+def rust_tests_key(e: dict[str, str]) -> str | None:
+    """What flock-rust-tests reads: `rust_tests_inputs`, the Rust toolchain the script finds (`rustc -vV`, ~/.cargo/bin first),
+    the platform and the environment.  None when the tree's files cannot be listed or there is no rustc yet (the script installs
+    one; that run stores nothing)."""
+    files = tracked_files()
+    path = f"{Path(e.get('HOME') or Path.home()) / '.cargo' / 'bin'}{os.pathsep}{e.get('PATH', '')}"
+    rustc = shutil.which("rustc", path=path)
+    if files is None or rustc is None:
+        return None
+    r = subprocess.run([rustc, "-vV"], env={**e, "PATH": path}, capture_output=True, text=True)
+    if r.returncode:
+        return None
+    h = hashlib.sha256(json.dumps([r.stdout, platform.platform(), _env_key(e)]).encode())
+    for f in rust_tests_inputs(files):
+        p = ROOT / f
+        h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
+    return h.hexdigest()
+
+
+#: the steps whose pass is kept under a key of everything they read, and reused while it holds
+STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key}
 
 
 def agreement_closure(files: list[str]) -> list[str]:
@@ -640,7 +680,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
     e = env()
     t0 = time.monotonic()
     hit = None
-    key = agreement_key(e) if cache and name == "lean-agreement" else None
+    key = STEP_KEYS[name](e) if cache and name in STEP_KEYS else None
     if key:
         entry = cache_dir() / name / f"{key}.json"
         if entry.exists():

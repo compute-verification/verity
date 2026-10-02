@@ -19,18 +19,21 @@ Five schemas:
 ``blake3-keyed/row-nvfp4/v1`` ``BLAKE3(nvfp4_row_bytes, key=blake3_row_key(role))``: the same row bytes, the frame-v3 keys.
 ``sha512/row/v1``            ``SHA-512(sha512_row_prefix(role, word_bits, n_words) || row_bytes)``: ``sha256/row/v1`` through SHA-512,
                              with a 128-byte constant first block (``frame-v3-sha512`` rows and ``hm96-sha512/v1``'s inner digest).
+``sha512/row/v2``            ``SHA-512(sha512_row_v2_prefix(n_bits) || row)``: a row is a bit string (:func:`bit_row`), the
+                             128-byte constant first block only its tag and length in bits; no format, role or word width.
 ``hm96-sha256/row/v1``       the schema a frame-v3 leaf binds over a hiding row's leaf digest: ``hm96.SHA256.tree_leaf(key, b || c)``
                              over ``sha256/row/v1`` (32 bytes).
 ``hm96-sha512/row/v1``       the same under a ``frame-v3-sha512`` domain: ``hm96.SHA512.tree_leaf(key, b || c)`` over
-                             ``sha512/row/v1`` (64 bytes).
+                             ``sha512/row/v1`` (64 bytes); ``hm96-sha512/row/v2`` over ``sha512/row/v2``.
 ``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
                              but algebraic: its results are reported and flagged as algebraic in the security section,
                              and never count toward a standard-hash claim (Daniel's standing decision).
 
 ``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  ``nvfp4_row_bytes``
 are the codes packed two per byte (code ``2i`` in the low nibble), then the scale bytes: the code buffer and the scale
-buffer as NVFP4 tensors hold them, so a serving-side committer hashes rows without repacking.  Roles are
-:data:`ROLE_X` (1, an x row) and :data:`ROLE_W` (2, a W column).  Unsalted: a low-entropy row is preimage-searchable.
+buffer as NVFP4 tensors hold them, so a serving-side committer hashes rows without repacking (``bit_row`` gives the same
+bytes).  Roles are :data:`ROLE_X` (1, an x row) and :data:`ROLE_W` (2, a W column).  Unsalted: a low-entropy row is
+preimage-searchable.
 """
 from __future__ import annotations
 
@@ -49,10 +52,13 @@ __all__ = [
     "SCHEMA_BLAKE3_ROW_NVFP4",
     "SCHEMA_HM96_SHA256_ROW",
     "SCHEMA_HM96_SHA512_ROW",
+    "SCHEMA_HM96_SHA512_ROW_V2",
     "SCHEMA_ROW",
     "SCHEMA_SHA256_ROW",
     "SCHEMA_SHA256_ROW_NVFP4",
     "SCHEMA_SHA512_ROW",
+    "SCHEMA_SHA512_ROW_V2",
+    "bit_row",
     "blake3_row_digest",
     "blake3_row_key",
     "blake3_row_layout",
@@ -72,6 +78,9 @@ __all__ = [
     "sha512_row_digest",
     "sha512_row_layout",
     "sha512_row_prefix",
+    "sha512_row_v2_digest",
+    "sha512_row_v2_layout",
+    "sha512_row_v2_prefix",
 ]
 
 SCHEMA_ROW = "poseidon2-babybear-w24/row/v2h"
@@ -82,14 +91,17 @@ SCHEMA_BLAKE3_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 SCHEMA_SHA512_ROW = "sha512/row/v1"
 SCHEMA_HM96_SHA256_ROW = "hm96-sha256/row/v1"
 SCHEMA_HM96_SHA512_ROW = "hm96-sha512/row/v1"
+SCHEMA_SHA512_ROW_V2 = "sha512/row/v2"
+SCHEMA_HM96_SHA512_ROW_V2 = "hm96-sha512/row/v2"
 _DIGEST_SCHEMAS = {SCHEMA_SHA256_ROW: 32, SCHEMA_BLAKE3_ROW: 32, SCHEMA_SHA256_ROW_NVFP4: 32, SCHEMA_BLAKE3_ROW_NVFP4: 32, SCHEMA_SHA512_ROW: 64,
-                   SCHEMA_HM96_SHA256_ROW: 32, SCHEMA_HM96_SHA512_ROW: 64}
+                   SCHEMA_HM96_SHA256_ROW: 32, SCHEMA_HM96_SHA512_ROW: 64, SCHEMA_SHA512_ROW_V2: 64, SCHEMA_HM96_SHA512_ROW_V2: 64}
 
 ROLE_X, ROLE_W = h2.ROLE_X, h2.ROLE_W
 _ROLE_KEY_NAME = {ROLE_X: b"x", ROLE_W: b"w"}
 SHA256_ROW_TAG = b"verity/sha256-row/v1\0"
 SHA256_ROW_NVFP4_TAG = b"verity/sha256-row-nvfp4/v1\0"
 SHA512_ROW_TAG = b"verity/sha512-row/v1\0"
+SHA512_ROW_V2_TAG = b"verity/sha512-row/v2\0"
 NVFP4_SCALE_GROUP = 16
 BLAKE3_KEY_PREFIX = b"verity/blake3-leaf/v1/"
 
@@ -158,6 +170,60 @@ def sha512_row_layout(role: int, word_bits: int, n_words: int) -> LeafLayout:
 
 def sha512_row_digest(words: Sequence[int], word_bits: int, role: int) -> bytes:
     return sha512_row_layout(role, word_bits, len(words)).digest(row_bytes(words, word_bits))
+
+
+# --- sha512/row/v2 -----------------------------------------------------------------------------------------------
+
+
+def bit_row(*parts: tuple[Sequence[int], int]) -> tuple[bytes, int]:
+    """The row of ``(values, bits)`` parts, in order, each value its ``bits`` bits least significant first: ``(row, n_bits)``.
+
+    Row bit ``i`` is bit ``i % 8`` of byte ``i // 8``, and the last byte's fill is zero bits.  For every format in use that
+    is the tensor's memory: ``bit_row((codes, 4), (scales, 8))`` is ``nvfp4_row_bytes(codes, scales)``, an E4M3 row is its
+    bytes, and ``bit_row((elements, 16))`` is BF16 elements little-endian."""
+
+    out, acc, n, total = bytearray(), 0, 0, 0
+    for values, bits in parts:
+        if isinstance(bits, bool) or not isinstance(bits, int) or bits < 1:
+            raise ValueError(f"an element is a positive number of bits, not {bits!r}")
+        bound = 1 << bits
+        for v in values:
+            v = int(v)
+            if not 0 <= v < bound:
+                raise ValueError(f"row element {v} does not fit {bits} bits")
+            acc |= v << n
+            n += bits
+            total += bits
+            while n >= 8:
+                out.append(acc & 0xFF)
+                acc >>= 8
+                n -= 8
+    if n:
+        out.append(acc)
+    return bytes(out), total
+
+
+def sha512_row_v2_prefix(n_bits: int) -> bytes:
+    """``P(n_bits)``, the 128-byte first block: ``"verity/sha512-row/v2\\0" || u64be n_bits``, zero padded."""
+
+    if isinstance(n_bits, bool) or not isinstance(n_bits, int) or not 0 <= n_bits < 1 << 64:
+        raise ValueError(f"a row's length is a u64 number of bits, not {n_bits!r}")
+    return (SHA512_ROW_V2_TAG + n_bits.to_bytes(8, "big")).ljust(128, b"\0")
+
+
+def sha512_row_v2_layout(n_bits: int) -> LeafLayout:
+    """The ``ceil(n_bits / 8)`` row bytes after ``P(n_bits)``; a gadget wires the fill bits of the last byte as zeros."""
+
+    return LeafLayout("sha512", sha512_row_v2_prefix(n_bits), (n_bits + 7) // 8)
+
+
+def sha512_row_v2_digest(row: bytes, n_bits: int) -> bytes:
+    """``SHA-512(P(n_bits) || row)`` for a row of :func:`bit_row`'s bytes, refusing a row whose fill bits are not zero."""
+
+    layout, row = sha512_row_v2_layout(n_bits), bytes(row)
+    if len(row) == layout.value_len and n_bits % 8 and row[-1] >> n_bits % 8:
+        raise ValueError(f"a row of {n_bits} bits fills its last byte with zero bits")
+    return layout.digest(row)
 
 
 # --- blake3-keyed/row/v2 -----------------------------------------------------------------------------------------
@@ -252,8 +318,9 @@ def row_leaf(domain: CommitmentDomain, rank: int, digest, schema: str = SCHEMA_R
     """The frame-v3 leaf of the row at ``rank`` (rank == position in a range domain).
 
     ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default), the 32-byte SHA-256 / BLAKE3 row digest (four digest
-    schemas, NVFP4 rows included), the 64-byte ``sha512/row/v1`` digest (under a ``frame-v3-sha512`` domain), or a hiding row's
-    hm96 leaf digest under ``hm96-sha256/row/v1`` (32 bytes) or ``hm96-sha512/row/v1`` (64 bytes).
+    schemas, NVFP4 rows included), the 64-byte ``sha512/row/v1`` or ``sha512/row/v2`` digest (under a ``frame-v3-sha512``
+    domain), or a hiding row's hm96 leaf digest under ``hm96-sha256/row/v1`` (32 bytes), ``hm96-sha512/row/v1`` or
+    ``hm96-sha512/row/v2`` (64 bytes).
     """
     value = row_leaf_value(digest) if schema == SCHEMA_ROW else bytes(digest)
     if schema != SCHEMA_ROW and len(value) != _DIGEST_SCHEMAS.get(schema, -1):
