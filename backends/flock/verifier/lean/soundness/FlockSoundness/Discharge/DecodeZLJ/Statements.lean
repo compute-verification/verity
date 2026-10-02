@@ -160,7 +160,4 @@ def DecodesOnJExec : Prop :=
     DecodesOnJ H512 enc512 leaf512 (planJ ht T₀ dj) I wr (opnJ I (planJ ht T₀ dj) dj) (decJ (planJ ht T₀ dj))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
 
-theorem decodesOnJ_exec : DecodesOnJExec := by
-  sorry
-
 end FlockSoundness.Discharge.DecodeZLJ
