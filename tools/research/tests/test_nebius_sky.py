@@ -85,7 +85,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
     assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
                     "commit-pack": ("deployments-gpu", "circuits-gpu"),
                     "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench"),
-                    "store-push": ("backfill", "backfill")}
+                    "store-push": ("backfill", "backfill"), "store-fetch": ("backfill", "backfill")}
 
 
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
@@ -474,7 +474,7 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
         if f.stem == "commit-pack":           # a pilot: each Commit it runs is config-run's gpu task script, job tree included
             assert tasks == 0 and "job_tree.sh" not in t and 'pilot=$SRC/sky/commit_pack.py' in t, f.name
             continue
-        if f.stem == "store-push":            # only imports `research` from the tree, never writes it
+        if f.stem in ("store-push", "store-fetch"):   # only import `research` from the tree, never write it
             assert tasks == 0 and "job_tree.sh" not in t and 'PYTHONDONTWRITEBYTECODE: "1"' in t, f.name
             continue
         assert t.count('job_tree.sh" "$SRC")') == t.count('job_tree.sh" --mine)') == tasks >= 1, f.name
@@ -483,6 +483,50 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
             assert re.search(r'--out "?/workspace/jobs/', line), (f.name, line)
     capture = (SKY / "jobs" / "port-capture.yaml").read_text()
     assert 'vllm_bootstrap.sh" --cpu --out' in capture and "pod-$(hostname)" in capture     # no native taps; $CMD gets its own copy
+
+
+def test_store_fetch_lays_each_artifact_out_under_its_hex_through_a_scratch_store_it_removes(tmp_path):
+    """store-fetch's run step with `research` from this checkout and a directory remote in place of R2: a tree (PATHS picking its
+    files) and a file artifact land under $OUT/$NAME/<hex>/, the scratch store is gone, a directory older than KEEP_DAYS goes, and
+    an id that isn't a full art id fails before anything is fetched."""
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    from research.store.local import LocalStore
+
+    vault, toml, jobs, out = tmp_path / "vault", tmp_path / "store.toml", tmp_path / "jobs", tmp_path / "out"
+    toml.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    (tmp_path / "repo").mkdir()
+    origin = LocalStore(tmp_path / "origin", config_path=toml, repo=tmp_path / "repo")
+    (tmp_path / "t" / "rep1").mkdir(parents=True)
+    (tmp_path / "t" / "rep1" / "a.json").write_text("{}\n")
+    (tmp_path / "t" / "b.log").write_text("log\n")
+    (tmp_path / "one.bin").write_bytes(b"\x01" * 64)
+    tree = origin.put_artifact("run-files/v1", {"n": 1}, tree=tmp_path / "t")
+    one = origin.put_artifact("proof/v1", {"n": 2}, file=tmp_path / "one.bin")
+    assert origin.push(tree)["preserved"] and origin.push(one)["preserved"]
+
+    (jobs / "bin").mkdir(parents=True)
+    (jobs / "bin" / "uv").write_text(f'#!/bin/sh\nshift 5\nexec "{sys.executable}" "$@"\n')     # `uv run --no-project --python 3.12 python`
+    (jobs / "bin" / "uv").chmod(0o755)
+    (out / "old").mkdir(parents=True)
+    os.utime(out / "old", (0, 0))
+    text = (SKY / "jobs" / "store-fetch.yaml").read_text()
+    run = textwrap.dedent(text.split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]).replace("/workspace/jobs", str(jobs))
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_"))}
+    env.update(SRC=str(SKY.parents[6]), RESEARCH_STORE_CONFIG=str(toml), RESEARCH_REPO=str(tmp_path / "repo"), OUT=str(out),
+               KEEP_DAYS="2", NAME="console-1", ARTS=f"{tree} {one}", PATHS="rep1/*")
+
+    r = subprocess.run(["bash", "-c", run], capture_output=True, text=True, env=env, cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    dest = out / "console-1"
+    assert sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()) == [f"{tree[4:]}/rep1/a.json", f"{one[4:]}/one.bin"]
+    assert not (dest / ".store").exists() and not (out / "old").exists() and "2 artifact(s), 2 file(s)" in r.stdout
+
+    r = subprocess.run(["bash", "-c", run], capture_output=True, text=True, env={**env, "ARTS": f"{tree} {one[:12]}", "NAME": "x"})
+    assert r.returncode == 2 and "is not a full art id" in r.stderr and not (out / "x").exists()
 
 
 def test_a_per_pod_copy_goes_once_research_run_exits(tmp_path):
