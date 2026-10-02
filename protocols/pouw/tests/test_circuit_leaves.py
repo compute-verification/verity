@@ -1,6 +1,7 @@
 """The tile checks' committed rows and tile digest (`verity_pouw.circuit.leaves`): the row schemas' words and commit strings
-are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor's memory, and the tile digest in gates is
-the pinned one and `pearl_c.leaf`."""
+are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor's memory, a row's commit string is core's
+over `sha512/row/v1` (role X) or `sha512/row/v2` at every padding edge, and the tile digest in gates is the pinned one and
+`pearl_c.leaf`.  C-Flock's tests recompute the vectors through its own ports (``backends/flock/tests/test_pouw_rows.py``)."""
 from __future__ import annotations
 
 import json
@@ -10,7 +11,8 @@ import types
 import pytest
 
 import pouw_rows_vectors as V
-from verity.commitments.rowleaf import nvfp4_row_bytes, row_bytes
+from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, bit_row, nvfp4_row_bytes, row_bytes, sha512_row_digest,
+                                        sha512_row_v2_digest)
 from verity.evaluation import evaluate
 
 from verity_pouw.circuit import leaves as L
@@ -34,7 +36,8 @@ def test_the_gates_compute_the_pinned_tile_digests(case):
 
 def test_the_rows_are_the_tensors_bytes():
     """Each row's bytes are the tensor's memory: bf16 and fp32 rows their words little-endian, nvfp4-p's codes and scales
-    `rowleaf.nvfp4_row_bytes`' and fp8-p's codes the codes' bytes, each then P's BF16 words."""
+    `rowleaf.nvfp4_row_bytes`' and fp8-p's codes the codes' bytes, each then P's BF16 words; and each packed row's bytes
+    and bit count are `rowleaf.bit_row`'s of its elements (what `sha512/row/v2` hashes)."""
     rng, k = random.Random(3), 128
     x16, x32 = [rng.getrandbits(16) for _ in range(k)], [rng.getrandbits(32) for _ in range(k)]
     c4, c8 = [rng.getrandbits(4) for _ in range(k)], [rng.getrandbits(8) for _ in range(k)]
@@ -46,6 +49,23 @@ def test_the_rows_are_the_tensors_bytes():
     for row, (words, memory) in rows.items():
         assert row_bytes(words, 16) == memory, row
         assert len(words) == L.ROW_WORDS[row](k), row
+    assert bit_row((c4, 4), (scales, 8), (p, 16)) == (rows["nvfp4-p"][1], 16 * L.ROW_WORDS["nvfp4-p"](k))
+    assert bit_row((c8, 8), (p, 16)) == (rows["fp8-p"][1], 16 * L.ROW_WORDS["fp8-p"](k))
+
+
+@pytest.mark.parametrize("row, sizes", [("bf16", (64, 128, 192)), ("nvfp4-p", (2, 16, 54, 56, 118, 120)),
+                                        ("tile", (16,))], ids=["v1", "v2", "tile"])
+def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, sizes):
+    """`commit` is `hm96.SHA512.commit_string` of the row's `sha512/row/v1` digest (role X, whole blocks) or its
+    `sha512/row/v2` digest: v2 rows that pad into one block after the prefix (54 words), into two (56), and across the next
+    edge (118, 120)."""
+    rng = random.Random(len(row))
+    for n in sizes:
+        words, y = [rng.getrandbits(16) for _ in range(n)], bytes(rng.getrandbits(8) for _ in range(192))
+        x = (sha512_row_digest(words, 16, ROLE_X) if L.ROW_SCHEMA[row] == SCHEMA_HM96_SHA512_ROW
+             else sha512_row_v2_digest(row_bytes(words, 16), 16 * n))
+        assert L.row_digest(row, words) == x, n
+        assert L.commit(row, words, y) == L.INST.commit_string(L.KEY, x, y), n
 
 
 @pytest.mark.parametrize("tm, tn", [(1, 1), (2, 3), (3, 33), (2, 64)])
@@ -58,9 +78,16 @@ def test_the_tile_digest_is_pearl_cs_leaf(tm, tn):
 
 
 def test_out_of_schema_rows_are_refused():
+    for row, words in (("bf16", 32), ("fp32", 96)):
+        with pytest.raises(ValueError, match="whole SHA-512 blocks"):
+            L.commit(row, [0] * words, bytes(192))
+    with pytest.raises(ValueError, match="positive number of words"):
+        L.row_leaf("tile", 0)
     with pytest.raises(ValueError):
         L.words_nvfp4_p([0] * 64, [0] * 3, [0] * L.P_WORDS)
     with pytest.raises(ValueError):
         L.words_fp8_p([0] * 64, [0] * 63)
     with pytest.raises(ValueError):
         L.words_tile(bytes(31))
+    with pytest.raises(ValueError):
+        L.words_ok(2)

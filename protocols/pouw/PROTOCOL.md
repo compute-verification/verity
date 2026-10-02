@@ -734,29 +734,33 @@ useful    U/(α_A·α_B), glue
     unit's committed rows: a row unit's input row (bf16), the nvfp4-p row it writes and its ``ok`` row (every output is
     committed, #757), and a tile's TM + TN nvfp4-p rows and its tile digest. A tile reads each row as its row unit wrote
     it (the same words, schema and salt), so the units link by equal commit strings b ‖ c.
-  - The rows are `hm96-sha512/row/v1` rows of 16-bit words: `sha512/row/v1`'s prefix block names the role, the word
-    width (16) and the word count, and a registration domain binds the schema id and the word count. Every narrower
-    element is packed low bits first, so a row's bytes are the tensor's memory:
+  - The rows are rows of 16-bit words, each the row C-Flock's port of its words commits (`leaves.ROW_SCHEMA`): an
+    `hm96-sha512/row/v1` row (`sha512/row/v1`, role X and word width 16, as every C-Flock v1 port is, of whole SHA-512
+    blocks) or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a word). Neither digest names the role or the
+    schema, so the registration domain of the tree a row sits in binds the schema id, the word count and the role. Every
+    narrower element is packed low bits first, so a row's bytes are the tensor's memory (`rowleaf.bit_row`'s of its
+    elements):
 
     ~~~text
-    schema id            words                                                     count             role
-    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)
-    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W
-    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),
+    schema id            words                                                     count             role               row
+    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   v1
+    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               v1
+    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
-    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W
-    pouw/row-ok/v1       the row's admission bit, bit 0 of one word                1                 X, W
-    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X
+    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               v2
+    pouw/row-ok/v1       the row's admission bit, bit 0 of one word                1                 X, W               v2
+    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     ~~~
 
+    Whole blocks hold a bf16 row when 64 | k and an fp32 row when 32 | k (`leaves.row_leaf` refuses the rest).
     nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
     that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
-    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c. These rows are what C-Flock's ports commit, byte
-    for byte.
+    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
   - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
-  - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, `sha512/row/v1`
-    digest, commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute.
-    C-Flock's ports are mapped onto them.
+  - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, row digest,
+    commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute. C-Flock's
+    ports commit them byte for byte: `backends/flock/tests/test_pouw_rows.py` recomputes every vector through C-Flock's
+    port for the row, and one v1 row, one v2 row and a tile through the Lean verifier's row constants.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
