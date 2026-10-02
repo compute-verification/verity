@@ -5,7 +5,8 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 
     # fill: owner=bc-0de2d624 gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
     #   gpus 0 or 1 (default 1), or 2 for a Commit guest (a TP2 row: two idle GPUs on one NUMA node); max_min <= 30 (default
-    #   25), a Commit guest's <= FILL_COMMIT_MAX_MIN (120); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
+    #   25), a Commit guest's <= FILL_COMMIT_MAX_MIN (120), a job FILL_DIR/max-min names <= what it allows (infra's exceptions,
+    #   each with an end: `pous-honest-soak-* 540 2026-10-02T14:45Z  # who, why`); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
 #   index or indices the job may run on (3, 2-7 or 2,5; it waits for one of them); prio: higher starts first (default 0; give GPU-heavy jobs more than
 #   ones that hold a GPU while mostly computing on the CPU); within a prio, owners take turns (the owner with the fewest
 #   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
@@ -49,6 +50,7 @@ Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 from __future__ import annotations
 
 import fcntl
+import fnmatch
 import json
 import os
 import re
@@ -113,11 +115,30 @@ def event(kind: str, job: str, **kw) -> None:
         f.write(json.dumps({"t": now(), "event": kind, "job": job, **kw}) + "\n")
 
 
-# one-job exceptions to the 30-min GPU cap, each approved by infra by name
-MAX_MIN_EXCEPTIONS: dict[str, int] = {}
+def max_min_exception(name: str, t: float | None = None) -> int | None:
+    """FILL_DIR/max-min: exceptions to the 30-min GPU cap, each approved by infra, one per line, read at each start:
+    `<job name glob> <minutes> <until UTC, 2026-10-02T14:45Z>  # who, why`.  A job it names may set max_min up to those minutes
+    and never past the line's until, so the exception ends on its own; a line past its until is ignored."""
+    t = time.time() if t is None else t
+    try:
+        lines = (FILL / "max-min").read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        f = line.split("#")[0].split()
+        if len(f) != 3 or not f[1].isdigit() or not fnmatch.fnmatchcase(name, f[0]):
+            continue
+        try:
+            until = datetime.fromisoformat(f[2].replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        left = int((until.replace(tzinfo=until.tzinfo or timezone.utc).timestamp() - t) // 60)
+        if left >= 1:
+            return min(int(f[1]), left)
+    return None
 
 
-def header(p: Path) -> dict:
+def header(p: Path, t: float | None = None) -> dict:
     h = {"owner": "unknown", "gpus": 1, "max_min": 25, "cpus": 8, "project": "pous", "on": None, "prio": 0}
     for line in p.read_text(errors="replace").splitlines()[:20]:
         m = re.match(r"#\s*fill:\s*(.*)", line)
@@ -127,8 +148,9 @@ def header(p: Path) -> dict:
     commit = p.name.startswith(COMMIT_PREFIX)
     h["gpus"] = min(max(int(h["gpus"]), 0), 2 if commit else 1)
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
-    cap = MAX_MIN_EXCEPTIONS.get(p.name, COMMIT_MAX_MIN if commit and h["gpus"] else
-                                 360 if h["project"] == "verity" and not h["gpus"] else 30)
+    cap = max_min_exception(p.name, t)
+    if cap is None:
+        cap = COMMIT_MAX_MIN if commit and h["gpus"] else 360 if h["project"] == "verity" and not h["gpus"] else 30
     h["max_min"] = min(int(h["max_min"]), cap)
     return h
 
