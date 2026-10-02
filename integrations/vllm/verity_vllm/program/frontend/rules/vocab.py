@@ -383,7 +383,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
-           "layer_norm_aten_value": lambda N: ir_bind(_vi.LayerNormAtenV2, N=N)},
+           "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
