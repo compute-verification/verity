@@ -30,14 +30,16 @@ T0 = 1_790_924_000_000_000_000
 
 
 def _chunk(path: Path) -> Path:
-    """Two runs of cell 1 (idle, 10 Hz, 64 KiB, tuned), one with timestamping and its twin: 400 answers each, every tenth a
-    ping, the first second of each run inside the warm-up; one answer with no K_tx_resp."""
+    """Two runs of cell 19 (decode, 10 Hz, 64 KiB, tuned), one with timestamping and its twin: 400 answers each, every tenth
+    a ping, the first second of each run inside the warm-up; one answer with no K_tx_resp.  The second run keeps the decode
+    load, so the 18 s from the first run's end to its first arrival are a no-challenge window."""
     rng = np.random.default_rng(7)
     rows, cell, run, ktx, s4, runs = [], [], [], [], [], []
     for j, ts in enumerate((True, False)):
         start = T0 + j * 60_000_000_000
-        runs.append({"cell": 1, "pass": 0, "ts": ts, "start_ns": start, "t0_ns": start + 2_000_000_000,
-                     "end_ns": start + 44_000_000_000, "start_utc": E._utc(start), "status": "done"})
+        runs.append({"cell": 19, "pass": 0, "ts": ts, "start_ns": start, "t0_ns": start + 2_000_000_000,
+                     "end_ns": start + 44_000_000_000, "start_utc": E._utc(start), "status": "done",
+                     "load": {"mode": "decode", "switched": j == 0}})
         for i in range(400):
             t = start + 2_000_000_000 + i * 100_000_000
             op = E.OP_PING if i % 10 == 0 else E.OP_READ
@@ -48,7 +50,7 @@ def _chunk(path: Path) -> Path:
             s3 = (s2 or s0) + 4_000
             rows.append([t, t + 1_000, t + 1_000 + lat, 0, 25_000 if op == E.OP_READ else 0, krx, s0, s3, s1, s2, op, 65_536])
             k = s3 + 40_000 if ts and i != 123 else 0
-            cell.append(1), run.append(j), ktx.append(k), s4.append(s3 + 45_000)
+            cell.append(19), run.append(j), ktx.append(k), s4.append(s3 + 45_000)
     steps = np.array([[T0 + k * 1_000_000_000, 0, T0 + k * 1_000_000_000, T0 + k * 1_000_000_000 + 700_000_000, 8, 8, 0, 8]
                       for k in range(120)], np.int64)
     n = 1200
@@ -87,16 +89,18 @@ def doc(tmp_path_factory):
     return json.loads(json.dumps(d, allow_nan=False))
 
 
-def test_survival_interpolation_is_log_log_and_ends_at_max():
+def test_survival_interpolation_is_log_log_and_ends_at_one_over_n_at_max():
     t = list(E.T_US)
     s = [1.0] * 40 + [0.5, 0.25] + [0.0] * (len(t) - 42)
-    assert E.survival_at(t, s, 11.0, 0.5) == 1.0
-    assert E.survival_at(t, s, 11.0, t[40]) == 0.5
-    mid = math.sqrt(t[40] * t[41])
-    assert E.survival_at(t, s, 11.0, mid) == pytest.approx(math.sqrt(0.5 * 0.25), rel=1e-12)
-    assert E.survival_at(t, s, 11.0, t[41] * 1.01) == 0.25
-    assert E.survival_at(t, s, 11.0, 11.0) == 0.25
-    assert E.survival_at(t, s, 11.0, 11.000001) == 0.0
+    mx, n = 11.0, 8
+    assert t[41] < mx < t[42]
+    assert E.survival_at(t, s, mx, n, 0.5) == 1.0
+    assert E.survival_at(t, s, mx, n, t[40]) == 0.5
+    assert E.survival_at(t, s, mx, n, math.sqrt(t[40] * t[41])) == pytest.approx(math.sqrt(0.5 * 0.25), rel=1e-12)
+    assert E.survival_at(t, s, mx, n, math.sqrt(t[41] * mx)) == pytest.approx(math.sqrt(0.25 / n), rel=1e-12)
+    assert E.survival_at(t, s, mx, n, mx) == 1 / n
+    assert E.survival_at(t, s, mx, n, mx * (1 + 1e-9)) == 0.0
+    assert E.survival_at(t, s, t[41], 4, t[41]) == 0.25
     assert len(t) == 201 and t[0] == 1.0 and t[-1] == pytest.approx(1e5)
 
 
@@ -117,7 +121,7 @@ def test_the_document_has_the_specs_keys(doc):
     assert set(doc["run"]) == {"host", "gpu", "start_utc", "end_utc", "chunks", "answers", "wrong", "schedule_seed", "notes"}
     assert len(doc["cells"]) == 72 and set(doc["cells"][0]) == {"cell", "load", "rate_hz", "block_bytes", "config", "runs",
                                                                 "answers", "challenges", "pings", "twin_runs", "twin_answers"}
-    c1 = doc["cells"][1]
+    c1 = doc["cells"][19]
     assert (c1["runs"], c1["twin_runs"], c1["challenges"] + c1["pings"], c1["twin_answers"]) == (1, 1, 390, 390)
     assert {m["id"] for m in doc["metrics"]} == {"elapsed", "server_user", "server_kernel", "gpu_span", "schedule_lag",
                                                  "tor_400_tuned", "tor_400_default", "tor_100_tuned", "tor_100_default"}
@@ -149,11 +153,22 @@ def test_the_document_has_the_specs_keys(doc):
                            "gpu7_temp_c", "other_gpus_util_pct_max", "loadavg1", "clock_offset_range_ns"}
     assert set(minute["steal_ms_per_s"]) == {"verifier", "responder", "max_other"}
     assert minute["other_gpus_util_pct_max"] == 5 and minute["gpu7_power_w"] == 200.0
-    assert set(doc["serving"][0]) == {"cell", "tokens_per_s", "steps_per_s", "step_gpu_ms_p50", "step_gpu_ms_p99"}
-    assert doc["serving"][0]["step_gpu_ms_p50"] == pytest.approx(700.0)
+    for row in doc["serving"]:
+        assert set(row) == {"cell", "load", "rate_hz", "block_bytes", "config", "tokens_per_s", "steps_per_s",
+                            "step_gpu_ms_p50", "step_gpu_ms_p99"}
+    cell19 = next(r for r in doc["serving"] if r["cell"] == 19)
+    assert (cell19["load"], cell19["rate_hz"], cell19["block_bytes"], cell19["config"]) == ("decode", 10, 65_536, "tuned")
+    assert cell19["step_gpu_ms_p50"] == pytest.approx(700.0)
+    free = {r["load"]: r for r in doc["serving"] if r["cell"] is None}
+    assert set(free) == {"decode", "prefill", "mixed"}
+    assert all((r["rate_hz"], r["block_bytes"], r["config"]) == (0, None, None) for r in free.values())
+    assert (free["decode"]["steps_per_s"], free["decode"]["tokens_per_s"]) == (1.0, 8.0)
+    assert free["prefill"]["tokens_per_s"] is None and free["mixed"]["step_gpu_ms_p50"] is None
+    assert any("no-challenge" in n and "decode: 1 windows" in n for n in doc["run"]["notes"])
     assert len(doc["stalls"]) == 200 and [s["rank"] for s in doc["stalls"][:3]] == [1, 2, 3]
     assert set(doc["stalls"][0]) == {"rank", "utc", "cell", "op", "elapsed_us", "server_kernel_us", "components", "steal_ms",
-                                     "vllm_step_overlap", "softirq", "attribution"}
+                                     "vllm_step_overlap", "softirq", "attribution", "attribution_label"}
+    assert all(isinstance(s["attribution_label"], str) and s["attribution_label"] for s in doc["stalls"])
     assert all(s["attribution"] in {"steal", "vllm-step", "gpu", "socket", "unknown"} for s in doc["stalls"])
     els = [s["elapsed_us"] for s in doc["stalls"]]
     assert els == sorted(els, reverse=True)
@@ -165,6 +180,15 @@ def test_the_vectors_reproduce_from_the_file_alone(doc):
     for v in doc["vectors"]:
         i = v["inputs"]
         r = rows[(i["cell"], i["metric"], i["op"], i["timestamping"])]
-        got = E.survival_at(doc["t_us"], r["s"], r["max_us"], i["t_us"])
+        got = E.survival_at(doc["t_us"], r["s"], r["max_us"], r["n"], i["t_us"])
         assert got == pytest.approx(v["expected"]["survival_fraction"], rel=v["tolerance"]["relative"], abs=0)
     assert {v["expected"]["survival_fraction"] for v in doc["vectors"]} >= {0.0, 1.0}
+    inside = at_max = past = 0
+    for v in doc["vectors"]:
+        i = v["inputs"]
+        r = rows[(i["cell"], i["metric"], i["op"], i["timestamping"])]
+        k = max(j for j, x in enumerate(doc["t_us"]) if x <= r["max_us"])
+        inside += doc["t_us"][k] < i["t_us"] < r["max_us"]
+        at_max += i["t_us"] == r["max_us"] and v["expected"]["survival_fraction"] == 1 / r["n"]
+        past += r["max_us"] < i["t_us"] < r["max_us"] * 1.001 and v["expected"]["survival_fraction"] == 0
+    assert inside >= 3 and at_max >= 1 and past >= 1

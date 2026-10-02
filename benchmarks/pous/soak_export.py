@@ -15,7 +15,7 @@ Definitions (the file's `metrics`, `run.notes` and the spec `pous-soak-plots.md`
   its value wide), reported as the bin's geometric centre clamped to the exact min and max; values under `HIST_LO_US` or at
   least `HIST_HI_US` are kept exactly.
 - `survival_at` is the reference interpolation the vectors pin: 1 below `T_US[0]`, 0 past `max_us`, ln s linear in ln t
-  between grid points, and the last grid value held up to `max_us` where the next grid value is 0.
+  between grid points, and on the segment straddling `max_us` linear from its grid point to (`max_us`, 1/n).
 """
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ WARMUP_NS = 1_000_000_000
 TOP_STALLS = 200
 OP_PING, OP_READ = 2, 4
 OPS = {OP_READ: "challenge", OP_PING: "ping"}
+LOADED = ("decode", "prefill", "mixed")
 HEADER_BYTES = 192
 BLOCK_BYTES = (65_536, 147_456, 393_216)
 ROUNDS = range(6)
@@ -105,20 +106,56 @@ ATTRIBUTION_RULE = (
     "the elapsed; else 'unknown'.  Twins (timestamping off) have no socket parts, so they are never 'socket'")
 
 
-def survival_at(t_us: list[float] | tuple[float, ...], s: list[float], max_us: float, t: float) -> float:
-    """S(t) from a survival row: 1 below the grid, 0 past `max_us`, ln s linear in ln t between grid points; where the next
-    grid value is 0 (the curve ends between them) the last nonzero value holds up to `max_us`."""
+def _dur(us: float) -> str:
+    return f"{us / 1000:.1f} ms" if us >= 1000 else f"{us:.0f} µs"
+
+
+SOCKET_LABELS = {
+    "send": "send stall on loopback: TCP send took {x}",
+    "delivery": "delivery stall on loopback: the last byte reached the verifier {x} after the server's TX stamp",
+    "socket_pickup": "pickup stall: the responder read the request {x} after its kernel RX stamp",
+    "request": "request stall on loopback: {x} from the verifier's send to the server's kernel RX",
+}
+
+
+def stall_label(attr: str, comps: dict[str, float], gpu_us: float, elapsed_us: float, steal_role: str,
+                steal_ms: float | None, server_user_us: float | None) -> str:
+    """A short human label for a stall's attribution, naming its largest part."""
+    if attr == "steal":
+        return f"hypervisor steal on the {steal_role}'s core: {steal_ms:.0f} ms stolen"
+    if attr == "vllm-step":
+        return f"GPU copy behind a vLLM step: the GPU span took {_dur(gpu_us)}"
+    if attr == "gpu":
+        return f"GPU span took {_dur(gpu_us)} with no vLLM step running"
+    if attr == "socket":
+        k = max(SOCKET_LABELS, key=lambda c: comps.get(c) or 0.0)
+        return SOCKET_LABELS[k].format(x=_dur(comps[k]))
+    if "request" not in comps:
+        su = f", server user time {_dur(server_user_us)}" if server_user_us is not None else ""
+        return f"twin without kernel stamps: elapsed {_dur(elapsed_us)}{su}"
+    k = max(comps, key=lambda c: comps[c])
+    return f"no single cause: the largest part, {k.replace('_', ' ')}, took {_dur(comps[k])} of {_dur(elapsed_us)}"
+
+
+def survival_at(t_us: list[float] | tuple[float, ...], s: list[float], max_us: float, n: int, t: float) -> float:
+    """S(t) from a survival row of `n` answers: 1 below the grid, ln s linear in ln t between grid points, 0 past `max_us`.
+    s ≥ 1/n at every grid point up to `max_us`, so the only segment with a zero end straddles it (t_i ≤ max_us < t_{i+1}):
+    there ln s runs linearly in ln t from (t_i, s_i) to (max_us, 1/n), and S(max_us) = 1/n exactly.  Past the grid's last
+    point the same holds from that point to (max_us, 1/n)."""
     if t > max_us:
         return 0.0
     if t < t_us[0]:
         return 1.0
+    if t == max_us:
+        return 1.0 / n
     j = bisect.bisect_right(t_us, t) - 1
-    if j >= len(t_us) - 1 or t == t_us[j]:
+    if t == t_us[j]:
         return float(s[j])
-    if s[j + 1] <= 0:
-        return float(s[j])
-    x0, x1 = math.log(t_us[j]), math.log(t_us[j + 1])
-    y0, y1 = math.log(s[j]), math.log(s[j + 1])
+    if j + 1 < len(t_us) and s[j + 1] > 0:
+        x1, y1 = math.log(t_us[j + 1]), math.log(s[j + 1])
+    else:
+        x1, y1 = math.log(max_us), math.log(1.0 / n)
+    x0, y0 = math.log(t_us[j]), math.log(s[j])
     return math.exp(y0 + (y1 - y0) * (math.log(t) - x0) / (x1 - x0))
 
 
@@ -221,7 +258,7 @@ class Acc:
         out: dict[str, float | None] = {}
         for name, p in QUANTILES:
             out[name] = None if (name == "p9999_us" and self.n < 10_000) or not self.n else _r(self.quantile(p))
-        out["max_us"] = _r(self.max) if self.n else None
+        out["max_us"] = self.max if self.n else None
         return out
 
 
@@ -304,7 +341,10 @@ class Builder:
         self.cell_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self.runs_out: list[dict[str, Any]] = []
         self.minutes: dict[int, dict[str, Any]] = {}
-        self.serving: dict[int, dict[str, Any]] = defaultdict(lambda: {"tokens": 0, "steps": 0, "seconds": 0.0, "gpu_ms": []})
+        self.serving: dict[Any, dict[str, Any]] = defaultdict(lambda: {"tokens": 0, "steps": 0, "seconds": 0.0, "windows": 0,
+                                                                        "gpu_ms": []})
+        self.free_checked: dict[str, dict[str, int]] = {m: defaultdict(int) for m in LOADED}
+        self.prev_run: tuple[Any, int, str | None] | None = None
         self.stalls: list[tuple[float, int, dict[str, Any]]] = []
         self.calls = {b: call_ns(b) for b in BLOCK_BYTES}
         self.taus = {f"{b}/d{d}": tau_us(d, self.calls[b]) for b in BLOCK_BYTES for d in ROUNDS}
@@ -469,23 +509,47 @@ class Builder:
                     mm["load"].append(float(load[0]))
 
     def _serving(self, c: Chunk) -> None:
+        """Per cell, vLLM's steps in each run's measured window; per loaded load, its steps in the windows with no challenge
+        traffic: from the previous run's end to this run's first arrival (the gap and the 2 s settle) when the previous run
+        was on the same server (job) and this run did not switch the load, so the load was already running."""
         st = c.steps
         if len(st):
             st = st[np.argsort(st[:, 2], kind="stable")]
-        for r in c.runs:
-            if "error" in r or not r.get("t0_ns") or not r.get("end_ns"):
-                continue
-            a, b = int(r["t0_ns"]) + WARMUP_NS, int(r["end_ns"])
-            if b <= a:
-                continue
-            sv = self.serving[int(r["cell"])]
+        cover = int(c.meta["chunk_start_ns"]) - 5_000_000_000 if c.meta.get("chunk_start_ns") else None
+        job = c.meta.get("job")
+
+        def take(sv: dict[str, Any], a: int, b: int) -> None:
             sv["seconds"] += (b - a) / 1e9
+            sv["windows"] += 1
             if len(st):
                 i, j = np.searchsorted(st[:, 2], a, side="left"), np.searchsorted(st[:, 2], b, side="left")
                 w = st[i:j]
                 sv["tokens"] += int(w[:, 4].sum())
                 sv["steps"] += len(w)
                 sv["gpu_ms"].extend(((w[:, 3] - w[:, 2]) / 1e6).tolist())
+
+        for r in c.runs:
+            if "error" in r or not r.get("t0_ns") or not r.get("end_ns"):
+                self.prev_run = None
+                continue
+            a, b = int(r["t0_ns"]) + WARMUP_NS, int(r["end_ns"])
+            if b > a:
+                take(self.serving[int(r["cell"])], a, b)
+            load = r.get("load") or {}
+            mode = load.get("mode")
+            if mode in LOADED:
+                chk = self.free_checked[mode]
+                prev = self.prev_run
+                if prev is None or prev[0] != job:
+                    chk["first_on_server"] += 1
+                elif load.get("switched", True) or prev[2] != mode:
+                    chk["switched"] += 1
+                else:
+                    lo, hi = max(prev[1], cover) if cover is not None else prev[1], int(r["t0_ns"])
+                    if hi > lo:
+                        take(self.serving[("free", mode)], lo, hi)
+                        chk["used"] += 1
+            self.prev_run = (job, int(r["end_ns"]), mode)
 
     def _stalls(self, c: Chunk, vals: dict[str, np.ndarray]) -> None:
         sel = np.flatnonzero(c.keep & (c.op == OP_READ) & np.isfinite(vals["elapsed"]))
@@ -504,14 +568,18 @@ class Builder:
                 continue
             v0, v1 = int(c.st["V0"][i]), int(c.st["V1"][i])
             steal_ms = softirq = None
+            steal_role = "responder"
             if t is not None and len(t) >= 2 and "cpustat" in s and "lastcpu" in s:
                 a = max(int(np.searchsorted(t, v0, side="right")) - 1, 0)
                 b = min(int(np.searchsorted(t, v1, side="left")), len(t) - 1)
                 b = max(b, a + 1) if a + 1 < len(t) else b
-                cores = {int(s["lastcpu"][b, TARGET_RESPONDER]), int(s["lastcpu"][b, TARGET_VERIFIER])}
-                pos = [cpus.index(x) for x in cores if x in cpus]
                 d = s["cpustat"][b, :, 7] - s["cpustat"][a, :, 7]
-                steal_ms = float(d[pos].max() * 1000 / USER_HZ) if pos else None
+                by_role = {role: float(d[cpus.index(core)] * 1000 / USER_HZ)
+                           for role, core in (("responder", int(s["lastcpu"][b, TARGET_RESPONDER])),
+                                              ("verifier", int(s["lastcpu"][b, TARGET_VERIFIER]))) if core in cpus}
+                if by_role:
+                    steal_role = max(by_role, key=lambda k: by_role[k])
+                    steal_ms = by_role[steal_role]
                 if "softirq" in s:
                     softirq = int((s["softirq"][b] - s["softirq"][a]).sum())
             overlap = 0.0
@@ -532,9 +600,12 @@ class Builder:
             else:
                 attr = "unknown"
             sk = vals["server_kernel"][i]
+            su = vals["server_user"][i]
+            label = stall_label(attr, cv, gpu, e, steal_role, steal_ms, float(su) if np.isfinite(su) else None)
             row = {"utc": _utc(v0, ms=True), "cell": int(c.cell[i]), "op": "challenge", "elapsed_us": _r(e),
                    "server_kernel_us": _r(float(sk)) if np.isfinite(sk) else None, "components": cv, "steal_ms": steal_ms,
-                   "vllm_step_overlap": _r(overlap, 4), "softirq": softirq, "attribution": attr}
+                   "vllm_step_overlap": _r(overlap, 4), "softirq": softirq, "attribution": attr,
+                   "attribution_label": label}
             self.stall_seq += 1
             item = (e, -self.stall_seq, row)
             if len(self.stalls) < TOP_STALLS:
@@ -552,7 +623,7 @@ class Builder:
                                                     ("runs", "answers", "challenges", "pings", "twin_runs", "twin_answers")}})
         survival, quantiles = [], []
         for (cell, metric, op, ts), acc in sorted(self.surv.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], not kv[0][3])):
-            survival.append({"cell": cell, "metric": metric, "op": op, "timestamping": ts, "n": acc.n, "max_us": _r(acc.max),
+            survival.append({"cell": cell, "metric": metric, "op": op, "timestamping": ts, "n": acc.n, "max_us": acc.max,
                              "s": [_r(g / acc.n) for g in acc.ge.tolist()]})
             quantiles.append({"cell": cell, "metric": metric, "op": op, "timestamping": ts, "n": acc.n, **acc.quantiles()})
         breakdown = []
@@ -589,10 +660,14 @@ class Builder:
                 "loadavg1": _r(float(np.mean(mm["load"])), 5) if mm["load"] else None,
                 "clock_offset_range_ns": (mm["off_max"] - mm["off_min"]) if mm["off_min"] is not None else None})
         serving = []
-        for cid in sorted(self.serving):
-            sv = self.serving[cid]
+        keys = [(cid, self.cells_meta[cid]) for cid in sorted(k for k in self.serving if isinstance(k, int))]
+        keys += [(("free", m), {"id": None, "load": m, "rate": 0, "kib": None, "config": None}) for m in LOADED]
+        for key, m in keys:
+            sv = self.serving.get(key) or {"tokens": 0, "steps": 0, "seconds": 0.0, "gpu_ms": []}
             g = np.array(sv["gpu_ms"], float)
-            serving.append({"cell": cid, "tokens_per_s": _r(sv["tokens"] / sv["seconds"], 6) if sv["seconds"] else None,
+            serving.append({"cell": m["id"], "load": m["load"], "rate_hz": m["rate"],
+                            "block_bytes": m["kib"] * 1024 if m["kib"] else None, "config": m["config"],
+                            "tokens_per_s": _r(sv["tokens"] / sv["seconds"], 6) if sv["seconds"] else None,
                             "steps_per_s": _r(sv["steps"] / sv["seconds"], 6) if sv["seconds"] else None,
                             "step_gpu_ms_p50": _r(_nearest_rank(g, 0.5), 6) if len(g) else None,
                             "step_gpu_ms_p99": _r(_nearest_rank(g, 0.99), 6) if len(g) else None})
@@ -615,6 +690,19 @@ class Builder:
         doc["vectors"] = vectors(doc)
         return doc
 
+    def free_note(self) -> str:
+        parts = []
+        for m in LOADED:
+            sv, chk = self.serving.get(("free", m)), self.free_checked[m]
+            got = (f"{sv['windows']} windows, {sv['seconds']:.1f} s, {sv['steps']} steps" if sv and sv["seconds"]
+                   else "no window, so null")
+            parts.append(f"{m}: {got} (of {sum(chk.values())} {m} runs: {chk['used']} used, {chk['switched']} switched the load "
+                         f"at their start, {chk['first_on_server']} first on their server)")
+        return ("serving's no-challenge rows (cell null, rate_hz 0): vLLM steps whose GPU start falls between a run's end and the "
+                "next run's first arrival (the ~1 ms gap and the 2 s settle) on the same server, when the next run kept the "
+                "load (load.switched false), so the load ran throughout with no challenge or ping in flight; a run that "
+                "switched the load is not used, its new load starting inside the settle; " + "; ".join(parts))
+
     def notes(self, extra: list[str]) -> list[str]:
         out = list(extra)
         out += [
@@ -635,8 +723,10 @@ class Builder:
             ("quantiles: nearest-rank order statistics (rank ⌈p·n⌉) from log histograms of 1000 bins per decade (bin width 0.23 % "
             "of the value), each the bin's geometric centre clamped to the exact min and max (within 0.12 % of the exact value); "
             "values under 0.01 µs or at least 1 s exact; timeline runs' quantiles exact"),
-            ("survival counts are exact (values ≥ t_us[i]); interpolation (the vectors): 1 below t_us[0], 0 past max_us, ln s "
-            "linear in ln t between grid points, the last nonzero grid value held up to max_us where the next is 0"),
+            ("survival counts are exact (values ≥ t_us[i]) and max_us is the exact maximum, unrounded; interpolation (the "
+             "vectors): 1 below t_us[0], ln s linear in ln t between grid points, and on the segment straddling max_us "
+             "(t_i ≤ max_us < t_{i+1}, s_{i+1} = 0) ln s linear in ln t from (t_i, s_i) to (max_us, 1/n), n the row's n: "
+             "exactly 1/n at max_us, 0 past it; a max_us past the grid's last point would run the same from that point"),
             ("the ToR model (contract §3) on node 2: mlx5_core, 400 Gb/s, MTU 1500 (MSS 1448, 90 B per frame), B_pcie 25 GB/s, "
             "rx-usecs 8 for default (t_nic_rx 10 µs) and 2 µs for tuned; the 100 Gb/s variants use the same terms at 100 Gb/s; "
             "response bytes = the 192 B header (24 words) + the block (pings carry the cell's block from the staging buffer)"),
@@ -649,18 +739,20 @@ class Builder:
             "voluntary + involuntary switches of the responder thread, verifier and checker; clock_offset_range_ns the range of "
             "CLOCK_REALTIME − CLOCK_MONOTONIC (bracketed) within the minute"),
             ("serving: vLLM steps whose GPU start falls in a run's measured window (first arrival + 1 s to the run's end), per cell "
-            "over both twins and timestamping-on runs; step_gpu_ms = gpu_t1 − gpu_t0"),
+             "over both twins and timestamping-on runs; step_gpu_ms = gpu_t1 − gpu_t0"),
+            self.free_note(),
             "stalls: the 200 slowest timestamping-on or twin challenge answers by elapsed; steal_ms is the stolen time over the "
             "100 ms samples spanning [V0, V1] on the responder's or verifier's core (the larger, 10 ms jiffies); softirq the "
             "softirqs on cores 80-93 over the same samples; vllm_step_overlap the share of [V0, V1] inside vLLM steps' GPU "
-            "intervals; " + ATTRIBUTION_RULE,
+            "intervals; " + ATTRIBUTION_RULE + "; attribution_label names the cause and, for socket and unknown, the largest "
+            "part",
         ]
         return out
 
 
-def vectors(doc: dict[str, Any], per_row: int = 8, rows: int = 6) -> list[dict[str, Any]]:
+def vectors(doc: dict[str, Any], rows: int = 6) -> list[dict[str, Any]]:
     """Interpolation lookups from `survival_at` over a spread of the file's survival rows: below the grid, on and between
-    grid points, near the row's max and past it."""
+    grid points, three inside the segment straddling the row's max, at the max exactly and just past it."""
     t_us = doc["t_us"]
     cand = sorted((r for r in doc["survival"] if r["n"] >= 2), key=lambda r: -r["n"])
     longest = max(cand, key=lambda x: x["max_us"]) if cand else None
@@ -678,14 +770,20 @@ def vectors(doc: dict[str, Any], per_row: int = 8, rows: int = 6) -> list[dict[s
     pick += [x for x in cand if x not in pick][: max(0, rows - len(pick))]
     out = []
     for r in pick:
-        mx = r["max_us"]
-        first_lt1 = next((i for i, v in enumerate(r["s"]) if v < 1), len(t_us) - 1)
-        ts = [0.5, t_us[min(first_lt1, len(t_us) - 1)], math.sqrt(t_us[first_lt1] * t_us[min(first_lt1 + 1, len(t_us) - 1)]),
-              t_us[min(first_lt1 + 7, len(t_us) - 1)] * 1.013, mx * 0.5, mx * 0.97, mx, mx * 1.5]
-        for t in ts[:per_row]:
+        mx, n = r["max_us"], r["n"]
+        last = len(t_us) - 1
+        first_lt1 = next((i for i, v in enumerate(r["s"]) if v < 1), last)
+        ts = [0.5, t_us[first_lt1], math.sqrt(t_us[first_lt1] * t_us[min(first_lt1 + 1, last)]),
+              t_us[min(first_lt1 + 7, last)] * 1.013, mx * 0.5]
+        if mx >= t_us[0]:
+            i = bisect.bisect_right(t_us, mx) - 1
+            if t_us[i] < mx:
+                ts += [t_us[i] * (mx / t_us[i]) ** f for f in (0.25, 0.5, 0.75)]
+        ts += [mx, mx * (1 + 1e-6), mx * 1.5]
+        for t in ts:
             out.append({"inputs": {"cell": r["cell"], "metric": r["metric"], "op": r["op"], "timestamping": r["timestamping"],
                                    "t_us": float(t)},
-                        "expected": {"survival_fraction": survival_at(t_us, r["s"], mx, float(t))},
+                        "expected": {"survival_fraction": survival_at(t_us, r["s"], mx, n, float(t))},
                         "tolerance": {"relative": 1e-9}})
     return out
 
