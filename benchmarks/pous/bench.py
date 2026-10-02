@@ -239,6 +239,8 @@ class VllmGpu:
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
         from verity_pous import schemes
 
+        if ws["id"] not in self.MODELS:
+            raise SystemExit(f"vllm-gpu: its frozen harness runs only {sorted(self.MODELS)}, not {ws['id']!r}")
         tree = Path(a.impl_tree).resolve()
         model = self.MODELS[ws["id"]]
         impl_out = out / "impl"
