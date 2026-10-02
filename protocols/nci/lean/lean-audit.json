@@ -37,11 +37,23 @@
  "pins": {
   "Nci.SecurityProofs.Inference": {
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
+   "statement": [
+    "∀ (Γ : Nat) (α : Real) (d : Verity.Declaration) (n : Nat) (P : Verity.Partition d.D n)",
+    "  (prompt : Fin n → Finset (Fin d.D.N)),",
+    "  (∀ (u : Fin n), instLENat.le (d.D.size (P.gates u)) Γ) →",
+    "    (∀ (u : Fin n), Finset.instPartialOrder.le (d.D.into (P.gates u)) (Finset.instUnion.union d.θ (prompt u))) →",
+    "      (∀ (u : Fin n), Real.instLE.le (d.D.width (prompt u)).cast (instHMul.hMul α (d.D.size (P.gates u)).cast)) →",
+    "        And (Nci.Complies Γ α d) (ENNReal.instLE.le (Nci.slowdown (Nci.Complies Γ α) d) 1)"
+   ],
    "assumptions": [],
    "type_hash": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600"
   },
   "Nci.SecurityProofs.ReadBound": {
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
+   "statement": [
+    "∀ (Γ : Nat) (α : Real) (c d : Verity.Declaration),",
+    "  c.Contains d → Nci.Complies Γ α d → Real.instLE.le (Nci.Reads Γ c).cast (instHMul.hMul α (d.D.size d.D.computed).cast)"
+   ],
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   }

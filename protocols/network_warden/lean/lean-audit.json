@@ -25,31 +25,64 @@
  "pins": {
   "NetTiming.SecurityProofs.CardCountsEqLe": {
    "signature": ["NetTiming.SecurityProofs.CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe"],
+   "statement": [
+    "∀ (T S M : Nat),",
+    "  instLENat.le (Finset.filter (fun n => Eq (Finset.univ.sum fun t => (n t).val) M) Finset.univ).card",
+    "    ((instHSub.hSub (instHAdd.hAdd T M) 1).choose M)"
+   ],
    "assumptions": [],
    "type_hash": "6ac53363ef74893090add2bcb7ad5ecbe306964a195570aec5a74a7936409f03"
   },
   "NetTiming.SecurityProofs.CardCountsLeLe": {
    "signature": ["NetTiming.SecurityProofs.CardCountsLeLe : NetTiming.Guarantees.CardCountsLeLe"],
+   "statement": [
+    "∀ (T S M : Nat),",
+    "  instLENat.le (Finset.filter (fun n => instLENat.le (Finset.univ.sum fun t => (n t).val) M) Finset.univ).card",
+    "    ((instHAdd.hAdd T M).choose M)"
+   ],
    "assumptions": [],
    "type_hash": "04f7131f74dd541c625ac0f7f98fdb853bba88a3cdd68335d671a5fe3fd3916c"
   },
   "NetTiming.SecurityProofs.CardFree": {
    "signature": ["NetTiming.SecurityProofs.CardFree : NetTiming.Guarantees.CardFree"],
+   "statement": ["∀ (T S : Nat), Eq (Fintype.card (Fin T → Fin S → Bool)) (instHPow.hPow 2 (instHMul.hMul T S))"],
    "assumptions": [],
    "type_hash": "e4e7a9edfc56cbca57a08a9cf0180c2156dab3e50650ae6ff3e0d0611079c2ee"
   },
   "NetTiming.SecurityProofs.CardLeftPacked": {
    "signature": ["NetTiming.SecurityProofs.CardLeftPacked : NetTiming.Guarantees.CardLeftPacked"],
+   "statement": [
+    "∀ (T S : Nat), Eq (Fintype.card (Subtype fun P => NetTiming.LeftPacked P)) (instHPow.hPow (instHAdd.hAdd S 1) T)"
+   ],
    "assumptions": [],
    "type_hash": "fdfab1c44d76caa6294c61288540dfde050ca2359206918637a50e713c6b9185"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeAdvice": {
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice"],
+   "statement": [
+    "∀ {L K S : Nat} {In Adv : Type} [inst : Fintype Adv] (P : NetTiming.Program L S In Adv)",
+    "  (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat),",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard (instHMul.hMul (Fintype.card Adv) (instHPow.hPow D n)).cast"
+   ],
    "assumptions": [],
    "type_hash": "40d4a073062cf0330c38a8bb969f3a51e891a89e54e2f1cae778a65226df30f0"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": {
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeBlocks : NetTiming.Guarantees.EncardAccSeqsLeBlocks"],
+   "statement": [
+    "∀ {L K S : Nat} {In Ac B C : Type} {At : B → Type} {U : C → Type} [inst : Fintype Ac] [inst_1 : Fintype B]",
+    "  [inst_2 : DecidableEq B] [inst_3 : (β : B) → Fintype (At β)] [inst_4 : Fintype C] [DecidableEq C]",
+    "  [inst_6 : (c : C) → Fintype (U c)] (P : NetTiming.Program L S In (Prod Ac ((β : B) → At β)))",
+    "  (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat) (step : C → Nat) (blk : C → B)",
+    "  (occ : (c : C) → List In → Prod Ac ((β : B) → At β) → U c),",
+    "  NetTiming.FramesReadNoTimingAdvice P step occ →",
+    "    NetTiming.OccupancyReadsOwnBlock blk occ →",
+    "      instLEENat.le (NetTiming.AccSeqs P op n D).encard",
+    "        (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n))",
+    "            (Finset.univ.prod fun β =>",
+    "              instMinNat.min (Fintype.card (At β))",
+    "                ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
+   ],
    "assumptions": [],
    "type_hash": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6"
   },
@@ -57,36 +90,112 @@
    "signature": [
     "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts : NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts"
    ],
+   "statement": [
+    "∀ {L K S : Nat} {In Ac B : Type} {At : B → Type} [inst : Fintype Ac] [inst_1 : Fintype B] [inst_2 : DecidableEq B]",
+    "  [inst_3 : (β : B) → Fintype (At β)] (P : NetTiming.Program L S In (Prod Ac ((β : B) → At β)))",
+    "  (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat) (blk : Prod (Fin L) (Fin n) → B),",
+    "  (NetTiming.FramesReadNoTimingAdvice P (fun c => c.snd.val) fun c ins a =>",
+    "      NetTiming.rowCount (P.rows c.snd.val ins a c.fst)) →",
+    "    (NetTiming.OccupancyReadsOwnBlock blk fun c ins a => NetTiming.rowCount (P.rows c.snd.val ins a c.fst)) →",
+    "      instLEENat.le (NetTiming.AccSeqs P op n D).encard",
+    "        (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n))",
+    "            (Finset.univ.prod fun β =>",
+    "              instMinNat.min (Fintype.card (At β))",
+    "                (instHPow.hPow (instHAdd.hAdd S 1) (Finset.filter (fun c => Eq (blk c) β) Finset.univ).card))).cast"
+   ],
    "assumptions": [],
    "type_hash": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock : NetTiming.Guarantees.EncardAccSeqsLeFixedClock"],
+   "statement": [
+    "∀ {L K S : Nat} {In Ac : Type} [inst : Fintype Ac] (W : Nat) (P : NetTiming.Program L S In (Prod Ac (Fin W → Unit)))",
+    "  (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat),",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n)).cast"
+   ],
    "assumptions": [],
    "type_hash": "83702ebbd0d402a2f16e304ab599dcff7ea1f1557615b05a358e2b3caca1257d"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeSync": {
    "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeSync : NetTiming.Guarantees.EncardAccSeqsLeSync"],
+   "statement": [
+    "∀ {L K S : Nat} {In Ac Sync : Type} [inst : Fintype Ac] [inst_1 : Fintype Sync] (W : Nat)",
+    "  (P : NetTiming.Program L S In (Prod Ac (Fin W → Sync))) (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat),",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard",
+    "    (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow (Fintype.card Sync) W)) (instHPow.hPow D n)).cast"
+   ],
    "assumptions": [],
    "type_hash": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada"
   },
   "NetTiming.SecurityProofs.EncardAcceptedRunsLe": {
    "signature": ["NetTiming.SecurityProofs.EncardAcceptedRunsLe : NetTiming.Guarantees.EncardAcceptedRunsLe"],
+   "statement": [
+    "∀ {L K S : Nat} {Z In Act Wire Adv : Type} (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In Adv) (n : Nat) (N : Nat → Nat),",
+    "  (∀ (t : Nat),",
+    "      instLTNat.lt t n →",
+    "        ∀ (h : List (NetTiming.Obs L K S)),",
+    "          instLEENat.le",
+    "            (Set.ofPred fun x =>",
+    "                Exists fun z =>",
+    "                  And (NetTiming.AcceptedUpTo P I.op (instHAdd.hAdd t 1) (I.obsRun z (instHAdd.hAdd t 1)))",
+    "                    (Eq (I.obsRun z (instHAdd.hAdd t 1)) (instHAppendOfAppend.hAppend h (List.cons x List.nil)))).encard",
+    "            (N t).cast) →",
+    "    instLEENat.le",
+    "      (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard",
+    "      ((Finset.range n).prod fun t => N t).cast"
+   ],
    "assumptions": [],
    "type_hash": "d673c351e63c9cc82aca6bec1775269b8efcaa21073223340674c64073b5e6ae"
   },
   "NetTiming.SecurityProofs.EncardDecodableLe": {
    "signature": ["NetTiming.SecurityProofs.EncardDecodableLe : NetTiming.Guarantees.EncardDecodableLe"],
+   "statement": [
+    "∀ {L K S : Nat} {Z In Act Wire Adv : Type} (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In Adv) (n : Nat) (view : Nat → NetTiming.Obs L K S → Wire),",
+    "  NetTiming.Regenerates I.warden view →",
+    "    ∀ (Zs : Set Z),",
+    "      (∀ (z : Z), Set.instMembership.mem Zs z → NetTiming.AcceptedUpTo P I.op n (I.obsRun z n)) →",
+    "        ∀ (dec : List Wire → Z),",
+    "          (∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z) →",
+    "            instLEENat.le Zs.encard",
+    "              (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
+   ],
    "assumptions": [],
    "type_hash": "6d4f0f243d8a54ddc3a160d8a6f3de5b90c7bcddd55d1dc4a091f76736a5109c"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeBlocks": {
    "signature": ["NetTiming.SecurityProofs.EncardDecodableLeBlocks : NetTiming.Guarantees.EncardDecodableLeBlocks"],
+   "statement": [
+    "∀ {L K S : Nat} {Z In Act Wire Ac B C : Type} {At : B → Type} {U : C → Type} [inst : Fintype Ac] [inst_1 : Fintype B]",
+    "  [inst_2 : DecidableEq B] [inst_3 : (β : B) → Fintype (At β)] [inst_4 : Fintype C] [DecidableEq C]",
+    "  [inst_6 : (c : C) → Fintype (U c)] (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In (Prod Ac ((β : B) → At β))) (n D : Nat) (view : Nat → NetTiming.Obs L K S → Wire),",
+    "  NetTiming.Regenerates I.warden view →",
+    "    NetTiming.JitterBounded I.warden D →",
+    "      ∀ (step : C → Nat) (blk : C → B) (occ : (c : C) → List In → Prod Ac ((β : B) → At β) → U c),",
+    "        NetTiming.FramesReadNoTimingAdvice P step occ →",
+    "          NetTiming.OccupancyReadsOwnBlock blk occ →",
+    "            ∀ (Zs : Set Z),",
+    "              (∀ (z : Z), Set.instMembership.mem Zs z → NetTiming.AcceptedUpTo P I.op n (I.obsRun z n)) →",
+    "                ∀ (dec : List Wire → Z),",
+    "                  (∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z) →",
+    "                    instLEENat.le Zs.encard",
+    "                      (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n))",
+    "                          (Finset.univ.prod fun β =>",
+    "                            instMinNat.min (Fintype.card (At β))",
+    "                              ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c =>",
+    "                                Fintype.card (U c)))).cast"
+   ],
    "assumptions": [],
    "type_hash": "ea0d8acb8a2a5711c199aa1d7abd4ce9a53a7b750dcd511fd0998914510848dc"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "signature": ["NetTiming.SecurityProofs.EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids"],
+   "statement": [
+    "∀ {F : Type} (T S : Nat) (f : Nat → F),",
+    "  Eq (Set.range fun enq => NetTiming.fifoGrid T S f enq).encard (instHPow.hPow (instHAdd.hAdd S 1) T).cast"
+   ],
    "assumptions": [],
    "type_hash": "5f7005aaad8517a5e9ae40189d5fed4703b1b743643e815d658f804fc67b2385"
   },
@@ -94,46 +203,104 @@
    "signature": [
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable : NetTiming.Guarantees.EncardFifoGridsLeOfAvailable"
    ],
+   "statement": [
+    "∀ {F : Type} (T S M : Nat) (f : Nat → F),",
+    "  instLEENat.le",
+    "    (Set.ofPred fun g =>",
+    "        Exists fun enq =>",
+    "          And (instLENat.le ((Finset.range T).sum fun t => enq t) M) (Eq g (NetTiming.fifoGrid T S f enq))).encard",
+    "    ((instHAdd.hAdd T M).choose M).cast"
+   ],
    "assumptions": [],
    "type_hash": "02730e35f9f7a998b1685f27c853538842a5575dd32c53de7a5088909c2211c0"
   },
   "NetTiming.SecurityProofs.EncardLeProdOfBranching": {
    "signature": ["NetTiming.SecurityProofs.EncardLeProdOfBranching : NetTiming.Guarantees.EncardLeProdOfBranching"],
+   "statement": [
+    "∀ {α : Type} (n : Nat) (Sq : Set (List α)) (N : Nat → Nat),",
+    "  (∀ (o : List α), Set.instMembership.mem Sq o → Eq o.length n) →",
+    "    (∀ (t : Nat),",
+    "        instLTNat.lt t n →",
+    "          ∀ (h : List α),",
+    "            instLEENat.le",
+    "              (Set.ofPred fun x =>",
+    "                  Exists fun o =>",
+    "                    And (Set.instMembership.mem Sq o)",
+    "                      (Eq (List.take (instHAdd.hAdd t 1) o)",
+    "                        (instHAppendOfAppend.hAppend h (List.cons x List.nil)))).encard",
+    "              (N t).cast) →",
+    "      instLEENat.le Sq.encard ((Finset.range n).prod fun t => N t).cast"
+   ],
    "assumptions": [],
    "type_hash": "6040733c353c0ca25247cfabedf1e884f1f7c64f9e37f86a94d407c308b94fbc"
   },
   "NetTiming.SecurityProofs.EncardObsDecodableLe": {
    "signature": ["NetTiming.SecurityProofs.EncardObsDecodableLe : NetTiming.Guarantees.EncardObsDecodableLe"],
+   "statement": [
+    "∀ {L K S : Nat} {Z In Act Wire Adv : Type} (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In Adv) (n : Nat) (Zs : Set Z),",
+    "  (∀ (z : Z), Set.instMembership.mem Zs z → NetTiming.AcceptedUpTo P I.op n (I.obsRun z n)) →",
+    "    ∀ (dec : List (NetTiming.Obs L K S) → Z),",
+    "      (∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.obsRun z n)) z) →",
+    "        instLEENat.le Zs.encard",
+    "          (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
+   ],
    "assumptions": [],
    "type_hash": "59be610877959f8821b9431a9bfff89a86008fb9555357d0829964e42358cdad"
   },
   "NetTiming.SecurityProofs.ExistsFillOfLeftPacked": {
    "signature": ["NetTiming.SecurityProofs.ExistsFillOfLeftPacked : NetTiming.Guarantees.ExistsFillOfLeftPacked"],
+   "statement": [
+    "∀ {T S : Nat} {F : Type} [Inhabited F] (g : NetTiming.Grid T S F),",
+    "  NetTiming.LeftPacked (NetTiming.occ g) → Exists fun f => Exists fun n => Eq g (NetTiming.fill f n)"
+   ],
    "assumptions": [],
    "type_hash": "0a3dad879e152c0af9af48a2761127ce88794f823622cdec16a4d52cad676951"
   },
   "NetTiming.SecurityProofs.FillInjective": {
    "signature": ["NetTiming.SecurityProofs.FillInjective : NetTiming.Guarantees.FillInjective"],
+   "statement": ["∀ {T S : Nat} {F : Type} (f : Nat → F), Function.Injective (NetTiming.fill f)"],
    "assumptions": [],
    "type_hash": "0764b96209fc576521fd63ef7eedb174390a8cf5f7d6c1ba5847028e37aa6e59"
   },
   "NetTiming.SecurityProofs.NoFaultOfAccepted": {
    "signature": ["NetTiming.SecurityProofs.NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted"],
+   "statement": [
+    "∀ {L K S : Nat} {Z In Act Wire Adv : Type} (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In Adv) (winEnd : Nat → Nat),",
+    "  (∀ (i : Nat), instLENat.le i (winEnd i)) →",
+    "    NetTiming.FailClosed I.warden winEnd →",
+    "      ∀ (z : Z) (n : Nat),",
+    "        NetTiming.AcceptedUpTo P I.op n (I.obsRun z n) →",
+    "          ∀ (i : Nat) (hi : instLTNat.lt i (I.actRun z n).length),",
+    "            instLTNat.lt (winEnd i) n → Not (I.warden.fault (List.instGetElemNatLtLength.getElem (I.actRun z n) i hi))"
+   ],
    "assumptions": [],
    "type_hash": "437ff0e08b9259496169df566db65c22ef70646a8531de204c886dcf5ae5447e"
   },
   "NetTiming.SecurityProofs.RecordedRowEqFill": {
    "signature": ["NetTiming.SecurityProofs.RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill"],
+   "statement": [
+    "∀ {L K S : Nat} {In Act Wire : Type} (w : NetTiming.Warden L K S In Act Wire),",
+    "  NetTiming.Packed w →",
+    "    ∀ (k : Nat) (xs : List In) (as : List Act) (ℓ : Fin L),",
+    "      Exists fun f => Exists fun c => Eq (fun x => (w.obs k xs as).rows ℓ) (NetTiming.fill f c)"
+   ],
    "assumptions": [],
    "type_hash": "c8caf87035332bb668e0b8c19d145372ac9cbd88b1ce8ad09ac552e0900053aa"
   },
   "NetTiming.SecurityProofs.ReleasedSelf": {
    "signature": ["NetTiming.SecurityProofs.ReleasedSelf : NetTiming.Guarantees.ReleasedSelf"],
+   "statement": ["∀ (S : Nat) (n : Nat → Fin (instHAdd.hAdd S 1)), Eq (NetTiming.released S fun t => (n t).val) n"],
    "assumptions": [],
    "type_hash": "187e9682fac50fa5479e5be9401bace64aa4fa5e21ea5230713d08fc0b653a8b"
   },
   "NetTiming.SecurityProofs.SumReleasedLe": {
    "signature": ["NetTiming.SecurityProofs.SumReleasedLe : NetTiming.Guarantees.SumReleasedLe"],
+   "statement": [
+    "∀ (T S : Nat) (enq : Nat → Nat),",
+    "  instLENat.le ((Finset.range T).sum fun t => (NetTiming.released S enq t).val) ((Finset.range T).sum fun t => enq t)"
+   ],
    "assumptions": [],
    "type_hash": "f16a2e8bdc945ffd0434cf7c774b95e5547888e1bfb4854fcdb47113f3ed4287"
   },
