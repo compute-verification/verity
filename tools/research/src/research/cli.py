@@ -1075,8 +1075,36 @@ def main(argv: list[str] | None = None) -> int:
         from .slack import main as slack_main
 
         return slack_main(rest, prog=f"research {cmd}")
-    print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
+    age = checkout_age()
+    print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
+                                                  "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",
+          file=sys.stderr)
     return 2
+
+
+def checkout_age(repo: Path = Path(__file__).resolve().parent) -> str:
+    """Where this checkout's HEAD stands: its commit, and how far behind origin/main it is as of the last fetch (no network,
+    so a credential prompt can't hang it; no date, since merge trains pin theirs). Empty outside a git checkout."""
+    import subprocess
+
+    def git(*a: str) -> str:
+        p = subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, timeout=20,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        return p.stdout.strip() if p.returncode == 0 else ""
+
+    try:
+        sha = git("rev-parse", "--short", "HEAD")
+        behind = git("rev-list", "--count", "HEAD..origin/main")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if not sha:
+        return ""
+    if not behind:
+        return f"This checkout is at {sha}."
+    n = int(behind)
+    return (f"This checkout is at {sha}, "
+            + (f"{n} commit{'s' if n != 1 else ''} behind origin/main as of its last fetch." if n else
+               "level with origin/main as of its last fetch."))
 
 
 if __name__ == "__main__":
