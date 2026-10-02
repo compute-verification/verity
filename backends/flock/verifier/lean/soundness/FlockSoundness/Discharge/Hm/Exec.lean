@@ -4,6 +4,9 @@ three loops as folds (`compress_unfold`), then each fold against the spec by ind
 -/
 import Mathlib.Tactic
 import FlockSoundness.Discharge.Hm.Spec
+-- `compress_unfold`'s `simp` needs `Std.Legacy.Range.mk.congr_simp`, which LookupRows already declares: realizing it
+-- again here would declare it twice, and the audit's kernel replay refuses that.
+import FlockLevel3.LookupRows
 
 namespace FlockSoundness.Discharge.Hm
 
