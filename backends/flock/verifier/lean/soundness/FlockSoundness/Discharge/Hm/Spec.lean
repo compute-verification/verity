@@ -39,4 +39,11 @@ def roundsV (w : List (BitVec 64)) : Nat → Nat → Regs (BitVec 64) → Regs (
 def compressV (cv msg : List (BitVec 64)) : List (BitVec 64) :=
   List.zipWith (· + ·) cv (roundsV (scheduleV 64 msg) 80 0 (Regs.ofList cv)).toList
 
+/-- Bit `p` of a list of words in word order: bit `p % 64` of word `p / 64`. -/
+def wbit (ws : List (BitVec 64)) (p : Nat) : Bool := (ws.getD (p / 64) 0).getLsbD (p % 64)
+
+/-- Bit `i` of `M·y` for the salt's bits `y` (`Hm96.mask`): `⊕_{j < 1536} key_{i+j} · y_j`. -/
+def maskV (key : ByteArray) (y : Nat → Bool) (i : Nat) : Bool :=
+  (List.range 1536).foldl (fun acc j => acc ^^ (Flock.Hm96.bit key (i + j) && y j)) false
+
 end FlockSoundness.Discharge.Hm

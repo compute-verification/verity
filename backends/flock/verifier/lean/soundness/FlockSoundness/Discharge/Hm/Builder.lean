@@ -5,6 +5,7 @@ on core Lean and `Flock.Hash` (the round constants), so the executable verifier 
 force is proved in `Gadget`, `Word` and `Compress`.
 -/
 import Flock.Hash
+import Flock.Hm96
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -232,5 +233,41 @@ def compression (n : Nat) : M (List (List Lin × List Lin) × List (List Lin)) :
 
 /-- The sha512x3 slot's circuit. -/
 def compression3 : M (List (List Lin × List Lin) × List (List Lin)) := compression 3
+
+/-! ## The hm96 slot -/
+
+/-- `sha512_circuit.word_bit`: the word-order position of byte-string bit `t` (bit `t % 8` of byte `t / 8`; words
+big-endian). -/
+def wordBit (t : Nat) : Nat := 64 * (t / 64) + 56 - 8 * (t / 8 % 8) + t % 8
+
+/-- The salt's 24 message words: word `i`'s bit `j` is the byte-string bit of `y` that `wordBit` sends to `64 i + j`. -/
+def saltWords (y : List Lin) : List Word :=
+  (List.range 24).map fun i => (List.range 64).map fun j => y.getD (64 * i + 8 * (7 - j / 8) + j % 8) Lin.zero
+
+/-- Bit `i` of `b = x ⊕ M·y` from `x`'s bit: `M[i][j]` is key bit `i + j` (`Hm96.mask`), `j < 1536`, added in order. -/
+def maskBit (key : ByteArray) (y : List Lin) (i : Nat) (x : Lin) : Lin :=
+  (List.range 1536).foldl (fun acc j => if Flock.Hm96.bit key (i + j) then y.getD j Lin.zero ^^^ acc else acc) x
+
+/-- The chaining value after `hm96-sha512/v1`'s salt prefix (one block). -/
+def saltMid : List (BitVec 64) :=
+  (List.range 8).map fun i => (Flock.Sha512.compress Flock.Sha512.iv Flock.Hm96.Default512.saltPrefix 0)[i]!.toBitVec
+
+/-- The salt digest's second block after the salt's last 64 bytes: SHA-512's padding of a 320-byte message. -/
+def saltTail : List (BitVec 64) := [0x8000000000000000#64, 0#64, 0#64, 0#64, 0#64, 0#64, 0#64, 2560#64]
+
+/-- `sha512_circuit.hm96_row`: inputs `cv` (512 bits), `pad` (1024) and the salt `y` (1536, byte-string order); output
+`b ‖ c` (1024 bits, byte-string order), `x = F(cv, pad)`, `c = SHA-512(salt_prefix ‖ y)` from the prefix's midstate,
+`b = x ⊕ M(key)·y`. -/
+def hm96Row (key : ByteArray) : M (List Lin × List Lin × List Lin × List Lin) := do
+  let cv ← input 512
+  let pad ← input 1024
+  let y ← input 1536
+  let x ← compress (words cv 8) (words pad 16)
+  let yw := saltWords y
+  let st ← compress (saltMid.map constW) (yw.take 16)
+  let st ← compress st (yw.drop 16 ++ saltTail.map constW)
+  let b := (List.range 512).map fun i => maskBit key y i (x.flatten.getD (wordBit i) Lin.zero)
+  let c := (List.range 512).map fun t => st.flatten.getD (wordBit t) Lin.zero
+  pure (cv, pad, y, b ++ c)
 
 end FlockSoundness.Discharge.Hm
