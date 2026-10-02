@@ -225,6 +225,21 @@ def test_the_tor_presets_weight_each_rate_equally():
     assert {v["inputs"]["model"] for v in built["vectors"]} == set(models) and 40 <= len(built["vectors"]) <= 60
 
 
+def test_the_tor_presets_leave_zerocopy_out_and_end_with_the_runs_note():
+    soak, plain = _soak(), E.build(generated_at="x", commit="test", soak=(_soak(), "art:soak"))
+    for j, b in enumerate(E.BLOCK_BYTES):
+        cid = 100 + j
+        soak["cells"].append({"cell": cid, "load": "decode", "rate_hz": 1000, "block_bytes": b, "config": "zerocopy"})
+        for metric in ("tor_400_tuned", "tor_100_default"):
+            soak["survival"].append({"cell": cid, "metric": metric, "op": "challenge", "timestamping": True, "n": 10,
+                                     "max_us": 1e5, "s": [1.0] * len(soak["t_us"])})
+    built = E.build(generated_at="x", commit="test", soak=(soak, "art:soak"), soak_note="The rerun, on node 1.")
+    for a, b in zip(plain["honest_models"], built["honest_models"]):
+        assert a["curves"] == b["curves"]
+        assert b["description"] == (f"{a['description']}  The rerun, on node 1." if a["id"] in E.SOAK_PRESETS
+                                    else a["description"])
+
+
 def test_measured_from_pooled_histograms():
     edges = [10 ** (k / 40) for k in range(201)]
 

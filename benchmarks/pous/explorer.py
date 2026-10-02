@@ -22,13 +22,13 @@ here, from the file alone:
 5. bound = ε_proof(D) + sampling.
 
     uv run python benchmarks/pous/explorer.py --out pous-explorer.json [--histograms verify-honest.json ...]
-        [--soak pous-soak-v1.json=art:…]
+        [--soak pous-soak-v1.json=art:… [--soak-note TEXT]]
 
 `--histograms` pools the series' `verify-honest.json` histograms into the `measured` preset (two runs or more); without it
 `measured` is run 1's quantiles and window counts (`RUN1`).  `--soak` builds the off-host presets from a `pous-soak/v1`
 file's ToR-equivalent curves (`soak_presets`): `rack` from `tor_400_tuned`, `rack-100g` from `tor_100_default`, and
 `datacenter` as `tor_100_default` plus its fabric round trip; each block from its own cells, not shifted, each audit rate
-weighted equally.
+weighted equally.  `--soak-note` ends each of their descriptions with what the file's run was.
 """
 from __future__ import annotations
 
@@ -140,6 +140,9 @@ MEASURED_KNEE_US, MEASURED_ALPHA = 750.0, 1.8
 
 #: the soak's loads pooled into the ToR presets: the responder serving its own POUS forwards (idle has no serving)
 SOAK_LOADS = ("decode", "prefill", "mixed")
+#: the responder configs pooled: on loopback MSG_ZEROCOPY's pages are copied anyway, so `zerocopy` there adds only its
+#: completion wait and says nothing about a NIC path
+SOAK_CONFIGS = ("baseline", "tuned")
 #: past the soak's slowest pooled answer a curve continues as a Pareto of this exponent
 SOAK_TAIL_ALPHA = 1.0
 #: the datacenter fabric beyond the ToR: lognormal (median, p99) µs, and a (chance, xmin µs, exponent) Pareto incast delay
@@ -419,14 +422,15 @@ def curve(s_fine: np.ndarray, block_bytes: int) -> list[float]:
 
 def soak_pooled(soak: dict[str, Any], metric: str, block_bytes: int,
                 by_answers: bool = False) -> tuple[np.ndarray, dict[str, Any]]:
-    """S of `metric` at `T_US` for one block: the soak's challenge answers with kernel stamps in the `SOAK_LOADS` cells of
-    that block pooled, each audit rate weighted equally (the rate isn't fixed, and most answers are the fastest rate's) and
-    the cells of one rate by their answers; `by_answers` weights every cell by its answers instead.  Past the slowest pooled
-    answer, a Pareto of exponent `SOAK_TAIL_ALPHA` from the last grid point with S > 0.  The soak's grid holds `T_US`, so S
+    """S of `metric` at `T_US` for one block: the soak's challenge answers with kernel stamps in the `SOAK_LOADS` and
+    `SOAK_CONFIGS` cells of that block pooled, each audit rate weighted equally (the rate isn't fixed, and most answers are
+    the fastest rate's) and the cells of one rate by their answers; `by_answers` weights every cell by its answers instead.
+    Past the slowest pooled answer, a Pareto of exponent `SOAK_TAIL_ALPHA` from the last grid point with S > 0.  The soak's grid holds `T_US`, so S
     at a grid point is the cells' own value there (0 past a cell's `max_us`)."""
     cells = {c["cell"]: c for c in soak["cells"]}
     rows = [s for s in soak["survival"] if s["metric"] == metric and s["op"] == "challenge" and s["timestamping"]
-            and cells[s["cell"]]["block_bytes"] == block_bytes and cells[s["cell"]]["load"] in SOAK_LOADS]
+            and cells[s["cell"]]["block_bytes"] == block_bytes and cells[s["cell"]]["load"] in SOAK_LOADS
+            and cells[s["cell"]]["config"] in SOAK_CONFIGS]
     if not rows:
         raise ValueError(f"no {metric} challenge rows at {block_bytes} B in the soak file")
     grid = np.array(soak["t_us"])
@@ -469,10 +473,10 @@ SOAK_PRESETS = {
 }
 
 
-def soak_presets(soak: dict[str, Any], source: str) -> list[dict[str, Any]]:
+def soak_presets(soak: dict[str, Any], source: str, note: str | None = None) -> list[dict[str, Any]]:
     """The ToR presets (`SOAK_PRESETS`): per block, `soak_pooled` of the metric; `datacenter` adds the fabric round trip
     (`FABRIC_RTT`, `FABRIC_INCAST`) on `FINE`.  Each description states every modeled parameter, and S at d = 0, 64 KiB
-    under both weightings."""
+    under both weightings, then `note`."""
     metrics = {m["id"]: m for m in soak["metrics"]}
     tau0 = tau_us(0, call_ns(65_536), 1)
 
@@ -504,6 +508,8 @@ def soak_presets(soak: dict[str, Any], source: str) -> list[dict[str, Any]]:
             desc += (f"  Plus a fabric round trip beyond the ToR: lognormal (median {FABRIC_RTT[0]:g} µs, p99 "
                      f"{FABRIC_RTT[1]:g} µs), with a {FABRIC_INCAST[0]:g} chance of a Pareto({FABRIC_INCAST[1]:g} µs, "
                      f"{FABRIC_INCAST[2]:g}) incast delay.")
+        if note:
+            desc += f"  {note}"
         out.append({"id": mid, "label": label, "kind": "empirical" if mid != "datacenter" else "assumed",
                     "description": desc, "sources": [source], "curves": list(curves)})
     return out
@@ -561,9 +567,10 @@ def source_commit() -> str:
 
 
 def build(histograms: list[dict[str, Any]] | None = None, generated_at: str | None = None,
-          commit: str | None = None, soak: tuple[dict[str, Any], str] | None = None) -> dict[str, Any]:
+          commit: str | None = None, soak: tuple[dict[str, Any], str] | None = None,
+          soak_note: str | None = None) -> dict[str, Any]:
     """The `pous-explorer/v1` document; `soak` (a `pous-soak/v1` document and its source) replaces the off-host presets
-    with `soak_presets`."""
+    with `soak_presets`, their descriptions ending with `soak_note`."""
     if histograms and len(histograms) >= 2:
         measured, answers = measured_histograms(histograms)
         measured_sources = [d.get("source", "series verify-honest.json") for d in histograms]
@@ -581,7 +588,7 @@ def build(histograms: list[dict[str, Any]] | None = None, generated_at: str | No
                        "curves": [{"block_bytes": b, "t_us": [round(t, 9) for t in T_US], "survival_fraction": curve(s, b)}
                                   for b in BLOCK_BYTES]})
     if soak:
-        tor = {m["id"]: m for m in soak_presets(*soak)}
+        tor = {m["id"]: m for m in soak_presets(*soak, soak_note)}
         models = [x for m in models for x in ([tor["rack"], tor["rack-100g"]] if m["id"] == "rack" else [tor.get(m["id"], m)])]
     doc = {"schema": SCHEMA,
            "generated_at_utc": generated_at or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -604,6 +611,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--histograms", nargs="*", default=[], metavar="PATH=SOURCE",
                     help="series verify-honest.json files to pool into `measured`, each with its source (an art id)")
     ap.add_argument("--soak", metavar="PATH=SOURCE", help="a pous-soak/v1 file (and its art id) for the ToR presets")
+    ap.add_argument("--soak-note", help="a sentence ending each ToR preset's description: what the soak file's run was")
     a = ap.parse_args(argv)
     docs = []
     for arg in a.histograms:
@@ -615,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.soak:
         path, _, source = a.soak.partition("=")
         soak = (json.loads(Path(path).read_text()), source or path)
-    doc = build(docs, soak=soak)
+    doc = build(docs, soak=soak, soak_note=a.soak_note)
     text = json.dumps(doc, separators=(",", ":"), ensure_ascii=False)
     Path(a.out).write_text(text + "\n")
     print(f"{a.out}: {len(text):,} bytes, {len(doc['vectors'])} vectors", file=sys.stderr)
