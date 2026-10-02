@@ -27,7 +27,8 @@ here, from the file alone:
 `--histograms` pools the series' `verify-honest.json` histograms into the `measured` preset (two runs or more); without it
 `measured` is run 1's quantiles and window counts (`RUN1`).  `--soak` builds the off-host presets from a `pous-soak/v1`
 file's ToR-equivalent curves (`soak_presets`): `rack` from `tor_400_tuned`, `rack-100g` from `tor_100_default`, and
-`datacenter` as `tor_100_default` plus its fabric round trip; each block from its own cells, not shifted.
+`datacenter` as `tor_100_default` plus its fabric round trip; each block from its own cells, not shifted, each audit rate
+weighted equally.
 """
 from __future__ import annotations
 
@@ -416,11 +417,13 @@ def curve(s_fine: np.ndarray, block_bytes: int) -> list[float]:
 
 # The ToR presets from a `pous-soak/v1` file.
 
-def soak_pooled(soak: dict[str, Any], metric: str, block_bytes: int) -> tuple[np.ndarray, dict[str, Any]]:
+def soak_pooled(soak: dict[str, Any], metric: str, block_bytes: int,
+                by_answers: bool = False) -> tuple[np.ndarray, dict[str, Any]]:
     """S of `metric` at `T_US` for one block: the soak's challenge answers with kernel stamps in the `SOAK_LOADS` cells of
-    that block pooled (each cell's survival weighted by its answers), then past the slowest pooled answer a Pareto of
-    exponent `SOAK_TAIL_ALPHA` from the last grid point with S > 0.  The soak's grid holds `T_US`, so S at a grid point is
-    the cells' own value there (0 past a cell's `max_us`)."""
+    that block pooled, each audit rate weighted equally (the rate isn't fixed, and most answers are the fastest rate's) and
+    the cells of one rate by their answers; `by_answers` weights every cell by its answers instead.  Past the slowest pooled
+    answer, a Pareto of exponent `SOAK_TAIL_ALPHA` from the last grid point with S > 0.  The soak's grid holds `T_US`, so S
+    at a grid point is the cells' own value there (0 past a cell's `max_us`)."""
     cells = {c["cell"]: c for c in soak["cells"]}
     rows = [s for s in soak["survival"] if s["metric"] == metric and s["op"] == "challenge" and s["timestamping"]
             and cells[s["cell"]]["block_bytes"] == block_bytes and cells[s["cell"]]["load"] in SOAK_LOADS]
@@ -431,11 +434,13 @@ def soak_pooled(soak: dict[str, Any], metric: str, block_bytes: int) -> tuple[np
     if not np.allclose(grid[at], T_US, rtol=1e-9):
         raise ValueError("the soak's grid does not hold the explorer's")
     n = np.array([r["n"] for r in rows], dtype=float)
-    s = (n[:, None] * np.array([r["s"] for r in rows])[:, at]).sum(axis=0) / n.sum()
+    rate = np.array([cells[r["cell"]]["rate_hz"] for r in rows])
+    rates = sorted(set(rate.tolist()))
+    w = n if by_answers else n / np.array([n[rate == x].sum() for x in rate]) / len(rates)
+    s = (w[:, None] * np.array([r["s"] for r in rows])[:, at]).sum(axis=0) / w.sum()
     last = int(np.flatnonzero(s > 0)[-1])
     t = np.array(T_US)
     s = np.where(np.arange(len(t)) > last, s[last] * (t / t[last]) ** -SOAK_TAIL_ALPHA, s)
-    rates = sorted({cells[r["cell"]]["rate_hz"] for r in rows})
     configs = sorted({cells[r["cell"]]["config"] for r in rows})
     return np.minimum.accumulate(s), {"cells": len(rows), "answers": int(n.sum()), "max_us": max(r["max_us"] for r in rows),
                                       "tail_from_us": float(t[last]), "rates_hz": rates, "configs": configs}
@@ -466,35 +471,41 @@ SOAK_PRESETS = {
 
 def soak_presets(soak: dict[str, Any], source: str) -> list[dict[str, Any]]:
     """The ToR presets (`SOAK_PRESETS`): per block, `soak_pooled` of the metric; `datacenter` adds the fabric round trip
-    (`FABRIC_RTT`, `FABRIC_INCAST`) on `FINE`.  Each description states every modeled parameter."""
+    (`FABRIC_RTT`, `FABRIC_INCAST`) on `FINE`.  Each description states every modeled parameter, and S at d = 0, 64 KiB
+    under both weightings."""
     metrics = {m["id"]: m for m in soak["metrics"]}
+    tau0 = tau_us(0, call_ns(65_536), 1)
+
+    def pooled(mid: str, metric: str, b: int, by_answers: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+        s, info = soak_pooled(soak, metric, b, by_answers)
+        if mid == "datacenter":
+            s = np.array(curve(sum_s(soak_fine(s), rtt_s(*FABRIC_RTT, *FABRIC_INCAST)), 65_536))
+        return {"block_bytes": b, "t_us": [round(t, 9) for t in T_US],
+                "survival_fraction": [float(f"{max(x, S_FLOOR):.6g}") for x in s]}, info
+
     out = []
     for mid, (metric, label) in SOAK_PRESETS.items():
-        curves, infos = [], []
-        for b in BLOCK_BYTES:
-            s, info = soak_pooled(soak, metric, b)
-            if mid == "datacenter":
-                s = np.array(curve(sum_s(soak_fine(s), rtt_s(*FABRIC_RTT, *FABRIC_INCAST)), 65_536))
-            curves.append({"block_bytes": b, "t_us": [round(t, 9) for t in T_US],
-                           "survival_fraction": [float(f"{max(x, S_FLOOR):.6g}") for x in s]})
-            infos.append(info)
+        curves, infos = zip(*(pooled(mid, metric, b) for b in BLOCK_BYTES))
+        ref = {w: survival_at(c["t_us"], c["survival_fraction"], tau0)
+               for w, c in (("equal", curves[0]), ("answers", pooled(mid, metric, 65_536, by_answers=True)[0]))}
         i = infos[0]
         rates = "/".join(str(r) for r in i["rates_hz"])
         answers = ", ".join(f"{x['answers']:,}" for x in infos)
         tails = ", ".join(f"{x['tail_from_us'] / 1000:.1f}" for x in infos)
         desc = (f"The soak's {metric} ({metrics[metric]['label']}): R = K_tx_resp − K_rx_req measured on loopback on "
                 f"{soak['run']['host']} ({soak['run']['gpu']}, band d = 12 responder) while vLLM ran POUS forwards "
-                f"({', '.join(SOAK_LOADS)}), pooled by answers over {i['cells']} cells per block (rates {rates} Hz, "
-                f"configs {' and '.join(i['configs'])}; {answers} answers at 64/144/384 KiB), plus the modeled "
-                f"{tor_terms(metrics[metric]['params'])}.  Loopback's send includes the receiver's processing, so R is "
-                f"pessimistic at long blocks.  Past the slowest pooled answer ({tails} ms) a Pareto of exponent "
-                f"{SOAK_TAIL_ALPHA:g}.")
+                f"({', '.join(SOAK_LOADS)}), pooled over {i['cells']} cells per block with each rate ({rates} Hz) "
+                f"weighted equally and a rate's cells by their answers (configs {' and '.join(i['configs'])}; {answers} "
+                f"answers at 64/144/384 KiB), plus the modeled {tor_terms(metrics[metric]['params'])}.  Loopback's send "
+                f"includes the receiver's processing, so R is pessimistic at long blocks.  Past the slowest pooled answer "
+                f"({tails} ms) a Pareto of exponent {SOAK_TAIL_ALPHA:g}.  At d = 0, 64 KiB (τ = {tau0:.3f} µs) S is "
+                f"{ref['equal']:.3g}; weighting every cell by its answers instead, it would be {ref['answers']:.3g}.")
         if mid == "datacenter":
             desc += (f"  Plus a fabric round trip beyond the ToR: lognormal (median {FABRIC_RTT[0]:g} µs, p99 "
                      f"{FABRIC_RTT[1]:g} µs), with a {FABRIC_INCAST[0]:g} chance of a Pareto({FABRIC_INCAST[1]:g} µs, "
                      f"{FABRIC_INCAST[2]:g}) incast delay.")
         out.append({"id": mid, "label": label, "kind": "empirical" if mid != "datacenter" else "assumed",
-                    "description": desc, "sources": [source], "curves": curves})
+                    "description": desc, "sources": [source], "curves": list(curves)})
     return out
 
 
