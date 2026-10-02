@@ -1,9 +1,9 @@
 /-
 `HmRowComputes` at e2e-layout's rows (`keyedRowsOuts_computes`). At a drawn unit's site in its table's accepted
-statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` output (`Layout.bcAddr`) is the commit string
-of the row prefix and the bytes at the message columns, under the salt at `saltCol` (`bc_site_commit`): `row_bc_setupH`,
-with each column in the block (`bcCol_lt`, `saltCol_lt`, `Layout.msgCol_lt_of_parse`), so the site's addresses read the
-block's bits (`bit_siteAddr`).
+statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` output (`bcCol`, the address the regions pin
+`Layout.bcAddr`) is the commit string of the row prefix and the bytes at the message columns, under the salt at `saltCol`
+(`bc_site_col`, `bc_site_commit`): `row_bc_setupH`, with each column in the block (`bcCol_lt`, `saltCol_lt`,
+`Layout.msgCol_lt_of_parse`), so the site's addresses read the block's bits (`bit_siteAddr`).
 -/
 import FlockSoundness.Discharge.Hm.Bc
 import FlockSoundness.Discharge.Layout
@@ -127,9 +127,25 @@ theorem bytesAt_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.n
   ofFn_site a z o N col hcol
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
-outputs, at block `o`, VU `g` and row port `p`, the 128 bytes at the `hm96` slot's output (`Layout.bcAddr`) are the
-commit string of the row prefix and the `2 · words` bytes at the message columns (`Typed.msgCol`), under the 192 bytes at
+outputs, at block `o`, VU `g` and row port `p`, the 128 bytes at the `hm96` slot's output (`bcCol`) are the commit string
+of the row prefix and the `2 · words` bytes at the message columns (`Typed.msgCol`), under the 192 bytes at
 `saltCol`. -/
+theorem bc_site_col (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
+    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
+    (hp : p < a.st.c.ports.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => Layout.siteAddr a o (bcCol a.st.c g p j.val t.val)) =
+      Binding.commitString ((HmRow.rowPrefix a.st.c.ports[p]!.words).data.toList ++
+        List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
+          FlockSoundness.bit (z (Layout.siteAddr a o (Typed.msgCol a.st.c g p j.val t.val))))
+        (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => Layout.siteAddr a o (saltCol a.st.c g p j.val t.val)) := by
+  have R := acc_rowRanges a
+  rw [bytesAt_site a z o 128 (bcCol a.st.c g p) (fun j hj t ht => bcCol_lt R hg hp hj ht),
+    bytesAt_site a z o 192 (saltCol a.st.c g p) (fun j hj t ht => saltCol_lt R hg hp hj ht),
+    ofFn_site a z o _ (Typed.msgCol a.st.c g p)
+      (fun j _ t ht => Layout.msgCol_lt_of_parse (setupH_spec a.ht a.h).1 hg hp j t ht)]
+  exact acc_row_bc a ho hz o hg hp
+
+/-- `bc_site_col` at the address the regions pin (`Layout.bcAddr`). -/
 theorem bc_site_commit (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
@@ -138,17 +154,13 @@ theorem bc_site_commit (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unit
         List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
           FlockSoundness.bit (z (Layout.siteAddr a o (Typed.msgCol a.st.c g p j.val t.val))))
         (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => Layout.siteAddr a o (saltCol a.st.c g p j.val t.val)) := by
-  have R := acc_rowRanges a
   have hbc : (fun (j : Fin 128) (t : Fin 8) => Layout.siteAddr a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       fun j t => Layout.siteAddr a o (bcCol a.st.c g p j.val t.val) := by
     funext j t
-    rw [Layout.bcAddr_eq_slotCol _ _ _ _ _ (perVu_hm_pow2 R)]
+    rw [Layout.bcAddr_eq_slotCol _ _ _ _ _ (perVu_hm_pow2 (acc_rowRanges a))]
     rfl
-  rw [hbc, bytesAt_site a z o 128 (bcCol a.st.c g p) (fun j hj t ht => bcCol_lt R hg hp hj ht),
-    bytesAt_site a z o 192 (saltCol a.st.c g p) (fun j hj t ht => saltCol_lt R hg hp hj ht),
-    ofFn_site a z o _ (Typed.msgCol a.st.c g p)
-      (fun j _ t ht => Layout.msgCol_lt_of_parse (setupH_spec a.ht a.h).1 hg hp j t ht)]
-  exact acc_row_bc a ho hz o hg hp
+  rw [hbc]
+  exact bc_site_col a ho hz o hg hp
 
 end Site
 
