@@ -403,16 +403,16 @@ def HM_IN : Array Nat := #[512, 1024, 1536]
 def HM_OUT : Array Nat := #[1024]
 
 /- The two layouts are functions of `Unit`, built when a statement needs them: a closed term would be evaluated at every
-start of the program. -/
+start of the program. They are irreducible so that no proof's unfolding builds them. -/
 set_option compiler.extract_closed false in
 /-- `sha512x3`: `compression(3)` with inputs `cv0, msg0, cv1, msg1, cv2, msg2` and outputs `out0, out1, out2`. -/
-def shaLaid (_ : Unit) : Laid :=
+@[irreducible] def shaLaid (_ : Unit) : Laid :=
   let (r, st) := compression3.run St.empty
   layout st SHA_IN SHA_OUT r.2.flatten.toArray
 
 set_option compiler.extract_closed false in
 /-- `hm96`: `hm96_row` under the default key, inputs `cv, pad, y`, output `bc`. -/
-def hmLaid (_ : Unit) : Laid :=
+@[irreducible] def hmLaid (_ : Unit) : Laid :=
   let (r, st) := (hm96Row Hm96.Default512.key).run St.empty
   layout st HM_IN HM_OUT r.2.2.2.toArray
 
@@ -426,6 +426,17 @@ def sha512x3Net : Thunk (V Net) := Thunk.mk fun _ => netOf "sha512x3" (shaLaid (
 set_option compiler.extract_closed false in
 /-- The verifier's `hm96` net. -/
 def hm96Net : Thunk (V Net) := Thunk.mk fun _ => netOf "hm96" (hmLaid ())
+
+theorem thunk_get {α : Type} (f : Unit → α) : (Thunk.mk f).get = f () := rfl
+
+/- These two are not `rfl`: the kernel would build the nets to check it. -/
+theorem sha512x3Net_get : sha512x3Net.get = netOf "sha512x3" (shaLaid ()) := by
+  unfold sha512x3Net
+  exact thunk_get _
+
+theorem hm96Net_get : hm96Net.get = netOf "hm96" (hmLaid ()) := by
+  unfold hm96Net
+  exact thunk_get _
 
 deriving instance DecidableEq for Group
 deriving instance DecidableEq for Sparse
@@ -442,21 +453,24 @@ def firstDiff (p g : Net) : String :=
     | some i => s!"row {i} differs"
     | none => "its matrices differ"
 
-/-- One of the file's row nets is the verifier's `gen`, equal in every field. -/
-def checkNet (c : Circuit) (n : Nat) (name what : String) (gen : Thunk (V Net)) : V Unit :=
+/-- Net `n` of `nets` is the verifier's `gen`, equal in every field. -/
+def checkNet (nets : Array (String × Net)) (n : Nat) (name what : String) (gen : Thunk (V Net)) : V Unit :=
   match gen.get with
   | .error e => throw e
   | .ok g =>
-    if (c.nets.getD n default).2 = g then pure ()
-    else throw s!"circuit {name}: not the verifier's {what} ({firstDiff (c.nets.getD n default).2 g})"
+    if (nets.getD n default).2 = g then pure ()
+    else throw s!"circuit {name}: not the verifier's {what} ({firstDiff (nets.getD n default).2 g})"
 
-/-- The file's `sha512x3` and `hm96` nets are the verifier's. -/
-def check (c : Circuit) : V Unit := do
-  checkNet c c.shaNet "sha512x3" "three SHA-512 compressions" sha512x3Net
-  checkNet c c.hmNet "hm96" "hm96-sha512/row/v1 commit" hm96Net
+def checkNets (nets : Array (String × Net)) (sha hm : Nat) : V Unit := do
+  checkNet nets sha "sha512x3" "three SHA-512 compressions" sha512x3Net
+  checkNet nets hm "hm96" "hm96-sha512/row/v1 commit" hm96Net
 
-theorem checkNet_ok {c : Circuit} {n : Nat} {name what : String} {gen : Thunk (V Net)}
-    (h : checkNet c n name what gen = .ok ()) : ∃ g, gen.get = .ok g ∧ (c.nets.getD n default).2 = g := by
+/-- The file's `sha512x3` and `hm96` nets are the verifier's. Irreducible, so that no unification against it builds the
+nets. -/
+@[irreducible] def check (c : Circuit) : V Unit := checkNets c.nets c.shaNet c.hmNet
+
+theorem checkNet_ok {nets : Array (String × Net)} {n : Nat} {name what : String} {gen : Thunk (V Net)}
+    (h : checkNet nets n name what gen = .ok ()) : ∃ g, gen.get = .ok g ∧ (nets.getD n default).2 = g := by
   unfold checkNet at h
   split at h
   · cases h
@@ -464,6 +478,12 @@ theorem checkNet_ok {c : Circuit} {n : Nat} {name what : String} {gen : Thunk (V
     split at h
     · exact ⟨g, hg, by assumption⟩
     · cases h
+
+/-- `check` reads a circuit's nets and the two nets' indices only. -/
+theorem check_congr {c c' : Circuit} (hn : c.nets = c'.nets) (hs : c.shaNet = c'.shaNet) (hh : c.hmNet = c'.hmNet) :
+    check c = check c' := by
+  unfold check
+  rw [hn, hs, hh]
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -475,9 +495,10 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
 theorem check_ok {c : Circuit} (h : check c = .ok ()) :
     (∃ g, sha512x3Net.get = .ok g ∧ (c.nets.getD c.shaNet default).2 = g) ∧
       ∃ g, hm96Net.get = .ok g ∧ (c.nets.getD c.hmNet default).2 = g := by
-  unfold check at h
+  unfold check checkNets at h
   obtain ⟨_, h₁, h₂⟩ := bind_ok h
   exact ⟨checkNet_ok h₁, checkNet_ok h₂⟩
 
 end HmNets
 end Flock
+
