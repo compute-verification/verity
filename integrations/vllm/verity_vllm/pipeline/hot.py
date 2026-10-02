@@ -55,7 +55,7 @@ SCHEMA = "verity-sweep/hot-commit/v1"
 # toolchain view must not inherit that engine
 ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
-ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH"}
+ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
 WORKLOAD_ENGINE_KEYS = ("case", "model", "repo", "revision", "engine_args_required", "target", "execution", "row", "tokenizer", "dtype", "max_model_len")
 RC_HOT_INFRA = 70          # the worker died / refused before running the job (client falls back to cold)
 RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", "/workspace/cp/RELEASING"))     # pod_release.sh holds it while it ships
@@ -180,9 +180,12 @@ def unsafe_hints(argv: list[str], env: dict[str, str] | None = None) -> list[str
     ct = _argval(argv, "--compiled-taps", "off")
     if ct != "off":
         why.append(f"--compiled-taps {ct}")
-    for flag in ("--arms", "--only-arm", "--late-read", "--value-check"):
+    for flag in ("--arms", "--late-read", "--value-check"):
         if flag in argv:
             why.append(flag)
+    oa = _argval(argv, "--only-arm")
+    if oa == "control" or (oa and ct != "off"):
+        why.append(f"--only-arm {oa}")
     if "--arena-unchecked" in argv and _argval(argv, "--arena-mb") not in (None, "0"):
         why.append("--arena-unchecked (negative test)")
     if _argval(argv, "--moe-source") == "on":

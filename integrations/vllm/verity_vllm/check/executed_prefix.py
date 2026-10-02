@@ -23,18 +23,28 @@ the record's tokens.json; (c) any actual execution past the boundary FAILS (`row
 active-reference implementation classification only.  In the lifted fixed Program the corresponding positions are REQUIRED logical values
 assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category.
 
+A config run has no Match stage.  Its linked serving transcript is the Commit's own token record (`check.commit_tokens`): the driver's
+served tokens beside the commitment, each opened from the run root and verified equal to the committed sampled id it was served from
+(`link_to_commit_account`).  The prefix then rests on committed values, not on the committer's count; with a Match record too, both hold
+when the row committed its sampled ids, and the Match record alone when it committed none.
+
 PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -- how far each request actually ran)
   Purpose: per request, derive the two lengths every Commit consumer counts on -- served_output_len (tokens served, EOS included) and
     executed_prefix_len (cap on a length stop; served + LAG on an EOS stop) -- from the served tokens + the Program's DECLARED stop
-    rule (eos ids, lag), never from the trace; then accept it only when LINKED to the Match account of the same attempt.
+    rule (eos ids, lag), never from the trace; then accept it only when LINKED to an account of the same attempt: the Match account,
+    or, with no Match stage, the Commit's token record bound to the commitment (`check.commit_tokens`).
   Inputs: served tokens per request, caps, `eos_of_record` + `lag` (global_program.stop_rule / Workload_v1.lag), the Match account
-    (match/capture/tokens.json + global_match.json G6 via `load_match_account`), the binding map (for `rows_past_the_stop`).
+    (match/capture/tokens.json + global_match.json G6 via `load_match_account`), the token record's link
+    (binding.coverage.commit_account_link), the binding map (for `rows_past_the_stop`), the C2 boundary linkage's horizon.
   Outputs: dicts consumed by commit_delta / binding / sampled_replay: `executed_prefix_of_record` {requests{served_output_len,
     executed_prefix_len, cap, eos_stop}, ok, problems, any_eos_stop, lag}, `request_steps_of_record`, `rows_past_the_stop`,
-    `link_to_match_account` {ok, required, problems, tokens_equal, g6}, `executed_prefix_facts` (the named facts sampled_replay takes).
+    `link_to_match_account` {ok, required, problems, tokens_equal, g6, match_dir}, `executed_prefix_facts` (the named facts
+    sampled_replay takes, from whichever account is of record).
   Invariants: LAG is never defaulted to 0 or 1 -- an early stop with no declared EOS set / LAG, a non-EOS last token, or served > cap
     is a problem and the population stays the cap's; a prefix reduced from its cap on the committer's own count alone is never
-    accepted (R17-27 (a)); the lag must agree on every leg (declared == tokens.json == G6); a committed Call past the prefix fails by name.
+    accepted (R17-27 (a)): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
+    Commit and the row committed its sampled ids; the lag must agree on every leg (declared == tokens.json == G6, or declared == the
+    token record's == the engine's read-back); the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
@@ -171,6 +181,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
     required = bool(reduced)
     res: dict[str, Any] = {"required": required, "reduced_requests": reduced, "tokens_json": None, "global_match": None, "notes": list(account.get("notes") or []),
+                           "match_dir": account.get("match_dir"),
                            "rule": "R17-27 (a): n_exec from the LINKED serving transcript (Commit served == Match tokens.json == G6 account); "
                                    "(b) lag attested declared == tokens.json == G6; the committer's own count is never sufficient by itself"}
     tok = account.get("tokens")
@@ -291,16 +302,25 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
     `eos_declared` = the served token a_r-1 is a declared EOS id (F-pm-24); `rows_past_stop` = coverage's execution-past-the-stop count.
     [reqval M-0585 / revb S-r17b-20 R3] with `served_tokens` (this run's own served ids per request) the facts also carry `served` (the list)
     and `eos_ids` (the Program's declared set) so a consumer that derives the class from Continuation_v1's recurrence (r_t) does so from the
-    record's own list -- ONE code path on Build, Match and Commit; the caller passes only the keys the consumer's signature accepts."""
+    record's own list -- ONE code path on Build, Match and Commit; the caller passes only the keys the consumer's signature accepts.
+    With no Match record beside the Commit (no `match_dir`) the account is the Commit's token record (binding.coverage.commit_account_link,
+    check.commit_tokens): `a_r` is its served length, `linked` = that link held, every served token of the request was opened from the
+    run root equal to the committed sampled id, the C2 boundary linkage passed AND ran over exactly the request's executed prefix, and
+    `lag_attested` is that link's, and `a_r_source` says so as a note, not a missing leg.  With both, both must hold wherever the token
+    record places a shorter prefix; a token-record link not applied (a row that committed no sampled id) places none."""
     cov = (binding or {}).get("coverage") or {}
     link = cov.get("match_account_link") or {}
     tj = link.get("tokens_json") or {}
     g6 = link.get("global_match") or {}
+    cl = cov.get("commit_account_link") or {}
+    by_commit = bool(cl) and not link.get("match_dir")
+    with_commit = by_commit or bool(cl.get("required"))
+    horizon = (linkage or {}).get("horizon") or {}
     # [r19-int-21, F-r19-int-19] the account legs that are NOT beside the Commit, named: #39 (qwen25-15b i4096, l40s4) had its match/capture/
     # moved to /vault to free the disk (F-r19-int-14) while its Commit was queued; tokens.json (a_r per request, the lag attestation) went
     # with it, the link fell to the G6 leg for a_r and the class faulted 'a_r is not linked (linked=False)' + 'LAG rule not attested' after
     # 47 min -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing leg(s); the consumer faults on it by name.
-    account_missing = [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
+    account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
     past = (cov.get("rows_past_the_stop") or {}).get("steps_past_by_request") or {}
     eos_set = {int(x) for x in (stop.get("eos") or [])} if stop.get("eos") is not None else None
     decl_lag = stop.get("declared_lag")
@@ -314,14 +334,26 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
             a_r, src = int(m_served), f"match record {tj.get('path')} (sha256 {str(tj.get('sha256'))[:16]}): tokens.json generated_token_ids"
         elif g_len is not None:
             a_r, src = int(g_len), f"match record {g6.get('path')} (sha256 {str(g6.get('sha256'))[:16]}): G6 lengths_by_request.served_output_len"
+        elif by_commit and (cl.get("served_by_request") or {}).get(rid) is not None:
+            _rec = cl.get("record") or {}
+            a_r, src = int(cl["served_by_request"][rid]), (f"commit token record {_rec.get('path')} (sha256 {str(_rec.get('sha256'))[:16]}): generated_token_ids opened "
+                                                           "from the run root; no Match record beside the Commit (a config run has no Match stage): the prefix is "
+                                                           "linked to the Commit's token record")
         else:
             a_r, src = int(served_commit if served_commit is not None else rec["cap"]), "the Commit's OWN served tokens (no Match record beside the Commit: NOT linked)"
         if account_missing:
             src += f"; Match account leg(s) NOT beside the Commit: {', '.join(account_missing)}"
         linked = bool(link.get("ok") is True and (tj.get("tokens_equal") or {}).get(rid) is True and g6.get("verdict") == "PASS" and lk_ok)
+        lag_attested = bool(link.get("lag_attested"))
+        if with_commit:
+            # the boundary linkage must have run over exactly this executed prefix: the committed tokens are the ones the next step consumed
+            linked_c = bool(cl.get("ok") is True and (cl.get("tokens_committed") or {}).get(rid) is True and lk_ok
+                            and (horizon.get(rid) or {}).get("linked_steps") == rec.get("executed_prefix_len"))
+            linked = linked_c if by_commit else (linked and linked_c)
+            lag_attested = bool(cl.get("lag_attested")) and (by_commit or lag_attested)
         out[rid] = {"a_r": a_r, "a_r_source": src, "lag": (int(decl_lag) if decl_lag is not None else -1), "cap": int(rec["cap"]), "arrive": int(arrivals.get(rid, 0)),
                     "eos_declared": (None if rec.get("last_served_token") is None or eos_set is None else (int(rec["last_served_token"]) in eos_set)),
-                    "served_len_commit": served_commit, "linked": linked, "lag_attested": bool(link.get("lag_attested")),
+                    "served_len_commit": served_commit, "linked": linked, "lag_attested": lag_attested,
                     "rows_past_stop": int(past.get(rid, 0)), "account_missing": list(account_missing)}
         if served_tokens is not None and served_tokens.get(rid) is not None:
             out[rid]["served"] = [int(t) for t in served_tokens[rid]]

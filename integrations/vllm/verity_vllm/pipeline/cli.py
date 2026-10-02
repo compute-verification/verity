@@ -28,11 +28,14 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
     "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
+    "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "canonical-profiles": ("verity_vllm.engine.profiles.canonical", "check or rewrite the canonical profile pins"),
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
+    "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "conformance": ("verity_vllm.program.registry.conformance", "conformance record of the registered library"),
@@ -42,6 +45,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
+    "fp8-checkpoint": ("verity_vllm.engine.fp8_checkpoint", "make or re-make a block-FP8 checkpoint from a BF16 pin"),
     "gate": ("verity_vllm.acquire.gate", "CPU acquisition gate of one row"),
     "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
@@ -204,6 +208,17 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
 
 
+#: the environment variable that caps the float64 dense chain's threads (`dense_rows.use_threads`; the words do not depend on it)
+DENSE_THREADS_ENV = "VERITY_DENSE_THREADS"
+
+
+def process_settings(environ: Mapping[str, str]) -> None:
+    """The process-wide settings every command takes from the environment: the dense chain's threads."""
+    if environ.get(DENSE_THREADS_ENV):
+        from verity_vllm.program.kernels import dense_rows
+        dense_rows.use_threads(environ[DENSE_THREADS_ENV])
+
+
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
     argv = sys.argv[1:] if process else list(argv)
@@ -214,6 +229,7 @@ def main(argv: list[str] | None = None) -> Any:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
     parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    process_settings(os.environ)
     if process:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
         sys.argv[:] = [mod.__file__ or sys.argv[0], *argv[1:]]

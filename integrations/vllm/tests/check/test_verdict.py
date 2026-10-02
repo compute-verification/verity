@@ -255,6 +255,64 @@ def test_account_missing_is_insufficient_evidence_not_fail():
     assert ok2 is True and out2 == V.PASS and link2.outcome == V.PASS and link2.scope["account_missing"] == ["tokens.json"] and link2.notes
 
 
+def _commit_link(ok: bool = True, problems: list | None = None) -> dict:
+    return {"ok": ok, "required": True, "lag_attested": ok, "problems": problems or [], "tokens_committed": {"r0": ok},
+            "record": {"path": "/x/commit/tokens_p0.json", "sha256": "12" * 32, "schema": "verity-vllm/commit-tokens/v1", "requests_n": 1}}
+
+
+def test_a_config_run_early_stop_rests_on_the_commit_token_record():
+    """No Match stage: a request that stopped at EOS before its cap is linked by the Commit's token record (check.commit_tokens), and the
+    Match link's refusal is not the account of record.  The same record with the token record refused fails in v1 and v2, by name."""
+    c = _base()
+    cov = c["binding"]["coverage"]
+    cov["executed_prefix_of_record"]["any_eos_stop"] = True
+    cov["executed_prefix_of_record"]["requests"]["r0"] = {"served_output_len": 5, "executed_prefix_len": 6, "cap": 8, "cap_exhausted": False, "eos_stop": True}
+    cov["match_account_link"] = {"ok": False, "required": True, "match_dir": None, "lag_attested": False,
+                                 "problems": ["executed prefix reduced from the cap for ['r0'] on the committer's own served count alone"]}
+    cov["commit_account_link"] = _commit_link()
+    c["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 6, "cap": 8, "linked": True, "account_missing": []}}}
+    (ok, why), out, checks = _both(c)
+    assert ok is True and out == V.PASS, why
+    link = next(x for x in checks if x.name == "execution_extent/match_account_link")
+    assert link.outcome == V.PASS and link.scope["account"] == "commit token record" and link.scope["account_missing"] is None
+    assert link.inputs["commit_tokens_sha256"] == "12" * 32
+    bad = copy.deepcopy(c)
+    why_c = "r0: (1) served token 1 is 13 but the committed sampled id at engine step 1 is 12"
+    bad["binding"]["coverage"] |= {"commit_account_link": _commit_link(ok=False, problems=[why_c]), "ok": False,
+                                   "error": "executed prefix not bound to the commitment by the Commit's token record: " + why_c}
+    bad["sampled_replay"]["executed_prefix_of_record"]["facts_of_record"]["r0"]["linked"] = False
+    (ok, why), out, checks = _both(bad)
+    assert ok is False and out == V.FAIL, why
+    link = next(x for x in checks if x.name == "execution_extent/match_account_link")
+    assert link.outcome == V.FAIL and link.reason == "commit token record link: " + why_c
+
+
+def test_a_full_row_that_committed_no_sampled_ids_rests_on_its_match_link_alone():
+    """A Match record beside the Commit and no committed sampled id: the token-record link is not applied, and an early stop is decided by
+    the Match link exactly as before -- accepted when it holds, refused by its name when it does not."""
+    c = _base()
+    cov = c["binding"]["coverage"]
+    cov["executed_prefix_of_record"]["any_eos_stop"] = True
+    cov["executed_prefix_of_record"]["requests"]["r0"] = {"served_output_len": 5, "executed_prefix_len": 6, "cap": 8, "cap_exhausted": False, "eos_stop": True}
+    cov["match_account_link"] = _link(required=True) | {"match_dir": "/x/match"}
+    cov["commit_account_link"] = {"ok": None, "required": False, "lag_attested": None, "problems": [], "record": None,
+                                  "not_applied": "no committed runner.sampler/sampled_token_ids in the binding map: the Match link alone decides"}
+    c["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 6, "cap": 8, "linked": True, "account_missing": []}}}
+    (ok, why), out, checks = _both(c)
+    assert ok is True and out == V.PASS, why
+    link = next(x for x in checks if x.name == "execution_extent/match_account_link")
+    assert link.outcome == V.PASS and "account" not in link.scope and "commit_tokens_sha256" not in link.inputs
+    bad = copy.deepcopy(c)
+    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (R17-27 (a))"
+    bad["binding"]["coverage"] |= {"match_account_link": _link(ok=False, required=True, problems=[why_m]) | {"match_dir": "/x/match", "tokens_json": cov["match_account_link"]["tokens_json"]},
+                                   "ok": False, "error": "executed prefix not linked to the Match account: " + why_m}
+    bad["sampled_replay"]["executed_prefix_of_record"]["facts_of_record"]["r0"]["linked"] = False
+    (ok, why), out, checks = _both(bad)
+    assert ok is False and out == V.FAIL, why
+    link = next(x for x in checks if x.name == "execution_extent/match_account_link")
+    assert link.outcome == V.FAIL and link.reason == "Match account link: " + why_m
+
+
 def test_not_run_when_the_record_lacks_the_evidence():
     c = _base()
     del c["extra"]["identity_check"]

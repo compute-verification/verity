@@ -5,7 +5,8 @@ The rows are each request's Program (the one request of a request manifest; `com
 Build dir whose program digest is the request's (under `--program-dir` / `--programs-root`), grouped by the population the manifest was
 built with, each identity checked against its Calls (rows, width, element range, dtype).  A row of module body M reads a Value of M's own
 body at the same step (evaluated here), a literal (evaluated once), a weight field (the model's parameter or buffer of that name, wrapper
-prefix stripped, in its own width) or a Value produced outside M.  The outside Values are M's forward arguments: the k-th distinct
+prefix stripped, in its own width), a Value of M's weight-only Calls of another step (a norm's `weight + 1` the Build made once: taken
+into the body and evaluated from the weights, its words the same at every step) or a Value produced outside M.  The outside Values are M's forward arguments: the k-th distinct
 (producer module, fx node, hint, port) M's rows at the step read, in Program order, is the k-th tensor among the arguments (positional,
 then keyword), holding the producer rows read in ascending order, as [rows, port elements] words of the port's width.  A body that reads
 anything else -- a Program input other than a weight, a Value of another step, a module under M, a slice across two ports or two fields --
@@ -133,6 +134,7 @@ class Plan:
     kernel_only: set[str] = field(default_factory=set)                    # Definitions over REFERENCE_LEAVES words per instance
     composition: dict[int, dict[str, int]] = field(default_factory=dict)  # engine step -> {request: token rows}: a global manifest's
     order: dict[str, str] = field(default_factory=dict)                   # workload request id -> `r<i>` (the binding map's)
+    by_index: dict[int, str] = field(default_factory=dict)               # workload index -> `r<i>` (a warm-up request stands in by index)
     identities: int = 0
     uncovered: list[str] = field(default_factory=list)
     bytes_per_token: int = 0
@@ -190,6 +192,7 @@ def plan(manifest: Mapping[str, Any], ids: Sequence[Mapping[str, Any]], *roots: 
     if steps and isinstance(steps[0], Mapping):
         p.composition = {int(e["engine_step"]): {str(m["request_id"]): int(m["rows"]) for m in e.get("members") or ()} for e in steps}
     p.order = {str(d["workload_request_id"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("workload_request_id")}
+    p.by_index = {int(d["index"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("index") is not None}
     why = (f"a manifest of {ranks} ranks (the source serves one rank)" if ranks > 1 else
            f"a manifest of {len(requests)} requests without per-request components and composition"
            if len(requests) > 1 and (len(progs) != len(requests) or not p.composition) else None)
@@ -276,6 +279,17 @@ def _plan_request(p: Plan, manifest: Mapping[str, Any], rid: str, ids: Sequence[
     return out
 
 
+def _definition(spec: str) -> tuple[Any, list[Any]]:
+    """The registered Definition a Call's spec names and its parameters."""
+    from verity.evaluation.reference import signature_of
+    from verity_vllm.query.call_scope import specialization
+    from verity_vllm.query.manifest.format import spec_family
+    from verity_vllm.query.program_view import spec_statics
+
+    d = specialization(spec_family(spec), spec_statics(spec))
+    return d, signature_of(d)[0]
+
+
 def _identity_fault(r: Mapping[str, Any], g: tuple[Any, list[int]] | None) -> str | None:
     if int(r.get("invocation") or 0) or r.get("program_op_path"):
         return f"invocation {r.get('invocation')} of a shared module ({r.get('program_op_path')}): one forward, several bodies"
@@ -336,21 +350,15 @@ class _Context:
         return self.wports[k]
 
     def definition(self, cid: int) -> str:
-        from verity_vllm.query.call_scope import specialization
-        from verity_vllm.query.manifest.format import spec_family
-        from verity_vllm.query.program_view import spec_statics
-
         r = self.raw[cid]
         spec = str(r["spec"])
         if str(r.get("form") or "call") != "call":
             raise Uncovered(f"Call {cid} ({spec}) is a {r.get('form')} row")
         if spec not in self.plan.definitions:
-            from verity.evaluation.reference import signature_of
             from verity_vllm.program.kernels import kernel_registry, rows
 
             try:
-                d = specialization(spec_family(spec), spec_statics(spec))
-                params = signature_of(d)[0]
+                d, params = _definition(spec)
             except Exception as e:  # noqa: BLE001
                 raise Uncovered(f"Call {cid}: {spec} does not resolve to a registered Definition ({e!r:.80})") from None
             leaves = sum(pt.leaves for pt in params)
@@ -372,11 +380,28 @@ class _Context:
             self.plan.literals[spec] = np.asarray(evaluate(self.plan.definitions[spec][0]), dtype=np.uint64)
         return spec
 
+    def weight_only(self, a: int, m: str, memo: dict[int, bool]) -> bool:
+        """Call `a` is of body M and reads only weight fields, literals and other such Calls: its words are the same at every step."""
+        if a not in memo:
+            memo[a] = False
+            r = self.raw.get(a)
+            memo[a] = r is not None and self.corr.module_of(a) == m and str(r.get("form") or "call") == "call" and all(
+                (kind == "p" and int(x) == self.weights) or int(x) in self.pop.literals or (kind == "n" and self.weight_only(int(x), m, memo))
+                for g in r.get("args") or () for kind, x, _lo, _hi in g)
+        return memo[a]
+
     def part(self, rid: str, m: str, s: int, calls: list[int], targets: list[tuple]) -> Part:
         pop, corr, lits = self.pop, self.corr, self.pop.literals
-        inside = set(calls)
+        inside, memo, stack = set(calls), {}, list(calls)
+        while stack:                                   # M's weight-only Calls of another step (a norm's `weight + 1`, made once): its own
+            for g in self.raw[stack.pop()].get("args") or ():
+                for kind, a, _lo, _hi in g:
+                    a = int(a)
+                    if kind == "n" and a not in inside and a not in lits and pop.step_of(a) != s and self.weight_only(a, m, memo):
+                        inside.add(a)
+                        stack.append(a)
         keys: dict[tuple[str, str, str, str], tuple[Any, set[int]]] = {}
-        for c in calls:
+        for c in sorted(inside):
             for g in self.raw[c].get("args") or ():
                 for kind, a, lo, hi in g:
                     a = int(a)
@@ -563,6 +588,64 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
     return max((-(-n // max(1, tokens.get(e, 1))) for e, n in nbytes.items()), default=0), max(count.values(), default=0)
 
 
+# ------------------------------------------------------------------------------------------------------------------------------- record
+def to_json(p: Plan) -> dict[str, Any]:
+    """`p` as JSON: each distinct template once (the bodies' parts index them), the literals' words as little-endian u64 in base64, each
+    Definition by its spec and arity (`of_json` resolves it again)."""
+    import base64
+
+    index: dict[tuple, int] = {}
+    templates: list[dict[str, Any]] = []
+
+    def tpl(t: Template) -> int:
+        k = (t, tuple(o.where for o in t.operands))
+        if k not in index:
+            index[k] = len(templates)
+            templates.append({"specs": t.specs, "recipes": t.recipes, "levels": t.levels,
+                              "operands": [[o.where, o.per_row, o.elems, o.width] for o in t.operands],
+                              "targets": [[x.name, x.at, x.lo, x.hi, x.dtype, x.shared] for x in t.targets],
+                              "shared_specs": t.shared_specs, "shared_recipes": t.shared_recipes, "shared_levels": t.shared_levels})
+        return index[k]
+
+    bodies = [[e, m, [[q.request, tpl(q.template), q.rows] for q in b.parts]] for (e, m), b in p.bodies.items()]
+    return {"program_dirs": p.program_dirs, "templates": templates, "bodies": bodies,
+            "literals": {s: [list(a.shape), base64.b64encode(np.ascontiguousarray(a, dtype="<u8").tobytes()).decode()] for s, a in p.literals.items()},
+            "fields": {n: list(v) for n, v in p.fields.items()}, "definitions": {s: n for s, (_d, n) in p.definitions.items()},
+            "kernel_only": sorted(p.kernel_only), "composition": [[e, c] for e, c in p.composition.items()], "order": p.order,
+            "by_index": [[i, r] for i, r in p.by_index.items()], "identities": p.identities, "uncovered": p.uncovered,
+            "bytes_per_token": p.bytes_per_token, "tensors_per_step": p.tensors_per_step}
+
+
+def _tuples(x: Any) -> Any:
+    return tuple(_tuples(y) for y in x) if isinstance(x, list) else x
+
+
+def of_json(doc: Mapping[str, Any]) -> Plan:
+    """The Plan `to_json` wrote; each Definition resolved from its spec (ValueError when one resolves to another arity)."""
+    import base64
+
+    templates = [Template(_tuples(t["specs"]), _tuples(t["recipes"]), _tuples(t["levels"]),
+                          tuple(Operand(str(w), int(k), int(e), int(b)) for w, k, e, b in t["operands"]),
+                          tuple(Target(str(n), _tuples(at), int(lo), int(hi), str(dt), bool(sh)) for n, at, lo, hi, dt, sh in t["targets"]),
+                          _tuples(t["shared_specs"]), _tuples(t["shared_recipes"]), _tuples(t["shared_levels"])) for t in doc["templates"]]
+    definitions: dict[str, tuple[Any, int]] = {}
+    for spec, n in doc["definitions"].items():
+        d, params = _definition(spec)
+        if len(params) != int(n):
+            raise ValueError(f"call-boundary plan: {spec} takes {len(params)} arguments here, {n} in the plan")
+        definitions[spec] = (d, int(n))
+    return Plan(program_dirs={str(r): str(d) for r, d in doc["program_dirs"].items()},
+                bodies={(int(e), str(m)): Body(str(m), int(e), tuple(Part(str(r), templates[int(i)], int(n)) for r, i, n in parts))
+                        for e, m, parts in doc["bodies"]},
+                literals={s: np.frombuffer(base64.b64decode(b), dtype="<u8").astype(np.uint64).reshape(shape)
+                          for s, (shape, b) in doc["literals"].items()},
+                fields={str(n): (int(e), int(w)) for n, (e, w) in doc["fields"].items()}, definitions=definitions,
+                kernel_only=set(doc["kernel_only"]), composition={int(e): {str(r): int(n) for r, n in c.items()} for e, c in doc["composition"]},
+                order={str(k): str(v) for k, v in doc["order"].items()}, by_index={int(i): str(r) for i, r in doc["by_index"]},
+                identities=int(doc["identities"]), uncovered=[str(u) for u in doc["uncovered"]], bytes_per_token=int(doc["bytes_per_token"]),
+                tensors_per_step=int(doc["tensors_per_step"]))
+
+
 # ---------------------------------------------------------------------------------------------------------------------------- evaluation
 def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray],
                       shared: dict | None = None) -> dict[str, np.ndarray]:
@@ -637,4 +720,4 @@ def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
 
 
 __all__ = ["FAMILY", "WORD_DTYPES", "Uncovered", "Operand", "Target", "Template", "Part", "Body", "Plan", "build_dirs", "request_programs",
-           "plan", "evaluate_template"]
+           "plan", "to_json", "of_json", "evaluate_template"]

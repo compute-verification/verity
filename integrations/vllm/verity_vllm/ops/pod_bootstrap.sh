@@ -38,7 +38,7 @@ SAMPLED=$(cd "$ROOT/../../protocols/sampled_proofs" 2>/dev/null && pwd -P) || { 
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH:$SAMPLED${PYTHONPATH:+:$PYTHONPATH}
-export VERITOR_REPO=$ROOT
+export VERITY_TREE=$ROOT
 CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
 while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
 if [ "$MODE" = auto ]; then
@@ -101,16 +101,24 @@ import hashlib, json, os, sys
 from pathlib import Path
 case, manifest = sys.argv[1], sys.argv[2]
 doc = json.load(open(manifest))
-cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B"}   # every other case is a `role` in checkpoints.json
+cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B", "B7": "Qwen/Qwen2.5-7B"}   # every other case is a `role` in checkpoints.json
 ent = next((c for c in doc["checkpoints"] if c.get("role") == case or (case in cases and c["repo"] == cases[case] and c.get("local_path"))), None)
 if ent is None:
     sys.exit(f"no checkpoints.json entry for case {case}")
 local = Path(ent["local_path"]); shas = ent.get("safetensors_sha256", {})
 if not all((local / f).exists() for f in shas) or not (local / "config.json").exists():
     from huggingface_hub import snapshot_download
-    p = snapshot_download(ent["repo"], revision=ent["revision"], allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.py"],
-                          cache_dir=os.path.join(os.environ["HF_HOME"], "hub"))
-    print("downloaded", p, flush=True)
+    fetch = lambda e: snapshot_download(e["repo"], revision=e["revision"], allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.py"],
+                                        cache_dir=os.path.join(os.environ["HF_HOME"], "hub"))
+    if ent.get("recipe"):          # no hub repo holds a recipe pin: made here from its BF16 pin (engine/fp8_checkpoint.py)
+        from verity_vllm.engine import fp8_checkpoint as F
+        base = F.base_entry(ent, doc["checkpoints"])
+        if not all((Path(base["local_path"]) / f).exists() for f in base["safetensors_sha256"]):
+            print("downloaded", fetch(base), flush=True)
+        made, bad = F.remake(ent, doc["checkpoints"])
+        print("made", made["local_path"], "mismatch", bad, flush=True)
+    else:
+        print("downloaded", fetch(ent), flush=True)
 ok = True
 for f, sha in shas.items():
     h = hashlib.sha256()
