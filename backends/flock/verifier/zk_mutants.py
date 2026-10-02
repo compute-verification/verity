@@ -215,7 +215,7 @@ def main(src, out, table=None):
     record_case("zk-coin-round1", coin(1), reject("ligerito: final check failed"))
     record_case("zk-coin-last-round", coin(-1), reject("zk inner: column"))
     # the verifier checks the record's coin tree, not its openings: the commitment protects the prover (verifier PROTOCOL.md
-    # §7.4); upstream's offline replay ignores `coin_tree` (divergence D5)
+    # §7.4); upstream's offline replay ignores `coin_tree` (divergence D6)
     record_case("zk-coin-tree-key", coin_tree("key", lambda h: flip_hex(h, 5)), ACCEPT)
     record_case("zk-coin-tree-root", coin_tree("root", lambda h: flip_hex(h, 5)), ACCEPT)
     record_case("zk-coin-tree-key-bit-2047", coin_tree("key", lambda h: h[:-2] + "%02x" % (int(h[-2:], 16) | 0x80)),
