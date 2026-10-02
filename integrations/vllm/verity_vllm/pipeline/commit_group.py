@@ -1,8 +1,8 @@
 """`verity-vllm commit-group SPEC`: the Commits of several rows of one engine in one process, under one GPU lease (a grouped Commit).
 
 Each row's Commit is the one its row would run alone (`row_group` writes SPEC from each row's own command line and environment): this
-process runs `commit.main` once per row, in order, in that row's environment and with its output in that row's ``commit.log``, as
-the hot worker runs a job (`hot.serve`).  The first row's Commit takes the lease and builds the engine; the later rows' keep the lease
+process runs `commit.main` once per row, in order, in that row's environment (with what the engine's build wrote into the process's,
+`row_environ`) and with its output in that row's ``commit.log``, as the hot worker runs a job (`hot.serve`).  The first row's Commit takes the lease and builds the engine; the later rows' keep the lease
 (`gpu_lease.acquire`) and reuse the engine when it is exactly the one they would build (`commit.main`: HOT-KEY-MISMATCH otherwise),
 and the pinned pool, the weights root and the live weight digests (`group_reuse`); only the last row's last run releases the lease.
 
@@ -113,6 +113,12 @@ def refusals(rows: list[dict[str, Any]], parse: Callable[[list[str]], Any], unsa
         elif k != first[1]:
             why[r["row"]] = f"its engine differs from row {first[0]}'s ({', '.join(_differs(k, first[1]))})"
     return why
+
+
+def row_environ(env0: Mapping[str, str], r: dict[str, Any], eng: Any) -> dict[str, str]:
+    """A row's process environment: this process's, the row's own keys, then what the engine's build wrote (``Engine.environ``), as
+    a row that built the engine in its own process would have it."""
+    return {**env0, **r["env"], **(getattr(eng, "environ", None) or {})}
 
 
 def _result_of(r: dict[str, Any], **fields: Any) -> dict[str, Any]:
@@ -250,7 +256,7 @@ def main(o: Options) -> int:
     env0 = dict(o.environ)
 
     def enter(r: dict[str, Any]) -> None:
-        cli.set_environment({**env0, **r["env"]}, keep=GL.LEASED)
+        cli.set_environment(row_environ(env0, r, (cd._HOT or {}).get("eng")), keep=GL.LEASED)
         prof.apply_env()                   # the pins a row's own Commit process has from its import of `commit`
 
     def commit(argv: list[str]) -> None:
