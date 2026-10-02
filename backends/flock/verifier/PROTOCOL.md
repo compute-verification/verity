@@ -1315,6 +1315,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
   refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
   audit reports as a gap.
+- **Registered reads** (`Flock.Registered`; `protocols/sampled_proofs/README.md`, "Registered values"). A shared-row header
+  may name `registered`, `{port: {value, positions, paths}}`: those tables' rows are rows of a value committed at
+  registration. The verifier then needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, its
+  root, leaf count and domain, and the position each unit reads). Every table row's `b ‖ c` must open the root at its
+  position (its `hm96-sha512/row/v1` leaf, climbed through its path), and every instance's ref must name the position the
+  verifier's program reads for its unit. A port one side names and the other doesn't refuses. Verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1428,7 +1434,7 @@ Lean verifier without a spec change. After the gate passes, production runs only
 stays in CI as a regression oracle.
 
 "Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
-(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in four
+(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in five
 places, and the corpus marks the vectors that exercise them with the upstream verdict they expect
 (`upstream_accepted` in an expectation):
 
@@ -1441,8 +1447,10 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignored the retained bytes before its
   server retained them. Closed upstream at `631567f7`, where `from_record` requires `msg` on every round of a statement
   whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
+- **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
+  refuses a row that does not open its registered root. No corpus vector exercises it yet.
 
-At `631567f7` only D1 and D2 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
+At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
 in `redigest.py` and `fuzz.py`).
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for

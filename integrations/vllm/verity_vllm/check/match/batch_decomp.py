@@ -56,6 +56,8 @@ import time
 from dataclasses import dataclass
 
 from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import supplied_inputs as SI
+from verity_vllm.check.match.input_layout import weights_input_nodes  # noqa: F401  (re-exported: attribution, resolve_decomp, tests)
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
@@ -168,43 +170,6 @@ def attribute(meta: dict, st: dict) -> tuple[str | None, str]:
 # ------------------------------------------------------------------------------------------------ projection
 
 
-def weights_input_nodes(B: "C.Prog", n_request_params: int, n_seed_params: int = 0, n_peer_params: int = 0) -> set[int]:
-    """[R16 global, F-fp8-GM1 / M-0823] The fold's shared WEIGHTS parameter as a SET of Input nodes: every Input node of the oracle
-    Prog that no request owns.  The fold's root parameters are `prompt_<r>` (one per request, header order), then `seed_<i>` (one per
-    seeded request, [R15 stoch]), then ONE `weights` Record (`fold._header`).  `verity.ir.program._lower_input` lowers a width-homogeneous
-    Record to ONE `Input` batch (the bf16 dense models: `n_input_nodes - 1` was that node) but a MIXED-width Record to one batch PER LEAF
-    FIELD (Qwen3-4B-FP8: e4m3 weight + f32 `weight_scale_inv` per linear + bf16 norms -> 435 nodes at B=1), so the last Input node is not
-    "the weights" and the node count says nothing about the number of requests.  The request-owned Inputs are exactly the first
-    `n_request_params + n_seed_params` nodes (the codec emits one node per prompt/seed parameter, in parameter order, before the Record's
-    leaves); everything after them is the weights, shared by every request subcircuit exactly once (one global address per leaf).
-    Refuses by name a Prog whose Input nodes cannot hold the header's parameters or whose request-owned Inputs are not the leading ones.
-    [R17 D90] a tensor-parallel rank fold adds ONE `peers_<i>` Record per request (homogeneous bf16 -> one Input node each) after the seeds
-    and before the weights: `n_peer_params` of them, request-owned."""
-    n_owned = n_request_params + n_seed_params + n_peer_params
-    inputs = sorted(B.inputs)
-    if len(inputs) <= n_owned:
-        raise ValueError(f"program has {len(inputs)} input nodes but the header has {n_request_params} requests + {n_seed_params} seeds "
-                         f"+ {n_peer_params} peers (>= 1 weights node expected)")
-    owned = inputs[:n_owned]
-    if owned != list(range(n_owned)):
-        raise ValueError(f"the request-owned input nodes are not the leading Input nodes 0..{n_owned - 1}: {owned[:8]}")
-    w = set(inputs[n_owned:])
-    # the codec's layout contract (compare.load_oracle `input_base`): the weights leaves are contiguous after the owned parameters
-    if min(w) != n_owned:
-        raise ValueError(f"first weights input node is {min(w)}, expected {n_owned} (request params {n_request_params}, seeds {n_seed_params}, "
-                         f"peers {n_peer_params})")
-    # cross-check against the fold's OWN statement of where the weights parameter is: load_oracle keys `input_base` by every Input node at or
-    # after the weights parameter index the instances actually read (`operand_refs` space "p", fold contract: weights = the LAST parameter).
-    # A header claiming more (or fewer) requests than the Program has prompt parameters puts the boundary elsewhere -> refused by name.
-    base = getattr(B, "input_base", None)
-    if base:
-        if set(base) != w:
-            raise ValueError(f"header and Program disagree on the input layout: the header's {n_request_params} requests + {n_seed_params} seeds put "
-                             f"the weights at input nodes {min(w)}..{max(w)}, the fold's instances read the weights parameter as input nodes "
-                             f"{min(base)}..{max(base)}")
-    return w
-
-
 class Projection(C.Prog):
     """Request r's view of the oracle Prog: the subset of instances attributed to r, segmented at r's TokenSelects."""
 
@@ -223,6 +188,11 @@ class Projection(C.Prog):
         self.peer_fields = {peer_node: oracle.peer_fields[peer_node]} if peer_node is not None and peer_node in getattr(oracle, "peer_fields", {}) else {}
         self._all_peer_nodes = set(getattr(oracle, "peer_fields", {}))
         self.peer_index = getattr(oracle, "peer_index", {})
+        # the registered `values` are shared like the weights; a `run_<i>` is request i's (the header index = this prompt's node)
+        owner = getattr(oracle, "supplied_owner", {})
+        self.supplied_fields = {k: f for k, f in getattr(oracle, "supplied_fields", {}).items() if owner.get(k) in (None, tok_node)}
+        self.supplied_owner = {k: owner.get(k) for k in self.supplied_fields}
+        self._all_supplied = set(getattr(oracle, "supplied_fields", {}))
         self.param_names = getattr(oracle, "param_names", [])
         self.inst = [oracle.inst[i] for i in inst_idx]
         self.weight_fields = {}
@@ -252,6 +222,11 @@ class Projection(C.Prog):
         space, idx, lo, hi = run
         if space == "n":
             if idx in self.inputs:
+                if idx in self._all_supplied:
+                    if idx in self.supplied_fields:
+                        return SI.src(self, idx, lo, hi)
+                    self._xreq("run-param", idx, lo, hi)
+                    return (XREQ, "run", idx, lo, hi)
                 if idx == self.tok_node:
                     return ("TOK", lo, hi)
                 if idx in self.seed_nodes:
@@ -280,6 +255,11 @@ class Projection(C.Prog):
             dI, dL, dH = delta
             if dI == 0 or c == 1:
                 if idx0 in self.inputs:
+                    if idx0 in self._all_supplied:
+                        if idx0 in self.supplied_fields:
+                            return SI.srcP(self, p, unfold)
+                        self._xreq("run-param", (idx0, lo0, hi0), (0, dL, dH), c)
+                        return [(XREQ, "run", (idx0, lo0, hi0), (0, dL, dH), c)]
                     if idx0 == self.tok_node:
                         return [("TOK", (lo0, hi0), (dL, dH), c)]
                     if idx0 in self.seed_nodes:
@@ -602,12 +582,10 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # A per-position Attention group (rows=|positions sharing T|) is the case only dataflow gets right on pre-X-09 folds.
     shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance (owner SHARED, module level)
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
-    for rid, pidx in param_of.items():
-        owners_of_param[pidx].add(rid)
-    for rid, k in seed_node_of.items():
+    # request-owned inputs: its prompt, seed, [R17 D90] peers (a collective instance reading request r's peers node is r's) and run values
+    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *SI.run_owners(B, reqs)]:
         owners_of_param[k].add(rid)
-    for rid, k in peer_node_of.items():
-        owners_of_param[k].add(rid)      # [R17 D90] a collective instance reading request r's peers node is r's (dataflow channel)
+    shared_inputs = weights_nodes | SI.values_nodes(B)
     owner_of_node: dict[int, str] = {}
     per_req: dict[str, list[int]] = collections.OrderedDict()
     unattributed: list[dict] = []
@@ -631,7 +609,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                         continue
                     for idx in (_idx_values(run) if compact else (run[1],)):
                         if idx in B.inputs:
-                            if idx not in weights_nodes:
+                            if idx not in shared_inputs:
                                 deps |= owners_of_param.get(idx, {("?", "param", idx)})
                             else:
                                 reads_weight = True

@@ -8,7 +8,8 @@ from verity.ir.refs import Coll
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, scalar_kind, shape
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
 
 
@@ -76,7 +77,11 @@ class GeluTanhAndMulRule(InPlaceRule):
                     evidence_domain="structural; numerics: GeluTanhMul_v1 (vLLM _C.gelu_tanh_and_mul)")
 
     def targets(self):
-        return _C_op("gelu_tanh_and_mul")
+        return targets_for("gelu_tanh_and_mul")
+
+    def registered_tables(self, ep, mode):
+        ts = self.targets()
+        return ("gelu_tanh_bf16",) if any(n.op == "call_function" and n.target in ts for n in ep.graph.nodes) else ()
 
     def applies(self, node, ctx):
         out, x = node.args[:2]
@@ -94,8 +99,11 @@ class GeluTanhAndMulRule(InPlaceRule):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
         I = rows[0].type.n // 2
-        fn = ctx.kind("gelu_tanh_mul", node, I=I)
-        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        if ctx.registered_values:
+            fn, table = ctx.kind("gelu_tanh_mul_table", node, I=I), (ctx.table("gelu_tanh_bf16", node),)
+        else:
+            fn, table = ctx.kind("gelu_tanh_mul", node, I=I), ()
+        outs = [ctx.call(fn, r, *table, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
@@ -127,13 +135,12 @@ class Bf16ScalarChainRule(OpRule):
         rows, lead = rows_of(ctx.coll(x))
         N = rows[0].type.n
         if node.target is aten.tanh.default:
-            fn, det = ctx.kind("bf16_tanh", node, N=N), {"N": N}
-        elif node.target is aten.div.Tensor:
-            fn, det = ctx.kind("bf16_div_scalar", node, N=N, C=float(node.args[1])), {"N": N, "C": float(node.args[1])}
+            (fn, value), det = (ctx.kind("bf16_tanh", node, N=N), ()), {"N": N}
         else:
-            fn, det = ctx.kind("bf16_mul_scalar", node, N=N, C=float(node.args[1])), {"N": N, "C": float(node.args[1])}
+            role, C = "bf16_div_scalar" if node.target is aten.div.Tensor else "bf16_mul_scalar", float(node.args[1])
+            (fn, value), det = scalar_kind(ctx, role, node, N, C), {"N": N, "C": C}
         member = _softcap_member(node, ctx) if node.target is aten.mul.Tensor else None
-        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}/{member}[{i}]" if member else f"{ctx.hint_name(node)}[{i}]")
+        outs = [ctx.call(fn, r, *value, node=node, rule=self, name=f"{ctx.hint_name(node)}/{member}[{i}]" if member else f"{ctx.hint_name(node)}[{i}]")
                 for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
         ctx.record(self, node, {**det, "rows": len(rows), **({"member": member} if member else {})}, emitted=f"{fn.id} x{len(rows)}")
