@@ -154,6 +154,13 @@ def test_gpu_lease_caps_busy_and_sampled_time_at_the_held_time(tmp_path):
 FILL_RUNNER = GPU_LEASE.parent.parent / "nebius" / "fill_runner.py"
 
 
+@pytest.fixture(autouse=True)
+def _no_host_yield_lock(tmp_path, monkeypatch):
+    """fill_runner pauses cpu-sets jobs while a check holds FILL_YIELD_LOCK, by default the node's slot-d lock, which the train
+    check running these tests on a node may hold itself (r20261002-072246-b9fe, -073629-eb44): no test sees the host's."""
+    monkeypatch.setenv("FILL_YIELD_LOCK", str(tmp_path / "check-d.lock"))
+
+
 @needs_flock
 def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_with_wait_in_its_argv(tmp_path, monkeypatch):
     """A `gpu-lease 1 --wait` that holds its GPU keeps `--wait` in its argv. Counting it as a waiter froze fill across node 2 for as
@@ -1054,6 +1061,7 @@ def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quie
             ]}) + "\n")
     monkeypatch.setenv("UTIL_OUT_DIR", str(util))
     monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("LEASE_USAGE", str(tmp_path / "lease-usage.jsonl"))
     spec = importlib.util.spec_from_file_location("publish_pool_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pp)
@@ -1237,6 +1245,34 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_node_2_again(tmp_path):
+    """cov-cg04-norm-taps-2 went from node 1 to node 2 seven times (22:30-23:06Z, 1 Oct): node 2 handed it back after two stops,
+    and node 1's offload moved it again 120 s later. A Commit handed back (task 1) goes into node 1's reclaimed.txt, which offload
+    skips, before node 1's dispatcher takes it; a replay (task 2) doesn't, and a proof goes to neither. `dispatch_n1` runs as the
+    script defines it, with ssh faked."""
+    fn = re.search(r"^dispatch_n1\(\) \{.*?^\}\n", (NEBIUS / "n2_commit.sh").read_text(), re.M | re.S).group(0)
+    bin_, log = tmp_path / "bin", tmp_path / "ssh.log"
+    bin_.mkdir()
+    (bin_ / "ssh").write_text(f'#!/bin/sh\n[ "$1" = -n ] && shift\nshift\necho "$*" >> {log}\n')
+    (bin_ / "ssh").chmod(0o755)
+
+    def hand_back(task: int, proof: str = "") -> list[str]:
+        log.write_text("")
+        subprocess.run(["bash", "-c", f"set -euo pipefail\n{fn}\nITEM_ARGS=(--env ROW=r)\ndispatch_n1 {task}"], check=True,
+                       capture_output=True, env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "N1": "vy-n1", "GUEST": "/g",
+                                                 "DISPATCH": "/d.py", "KUBE_DISPATCH": "KUBECONFIG=k", "TREE": "/t", "PROOF": proof,
+                                                 "COMMIT_KEY": "vllm-epoch-run/cov-cg04-norm-taps-2"})
+        return log.read_text().splitlines()
+
+    mark, submit = hand_back(1)
+    assert mark == "echo vllm-epoch-run/cov-cg04-norm-taps-2 >> /g/reclaimed.txt"
+    assert "/d.py submit config-run vllm-epoch-run/cov-cg04-norm-taps-2 --tree /t --task 1" in submit
+    [replay] = hand_back(2)
+    assert "--task 2" in replay
+    assert hand_back(1, proof="1") == []
+
+
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
@@ -1314,7 +1350,8 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
     t = 1_800_000_000.0
     s = c.tick(t)
     created = [json.loads(st) for a, st in calls if a[0] == "create"]
-    assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"] == {"nvidia.com/gpu": "1"}
+    assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"] == {
+        "requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}      # no CPU or memory: waiters hold the queue's
     assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "provers" and s["pool"] == 0
     assert all(g["fence_pids"] for g in s["gpus"])
     state["holders"] = [(created[0]["metadata"]["name"], "hold-1", "GPU-b")]

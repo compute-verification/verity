@@ -44,6 +44,20 @@ def test_odd_partitions(rope, spec):
     assert r["units"] != PU.check(PU.partition_units(rope, "q-word"), T=1)["units"]
 
 
+def test_a_registered_input_is_an_input():
+    from verity.ir.defs import CompositeDefinition
+    from verity.ir.types import Value
+    from verity.ml.scalar import I32Add
+
+    I32 = Value(32)
+    top = CompositeDefinition("PuRegistered", 1, (), lambda S: ((("x", I32), ("eps", I32)), I32),
+                              lambda B, S, x, eps: B.call(I32Add, B.call(I32Add, x, eps), eps), register=False)
+    runs = [PU.check(PU.partition_units(Program(top, registered=reg), "q-word"), T=4) for reg in ((), ("eps",))]
+    for r in runs:
+        assert r["shapes_lowered"] == r["shapes"] == 1 and r["units"] == 2 and r["mismatches"] == 0
+    assert runs[0]["classes"] == runs[1]["classes"] and runs[0]["partition"] != runs[1]["partition"]
+
+
 @pytest.mark.slow
 def test_a_class_circuit_rejects_another_class(tiny):
     units = PU.partition_units(tiny, "q-word")

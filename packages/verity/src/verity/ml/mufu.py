@@ -198,19 +198,22 @@ def _div_full_divisor(b: int) -> int:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@primitive("MufuEx2Ftz", 1, [("x", F32)], F32, conformance="exact-model-tested")
+@primitive("MufuEx2Ftz", 1, [("x", F32)], F32, conformance="exact-model-tested",
+           tables=(("ex2", library.LIBRARY),))
 def MufuEx2Ftz(x: int) -> int:
     """`ex2.approx.ftz.f32` (MUFU.EX2), measured table + reduction rule (attention-model.md §3.1)."""
     return mufu_ex2_bits(x, _row("ex2"))
 
 
-@primitive("MufuRcpFtz", 1, [("x", F32)], F32, conformance="exact-model-tested")
+@primitive("MufuRcpFtz", 1, [("x", F32)], F32, conformance="exact-model-tested",
+           tables=(("rcp", library.LIBRARY),))
 def MufuRcpFtz(x: int) -> int:
     """`rcp.approx.ftz.f32` (MUFU.RCP), measured 2^23 mantissa table (attention-model.md §3.1)."""
     return mufu_rcp_bits(x, _row("rcp"))
 
 
-@primitive("Fa2InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested")
+@primitive("Fa2InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested",
+           tables=(("rcp", library.LIBRARY),))
 def Fa2InvSum(s: int) -> int:
     """FA2 `normalize_softmax_lse`: (sum == 0 || sum != sum) ? 1 : MUFU.RCP(sum)."""
     if (s & 0x7FFFFFFF) == 0 or f32_is_nan(s):
@@ -218,13 +221,15 @@ def Fa2InvSum(s: int) -> int:
     return MufuRcpFtz.evaluate(s)
 
 
-@primitive("MufuSqrtFtz", 1, [("x", F32)], F32, conformance="exact-model-tested")
+@primitive("MufuSqrtFtz", 1, [("x", F32)], F32, conformance="exact-model-tested",
+           tables=(("sqrt", library.LIBRARY),))
 def MufuSqrtFtz(x: int) -> int:
     """`sqrt.approx.ftz.f32` (MUFU.SQRT) as the Triton RMSNorm kernel uses it (rmsnorm-model.md)."""
     return mufu_sqrt_bits(x, _row("sqrt"))
 
 
-@primitive("DivFullRcp", 1, [("b", F32)], F32, conformance="exact-model-tested")
+@primitive("DivFullRcp", 1, [("b", F32)], F32, conformance="exact-model-tested",
+           tables=(("rcp", library.LIBRARY),))
 def DivFullRcp(b: int) -> int:
     """`div.full.f32` reciprocal part as ptxas emits it: range-scale b (|b| > 2^126: *0.25; |b| < 2^-126:
     *2^24) then MUFU.RCP; `DivFullScaleA` produces the matching scaled numerator (rms_triton_model.cpp)."""
@@ -244,7 +249,8 @@ def DivFullScaleA(a: int, b: int) -> int:
     return a & 0xFFFFFFFF
 
 
-@primitive("RsqrtApprox", 1, [("x", F32)], F32, conformance="exact-model-tested")
+@primitive("RsqrtApprox", 1, [("x", F32)], F32, conformance="exact-model-tested",
+           tables=(("rsq", library.LIBRARY),))
 def RsqrtApprox(x: int) -> int:
     """`rsqrt.approx.f32` (rsqrtf without fast-math): MUFU.RSQ with the subnormal range scaling
     (rms_triton_model.rsqrt_f32; CUDA fused_add_rms_norm / rms_norm kernels)."""
@@ -409,7 +415,8 @@ def mufu_tanh_coverage() -> dict:
            conformance="quarantine: measured exact table 2026-09-17 (RTX 4090 sm_89, driver 580.178.04, triton 3.7.1) covering all 2^32 "
                        "words — in-tree quarantine/dense/tables/mufu_tanh_sm89.xzblocks (sha256 5e261b88…) + three exhaustively-scanned "
                        "rules; on-worker conformance job 0917T215619-1af45f 400,077 words 0 mismatches; exercised end-to-end by the "
-                       "dense/AttentionSoftcap@v1 difftest vs FA2 (job 0917T223335-9ad747, 25/25 bitwise, driver 595.91.07)")
+                       "dense/AttentionSoftcap@v1 difftest vs FA2 (job 0917T223335-9ad747, 25/25 bitwise, driver 595.91.07)",
+           tables=(("tanh_mufu", library.LIBRARY),))
 def MufuTanh(x: int) -> int:
     """`tanh.approx.f32` (MUFU.TANH) as FA2 `apply_softcap` executes it on sm_89: NaN and the exhaustively scanned regions from
     `MUFU_TANH_RULES`, every other word from the measured table (see the section comment).  Raises `MufuTanhUnmeasured` only when
