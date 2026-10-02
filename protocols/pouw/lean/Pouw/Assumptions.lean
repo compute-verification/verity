@@ -1,34 +1,58 @@
-import Pouw.Game.Defs
+import Pouw.Assumptions.Dimension.A2Words
+import Pouw.Assumptions.Dimension.Assumptions
+import Pouw.Assumptions.Dimension.Embed
+import Pouw.Assumptions.Dimension.EmbedAssumptions
+import Pouw.Assumptions.Dimension.Forest
+import Pouw.Assumptions.Dimension.Fp8Mma
+import Pouw.Assumptions.Dimension.H100
+import Pouw.Assumptions.Dimension.H100Assumptions
+import Pouw.Assumptions.Dimension.H100Cite
+import Pouw.Assumptions.Dimension.H100Dense
+import Pouw.Assumptions.Dimension.H100Floor
+import Pouw.Assumptions.Dimension.H100Frag
+import Pouw.Assumptions.Dimension.H100LoopFree
+import Pouw.Assumptions.Dimension.H100Measured
+import Pouw.Assumptions.Dimension.H100PeakTc
+import Pouw.Assumptions.Dimension.H100W
+import Pouw.Assumptions.Dimension.Mixing
+import Pouw.Assumptions.Dimension.OpenPipe
+import Pouw.Assumptions.Dimension.Pinned
+import Pouw.Assumptions.Dimension.Pipe
+import Pouw.Assumptions.Dimension.PipeAssumptions
+import Pouw.Assumptions.Dimension.PipeModel
+import Pouw.Assumptions.Dimension.RouteU
+import Pouw.Assumptions.Dimension.RouteUPipe
+import Pouw.Assumptions.Dimension.RouteUPipeAssumptions
+import Pouw.Assumptions.Fp8Atom.H1TAssumptions
+import Pouw.Assumptions.Fp8Atom.H1TGamma
+import Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
+import Pouw.Assumptions.Fp8Atom.H1TTile
+import Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
+import Pouw.Assumptions.Game
+import Pouw.Assumptions.NCP.Assumptions
+import Pouw.Assumptions.NCP.Chain
+import Pouw.Assumptions.NCP.GamePinned
+import Pouw.Assumptions.NCP.RouteUAssumptions
+import Pouw.Assumptions.NCP.RouteUGame
+import Pouw.Assumptions.NCP.RouteUWord
+import Pouw.Assumptions.PearlC.DeviceChainCap
+import Pouw.Assumptions.PearlC.DeviceChainCapKernel
+import Pouw.Assumptions.PearlC.RowSeedAssumptions
+import Pouw.Assumptions.PearlC.TTOut
+import Pouw.Assumptions.PearlC.TTOutChainOnly
+import Pouw.Assumptions.PearlC.TTOutFp4
+import Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
+import Pouw.Assumptions.PearlC.TTOutRev1
+import Pouw.Assumptions.PearlC.TTOutRowSeed
+import Pouw.Assumptions.PearlC.TTOutTileUOnly
+import Pouw.Assumptions.PearlC.TTOutUOnly
+import Pouw.Assumptions.Pinned
 
 /-!
-# Named assumptions (trusted)
+# PoUW's named assumptions, and the definitions and statements over them (trusted)
 
-Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
+The modules `lean-audit.json` lists under `assumptions` state the named assumptions, each a `Prop` taken as a
+hypothesis by the statements that use it, never an `axiom`; the game's are in `Game`. The layer's other modules hold
+the definitions and statements that read them, which an assumption module may import. They import `Pouw.Protocol` and
+each other, never a proof.
 -/
-
-namespace Pouw.Assumptions
-
-open Finset
-
-variable {Q R S : Type}
-
-/-- **Assumption TT(γ₀), tight noised transcript** (problem statement §4.4), for a cost model `CM`, a protocol `P`
-(the named assumption is its instance at `CM = M_4090` and `P = D1.m1`), a domain `D`, a target `γ₀` and an error
-`ε(q, N)`.
-
-The model's programs reach the oracle only through counted queries (`CostModel.Queries`, red-team B6). In the game
-of §3.3 (the same adversaries, budgets and oracle-call bounds as `Gγ`), let `K'` be the units whose checked values
-are correct (`checkedSet`; the useful output is not required). Then
-`Pr_{H,s}[ ∑_{u ∈ K'} m_u·k_u·n_u > T / (1 − γ₀) ] ≤ ε(q, N)`.
-
-It is stated in the same game as `Gγ`, so grinding and collisions over the `q` free oracle calls are inside
-`ε(q, N)`. TT is false when `γ₀ ≥ 1` or for zero noise in natural models (`Pouw.Sanity`). -/
-def TT [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
-  CM.Queries ∧
-  ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), ((U.layout.shape u).Wmm : ℝ))
-      ≤ ε q U.layout.N
-
-end Pouw.Assumptions
