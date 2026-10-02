@@ -21,12 +21,15 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   pre : ∃ more, c.nets.toList = (#[("root", t.root)] ++ t.layouts.map fun (e : String × Net × ℕ) => (e.1, e.2.1)).toList ++ more ∧
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
+  portWords : ∀ p ∈ c.ports.toList, 2 * p.words = 128 * p.chunks
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
   check : ∃ ls, HmRow.check c tags ls = .ok ()
+  /-- the `sha512x3` and `hm96` nets are the verifier's (`HmNets.check_ok`) -/
+  rowNets : HmNets.check c = .ok ()
   typed : c.typed = some (HmRow.blockOf t)
   upv : c.upv = 1
   leavesIn : c.leavesIn = #[#[]]
@@ -170,6 +173,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   (have hh := except_bind_ok h; clear h; obtain ⟨tyd, htyd, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hnetOf : ∀ nm i, netOf nm = .ok i → i < nets2.size := by
@@ -263,7 +267,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
   -- the ports
-  have hports : ∀ p ∈ ports.toList, 0 < p.chunks := by
+  have hports : ∀ p ∈ ports.toList, 0 < p.chunks ∧ 2 * p.words = 128 * p.chunks := by
     intro p hp
     have := forIn_array_yield_ok (fun a s hs => by
       split at hs
@@ -314,7 +318,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          ports := hports, unitNet := findIdx?_lt hunit
+          ports := fun p hp => (hports p hp).1, portWords := fun p hp => (hports p hp).2, unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
@@ -327,6 +331,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
             simp [h2] at h0
           shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩
+          rowNets := by cases w'; exact hrows
           typed := htyped
           upv := (Except.ok.inj hupv).symm
           leavesIn := (Except.ok.inj hleavesIn).symm

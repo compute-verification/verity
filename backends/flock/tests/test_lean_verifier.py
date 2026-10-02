@@ -742,6 +742,50 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
         assert p.returncode == 1 and "a range's slots are smaller than a word or larger than the block" in p.stdout, (change, p.stdout)
 
 
+def first_and_row(lines: list[str], name: str) -> int:
+    """The line of section `name`'s first AND row: its first row that is neither an input's self row nor empty."""
+    at = next(k for k, line in enumerate(lines) if line.startswith(f"CIRCUIT {name} ")) + 2
+    return next(at + q for q, line in enumerate(lines[at:]) if line not in (f"1 {q} 1 {q}", "0 0"))
+
+
+ROW_NETS = [("sha512x3", "three SHA-512 compressions"), ("hm96", "hm96-sha512/row/v1 commit")]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_row_nets_are_the_verifiers(tmp_path):
+    """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
+    generates (`Flock.HmNets`, PROTOCOL.md §16.10). A composed RoPE circuit is accepted; one AND row changed in either
+    section is refused, naming the row."""
+    pytest.importorskip("verity_numerical")
+    from verity_flock import circuit as FC
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit)
+    FC.stage(low, s, 0, 4, tmp_path / "st")
+
+    def statement(circuit):
+        f = tmp_path / "c.circuit"
+        f.write_text(circuit)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+                               "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True, text=True)
+
+    p = statement(text)
+    assert p.returncode == 0, p.stderr
+    for name, what in ROW_NETS:
+        lines = text.split("\n")
+        at = first_and_row(lines, name)
+        lines[at] = "1 0 1 1"
+        p = statement("\n".join(lines))
+        row = at - next(k for k, line in enumerate(lines) if line.startswith(f"CIRCUIT {name} ")) - 2
+        assert p.returncode == 1 and f"circuit {name}: not the verifier's {what} (row {row} differs)" in p.stdout, p.stdout
+
+
 TOY_EXTRACTOR = r"""import FlockProofs
 open Flock
 

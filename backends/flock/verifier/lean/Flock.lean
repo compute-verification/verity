@@ -22,6 +22,7 @@ import Flock.Blake3Row
 import Flock.Statement
 import Flock.Verify
 import Flock.Partition
+import Flock.HmNets
 import Flock.HmRow
 import Flock.TemplateQuery
 import Flock.Derive
