@@ -1213,6 +1213,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   row's 192-byte salt `y` under `hm96-sha512/v1`'s default key. The verifier recomputes each row's `prefix`, the midstate
   after it (one SHA-512 compression from the IV), and the padding block `0x80 ‖ 0 ‖ be128(8·(128 + 2·words))`, and refuses
   a META `rows` entry that differs, and a `row_key_sha512` other than SHA-512 of the default key.
+- **Bit rows (`hm96-sha512/row/v2`).** META may carry `row_schemas`, one `["hm96-sha512/row/v2", ℓ]` per port, for
+  `row_schema` (refused: both, neither, or typed); the identity's `row_leaf_in_circuit` then names `hm96-sha512/row/v2`.
+  Port `p` is core's bit row of `ℓ < 2^64` bits (`sha512/row/v2`): `⌈ℓ/16⌉` u16 leaves, bits low first, `x = SHA-512(P(ℓ)
+  ‖ bytes)` over `B = ⌈ℓ/8⌉` bytes. The verifier derives from `ℓ` the words, `⌈(B + 17)/128⌉ − 1 ≤ 2^16` compressions,
+  `P(ℓ)`'s midstate and the padding `0x80 ‖ 0* ‖ be128(8·(128 + B))`, refusing a differing META `ports` or `rows` entry and
+  a statement with no compression. Message bit `b` of byte `j` is a row bit if `8j + b < ℓ`, else a zero fill bit (`j <
+  B`) or padding; so the hm96 `pad` may hold row bytes, and a row of ≤ 111 bytes has no compression.
 - **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
   1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
   ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
@@ -1228,7 +1235,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
   bit `t % 8` (compression `B / 128`, word `o / 8`, bit `56 − 8·(o % 8) + t % 8` for `o = B % 128`; a zero leaf from its own
-  forced-zero row); every wire.
+  forced-zero row); every wire. For a bit row: the first `cv` (with no compression, the unwired hm96
+  slot's) from the midstate; every constant message bit as `pad`'s are; a leaf or cut bit at row bit `16·leaf + t ≥ ℓ`
+  from the forced-zero row (no leaf reads a fill bit), one in the last block from the hm96 `pad`.
 - **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
   `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
 - **The region-word check** (`HmRow.checkRegionWords`, `docs/region-word-check.md`; the red team's C3, H_reg).
@@ -1246,8 +1255,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
   `SHA-512(canon(header, rows = false) ‖ body)`. The frame-v3-sha512 roots (§16.6 with SHA-512) are over the population:
-  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))`, output leaves `u16` words. Each port's
-  `dummy.bc` must be the zero row's: `SHA-512(prefix ‖ 0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)`.
+  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))` (a bit row's under
+  `hm96-sha512/row/v2`), output leaves `u16` words. Each port's `dummy.bc` must be the zero row's: `SHA-512(prefix ‖
+  0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)` (a bit row's with `P(ℓ)` and `0^B`).
 - **The drawn statement.** For a record with a `unit_draw` over the population's `N` instances, instance `i` is population
   position `units[i]`; the header is the population's with `unit_draw`, `instances = K`, `population = N` and the drawn
   units' indices in `units`; the public digest covers that header and the population's body, so the roots stay the

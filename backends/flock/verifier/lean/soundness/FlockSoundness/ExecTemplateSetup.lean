@@ -267,56 +267,43 @@ theorem read_held {tags : Tags} {bytes : ByteArray} {tables : List (String × By
 
 /-! ## The rows' wires are into the rows' circuits -/
 
-theorem rowSlots_all (ports : Array Port) :
-    ∀ w ∈ (HmRow.rowSlots ports).2.toList, ∀ e ∈ w.toList, e.1 < (HmRow.rowSlots ports).1 ∧ e.2 < 3 := by
-  unfold HmRow.rowSlots
-  simp only [HmRow.PER_SLOT]
-  rw [← Array.forIn_toList]
-  have := forIn_id_inv_tail (fun (_ : List Port) (s : ℕ × Array (Array (ℕ × ℕ))) =>
-      ∀ w ∈ s.2.toList, ∀ e ∈ w.toList, ∃ k, e = (k / 3, k % 3) ∧ k < s.1)
-    (f := fun p s => pure (ForInStep.yield (s.1 + p.chunks,
-      s.2.push (Array.map (fun k => ((s.1 + k) / 3, (s.1 + k) % 3)) (Array.range p.chunks)))))
-    (fun p L s hs => ⟨_, rfl, ?_⟩) ports.toList (0, #[]) (by simp)
-  · intro w hw e he
-    obtain ⟨k, rfl, hlt⟩ := this w hw e he
-    show k / 3 < (_ + 3 - 1) / 3 ∧ k % 3 < 3
-    omega
-  · intro w hw e he
-    simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw
-    rcases hw with hw | rfl
-    · obtain ⟨k, hk, hlt⟩ := hs w hw e he
-      exact ⟨k, hk, by simp only; omega⟩
-    · simp only [Array.toList_map, Array.toList_range, List.mem_map, List.mem_range] at he
-      obtain ⟨k, hk, rfl⟩ := he
-      exact ⟨s.1 + k, rfl, by simp only; omega⟩
-
 /-- **The rows' own wires are into the rows' circuits**: each chain's `cv` into a `sha512x3` slot, each row's hm96 `cv`
 into its hm96 slot. -/
-theorem rowWires_dst (ports : Array Port) (hp : ∀ p ∈ ports.toList, 0 < p.chunks) (sha hm : ℕ) :
+theorem rowWires_dst (ports : Array Port) (sha hm : ℕ) :
     ∀ w ∈ (HmRow.rowWires ports sha hm).toList,
       (w.dst.1 = sha ∧ w.dst.2.1 < (HmRow.rowSlots ports).1) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size) := by
   have hall := rowSlots_all ports
-  have hsz := (rowSlots_spec ports hp).1
+  have hsz := rowSlots_spec ports
   unfold HmRow.rowWires
   generalize HmRow.rowSlots ports = r at hall hsz ⊢
   obtain ⟨nSha, where_⟩ := r
   simp only at hall hsz ⊢
   refine forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
       (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
-    (fun p _ hpl out hout => ⟨_, rfl, ?_⟩) (by simp)
+    (fun p _ hpl out hout => ?_) (by simp)
   have hw : where_[p]! ∈ where_.toList := getElem_mem_toList' hpl
-  intro w hw'
-  simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw'
-  rcases hw' with hw' | rfl
-  · revert w hw'
-    refine forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
-        (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
-      (fun k _ hk out hout => ⟨_, rfl, fun w hw' => ?_⟩) hout
+  have hchain : ∀ k, 1 ≤ k → k < (where_[p]!).size → ∀ out : Array Wire, (∀ w ∈ out.toList,
+      (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size)) →
+      ∀ w ∈ (out.push ⟨(sha, (where_[p]!)[k]!.1, 2 * (where_[p]!)[k]!.2),
+        (sha, (where_[p]!)[k - 1]!.1, (where_[p]!)[k - 1]!.2)⟩).toList,
+      (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size) := by
+    intro k _ hk out hout w hw'
     simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw'
     rcases hw' with hw' | rfl
     · exact hout w hw'
     · exact Or.inl ⟨rfl, (hall _ hw (where_[p]!)[k]! (getElem_mem_toList' hk)).1⟩
-  · exact Or.inr ⟨rfl, by rw [← hsz]; exact hpl⟩
+  by_cases h0 : 0 < (where_[p]!).size
+  · refine ⟨_, by simp only [h0, ↓reduceIte]; rfl, fun w hw' => ?_⟩
+    simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw'
+    rcases hw' with hw' | rfl
+    · revert w hw'
+      exact forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
+          (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
+        (fun k hk1 hk out hout => ⟨_, rfl, hchain k hk1 hk out hout⟩) hout
+    · exact Or.inr ⟨rfl, by rw [← hsz]; exact hpl⟩
+  · exact ⟨_, by simp only [h0, ↓reduceIte]; rfl, forIn_id_inv_range (P := fun out : Array Wire => ∀ w ∈ out.toList,
+        (w.dst.1 = sha ∧ w.dst.2.1 < nSha) ∨ (w.dst.1 = hm ∧ w.dst.2.1 < ports.size))
+      (fun k hk1 hk out hout => ⟨_, rfl, hchain k hk1 hk out hout⟩) hout⟩
 
 /-- **Δ's other flat rows, for a template, are input bits of the rows' circuits' slots**: no leaf map or cut, and the
 wires are the rows' own chains (`parse_facts_tmpl`). -/
@@ -339,30 +326,21 @@ theorem deltaIn_rows {tags : Tags} {t : Typed.Template} {c : Circuit} {tb : Type
     refine ⟨n, hn, g * c.perVu.getD n 0 + i, q.1 + t, ⟨by rw [hc]; exact Rows.mul_add_lt hg hi, ?_, ?_⟩, by omega⟩
     · rw [hsl]; omega
     · unfold Circuit.slotCol; omega
-  obtain ⟨hws, hw0⟩ := rowSlots_spec c.ports P.ports
-  rcases hx with ⟨g, hg, p, hp, t, ht, rfl⟩ | ⟨g, hg, p, hp, t, ht, rfl⟩ | ⟨k, hk, j, hj, t, ht, rfl⟩ |
+  have hws := rowSlots_spec c.ports
+  have hall := rowSlots_all c.ports
+  rcases hx with ⟨g, hg, p, hp, k, hk, i, hi, t, ht, rfl⟩ | ⟨g, hg, p, hp, i, hi, t, ht, rfl⟩ | ⟨k, hk, j, hj, t, ht, rfl⟩ |
     ⟨g, hg, e, he, t, ht, rfl⟩ | ⟨g, hg, w, hw, t, ht, rfl⟩
-  · -- a row's first cv bit
-    obtain ⟨h1, h2⟩ := hw0 _ (getElem_mem_toList' hp)
+  · -- a bit of a row's chain
+    obtain ⟨h1, h2⟩ := hall _ (getElem_mem_toList' hp) _ (getElem_mem_toList' hk)
     have hsz := C.sha_in.1
-    have hidx : 2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2 < 6 := by omega
+    have hidx : 2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i < 6 := by omega
     refine hbit _ (Or.inl rfl) g hg _ (by rw [C.perVu_sha]; exact h1) _
       (getElem_mem_toList' (by rw [hsz]; exact hidx)) t ?_
-    rw [C.sha_in.2 _ hidx, ite_eq_left (by simp)]
+    rw [C.sha_in.2 _ hidx, sha_width _ _ hi]
     exact ht
-  · -- an hm96 slot's pad bit
-    have hl : (portCols (c.nets.getD c.hmNet default).2.inGroups).toList.map (·.2) =
-        [512, 1024, 8 * HmRow.SALT_BYTES] := by
-      rw [← Array.toList_map, C.hm_in]
-    have hsz : (portCols (c.nets.getD c.hmNet default).2.inGroups).size = 3 := by
-      have := congrArg List.length hl; simpa using this
-    have hw : (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.2 = 1024 := by
-      rw [getElem!_pos _ 1 (by rw [hsz]; omega)]
-      have := congrArg (fun l : List ℕ => l[1]?) hl
-      simp only [List.getElem?_map, Array.getElem?_toList] at this
-      rw [Array.getElem?_eq_getElem (by rw [hsz]; omega)] at this
-      simpa using this
-    refine hbit _ (Or.inr rfl) g hg p ?_ _ (getElem_mem_toList' (by rw [hsz]; omega)) t (by rw [hw]; exact ht)
+  · -- a bit of a row's hm96 slot
+    obtain ⟨hil, hw⟩ := hm_width C.hm_in hi
+    refine hbit _ (Or.inr rfl) g hg p ?_ _ (getElem_mem_toList' hil) t (by rw [hw]; exact ht)
     rw [C.perVu_hm, ← hws]
     exact lt_of_lt_of_le hp (le_nextPow2 _)
   · -- no leaf map
@@ -373,7 +351,7 @@ theorem deltaIn_rows {tags : Tags} {t : Typed.Template} {c : Circuit} {tb : Type
     cases he
   · -- the rows' own wires
     rw [P.wires] at hw
-    have hwd := rowWires_dst c.ports P.ports c.shaNet c.hmNet w hw
+    have hwd := rowWires_dst c.ports c.shaNet c.hmNet w hw
     by_cases hq : w.dst.2.2 < (portCols (c.nets.getD w.dst.1 default).2.inGroups).size
     · have hqm := getD_mem_toList (d := default) hq
       rcases hwd with ⟨h1, h2⟩ | ⟨h1, h2⟩
@@ -687,55 +665,76 @@ theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFa
   · exact (netOK_built (parse_built hp)).1
   · exact (netOK_lookup hb).1
 
-/-- **A message bit's column is in the block**: for any row, byte and bit, it is a column of a `sha512x3` slot's message
-port, when the file has a row. -/
+theorem starts_size (c : Circuit) : (Typed.starts c).size = c.ports.size := by
+  unfold Typed.starts
+  rw [← Array.foldl_toList]
+  suffices h : ∀ (L : List Port) (acc : Array ℕ × ℕ),
+      (L.foldl (fun (acc : Array ℕ × ℕ) p => (acc.1.push acc.2, acc.2 + p.words)) acc).1.size = acc.1.size + L.length by
+    simpa using h c.ports.toList (#[], 0)
+  intro L
+  induction L with
+  | nil => intro acc; simp
+  | cons p L ih => intro acc; rw [List.foldl_cons, ih]; simp only [Array.size_push, List.length_cons]; omega
+
+/-- **The port a row word's leaf is in** (`copySrc`'s, as `HmRow.delta` finds it) is one of the file's ports, when it has
+one. -/
+theorem portAt_lt (c : Circuit) (hne : 0 < c.ports.size) (x : ℕ) :
+    ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x)).getD 0 < c.ports.size := by
+  rw [← starts_size c] at hne ⊢
+  cases hf : (List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x) with
+  | none => exact hne
+  | some q => exact List.mem_range.1 (List.mem_reverse.1 (List.mem_of_find?_eq_some hf))
+
+/-- **A message bit's column is in the block**: for a row of the file, any byte and bit, it is a column of a `sha512x3`
+slot's message port or, past the row's chain, of its hm96 slot's `pad`. -/
 theorem msgCol_lt {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
-    (C : CheckFactsT c (HmRow.blockOf t)) (hne : 0 < c.ports.size) {g : ℕ} (hg : g < c.g) (p byte b : ℕ)
+    (C : CheckFactsT c (HmRow.blockOf t)) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
     (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
-  obtain ⟨hws, hw0⟩ := rowSlots_spec c.ports P.ports
+  have hws := rowSlots_spec c.ports
   have hall := rowSlots_all c.ports
-  have hns : 0 < (HmRow.rowSlots c.ports).1 := by
-    have hw : (HmRow.rowSlots c.ports).2[0]! ∈ (HmRow.rowSlots c.ports).2.toList :=
-      getElem_mem_toList' (by rw [hws]; exact hne)
-    exact lt_of_le_of_lt (Nat.zero_le _) (hw0 _ hw).1
-  have hent : ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.1 < (HmRow.rowSlots c.ports).1 ∧
-      ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.2 < 3 := by
-    rcases nested_getElem! (HmRow.rowSlots c.ports).2 p (byte / 128) with h | ⟨w, hw, he⟩
-    · rw [h]; exact ⟨hns, by decide⟩
-    · exact hall w hw _ he
-  obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
-  have hc := C.count _ hm _ hk
-  have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
-  obtain ⟨-, hW, hports⟩ := rows_netOK P C _ (Or.inl rfl)
+  have hpad : ∀ n, (n = c.shaNet ∨ n = c.hmNet) → ∀ s < c.perVu.getD n 0,
+      ∀ i < (portCols (c.nets.getD n default).2.inGroups).size,
+      ((portCols (c.nets.getD n default).2.inGroups)[i]!).2 = 1024 →
+      c.slotCol n g s + ((portCols (c.nets.getD n default).2.inGroups)[i]!).1 + 64 * (byte % 128 / 8) + 56 -
+        8 * (byte % 128 % 8) + b < 2 ^ c.kLog := by
+    intro n hn s hs i hi hq
+    have hnl : n < c.nets.size := by rcases hn with rfl | rfl; exact P.shaNet; exact P.hmNet
+    obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ hnl)
+    have hc := C.count _ hm _ hk
+    have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
+    obtain ⟨-, hW, hports⟩ := rows_netOK P C _ hn
+    have hqm := hports _ (getElem_mem_toList' hi)
+    have h1 : 64 * (byte % 128 / 8) ≤ 960 := by omega
+    have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+    have hat : AtSlot c n (g * c.perVu.getD n 0 + s)
+        (((portCols (c.nets.getD n default).2.inGroups)[i]!).1 + 64 * (byte % 128 / 8) +
+          (56 - 8 * (byte % 128 % 8)) + b)
+        (c.slotCol n g s + ((portCols (c.nets.getD n default).2.inGroups)[i]!).1 +
+          64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + b) := by
+      refine ⟨by rw [hc]; exact Rows.mul_add_lt hg hs, ?_, ?_⟩
+      · rw [hsl]; omega
+      · unfold Circuit.slotCol; omega
+    exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
   have hpv := C.perVu_sha
-  obtain ⟨hsz, hsin⟩ := C.sha_in
   unfold Typed.msgCol
-  generalize hrs : HmRow.rowSlots c.ports = rs at hent hns hpv
+  generalize hrs : HmRow.rowSlots c.ports = rs at hall hws hpv
   obtain ⟨nSha, where_⟩ := rs
-  simp only at hent hpv ⊢
-  generalize hE : (where_[p]!)[byte / 128]! = e at hent ⊢
-  obtain ⟨slot, sub⟩ := e
-  simp only at hent ⊢
-  have hsub : 2 * sub + 1 < 6 := by omega
-  have hq : ((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).2 = 1024 := by
-    rw [hsin _ hsub]
-    have : (2 * sub + 1) % 2 = 1 := by omega
-    simp [this]
-  have hqm := hports _ (getElem_mem_toList' (by rw [hsz]; exact hsub))
-  have hat : AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + slot)
-      (((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).1 + 64 * (byte % 128 / 8) +
-        (56 - 8 * (byte % 128 % 8)) + b)
-      (c.slotCol c.shaNet g slot + ((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).1 +
-        64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + b) := by
-    refine ⟨by rw [hc, hpv]; exact Rows.mul_add_lt hg hent.1, ?_, ?_⟩
-    · rw [hsl]
-      have h1 : 64 * (byte % 128 / 8) ≤ 960 := by omega
-      have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
-      omega
-    · unfold Circuit.slotCol
-      have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
-      omega
-  exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
+  simp only at hall hws hpv ⊢
+  split
+  · rename_i hk
+    generalize hE : (where_[p]!)[byte / 128]! = e
+    obtain ⟨slot, sub⟩ := e
+    have hent := hall _ (getElem_mem_toList' (by rw [hws]; exact hp)) (slot, sub)
+      (by rw [← hE]; exact getElem_mem_toList' hk)
+    simp only at hent ⊢
+    obtain ⟨hsz, hsin⟩ := C.sha_in
+    have hsub : 2 * sub + 1 < 6 := by omega
+    refine hpad _ (Or.inl rfl) slot (by rw [hpv]; exact hent.1) _ (by rw [hsz]; exact hsub) ?_
+    rw [hsin _ hsub, sha_width sub 1 (by omega)]
+  · obtain ⟨hil, hw⟩ := hm_width C.hm_in (i := 1) (by omega)
+    refine hpad _ (Or.inr rfl) p ?_ _ hil (by rw [hw])
+    rw [C.perVu_hm]
+    exact lt_of_lt_of_le hp (le_nextPow2 _)
 
 theorem unit_inCols_size {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
@@ -872,7 +871,7 @@ theorem setupH_templateLayout (ht : tags.typed = true)
     refine ⟨by rw [hc], by rw [hc]; exact P.typed, ?_⟩
     have P' : ParseFactsT tags t st.c := by
       rw [hc]
-      exact ⟨P.pre, P.ports, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
+      exact ⟨P.pre, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
         P.leavesIn, P.wires, P.leafCuts⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
@@ -1166,8 +1165,8 @@ theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T :
 end TemplateLayout
 
 /-- **An accepted template statement's inputs read message bits inside the block**: input `w` of VU `g` copies
-`Typed.copySrc st.c g w`, a column of a `sha512x3` slot's message port. The file has a row, since the instance's inputs
-are its rows' words (`checkTyped`) and the unit has input `w`. -/
+`Typed.copySrc st.c g w`, a message bit of one of the file's rows (`msgCol_lt`). The file has a row, since the instance's
+inputs are its rows' words (`checkTyped`) and the unit has input `w`. -/
 theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
@@ -1184,7 +1183,7 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
     have C := check_facts_typed P.typed hcheck
     have P' : ParseFactsT tags t st.c := by
       rw [hc]
-      exact ⟨P.pre, P.ports, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
+      exact ⟨P.pre, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
         P.leavesIn, P.wires, P.leafCuts⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
@@ -1201,7 +1200,7 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
       have : ty.inBits = 0 := by unfold CircuitType.inBits; rw [hins]; rfl
       omega
     unfold Typed.copySrc
-    exact msgCol_lt P' C' hne hg _ _ _ (Nat.mod_lt _ (by norm_num))
+    exact msgCol_lt P' C' hg (portAt_lt st.c hne _) _ _ (Nat.mod_lt _ (by norm_num))
   · cases hrn
 
 /-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of VU

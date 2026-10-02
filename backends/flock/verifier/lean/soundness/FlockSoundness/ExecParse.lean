@@ -172,14 +172,10 @@ theorem run_bind_fst {P Q : Array (ℕ × ℕ) → Prop} {m : Id (Array (ℕ × 
     {k : Array (ℕ × ℕ) → Id (Array (ℕ × ℕ) × Array (ℕ × ℕ))} (hm : P (Id.run m))
     (hk : ∀ d, P d → Q (Id.run (k d)).1) : Q (Id.run (m >>= k)).1 := hk _ hm
 
-/-- **The rows Δ writes after its first loop** (`DeltaRow`'s other forms): a row slot's first `cv` bit, an hm96 slot's
-`pad` bit, a unit's leaf bit, a unit's leaf-cut bit, or a wire's destination bit. -/
+/-- **The rows Δ writes after its first loop** (`DeltaRow`'s other forms): a bit of a row's chain, a bit of a row's hm96
+slot, a unit's leaf bit, a unit's leaf-cut bit, or a wire's destination bit. -/
 def DeltaIn (c : Circuit) (x : ℕ) : Prop :=
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 512,
-      x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[0]!.1 +
-        (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2]!.1 + t) ∨
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 1024,
-      x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1 + t) ∨
+  ShaRowBit c x ∨ HmRowBit c x ∨
   (∃ k < c.unitRange.count, ∃ j < (c.leavesIn.getD (k % c.upv) #[]).size, ∃ t < 16,
       x = c.unitRange.slot k + ((portCols #[c.unit.inGroups.getD 0 default]).map (·.1)).getD j 0 + t) ∨
   (∃ g < c.g, ∃ e ∈ c.leafCuts.toList, ∃ t < (portCols c.unit.inGroups)[e.2.1]!.2,
@@ -220,13 +216,21 @@ theorem delta_split (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
         · simp
   intro d hd
   have h0 : ExtL (constPairs c pin) (DeltaIn c) d := ⟨[], by simp [hd], by simp⟩
-  -- the rows' cv and pad bits
+  -- the rows' constant bits
   refine run_bind_fst (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_range _ (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) h0) ?_
-  · refine forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩)
-      (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd)
-    · exact Or.inr (Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩)
-    · exact Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩
+  · refine forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩)
+      (forIn_id_inv_range _ (fun t _ ht d hd => ?_)
+        (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd))
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩))⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
+      · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩)
   intro d hd
   -- the units' leaf bits
   refine run_bind_fst (forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl,

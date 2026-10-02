@@ -87,7 +87,7 @@ def _session(R: Path, monkeypatch, points: int, point_fc: list[dict]) -> list[di
     pk = _key(R / "out/preflight/key.json", {"FC_VERIFY_AHEAD": "10"})
     (R / ".research-source.json").write_text(json.dumps({"commit": "c" * 40, "dirty": False}))
     census = R / "hardware.json"
-    census.write_text(json.dumps([{"id": GH.PEAK_ID, "flop_per_second": 1.0e15, "device": "RTX PRO 6000"}]))
+    census.write_text(json.dumps([{"id": GH.DTYPES["bf16"][2], "flop_per_second": 1.0e15, "device": "RTX PRO 6000"}]))
     phases = ["job\tstart\t1000", "preflight\tstart\t1001", "preflight\tend\t1041"]
     for i in range(points):
         t = 1042 + 40 * i
