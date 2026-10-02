@@ -18,6 +18,22 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label is the manifest's directory) and
 ``<out>/summary.json``.  Its gate is that every sampled tile's openings and checked values hold (`Verifier.check_tile`):
 the measurement is of the committed pass.
+
+**On a served pass.** `window.sh` keeps each served window's verify pass outside its run directory, under
+``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on node 2 (``WORK=/workspace/pouw/mvp-e2e``, about 45 GB a run,
+so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores, with one BLAS
+thread a worker (``--jobs`` defaults to the CPUs this process may use)::
+
+  research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
+      --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
+      'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
+         PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+       P=/workspace/pouw/mvp-e2e/passes/RUN_ID
+       exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
+         $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
+
+A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of node 2's queue cores (Llama-3.1-8B's
+1,023 sampled tiles: 98 min on 44, r20261002-173355-4eef).  Add no ``taskset`` of your own: the queue pins the job's cores.
 """
 from __future__ import annotations
 
@@ -250,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("manifests", type=Path, nargs="+")
     p.add_argument("--tiles", type=int, nargs="+", required=True, help="tiles per stratum, one per manifest")
     p.add_argument("--seed", type=int, default=SEED)
-    p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args(argv)
     if len(a.tiles) != len(a.manifests):
