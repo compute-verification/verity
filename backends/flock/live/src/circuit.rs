@@ -30,7 +30,7 @@
 //! template has no statement here.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{
         OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -148,6 +148,28 @@ const SHA512_ROW_TAG: &[u8] = b"verity/sha512-row/v1\0";
 const ROLE_X: u8 = 1;
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
+
+/// Words as aligned power-of-two blocks `(w, e)` (`w` a multiple of `2^e`), ascending: each maximal run of consecutive words
+/// cut from its start, every block the largest aligned one that fits in what is left of the run.
+pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
+    let (mut out, mut it) = (Vec::new(), words.iter().copied().peekable());
+    while let Some(mut a) = it.next() {
+        let mut b = a + 1;
+        while it.next_if_eq(&b).is_some() {
+            b += 1;
+        }
+        while a < b {
+            let mut e = (usize::BITS - 1 - (b - a).leading_zeros()) as usize;
+            while a % (1 << e) != 0 {
+                e -= 1;
+            }
+            out.push((a, e));
+            a += 1 << e;
+        }
+    }
+    out
+}
+
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
@@ -770,8 +792,8 @@ impl Composite {
     }
 
     /// The public input ports (§16.10): each named once, and no row's name; one public leaf map per unit, each public leaf a
-    /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` region reads it; the region's words
-    /// ([`Self::public_span`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
+    /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` regions read it; their words
+    /// ([`Self::public_leaf_words`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
     fn check_public_inputs(&self) -> Result<(), String> {
         if self.public_inputs.is_empty() {
             return Ok(());
@@ -794,14 +816,19 @@ impl Composite {
         if 7 + log2ceil(ur.count) > PT_LOCAL {
             return Err(format!("public inputs: {} unit slots, too many for an in region of at most {PT_LOCAL} free bits", ur.count));
         }
-        let (w0, e) = self.public_span().ok_or("public inputs: no unit reads a public word")?;
+        let words = self.public_leaf_words();
+        if words.is_empty() {
+            return Err("public inputs: no unit reads a public word".into());
+        }
         let g0 = &self.unit().in_groups[0];
-        if w0 < g0.col || w0 + (1 << e) > g0.col + g0.words {
-            return Err(format!("public inputs: the in region's words {w0}..{} leave the unit's leaf group", w0 + (1 << e)));
+        for (w, e) in aligned_blocks(&words) {
+            if w < g0.col || w + (1 << e) > g0.col + g0.words {
+                return Err(format!("public inputs: the in region's words {w}..{} leave the unit's leaf group", w + (1 << e)));
+            }
         }
         for (lp, li) in self.leaves_public.iter().zip(&self.leaves_in) {
-            if let Some(j) = (0..li.len()).find(|&j| (w0..w0 + (1 << e)).contains(&(g0.col + j / 8)) && lp[j] < 0 && li[j] >= 0) {
-                return Err(format!("public inputs: leaf {j} reads a row word inside the in region's words {w0}..{}", w0 + (1 << e)));
+            if let Some(j) = (0..li.len()).find(|&j| words.contains(&(g0.col + j / 8)) && lp[j] < 0 && li[j] >= 0) {
+                return Err(format!("public inputs: leaf {j} reads a row word inside word {}, which holds a public word", g0.col + j / 8));
             }
         }
         Ok(())
@@ -822,21 +849,25 @@ impl Composite {
         k < ur.count && self.leaves_public.get(k % self.upv).and_then(|l| l.get(x / 16)).is_some_and(|&p| p >= 0)
     }
 
-    /// The `in` region's words in a unit slot (§16.10): the smallest aligned power-of-two span `[w0, w0 + 2^e)` of 128-bit
-    /// words holding every unit's public leaves (leaf `j` in word `col + j / 8` of the leaf group), as `(w0, e)`; `None`: no
-    /// public leaf.
-    pub fn public_span(&self) -> Option<(usize, usize)> {
-        let col = self.unit().in_groups.first()?.col;
-        let words = self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8));
-        let (a, b) = words.fold(None, |m: Option<(usize, usize)>, w| Some(m.map_or((w, w), |(a, b)| (a.min(w), b.max(w)))))?;
-        let e = (usize::BITS - (a ^ b).leading_zeros()) as usize;
-        Some((a >> e << e, e))
+    /// The 128-bit words of a unit slot holding some unit's public leaf (leaf `j` in word `col + j / 8` of the leaf group),
+    /// ascending.
+    pub fn public_leaf_words(&self) -> BTreeSet<usize> {
+        let Some(col) = self.unit().in_groups.first().map(|g| g.col) else { return BTreeSet::new() };
+        self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8)).collect()
     }
 
-    /// The `in` region's split (§16.10): `s`, each region's `2^s` words per unit slot (`7 + s` free bits beside the
-    /// `log2ceil(units)` slot bits, at most `PT_LOCAL`), and the `2^(e - s)` regions over `[w0, w0 + 2^e)`.
-    pub fn in_region_log(&self, e: usize) -> usize {
-        e.min(PT_LOCAL.saturating_sub(7 + log2ceil(self.unit_range().count)))
+    /// The `in` regions (§16.10), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
+    /// ([`Self::public_leaf_words`]) in aligned blocks of `2^e` words ([`aligned_blocks`]), each split into `2^(e - s)`
+    /// regions, `s = min(e, PT_LOCAL - 7 - log2ceil(units))` (`7 + s` free bits beside the slot bits).
+    pub fn in_regions(&self) -> Vec<(usize, usize)> {
+        let top = PT_LOCAL.saturating_sub(7 + log2ceil(self.unit_range().count));
+        aligned_blocks(&self.public_leaf_words())
+            .into_iter()
+            .flat_map(|(w, e)| {
+                let s = e.min(top);
+                (0..1usize << (e - s)).map(move |r| (w + (r << s), s))
+            })
+            .collect()
     }
 
     /// Every input port of every slot is wired exactly once: a unit's leaf ports by its leaf map, the rest by a wire. The
@@ -1555,9 +1586,9 @@ pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 
 pub enum Region {
     /// row `p`'s `b || c` of each VU (its hm96 slot's output)
     Digest(usize),
-    /// the public input words of every unit slot's leaf group, `2^s` words of the in region's span from word `w0 + r 2^s`
-    /// ([`Composite::in_region_log`]): `In(r)`
-    In(usize),
+    /// the public input words of every unit slot's leaf group ([`Composite::in_regions`]), `In(w, s)`: `2^s` words from
+    /// word `w`
+    In(usize, usize),
 }
 
 pub struct RegionShape {
@@ -2104,12 +2135,9 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
-        if let Some((w0, e)) = c.public_span() {
-            let ur = c.unit_range();
-            let s = c.in_region_log(e);
-            for r in 0..1usize << (e - s) {
-                out.push(mk(Region::In(r), [bits(0, 7 + s), bits(ur.slot_log, log2ceil(ur.count))].concat(), ur.start() + ((w0 + (r << s)) << 7))?);
-            }
+        let ur = c.unit_range();
+        for (w, s) in c.in_regions() {
+            out.push(mk(Region::In(w, s), [bits(0, 7 + s), bits(ur.slot_log, log2ceil(ur.count))].concat(), ur.start() + (w << 7))?);
         }
         Ok(out)
     }
@@ -2523,10 +2551,9 @@ impl Stmt {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
             // each unit slot's words, 16-bit leaves u16 LE: a public leaf its instance's public word, zero for a zero leaf, a
             // padding instance or a slot past the units
-            Region::In(r) => {
-                let (w0, e) = c.public_span().expect("an in region's circuit has public inputs");
-                let (ur, s, np) = (c.unit_range(), c.in_region_log(e), c.public_words());
-                let j0 = 8 * (w0 + (r << s) - c.unit().in_groups[0].col);
+            &Region::In(w, s) => {
+                let (ur, np) = (c.unit_range(), c.public_words());
+                let j0 = 8 * (w - c.unit().in_groups[0].col);
                 let mut out = Vec::with_capacity(16 << (s + log2ceil(ur.count)));
                 for k in 0..1usize << log2ceil(ur.count) {
                     let (g, u) = (k / c.upv, k % c.upv);
@@ -2692,6 +2719,17 @@ mod tests {
         // a region's two bit ranges overlapping: bits 8 and 9 twice (as [bits(0, 10), bits(8, 4)] would be)
         let overlap = region([(0..10).collect::<Vec<_>>(), (8..12).collect()].concat());
         assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
+    }
+
+    /// §16.10: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
+    #[test]
+    fn public_words_are_cut_into_aligned_blocks() {
+        let blocks = |w: &[usize]| aligned_blocks(&w.iter().copied().collect());
+        assert_eq!(blocks(&(8..137).collect::<Vec<_>>()), [(8, 3), (16, 4), (32, 5), (64, 6), (128, 3), (136, 0)]);
+        assert_eq!(blocks(&[0, 1, 2, 3]), [(0, 2)]);
+        assert_eq!(blocks(&[3, 5]), [(3, 0), (5, 0)]);
+        assert_eq!(blocks(&[1, 2, 3, 4, 5]), [(1, 0), (2, 1), (4, 1)]);
+        assert!(blocks(&[]).is_empty());
     }
 
     #[test]
