@@ -7,8 +7,9 @@ import FlockSoundness.Discharge.Layout.Tables
 
 `Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
-form at flock-verify's verdict, `Prog.flock_headline_live`, whose hypotheses are `Prog.flock_headline`'s (`pp`, `hConst`,
-`hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`).
+form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
+`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`, the decoder right at
+the law's draws, `DecodesOn`).
 
 `flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
 source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
@@ -58,7 +59,7 @@ theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).C
   Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc h1 hpr ho
     (sitesAt_bcSite ht dj x₀ hc ho hpub (Layout.loadPublic_tables hpub hs))
 
-/-- The one-table plan's tables, as `Prog.flock_headline_live` takes them. -/
+/-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
 noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAt ht dj x₀ S).T
 
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
@@ -73,11 +74,12 @@ Its hypotheses, past the session's inputs:
 * conditions on the circuit that e2e-layout's `rs` takes: the unit returns the outputs (`ho`), has only its leaf group
   (`h1`), and every input a unit row reads is a port bit (`hpr`, `PortReads`, a real condition: e2e-layout's finding);
   the statement's tag has no shared-row files (`hs`; M0's `verity/flock-circuit` by `rfl`, `Layout.circuit_sharedRows`);
-* `hdec` (`DecodesAll`, R11b), open: owner e2e-exec (the framing decoder, `wr` as the server's record, `opn`, `fin`,
-  `capOf`). At a draw flock-verify accepts whose record carries the coin server's draw `dj S`, proving `S`, with link
-  points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by `model_eq_stmtOf`), the
-  statement e2e-exec's acceptance plays. At an accepted draw whose link points are not `mPts` the table is
-  unsatisfiable and `hdec` fails there, so `hdec` also needs the law's draws to set up at `mPts`;
+* `hdec` (`DecodesOn`, R11b, at the law's draws only), open: owner e2e-exec (the framing decoder, `wr` as the server's
+  record, `opn`, `fin`, `capOf`). At a draw flock-verify accepts whose record carries the coin server's draw `dj S`,
+  proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
+  `model_eq_stmtOf`), the statement e2e-exec's acceptance plays. At an accepted draw whose link points are not `mPts`
+  the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted draw of the law to set up at
+  `mPts`; setupH's link points are `PT_LOCAL + max 3 (log2ceil ⌈|D.proved| / c.g⌉)` (`setupH_mPts`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
 * numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).
@@ -101,36 +103,37 @@ theorem flock_headline_exec
     (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
-    (hdec : DecodesAll H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dec one fin capOf)
+    (hdec : DecodesOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dec one fin capOf
+      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512
       (planAt ht dj x₀) (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).binding
         (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr))
-      (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
-      (cont (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
+      (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
+      (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
       (planAt ht dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
-        (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
+        (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
       (batchStratL H512 enc512 leaf512 (planAt ht dj x₀)
-        (cont (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
+        (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
         K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planAt ht dj x₀)
               (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).binding
         (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr))
-              (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
-              (cont (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
+              (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
+              (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
       (Law.stratified σs ks hks).miss K +
         StrictCR.ksAvgStrict (planAt ht dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
-          (reg (simAudit H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
+          (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀) (tabAt ht dj x₀)
           ((rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).binding
         (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr)) k Rw M ρ t' :=
-  (Placed.keyProg c hU n).flock_headline_live (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3
+  (Placed.keyProg c hU n).flock_headline_live_on (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3
     (tablesAt ht dj x₀) (tabAt ht dj x₀)
     (Placed.Sites.progPlaces_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
     {Layout.oneG} (Const.constCols_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
