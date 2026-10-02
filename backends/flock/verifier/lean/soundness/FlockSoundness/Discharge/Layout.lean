@@ -6,6 +6,7 @@ import FlockSoundness.Discharge.Layout.Pins
 import FlockSoundness.Discharge.Layout.Drawn
 import FlockSoundness.Discharge.Layout.Site
 import FlockSoundness.Discharge.Layout.OfRows
+import FlockSoundness.Discharge.Layout.KeyProg
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -26,5 +27,9 @@ from the decoder's places and the executable's regions:
   (`bc_site`) and, at each message-keyed unit input, its row's bit (`copy_site`);
 * `OfRows`: readers whose commit strings are units' row ports and single gates (`Readers.ofRows`), with Δ's copies
   from the row bits alone (`ofRows_copies`), the rows' `b ‖ c` (`ofRows_bcPinned`) and the single gates' bits
-  (`ofRows_valPinned`; 1 on the constant's gates and 0 on the zero's, `gate_pub`).
+  (`ofRows_valPinned`; 1 on the constant's gates and 0 on the zero's, `gate_pub`);
+* `KeyProg`: those readers at [e2e-placed]'s places of the circuit's program on Δ's source keys (`Placed.keyProg`),
+  with rows the message-keyed inputs (`keyRowOf`): Δ's copies (`keyProg_copies`), the rows' `b ‖ c`
+  (`keyProg_bcPinned`), the single gates' bits (`keyProg_valPinned`), and `lay` and `rs` there (`keyLayout`,
+  `keyRows`).
 -/
