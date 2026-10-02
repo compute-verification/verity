@@ -179,3 +179,25 @@ def test_the_sp1_guest_mirror_agrees() -> None:
         assert R.div_full_rcp(x, row(rcp_t, R.div_full_rcp_index(x))) == M.DivFullRcp.evaluate(x), hex(x)
     for a, b in _inputs(M.DivFullScaleA):
         assert R.div_full_scale_a(a, b) == M.DivFullScaleA.evaluate(a, b), (hex(a), hex(b))
+
+
+_TABLE_WORDS = (0x00000000, 0x00400000, 0x3A83126F, 0x3F400000, 0x3F800000, 0x40400000, 0x7E800000, 0x7F800000, 0xBF000000)
+
+
+def test_each_primitive_declares_the_tables_its_evaluator_reads(monkeypatch):
+    """A table an evaluator reads by index is no gate, so only `PrimitiveDefinition.tables` shows it to the guard: every
+    primitive here declares exactly the library tables it reads on words of every region."""
+    read: list[str] = []
+    row, shards = M._row, M.mufu_tanh_shards
+    monkeypatch.setattr(M, "_row", lambda name: (read.append(name), row(name))[1])
+    monkeypatch.setattr(M, "mufu_tanh_shards", lambda: (read.append("tanh_mufu"), shards())[1])
+    prims = [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition) and d.evaluate.__module__ == M.__name__]
+    assert len(prims) >= 8
+    for p in prims:
+        read.clear()
+        for ws in itertools.product(_TABLE_WORDS, repeat=len(p.params)):
+            try:
+                p.evaluate(*ws)
+            except M.MufuTanhUnmeasured:
+                pass
+        assert {(n, L.LIBRARY) for n in read} == set(p.tables), p.id

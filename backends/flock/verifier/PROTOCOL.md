@@ -347,9 +347,6 @@ the same as `verity_sampled_proofs.one_stage`'s, in `protocols/sampled_proofs/RE
 **The work law** is the draw law's second version (Daniel approved work-proportional sizing on Sep 28,
 `note:20260929T0340Z-handoff-from-pous-rulings-2`). It keeps the stratified law's strata and sampler; only the sizes
 differ. The stratified law is unchanged.
-- **Work.** Each template's PoUW work per unit comes from the verifier's own work table (`--work-table F`: a JSON
-  object from template descriptor id to a natural number, in any fixed unit). Units that do no PoUW work, such as
-  dequantization, the quantizer and attention, have work 0. A template the table does not name refuses the law
 - **Work and floors.** Each template's PoUW work per unit, and its floor, come from the verifier's own work table
   (`--work-table F`: a JSON object from template descriptor id to the work, a natural number in any fixed unit, or to
   `{"work": w, "floor": f}` with `f ≥ 1`; the floor is one when the table gives only the work). Units that do no PoUW
@@ -412,13 +409,13 @@ and the record keeps it as `unit_draw`. The offline checks:
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
-public header with it and records it; until then no recorded session carries one.
+public header with it and records it.
 
 ### 7.4 The keyed coin tree (`coin-tree/hm96-sha512/v2`, `docs/coin-tree-v2.md`)
 
 The verifier's coins are committed at `Hello` in a coin tree whose every hash is prefixed by the prover's fresh 32-byte
-nonce. The server answers with the root and a fresh hm96 key for the session's tree. The key is drawn after the nonce,
-never reused, and never revealed before that answer. `Flock.CoinTree` checks the record; the openings need no check, since
+nonce. The server answers with the root and the session tree's hm96 key, drawn after the nonce, never reused, and never
+revealed before that answer. `Flock.CoinTree` checks the record; the openings need no check, since
 the commitment protects the prover (§7 of the spec).
 - **`Hello`.** `coins` is `{"block", "nonce", "rounds_log", "scheme", "streams"}`. The verifier's own `Hello` (`helloOf`
   with `Coins.tree`) leaves the nonce empty.
@@ -430,9 +427,8 @@ the commitment protects the prover (§7 of the spec).
     lowercase hex.
   - The spec is `{"block", "rounds_log", "scheme", "streams"}`, the verifier's.
 - **Freshness** (`CoinTree.checkFresh`). `verify` refuses a session whose key an earlier session of the same run used.
-- **Scope.** Only `--zk` sessions carry a coin tree (§16.13). The checks run once a statement's `Hello` names the scheme
-  (`Stmt.spec`'s `coinTree`). `flock-verify coin-tree-check` runs them alone, on §9's values (`test_lean_coin_tree.py`).
-  The round coins are the record's: the key and root are not opened against them.
+- **Scope.** Only `--zk` sessions (§16.13) carry a coin tree; the checks run once `Hello` names the scheme (`Stmt.spec`'s
+  `coinTree`). `flock-verify coin-tree-check` runs them alone, on §9's values (`test_lean_coin_tree.py`).
 
 ## 8. The proof container
 
@@ -1159,6 +1155,13 @@ The algorithm step by step and the agreement evidence (`cut_check_agree.py`, `qw
 every pinned vector, all of #101's Definitions, the LM-head `Gemm` in 100 s at 9 GB) are in
 `note:20260929T1052Z-report-flock-verifier-qword-cut-check`.
 
+An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound at registration; core's PROTOCOL.md §5):
+`Program.inputId?` records the binding time; both are inputs to every query, never Calls.
+
+**`Q_call` v1** (`Flock.Qcall`, `flock-verify qcall-program`; core's PROTOCOL.md §11) is core's evaluation, refusals and cut
+check, as `Flock.Qcall` documents them. `qcall_agree.py` checks it against `qcall_vectors.json` field for field, with
+`format_vectors.json`'s input ids and a program with registered inputs.
+
 Still ahead: the leaf positions.
 
 ### 16.8 Objects by content
@@ -1213,6 +1216,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   row's 192-byte salt `y` under `hm96-sha512/v1`'s default key. The verifier recomputes each row's `prefix`, the midstate
   after it (one SHA-512 compression from the IV), and the padding block `0x80 ‖ 0 ‖ be128(8·(128 + 2·words))`, and refuses
   a META `rows` entry that differs, and a `row_key_sha512` other than SHA-512 of the default key.
+- **Bit rows (`hm96-sha512/row/v2`).** META may carry `row_schemas`, one `["hm96-sha512/row/v2", ℓ]` per port, for
+  `row_schema` (refused: both, neither, or typed); the identity's `row_leaf_in_circuit` then names `hm96-sha512/row/v2`.
+  Port `p` is core's bit row of `ℓ < 2^64` bits (`sha512/row/v2`): `⌈ℓ/16⌉` u16 leaves, bits low first, `x = SHA-512(P(ℓ)
+  ‖ bytes)` over `B = ⌈ℓ/8⌉` bytes. The verifier derives from `ℓ` the words, `⌈(B + 17)/128⌉ − 1 ≤ 2^16` compressions,
+  `P(ℓ)`'s midstate and the padding `0x80 ‖ 0* ‖ be128(8·(128 + B))`, refusing a differing META `ports` or `rows` entry and
+  a statement with no compression. Message bit `b` of byte `j` is a row bit if `8j + b < ℓ`, else a zero fill bit (`j <
+  B`) or padding; so the hm96 `pad` may hold row bytes, and a row of ≤ 111 bytes has no compression.
 - **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
   1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
   ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
@@ -1228,10 +1238,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
   bit `t % 8` (compression `B / 128`, word `o / 8`, bit `56 − 8·(o % 8) + t % 8` for `o = B % 128`; a zero leaf from its own
-  forced-zero row); every wire.
+  forced-zero row); every wire. For a bit row: the first `cv` (with no compression, the unwired hm96
+  slot's) from the midstate; every constant message bit as `pad`'s are; a leaf or cut bit at row bit `16·leaf + t ≥ ℓ`
+  from the forced-zero row (no leaf reads a fill bit), one in the last block from the hm96 `pad`.
 - **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
   `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
-- **The region-word check** (`HmRow.checkRegionWords`, `docs/region-word-check.md`; the red team's C3, H_reg).
+- **The region-word check** (`HmRow.checkRegionWords`; the red team's C3, H_reg).
   - A region claim's ring-switch message carries every bit of each word the region covers in the clear.
   - So `setupH` refuses a statement in which a column shares a 128-bit word with a *partial* region's columns without
     being one of them, unless its rows in the combined `A` and `B` are both empty.
@@ -1246,8 +1258,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
   `SHA-512(canon(header, rows = false) ‖ body)`. The frame-v3-sha512 roots (§16.6 with SHA-512) are over the population:
-  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))`, output leaves `u16` words. Each port's
-  `dummy.bc` must be the zero row's: `SHA-512(prefix ‖ 0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)`.
+  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))` (a bit row's under
+  `hm96-sha512/row/v2`), output leaves `u16` words. Each port's `dummy.bc` must be the zero row's: `SHA-512(prefix ‖
+  0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)` (a bit row's with `P(ℓ)` and `0^B`).
 - **The drawn statement.** For a record with a `unit_draw` over the population's `N` instances, instance `i` is population
   position `units[i]`; the header is the population's with `unit_draw`, `instances = K`, `population = N` and the drawn
   units' indices in `units`; the public digest covers that header and the population's body, so the roots stay the
@@ -1264,10 +1277,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     population's tables, every refs and every output word.
   A file without `shared_rows` is read exactly as before, and the earlier statement names refuse a file that has it (their
   upstream builds reject its length). `@967b8d06` is also the identity text of `68ae79f2`: `round_digest`, `statement_digest`
-  and `sigma` read `sha512`. Set 14 (a shared-row RoPE file whose six instances repeat three rows) agrees 23 of 23 with
-  upstream on M0's selftest records, `row_ref_claim_false` included; set 15 (the same instances per instance) agrees 22 of 22.
-  The `967b8d06` vectors patch writes each false statement as the verifier's file (`<case>.pub.bin`) under its real public
-  digest, so replaying those negatives reaches the proof's openings rather than the session parameters.
+  and `sigma` read `sha512`. Sets 14 and 15 exercise it.
 - **Digests.** The circuit pin is `SHA-512(circuit file)`. The statement digest is `SHA-512(TAG ‖ circuit SHA-512 ‖
   canon(identity) ‖ le64[n, blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ le64|Δ_A| ‖ Δ_A (le32, le32) ‖ le64|Δ_B| ‖
   Δ_B)`; Flock's 32-byte statement slot (round 0's R1CS digest) is its first 32 bytes. `Σ = SHA-512("verity/flock-circuit/sigma"
@@ -1284,7 +1294,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   of the partition object (`--partition`, by path or archive digest). Its form is #111's canonical one with open query names:
   exactly `format`, `program`, `query`; a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a
   natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1 and v2:
-  exactly `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
+  exactly `X`, `W`, positive integers; `Q_call` v1: exactly `X`, an integer in 1..2^16). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
   `program` must be META's `program_sha512`. The provisional unit cover takes no object.
 - **Tail outputs, packed ranges and leaf cuts (from PR #83 `15260468`, GEMM).** META may name `out_net`, the circuit whose
   output group holds the returned outputs (default `unit`), with `out_net_ports`, and `leaf_cuts`, `[unit, u, port, leaf]`.
@@ -1295,7 +1305,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
     the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
     wires.
-  - Set 13 (GEMM k1024, recorded on a CPU pod) agrees 27 of 27.
+  - Set 13 (GEMM k1024) exercises them.
 - **The template queries** (`Flock.TemplateQuery`; core's `TemplatePartition`, #131): `Q_template_instance` v0 (`{template}`, a
   string) and `Q_template_instances` v0 (`{templates}`, a non-empty list of distinct strings). With the verifier's own copy of
   the program (`--program`, its `verity-ir/descriptor/v1` bytes, by path or archive digest), whose SHA-512 over the canonical
@@ -1305,16 +1315,23 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   order, and a unit's gates are its instance's interval. Every listed template has an instance, or the query refuses. The
   circuit's template (the one key of META `program_digests`) must be listed, and every unit the header's `units.indices`
   claims must be an instance of it: then the statement's units are derived. `template_query_agree.py` checks the decoding
-  against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
-  the refusals word for word, the malformed parameters).
+  against #131's `template_instance_vectors.json`.
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
   `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
   queries (above), and for `Q_word` v1 and v2 (§16.7) when the program is the object's, the query applies, every claimed unit is
   one whole activation of the circuit's template (the innermost Definition on its `locate` path, whose cut is one unit),
-  and every Call's cut holds the invariant and the width rule. A failing cut refuses the partition, naming the Call and
-  its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
+  and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
+  whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
+  and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
+  failing cut refuses the partition, naming the Call and its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
   refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
   audit reports as a gap.
+- **Registered reads** (`Flock.Registered`). A shared-row header may name `registered`, `{port: {value, positions,
+  paths}}`: rows of a value committed at registration. The verifier then needs its own `--registered F`
+  (`verity/registered-reads/v0`: per port the value, root, leaf count, domain, and each unit's read position). Every table
+  row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, and every instance's ref must name the
+  position the verifier's program reads for its unit, so units must be `derived`. A port named on one side only refuses.
+  Verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1359,8 +1376,7 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
     2. each part's bound input rows, `(i, i)` and each source, in item order;
     3. the root rows' cross entries: A's in `Δ_A` and B's in `Δ_B`.
   - **Regions:** the digests, then `Out` over the root's output group.
-  - **Tested** on #273's GEMM (`test_lean_typed_template.py`): of the prover's 20 recorded CPU selftest sessions, the
-    verifier accepts the 3 honest ones, so its statement digest and Σ are the prover's, and it refuses the 17 negatives.
+  - **Tested** on #273's GEMM (`test_lean_typed_template.py`).
 - **Reads** (attention): a placed read is a part whose layout `table/v2` generates (`own: {gen: "table/v2", …}`), placed
   and bound as a call is.
   - **Tables:** the statement names each table by the SHA-512 of its raw `u32` LE words and never carries them. The
@@ -1389,7 +1405,7 @@ such a session; any other statement refuses `J > 1`.
     drawn statement of `{"law": "subset", "population": N, "k": k, "units": part j}`, under the identity plus
     `session: {tables: J, table: j, units: "the draw's units (without a draw, the population's) in equal consecutive
     parts; table j proves part j as a subset draw of the population"}`.
-  - Every part comes from the session's draw. Nothing in the record describes a table's units.
+  - Nothing in the record describes a table's units.
 - **The session.**
   - Every table must have the same `m_pts`.
   - Σ = `SHA-512("verity/flock-circuit/sigma-tables" ‖ le64(J) ‖ Σ_0 ‖ … ‖ Σ_{J−1})`, and `root_F = Σ` (S6).
@@ -1401,23 +1417,21 @@ such a session; any other statement refuses `J > 1`.
     `2J` rep streams. S14's roots are in table order, which is lexicographic.
   - Table `t`'s reps are the files `<t>.rep<r>.bin`. Each is verified against its table's statement and domain, and S18
     applies per table.
-- **Upstream's rules the record can't show.** One `Commit` carries every root. Every proof comes after the session's last
-  coin (the barrier). These are the live server's and the prover's rules. The barrier serves zero-knowledge; a verifier
-  accepts without it.
+- **The live protocol's rules the record can't show.** One `Commit` carries every root. Every proof comes after the
+  session's last coin (the barrier, which serves zero-knowledge; a verifier accepts without it).
 
-### 16.13 `--zk` sessions (`verify --zk`, `Flock.Zk`)
+### 16.13 `--zk` sessions
 
-`--zk`, the verifier's setting, verifies `flock-circuit --zk` sessions (with `--session-tables J` and draws): the masked
-protocol on the keyed coin tree (§7.4), as `backends/flock/live/PROTOCOL.md` and upstream's `zk_veil.rs` define it.
-`Flock.ZkProof`, `Flock.ZkLigerito` and `Flock.Zk` state each check and leave §8–§13's code as it is. The identity's
-`hooks` are upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
+`verify --zk`, the verifier's setting, checks `flock-circuit --zk` sessions (any `J`, draws) after the same setup, by
+`backends/flock/live/PROTOCOL.md`'s masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's
+`zk_identity`; `proof_class` stays `NON_ZK_PROOF`. `agree.py --zk` compares the live build's `replay --zk`.
 
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
 
-Upstream's Rust verifier (with `backends/flock/live`'s `Server::from_record` and `ReplayChallenger`) is the reference in a
-cross-validation test, run in CI on every change to the Lean verifier, the statements or the pinned files:
+Upstream's Rust verifier (below, with `backends/flock/live`'s `ReplayChallenger`) is the reference in a cross-validation test,
+run in CI on every change to the Lean verifier, the statements or the pinned files:
 
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
    - every honest session: both accept;
@@ -1435,7 +1449,7 @@ Lean verifier without a spec change. After the gate passes, production runs only
 stays in CI as a regression oracle.
 
 "Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
-(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in five
+(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in six
 places, and the corpus marks the vectors that exercise them with the upstream verdict they expect
 (`upstream_accepted` in an expectation):
 
@@ -1443,14 +1457,16 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
   check it.
 - **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
   outside the rep prefixes.
-- **D3:** `link.sigma = Σ` (S4). Upstream's `from_record` ignored the field before PR #83 `b3baabd8`; Σ was bound there
-  through `Hello` (S2) and `root_F` (S6). Found by fuzzing (seed 20260926). Closed upstream at `b3baabd8`.
-- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignored the retained bytes before its
-  server retained them. Closed upstream at `631567f7`, where `from_record` requires `msg` on every round of a statement
-  whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
-- **D5:** a `--zk` record's `coin_tree` (§7.4), which upstream's `from_record` ignores.
+- **D3:** `link.sigma = Σ` (S4). Closed upstream at PR #83 `b3baabd8`; before it `from_record` ignored the field, and Σ
+  was bound through `Hello` (S2) and `root_F` (S6).
+- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`, where
+  `from_record`, which ignored them before, requires `msg` on every round of a statement whose `Hello` says
+  `"rounds": "bytes retained"` and checks its length and digest.
+- **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
+  refuses a row that does not open its registered root (set 16).
+- **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 
-At `631567f7` only D1 and D2 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
+At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
 in `redigest.py` and `fuzz.py`).
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
@@ -1534,7 +1550,6 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
     - for `hm96-sha512/v1`, `Hm96.leafPair` gives the outer inputs, or the salt digest's (`leafPair_collides`), or the rows'
       when their row hashes are one.
   - The propositions `merkle_binding_collision` and `MerkleScheme.collision_hash` are corollaries.
-  - A test evaluates the extractor on a toy scheme with 1-byte digests, whose accepted checks do collide.
   - The executable only ever hashes digest-width children: `merkleCheck` refuses a sibling or cap entry of another width,
     and the running digests are hash outputs.
   - Nodes and leaves are not tag-separated in the unsalted schemes, and binding doesn't need it. Both openings climb from
@@ -1580,8 +1595,6 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
     rows, and `KONST` is 2^48 − 1.
   - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
-- Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
-  `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
 ## 18. Test vectors
 
@@ -1590,31 +1603,24 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
 
 - **Honest sessions: 50 sets, 100 sessions,** each with `expect: accept`, taken from the verifier runs of cells that
   verify-flock-pure replayed and labelled `verified=accepted`, and red-team-flock(-2, -3) labelled `NON_ZK_PROOF`:
-  - pure-block: `Chunk(3)` (H100, A100), `Fp8` (4090, H100), `ShaBf16`, `ShaFp8`, `Fp4`, `ShaFp4` (5090), `Chunk(n)` at
-    real K (spine sets, L40S), 23 cells; point coordinates `m_pts` 26–28;
+  - pure-block: `Chunk(3)`, `Fp8`, `ShaBf16`, `ShaFp8`, `Fp4`, `ShaFp4`, `Chunk(n)` at real K, 23 cells; `m_pts` 26–28;
   - IR frame v2 and v3: elementwise (#101 and served), attention per-T (T = 4 … 257) and the three attention class cells,
     23 cells; `m_pts` 19–25;
   - IR sampling (2 cells, legacy L-SAMPLE) and vllm-block (1 cell, same verifier path, outside this spec's statements);
   - the PR #83 circuit statement: 2 loopback sessions of the SiLU 128-row run (`art:6250c04f`, `m_pts` 31, `os` coins).
-  Each set names its record artifact, the verifier run and commit, the public input files, the recorded `Hello` and
-  statement digest. Ten sets (the earliest pure-block cells) are pre-G2 records (§5.1).
-- **Record-level negatives: 20 recipes.** Twelve ran on two cells in verify-flock-pure's replay run `r20260925-222222-a2cf`
-  (`art:487b77de`), with outcomes: 9 rejected, 1 accepted as required, 2 informational. The required acceptance is
-  `unused_high_bits_of_query_coin`: flipping bit 127 of a query coin must not change the verdict (§13.5). The two
-  informational cases are explained in §19 (A1, A2): both are accepted on honest proofs, correctly. Eight new recipes cover
-  S6 (D1), S11 (D2), S13, S15, a proof byte flip and a relabelled profile.
+  Ten sets (the earliest pure-block cells) are pre-G2 records (§5.1).
+- **Record-level negatives: 20 recipes** (recorded outcomes in the manifest). One must be accepted:
+  `unused_high_bits_of_query_coin` (flipping bit 127 of a query coin must not change the verdict, §13.5). Two are
+  informational (§19 A1, A2): both are accepted on honest proofs, correctly. Eight cover S6 (D1), S11 (D2),
+  S13, S15, a proof byte flip and a relabelled profile.
 - **Forgeries: 12 red-team runs,** including R-BREAK (`art:8d04b53f`: two honest reps over different witnesses, accepted by
   upstream's Fiat–Shamir r2 verifier; this spec rejects it at S13/S16/S18). The runs stored their harnesses and verdict
-  tables, not the forged records and proofs. Phase 2 materialises them with a `--dump` of each selftest case (the plan is in
-  the manifest) before the Lean verifier's gate.
+  tables, not the forged records and proofs (the manifest's `dump_plan`).
 - **Spec self-check:** `transcript_check.py` rebuilds every round of a session from this spec alone (§6, §8, §9–§13,
-  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. On the first vector of all 50
-  honest sets, both reps, `m` 25 to 34, every recorded round matches (`art:430c513a`). It checks the transcript and the
-  layout, not the verifier's equations.
-- **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
-  bytes. Phase 2 generates both.
-- **`--zk` sessions (§16.13)** are not in `vectors.json`: the pinned upstream build predates `--zk`. `agree.py --zk`
-  compares them with `flock-circuit replay --zk` (`backends/flock/live`), and `zk_mutants.py` tampers with each check.
+  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record (the manifest's
+  `spec_transcript_check`). It checks the transcript and the layout, not the verifier's equations.
+- **Missing:** no stored session uses `seed` coins or `--zk`, and none exercises the legacy L-TAIL path with a forged cut
+  word as bytes.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
@@ -1622,7 +1628,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 
 | id | topic | the paper | the spec (upstream) |
 |---|---|---|---|
-| A1 | zerocheck coins | `r ∈ F^{m−k_s}`, 7 fixed | 6 extra coins `r_skip` squeezed first and never read; kept so the transcript matches. Flipping any of their bits leaves an honest verdict unchanged, and would leave any verdict unchanged |
+| A1 | zerocheck coins | `r ∈ F^{m−k_s}`, 7 fixed | 6 extra coins `r_skip` squeezed first and never read; kept so the transcript matches. Flipping any of their bits leaves any verdict unchanged |
 | A2 | last coin | — | Ligerito's final claim-batching coin: read, but an honest proof satisfies the final equation for every value, so flipping its bits leaves an honest proof accepted (a dishonest proof's check depends on it) |
 | A3 | vanishing on S | the verifier checks `P_ab − P_z` vanishes on S; degree ≤ 126 | imposed by interpolating over S ∪ Λ with S = 0; degree ≤ 127 (Schwartz–Zippel `127/|F|`) |
 | A4 | `v†` | the verifier computes `P_z(λ)` | the prover sends `final_c_eval`; the verifier compares it with its interpolation; not absorbed |
@@ -1636,7 +1642,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 | A12 | proof of work | a small amount of grinding | Fast100 grinds only Ligerito's claim and consistency batching; under live coins every nonce is a message and is never checked (R4); structural zero-nonce checks remain where upstream has them (§8, §12, §13) |
 | A13 | statement binding | absent | label, statement digest and Merkle cap absorbed before the first coin |
 | A14 | extra claims | step 4, an auxiliary protocol | public-region claims at the verifier's link points, opened in the same batch as `ab` and `c`; their points and values are not absorbed (the session order fixes them before any Flock coin) |
-| A15 | `root_F` | — | not checked by the live server when `points = 2`; the spec requires `root_F = Σ` (S6), as the replay tools do |
+| A15 | `root_F` | — | the live server skips it when `points = 2`; the spec requires it (S6, D1), as the replay tools do |
 | A16 | `m > 35` | — | no Fast100 schedule; upstream panics (caught as a rejection); the spec rejects explicitly |
 
 ## 20. Mapping onto Lean
@@ -1660,7 +1666,6 @@ Flock.Merkle          §14    verifyPath / verifyBatch
 Flock.Schedule        §15    fast100 : Nat → Option Schedule   (the table as data)
 Flock.Statement.*     §16    PureBlock, IrFrame, Circuit; Legacy (L-CV, L-ACC, L-TAIL, L-SAMPLE)
 Flock.Verify          §3     verify : Config → Record → Proofs → PublicInput → Verdict
-Flock.Zk*             §16.13 verify --zk
 ~~~
 
 The transcript state is threaded explicitly (a state monad over `Except`), never global. Level 3's theorems attach to

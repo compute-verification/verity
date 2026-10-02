@@ -125,6 +125,100 @@ def test_replay_record_is_identical_serial_vs_forked_and_names_the_frozen_fork(w
     assert fk["gc_freeze"] is True and fk["workers"] == 3 and fk["gc_frozen_objects"] > 0 and fk["picked"] == par["sample"]["evaluated"]
 
 
+# ------------------------------------------------------------------------------------------ the pool fitted after the prewarm
+GiB = 1 << 30
+
+
+@pytest.fixture
+def cgroup(tmp_path, monkeypatch):
+    mx, cur = tmp_path / "memory.max", tmp_path / "memory.current"
+    monkeypatch.setattr(SR, "CGROUP_MEMORY", (str(mx), str(cur)))
+    return mx, cur
+
+
+def _prewarm_leaves(monkeypatch, cur, in_use: int) -> None:
+    """The prewarm (in the Boolean replay, every picked Boolean version compiled in the parent) leaves ``in_use`` bytes in the cgroup."""
+    real = SR._prewarm_evaluators
+
+    def prewarm(picked):
+        out = real(picked)
+        cur.write_text(f"{in_use}\n")
+        return out
+
+    monkeypatch.setattr(SR, "_prewarm_evaluators", prewarm)
+
+
+def _pool_in_process(monkeypatch) -> list[int]:
+    forked: list[int] = []
+
+    def pool(fn, picked, workers):
+        forked.append(workers)
+        return [fn(vu) for vu in picked]
+
+    monkeypatch.setattr(SR, "_parallel_replay", pool)
+    return forked
+
+
+class _Stating:
+    """A row evaluator that only states each pick's peak: the driver's copy of `ROW_EVALUATORS` (the rows evaluate as on the record)."""
+
+    def __init__(self, peak) -> None:
+        self.peak_bytes = peak
+
+
+def test_the_pool_is_fitted_after_the_prewarm_to_what_the_parent_then_holds(world, cgroup, monkeypatch):
+    """r20261001-183627-ffcb: 30 workers asked for under a 400 GiB memory.max, 10 GiB in use when the replay began and 301.4 GiB once the
+    prewarm had compiled the Boolean versions.  The workers sized before the prewarm (all 30 at 9.6 GiB) were OOM-killed."""
+    mx, cur = cgroup
+    mx.write_text(f"{400 * GiB}\n")
+    cur.write_text(f"{10 * GiB}\n")
+    _prewarm_leaves(monkeypatch, cur, int(301.4 * GiB))
+    forked = _pool_in_process(monkeypatch)
+    bmap, committed = world.bmap_and_reader()
+    sr = SR.sampled_replay(TSR._programs(world), bmap, committed, TSR._weights(world), workers=30, worker_peak=int(9.6 * GiB),
+                           per_stratum=2, seed=11, retention="host")
+    assert forked == [10] and sr["result"] is True and sr["evaluator"]["workers"] == 10
+    m = sr["evaluator"]["memory"]
+    assert (m["in_use"], m["room"], m["workers_requested"], m["workers_fitted"]) == (int(301.4 * GiB), 400 * GiB - int(301.4 * GiB), 30, 10)
+    assert sr["evaluator"]["note"].startswith("30 requested, fitted to 10 after the prewarm: 10 workers at the largest picks' peaks (96.0 GiB")
+    assert SR.sampled_replay(TSR._programs(world), bmap, committed, TSR._weights(world), workers=30, per_stratum=2, seed=11,
+                             retention="host")["evaluator"]["workers"] == 30 and forked[-1] == 30   # no worker_peak: not fitted
+
+
+def test_a_pick_that_cannot_fit_is_refused_before_the_fork_never_replayed_serially(world, cgroup, monkeypatch):
+    """r20261001-200753-63d1's LM-head worker peaked at 182.1 GiB; after ffcb's prewarm 98.6 GiB were left, for any worker or the parent."""
+    mx, cur = cgroup
+    mx.write_text(f"{400 * GiB}\n")
+    cur.write_text(f"{10 * GiB}\n")
+    _prewarm_leaves(monkeypatch, cur, int(301.4 * GiB))
+    forked = _pool_in_process(monkeypatch)
+    monkeypatch.setattr(SR, "ROW_EVALUATORS", [_Stating(lambda vu: int(182.1 * GiB))])
+    bmap, committed = world.bmap_and_reader()
+    with pytest.raises(SR.PoolDoesNotFit, match=r"needs 182\.3 GiB, more than the cgroup's memory\.max 400\.0 GiB less the 301\.4 GiB in "
+                                                 r"use after the prewarm \(98\.6 GiB\): the job needs at least 483\.7 GiB"):
+        SR.sampled_replay(TSR._programs(world), bmap, committed, TSR._weights(world), workers=30, worker_peak=250 << 20, per_stratum=2,
+                          seed=11, retention="host")
+    assert forked == []
+
+
+def test_the_workers_hold_the_largest_picks_side_by_side(cgroup, monkeypatch):
+    mx, cur = cgroup
+    stated = {0: 182, 1: 17, 2: 12, 3: 12, 4: 12}
+    picked = [{"i": i, "spec": f"Gemm_v3{{N={i}}}"} for i in (3, 1, 4, 0, 2)]
+    monkeypatch.setattr(SR, "ROW_EVALUATORS", [_Stating(lambda vu: stated[vu["i"]] * GiB)])
+    assert SR.fit_pool(8, picked, GiB) == (8, None)                     # no cgroup
+    mx.write_text("max\n")
+    cur.write_text(f"{6 * GiB}\n")
+    assert SR.fit_pool(8, picked, GiB) == (8, None)                     # no limit
+    mx.write_text(f"{400 * GiB}\n")
+    cur.write_text(f"{166 * GiB}\n")
+    n, m = SR.fit_pool(8, picked, GiB)                                  # 183 + 18 + 13 + 13 of 234 GiB; a fifth's 13 does not fit
+    assert (n, m["fitted_bytes"], m["largest"], m["peaks_stated_by"]) == (4, 227 * GiB, {"spec": "Gemm_v3{N=0}", "bytes": 183 * GiB}, "_Stating")
+    assert SR.fit_pool(3, picked, GiB)[0] == 3
+    monkeypatch.setattr(SR, "ROW_EVALUATORS", [])
+    assert SR.fit_pool(300, picked, GiB)[0] == 234                      # no stated peaks: the baseline alone, idle workers included
+
+
 # ------------------------------------------------------------------------------------------ (a) the RETAIN-windowed pool by family
 def test_retain_exclude_alias_names_both_tap_families():
     assert NC.retain_exclude_families("hidden_m1") == {"fa2_hidden_m1", "fa3_hidden_m1"}
