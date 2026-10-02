@@ -478,6 +478,27 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   group's word the next.
 - Only forming v1 runs on a non-H100 record (v0 is #311's H100 port).
 - The work law aligns `k_unit` to 128, so it requires 32·G ∣ 128.
+- **The circuit (`circuit.pc8`)** is forming v1's tile check as a Program, cut as `circuit.pc4` cuts Pearl-C4's. Its
+  units are three templates, each with the device record as a static (`DEV`: `h100`, `sm120`, `sm120-unpromoted`):
+
+  ~~~text
+  template              per                      reads                                   returns
+  Pc8RowB{K,DEV}        row j of B               B_j, E_B,j, F_B, F_A, G                 B̃_j's codes, P_B,j, ok
+  Pc8RowA{K,DEV}        row i of A               A_i, E_A,i, F_A, F_B                    A′_i's codes, P_A,i, ok
+  Pc8Tile{K,TM,TN,DEV}  tile of TM × TN words    its rows' A′, P_A, B̃, P_B               C̃ and U of its words
+  ~~~
+
+  - The roots are `pc4`'s: `Pc8Weight{K,N,DEV}`, `Pc8Call{M,K,N,TM,TN,DEV}` and `Pc8Check{M,K,N,TM,TN,DEV}`.
+  - The atom is the record's (`HopperE4m3QgmmaDot32` or `BlackwellE4m3QmmaDot32`), and so is its promotion period. The
+    peel is `HopperBF16WgmmaDot16` on every record.
+  - ``ok`` is the domain on the row: every word finite, ρ finite, the noise floor as the sign of fma(ρ, α, −1), and
+    `live_row` on exact squares. `words.PouwSqAcc`, `PouwSqCeil` and `PouwSqGe` scale each square by 2^300 into a
+    576-bit integer, which never leaves the row unit. No other rejection of the scheme's is reachable on such a row (the
+    module docstring).
+  - The noise lines and G are anchored inputs, as in `pc4`.
+  - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
+    partition computes each value in exactly one unit.
+  - Not in it yet: the debit and the cap, and the hiding leaves of A's rows, B's rows and the tile's words.
 
 ## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 

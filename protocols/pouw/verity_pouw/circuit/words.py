@@ -1,8 +1,10 @@
-"""PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, and the three Pearl-C4's tile check
-(`pc4`) adds to core's FP32, cast and tensor-core primitives.
+"""PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
+adds to core's FP32, cast and tensor-core primitives, and the three exact sums of squares Pearl-C's (`pc8`) liveness reads.
 
-Every primitive returns one value of at most 32 bits, so every unit of any `Q_word` cut of these Definitions meets the width
-rule, and a 64-bit hash word is carried as two 32-bit halves: SHA-512's words as (hi, lo), Keccak's lanes as (lo, hi).
+Every primitive but `PouwSqAcc` (576 bits) and `PouwSqCeil` (64) returns one value of at most 32 bits, so every unit of any
+`Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two 32-bit halves: SHA-512's
+words as (hi, lo), Keccak's lanes as (lo, hi).  The two wide values stay inside one `pc8` row unit, whose partition is
+`Q_template_instances`.
 Encodings: `U32` = `Value<32>`; `I7` = `Value<7>`, a two's-complement int7 (A's and B's entries: the type is the int7 domain
 check); `U8` = `Value<8>`, a byte read as u8 (X + β) or s8 (the noise, Y) as each primitive says; `F32`, `BF16` and `E2M1`
 the float encodings.  Every evaluator is total on encodings.
@@ -238,6 +240,57 @@ def PouwETilde(e: int, ae: int) -> int:
 def PouwBf16Neg(a: int) -> int:
     """−a on a BF16 encoding: the sign bit flipped (−Ẽ_B in P_B)."""
     return (a ^ 0x8000) & 0xFFFF
+
+
+# ---- Pearl-C (`pc8`): `pearl_c.live_row`'s exact statistic -----------------------------------------------------------------
+
+#: 2^300 · x² of every FP32 word is an integer below 2^558, and a sum of k/8 <= 2^13 of them is below 2^571
+SQ_SCALE, SQ = 300, Value(576)
+SQ_MASK = (1 << 576) - 1
+#: a nonnegative integer v rounded up to 48 significant bits, as (e << 48) | m with v <= m · 2^e: e = 0 and m = v below 2^48,
+#: else 2^47 <= m < 2^48, so the encoding's order is the value order
+SQ48, _M48 = Value(64), (1 << 48) - 1
+
+
+def sq300(x: int) -> int:
+    """2^300 · x² for the FP32 word ``x``, exactly; the sign is dropped and exponent 255 decodes as a normal exponent (a
+    non-finite word fails the row's admission before this matters)."""
+    e, m = (x >> 23) & 0xFF, x & 0x7FFFFF
+    if e:
+        m |= 1 << 23
+    return (m * m) << (2 * (max(e, 1) - 150) + SQ_SCALE)          # |x| = m · 2^(max(e, 1) − 150)
+
+
+def up48(v: int) -> int:
+    """``v`` >= 0 rounded up to 48 significant bits, encoded as `SQ48` says."""
+    if v <= _M48:
+        return v
+    e = v.bit_length() - 48
+    m = -(-v >> e)
+    if m > _M48:
+        m, e = m >> 1, e + 1
+    return (e << 48) | m
+
+
+@primitive("PouwSqAcc", 1, [("acc", SQ), ("x", F32)], SQ, conformance="protocol-defined")
+def PouwSqAcc(acc: int, x: int) -> int:
+    """acc + 2^300 · x², exactly (`sq300`), mod 2^576: a term of `live_row`'s Σ_{p ≡ 0 (8)} x_p²."""
+    return (acc + sq300(x & M32)) & SQ_MASK
+
+
+@primitive("PouwSqCeil", 1, [("t", SQ), ("n", U32)], SQ48, conformance="protocol-defined")
+def PouwSqCeil(t: int, n: int) -> int:
+    """θ = ⌈64 · t / n⌉ rounded up to 48 significant bits (`up48`): an x is dead in `live_row` (n · 2^300 · x² >= 64 · t,
+    t the scaled sum over n positions) iff 2^300 · x², which has at most 48 significant bits, is at least θ.  n = 0 gives
+    the largest encoding."""
+    n &= M32
+    return up48(-(-64 * t // n)) if n else (1 << 64) - 1
+
+
+@primitive("PouwSqGe", 1, [("x", F32), ("th", SQ48)], Value(1), conformance="protocol-defined")
+def PouwSqGe(x: int, th: int) -> int:
+    """1 iff 2^300 · x² >= the value θ encodes (`PouwSqCeil`), compared as `SQ48` encodings."""
+    return 1 if up48(sq300(x & M32)) >= th else 0
 
 
 __all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "U32", "U8", "sx", "i32_to_f32_rn",
