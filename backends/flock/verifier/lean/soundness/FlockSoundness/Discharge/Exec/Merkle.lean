@@ -80,19 +80,7 @@ theorem parse_leafScheme_pre {tags : Tags} {bytes : ByteArray} {tables : List (S
   simp (config := { zeta := false }) only [jpL] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨s2, hlook, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets2 at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpS at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpS] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨ports, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, hpcheck, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨listed, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpR] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h
   replace h := ite_throw_ok h
@@ -218,19 +206,7 @@ theorem parse_leafScheme_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (
   simp (config := { zeta := false }) only [jpL] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨s2, hlook, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets2 at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpS at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpS] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨ports, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, hpcheck, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨listed, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpR] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h
   replace h := ite_throw_ok h
