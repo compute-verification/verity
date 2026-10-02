@@ -5,8 +5,8 @@ import FlockSoundness.Audit.OneStage
 /-!
 # flock-verify's acceptance, as an event of the audit
 
-`Prog.flock_headline` bounds an event of the model's audit, whose outcome is the model's verdict and the draw. What
-the verifier of record decides is flock-verify's verdict on the session directory a run leaves: the record the coin
+`Prog.flock_headline` bounds an event of the audit as Lean defines it, whose outcome is that audit's verdict and the
+draw. What the verifier of record decides is flock-verify's verdict on the session directory a run leaves: the record the coin
 server wrote (`session.json`) and the proof file it received for each table's rep. This file states that verdict as an
 event, on an audit whose outcome carries the transcript.
 
@@ -19,7 +19,8 @@ event, on an audit whose outcome carries the transcript.
 * `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's draw, then the live session
   `live S R` that ends in the transcript, and its outcome the registration, the draw and the transcript.
 * `ExecRefines`: the open guarantee R11 at one strategy pair, the probability that flock-verify accepts in the live
-  audit is at most the model audit's acceptance plus a live event `bad` (for `bad = ⊥`, the skeleton's `hExec`).
+  audit is at most the probability that the audit as Lean defines it accepts, plus a live event `bad` (for `bad = ⊥`,
+  the skeleton's `hExec`).
 -/
 
 namespace FlockSoundness.Discharge.Exec
@@ -28,9 +29,10 @@ open Lean (Json)
 open Game Audit
 open scoped ENNReal
 
-/-- What `flock-verify verify` reads besides the session directory: the statement's tags (`--statement`), the circuit and
-public files (`--circuit`, `--public`), the coins (`--coins`), the tables per session (`--session-tables`), the lookup
-tables the circuit pins, and the verifier's own partition, program, work, stratified `K` and closure map. -/
+/-- What `flock-verify verify` reads besides the session directory: the statement's tags (`--statement`, as `verifyCmd`
+passes them to `Stmt.setupTables`, so after any rewrite of the tags by `--coins`), the circuit and public files
+(`--circuit`, `--public`), the coins (`--coins`), the tables per session (`--session-tables`), the lookup tables the
+circuit pins, and the verifier's own partition, program, work, stratified `K` and closure map. -/
 structure Inputs where
   tags : Flock.Tags
   circuitFile : ByteArray
@@ -84,8 +86,8 @@ def auditLive (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game T
 /-- flock-verify accepts the live audit's transcript. -/
 def LiveAccepts (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop := Accepts I o.2.2
 
-/-- **R11 at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the model's
-game `Gm` played by `σ` accepts, up to the live event `bad`. -/
+/-- **R11 at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the audit `Gm`
+as Lean defines it, played by `σ`, accepts, up to the live event `bad`. -/
 def ExecRefines {β : Type} (G : Game β) (τ : Strategy G) (acc bad : β → Prop) (Gm : Game (Bool × Finset (Fin n)))
     (σ : Strategy Gm) : Prop :=
   prob acc G τ ≤ prob (fun o => o.1 = true) Gm σ + prob bad G τ

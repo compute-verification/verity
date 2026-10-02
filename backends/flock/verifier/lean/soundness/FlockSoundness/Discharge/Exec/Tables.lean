@@ -9,7 +9,7 @@ import FlockSoundness.Discharge.Exec.SessionL
 * `verify_ok_tables`: when `Flock.verify spec tabs record proofs` accepts, the record decodes, there is one statement
   per table, and each table `i` has its `fast100` schedule and both reps' checks accept with one cap, on the proof
   files `proofs[2i]` and `proofs[2i+1]`.
-* `table_refines_hm96`: one table's accepted reps refine the model's compiled reps, with salted openings
+* `table_refines_hm96`: one table's accepted reps refine the compiled reps as Lean defines them, with salted openings
   (`verify_refines_hm96` at any table index).
 * `table_tableAfterL`: the same as one run of the salted session's table game `tableAfterL` (`SessionL.lean`), played
   on the two streams' coins, which accepts.
@@ -81,7 +81,7 @@ theorem verify_ok_tables {spec : SessionSpec} {tabs : Array Setup} {record : Str
   | none => rw [hm] at hf; cases hf
   | some s => rw [hm] at hf; cases hf; rfl
 
-/-- **One table's accepted reps refine the model's, for `hm96-sha512/v1`** (§9–§14): `verify_refines_hm96` at table
+/-- **One table's accepted reps refine the compiled reps, for `hm96-sha512/v1`** (§9–§14): `verify_refines_hm96` at table
 `i` of a session, from both reps' checks accepting with one cap. -/
 theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
@@ -128,7 +128,7 @@ theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
 
 open Classical in
 /-- **One table's accepted reps are one accepting run of the salted table game** (§5): `table_refines_hm96`, with the
-model's `extraClaims` at link points `pts`, as one run of `tableAfterL` at `Refine.leaf512`, played on the two streams'
+statement's `extraClaims` at link points `pts`, as one run of `tableAfterL` at `Refine.leaf512`, played on the two streams'
 coins, rep 0's then rep 1's. Its openings and salts are the proofs'. -/
 theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
@@ -167,7 +167,7 @@ theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement
 
 /-- **flock-verify refines each table of the session it accepts, under `hm96-sha512/v1`** (§5, §9–§14, §16.12). When
 `Accepts I t`, the record decodes against the session's spec, and each table `j` is `setupH`'s statement. For a table
-whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the model statement `stmtOf sts[j]` read off its
+whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the statement `stmtOf sts[j]` read off its
 layout and the record's link points, one run of the salted table game `tableAfterL` on the table's two streams' coins,
 with the proof files' openings and salts, accepts. -/
 theorem accepts_tables_hm96 {I : Inputs} {t : Transcript} (h : Accepts I t) :
