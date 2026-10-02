@@ -203,7 +203,10 @@ class _Operands:
 
 
 class _Transcript(dict):
-    """An execution transcript whose registered tables' Input gates are read through the table, never stored."""
+    """An execution transcript whose registered tables' Input gates are read through the table, never stored.
+
+    ``in`` doesn't see those gates, only ``[]`` does. `evaluate_region` asks ``in`` only of Input gates inside its selection,
+    and a standalone call's selection holds none."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -247,7 +250,9 @@ def _evaluate_with_tables(t: Any, args: Sequence[Any]) -> tuple[int, ...]:
     for pi, a in enumerate(args):
         refs = prog.input_coll(pi).refs
         if isinstance(a, RegisteredTable):
-            assert isinstance(refs, Affine) and refs.count == a.leaves, (t.id, pi, refs)
+            if not (isinstance(refs, Affine) and refs.count == a.leaves):
+                raise TypeError(f"{t.id} argument {pi}: the registered table {a.name!r} ({a.leaves} leaves) needs one "
+                                f"contiguous run of as many Input gates, not {refs!r}")
             tr.add_table(refs.base, a)
             continue
         vals = _leaves(a)
