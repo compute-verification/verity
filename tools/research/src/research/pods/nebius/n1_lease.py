@@ -12,6 +12,9 @@ A job leases a GPU for its GPU phase only: its pod requests no `nvidia.com/gpu`,
 the device plugin, so Kubernetes never hands it to another pod. Every other GPU is *fenced*: a `flock -x` on its lock file, held by
 a detached process whose owner line says who=kubernetes, so no lease can take it, whatever list a waiting gpu-lease read at its
 start. A fence outlives this controller, so a crash fails closed. `pool.gpus` (the allowed file) lists every index.
+A holder requests its GPU and nothing else: waiting pods hold their queue's CPU and memory quota, so a holder that needed any could
+wait on the very pods it serves. It is BestEffort, so evicted first under memory pressure, and an evicted holder's lease is outside
+the pool (below).
 Each tick, with the brain absent (local rules):
   - grow: when the waiters want more than the free pool GPUs and pending holders cover, submit holders (at most `$VY_POOL_MAX`,
     and never past the queue's nominal GPU quota less what its other admitted Workloads reserve: a holder on borrowed quota is
@@ -196,8 +199,7 @@ def holder_job(t: float) -> dict:
                      "securityContext": {"runAsUser": 1000, "runAsGroup": 1000}, "terminationGracePeriodSeconds": 1,
                      "containers": [{"name": "hold", "image": IMAGE, "imagePullPolicy": "IfNotPresent",
                                      "command": ["sh", "-c", "nvidia-smi --query-gpu=uuid --format=csv,noheader; exec sleep 2147483647"],
-                                     "resources": {"requests": {"cpu": "100m", "memory": "64Mi", "nvidia.com/gpu": "1"},
-                                                   "limits": {"nvidia.com/gpu": "1"}}}]}}},
+                                     "resources": {"requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}}]}}},
     }
 
 

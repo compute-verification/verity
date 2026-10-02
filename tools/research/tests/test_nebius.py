@@ -1305,7 +1305,8 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
     t = 1_800_000_000.0
     s = c.tick(t)
     created = [json.loads(st) for a, st in calls if a[0] == "create"]
-    assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"] == {"nvidia.com/gpu": "1"}
+    assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"] == {
+        "requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}      # no CPU or memory: waiters hold the queue's
     assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "provers" and s["pool"] == 0
     assert all(g["fence_pids"] for g in s["gpus"])
     state["holders"] = [(created[0]["metadata"]["name"], "hold-1", "GPU-b")]
