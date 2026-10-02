@@ -9246,6 +9246,11 @@
    "assumptions": [],
    "type_hash": "28b76d8498c93eccd945d8bfd2349de278367b90754881e658c2c44e2f9c2e63"
   },
+  "FlockSoundness.Discharge.ZkView.decode_encode": {},
+  "FlockSoundness.Discharge.ZkView.honest_msg": {},
+  "FlockSoundness.Discharge.ZkView.leafSplit": {},
+  "FlockSoundness.Discharge.ZkView.zk_wire_fixed": {},
+  "FlockSoundness.Discharge.ZkView.zk_wire_prefinal": {},
   "FlockSoundness.Game.Plays.toT": {
    "signature": [
     "FlockSoundness.Game.Plays.toT {W F : Type} [Inhabited W] {ι : W → F} {α : Type} {g : FlockSoundness.Game α}",
