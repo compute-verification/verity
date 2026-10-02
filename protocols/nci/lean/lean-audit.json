@@ -44,6 +44,19 @@
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
+  },
+  "Nci.SecurityProofs.loomis_whitney": {
+   "signature": [
+    "Nci.SecurityProofs.loomis_whitney.{u_1, u_2, u_3} {α : Type u_1} {β : Type u_2} {γ : Type u_3} [DecidableEq α]",
+    "  [DecidableEq β] [DecidableEq γ] (T : Finset (Prod α (Prod β γ))) :",
+    "  instLENat.le (instHPow.hPow T.card 2)",
+    "    (instHMul.hMul",
+    "      (instHMul.hMul (Finset.image (fun x => { fst := x.fst, snd := x.snd.fst }) T).card",
+    "        (Finset.image (fun x => { fst := x.fst, snd := x.snd.snd }) T).card)",
+    "      (Finset.image (fun x => { fst := x.snd.fst, snd := x.snd.snd }) T).card)"
+   ],
+   "assumptions": [],
+   "type_hash": "699c0e8c25ebd5e02db7990880c2aab5edf63a3a632f092488b8826906380abe"
   }
  },
  "reads": {

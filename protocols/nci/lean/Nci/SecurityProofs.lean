@@ -1,4 +1,5 @@
 import Nci.Guarantees
+import Nci.SecurityProofs.LoomisWhitney
 import Verity.SecurityProofs
 
 /-!
