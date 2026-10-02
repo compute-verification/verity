@@ -169,6 +169,21 @@
   }
  },
  "pins": {
+  "FlockSoundness.ZK.GK.Model.gk_simulate": {},
+  "FlockSoundness.ZK.GK.Model.gk_simulate_coins": {},
+  "FlockSoundness.ZK.GK.Model.gk_simulate_coins_keyed": {},
+  "FlockSoundness.ZK.GK.gk_simulate_avg": {},
+  "FlockSoundness.ZK.GK.gk_simulate_hm96": {},
+  "FlockSoundness.ZK.GK.Model.sim_runs_le": {},
+  "FlockSoundness.ZK.GK.Model.sim_runs_ev": {},
+  "FlockSoundness.ZK.GK.Model.sim_runs_tail": {},
+  "FlockSoundness.ZK.GK.prefinalClose_hm96": {},
+  "FlockSoundness.ZK.GK.rewindClose_hm96": {},
+  "FlockSoundness.ZK.GK.bindColl_isColl": {},
+  "FlockSoundness.ZK.GK.bindCollKeyed_isColl": {},
+  "FlockSoundness.ZK.GK.coinColl_isColl": {},
+  "FlockSoundness.ZK.GK.coinCollKeyed_isColl": {},
+  "FlockSoundness.ZK.GK.coinPairs_length_le": {},
   "FlockSoundness.Audit.InfluenceWitness.A.accepts": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
