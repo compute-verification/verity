@@ -566,6 +566,16 @@ def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUN
     return out
 
 
+def _window_level_sizes(n_total: int, j: int) -> list[int]:
+    """Nodes per level 0..n_levels-1 of a windowed step's host levels: n_L = ceil(n / 2^L), n_levels = min(j, height) + 1 (below the
+    window level the tree is a disjoint union of per-window subtrees)."""
+    height, m = 0, n_total
+    while m > 1:
+        m = (m + 1) // 2
+        height += 1
+    return [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
+
+
 class NativeCollectCommitter(NativeHostCommitter):
     """Arm 3.  Inherits the whole R9 complete path; replaces the serving-thread acquisition (see module docstring).
 
@@ -1270,13 +1280,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             """Pinned host buffers for levels 0..n_levels-1 of the WHOLE step (n_L = ceil(n / 2^L)); the per-window subtrees are copied
             straight into their slices (no host concat).  n_levels = min(j, height) + 1: below the window level the tree is a disjoint
             union of per-window subtrees; the upper tree is built over the per-window top nodes by `H.tree` afterwards."""
-            height = 0
-            m = n_total
-            while m > 1:
-                m = (m + 1) // 2
-                height += 1
-            n_levels = min(j, height) + 1
-            sizes = [-(-n_total // (1 << L)) for L in range(n_levels)]
+            sizes = _window_level_sizes(n_total, j)
+            n_levels = len(sizes)
             buf = self.pool.take(sum(sizes) * 32) if self.retain_pinned else torch.empty(sum(sizes) * 32, dtype=torch.uint8)
             views, off = [], 0
             for nL in sizes:
@@ -1485,16 +1490,17 @@ class NativeCollectCommitter(NativeHostCommitter):
             if padded and self.retain_pinned:
                 # prime the pinned pool with the LEVEL buffers the record run will take for this step (same sizes as begin_tree) and, under
                 # retain=host (+ exclude), the same `take` sequence for the retained byte ranges -- all returned to the pool's free list by
-                # reset() -- so the cudaHostAlloc cost (~0.4 s/GB) falls in the warm-up, not inside the measured pair
-                begin_tree(padded // C)
-                state.clear()
+                # reset() -- so the cudaHostAlloc cost (~0.4 s/GB) falls in the warm-up, not inside the measured pair.  `reserve` makes
+                # the blocks these takes allocate in one burst, their pages faulted in over the pool's helper threads at once
+                parts: list[tuple[int, int]] = []
                 if self.retain == "host":
                     excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
-                    n_w = -(-padded // W)
-                    for kk in range(n_w):
-                        base = kk * W
-                        for a, b in retained_parts(base, base + min(W, padded - base)):
-                            self.pool.take(b - a)
+                    parts = [p for kk in range(-(-padded // W)) for p in retained_parts(kk * W, kk * W + min(W, padded - kk * W))]
+                self.pool.reserve([32 * sum(_window_level_sizes(padded // C, j))] + [b - a for a, b in parts])
+                begin_tree(padded // C)
+                state.clear()
+                for a, b in parts:
+                    self.pool.take(b - a)
             nc.finish_step(job.step)
             self.learned_only_steps.append(job.step)
             self.learned_only_bytes += padded
