@@ -171,7 +171,9 @@ print("COMMIT_ARGS=(" + " ".join(shlex.quote(a) for a in
       [x for k, v in (d.get("env") or {}).items() for x in ("--env", f"{k}={v}")]
       + ([ "--class", d["class"]] if d.get("class") else [])
       + (["--resources", json.dumps(d["resources"])] if d.get("resources") else [])
-      + (["--queue", d["queue"]] if d.get("queue") else []) + (["--priority", d["priority"]] if d.get("priority") else [])) + ")")
+      + (["--queue", d["queue"]] if d.get("queue") else []) + (["--priority", d["priority"]] if d.get("priority") else [])
+      + (["--lease", d["lease"]] if d.get("lease") else [])
+      + (["--template-sha", d["template_sha"]] if d.get("template_sha") else [])) + ")")
 EOF
 )"
   local row_dir=$SWEEP_DIR/$ROW marker=$SWEEP_DIR/$ROW/.n2-build run_id

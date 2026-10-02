@@ -28,7 +28,8 @@ from typing import Any
 
 from verity.ir.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ir.defs import Body, CompositeDefinition, Node, SpecializedDefinition
-from verity.ir.program import Program
+from verity.ir.constants import REGISTRATION
+from verity.ir.program import Program, is_input
 from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
 from verity.ir.types import Tuple as TupleT, Type
 from verity_vllm.program.sampling_event import is_sampling_event
@@ -37,7 +38,7 @@ SCHEMA = "verity/workload-program/v1"
 
 
 def _is_input_node(n: Node) -> bool:
-    return n.form == "batch" and (getattr(n.fn, "family", None) == "Input" or n.fn.id.startswith("Input"))
+    return n.form == "batch" and is_input(n.fn)
 
 
 def _remap(r: Refs, K: int, logs: dict[int, tuple[PartLog, PartLog]] | None = None) -> Refs:
@@ -135,6 +136,7 @@ class RequestComponent:
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
+    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ir.constants`: registration or run)
 
     def to_json(self) -> dict:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
@@ -296,7 +298,8 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         bounds.append((lo, len(nodes)))  # trailing instances after the last TokenSelect (none for the request wrapper; kept, never dropped)
     step_gates = tuple((offsets[a], offsets[b]) for a, b in bounds)
     return RequestComponent(sp, digest, desc["program_fn"], params, input_gates, offsets[-1], len(nodes),
-                            hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates)
+                            hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates,
+                            tuple(body.nodes[j].fn.binding for j in range(K)))
 
 
 @dataclass
@@ -418,8 +421,12 @@ class WorkloadProgram:
         ids = [r.request_id for r in requests]
         if len(set(ids)) != len(ids):
             raise ValueError(f"duplicate request_id in the workload: {ids}")
-        # the shared group (`weights`): the same Input batches — same count, names and types — in every request component
-        idx = [tuple(j for j, g in enumerate(r.component.groups) if g == shared) for r in requests]
+        # the shared groups: `weights`, and every group a component registers (its `values`, its tables: what the program brings, bound
+        # once at registration) -- the same Input batches, same count, names and types, in every request component
+        reg = [frozenset(g for g, b in zip(r.component.groups, r.component.bindings) if b == REGISTRATION) for r in requests]
+        if any(x != reg[0] for x in reg[1:]):
+            raise ValueError(f"the request components register different groups {sorted({tuple(sorted(x)) for x in reg})}: not one program; refused")
+        idx = [tuple(j for j, g in enumerate(r.component.groups) if g == shared or g in reg[0]) for r in requests]
         if not idx[0]:
             raise ValueError(f"no prescribed parameter group {shared!r} in the request components (groups: {sorted(set(requests[0].component.groups))})")
         sig = [tuple(r.component.params[j] for j in ix) for r, ix in zip(requests, idx)]
@@ -441,6 +448,8 @@ class WorkloadProgram:
                                  "cap, never from a served length")
         self.requests = list(requests)
         self.shared_group = shared
+        self.registered = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
+                                if requests[0].component.groups[j] in reg[0])   # the root parameters bound at registration
         self.shared = shared_idx                       # request 0's positions = the shared Input batches' order
         self.shared_by_request = tuple(idx)            # per request (== shared_idx everywhere in the uniform/TP1 case)
         self.shared_positions_uniform = uniform
@@ -451,7 +460,7 @@ class WorkloadProgram:
         # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` [R17-1] is the third static:
         # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag)
         self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
-        self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest})
+        self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered)
         self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
         self.digest = program_digest(self.descriptor)
         # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes
@@ -607,6 +616,7 @@ class WorkloadProgram:
                 "lag": self.lag, "lengths": served_lengths_rule(self.lag),
                 "input_gates": self.program.input_gates, "n_root_nodes": len(self.program.root.body.nodes), "manifest_digest": self.manifest_digest,
                 "shared": {"group": self.shared_group, "component_params": list(self.shared),
+                           **({"registered": list(self.registered)} if self.registered else {}),
                            **({} if self.shared_positions_uniform else {"component_params_by_request": [list(x) for x in self.shared_by_request]})},
                 "shared_param_index": list(self.shared),  # (compat: gmatch's from_gprog labels the shared parameter with it)
                 "shared_param_index_by_request": None if self.shared_positions_uniform else [list(x) for x in self.shared_by_request],

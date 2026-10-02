@@ -69,7 +69,7 @@ def hopper_wgmma_dot16_total(acc_bits: int, a, b) -> int:
     return tc_dot_total(HOPPER_BF16_WGMMA_K16, acc_bits, a, b)
 
 
-@primitive("Fa3InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested")
+@primitive("Fa3InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested", tables=(("rcp", "library"),))
 def Fa3InvSum(s: int) -> int:
     """FA3 `Softmax::finalize` (hopper/softmax.h): `inv_sum = (sum == 0.f || sum != sum) ? 0.f : 1.f / sum` under
     `--use_fast_math` (`1.f / sum` -> `rcp.approx.ftz.f32`, MUFU.RCP), then `scores_scale = inv_sum * 1.f`.  Tested on

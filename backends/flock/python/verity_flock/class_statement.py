@@ -8,8 +8,12 @@ M0's statement proves a template's identical units with every instance's input r
 
 * one unit per instance: the class's circuit (`partition_units.lower_class`), its inputs packed into one u16 row port per source
   (`sources`: a Call parameter it reads, or a class of producing units whose committed outputs it reads; a word of w bits takes
-  ceil(w / 16) consecutive u16 leaves, low half first; each row padded with unread zero words to a whole number of 64-word SHA-512
-  blocks, as frame-v3 rows are), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
+  ceil(w / 16) consecutive u16 leaves, low half first, or under ``FLOCK_PACK_WORDS=1`` a word narrower than 16 bits takes the
+  next w bits of the current leaf, low bits first, when they fit there and the next leaf's low bits when not, so four FP4 or two
+  FP8 elements share a leaf and the row's little-endian bytes are the elements' packed memory layout; each row padded with
+  unread zero words to a whole number of 64-word SHA-512 blocks, as frame-v3 rows are; under ``FLOCK_CORE_ROWS=1`` an FP GEMM
+  coordinate's x and its scales are one packed row and its W column and scales another, each core's bit row (``sha512/row/v2``)
+  of exactly its elements' bits, `element_rows`), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
@@ -71,6 +75,36 @@ def _pad(n: int, to: int) -> int:
     return max(to, -(-n // to) * to)
 
 
+#: FLOCK_PACK_WORDS=1: words narrower than a leaf share it (`_slots`); a different circuit and statement from the default layout's
+PACK_WORDS = os.environ.get("FLOCK_PACK_WORDS") == "1"
+#: FLOCK_CORE_ROWS=1: an FP GEMM coordinate's rows are core's bit rows (`element_rows`); packed, and a different circuit and
+#: statement from both other layouts'
+CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
+#: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
+ELEMENT_ROWS = {"GemmCoordinateE4m3_v1": (("x",), ("wrow",)),
+                "GemmCoordinateNvf4_v1": (("x", "sx"), ("wrow", "sw")),
+                "GemmCoordinateMxf4_v1": (("x", "sx"), ("wrow", "sw"))}
+
+
+def _slots(widths: Sequence[int], packed: bool = False) -> tuple[list[tuple[int, int]], int]:
+    """Each word's (first leaf, first bit) in its row, and the leaves the row's words take: a word of 16 bits or more starts a
+    leaf and takes ceil(w / 16); packed, a narrower one takes the current leaf's next w bits when they fit, else the next leaf's
+    first w (a word never spans two leaves)."""
+    at, leaf, bit = [], 0, 0
+    for w in widths:
+        if packed and w < 16:
+            if bit + w > 16:
+                leaf, bit = leaf + 1, 0
+            at.append((leaf, bit))
+            bit += w
+        else:
+            if bit:
+                leaf, bit = leaf + 1, 0
+            at.append((leaf, 0))
+            leaf += _words(w)
+    return at, leaf + (1 if bit else 0)
+
+
 @dataclass
 class ClassDefinition:
     """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array."""
@@ -102,22 +136,56 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None) -> IL.Lowering:
-    """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), each
-    padded to whole 64-word SHA-512 blocks, and ``out0 .. out{W_out-1}``."""
+def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+    """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
+    scales another, each core's bit row (``verity.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
+    the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
+    bits. Refuses a Definition that is not such a coordinate and a source that is not one whole parameter in element order. A
+    row of any length is staged: the verifiers derive its fill bits and SHA-512 padding from the length."""
+    family = act.fn.id.split("{")[0]
+    if family not in ELEMENT_ROWS:
+        raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id} is not an FP GEMM coordinate ({sorted(ELEMENT_ROWS)})")
+    rows = ELEMENT_ROWS[family]
+    sig = act.fn.signature()[0]
+    first = [sum(t.leaves for _n, t in sig[:i]) for i in range(len(sig))]
+    held = []
+    for g in groups:
+        leaves = [-1 - uc.inputs[t] if uc.inputs[t] < 0 else None for t in g]
+        p = next((i for i in range(len(sig)) if leaves[0] is not None and first[i] <= leaves[0] < first[i] + sig[i][1].leaves), None)
+        if p is None or leaves != list(range(first[p], first[p] + sig[p][1].leaves)):
+            raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: a source that is not one whole parameter in element order")
+        held.append(sig[p][0])
+    merged, joins, bits = [], [], []
+    for params in rows:
+        if any(nm not in held for nm in params):
+            raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: the unit reads no {params}")
+        idx = tuple(held.index(nm) for nm in params)
+        g = [t for i in idx for t in groups[i]]
+        merged.append(g)
+        joins.append(idx)
+        bits.append(sum(uc.in_widths[t] for t in g))
+    if sorted(i for j in joins for i in j) != list(range(len(groups))):
+        raise ValueError(f"FLOCK_CORE_ROWS: {act.fn.id}: a source in no row")
+    return merged, joins, bits
+
+
+def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+                   packed: bool = False, blocks: bool = True) -> IL.Lowering:
+    """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
+    words laid out by `_slots` (``packed``: narrow words share leaves), each padded to whole 64-word SHA-512 blocks (not
+    ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``."""
     groups = groups or [list(range(len(uc.inputs)))]
-    port_words = tuple(_pad(sum(_words(uc.in_widths[t]) for t in g), BLOCK_WORDS) for g in groups)
+    slots = [_slots([uc.in_widths[t] for t in g], packed) for g in groups]
+    port_words = tuple(_pad(used, BLOCK_WORDS) if blocks else used for _at, used in slots)
     C = gf2.Circuit()
     leaves = []
     for i, w in enumerate(port_words):
         leaves += [C.input(f"in{len(leaves) + j}", 16) for j in range(w)]
     wires, base = {}, 0
-    for g, w_port in zip(groups, port_words):
-        at = base
-        for t in g:
+    for g, (at, _used), w_port in zip(groups, slots, port_words):
+        for t, (leaf, bit) in zip(g, at):
             w = uc.in_widths[t]
-            wires[act.absolute(uc.inputs[t])] = [b for word in leaves[at:at + _words(w)] for b in word][:w]
-            at += _words(w)
+            wires[act.absolute(uc.inputs[t])] = [b for word in leaves[base + leaf:base + leaf + _words(bit + w)] for b in word][bit:bit + w]
         base += w_port
     IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
     out_bits = []
@@ -135,21 +203,24 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
 
 
 def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
-         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None):
+         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
-    the packing `class_lowering` reads."""
+    the layout `class_lowering` reads (``packed`` as there)."""
     groups = groups or [list(range(len(uc.inputs)))]
     port_words = port_words or [w_in]
     n = len(ins[0]) if ins else len(want[0])
     rows = np.zeros((n, w_in), np.uint16)
     base = 0
     for g, wp in zip(groups, port_words):
-        at = base
-        for t in g:
+        at, _used = _slots([uc.in_widths[t] for t in g], packed)
+        for t, (leaf, bit) in zip(g, at):
+            w = uc.in_widths[t]
             v = np.asarray(ins[t], dtype=np.uint64)
-            for h in range(_words(uc.in_widths[t])):
-                rows[:, at + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
-            at += _words(uc.in_widths[t])
+            if packed and w < 16:
+                rows[:, base + leaf] |= ((v & np.uint64((1 << w) - 1)) << np.uint64(bit)).astype(np.uint16)
+                continue
+            for h in range(_words(w)):
+                rows[:, base + leaf + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
         base += wp
     outs = np.zeros((n, w_out), np.uint16)
     at = 0
@@ -371,23 +442,34 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
     return ins, want, rows
 
 
-def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes) -> dict:
+def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
+          packed: bool | None = None, core_rows: bool | None = None) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
-    source identities share equal rows)."""
+    source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
+    GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS)."""
+    core_rows = CORE_ROWS if core_rows is None else core_rows
+    packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
     uc = cl.representative
-    name = shape[:16]
+    suffix = "-core-rows" if core_rows else "-packed" if packed else ""
+    name = shape[:16] + suffix
     ins, want, idents = lanes_ if len(lanes_) == 3 else (*lanes_, None)
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
-    low = class_lowering(act, uc, f"unit-class/{name}", groups)
-    sub, iset = _shims(name, uc.form.encode(), len(groups))
-    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words)
+    bits = None
+    if core_rows:
+        groups, joins, bits = element_rows(act, uc, groups)
+        idents = [list(zip(*(idents[i] for i in j))) for j in joins] if idents is not None else None
+    low = class_lowering(act, uc, f"unit-class/{name}", groups, packed, blocks=not core_rows)
+    sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b""), len(groups))
+    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packed)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
-    text = FC.compose(low, sub, partition=partition, program=program)
+    text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
         raise AssertionError(f"class {name}: the laid-out unit rows disagree with the reference on its lanes")
+    if bits is not None:
+        _check_bit_rows(uc, ins, groups, bits, per_port, name)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
@@ -420,7 +502,22 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
-            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
+        ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if bits is not None else {})
+
+
+def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+                    name: str, lanes: int = 8) -> None:
+    """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
+    from verity.commitments.rowleaf import bit_row
+
+    for i, (g, n_bits) in enumerate(zip(groups, bits)):
+        rows = per_port[f"p{i}"]
+        for lane in range(min(lanes, len(rows))):
+            want, got_bits = bit_row(*(([int(ins[t][lane])], uc.in_widths[t]) for t in g))
+            row = rows[lane].astype("<u2").tobytes()
+            if got_bits != n_bits or rows.shape[1] != -(-n_bits // 16) or row[:len(want)] != want or any(row[len(want):]):
+                raise AssertionError(f"class {name}: port p{i} lane {lane} is not core's bit row of its elements")
 
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
@@ -447,6 +544,8 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
     vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
     tile's leaf maps."""
+    if PACK_WORDS or CORE_ROWS:
+        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS: a tile is staged in the default layout only")
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
@@ -489,6 +588,15 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
             "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
             "ports": list(low.definition.port_words), "ands": low.layout.counts["ands"] * P * C, "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+
+
+def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
+    """The statement as the verifier builds it from its public file (``flock-circuit statement``: its digest, the circuit's and
+    the public file's SHA-512, k_log, blocks; nothing proved), or why it couldn't."""
+    r = subprocess.run([binary, "statement", "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt")],
+                       capture_output=True, text=True, timeout=timeout, check=False)
+    got = next((json.loads(ln.split("\t", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith("STATEMENT\t")), None)
+    return got if r.returncode == 0 and got else {"why": f"exit {r.returncode}: {(r.stderr or r.stdout)[-400:]}"}
 
 
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
@@ -558,7 +666,7 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
                                "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
-         "verifier": f"pod {remote.get('host')}" if remote else "loopback",
+         "verifier": f"pod {remote.get('host')}" if remote else "loopback", "coins": FC.coins(live),
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
          # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
@@ -710,7 +818,7 @@ def _stage_cache(s: str) -> Path | None:
         c["source_digest"] = _source_digest()
     a = c["a"]
     ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
-             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE]
+             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 
@@ -954,6 +1062,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
     ap.add_argument("--stage-only", action="store_true", help="stage the shapes (into FLOCK_STAGE_CACHE) and run nothing, into staged.jsonl: "
                     "a GPU job with the same settings takes them from the cache and starts at the prove")
+    ap.add_argument("--statement-digest", action="store_true", help="with --stage-only: also record each staged statement's digest "
+                    "as --binary builds it from the public file (flock-circuit statement; nothing proved)")
     ap.add_argument("--serve-only", default=None, metavar="DIR", help="stage the shapes (from FLOCK_STAGE_CACHE) and serve each one's "
                     "--warm + --runs sessions on this host's address, published as DIR/<pin>-n<N>-s<sessions>.json for a prover in "
                     "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
@@ -1050,6 +1160,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 if not (a.selftest_only or a.stage_only):
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
+                elif a.stage_only and a.statement_digest:
+                    rec["statement"] = statement(a.binary, d, rec["stage"]["n"])
                 if a.selftest and not a.stage_only and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each

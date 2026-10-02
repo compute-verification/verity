@@ -425,7 +425,7 @@ class PearlC:
             claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability") if hashing == "h0"
             else ("tt-out", "random-oracle", "xof/blake3", "cr/blake3", "cr/sha-256", "device-reproducibility",
                   "beacon-unpredictability"),
-            theorems=("Pouw.Proofs.workWeightedSampling",),
+            theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=hardware,
             allowances=(allowance, "the unscale is glue outside the checked values"),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", device.window),

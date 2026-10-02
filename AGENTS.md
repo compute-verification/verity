@@ -32,7 +32,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
     `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
-    (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
+    (`evaluate`, the IR oracle, which also takes a table held in a registered
+    input lazily, as a `RegisteredTable`), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
     `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
@@ -43,7 +44,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
     comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
-    hardware and protocol objects core owns (`library`), and numpy kernels
+    hardware and protocol objects core owns (`library`), the pinned list of
+    operations with the guard that a program holds no data (`operations`), and numpy kernels
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
     and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
     the word library as Boolean Definitions: C-Flock's linear-form builder and
@@ -91,7 +93,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
- package (`lean/`, whose `Pouw.Proofs.endToEnd` is the guarantee); see its `PROTOCOL.md`.
+ package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
  `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
  channel: the warden, its audit and calibration, and its Lean package (`lean/`).
  `protocols/nci` is novel communication intensity, the policy that throttles frontier training
@@ -157,12 +159,13 @@ small binding in `circuit_check.targets`, which the suite enforces.
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
-`circuit-check --all`, the Lean verifier's build and its partition check against `verity.ir`, the Lean audit, and the
-verifier's cross-check against upstream's Rust verifier, at once on a multi-core CPU pod, with caches that hit only on
-identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
+`circuit-check --all`, C-Flock's Rust build and tests on its patched checkout, the Lean verifier's build and its partition check
+against `verity.ir`, the Lean audit, and the verifier's cross-check against upstream's Rust verifier, at once on a multi-core
+CPU pod, with caches that hit only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
 only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
 when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
-of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
+of the merged tree. The lander checks a train-prep commit with `tools/check/train.sh COMMIT POD` (`--agreement` for a pinned
+guarantee changed outside `backends/flock/`). A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
 (`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
 alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
