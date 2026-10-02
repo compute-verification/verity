@@ -340,6 +340,9 @@ class GeluTanhAndMul:
             return unsupported(node, "gelu_tanh_and_mul views are not row-major [M,2I] -> [M,I]", x=repr(x), out=repr(out))
         if not (x.dtype == out.dtype == "bfloat16"):
             return unsupported(node, "GeluTanhMul is bf16", dtypes=[x.dtype, out.dtype])
+        if getattr(ctx.profile, "registered_values", False):
+            return unsupported(node, "registered_values: GeluTanhMul_v3 reads the registered table gelu_tanh_bf16, which the fold "
+                               "does not supply yet")
         M, I = out.shape
         return _compute(node, ctx, bind(gelu_tanh_mul.GeluTanhMul, I=I), M, (PerRow(x),), (PerRow(out),), self.name, ("act_and_mul_kernel",),
                         "gelu_tanh_and_mul")

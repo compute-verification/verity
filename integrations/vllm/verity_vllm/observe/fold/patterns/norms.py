@@ -5,15 +5,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 from verity.ir.defs import bind
 from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import value_inputs as VI
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext, Supplied
 from verity_vllm.observe.fold.tree import TreeNode
+
+
+def eps_input(eps: float) -> Supplied:
+    """A norm's epsilon as the registered value `eps`: the f32 word the kernel reads (vLLM passes the Python float, the launch narrows it)."""
+    return Supplied("registration", "eps", 32, int(P.bits_of(np.float32(eps))))
 
 
 @dataclass
@@ -58,8 +67,10 @@ class RMSNormTritonLaunch:
         if node.enter.grid and node.enter.grid[0] != M:
             return unsupported(node, "grid does not launch one program per row", grid=node.enter.grid, M=M)
         roots = ctx.roots_of(w)
-        return Compute(bind(b1.RMSNormTriton, N=n_cols, EPS=self.eps if self.eps is not None else eps), M,
-                       (PerRow(x), Shared(w)), (PerRow(out),), (node.id,), hint=hint_of(node, roots[0].name if roots else "rms_norm"),
+        spec, operands = bind(b1.RMSNormTriton, N=n_cols, EPS=self.eps if self.eps is not None else eps), (PerRow(x), Shared(w))
+        if getattr(ctx.profile, "registered_values", False):
+            spec, operands = bind(VI.RMSNormTritonV3, N=n_cols), operands + (eps_input(self.eps if self.eps is not None else eps),)
+        return Compute(spec, M, operands, (PerRow(out),), (node.id,), hint=hint_of(node, roots[0].name if roots else "rms_norm"),
                        kernels=(self.kernel,), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
 
 
@@ -91,7 +102,9 @@ class FusedAddRMSNorm:
             return unsupported(node, "epsilon differs from the profile's EPS", eps=eps, pinned=self.eps)
         M = x.shape[0]
         roots = ctx.roots_of(w)
-        return Compute(bind(b1.RMSNormFusedCuda, N=N, EPS=self.eps if self.eps is not None else eps), M,
-                       (PerRow(x), PerRow(res), Shared(w)), (PerRow(x), PerRow(res)), (node.id,),
+        spec, operands = bind(b1.RMSNormFusedCuda, N=N, EPS=self.eps if self.eps is not None else eps), (PerRow(x), PerRow(res), Shared(w))
+        if getattr(ctx.profile, "registered_values", False):
+            spec, operands = bind(VI.RMSNormFusedCudaV4, N=N), operands + (eps_input(self.eps if self.eps is not None else eps),)
+        return Compute(spec, M, operands, (PerRow(x), PerRow(res)), (node.id,),
                        hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)

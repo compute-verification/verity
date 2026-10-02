@@ -8,13 +8,13 @@ namespace FlockSoundness
 
 /-- **What `Stmt.setupH` accepted** (an untyped `hm96-sha512/row/v1` statement, `tags.typed = false`, which `setupH`
 reads with `HmRow.parse` rather than `parseTyped`): the circuit `HmRow.parse` accepted, the pin
-`HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 26`. -/
+`HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/
 theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     HmRow.parse tags cf tables = .ok st.c ∧ HmRow.pin st.c = .ok st.pin ∧
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
-      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 26 := by
+      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 27 := by
   unfold Stmt.setupH at h
   simp (config := { zeta := false }) only [ht, Bool.false_eq_true, ↓reduceIte] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)
@@ -432,7 +432,7 @@ theorem slotLog_le {c : Circuit} (C : CheckFacts c) {r : Range} (hr : r ∈ c.ra
 (an untyped statement's, or a typed flat class's). -/
 theorem layout_of {tags : Tags} {st : Stmt} (P : ParseFacts tags st.c) (hpin : HmRow.pin st.c = .ok st.pin)
     (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
-    (hm : st.m = st.c.kLog + st.nbl) (hk : st.c.kLog ≤ 26) : Layout st := by
+    (hm : st.m = st.c.kLog + st.nbl) (hk : st.c.kLog ≤ 27) : Layout st := by
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
