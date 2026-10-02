@@ -19,7 +19,8 @@
 
 PATH is a timing.json, a 73-sweep-shape.sh SUMMARY (its `timings`), or a directory searched for either. A shape measured more than
 once in a mode takes its latest accepted timing under the first --label (repeatable, in priority order; default: unlabelled) it
-has one under, so a hill-climb step's rollup is `--label <step> --label baseline`.
+has one under, so a hill-climb step's rollup is `--label <step> --label baseline`; `--label <step>@m0` (or @zk) counts in that
+mode only.
 """
 from __future__ import annotations
 
@@ -231,7 +232,10 @@ def rollup(a) -> dict:
     for mode in MODES:
         best: dict[str, dict] = {}
         for lab in reversed(labels):
-            for t in sorted((t for t in tims if (t.get("label") or None) == lab and t.get("mode") == mode and t.get("accepted")
+            lab, _, only = (lab or "").partition("@")
+            if only and only != mode:
+                continue
+            for t in sorted((t for t in tims if (t.get("label") or "") == lab and t.get("mode") == mode and t.get("accepted")
                              and t.get("shape") in shapes), key=lambda t: t["t"]):
                 best[t["shape"]] = t
         if not best:
@@ -396,7 +400,7 @@ def main(argv=None) -> int:
     r.add_argument("--row", required=True)
     r.add_argument("--basis", choices=BASES, default="prove")
     r.add_argument("--label", action="append", help="the timings' VO_LABEL; repeated, in priority order: a shape takes the first "
-                   "label it has an accepted timing under (a hill-climb step's label, then baseline)")
+                   "label it has an accepted timing under (a hill-climb step's label, then baseline); LABEL@MODE counts in MODE only")
     r.add_argument("--flag", action="append")
     r.add_argument("--prompt", type=int, default=1024)
     r.add_argument("--generated", type=int, default=128)
