@@ -6,13 +6,18 @@ description: >
   when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
   `check`, tests, shared tools, other lanes' work) and the `kind: friction` note format with its `severity: incident` flag.
   Use when you worked around something, a step bit you twice, you see a better abstraction, you're unsure whether a change
-  is yours to make, you just got a ruling from Daniel, or you're the coordinator reading friction notes.
+  is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or a command fails for
+  missing credentials.
 ---
 
 # Friction
 
 When something gets in your way (a wrong command, a clumsy step, a check that fails late, a missing abstraction), take the
 first of these that applies.
+
+If `research data`, `research queue` or node ssh fail for missing credentials, rerun from a fresh tmux login shell before
+anything else: on a cloud VM a long-lived tool shell can lose the injected secrets (store, node SSH key, Slack token) that a
+fresh login shell still has.
 
 ## 1. Fix it, when it's clearly yours
 
