@@ -155,6 +155,7 @@ theorem parse_leafScheme_pre {tags : Tags} {bytes : ByteArray} {tables : List (S
   simp (config := { zeta := false }) only [pure_bind] at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w', -, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   simpa [bne_iff_ne] using hleaf
@@ -298,6 +299,7 @@ theorem parse_leafScheme_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (
   (have hh := except_bind_ok h; clear h; obtain ⟨tyd, htyd, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w', -, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   simpa [bne_iff_ne] using hleaf
