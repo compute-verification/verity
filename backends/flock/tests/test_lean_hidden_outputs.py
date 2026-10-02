@@ -8,7 +8,10 @@ upstream's pinned builds, none of which has hidden outputs. So it catches a veri
 output rows (their Δ copies, regions, public file or identity), which no statement-only test sees. Only the cases about the
 public statement are verified (the honest session, which pins the statement digest and Σ to the prover's, and the false
 statements, each under its own public file): a whole set takes minutes. `vectors.json`'s `live.sets` carry every case of
-the same records (`ci.py --live`)."""
+the same records (`ci.py --live`).
+
+The sets are a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
+when it cannot, so a missing set fails this test rather than skipping it."""
 from __future__ import annotations
 
 import json
@@ -24,7 +27,8 @@ VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the four sets (`flat/` and `typed/`, each `rope-head/` and `gemm-coordinate/`: the statement's `stage/` files and CASES'
 #: `records-cpu/`), recorded by 60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 (TYPED=1 for `typed/`) at 455a01049
-FIXTURE = "art:dae0b537"
+#: (`art:dae0b537`, the same bytes)
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs"
 SETS = {("flat", "rope-head"): "verity/flock-circuit+seed-injection",
         ("flat", "gemm-coordinate"): "verity/flock-circuit+seed-injection",
         ("typed", "rope-head"): "verity/flock-circuit/types+seed-injection",
@@ -35,16 +39,11 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 @pytest.fixture(scope="module")
-def store(tmp_path_factory):
-    sys.path.insert(0, str(VERIFIER))
-    import ci  # noqa: PLC0415
-
-    try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
+def store():
+    assert all((FIXTURE / f / n / "stage" / "circuit.txt").is_file() for f, n in SETS), (
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures backends/flock/tests/fixtures/hidden-outputs`")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    return root
+    return FIXTURE
 
 
 @pytest.mark.parametrize("form,name", list(SETS))
