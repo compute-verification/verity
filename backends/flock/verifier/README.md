@@ -26,7 +26,9 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 
 `ID` names a version:
 - `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row
-  (§16.13), so the public file holds roots, hiding leaves and structure only. It needs no `--comp`, and it pins
+  (§16.13), so the public file holds roots, hiding leaves and structure only (M0's transcript is not hiding; no soundness
+  theorem covers `Stmt.setupHidden` yet). Before #757 the name meant `@e51e2b86`, and `/types` meant `types@210d32e1`.
+  It needs no `--comp`, and it pins
   `seed_injection: false`, as a proving build does. A circuit that binds a `verity/partition/v1` digest needs
   `--partition F`, the verifier's own copy of the partition object (§16.10).
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
@@ -69,6 +71,9 @@ package's Mathlib and ArkLib pin, so that one build covers both.
 ~~~text
 research data fetch art:ef080b64 --to /tmp/v     # likewise the other two
 ~~~
+
+`transcript_check.py` (PROTOCOL.md §18's spec self-check) matches every recorded round on the first vector of all 50 honest
+sets, both reps, `m` 25 to 34 (`art:430c513a`).
 
 `redigest.py SESSION_DIR OUT_DIR` writes the proof mutants: one value of one rep's proof is edited, and that rep's round
 digests and `proof_sha256` are rebuilt from the edited proof (with `transcript_check.py`'s spec transcript), keeping
@@ -158,9 +163,12 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
   file (`<case>.pub.bin`) under its real public digest, so those negatives reach the proof's openings, not the session
   parameters.
-- Hidden outputs (§16.13): PR #83's pinned build has none of these statements, so check's agreement step replays none.
-  `vectors.json` `live.sets` 2 to 5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate;
-  `ci.py --live`: 20/20, 21/21, 20/20, 21/21), the honest sessions accepted, so digest and Σ are the prover's, and every
-  negative refused, `output_row_committed_false` (an output row's `b ‖ c` not the circuit's outputs) included. `check`
-  verifies four cases of each (`test_lean_hidden_outputs.py`). A replayable set needs a pinned upstream build with
-  `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
+- Hidden outputs (§16.13): PR #83's pinned build has none of these statements, so check's agreement step replays none, and
+  the agreement is between Lean and this repository's Rust prover, not upstream's verifier. `vectors.json` `live.sets` 2 to
+  5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate; `ci.py --live`: 20/20, 21/21,
+  20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`), the honest sessions accepted, so digest and Σ are the
+  prover's, and every negative refused, `output_row_committed_false` (an output row's `b ‖ c` not the circuit's outputs)
+  included. `test_lean_hidden_outputs.py` verifies four of each set's cases (the honest session and the three false
+  statements) from a fetched fixture (`backends/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable
+  set needs a pinned upstream build with `flock-circuit replay` (the selftest's `record_replays_offline` already replays
+  in process).

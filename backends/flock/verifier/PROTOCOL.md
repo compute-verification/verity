@@ -1397,15 +1397,16 @@ statements define such a session; any other statement refuses `J > 1`.
 
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
-`@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows, so the public file holds roots, hiding leaves
-and structure only (Daniel, Oct 1); `+seed-injection` is the selftest build. `Flock.HmOut` (`Stmt.setupHidden`) applies
-§16.10's definitions to every row.
+`@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows (Daniel, Oct 1); `+seed-injection` is the
+selftest build. `Flock.HmOut` (`Stmt.setupHidden`, no soundness theorem yet: §17.4) applies §16.10's definitions to every
+row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
+(`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
 
 - **Rows.** META `ports`: the `input_ports` input rows, then one `hm96-sha512/row/v1` row per `out_ports` entry (its name,
   its `w` words zero-padded to `⌈w / 64⌉ · 64`), each with its own salt, `rows` entry and compressions after the input
   rows'. `per_vu[hm96] = next_pow2(rows)`.
-- **Δ** then copies, per VU, output word `k`'s bit `t` (from the returning unit, the last tail stage's port or a typed
-  root's output group) into its row's message bit at byte `2k + t / 8`, bit `t % 8`; past `w` words, the forced-zero row.
+- **Δ** then copies, per VU, output word `k`'s bit `t` (of the returning unit, the last tail stage's port or a typed
+  root's output group) to its row's message bit `t % 8` of byte `2k + t / 8`; past `w` words, the forced-zero row.
   Unit leaves and leaf cuts read input rows only; `HmRow.checkTyped` puts a template's output rows after its input rows.
 - **Regions.** `Digest(p)` per row and no `Out`, so the region-word check has no shared word.
 - **Public file.** §16.10's header without the content digest; the body is every row's `b ‖ c` (instance-major, inputs
@@ -1414,9 +1415,11 @@ and structure only (Daniel, Oct 1); `+seed-injection` is the selftest build. `Fl
   are the zero instance's (`dummy.outputs`) under zero salts, each row's `dummy.bc` checked.
 - **Identity** adds `outputs`: `"hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file
   has no output word"`.
-- **Linking.** An output row is committed as an input row of the same words, so a reader committing it under the same salt
-  has the producer's output leaf as its input leaf.
-- **Agreement:** README, "Agreement with upstream".
+- **Linking.** An output row is committed as an input row of the same words, so a reader committing it under the producer's
+  salt has the producer's `b ‖ c` as its input leaf. A salt commits one row value: reused for another row, it reveals
+  `b₁ ⊕ b₂ = x₁ ⊕ x₂`. A link is as good as both proofs (under a draw, an undrawn producer instance's output is unproven),
+  and a deduplicated reader table (`shared_rows`) links at most one producer instance per row.
+- **Agreement:** README.
 
 ## 17. Acceptance, assumptions and trust
 
@@ -1511,7 +1514,7 @@ is the article's recursion caveat, applied to the slots of one block.
 | 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under the scheme's collision resistance (SHA-256, or SHA-512 on the target statement; an explicit collision extractor) | 4a; Merkle 3 |
 | 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
 | 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
-| 1e glue | one theorem: `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. No zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
+| 1e glue | one theorem, for the `setupH` statements (not `Stmt.setupHidden`'s, §16.13): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. No zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
 | 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. The field code is proved to be GF(2^128) and K (level 3, below). What remains: the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
 | 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
 
@@ -1613,9 +1616,8 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   tables, not the forged records and proofs. Phase 2 materialises them with a `--dump` of each selftest case (the plan is in
   the manifest) before the Lean verifier's gate.
 - **Spec self-check:** `transcript_check.py` rebuilds every round of a session from this spec alone (§6, §8, §9–§13,
-  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. On the first vector of all 50
-  honest sets, both reps, `m` 25 to 34, every recorded round matches (`art:430c513a`). It checks the transcript and the
-  layout, not the verifier's equations.
+  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record (README, "Inputs and
+  vectors"). It checks the transcript and the layout, not the verifier's equations.
 - **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
   bytes. Phase 2 generates both.
 

@@ -15,7 +15,8 @@ Private by default. The public data are the frame-v3-sha512 roots, each row's ``
 functions of it), and the layout below. Every other word (every output word, every compression's chaining value, every word a
 unit, a tail stage or a lookup reads from another) stays inside the witness, joined by copy constraints (Δ) inside a block: no
 public value, and the verifier evaluates no part of the computation (a tail, the Gumbel noise of a public seed included, is a
-slot type of the circuit or the template has no statement here).
+slot type of the circuit or the template has no statement here). Private means absent from the public file: M0's transcript is
+a function of the witness (``NON_ZK_PROOF``, its mask slots zeros), so only ``--zk`` targets hiding from the transcript.
 
 One or more whole instances (VUs) per block. A block is the same for every block (Flock's ``A = I ⊗ A_0 + Δ``) and holds aligned
 ranges of slots of a few types:
