@@ -119,6 +119,7 @@ import FlockSoundness.Audit.FlockPublic
 import FlockSoundness.Audit.Harm
 import FlockSoundness.Audit.Influence
 import FlockSoundness.Audit.InfluenceWitness
+import FlockSoundness.Audit.Partitioning
 import FlockSoundness.Audit.TwoStageExfil
 import FlockSoundness.Refine
 import FlockSoundness.E2E
@@ -151,6 +152,7 @@ import FlockSoundness.Discharge.Placed
 import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
+import FlockSoundness.Discharge.DrawWords
 import FlockSoundness.ZK.GK
 import FlockSoundness.Discharge.HiddenExec
 import FlockSoundness.Discharge.Hidden
