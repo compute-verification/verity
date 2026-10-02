@@ -1,5 +1,7 @@
 import FlockSoundness.Audit.Partitioning.Guarantees
 import FlockSoundness.Audit.Partitioning.SecurityProofs.TwoStage
+import FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
+import FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
 
 /-!
 # The partitioning guarantees are not vacuous
@@ -54,15 +56,15 @@ theorem converse :
     have : 0 < 1 - Real.log 6 / (2 * 2) := by linarith
     positivity
 
-theorem achievability : min 1 (Real.log (1 / 2 : ℝ)⁻¹ / 2 * 1) + 1 / 4 < 1 := by
-  sorry
+theorem achievability : min 1 (Real.log (1 / 2 : ℝ)⁻¹ / 2 * 1) + 1 / 4 < 1 :=
+  SecurityProofs.Unequal.achievability_witness
 
 theorem granularity :
     MeetsTarget (Law.subset 1000 1000 le_rfl) (fun _ => 1) 10 (1 / 2) ∧
     MeetsTarget (Law.subset 500 500 le_rfl) (fun _ => 2) 10 (1 / 2) ∧
     0 < 1 - 1 / 10 - 10 / (1000 * 1) - 1 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) ∧
-    0 < 1 - 2 / 10 - 10 / (500 * 2) - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) := by
-  sorry
+    0 < 1 - 2 / 10 - 10 / (500 * 2) - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) :=
+  SecurityProofs.Unequal.granularity_witness
 
 theorem heavyUnit : MeetsTarget (Law.subset 1 1 le_rfl) (fun _ => 1) 1 (1 / 2) := by
   intro B hB
@@ -81,23 +83,23 @@ theorem unequal :
         (⌊Real.logb 2 (2 / 1)⌋₊ + 1)) ∧
     0 < Real.log (1 / 2 : ℝ)⁻¹ * (1 - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10)) *
       ((∑ u : Fin 100, (if u.val < 50 then (1 : ℝ) else 2) * unitCost 0 1 (if u.val < 50 then 1 else 2)) /
-          (2 ^ 2 * 10) * (1 - 2 / 10) - (⌊Real.logb 2 (2 / 1)⌋₊ + 1) * unitCost 0 1 2) := by
-  sorry
+          (2 ^ 2 * 10) * (1 - 2 / 10) - (⌊Real.logb 2 (2 / 1)⌋₊ + 1) * unitCost 0 1 2) :=
+  SecurityProofs.Unequal.unequal_witness
 
 theorem exfiltration :
     (1 : ℝ) * 1 + locBits 4 1 ≤ 4 ∧ (4 : ℝ) < 1 * (1 + 1) + locBits 4 (1 + 1) ∧
     CertifiesLeak (Law.subset 4 4 le_rfl) (fun _ => 1) (1 / 2) 4 ∧
     0 < ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) ∧
-    ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) < 4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1) := by
-  sorry
+    ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) < 4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1) :=
+  SecurityProofs.Exfil.witness_exfiltration
 
 theorem refinement :
     2 * (1 + 1) ≤ 4 ∧ (16 : ℝ) * 1 + locBits 4 1 ≤ 20 ∧ (20 : ℝ) < 16 * (1 + 1) + locBits 4 (1 + 1) ∧
     (16 : ℝ) + Real.logb 2 (1 + 2) / (1 + 1) ≤ 16 + Real.logb 2 2 ∧
     CertifiesLeak (Law.subset (2 * 4) (2 * 4) le_rfl) (fun _ => 16) (1 / 2) 20 ∧
     0 < (1 - 1 / 4) * (1 - Real.log (1 / 2 : ℝ)⁻¹ / (2 * (1 + 1))) *
-      (unitCost 0 1 1 * (4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1))) := by
-  sorry
+      (unitCost 0 1 1 * (4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1))) :=
+  SecurityProofs.Exfil.witness_refinement
 
 theorem riskConcave_needs_k_two :
     detectionRisk 2 1 (1 / 2) 1 - detectionRisk 2 1 (1 / 2) 0 <
