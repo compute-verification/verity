@@ -4179,6 +4179,46 @@
    "assumptions": [],
    "type_hash": "5388d71d013006cc5be51ad8081ef7246e8c55ef7fdbcdc5fe8fd800035fb84a"
   },
+  "FlockSoundness.Discharge.Integrate.model_eq_stmtOf": {
+   "signature": [
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
+    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st))",
+    "  (hwf : FlockSoundness.Refine.StmtWF st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog))) :",
+    "  Eq (⋯.model regs) (FlockSoundness.Refine.stmtOf st hwf regs)"
+   ],
+   "assumptions": [],
+   "type_hash": "6159dcf4295636281be799dc10ff6bccb0ddb7c990f63ec32e1851a29562ea85"
+  },
+  "FlockSoundness.Discharge.Integrate.net_width": {
+   "signature": [
+    "FlockSoundness.Discharge.Integrate.net_width {tags : Flock.Tags} {c : Flock.Circuit}",
+    "  (P : FlockSoundness.ParseFacts tags c) {n : Nat} (hn : instLTNat.lt n c.nets.size) :",
+    "  And",
+    "    (Eq (c.nets.getD n instInhabitedProd.default).snd.a.width",
+    "      (instHPow.hPow 2 (c.nets.getD n instInhabitedProd.default).snd.unitLog))",
+    "    (And",
+    "      (Eq (c.nets.getD n instInhabitedProd.default).snd.b.width",
+    "        (instHPow.hPow 2 (c.nets.getD n instInhabitedProd.default).snd.unitLog))",
+    "      (∀ (lk : Flock.LookupTable),",
+    "        Eq (c.nets.getD n instInhabitedProd.default).snd.lookup (Option.some lk) → instLENat.le lk.bits 32))"
+   ],
+   "assumptions": [],
+   "type_hash": "99ecfbd591c8e186e6ed861e9e93ac0e56720ea00d91d56904838a7958ed125c"
+  },
+  "FlockSoundness.Discharge.Integrate.setupH_leaf": {
+   "signature": [
+    "FlockSoundness.Discharge.Integrate.setupH_leaf {tags : Flock.Tags} {circuitFile publicFile : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json}",
+    "  {program : Option ByteArray} {st : Flock.Stmt}",
+    "  (h : Eq (Flock.Stmt.setupH tags circuitFile publicFile coins tables draw partition program) (Except.ok st)) :",
+    "  Eq st.leaf Flock.instInhabitedRowLeaf.default"
+   ],
+   "assumptions": [],
+   "type_hash": "b64aa36ddf08d7a2462528a063ee67a178fab380687cae684fd75b4751ebd187"
+  },
   "FlockSoundness.Discharge.Integrate.sitesAt_bcSite": {
    "signature": [
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs} {mPts : Nat}",
@@ -4247,6 +4287,20 @@
    "assumptions": [],
    "type_hash": "17c24c6f9e4f94b9c6c2af41db195d870f5d031b36161f2ec071049a17706ae9"
   },
+  "FlockSoundness.Discharge.Integrate.tableAt_stmtOf": {
+   "signature": [
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf {I : FlockSoundness.Discharge.Exec.Inputs} {mPts n : Nat}",
+    "  (ht : Eq I.tags.typed Bool.false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
+    "  (x₀ : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S₀ (dj S₀)) {S : Finset (Fin n)}",
+    "  (x : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S (dj S)) :",
+    "  Exists fun y =>",
+    "    And (Eq y.st x.st)",
+    "      (Eq (FlockSoundness.Discharge.Integrate.tableAt ht dj x₀ S).T.S",
+    "        (FlockSoundness.Refine.stmtOf y.st ⋯ (FlockSoundness.Refine.regionsOf y.st)))"
+   ],
+   "assumptions": [],
+   "type_hash": "7b3c4fb69a039e8f8254740ec779c5964ea760737577f720325ec0a14b9dc0a9"
+  },
   "FlockSoundness.Discharge.Integrate.tableAt_unsat": {
    "signature": [
     "FlockSoundness.Discharge.Integrate.tableAt_unsat {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs} {mPts : Nat}",
@@ -4258,6 +4312,17 @@
    ],
    "assumptions": [],
    "type_hash": "7adb6a0f21cac5cf42576cf354df3959c5f67e06fb73ec0eb83ea3889f55ac70"
+  },
+  "FlockSoundness.Discharge.Integrate.table_stmtOf": {
+   "signature": [
+    "FlockSoundness.Discharge.Integrate.table_stmtOf {I : FlockSoundness.Discharge.Exec.Inputs} {mPts n : Nat}",
+    "  (ht : Eq I.tags.typed Bool.false) {S : Finset (Fin n)} {d : Lean.Json}",
+    "  (x : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S d) :",
+    "  Eq (FlockSoundness.Discharge.Integrate.DrawSetup.table ht x).T.S",
+    "    (FlockSoundness.Refine.stmtOf x.st ⋯ (FlockSoundness.Refine.regionsOf x.st))"
+   ],
+   "assumptions": [],
+   "type_hash": "49315f97534363ffc17a2ea78817cd5d9d971340db7e15a86365ddf0b29a3ee2"
   },
   "FlockSoundness.Discharge.Layout.Readers.layout_row": {
    "signature": [
@@ -9732,7 +9797,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
     "FlockSoundness.Discharge.Layout.bc_site",
@@ -10050,11 +10117,14 @@
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf",
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite",
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
     "FlockSoundness.Discharge.Layout.bc_pinned",
@@ -10628,11 +10698,14 @@
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf",
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite",
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
     "FlockSoundness.Discharge.Layout.bc_pinned",
@@ -10933,7 +11006,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.Readers.layout_row",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.block_gateAt",
@@ -12648,7 +12723,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Prog.flock_headline_exec",
     "FlockSoundness.Prog.flock_headline_execL",
     "FlockSoundness.Prog.flock_headline_live"
@@ -12937,7 +13014,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
-    "FlockSoundness.Discharge.Integrate.tableAt_unsat"
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
+    "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf"
    ]
   },
   "FlockSoundness.Discharge.Layout.HmRegion": {
@@ -13275,7 +13354,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_site",
     "FlockSoundness.Discharge.Layout.bc_site_of",
@@ -13498,6 +13579,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Integrate.net_width",
     "FlockSoundness.Discharge.Zero.copyPos_zero"
    ]
   },
@@ -13656,11 +13738,14 @@
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf",
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite",
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
     "FlockSoundness.Discharge.Layout.bc_pinned",
@@ -13726,11 +13811,15 @@
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf",
+    "FlockSoundness.Discharge.Integrate.net_width",
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite",
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
     "FlockSoundness.Discharge.Layout.bc_pinned",
@@ -14719,7 +14808,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.Readers.layout_row",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.block_gateAt",
@@ -15619,11 +15710,14 @@
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf",
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite",
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.Readers.layout_row",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
@@ -16084,7 +16178,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.bc_drawn",
     "FlockSoundness.Discharge.Layout.bc_pinned",
@@ -16265,6 +16361,9 @@
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.Integrate.model_eq_stmtOf",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.setupH_wf",
@@ -16624,7 +16723,9 @@
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
     "FlockSoundness.Discharge.Integrate.tableAt_stmt",
+    "FlockSoundness.Discharge.Integrate.tableAt_stmtOf",
     "FlockSoundness.Discharge.Integrate.tableAt_unsat",
+    "FlockSoundness.Discharge.Integrate.table_stmtOf",
     "FlockSoundness.Discharge.Layout.Readers.layout_row",
     "FlockSoundness.Discharge.Layout.bcSite_keyProg",
     "FlockSoundness.Discharge.Layout.block_gateAt",
