@@ -304,8 +304,9 @@ class WorkloadRequest:
 
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
-# `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape -- tp M-0314 (B))
-_REQUEST_LOCAL_GROUPS = ("prompt",)
+# `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape -- tp M-0314 (B)); a stochastic
+# wrapper's `seed` and `splits` are its request's own, like the prompt
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 
@@ -415,7 +416,7 @@ class WorkloadProgram:
         uniform = len(set(idx)) == 1
         if not uniform:
             # [tp M-0314 (B)] the shared group may sit at different positions per component ONLY when what precedes/follows it is
-            # request-local by construction (prompt, peers_*: a TP rank Program's received collective values, K per shape); any other
+            # request-local by construction (prompt, seed, splits, peers_*: a TP rank Program's received collective values, K per shape); any other
             # group at a shifting position is still refused -- it would mean the components disagree on what the model's inputs are
             foreign = sorted({g for r in requests for g in r.component.groups if g != shared and not _is_request_local(g)})
             if foreign:
