@@ -56,6 +56,29 @@ class Vocabulary:
         return d
 
 
+def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM=None):
+    if FA2_MASKED_FROM is None:
+        raise TypeError("off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11)")
+    from verity_vllm.program.registry import fa2_check_inf as _f2v  # noqa: PLC0415
+    return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+
+
+# -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
+# the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
+_VALUE_KINDS = {
+    "rmsnorm_value": lambda N: ir_bind(b1.RMSNormTritonV3, N=N),
+    "rmsnorm_fused_value": lambda N: ir_bind(b1.RMSNormFusedCudaV4, N=N),
+    "attention_value": lambda T, NH, KVH, D: ir_bind(b1.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
+    "attention_dot_value": _attention_dot_value,
+}
+_VALUE_NOTES = {
+    "rmsnorm_value": "RMSNormTriton_v3{N}(x, w, eps): RMSNormTriton_v1's body with eps an input",
+    "rmsnorm_fused_value": "RMSNormFusedCuda_v4{N}(x, res, w, eps): RMSNormFusedCuda_v2's body with eps an input",
+    "attention_value": "Attention_v10{T,NH,KVH,D,BN=fa2_kblock_n(D)}(q, kc, vc, scale_log2): Attention_v3's body with the scale an input",
+    "attention_dot_value": "Attention_v11{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}(q, kc, vc, scale_log2): Attention_v5's body with the scale an "
+                           "input (FA2's per-iteration Check_inf); no kind elsewhere",
+}
+
 # -- profile "b1-eager": the B0/B1 vLLM eager profile (TA1's registered composites, v1) --------------------------
 PROFILE_B1_EAGER = Vocabulary(
     "b1-eager", "profile", "b1-eager",
@@ -73,8 +96,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "embedding": lambda V, H: ir_bind(b1.Embedding, V=V, H=H),
         "token_select": lambda V: ir_bind(b1.TokenSelect, V=V),
         "residual_add": lambda N: ir_bind(b1.ResidualAdd, N=N),
+        **_VALUE_KINDS,
     },
     notes={
+        **_VALUE_NOTES,
         "gemm": "Gemm_v1{K,N}: vLLM batch-invariant Triton matmul (AmpereBF16TcDot16 chains), bf16 in/out",
         "pouw_linear_row": "NcpLinearRow_v1{K,N}: one row of a pouw:ncp-v2 linear's served y (quantize, exact int7 dot, NcpDequant)",
         "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",

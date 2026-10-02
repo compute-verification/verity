@@ -140,6 +140,11 @@ class TargetProfile:
                            each of the Boolean version of that Definition, on bits (`verity_vllm.program.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
+    registered_values   -> where the Program's values live (a Program static, declared-and-bound, never attested).  None = in the
+                           Definitions, as constants.  True = the norms' eps and the attention scale are fields of the registered
+                           `values` parameter, read by the Definitions that take them as inputs (`RMSNormTriton_v3`,
+                           `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
+                           its constants.  Declaring false is refused (declare None).  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -187,6 +192,8 @@ class TargetProfile:
     protocols: tuple[str, ...] | None = None
     #: the IR the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
+    #: the Program's values as registered inputs (None = constants; see the doc); declared, never attested
+    registered_values: bool | None = None
 
     IRS = ("boolean",)
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
@@ -289,6 +296,10 @@ class TargetProfile:
             object.__setattr__(self, "protocols", canon)
         if self.ir is not None and self.ir not in self.IRS:
             raise ValueError(f"ir must be None (word) or one of {list(self.IRS)}; got {self.ir!r}")
+        if self.registered_values is not None and self.registered_values is not True:
+            raise ValueError(f"registered_values must be None (constants) or true; got {self.registered_values!r}")
+        if self.registered_values and self.ir == "boolean":
+            raise ValueError("registered_values has no Boolean Definitions yet: declare it on the word IR only")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -450,6 +461,8 @@ class TargetProfile:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:
             d.pop("ir", None)                      # absent = word; every earlier profile digest unchanged
+        if d.get("registered_values") is None:
+            d.pop("registered_values", None)       # absent = constants; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

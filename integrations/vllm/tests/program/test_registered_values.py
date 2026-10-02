@@ -86,3 +86,44 @@ def test_fa2_check_inf_attention_scale_input(masked_from):
     assert _const_id(scale) in _held(old)
     assert _const_id(scale) not in _held(new)
 
+
+def test_derive_registered_values_evaluates_like_the_constants_program():
+    """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
+    `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""
+    import torch
+
+    from verity_vllm.program.frontend import derive_examples as ex
+    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.registry.serve3_reference import materialize
+
+    C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
+    with torch.device("meta"):
+        m = ex.GreedyServe(C, 1)
+    inputs = (torch.empty(3, dtype=torch.int32, device="meta"),)
+    const = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve")
+    reg = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve", registered_values=True)
+    assert const.ok and reg.ok, reg.unsupported
+    eps, scale = P.bits_of(np.float32(C["EPS"])), b1._scale_log2_bits(C["D"])
+    fields = reg.provenance["supplied"]["registration"]["fields"]
+    assert [(f["name"], f["width"], int(f["bits"], 16)) for f in fields] == [("eps", 32, eps), ("scale_log2_d16", 32, scale)]
+    prog, twin = reg.program, Program(const.flat_definition)
+    assert [n for n, _ in prog.fn.body.params] == ["prompt", "values", "weights"]
+    assert prog.bindings == ("run", "registration", "run")
+    assert {n.fn.base_id for n in reg.flat_definition.body.nodes} >= {"RMSNormTriton_v3", "RMSNormFusedCuda_v4", "Attention_v10"}
+    assert not {_const_id(eps), _const_id(scale)} & _held(prog.fn)
+    rng = np.random.default_rng(5)
+    prompt = [int(v) for v in rng.integers(0, C["V"], 3)]
+    w = _bf16(rng, twin.input_coll(1).type.leaves, 0.05)
+    a, b = materialize(twin, [prompt, w]), materialize(prog, [prompt, [eps, scale], w])
+    assert [b[g] for g in prog.circuit.root_outputs()] == [a[g] for g in twin.circuit.root_outputs()]
+
+
+def test_target_profile_registered_values_is_declared_true_or_absent():
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    assert "registered_values" not in TargetProfile().to_json()
+    assert TargetProfile(registered_values=True).to_json()["registered_values"] is True
+    with pytest.raises(ValueError, match="None"):
+        TargetProfile(registered_values=False)
+    with pytest.raises(ValueError, match="Boolean"):
+        TargetProfile(registered_values=True, ir="boolean")

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 import torch
 
 from verity.ir.refs import Coll, PartLog, array_of
@@ -25,6 +27,24 @@ def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) 
         out.append(log)
     logs[layer_name] = (out[0], out[1])
     return out[0], out[1]
+
+
+def norm_kind(ctx, role: str, node, N: int, eps: float) -> tuple[object, tuple[Coll, ...]]:
+    """The norm Definition for `role` (`rmsnorm`, `rmsnorm_fused`) and its trailing operands: `EPS` a static, or under
+    `registered_values` eps the registered value `eps` (the f32 word the kernel reads), the same name the fold supplies."""
+    if not ctx.registered_values:
+        return ctx.kind(role, node, N=N, EPS=eps), ()
+    bits = int(np.float32(eps).view(np.uint32))
+    return ctx.kind(f"{role}_value", node, N=N), (ctx.supplied("eps", 32, bits, node),)
+
+
+def attention_scale(ctx, D: int, node) -> tuple[Coll, ...]:
+    """The attention chain's trailing operands: none (the scale `D^-0.5 * log2(e)` a constant), or under `registered_values` the
+    registered value `scale_log2_d{D}`, the same name the fold supplies."""
+    if not ctx.registered_values:
+        return ()
+    from verity_vllm.program.registry import b1
+    return (ctx.supplied(f"scale_log2_d{D}", 32, b1._scale_log2_bits(D), node),)
 
 
 def rows_of(x: Coll) -> tuple[list[Coll], tuple[int, ...]]:
