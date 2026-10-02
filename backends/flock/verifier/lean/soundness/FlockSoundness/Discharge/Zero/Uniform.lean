@@ -95,26 +95,16 @@ theorem srcAt_zero_iff (c : Flock.Circuit) (s₀ p t : ℕ) : Aliased.srcAt c (s
   · have hp' : (c.unit.inGroups.getD 0 default).bits.size ≤ p := by omega
     rw [ite_eq_right hp]
     have hR : ∀ (P Q : Prop), ((p < (c.unit.inGroups.getD 0 default).bits.size ∧ P) ∨
-        ((c.unit.inGroups.getD 0 default).bits.size ≤ p ∧ Q ∧ 16 ≤ t)) ↔ (Q ∧ 16 ≤ t) :=
+        ((c.unit.inGroups.getD 0 default).bits.size ≤ p ∧ Q)) ↔ Q :=
       fun _ _ => ⟨fun h => h.elim (fun h => absurd h.1 hp) (fun h => h.2), fun h => Or.inr ⟨hp', h⟩⟩
     rw [hR]
     split
     next e l hf =>
-      have hmem : e ∈ c.leafCuts.toList.filter (fun e => decide (e.1 = s₀ % c.upv ∧ e.2.1 = p)) := by
-        rw [hf]
-        exact List.mem_cons_self
-      obtain ⟨he, hpred⟩ := List.mem_filter.1 hmem
-      simp only [decide_eq_true_eq] at hpred
-      have hex : ∃ e ∈ c.leafCuts.toList, e.1 = s₀ % c.upv ∧ e.2.1 = p := ⟨e, he, hpred⟩
-      by_cases ht : t < 16
-      · exact iff_of_false (fun h => by simp [ht] at h) (fun h => by omega)
-      · exact iff_of_true (by simp [ht]) ⟨hex, by omega⟩
+      simp only [hf, List.head?_cons, Option.mem_def, Option.some.injEq, exists_eq_left', Bool.and_eq_true,
+        decide_eq_true_eq]
+      split <;> simp_all
     next hf =>
-      have hne : ¬ ∃ e ∈ c.leafCuts.toList, e.1 = s₀ % c.upv ∧ e.2.1 = p := by
-        rintro ⟨e, he, h1, h2⟩
-        have := List.filter_eq_nil_iff.1 hf e he
-        simp [h1, h2] at this
-      refine iff_of_false ?_ fun h => hne h.1
+      refine iff_of_false ?_ (by rw [hf]; simp)
       split <;> simp
 
 /-- **Δ's source key at a stacked input is the zero exactly when the input reads the zero** (`ZeroIn`). -/
