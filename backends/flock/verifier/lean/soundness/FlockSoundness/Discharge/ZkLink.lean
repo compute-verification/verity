@@ -7,3 +7,4 @@ import FlockSoundness.Discharge.ZkLink.Inh
 import FlockSoundness.Discharge.ZkLink.One
 import FlockSoundness.Discharge.ZkLink.Push
 import FlockSoundness.Discharge.ZkLink.OracleP
+import FlockSoundness.Discharge.ZkLink.LockLevel
