@@ -6,10 +6,11 @@
     research run --tool serving_commit_cost --campaign C -- python benchmarks/commitments/serving_commit_cost.py \\
         --input-set DIR --input-set-art art:... --n 1024 [--reps 5] [--workers N]
 
-Per call: fresh salts (a new OS salt key), every row's ``sha512/row/v1`` digest, ``b || c`` and ``frame-v3-sha512`` leaf, every
-output word's leaf, and one tree per port (``serving_rows.commit``).  The rows are the set's own row ports, one row per instance
-and port as M0's per-instance statement reads them (no shared rows); consecutive instances with the same row widths are one member
-(an attention class set spans key counts, so it is one member per T).  The first call is ``commit.cold_seconds``; ``commit.seconds``
+Per call: fresh salts (a new OS salt key), every row's ``sha512/row/v1`` digest, ``b || c`` and ``frame-v3-sha512`` leaf (each
+output port a row too, its words zero-padded to whole SHA-512 blocks), and one tree per port (``serving_rows.commit``).  The rows
+are the set's own row ports, one row per instance and port as M0's per-instance statement reads them (no shared rows);
+consecutive instances with the same row widths are one member (an attention class set spans key counts, so it is one member per
+T).  The first call is ``commit.cold_seconds``; ``commit.seconds``
 is the median of the next ``--reps`` (the renderer's ``views.COMMIT``).  The window's binding fields name the input set, not a
 served run: they enter each port's domain id once, so they do not move the time.  Validation recomputes two rows' ``b || c`` with
 core (``hm96.SHA512.commit_string`` over ``sha512_row_layout``) and compares them with what the hook committed.
@@ -76,7 +77,7 @@ def batch(s: InputSet, n: int) -> tuple[SR.Window, list[dict[str, dict[str, np.n
 def check_rows(c: SR.Committed, member: SR.Member) -> list[str]:
     bad = []
     inst = hm96.SHA512
-    for p, words in member.rows:
+    for p, words in member.all_rows:
         port = member.port(p)
         lay = sha512_row_layout(ROLE_X, 16, words)
         for i in sorted({0, member.n // 2}):
@@ -104,11 +105,11 @@ def main(argv: list[str] | None = None) -> int:
     bad = [x for m in checked for x in check_rows(c, m)]
     warm = calls[1:]
     med = {k: statistics.median(x[k] for x in warm) for k in ("total_s", "salts_s", "commit_s")}
-    rows = sum(m.n * len(m.rows) for m in ms)
-    row_bytes = sum(m.n * sum(2 * w for _, w in m.rows) for m in ms) / ns.n
+    rows = sum(m.n * len(m.all_rows) for m in ms)
+    row_bytes = sum(m.n * sum(2 * w for _, w in m.all_rows) for m in ms) / ns.n
     summary = {"set": s.name, "n": ns.n, "workers": ns.workers, "members": len(ms), "cold_s": calls[0]["total_s"], "warm_median_s": med["total_s"],
                "warm_s": [x["total_s"] for x in warm], "rows": rows, "row_bytes_per_instance": row_bytes,
-               "roots": {p: r.hex() for p, r in c.roots.items()}, "rows_checked": sum(len(m.rows) * len({0, m.n // 2}) for m in checked), "rows_bad": bad}
+               "roots": {p: r.hex() for p, r in c.roots.items()}, "rows_checked": sum(len(m.all_rows) * len({0, m.n // 2}) for m in checked), "rows_bad": bad}
     print(json.dumps({k: v for k, v in summary.items() if k != "roots"}))
     out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
     if out:
@@ -122,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             "workload_fingerprint": {"workload": "serving_commit_cost", "scheme": SR.SCHEME, "row_schema": SR.ROW_SCHEMA,
                                      "input_set": {"id": s.name, "art": ns.input_set_art, "content_digest": s.content_digest,
                                                    "manifest_sha256": s.manifest_sha256(), "subcircuit": s.subcircuit.id, "range": [0, ns.n]},
-                                     "rows": "one row per instance and row port (M0's per-instance statement, no shared rows); one member "
+                                     "rows": "one row per instance and row port, the output rows included (M0's per-instance statement, no shared rows); one member "
                                              "per run of instances with the same row widths (an attention class set: one per key count)",
                                      "members": len(ms),
                                      "implementation": "verity_vllm.commit.serving_rows.commit (hashlib SHA-512, numpy ChaCha20, fork pool)",
