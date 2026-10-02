@@ -138,6 +138,7 @@ def test_a_module_that_does_not_compile_fails_it_and_anything_else_skips_the_pac
     assert LC.run(cache, deps, tree) == 0
     assert [Path(p).name for p in log.read_text().split()] == ["c", "p", "a"]
     assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
+    assert "lean-changed: PASS: built 3 of the 3 package(s) whose audit misses" in capsys.readouterr().out
 
     (root / "p" / "Pp.lean").write_text("def p := gone -- BROKEN\n")
     log.unlink()
@@ -145,11 +146,14 @@ def test_a_module_that_does_not_compile_fails_it_and_anything_else_skips_the_pac
     out = capsys.readouterr().out
     assert "lean-changed: p: FAILED" in out and "error: Pp.lean:1:0: unknown identifier 'gone'" in out
     assert [Path(p).name for p in log.read_text().split()] == ["c", "p"], "the first failure ends it"
+    assert "lean-changed: FAIL (p): built 1 of the 3 package(s)" in out
 
     (root / "p" / "Pp.lean").write_text("def p := 1\n")
     (root / "a" / "Aa.lean").write_text("-- INFRA\n")
     assert LC.run(cache, deps, tree) == 0
-    assert "lean-changed: a: skipped: `lake build` exited 1" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "lean-changed: a: skipped: `lake build` exited 1" in out
+    assert "lean-changed: PASS: built 2 of the 3 package(s)" in out, "a skipped package is not counted as built"
     assert json.loads((tree / LC.LINKS).read_text()) == {} and not (tree / "a" / ".lake" / "packages").exists()
 
 

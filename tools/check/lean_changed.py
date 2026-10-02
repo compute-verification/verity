@@ -181,6 +181,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
             return 0
         links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
         failed: list[str] = []
+        built: list[str] = []
         try:
             for pkg in todo:
                 n = sync(closure(pkg), files, tree)
@@ -191,6 +192,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                 rc, text = build(pkg, tree, lake)
                 took = time.monotonic() - t0
                 if rc == 0:
+                    built.append(pkg)
                     log(f"lean-changed: {pkg}: built in {took:.0f} s ({n} files changed in the tree)")
                 elif bad := errors(text, pkg, files):
                     failed.append(pkg)
@@ -203,7 +205,8 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                         "its links are dropped, and lean-audit builds it")
         finally:
             (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
-    log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: {len(todo)} package(s) whose audit misses")
+    log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
+        "package(s) whose audit misses")
     return 1 if failed else 0
 
 
