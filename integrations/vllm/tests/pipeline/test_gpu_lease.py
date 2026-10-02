@@ -171,6 +171,74 @@ def test_a_commit_that_never_got_its_gpu_records_no_start(tmp_path):
     assert rc == 75 and rec["started"] is None and rec["requested"] is None and rec["held_min"] is None and rec["waited_min"] is None
 
 
+@pytest.mark.parametrize("item,seen", [({}, "device"), ({GL.WEIGHTS_HASH: "host"}, "host"), ({GL.WEIGHTS_HASH: "device-checked"}, "device-checked")])
+def test_a_leased_commit_hashes_its_weights_on_its_gpu_unless_the_item_says_how(tmp_path, item, seen):
+    env, got = {"GPU_LEASE": "/l/gpu-lease", **item}, []
+    GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, env, lambda to, argv: got.append(env.get(GL.WEIGHTS_HASH)) or 0,
+           clock=lambda: 0.0)
+    assert got == [seen] and env == {"GPU_LEASE": "/l/gpu-lease", **item}
+
+
+class _TL:
+    def __init__(self):
+        self.ev: list[tuple] = []
+
+    def start(self, stage, **kw):
+        self.ev.append(("start", stage, kw))
+
+    def end(self, stage, **kw):
+        self.ev.append(("end", stage, kw))
+
+
+def test_a_leased_commit_reads_its_checkpoint_files_whole_and_an_unleased_one_reads_nothing(tmp_path):
+    files = []
+    for i, n in enumerate((0, 5, 3 << 20, (1 << 20) + 7)):
+        files.append(tmp_path / f"model-{i}.safetensors")
+        files[-1].write_bytes(os.urandom(n))
+    leased = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started")}
+    assert GL.prefetch([str(f) for f in files], environ={"GPU_LEASE": "/l/gpu-lease"}) is None and not GL._PREFETCH
+    assert GL.prefetch([], environ=leased) is None and not GL._PREFETCH
+    pf = GL.Prefetch([str(f) for f in files] + [str(tmp_path / "gone.safetensors")], threads=2, chunk=1 << 20)
+    tl = _TL()
+    rec = pf.wait(tl)
+    assert rec["files"] == 5 and rec["bytes"] == sum(f.stat().st_size for f in files) and rec["read_s"] is not None
+    assert len(rec["errors"]) == 1 and "gone.safetensors" in rec["errors"][0]
+    assert [e[:2] for e in tl.ev] == [("start", "gpu_lease.prefetch_wait"), ("end", "gpu_lease.prefetch_wait")] and tl.ev[1][2] == rec
+
+
+def test_the_commit_waits_for_its_checkpoint_read_before_it_asks_for_the_gpu(tmp_path, monkeypatch):
+    env = {"GPU_LEASE": "/l/missing-gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started"), "CUDA_VISIBLE_DEVICES": ""}
+    monkeypatch.setattr(GL, "cuda_initialised", lambda: False)
+    (tmp_path / "w.safetensors").write_bytes(b"x" * 4096)
+    pf = GL.prefetch([str(tmp_path / "w.safetensors")], environ=env)
+    assert GL._PREFETCH == [pf]
+    asked = []
+    monkeypatch.setattr(pf, "wait", lambda tl=None: asked.append(os.path.exists(tmp_path / "gpu_lease.requested")) or {})
+    with pytest.raises(OSError):                       # the lease tool is missing: the request was written, then the tool failed
+        GL.acquire(environ=env)
+    assert asked == [False] and (tmp_path / "gpu_lease.requested").exists() and not GL._PREFETCH
+
+
+def test_the_commit_starts_its_checkpoint_read_before_the_producer_facts_and_the_lease():
+    src = Path(GL.__file__).with_name("commit.py").read_text()
+    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    marks = ["GL.prefetch(_ckpt_files)", "CP.producer_facts(", "GL.acquire(TL)", 'TL.start("engine.build"']
+    at = [main.index(m) for m in marks]
+    assert at == sorted(at) and main.count("GL.prefetch(") == 1, dict(zip(marks, at))
+
+
+def test_the_checkpoint_files_are_the_pinned_snapshots_safetensors(tmp_path):
+    from verity_vllm.engine import build
+
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    doc = {"checkpoints": [{"repo": "o/m", "role": "SOME_ROLE", "downloaded": True, "local_path": str(snap),
+                            "safetensors_sha256": {"model-00002-of-00002.safetensors": "b", "model-00001-of-00002.safetensors": "a"}}]}
+    (tmp_path / "checkpoints.json").write_text(json.dumps(doc))
+    assert build.checkpoint_files(tmp_path / "checkpoints.json", case="SOME_ROLE") == [
+        str(snap / "model-00001-of-00002.safetensors"), str(snap / "model-00002-of-00002.safetensors")]
+
+
 class _Ticks(threading.Event):
     """An event whose wait returns `n` times without being set (one heartbeat each), then as if set."""
 

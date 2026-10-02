@@ -16,8 +16,8 @@ import numpy as np
 
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
-from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
-                                      effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
+from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, checkpoint_files,  # noqa: F401
+                                      compilation_facts, effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
                                       parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
                                       target_mismatches, target_of_workload, vllm_has_flashinfer)
 from verity_vllm.engine.code_identity import (_VERITY_INDUCTOR_DIR_MARK, CUBIN_CODE_IDENTITY_RULE, CUBIN_DENY_LIST,  # noqa: F401

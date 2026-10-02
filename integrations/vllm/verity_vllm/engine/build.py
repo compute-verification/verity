@@ -175,6 +175,14 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     return kw, env_flags, cp
 
 
+def checkpoint_files(checkpoints: str | Path = "manifests/checkpoints.json", *, case: str = CASE) -> list[str]:
+    """The weight files `build_engine` loads for `case`: the pinned snapshot's safetensors (`checkpoints.json` `safetensors_sha256`)."""
+    from verity_vllm.engine import engine_profile as prof
+
+    cp = prof.checkpoint_for(case, checkpoints)
+    return [str(Path(cp["local_path"]) / f) for f in sorted(cp.get("safetensors_sha256") or {})]
+
+
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
                  execution: str | None = None) -> Engine:

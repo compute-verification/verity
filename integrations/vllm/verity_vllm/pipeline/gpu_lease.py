@@ -9,6 +9,11 @@ leased ``CUDA_VISIBLE_DEVICES``. The lease tool ending the holder (M minutes, th
 once the Commit lets go and nvidia-smi lists nothing on the leased GPUs, so a Commit's exit, whose context the driver frees seconds
 after the process has closed the lease's descriptors, stays inside its lease.
 
+What needs no GPU stays out of the lease. The Commit reads its checkpoint's files once beside the producer facts (``prefetch``), and
+``acquire`` waits for that read before it asks for the GPU, so the engine build inside the lease loads its weights from the page cache.
+Its weights registration hashes on the leased GPU (``VERITY_WEIGHTS_HASH=device`` unless the item sets it: the same leaves, tree and
+root as the host path, ``commit.committer.leafhash``), where the host path holds the GPU idle while it copies and hashes every tensor.
+
 After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every
 allocation in it (as at the process's exit), nvidia-smi showing nothing left on the leased GPU (the node's stray probe reads the
 same list), then the lease's locks and holder let go. What follows (binding and manifest coverage, the replay bundle, the weights
@@ -44,6 +49,8 @@ WATCH_S = 0.2                      # after the release, how often the Commit che
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
 MAX_MIN = "VERITY_LEASE_MAX_MIN"
 TOOL_START = "GPU_LEASE_STARTED"   # the lease tool's own start-time override (its tests): never passed to it
+WEIGHTS_HASH = "VERITY_WEIGHTS_HASH"   # commit's --weights-hash; a leased Commit's default is device
+PREFETCH_THREADS, PREFETCH_CHUNK = 4, 16 << 20
 
 EMPTY_LOOKS, EMPTY_EVERY_S = 120, 0.5   # how long the holder outlives the Commit's exit at most, waiting for its context to go
 
@@ -83,6 +90,7 @@ _HELD: list[Any] = []
 _EXITING = threading.Event()
 _RELEASED = threading.Event()
 _ENVIRON: list[MutableMapping[str, str]] = []
+_PREFETCH: list[Prefetch] = []
 
 
 def use_environ(environ: MutableMapping[str, str]) -> None:
@@ -97,6 +105,63 @@ def leased(environ: MutableMapping[str, str]) -> bool:
 def hide_devices(env: MutableMapping[str, str]) -> None:
     """No CUDA device outside the lease: torch and every child see none, so none can open a context on an unleased GPU."""
     env["CUDA_VISIBLE_DEVICES"] = ""
+
+
+def will_acquire(environ: MutableMapping[str, str] | None = None) -> bool:
+    """Whether ``acquire`` takes a lease in this process (a leased row's Commit stage)."""
+    environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
+    return environ is not None and bool(environ.get(STARTED)) and leased(environ)
+
+
+class Prefetch:
+    """Files read once, whole, in a thread (at most PREFETCH_THREADS at a time), into the page cache. The read changes nothing the
+    engine loads; it moves the disk's time out of the lease (cov-gm177, Oct 1 4:42 PM PDT: Qwen3-8B's 15.3 GiB of shards took
+    69.6 s cold inside its lease; cov-gm178 loaded the same files in 4.4 s warm)."""
+
+    def __init__(self, paths: list[str], *, threads: int = PREFETCH_THREADS, chunk: int = PREFETCH_CHUNK) -> None:
+        self.paths, self.threads, self.chunk = list(paths), max(1, int(threads)), int(chunk)
+        self.bytes, self.read_s, self.errors = 0, None, []
+        self._lock = threading.Lock()
+        self._t = threading.Thread(target=self._run, name="checkpoint-prefetch", daemon=True)
+        self._t.start()
+
+    def _read(self, path: str) -> None:
+        buf = memoryview(bytearray(self.chunk))
+        try:
+            with open(path, "rb", buffering=0) as f:
+                while n := f.readinto(buf):
+                    with self._lock:
+                        self.bytes += n
+        except OSError as e:
+            with self._lock:
+                self.errors.append(f"{path}: {e!r}"[:300])
+
+    def _run(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        t0 = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=min(self.threads, max(1, len(self.paths))), thread_name_prefix="checkpoint-prefetch") as ex:
+            list(ex.map(self._read, self.paths))
+        self.read_s = round(time.perf_counter() - t0, 3)
+
+    def wait(self, tl: Any = None) -> dict[str, Any]:
+        if tl is not None:
+            tl.start("gpu_lease.prefetch_wait", files=len(self.paths))
+        self._t.join()
+        rec = {"files": len(self.paths), "bytes": self.bytes, "read_s": self.read_s, "errors": self.errors}
+        if tl is not None:
+            tl.end("gpu_lease.prefetch_wait", **rec)
+        return rec
+
+
+def prefetch(paths: list[str], environ: MutableMapping[str, str] | None = None) -> Prefetch | None:
+    """Start reading ``paths`` (the engine's checkpoint files) when this process will take a lease; ``acquire`` waits for the read
+    before it asks for the GPU. Without a lease, nothing."""
+    if not paths or not will_acquire(environ):
+        return None
+    pf = Prefetch(paths)
+    _PREFETCH.append(pf)
+    return pf
 
 
 def max_min(timeout_s: int) -> int:
@@ -149,13 +214,15 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> 
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease, then see only its devices. Nothing before this call may initialise CUDA (the process sees no device until it returns). The
     lease's locks are this process's from here to its ``release`` or its exit; the holder ending first (the lease tool's --max-min)
-    kills this process."""
+    kills this process. A ``prefetch`` still reading is waited for first, outside the lease."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
-    if environ is None or not environ.get(STARTED) or not leased(environ):
+    if not will_acquire(environ):
         return
     if cuda_initialised():
         raise SystemExit("GPU lease: CUDA was initialised before the lease (with no device visible); nothing may touch CUDA before "
                          "gpu_lease.acquire, so no lease is taken")
+    while _PREFETCH:
+        _PREFETCH.pop(0).wait(tl)
     with open(_requested(environ[STARTED]), "w") as f:
         f.write(_utc(time.time()) + "\n")
     ours, theirs = socket.socketpair()
@@ -435,11 +502,16 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
     beat = threading.Thread(target=_heartbeat, args=(log, started, stop, every_s), daemon=True)
     beat.start()
     environ.update({STARTED: started, MAX_MIN: str(max_min(timeout_s))})
+    hash_ours = WEIGHTS_HASH not in environ
+    if hash_ours:
+        environ[WEIGHTS_HASH] = "device"
     try:
         rc = run_tl(2 * int(timeout_s), cmd)
     finally:
         environ.pop(STARTED, None)
         environ.pop(MAX_MIN, None)
+        if hash_ours:
+            environ.pop(WEIGHTS_HASH, None)
         stop.set()
         beat.join()
     t1 = clock()
