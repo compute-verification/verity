@@ -240,7 +240,7 @@ theorem keyRow_enc (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8) {S 
 variable {outs popOf} (rowW) in
 /-- **`rs` at `keyProg`'s places, with the row bytes `sha512/row/v1` hashes**: `keyRowsOut` with `enc := rowEnc`
 (`keyRow_enc`) and `bitCode` for the other commit strings. -/
-noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet) (hshape : OutShape c)
+noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
@@ -249,17 +249,17 @@ noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet) (hshape : OutShape c)
       {zeroG (c := c) (hU := hU) (n := n)}) :
     Binding.HmRows (keyLayout rowW hparse outs saltCol popOf (outBitOf c hU n outs popOf) bitCode) :=
   keyRowsOut (outs := outs) (popOf := popOf) (hparse := hparse) (rowW := rowW) (saltCol := saltCol) rowEnc
-    rowEnc_inj bitCode bitCode_inj ho hshape hsite hkeys houts hc1 hz1
+    rowEnc_inj bitCode bitCode_inj ho hsite hkeys houts hc1 hz1
 
 /-- `keyRowsEnc`'s `enc` is `rowEnc`. -/
-theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet) (hshape : OutShape c)
+theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
       {oneG (c := c) (hU := hU) (n := n)})
     (hz1 : ((keyProg c hU n).partition outs).ZeroCols plan tab (keyPlace hparse outs)
       {zeroG (c := c) (hU := hU) (n := n)}) :
-    (keyRowsEnc (rowW := rowW) (hparse := hparse) (saltCol := saltCol) ho hshape hsite hkeys houts hc1 hz1).enc =
+    (keyRowsEnc (rowW := rowW) (hparse := hparse) (saltCol := saltCol) ho hsite hkeys houts hc1 hz1).enc =
       rowEnc := rfl
 
 end FlockSoundness.Discharge.Layout

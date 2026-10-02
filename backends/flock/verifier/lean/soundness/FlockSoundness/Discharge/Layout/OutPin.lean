@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Layout.KeyProg
 import FlockSoundness.Discharge.Layout.OutSite
+import FlockSoundness.Discharge.Layout.OutShape
 
 set_option Elab.async false
 
@@ -16,8 +17,8 @@ it, in an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`
   column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each drawn unit's site, `BcSite`);
 * `OutsOut`: every committed gate a unit computes is on such a column (a condition on the circuit's outputs `outs`: the
   returned outputs' bits, and nothing else a unit computes);
-* `OutShape`: the output group's words are a power of two, and each copy's leaf's outputs are 16-bit ports, words below
-  `nOut`, that fit in them.
+* `OutShape`, which the parse checked (`outShape_of_parse`): the output group's words are a power of two, and each
+  copy's leaf's outputs are 16-bit ports, words below `nOut`, that fit in them.
 
 `keyRowsOut` is `keyRows` with `outBitOf` for the registration's bit and `keyProg_hout` for its `hout`.
 -/
@@ -115,15 +116,6 @@ def OutsOut : Prop :=
     ∀ x : Fin ((keyProg c hU n).rows u).w, (Const.Prog.instC (keyProg c hU n) outs u).wire x = g →
       ∃ u' j t, OutColAt c hU x.val u' j t
 
-variable {n} in
-/-- **The returned outputs' shape**: the output group's words are a power of two, and each copy's leaf's outputs are
-16-bit ports, output words below `nOut`, that fit in the group's words. -/
-def OutShape (c : Flock.Circuit) : Prop :=
-  (c.unit.outGroups.getD 0 default).words = 2 ^ (c.unit.outGroups.getD 0 default).words.log2 ∧
-  ∀ u' < c.upv, (∀ j < (c.leavesOut.getD u' #[]).size,
-      outBits c j = 16 ∧ (c.leavesOut.getD u' #[])[j]! < c.outWords) ∧
-    16 * (c.leavesOut.getD u' #[]).size ≤ 128 * (c.unit.outGroups.getD 0 default).words
-
 /-- **The unit range's count is a power of two** in a circuit `HmRow.parse` accepted whose unit returns the outputs. -/
 theorem unitRange_pow2 {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -149,8 +141,8 @@ include hparse in
 /-- **`hout` at `keyProg`'s places**: in an untyped circuit whose unit returns the outputs, at each drawn unit's site
 (`BcSite`, as `keyProg_bcPinned` takes it), a satisfying witness holds at every committed gate the unit computes the
 registration's bit `outBitOf`, the population's returned output's, when those gates are returned outputs' bits
-(`OutsOut`) of the shape region "out" packs (`OutShape`). -/
-theorem keyProg_hout (ho : c.outNet = c.unitNet) (hshape : OutShape c)
+(`OutsOut`); the shape region "out" packs is the parse's (`outShape_of_parse`). -/
+theorem keyProg_hout (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) :
     ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ ((keyProg c hU n).partition outs).io u,
@@ -205,7 +197,7 @@ theorem keyProg_hout (ho : c.outNet = c.unitNet) (hshape : OutShape c)
   have hpow := unitRange_pow2 hpar (by rw [hcc]; exact ho) hcount
   have hk := (si.acc S R u hu).layout.slot_lt (si.hvu S R u hu) (show u' < (si.acc S R u hu).st.c.upv by
     rw [hcc]; exact hu')
-  obtain ⟨hw, hsh⟩ := hshape
+  obtain ⟨hw, hsh⟩ := outShape_of_parse (hparse S R u hu) hU ho
   obtain ⟨hbl, hfit⟩ := hsh u' hu'
   have := out_site (si.acc S R u hu) (hsite S R u hu) (by rw [hcc]; exact ho) (parse_facts hpar).typed hM
     (u' := u') (j := j) (t := t) (by rw [hcc]; exact hu') hk (by rw [hpow]; exact hk) (by rw [hcc]; exact hw)
@@ -220,7 +212,7 @@ variable (outs popOf) in
 `hout` from `keyProg_hout`. -/
 noncomputable def keyRowsOut (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
-    (encO_inj : Function.Injective encO) (ho : c.outNet = c.unitNet) (hshape : OutShape c)
+    (encO_inj : Function.Injective encO) (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
@@ -229,7 +221,7 @@ noncomputable def keyRowsOut (enc : BitVal (Finset.univ.sup rowW + 1) → List U
       {zeroG (c := c) (hU := hU) (n := n)}) :
     Binding.HmRows (keyLayout rowW hparse outs saltCol popOf (outBitOf c hU n outs popOf) encO) :=
   keyRows rowW hparse outs saltCol popOf (outBitOf c hU n outs popOf) enc enc_inj encO encO_inj hsite hkeys hc1 hz1
-    (keyProg_hout hparse ho hshape hsite houts)
+    (keyProg_hout hparse ho hsite houts)
 
 end places
 
