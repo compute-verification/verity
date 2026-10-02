@@ -675,6 +675,7 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
                 for m in re.findall(r"  - path: (\S+)\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
     assert embedded["/usr/local/sbin/vy-setup"] == (NEBIUS / "vm_setup.sh").read_bytes()
     assert embedded["/usr/local/sbin/vy-nebius-stop"] == (NEBIUS / "vm_stop.sh").read_bytes()
+    assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
     assert embedded["/usr/local/share/vy/lease.sh"] == L.LEASE_SH.read_bytes()
     assert embedded["/usr/local/bin/gpu-lease"] == GPU_LEASE.read_bytes()
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
