@@ -205,6 +205,12 @@ def rowV2Identity (id : Json) : Json :=
   let id := id.setObjVal! "hashes" ((id.getObjValD "hashes").setObjVal! "row_leaf_in_circuit" (s "hm96-sha512/row/v2 over sha512/row/v2"))
   if (id.getObjVal? "outputs").toOption.isSome then id.setObjVal! "outputs" (s (hiddenOutputsText "hm96-sha512/row/v2")) else id
 
+/-- A statement with a segmented row (`hm96-sha512/row-seg/v1`, a port of META `row_schemas`): `row_leaf_in_circuit` names
+both bit-row leaves, as the prover's does; a statement of `v2` rows alone keeps its identity. -/
+def rowSegIdentity (id : Json) : Json :=
+  id.setObjVal! "hashes" ((id.getObjValD "hashes").setObjVal! "row_leaf_in_circuit"
+    (s "hm96-sha512/row/v2 over sha512/row/v2, hm96-sha512/row-seg/v1 over sha512/row-seg/v1, per port"))
+
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=

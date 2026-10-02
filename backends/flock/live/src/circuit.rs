@@ -912,7 +912,7 @@ impl Composite {
         names.sort_unstable();
         if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_words.len() || names.windows(2).any(|w| w[0] == w[1])
             || self.out_rows().iter().zip(&self.out_words).zip(&out_names)
-                .any(|((p, &w), &nm)| p.name != nm || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words)
+                .any(|((p, &w), &nm)| p.name != nm || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words || p.segs.is_some())
         {
             return Err("the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits), each name once".into());
         }
