@@ -40,6 +40,14 @@ def test_call_ns_is_pi2s_and_the_threshold_sits_under_the_cliff():
     assert E.tau_us(0, 1_446_000, 2) == pytest.approx(722.999, abs=1e-9)
 
 
+def test_a_cliff_past_the_deepest_eps_proof_is_audited_at_that_depth(doc):
+    base = {"model": "measured", "block_bytes": 65_536, "m": 1, "lambda_per_s": 100, "T_s": 600, "alpha": 0.01,
+            "beta": 0.01}
+    assert [E.rounds(doc, d) for d in (0, 5, 6, 12)] == [0, 5, 5, 5]
+    assert E.evaluate(doc, {**base, "d": 12}) == E.evaluate(doc, {**base, "d": 5})
+    assert E.evaluate(doc, {**base, "d": 12})["tau_us"] == pytest.approx(6 * 241.5 - 0.001, abs=1e-9)
+
+
 def _cdf_tail(f: int, mu: float) -> float:
     return 1 - sum(math.exp(-mu) * mu**k / math.factorial(k) for k in range(f + 1))
 
@@ -137,7 +145,8 @@ def test_the_vectors_reproduce_from_the_file_alone(doc):
     assert {i["model"] for i in inputs} == set(E.LABELS)
     assert {(i["d"], i["block_bytes"]) for i in inputs} >= {(0, 65_536), (1, 65_536), (2, 65_536), (0, 147_456), (0, 393_216)}
     assert {i["alpha"] for i in inputs} == set(E.ALPHAS) and {i["beta"] for i in inputs} == set(E.BETAS)
-    assert {i["d"] for i in inputs} == set(range(6))
+    assert {i["d"] for i in inputs} == {*range(6), 12}
+    assert all(v["expected"]["rounds_D"] == min(v["inputs"]["d"], 5) for v in vs)
     f0s = [v["expected"]["f0_count"] for v in vs]
     assert 0 in f0s and any(0 < f < 1000 for f in f0s) and any(f >= 1000 for f in f0s)
 
