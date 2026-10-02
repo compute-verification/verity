@@ -18,10 +18,29 @@ theorem foldr_xor (z : Var → Bool) (l : List Var) (c d : Bool) :
   | nil => rfl
   | cons v l ih => simp only [List.foldr_cons, ih, Bool.xor_assoc]
 
+theorem foldr_symmDiff (z : Var → Bool) (s t : List Var) :
+    (symmDiff s t).foldr (fun v b => z v ^^ b) false =
+      (s.foldr (fun v b => z v ^^ b) false ^^ t.foldr (fun v b => z v ^^ b) false) := by
+  fun_induction symmDiff s t with
+  | case1 t => simp
+  | case2 a s => simp
+  | case3 a s b t h ih => simp only [List.foldr_cons, ih, Bool.xor_assoc]
+  | case4 a s b t h h' ih =>
+      simp only [List.foldr_cons, ih]
+      cases z a <;> cases z b <;> simp
+  | case5 a s b t h h' ih =>
+      obtain rfl : a = b := Nat.le_antisymm (Nat.not_lt.mp h') (Nat.not_lt.mp h)
+      simp only [List.foldr_cons, ih]
+      cases z a <;> simp
+
+theorem eval_eq (z : Var → Bool) (f : Lin) : f.eval z = (f.s.foldr (fun v b => z v ^^ b) false ^^ f.c) := by
+  rw [eval, ← foldr_xor, Bool.false_xor]
+
 @[simp] theorem eval_xor (z : Var → Bool) (f g : Lin) : (f ^^^ g).eval z = (f.eval z ^^ g.eval z) := by
   show (xor f g).eval z = _
-  simp only [xor, eval, List.foldr_append]
-  rw [Bool.xor_comm f.c g.c, foldr_xor z g.s, Bool.xor_comm _ f.c, foldr_xor z f.s]
+  rw [eval_eq, eval_eq z f, eval_eq z g]
+  simp only [xor, foldr_symmDiff]
+  cases f.c <;> cases g.c <;> simp
 
 @[simp] theorem eval_zero (z : Var → Bool) : zero.eval z = false := rfl
 @[simp] theorem eval_one (z : Var → Bool) : one.eval z = true := rfl
@@ -33,9 +52,6 @@ theorem eval_of_isConst {f : Lin} (h : f.isConst = true) (z : Var → Bool) : f.
   simp only [isConst, List.isEmpty_iff] at h
   subst h
   rfl
-
-theorem eval_eq (z : Var → Bool) (f : Lin) : f.eval z = (f.s.foldr (fun v b => z v ^^ b) false ^^ f.c) := by
-  rw [eval, ← foldr_xor, Bool.false_xor]
 
 theorem eval_of_s_eq {f g : Lin} (h : f.s = g.s) (z : Var → Bool) : f.eval z = (g.eval z ^^ f.c ^^ g.c) := by
   rw [eval_eq z f, eval_eq z g, h]

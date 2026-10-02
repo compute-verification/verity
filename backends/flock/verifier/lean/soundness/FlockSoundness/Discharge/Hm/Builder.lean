@@ -12,11 +12,22 @@ namespace FlockSoundness.Discharge.Hm
 /-- A committed bit's index. -/
 abbrev Var := Nat
 
-/-- A GF(2) linear form: the XOR of the committed bits `s` and the constant `c` (`forms.L`). -/
+/-- A GF(2) linear form: the XOR of the committed bits `s` (ascending, each once: `forms.L`'s frozenset) and the
+constant `c`. -/
 structure Lin where
   s : List Var
   c : Bool
   deriving DecidableEq, Inhabited
+
+/-- The symmetric difference of two ascending lists, ascending. -/
+def symmDiff : List Var → List Var → List Var
+  | [], t => t
+  | a :: s, [] => a :: s
+  | a :: s, b :: t =>
+    if a < b then a :: symmDiff s (b :: t)
+    else if b < a then b :: symmDiff (a :: s) t
+    else symmDiff s t
+termination_by s t => s.length + t.length
 
 namespace Lin
 
@@ -25,8 +36,8 @@ def one : Lin := ⟨[], true⟩
 def var (v : Var) : Lin := ⟨[v], false⟩
 def const (b : Bool) : Lin := ⟨[], b⟩
 
-/-- XOR of two forms. -/
-def xor (f g : Lin) : Lin := ⟨f.s ++ g.s, f.c ^^ g.c⟩
+/-- XOR of two forms (`forms.L.__xor__`). -/
+def xor (f g : Lin) : Lin := ⟨symmDiff f.s g.s, f.c ^^ g.c⟩
 
 instance : HXor Lin Lin Lin := ⟨xor⟩
 
