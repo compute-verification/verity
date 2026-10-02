@@ -1,6 +1,6 @@
 """Tampered `flock-circuit --zk` sessions for the agreement check (`agree.py --zk`): one edit of an honest session each.
 
-    python zk_mutants.py SESSION_DIR OUT_DIR [--table T]    # SESSION_DIR: session.json and <t>.rep<r>.bin for every table
+    python zk_mutants.py SESSION_DIR OUT_DIR [--table T] [--public-inputs F]    # SESSION_DIR: session.json and <t>.rep<r>.bin
 
 A proof edit reaches the record as a prover that sent the edited proof would have made it: every retained round message
 (`rounds[k].msg`) of that rep holding the old bytes gets the new ones, with its `msg_sha512` rebuilt, and the rep's
@@ -8,7 +8,8 @@ A proof edit reaches the record as a prover that sent the edited proof would hav
 message, so only the check the edit breaks can reject it. A value no round absorbs (`τ`'s opening, the opened columns,
 their salts and paths, which follow the last coin) changes the file alone. Record edits change one field of
 `session.json`. The edits are table `T`'s (the first by default); a session of several tables adds its first two tables'
-rep-0 proofs swapped.
+rep-0 proofs swapped. With the verifier's own public input words `F` (a statement with public input ports), the session
+unchanged beside `F` with its first word's low bit flipped (`public-inputs.bin`): upstream takes no recomputation (D7).
 
 Writes OUT_DIR/<name>/ per case and OUT_DIR/zk_mutants.json, the `--expect` form of `agree.py`: the verdict both verifiers
 must reach, the Lean verifier's reason prefix, and `upstream_accepted` where upstream's offline replay, which takes the
@@ -176,7 +177,7 @@ def flip_hex(h, nibble=0):
     return h[:nibble] + "%x" % (int(h[nibble], 16) ^ 1) + h[nibble + 1:]
 
 
-def main(src, out, table=None):
+def main(src, out, table=None, public_inputs=None):
     src, out = Path(src), Path(out)
     base = json.loads((src / "session.json").read_text())
     tables = [t["name"] for t in base["config"]["tables"]]
@@ -254,6 +255,13 @@ def main(src, out, table=None):
         record_case("zk-tables-swapped", edit, reject("R2: round 0"), files)
     record_case("zk-link-point", lambda rec: rec["link"]["points"][0].__setitem__(3, flip_hex(rec["link"]["points"][0][3], 31)),
                 reject("S14: link_sha512"))
+    if public_inputs:
+        head, body = Path(public_inputs).read_bytes().split(b"\n", 1)
+        port = json.loads(head)["ports"][0]["port"]
+        record_case("zk-public-input-flipped", lambda rec: None,
+                    reject(f"setup: public input {port}: word 0 of instance 0 is not the verifier's own recomputation",
+                           upstream_accepted=True),
+                    {"public-inputs.bin": head + b"\n" + bytes([body[0] ^ 1]) + body[1:]})
     (out / "zk_mutants.json").write_text(json.dumps(manifest, indent=1))
     print(json.dumps({"mutants": len(manifest), "out": str(out)}))
 
@@ -261,4 +269,5 @@ def main(src, out, table=None):
 if __name__ == "__main__":
     args = sys.argv[1:]
     table = args[args.index("--table") + 1] if "--table" in args else None
-    main(args[0], args[1], table)
+    public_inputs = args[args.index("--public-inputs") + 1] if "--public-inputs" in args else None
+    main(args[0], args[1], table, public_inputs)

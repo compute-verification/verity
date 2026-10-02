@@ -8,7 +8,7 @@
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
-`upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
+`upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D7): upstream must then return that verdict instead
 of the Lean verifier's. A session directory may carry its own
 public file (`pub.bin`, a forgery's false statement), the verifier's own registered reads (`registered.json`, in place of
 `--registered`; null for none; upstream reads none), its own public input words (`public-inputs.bin`, in place of
