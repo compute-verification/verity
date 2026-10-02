@@ -98,6 +98,19 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
                          "verdict": verdict}}
 
 
+def session_registered(verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, str | None] | None:
+    """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verifiers of record report
+    (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
+    report under different roots mapped to None. None when no accepted verdict of record reports registered reads."""
+    out: dict[str, str | None] | None = None
+    for v in verdicts.values():
+        if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), Mapping):
+            out = {} if out is None else out
+            for e in v["registered"].values():
+                out[e["value"]] = e["root"] if out.get(e["value"], e["root"]) == e["root"] else None
+    return out
+
+
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
@@ -106,7 +119,8 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     """`draw` is the verifier's own draw. `served`: the units the sessions were served, when the draw was handed to them
     (each must serve exactly the draw). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verifier of record
-    opened the sessions' reads against; a registration with registered values needs it, each the registered root."""
+    opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
+    registered values needs it, each the registered root."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -149,4 +163,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "wrong_units"]
+__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "session_registered",
+           "wrong_units"]

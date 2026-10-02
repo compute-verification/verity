@@ -15,8 +15,8 @@ leaves are exactly row `r` of a registered value reads row `r`, for every unit, 
 that reads row `r` commits it with the registration's salt, so its `b || c` is the registered one, and opens it: header
 `registered: {port: {"value", "positions", "paths"}}`, each of the port's table rows its position and its frame-v3 path
 (the siblings, leaf level first, 64 bytes each, hex). The verifier checks each path to the registered root and each
-instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`); a statement that
-commits a registered row under fresh salts has no path and is refused.
+instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`, all from its own program
+but the root); a statement that commits a registered row under fresh salts has no path and is refused.
 """
 from __future__ import annotations
 
@@ -193,21 +193,34 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int])
     return out
 
 
-def reads_file(entries: Sequence[Mapping[str, Any]], read_map: Mapping[str, Mapping[str, Any]],
-               ports: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """The Lean verifier's `--registered` file: per registered port, the value it reads, its registered root, leaf count
-    and domain, and each unit's position. `entries` are the registration's (R7-checked against the verifier's own),
-    `read_map` is `reads`', and `ports` names a template parameter's circuit port when they differ."""
-    by_value = {e["value"]: e for e in entries}
+def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+    """The verifier's own `{value: {"leaves", "words", "domain"}}` for the parameters it expects registered
+    (`values`: `{parameter: words}`), from its own program."""
+    prog = P.program_sha512(program)
     out = {}
-    for name, r in read_map.items():
-        e = by_value.get(r["value"])
-        if e is None:
-            raise ValueError(f"parameter {name!r} reads {r['value']!r}, which the registration does not name")
-        out[(ports or {}).get(name, name)] = {"value": e["value"], "root": e["root"], "leaves": int(e["leaves"]),
-                                              "domain": e["domain"], "reads": list(r["rows"])}
+    for v, w in values.items():
+        n = shape(program, v, w)
+        out[v] = {"leaves": n, "words": int(w), "domain": domain(prog, v, w, n).domain_id.hex()}
+    return out
+
+
+def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
+               ports: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
+    it reads, the value's leaf count and domain (`registered_entries`), each unit's position (`reads`), and the value's
+    root from `roots` (`{value: root}`, of a registration the verifier accepted). `ports` names a template parameter's
+    circuit port when they differ."""
+    mine = registered_entries(program, values)
+    out = {}
+    for name, r in reads(program, query, values).items():
+        root = roots.get(r["value"])
+        if root is None:
+            raise ValueError(f"parameter {name!r} reads {r['value']!r}, whose registered root the verifier does not hold")
+        e = mine[r["value"]]
+        out[(ports or {}).get(name, name)] = {"value": r["value"], "root": root, "leaves": e["leaves"], "domain": e["domain"],
+                                              "reads": list(r["rows"])}
     return {"format": READS, "ports": out}
 
 
 __all__ = ["ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "WORD_BITS", "domain", "leaf",
-           "parameter_gates", "reads", "reads_file", "shape", "table", "verify_read"]
+           "parameter_gates", "reads", "reads_file", "registered_entries", "shape", "table", "verify_read"]

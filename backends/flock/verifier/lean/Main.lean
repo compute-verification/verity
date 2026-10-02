@@ -106,7 +106,7 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     (registered : Option (Array Registered.Port) := none) : V Stmt :=
   if tags.hm96Rows then do
     let st ← Stmt.setupH tags circuitB pubB coins tables draw partition program
-    Registered.check st.c st.pub registered
+    Registered.check st.c st.pub registered (Registered.derived st.partition)
     return st
   else do
     if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
@@ -123,7 +123,7 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     V (SessionSpec × Array Stmt) :=
   if tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
-    for st in sts do Registered.check st.c st.pub registered
+    for st in sts do Registered.check st.c st.pub registered (Registered.derived st.partition)
     return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
@@ -826,6 +826,8 @@ def main (args : List String) : IO UInt32 := do
   | "cut-check" :: paths => cutCheckCmd paths
   | "evaluate" :: paths => evaluateCmd paths
   | "qword-program" :: rest => qwordProgramCmd rest
+  | "qcall-program" :: rest => Qcall.cmd rest
+  | "input-ids" :: ids => Qcall.inputIdsCmd ids
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths

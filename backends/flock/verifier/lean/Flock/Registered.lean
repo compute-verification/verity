@@ -40,65 +40,120 @@ def ofJson (j : Json) : V (Array Port) := do
       | r => some <$> J.asNat r s!"{ctx}: a read position"
     return { name, value := ← J.str e "value" ctx, root, leaves, domain, reads }
 
+/-- The frame-v3-sha512 node over `l` and `r` at index `idx` of level `d`. -/
+def node (dom : ByteArray) (d idx : Nat) (l r : ByteArray) : ByteArray :=
+  FV3.hash "node" [dom, FV3.uint d, FV3.uint idx, l, r] Sha512.hash
+
+/-- The root a digest `cur` at index `idx` of level `d` climbs to through the siblings `sibs`, lowest first. -/
+def climbL (dom : ByteArray) : ByteArray → Nat → Nat → List ByteArray → ByteArray
+  | cur, _, _, [] => cur
+  | cur, idx, d, sib :: rest =>
+    climbL dom (if idx % 2 = 0 then node dom d (idx / 2) cur sib else node dom d (idx / 2) sib cur) (idx / 2) (d + 1) rest
+
+/-- A path's `depth` siblings, 64 bytes each, leaf level first. -/
+def sibs (path : ByteArray) (depth : Nat) : List ByteArray :=
+  (List.range depth).map fun d => path.extract (64 * d) (64 * d + 64)
+
 /-- The frame-v3-sha512 root a leaf at `i` climbs to through `path` (the siblings, leaf level first, 64 bytes each). -/
-def climb (dom leaf : ByteArray) (i depth : Nat) (path : ByteArray) : ByteArray := Id.run do
-  let mut cur := leaf
-  let mut idx := i
-  for d in [0:depth] do
-    let sib := path.extract (64 * d) (64 * d + 64)
-    cur := if idx % 2 == 0 then FV3.hash "node" [dom, FV3.uint d, FV3.uint (idx / 2), cur, sib] Sha512.hash
-      else FV3.hash "node" [dom, FV3.uint d, FV3.uint (idx / 2), sib, cur] Sha512.hash
-    idx := idx / 2
-  return cur
+def climb (dom leaf : ByteArray) (i depth : Nat) (path : ByteArray) : ByteArray := climbL dom leaf i 0 (sibs path depth)
+
+/-- The frame-v3-sha512 leaf at `pos` of a registered value's row whose `hm96-sha512/row/v1` leaf is `payload`. -/
+def rowLeaf (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
+  FV3.leaf dom pos HmRow.ROW_SCHEMA payload Sha512.hash
+
+/-- A row whose `hm96-sha512/row/v1` leaf is `payload` opens `reg`'s registered root at `pos` through `path`: a position
+among its leaves, one 64-byte sibling per level, and the climb ends at the root. -/
+def opensLeaf (reg : Port) (payload : ByteArray) (pos : Nat) (path : ByteArray) : Bool :=
+  decide (pos < reg.leaves) && decide (path.size = 64 * log2ceil reg.leaves) &&
+    decide (climb reg.domain (rowLeaf reg.domain pos payload) pos (log2ceil reg.leaves) path = reg.root)
+
+/-- A table row's `b ‖ c` opens `reg`'s registered root at `pos` through `path`. -/
+def opens (reg : Port) (bc : ByteArray) (pos : Nat) (path : ByteArray) : Bool :=
+  opensLeaf reg (Hm96.Default512.treeLeaf bc) pos path
 
 /-- What a verdict reports: each registered port's value and the root its reads were opened against. -/
 def finding (own : Array Port) : Json :=
   Json.mkObj (own.toList.map fun p => (p.name, Json.mkObj [("value", Json.str p.value), ("root", Json.str (hexOf p.root))]))
 
+/-- The statement check derived the statement's units from the verifier's own program (its partition finding,
+`HmRow.PartitionFinding`), rather than taking them as stated. -/
+def derived (partition : Json) : Bool := (partition.getObjValAs? String "units").toOption == some "derived"
+
+/-- The unit each of the public file's instances is (its header's `units.indices`). -/
+def unitIndices (pub : Public) : V (Array Nat) := do
+  (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+
+/-- Port `reg`'s entry in the header's `registered`: the position and the path of each row of its table. -/
+def entry (pub : Public) (reg : Port) : V (Array Nat × Array ByteArray) := do
+  let ctx := "public file.registered"
+  let .ok e := pub.header.getObjVal? "registered" >>= (·.getObjVal? reg.name)
+    | throw s!"registered reads: the statement commits port {reg.name}'s rows of {reg.value} afresh, with no path to its registered root"
+  if (← J.str e "value" ctx) != reg.value then throw s!"registered reads: port {reg.name} reads {reg.value}, not another value"
+  let positions ← (← J.arr e "positions" ctx).mapM (J.asNat · "a registered position")
+  let paths ← (← J.arr e "paths" ctx).mapM fun x => do unhex (← J.asStr x "a registered path")
+  return (positions, paths)
+
+/-- Row `r` of port `p`'s table: its `b ‖ c` among the file's row digests (`Public.digest` reads the same). -/
+def tableRow (pub : Public) (t : Tables) (p r : Nat) : ByteArray := pub.digests.getD (t.starts.getD p 0 + r) ByteArray.empty
+
+/-- Instance `i`'s ref into port `p`'s table, among `np` ports. -/
+def ref (t : Tables) (np p i : Nat) : Nat := t.refs.getD (i * np + p) 0
+
+/-- The first of port `p`'s `rows` table rows that does not open `reg`'s registered root at its position through its path. -/
+def badRow (reg : Port) (pub : Public) (t : Tables) (p rows : Nat) (positions : Array Nat) (paths : Array ByteArray) :
+    Option Nat :=
+  (List.range rows).find? fun r => !opens reg (tableRow pub t p r) (positions.getD r 0) (paths.getD r ByteArray.empty)
+
+/-- The first of `n` instances whose ref names no row of port `p`'s table, or whose row's position is not the one the
+verifier's program reads for the instance's unit. -/
+def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices : Array Nat) : Option Nat :=
+  (List.range n).find? fun i =>
+    !(decide (ref t np p i < rows) && decide (reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t np p i) 0))))
+
+/-- One port of the verifier's registered reads: a port of the circuit, whose table rows all open the registered root, and
+whose instances each read the row at the position the verifier's program reads for their unit. -/
+def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
+  let np := c.ports.size
+  let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
+    | throw s!"registered reads: {reg.name} is not an input port of the circuit"
+  let (positions, paths) ← entry pub reg
+  let rows := t.counts.getD p 0
+  if positions.size != rows || paths.size != rows then
+    throw s!"registered reads: port {reg.name}: one position and one path per table row"
+  match badRow reg pub t p rows positions paths with
+  | some r =>
+    throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {positions.getD r 0}"
+  | none =>
+    match badInstance reg t np p rows pub.n positions indices with
+    | none => pure ()
+    | some i =>
+      let u := indices.getD i 0
+      if ref t np p i ≥ rows then throw s!"registered reads: port {reg.name}: instance {i}'s ref names no row of its table"
+      match reg.reads[u]? with
+      | some (some want) =>
+        throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
+      | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
+
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
-the position the verifier's program reads for its unit. Without `own`, a statement that names registered reads is
-refused: its rows would be checked against no root. -/
-def check (c : Circuit) (pub : Public) (own : Option (Array Port)) : V Unit := do
+the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`). Without
+`own`, a statement that names registered reads is refused: its rows would be checked against no root. With `own`, the
+units must be `derived`: a unit's position is the verifier's, but which unit an instance is comes from its label, which
+binds nothing unless the verifier derived it. -/
+def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) : V Unit := do
   let hdr := pub.header.getObjVal? "registered"
   let some own := own
     | if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+  if !derived then
+    throw "registered reads: the statement's units are taken as stated, and a read's position binds only as far as its unit does: the verifier derives them from its own program (--partition, --program)"
   let .ok (.obj kvs) := hdr
     | throw "registered reads: the statement names no registered rows: a registered value's rows committed afresh open no registered root"
   for (name, _) in kvs.toArray do
     if !own.any (·.name == name) then throw s!"registered reads: the statement names port {name} registered, and the verifier's registered reads do not"
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
-  let np := c.ports.size
-  let ctx := "public file.registered"
-  let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-  for reg in own do
-    let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
-      | throw s!"registered reads: {reg.name} is not an input port of the circuit"
-    let .ok e := pub.header.getObjVal? "registered" >>= (·.getObjVal? reg.name)
-      | throw s!"registered reads: the statement commits port {reg.name}'s rows of {reg.value} afresh, with no path to its registered root"
-    if (← J.str e "value" ctx) != reg.value then throw s!"registered reads: port {reg.name} reads {reg.value}, not another value"
-    let positions ← (← J.arr e "positions" ctx).mapM (J.asNat · "a registered position")
-    let paths ← (← J.arr e "paths" ctx).mapM (J.asStr · "a registered path")
-    let rows := t.counts[p]!
-    if positions.size != rows || paths.size != rows then
-      throw s!"registered reads: port {reg.name}: one position and one path per table row"
-    let depth := log2ceil reg.leaves
-    for r in [0:rows] do
-      let pos := positions[r]!
-      let path ← unhex paths[r]!
-      let bc := pub.digests.getD (t.starts[p]! + r) ByteArray.empty
-      let leaf := FV3.leaf reg.domain pos HmRow.ROW_SCHEMA (Hm96.Default512.treeLeaf bc) Sha512.hash
-      if pos ≥ reg.leaves || path.size != 64 * depth || climb reg.domain leaf pos depth path != reg.root then
-        throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {pos}"
-    for i in [0:pub.n] do
-      let u := indices.getD i 0
-      let got := positions.getD (t.refs.getD (i * np + p) 0) 0
-      match reg.reads[u]? with
-      | some (some want) =>
-        if got != want then
-          throw s!"registered reads: port {reg.name}: unit {u} reads position {got}, and the verifier's program reads {want}"
-      | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
+  let indices ← unitIndices pub
+  own.toList.forM (checkPort c pub t indices)
 
 end Registered
 end Flock

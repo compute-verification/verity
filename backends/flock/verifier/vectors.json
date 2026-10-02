@@ -4309,6 +4309,63 @@
     ],
     "selftest_note": "every selftest case that runs a session, and the draw cases (no row_ref_claim_false: no table)",
     "agreement": "22/22 (local, 2026-09-27T10:05Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (registered reads: header registered, flock-verify --registered)",
+    "pr83": "967b8d06",
+    "generator": "stage_registered.py and e2e.sh in the artifact (run r20261002-013624-153f: RegisteredRoPE's cs_table committed once with verity_sampled_proofs' Registered.commit, its statements written by verity_flock.circuit.write with share_rows and registered, served and proved by flock-live at 967b8d06 with circuit-vectors-967b8d06.patch, --features sha512,seed-injection, CPU)",
+    "statement": {
+     "circuit": "art:bf70d8eb/stage/circuit.txt",
+     "public": "art:bf70d8eb/registered/pub-8.bin",
+     "partition": "art:bf70d8eb/stage/partition.json",
+     "program": "art:bf70d8eb/stage/program.json",
+     "registered": "art:bf70d8eb/registered/own.json",
+     "circuit_sha512": "4d3484b6f44e375b13a29d4cdad870a6d5229031fcb6925c44a94dd7c6e01759666123c92be6fef539dad103fdd8d80c4d845860d725e28cd6fe2b18bccb504f",
+     "detail": "RoPE d64, eight Calls of RegisteredRoPE reading cs_table rows [11, 5, 3, 1, 0, 9, 8, 4] of 12 (registered root 5de48d16), Q_template_instance v0, units derived; own.json is the verifier's reads file (reads_file on its own program)"
+    },
+    "sessions": [
+     {
+      "dir": "art:bf70d8eb/vectors/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:bf70d8eb/vectors/fresh-salts",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: port cs: table row 0 does not open cs_table's registered root at position 11",
+       "upstream_accepted": true
+      }
+     },
+     {
+      "dir": "art:bf70d8eb/vectors/afresh",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: the statement names no registered rows",
+       "upstream_accepted": true
+      }
+     },
+     {
+      "dir": "art:bf70d8eb/vectors/wrong-position",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: port cs: unit 0 reads position 11, and the verifier's program reads 0",
+       "upstream_accepted": true
+      }
+     },
+     {
+      "dir": "art:bf70d8eb/vectors/no-registered",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: the statement reads registered values, and the verifier holds no registered roots",
+       "upstream_accepted": true
+      }
+     }
+    ],
+    "lean_statement": "verity/flock-circuit@967b8d06+seed-injection",
+    "agreement": "5/5 (local, 2026-10-02T01:42Z): D5, upstream accepts all four negatives (fresh-salts: cs rows under fresh salts with the registered paths; afresh: no registered entry; wrong-position: the verifier's reads moved one row; no-registered: a session-level registered.json of null, no --registered)"
    }
   ],
   "recorded_runs": [
