@@ -6,8 +6,8 @@
 # stage-<table>.json, live.tsv (one LIVE record per proof: table, instances, mode, json), prove-*/serve-* logs, summary.json,
 # host.txt and the core samplers (as 75-hidden-reads.sh's). Staged statements and session records go under
 # FLOCK_WORK/scratch/<run id>, removed at exit.
-# env: CPUS=48 (the first CPUS cores of free 16-core slices, cpu-slices.sh)  GELU="8 32 128" TANH="8 32 128" (instances: one
-#      per 2^23-bit block, m = 26, 28, 30)  MODES="m0 zk"  WARM=1 RUNS=2
+# env: CPUS=48 (the first CPUS cores of free 16-core slices, cpu-slices.sh)  GELU="32 256 1024" TANH="32 256 1024" (instances:
+#      one per 2^23-bit block, m = 28, 31, 33; the summary's rates are between the two largest)  MODES="m0 zk"  WARM=1 RUNS=2
 #      FLOCK_WORK=/workspace/cache/flock-hidden-reads (75-hidden-reads.sh's build and venv, kept for the next attempt)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -40,7 +40,7 @@ H="python3 backends/flock/pod/hidden_gather.py"
 $H parts --out $O/parts.json > $O/parts.txt 2>&1 || { tail -5 $O/parts.txt; exit 1; }
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 for table in gelu_tanh_bf16 tanh_rn; do
-  case $table in gelu_tanh_bf16) NS=${GELU:-8 32 128} ;; tanh_rn) NS=${TANH:-8 32 128} ;; esac
+  case $table in gelu_tanh_bf16) NS=${GELU:-32 256 1024} ;; tanh_rn) NS=${TANH:-32 256 1024} ;; esac
   D=$S/$table
   $H stage --table $table --n $NS --out $D > $O/stage-$table.json 2> $O/stage-$table.err || { tail -5 $O/stage-$table.err; exit 1; }
   PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)

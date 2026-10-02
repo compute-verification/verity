@@ -181,7 +181,8 @@ def parts() -> dict:
 
 def summary(runs: list[Path]) -> dict:
     """Per table and mode: the marginal prover seconds per opening between the two largest sizes (``hidden_reads.rates``:
-    witness and both reps' proofs, medians), the largest size's seconds per opening, and #726's estimate."""
+    witness and both reps' proofs, medians), the largest size's seconds per opening, and #726's estimate. An opening's cost
+    is its block's, ``block_bits`` committed bits whatever the unit's rows."""
     outs = [r / "out" for r in runs]
     rt = HR.rates(outs)
     stages = {}
@@ -192,7 +193,7 @@ def summary(runs: list[Path]) -> dict:
     table = {}
     for name, st in sorted(stages.items()):
         row = {"rows": st["unit_counts"]["rows"], "ands": st["unit_counts"]["ands"], "unit_log": st["unit_log"], "k_log": st["k_log"],
-               "estimate_726": st["estimate_726"]}
+               "block_bits": (1 << st["k_log"]) // st["vus_per_block"], "estimate_726": st["estimate_726"]}
         for md in ("m0", "zk"):
             r = rt.get(f"{name}/{md}")
             if r:
