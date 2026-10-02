@@ -157,17 +157,21 @@ fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
 }
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
-/// the four uniform lanes (a pair per rep), from the prover's ChaCha20 streams 6 and 7; for rep 0 (a rep's copy sets `rep`).
-/// `zero`: M1's control (all zero).
-fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
+/// the four uniform lanes (a pair per rep), from the prover's ChaCha20 streams 6 and 7, drawn on rayon's threads; for rep 0 (rep
+/// 1 reads the same draw with its own `rep`, `ZkRep::l0_rep`). `zero`: M1's control (all zero).
+fn level0_zk(st: &Stmt, rng: &flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
     let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
     let (lanes, l, t) = ((1usize << lc.initial_k) + EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m));
-    let draw = |rng: &mut flock_live::zk_hooks::ProverRng, stream: u64, i: usize, n: usize| {
-        if zero { vec![F128::ZERO; n] } else { rng.f128s(stream, (i as u64) << 32, n) }
+    let draw = |stream: u64, i: usize, n: usize| {
+        let mut v = vec![F128::ZERO; n];
+        if !zero {
+            rng.fill_f128s(stream, (i as u64) << 32, &mut v);
+        }
+        v
     };
     Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
-               extra: std::array::from_fn(|i| draw(rng, 6, i, l)), pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
+               extra: std::array::from_fn(|i| draw(6, i, l)), pads: (0..lanes).map(|i| draw(7, i, t)).collect(), tamper }
 }
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
@@ -863,13 +867,26 @@ struct ZkRep {
     pad_mismatch: bool,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
-    /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
+    /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword; one copy, rep 0's)
     level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
+    /// the pair of extra lanes this rep reads (`Level0Zk::rep`)
+    l0_rep: usize,
+}
+
+impl ZkRep {
+    /// This rep's level-0 hiding as upstream's prover takes it: the session's, with this rep's pair (a copy for rep 1, CPU only).
+    fn level0_own(&self) -> std::borrow::Cow<'_, flock_core::pcs::ligerito::zk::Level0Zk> {
+        if self.level0.rep == self.l0_rep {
+            std::borrow::Cow::Borrowed(&*self.level0)
+        } else {
+            std::borrow::Cow::Owned(flock_core::pcs::ligerito::zk::Level0Zk { rep: self.l0_rep, ..(*self.level0).clone() })
+        }
+    }
 }
 
 /// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
 #[allow(clippy::too_many_arguments)]
-fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
+fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
               points: &Arc<Mutex<zkv::MaskRank>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
     let tz0 = Instant::now();
     let lay = zk_layout(st);
@@ -881,18 +898,20 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
     let ic = zkv::InnerCommit::new(&pads, sb);
     ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
-            level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep }, ..level0.clone() }) }
+            level0: level0.clone(), l0_rep: if plan.zk_shared_pair { 0 } else { rep } }
 }
 
-/// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
-/// the seed alone). The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's
-/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 draw's seconds, and each rep's
-/// pads with their tree's salt id.
+/// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the previous session ([`prebuild`])
+/// or beside the session's own witness build. They read the statement's shape, the plan's flags, the seed and `salts` (a fresh
+/// [`LeafSalts`](flock_live::zk_hooks::LeafSalts), whose key salts every tree of the session), and nothing the verifier sends.
+/// The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's proof's trees
+/// (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 draw's seconds, and each rep's pads with their
+/// tree's salt id.
 fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
               points: &Arc<Mutex<zkv::MaskRank>>) -> (f64, [(ZkRep, u64); 2]) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
-    let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
+    let level0 = Arc::new(level0_zk(st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper));
     let t_level0 = tl0.elapsed().as_secs_f64();
     let trees = params(st.m, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
@@ -1025,12 +1044,13 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     let tp = Instant::now();
     let (mut mch, sent) = zk_masking(st, ByRef(ch), zk);
     let mut hk = |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() };
+    let l0 = zk.level0_own();
     let (proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() {
         let mut rounds = |content: &[u8], n: usize| replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
         let mut fr = Framer { pending: frame_domain(&domain(&st.c, rep)), rounds: &mut rounds };
-        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut fr)
+        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&l0), &mut fr)
     } else {
-        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut mch)
+        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&l0), &mut mch)
     };
     let t_upstream = tp.elapsed().as_secs_f64();
     zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, json!({}))
@@ -2133,12 +2153,12 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
-                 level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool)
+                 z: &ZkRep, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool)
                  -> (R1csProofLigerito, Commitment, Value) {
     use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
+    let live = Live::Zk { level0: &*z.level0, rep: z.l0_rep, rounds };
     let (proof, commitment, ph, wph, hph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
-                                                 Reuse::None, native_sha));
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, live, Some(salts), Reuse::None, native_sha));
     let bk = gpu_buckets(wt, ph, wph, hph, false, native_sha);
     eprintln!("GPUPHASE\t{bk}");
     (proof, commitment, bk)
@@ -2154,7 +2174,7 @@ fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &Mutex<flock_live::zk_hooks::LeafSalts>,
-                 _: &flock_core::pcs::ligerito::zk::Level0Zk, _: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, _: bool)
+                 _: &ZkRep, _: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, _: bool)
                  -> (R1csProofLigerito, Commitment, Value) {
     panic!("built without the gpu feature")
 }
@@ -2321,17 +2341,49 @@ struct Prebuilt {
     w0: Wit,
     wt0: WitData,
     built_s: f64,
+    /// M1 on the device: the session's level-0 hiding and pads, under its salt key
+    zk: Option<ZkAhead>,
+}
+
+/// [`zk_prepare`]'s draw for one session, with the salts and the rank check it began, which that session takes over (every tree of
+/// a session takes the one key).
+struct ZkAhead {
+    salts: Arc<Mutex<flock_live::zk_hooks::LeafSalts>>,
+    points: Arc<Mutex<zkv::MaskRank>>,
+    reps: [(ZkRep, u64); 2],
+    built_s: f64,
+}
+
+/// Whether a session of `st` draws M1's randomness with [`zk_prepare`] (on the device, unless FC_ZK_SEQUENTIAL: the reference for
+/// the overlap's gain).
+fn zk_overlap(st: &Stmt, plan: &Plan) -> bool {
+    plan.gpu && is_zk(st) && std::env::var_os("FC_ZK_SEQUENTIAL").is_none()
+}
+
+fn lig_of(plan: &Plan) -> LigeritoProfile {
+    if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 }
 }
 
 /// Build the witness a one-table session of `st` with `seed` will take, on a thread of its own (the prover's host work beside the
-/// previous session's device work).
+/// previous session's device work), and under M1 on the device its level-0 hiding and pads beside it.
 fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed) -> std::thread::JoinHandle<Prebuilt> {
     let (st, inst, plan) = (st.clone(), inst.clone(), plan.clone());
     std::thread::spawn(move || {
+        let zk = zk_overlap(&st, &plan).then(|| {
+            let (st, plan) = (st.clone(), plan.clone());
+            std::thread::spawn(move || {
+                let t = Instant::now();
+                let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
+                let points = Arc::default();
+                let (_, reps) = zk_prepare(&st, &plan, seed, lig_of(&plan), &salts, &points);
+                ZkAhead { salts, points, reps, built_s: t.elapsed().as_secs_f64() }
+            })
+        });
         let mode = witness_mode(&st, &plan);
         let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
         let (wt0, built_s) = witness_uploaded(&st, &w0, mode);
-        Prebuilt { st, seed, mode, w0, wt0, built_s }
+        let zk = zk.map(|h| h.join().unwrap_or_else(|e| panic!("M1's randomness: {}", panic_msg(e))));
+        Prebuilt { st, seed, mode, w0, wt0, built_s, zk }
     })
 }
 
@@ -2379,6 +2431,7 @@ struct Proved {
     wait_e2e_s: f64,
     witness_s: f64,
     witness_prebuilt_s: Option<f64>,
+    zk_prebuilt_s: Option<f64>,
     prove_s: Vec<f64>,
     buckets: Vec<Value>,
     tp0: Instant,
@@ -2446,19 +2499,33 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let reuse_tag = (plan.gpu && !plan.rep1_other_witness && !is_zk(st)
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
-    let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
+    let lig = lig_of(plan);
+    // a witness built beside the previous session, taken (once: the handle leaves the plan) when it is the one this session
+    // would build, for this statement and seed; under M1 on the device it carries the session's level-0 hiding, pads and salt
+    // key. Its wait counts as this session's witness time
+    let tw = Instant::now();
+    let mut pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
+        .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
+        .flatten()
+        .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
+        .filter(|p| Arc::ptr_eq(&p.st, st) && p.seed == seed && p.mode == (device, host_units, mapped));
+    let t_pre = tw.elapsed().as_secs_f64();
+    let zk_ahead = pre.as_mut().and_then(|p| p.zk.take());
+    let zk_prebuilt_s = zk_ahead.as_ref().map(|z| z.built_s);
     // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
     // tree a fresh id (table j's from j << 32). The device expands its own trees' salts; a CPU proof takes host expansions.
-    let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
-        let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
-        (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
+    // The rank check's claim points: per table (each has its own mask slot).
+    let (salts_t, points_t): (Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>>, Vec<Arc<Mutex<zkv::MaskRank>>>) = match &zk_ahead {
+        Some(z) => (vec![z.salts.clone()], vec![z.points.clone()]),
+        None => {
+            let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+            ((0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect(), tabs.list.iter().map(|_| Arc::default()).collect())
+        }
     };
-    // the rank check's claim points: per table (each has its own mask slot)
-    let points_t: Vec<Arc<Mutex<zkv::MaskRank>>> = tabs.list.iter().map(|_| Arc::default()).collect();
-    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
-    // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
+    // M1 on the device: level 0's hiding and both reps' pads commitments beside the previous session or the witness build, and
+    // rep 0's replay and inner proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
-    let zk_pre = (plan.gpu && is_zk(st) && overlap).then(|| {
+    let zk_pre = (zk_ahead.is_none() && zk_overlap(st, plan)).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
         std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
@@ -2468,17 +2535,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut witness_prebuilt_s: Option<f64> = None;
     let mut wits = Vec::new();
     for (j, tb) in tabs.list.iter().enumerate() {
-        // a witness built beside the previous session: its wait counts as this session's witness time
-        let tw = Instant::now();
-        let pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
-            .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
-            .flatten()
-            .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
-            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped));
-        let (w0, wt0, tw0) = match pre {
+        let (w0, wt0, tw0) = match pre.take() {
             Some(p) => {
                 witness_prebuilt_s = Some(p.built_s);
-                (p.w0, p.wt0, tw.elapsed().as_secs_f64())
+                (p.w0, p.wt0, t_pre)
             }
             None => {
                 let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
@@ -2496,10 +2556,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         wits.push((w0, Some(wt0), wt1));
     }
     let tj = Instant::now();
-    let mut zk_pre = match zk_pre.map(|h| h.join()) {
-        Some(Ok((_, reps))) => Some(reps.map(Some)),
-        Some(Err(e)) => panic!("M1's randomness: {}", panic_msg(e)),
-        None => None,
+    let mut zk_pre = match (zk_ahead, zk_pre.map(|h| h.join())) {
+        (Some(z), _) => Some(z.reps.map(Some)),
+        (None, Some(Ok((_, reps)))) => Some(reps.map(Some)),
+        (None, Some(Err(e))) => panic!("M1's randomness: {}", panic_msg(e)),
+        (None, None) => None,
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
@@ -2525,10 +2586,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let mut later = Vec::new();
         for (j, tb) in tabs.list.iter().enumerate().skip(1) {
             let tc = Instant::now();
-            let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
-            let l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
+            let prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
+            let l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper));
             let root = level0_root(&tb.st, wits[j].1.as_ref().expect("a table's witness"), lig, l0.as_ref(), &salts_t[j]);
-            later.push((root, l0, tc.elapsed().as_secs_f64()));
+            later.push((root, l0.map(Arc::new), tc.elapsed().as_secs_f64()));
         }
         let later_roots: Vec<Vec<u8>> = later.iter().map(|x| x.0.clone()).collect();
         let mut later = later.into_iter();
@@ -2549,7 +2610,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             });
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
-            let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
+            let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| Arc::new(level0_zk(st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper))) } else { table_level0 };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
             let mut cached: Option<Vec<Vec<F128>>> = None;
             // M1 on the device: rep 0's replay and inner proof run beside rep 1's device run; rep 1's stream opens (its first round)
@@ -2558,7 +2619,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut rep0_done: Option<(Vec<u8>, Value)> = None;
             for rep in 0..2 {
                 // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent (on the
-                // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
+                // device path, beside the previous session or the witness build: rep 1's tree id is consumed here, where the
+                // sequential prover takes it)
                 let tz0 = Instant::now();
                 let (zkrep, pre_id) = match zk_pre.as_mut() {
                     Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
@@ -2651,7 +2713,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 let tp = Instant::now();
                                 let (proof, cm, bk) = {
                                     let mut rounds = |c: &[u8], n: usize| replay_round(&mut mch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
-                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)
+                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z, &mut rounds, native_sha)
                                 };
                                 let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
                                 rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
@@ -2679,7 +2741,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                         let m = &mut opened.as_mut().expect("rep 1's stream").0;
                                         replay_round(m, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"))
                                     };
-                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)
+                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z, &mut rounds, native_sha)
                                 }));
                                 if let Some(h) = first.take() {
                                     r0 = Some(h.join().map_err(panic_msg));
@@ -2737,12 +2799,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
-                prove_s, buckets, tp0 })
+                zk_prebuilt_s, prove_s, buckets, tp0 })
 }
 
 fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
-    let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, prove_s,
-                 buckets, tp0 } = p;
+    let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, zk_prebuilt_s,
+                 prove_s, buckets, tp0 } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
@@ -2772,7 +2834,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
-    (
+    let mut rec =
         json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": st.n * c.upv, "rows_per_vu": rows_per_vu,
@@ -2784,9 +2846,9 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && v["accepted"] == true && (is_zk(st) || seed_coins())}),
-        proofs,
-    )
+               "step0_checked": step0.is_ok() && v["accepted"] == true && (is_zk(st) || seed_coins())});
+    rec["zk_prebuilt_s"] = json!(zk_prebuilt_s);
+    (rec, proofs)
 }
 
 /// (case, expect accept, both reps must reject)
@@ -3551,7 +3613,7 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
     let draws = |tb: &Table, at: u64| -> Vec<[u8; 16]> {
         let (st, lay) = (&tb.st, zk_layout(&tb.st));
         let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, at);
-        let l0 = level0_zk(st, &mut prng, false, 0);
+        let l0 = level0_zk(st, &prng, false, 0);
         let mut w: Vec<F128> = l0.extra.iter().chain(&l0.pads).flatten().copied().collect();
         let mut s = salts.table(at);
         let mut b = s.expand(s.level0_id(), 64);
@@ -3648,10 +3710,13 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let used_a = |k: &str| a.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
     let accepted = a.0["accepted"] == true && b.0["accepted"] == true;
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
+    // under M1 the prebuilt session's level-0 hiding and pads come from its prebuild, the other's from its own draw
+    let zk_ahead = [a.0["zk_prebuilt_s"].is_number(), b.0["zk_prebuilt_s"].is_number()];
+    let zk_ahead_ok = zk_ahead == [false, zk_overlap(st, &Plan { gpu: true, ..Plan::default() })];
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
-           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
-           "pass": accepted && pe && te})
+           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "zk_prebuilt": zk_ahead, "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "pass": accepted && pe && te && zk_ahead_ok})
 }
 
 #[cfg(not(feature = "seed-injection"))]
