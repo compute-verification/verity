@@ -64,31 +64,65 @@ EPS_PROOF = (
     {"D": 5, "eps_proof_fraction": 0.0120, "status": "estimate, upper", "source": "lean, Slack 1790904948.520999 (k 111)"},
 )
 
-#: serving overhead (POUS / plain − 1 at T tokens per weight pass): untimed screens on node 2, RTX PRO 6000, qwen2.5-0.5b,
-#: the A9 kernel, each art's `decode_overhead_T*` measurements to 2 decimals
-_D0_64K = {"1": 28.17, "8": 32.92, "32": 31.97, "2048": 4.88}
+#: the weight sets the schemes were screened on (`weight_sets.json`); overheads compare only within one set, since each
+#: set's plain arm streams at its own rate (761 GB/s on qwen2.5-0.5b, about 1,430 GB/s on the Llama sets)
+WEIGHT_SETS = (
+    {"id": "qwen2.5-0.5b/linears+head", "label": "Qwen2.5-0.5B, every linear + head", "bytes": 987_922_432},
+    {"id": "llama3.1-8b/layer0+head", "label": "Llama-3.1-8B, layer 0 + head", "bytes": 1_486_880_768},
+    {"id": "llama3.1-8b/layers0-8+head", "label": "Llama-3.1-8B, layers 0-8 + head", "bytes": 4_976_541_696},
+    {"id": "llama3.1-8b/linears+head", "label": "Llama-3.1-8B, every linear + head", "bytes": 15_009_316_864},
+)
+
+#: serving overhead (POUS / plain − 1 at T tokens per weight pass): untimed screens on node 2, RTX PRO 6000, the A9
+#: kernel, each art's `decode_overhead_T*` measurements to 2 decimals
+_QWEN, _L0, _L9, _LFULL = (w["id"] for w in WEIGHT_SETS)
 SCHEMES = (
-    {"d": 0, "block_bytes": 65_536, "kind": "measured", "overhead_x_by_tokens": _D0_64K,
+    {"weight_set": _QWEN, "d": 0, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 28.17, "8": 32.92, "32": 31.97, "2048": 4.88},
      "art": "art:f26dcc43985e186972d1408f40d4337c8db2a76a220e082a06e61e20236a3948"},
-    {"d": 1, "block_bytes": 65_536, "kind": "measured", "overhead_x_by_tokens": {"1": 71.47, "8": 59.82, "32": 58.23, "2048": 8.94},
+    {"weight_set": _QWEN, "d": 1, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 71.47, "8": 59.82, "32": 58.23, "2048": 8.94},
      "art": "art:72529776ba02dc36228de198f6a58e5fb630712edd75350c5842cd64bd1254b9"},
-    {"d": 2, "block_bytes": 65_536, "kind": "measured", "overhead_x_by_tokens": {"1": 69.14, "8": 80.24, "32": 77.84, "2048": 11.87},
+    {"weight_set": _QWEN, "d": 2, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 69.14, "8": 80.24, "32": 77.84, "2048": 11.87},
      "art": "art:0daa432488c965e8ef090e73b2005be6b6e25f9bc6d89a63e49d34d706a84360"},
-    {"d": 5, "block_bytes": 65_536, "kind": "measured", "overhead_x_by_tokens": {"1": 132.27, "8": 153.4, "32": 148.9, "2048": 22.8},
+    {"weight_set": _QWEN, "d": 5, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 132.27, "8": 153.4, "32": 148.9, "2048": 22.8},
      "art": "art:88ea542b5f887b9ca25422bb58e05e2e9fbf3d3d149e1191d10d8ca559829c83", "note": "timed run r20261001-153056-53c6"},
-    {"d": 12, "block_bytes": 65_536, "kind": "measured",
+    {"weight_set": _QWEN, "d": 12, "block_bytes": 65_536, "kind": "measured",
      "overhead_x_by_tokens": {"1": 376.39, "8": 314.44, "32": 305.56, "2048": 46.88},
      "art": "art:4354a29314cf3e25917e1ddbc30fda90807650b4d6c94caceffbf3ad8ab80924"},
-    {"d": 0, "block_bytes": 147_456, "kind": "measured", "overhead_x_by_tokens": {"1": 40.88, "8": 47.74, "32": 46.42, "2048": 7.09},
+    {"weight_set": _QWEN, "d": 0, "block_bytes": 147_456, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 40.88, "8": 47.74, "32": 46.42, "2048": 7.09},
      "art": "art:529b4a35c4a1fb9b3c63cc0ff51690897832a46b60c4dea9ad931d6c83d1362c",
      "note": "too few rows to fill the GPU"},
-    {"d": 0, "block_bytes": 393_216, "kind": "measured", "overhead_x_by_tokens": {"1": 103.58, "8": 120.18, "32": 116.62, "2048": 17.84},
+    {"weight_set": _QWEN, "d": 0, "block_bytes": 393_216, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 103.58, "8": 120.18, "32": 116.62, "2048": 17.84},
      "art": "art:06d9d7a96e3bc729ab3f5765bf320fcf52400963b581c181f6d4ba784e0ad281",
      "note": "too few rows to fill the GPU"},
-    {"d": 0, "block_bytes": 147_456, "kind": "projected", "overhead_x_by_tokens": _D0_64K,
-     "note": "d = 0 / 64 KiB's rate at ≥ 12,000 rows"},
-    {"d": 0, "block_bytes": 393_216, "kind": "projected", "overhead_x_by_tokens": _D0_64K,
-     "note": "d = 0 / 64 KiB's rate at ≥ 12,000 rows"},
+    {"weight_set": _L0, "d": 12, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 329.96, "8": 357.74, "32": 514.27, "2048": 65.18},
+     "art": "art:0c524d678607a65e0c06a9d01c400525ebc47c9748561f45f511e064c995b55e",
+     "note": "T=1 and T=8 understate: their plain baselines ran below memory bandwidth"},
+    {"weight_set": _L9, "d": 0, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 46.27, "8": 46.87, "32": 44.02, "2048": 5.58},
+     "art": "art:12777159bb149d6b80b8646c4800844c2e1ea11ea5c24622ae54ad406fb6e1b1"},
+    {"weight_set": _L9, "d": 1, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 85.18, "8": 86.27, "32": 81.01, "2048": 10.31},
+     "art": "art:2bffd5f6c2bf776c5f83f5d72ed7bbc8d3ff29b82ba69e9b33aff94f9f8c1d5f"},
+    {"weight_set": _L9, "d": 0, "block_bytes": 147_456, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 47.55, "8": 47.95, "32": 45.28, "2048": 5.74},
+     "art": "art:ab8b372394bc9c2aaa62bd24e27a975c81a48dfa9dbb84e28fd04a29e60a9404"},
+    {"weight_set": _L9, "d": 0, "block_bytes": 393_216, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 39.3, "8": 61.58, "32": 58.04, "2048": 7.36},
+     "art": "art:232d274d2fd99ba1ac640838894df3f25a658f299cc14fee812e773538d82b70",
+     "note": "12,800 rows take 3 task rounds instead of 2; T=1 sits on the plain arm's warm-up reps (about 61 steady)"},
+    {"weight_set": _LFULL, "d": 0, "block_bytes": 65_536, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 45.46, "8": 45.92, "32": 42.91, "2048": 5.45},
+     "art": "art:24a67c520d1c44c4490e91387fe7071a76cf736c906584365cc3a509f65969bd"},
+    {"weight_set": _LFULL, "d": 0, "block_bytes": 393_216, "kind": "measured",
+     "overhead_x_by_tokens": {"1": 47.74, "8": 47.77, "32": 45.01, "2048": 5.7},
+     "art": "art:3ba0d32eb400fccc8603bcd9e1168abb975ee7ed94ce85948d2b2d372b7bb1e6"},
 )
 
 #: the `measured` preset before the series carries histograms: series 03946311d run 1, 99,900 honest answers on loopback
@@ -438,6 +472,7 @@ def build(histograms: list[dict[str, Any]] | None = None, generated_at: str | No
            "us_per_kib_above_64": US_PER_KIB,
            "eps_proof": list(EPS_PROOF),
            "f0_max_mean": {str(a): f0_max_mean(a) for a in ALPHAS},
+           "weight_sets": list(WEIGHT_SETS),
            "schemes": list(SCHEMES),
            "honest_models": models}
     doc["vectors"] = [{"inputs": i, "expected": evaluate(doc, i), "tolerance": {"relative": 1e-9, "f0_count": 0}}
