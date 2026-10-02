@@ -6,7 +6,7 @@
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
- "assumptions": ["Pous.Assumptions"],
+ "assumptions": ["Pous.Assumptions", "Pous.P2.Assumptions"],
  "layers": {
   "Pous.Game": {
    "imports": ["Mathlib", "Pous.Game"],
@@ -26,7 +26,7 @@
   "Pous.P2": {
    "imports": ["Mathlib", "Pous.Game", "Pous.Model", "Pous.Accounting", "Pous.P2"],
    "except": [],
-   "why": "the m1p pins read only the game, the models and the parameters"
+   "why": "P2's pins and its cost model read only the game, the models and the parameters"
   }
  },
  "pins": {
@@ -240,26 +240,85 @@
   "PousMargin.raw_b19_128": {
    "signature": [
     "PousMargin.raw_b19_128 (p b D Q k : Nat) (hk : instLENat.le k 100) (ε : ENNReal) :",
-    "  Not (PousMargin.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 128 D Q k ε)"
+    "  Not (Pous.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 128 D Q k ε)"
    ],
    "assumptions": [],
-   "type_hash": "d95ec3bc907a7d1059180620d4e1191d5865d58920a25b6fb561a1acc05404cc"
+   "type_hash": "d0bff096b158ccf64c17cb86a37336dc456cb17f02b82249240d7d0db4ca545a"
   },
   "PousMargin.raw_b19_256": {
    "signature": [
     "PousMargin.raw_b19_256 (p b D Q k : Nat) (hk : instLENat.le k 121) (ε : ENNReal) :",
-    "  Not (PousMargin.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 256 D Q k ε)"
+    "  Not (Pous.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 256 D Q k ε)"
    ],
    "assumptions": [],
-   "type_hash": "8b4dcabce1c0eed2e44358b698e56b94aa0b4be109cb3959f1c4be7ef9875a06"
+   "type_hash": "3fdea2f85e7f4440a8e6650452cb83592d2ef29340bb790298a5488aa0caf37a"
   },
   "PousMargin.raw_b19_64": {
    "signature": [
     "PousMargin.raw_b19_64 (p b D Q k : Nat) (hk : instLENat.le k 92) (ε : ENNReal) :",
-    "  Not (PousMargin.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 64 D Q k ε)"
+    "  Not (Pous.MeetsWithSlack (Pous.m1p (instHPow.hPow 2 19) 16448 p b) Pous.Reveal.sequential 64 D Q k ε)"
    ],
    "assumptions": [],
-   "type_hash": "4259d27326624f116cd8cbb3386f3155490f32b8b9ffa3bee1c93e03ddfb415d"
+   "type_hash": "7582830e3afaf25d58c296812d67b8916ab66ba7e330f9b301d1320b62bb6958"
+  },
+  "PousP2Ring.complete": {
+   "signature": [
+    "PousP2Ring.complete (B w p b : Nat) [NeZero B] [NeZero p] (hp : Nat.Prime p) (h4 : Eq (instHMod.hMod p 4) 3)",
+    "  (hb : instLENat.le (instHPow.hPow 2 b) p) (hp2 : instLENat.le p (instHPow.hPow 2 w))",
+    "  (hsp : instLENat.le (instHMul.hMul 20 w) (instHMul.hMul 21 b)) :",
+    "  And (Pous.p2ring B w p b).Correct",
+    "    (And (Pous.p2ring B w p b).CodeHoldsW",
+    "      (And ((Pous.p2ring B w p b).SpaceBound Pous.Params.expansion)",
+    "        (And (∀ (j : Fin B) (c : Pous.Bits w), Pous.Prog.RingBounded 2 2 3 (Pous.decBlock B w p b j c))",
+    "          (Exists fun A₂ =>",
+    "            ∀ (k : Nat) (W : Pous.Bits (Pous.p2ring B w p b).n),",
+    "              Eq (Pous.pr (Pous.seqAcceptsOn (Pous.p2ring B w p b) k W (Pous.honestPre (Pous.p2ring B w p b)) A₂)) 1))))"
+   ],
+   "assumptions": [],
+   "type_hash": "7c6ebb3bc80cc0ed0e1043ef5f51bff9e17ad7e2b8b28ea7f864cc4c9ee6a4d4"
+  },
+  "PousP2Ring.meets_of_meetsOn": {
+   "signature": [
+    "PousP2Ring.meets_of_meetsOn {B w p : Nat} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (reveal : Pous.Reveal)",
+    "  (D Q k : Nat) (ε : ENNReal) (h : Pous.MeetsOn sch reveal D Q Q k ε) : Pous.Meets sch reveal D Q k ε"
+   ],
+   "assumptions": [],
+   "type_hash": "ea38f93ac88c505e672f942af16f2f7ffe9ef67fc3b69c5fd1c3735643338bdb"
+  },
+  "PousP2Ring.not_meetsOn_b19_k88": {
+   "signature": [
+    "PousP2Ring.not_meetsOn_b19_k88 (hP : Pous.P2.Assumptions.PrimeP16448) (b D Q L k : Nat) (hD : instLENat.le 2 D)",
+    "  (hQ : instLENat.le 2 Q) (hL : instLENat.le (instHPow.hPow 2 30) L) (hk : instLENat.le k 88) (ε : ENNReal) :",
+    "  Not",
+    "    (Pous.MeetsOn (Pous.p2ring (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b)",
+    "      Pous.Reveal.sequential D Q L k ε)"
+   ],
+   "assumptions": ["Pous.P2.Assumptions.PrimeP16448"],
+   "type_hash": "e814675cd0c38f3261ff2ad2b8b741801c7c2d3292c5966fae7bd1fca8530119"
+  },
+  "PousP2Ring.tight": {
+   "signature": [
+    "PousP2Ring.tight (B w p b : Nat) [NeZero B] [NeZero p] (hp : Nat.Prime p) (h4 : Eq (instHMod.hMod p 4) 3)",
+    "  (hb : instLENat.le (instHPow.hPow 2 b) p) (hp2 : instLENat.le p (instHPow.hPow 2 w)) (n : Nat)",
+    "  (hn : instLTNat.lt (instHDiv.hDiv (instHAdd.hAdd p 1) 4) (instHPow.hPow 2 n)) (D Q L k : Nat)",
+    "  (hD : instLENat.le (instHMul.hMul 2 (instHAdd.hAdd n 1)) D) (hQ : instLENat.le 2 Q)",
+    "  (hL : instLENat.le (instHAdd.hAdd (instHMul.hMul 4 n) 5) L) (ε : ENNReal) :",
+    "  Not (Pous.MeetsOn (Pous.p2ring B w p b) Pous.Reveal.sequential D Q L k ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "93bae3bbd02d53e8c8338b0088c8cdf7a414cf9a74aa59230fd613dd7c279fdb"
+  },
+  "PousP2Ring.tight_p16448": {
+   "signature": [
+    "PousP2Ring.tight_p16448 (hP : Pous.P2.Assumptions.PrimeP16448) (B : Nat) [NeZero B] (b : Nat)",
+    "  (hb : instLENat.le b 16447) (D Q L k : Nat) (hD : instLENat.le 32894 D) (hQ : instLENat.le 2 Q)",
+    "  (hL : instLENat.le 65789 L) (ε : ENNReal) :",
+    "  Not",
+    "    (Pous.MeetsOn (Pous.p2ring B 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b) Pous.Reveal.sequential D Q L k",
+    "      ε)"
+   ],
+   "assumptions": ["Pous.P2.Assumptions.PrimeP16448"],
+   "type_hash": "192d8aed7bedf82a58eff7ba79b9b2bd049cae804814e803093bab986d29b978"
   },
   "PousP2p.family_k85_fails": {
    "signature": [
@@ -578,6 +637,11 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.BandChainMeets64",
@@ -660,6 +724,11 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A3Prime",
@@ -732,6 +801,11 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A1CompressionPr",
@@ -812,6 +886,11 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A3Prime",
@@ -1062,6 +1141,10 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.BandChainMeets64",
@@ -1101,6 +1184,11 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.P2ErrorSplitB19Uncond",
@@ -1243,6 +1331,11 @@
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448",
     "PousP2p.family_k85_fails",
     "PousP2p.not_meets_m1p_b19_k85",
     "PousProofs.A3Prime",
@@ -1279,6 +1372,66 @@
     "PousProofs.Theorem1iiSeq",
     "PousProofs.Theorem1iiTimed",
     "PousProofs.Theorem1iiiTimed"
+   ]
+  },
+  "Pous.P2.Assumptions": {
+   "digest": "2f4bb409e3a24391702c966699a2c6945839431dcd705dc402474016e9bcbd26",
+   "definitions": {
+    "Pous.P2.Assumptions.PrimeP16448": "88582f4a680fa4e016b25a000b822b465fd7754100edbea9718994503e8d20fe"
+   },
+   "pins": ["PousP2Ring.not_meetsOn_b19_k88", "PousP2Ring.tight_p16448"]
+  },
+  "Pous.P2.Cost": {
+   "digest": "5abba780cc73de0811c80ce3bf600d3225649b2d99da669b1143fbebe1fe4e11",
+   "definitions": {
+    "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
+    "Pous.KeyPart": "50ba6e14ab1a8a8f8c39a03ba7b2d9c8a5c5e3fc2d31644a815aacb1aaf5e32a",
+    "Pous.KeyPart.mask": "e048a8fb29b211cbb2adffb86ccedff56175199c02f0391c3d5a26d029558457",
+    "Pous.KeyPart.offset": "24de27e50b1f3edf5f685460cae0eb7c7157f767754d603d97afade22f953be9",
+    "Pous.MeetsOn": "8928d9e4e559021ef1dd7bf7762ad57bcef63c75985a5f32b3df930e2f4d8a4a",
+    "Pous.MeetsWithSlack": "21fc671e6d73e305d0c6ef8db1e7f39bd781aa58a45ea5ddceef0539c5566037",
+    "Pous.OddLabeling": "13c546c720dcea535ac7749b5929b317f1d34e052bed62248d7008b3e75df6a3",
+    "Pous.Prog.RingBounded": "52e3e55117db8dd0134cba49966e0ee7828c77124b6919be721584f1a9c93295",
+    "Pous.Prog.keyWork": "fca873b0cd0311e31091ce9f1d955fa525d941390b46d911d6570a98c57d1cca",
+    "Pous.Prog.mulDepth": "2d3f6426d2aa42f2f0b8ec83e165188fddc797b862ce0cc52ee55363491ac15a",
+    "Pous.Prog.ringWork": "a12afa7dcacf5e834d065f18e7cfd243eb42fe71e3102932a69239495519f09a",
+    "Pous.RingQry": "d96a717f70fc3ff3911541f66ae9634e5c7b133dee61e023237af330070c3c87",
+    "Pous.RingQry.add": "3d2987d195d620a4b1c7b8644da193d191d8734ad02b97d3d88fd2b65e812d56",
+    "Pous.RingQry.isKey": "6ae3db4a8e66e74ab6d4f043fe1d7598dd4035d148ba57eec796d32c77b50325",
+    "Pous.RingQry.isMul": "6161f7a056a4b060c54a1723754a69c52b7c0b9374dcecd985bad2ccf4873920",
+    "Pous.RingQry.key": "89e2dbbc6c106e303a60100cbfe4cf53b43fb5934d62ea9a68b12c364a51db98",
+    "Pous.RingQry.mul": "cc97284a2a2b51d2e0acd983d424bb0f5fe16891de0895a766c992bdb0b8bd55",
+    "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
+    "Pous.SeqResponderOn": "a3bc66a3ed2ab3aecba132b2032b5631acec15749aca42234627e50ebaea0057",
+    "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
+    "Pous.SimResponderOn": "c457aff17af43873e0491b82782d0fae10e963ff55d7987aa99ea4d2219e3a0b",
+    "Pous.SimResponderOn.prog": "5fbc08c1caef87dcc0ee147520ff272369887fcb366daab96043ee8d9ad9a514",
+    "Pous.decBlock": "52c9d55db46e0fd203f72e1aef72df7c6a353810d3092818fc5dd45148865f4c",
+    "Pous.eltD": "e0d35ad5a621d89317cedcaa1c472e5ca7089a6592f5e80abeed85a2296e66bb",
+    "Pous.encBlock": "ae8a61be28a1724696c809666cbac5784158a6c30d0d19a592ad6b029056045e",
+    "Pous.junkLabel": "1ae6b9885f6c078136edf78b23a90b027f3e84045d4b108ecc969c01ceeefe3c",
+    "Pous.lab": "14b0a991151c821344296df97e7f4e0b433675ba623a887f6baab8b3f3e80733",
+    "Pous.negL": "3178fe1b35681771e41c7545c6278c8dc2cd056b788bf50295dcdcfb2c97770b",
+    "Pous.nthAns": "731fb0d44de3615fef6e976a606836dc0504a2a585acc78fc0c209215c81767d",
+    "Pous.p2ring": "d7ea73b8c6aef42d803bca7a9822a090efc4bdab85d138a5dfb3f4013558d578",
+    "Pous.rhoE": "7b87742b079483bb4646a73b192b63783f6b444d89bddc24fa8e3fee71cd2b1e",
+    "Pous.ringOp": "952205b604d82d005be8e71d6bd28794a4698271744b39d5bbf4ebbc249a29b8",
+    "Pous.ringRO": "36e3e7e17100de2e8636562fbb7a41d0de57db072b605a8ea925994f7b4a6c43",
+    "Pous.seqAcceptsOn": "c8c26fb9cd30569149b52fbfb684d918763a29cbbbf51e2deea009ce7a66b3b5",
+    "Pous.sigmaK": "f5d0511f2e4b58ee2f3ee9ef90efece277371316e9c739685f2f14e419e26ac9",
+    "Pous.simAcceptsOn": "580aa02890e29c4aa2d17307ee9ce271349d1bd90105b0eec0869a5b419bc6e6",
+    "Pous.sqE": "3727f1863cf42a82d1b2940a9ca18c4ff59c2909e3b961c3a0d83c5def7eaaed",
+    "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
+   },
+   "pins": [
+    "PousMargin.raw_b19_128",
+    "PousMargin.raw_b19_256",
+    "PousMargin.raw_b19_64",
+    "PousP2Ring.complete",
+    "PousP2Ring.meets_of_meetsOn",
+    "PousP2Ring.not_meetsOn_b19_k88",
+    "PousP2Ring.tight",
+    "PousP2Ring.tight_p16448"
    ]
   },
   "Pous.P2.Pinned": {
@@ -1415,7 +1568,8 @@
     "Pous.junk_not_meets",
     "Pous.junk_spaceBound",
     "Pous.raw_seq_accepted",
-    "Pous.raw_sim_accepted"
+    "Pous.raw_sim_accepted",
+    "PousP2Ring.complete"
    ]
   },
   "PousProofs.Dense.SegTagged": {
@@ -1424,13 +1578,6 @@
     "PousDenseReCert.liftPar": "ad4ea847e7e3cd0cb4196503f44b974fc22fcf490d8e5dd3ef20bf17dc115715"
    },
    "pins": ["PousDenseReCert.segTag_auditSecure"]
-  },
-  "PousProofs.P2.Margin": {
-   "digest": "0b940699c0752d72e8dd9b2efaf9aa65d2927b590179ee781d0178d1ca09870d",
-   "definitions": {
-    "PousMargin.MeetsWithSlack": "2c6f7405db1b18b55a375256bf239ffedef676b6228b5fbad6cd7a45546e3fc2"
-   },
-   "pins": ["PousMargin.raw_b19_128", "PousMargin.raw_b19_256", "PousMargin.raw_b19_64"]
   },
   "PousProofs.P3.Column.BandComb": {
    "digest": "60a338189f53ebbffb4708d5e3f04b52ca741a5edd3a9cea5828d3456b2de0ca",

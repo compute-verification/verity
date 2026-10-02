@@ -234,7 +234,16 @@ def key_of(reg: dict, cid: str) -> str | None:
 
 
 def tag(h: dict) -> str:
+    if h.get("slack_user"):
+        return f"<@{h['slack_user']}>"                              # a person: a real mention, so Slack notifies them
     return f"<!subteam^{h['usergroup']}|@{h['handle']}>" if h.get("usergroup") else f"@{h['handle']}"
+
+
+def human_entry(reg: dict, name: str) -> dict | None:
+    """A named human as an addressee: `daniel` (first name, lower case), with the Slack user id that notifies them."""
+    name = name.lstrip("@").lower()
+    return next(({"handle": name, "slack_user": p["slack_user"]} for p in reg.get("humans", [])
+                 if p.get("slack_user") and p["name"].split()[0].lower() == name), None)
 
 
 # --- the Web API ------------------------------------------------------------------------------------------------------------
@@ -898,12 +907,14 @@ def routes_of(ns: argparse.Namespace) -> Routes:
     return ns._routes
 
 
-def name_entry(ns: argparse.Namespace, reg: dict, name: str) -> dict:
+def name_entry(ns: argparse.Namespace, reg: dict, name: str, person_ok: bool = False) -> dict:
     """A registry handle, or a name with an inbox that this checkout's registry predates: who may post (`--as`) and be
     addressed (`--to`)."""
     try:
         return entry(reg, name)
     except SlackError:
+        if person_ok and (person := human_entry(reg, name)):
+            return person
         name = name.lstrip("@")
         if routes_of(ns).get_route(name):
             return {"handle": name}
@@ -944,7 +955,7 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
 
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
-    to = [name_entry(ns, reg, t) for t in ns.to]
+    to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
     _post(client(ns), ch, h["handle"], announcement(h, to, _body(ns), ns.verify, ns.ships),
           route=_route(ns, reg, ch), urgent=ns.urgent)
@@ -956,7 +967,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
     and with no `--to` it is for every handle."""
     h = name_entry(ns, reg, ns.handle)
-    to = [name_entry(ns, reg, t) for t in ns.to]
+    to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
@@ -1534,6 +1545,8 @@ def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
     if not ns.link.startswith("https://"):
         raise SlackError(f"--link {ns.link!r}: an https URL to the full context")
     url = ns.agent_url or os.environ.get("RESEARCH_AGENT_URL")
+    if not url and not ns.dry_run and (me := self_agent_id()):
+        url = f"https://cursor.com/agents/{me}"
     if not url:
         raise SlackError("no --agent-url (or $RESEARCH_AGENT_URL): every card links the agent that asked it")
     return {"kind": ns.kind, "question": question, "why": ns.why.strip(), "options": options, "default": ns.default,
@@ -1674,6 +1687,15 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("the route's answer has no id or ts")
     ch = out.get("channel") or channel_id_for(reg, ASK_CHANNEL)
     print(f"{cid} {ts} {permalink(reg, ch, ts)}")
+    deciders = " ".join(f"<@{p['slack_user']}>" for p in reg.get("humans", []) if p.get("slack_user"))
+    when = pacific(datetime.fromisoformat(body["deadline"]))
+    rec = next((o["label"] for o in body["options"] if o.get("recommended")), "")
+    ping = (f"{deciders} a decision for you: {body['question']} I recommend: {rec}. "
+            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when})."))
+    try:                                                             # the card alone notifies nobody; a mention does
+        client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
+    except SlackError as e:
+        print(f"the card is up, but the mention didn't post ({e}): mention Daniel on it yourself", file=sys.stderr)
     shape = "the old shape (the route predates the card's fields)" if fell_back else "the card's fields"
     print(f"posted as {shape}; now subscribe_slack_thread(channelId={ch}, threadTs={ts}, expiresInSeconds={EXPIRES_S})", file=sys.stderr)
     if fell_back and body["kind"] == "default":
@@ -1714,7 +1736,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     cmd("handles", "the registry").add_argument("--json", action="store_true")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True, url=True)
-    p.add_argument("--to", nargs="+", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
+    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
                    help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
@@ -1741,7 +1763,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
-    p.add_argument("--to", nargs="+", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
+    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")

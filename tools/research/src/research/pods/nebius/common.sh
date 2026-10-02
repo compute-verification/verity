@@ -33,7 +33,11 @@ nebius_auth() {
   [ -x "$NEBIUS_BIN" ] || die "no nebius CLI (curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | bash)"
   local v
   for v in NEBIUS_SA_ID NEBIUS_SA_PUBLIC_KEY_ID NEBIUS_SA_PRIVATE_KEY; do
-    [ -n "${!v:-}" ] || die "$v is not set (a Cursor secret: Dashboard -> Cloud Agents -> Secrets)"
+    [ -n "${!v:-}" ] && continue
+    case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
+      *",$v,"*) die "$v not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
+      *) die "$v is not set (a Cursor secret: Dashboard -> Cloud Agents -> Secrets)" ;;
+    esac
   done
   NB_DIR=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/nebius-auth.XXXXXX") || die "mktemp failed"
   chmod 700 "$NB_DIR"

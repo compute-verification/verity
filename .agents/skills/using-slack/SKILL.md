@@ -155,6 +155,12 @@ An addressed handle, woken by one, does four things:
 `#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
 directly, **one question per card**; a worker asks its coordinator, which asks for it.
 
+**Ping him, every time** (Daniel, 2:43 PM PDT on 1 Oct). A decision that waits in a note or a lead's thread waits forever.
+`research msg ask-daniel` posts the card and mentions him on it, so Slack notifies him. If the card route fails, post the
+same thing with `research msg send --as <you> --to @daniel --text '...'`, which mentions him too. Either way the post holds
+one question, its options, your recommendation, and a deadline or what happens by default. Nothing else is needed: no
+review, and no second channel.
+
 **Before asking, check the recorded rulings**: "Rulings so far" in `.agents/skills/friction/SKILL.md`, the lines in `AGENTS.md`
 and the skills, and your own state file. If one covers the case, follow it and don't ask.
 

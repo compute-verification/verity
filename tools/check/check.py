@@ -13,8 +13,9 @@
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
 
-First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`) and the repository's wall-clock lint and
-blob cap (`LINTS`). The groups start only once it passes, so a check that one of them fails ends in seconds, not hours.
+First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
+tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
+once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
@@ -34,7 +35,7 @@ Then three independent groups run at once, the cores split between them (`--core
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
-                    run while compiling, dependency .olean digests, pinned statements, a kernel replay; its reports under
+                    run while compiling, dependency .olean digests, the pins' records, a kernel replay; its reports under
                     `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
                     steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
@@ -511,7 +512,7 @@ def agreement_closure(files: list[str]) -> list[str]:
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
-LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py::test_no_tracked_blob_exceeds_limit")
+LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py")
 #: how long a stopped step's processes have after SIGINT before SIGKILL
 STOP_GRACE_S = 60
 #: each step's record, one JSON line appended as the step ends

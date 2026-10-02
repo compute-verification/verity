@@ -22,4 +22,6 @@ import Pous.Accounting.LemmaA
 import Pous.Assumptions
 import Pous.Pinned
 import Pous.P2.Pinned
+import Pous.P2.Cost
+import Pous.P2.Assumptions
 import Pous.Sanity
