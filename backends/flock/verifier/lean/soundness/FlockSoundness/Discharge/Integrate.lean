@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.Integrate.Sites
+import FlockSoundness.Discharge.Integrate.Bridge
 import FlockSoundness.Discharge.Integrate.Headline
 
 /-!
@@ -10,6 +11,9 @@ with every guarantee the merged branches prove discharged and every other one a 
   unsatisfiable one elsewhere), each drawn unit's site at its rank in the draw (`sitesAt`, distinct units at distinct
   sites by `sitesAt_inj`), the one circuit file's parse (`sitesAt_parse`), and e2e-layout's site fact at every
   satisfiable site (`sitesAt_bcSite`);
+* `Bridge`: the statement `Placed.Accepted` reads (`Layout.model`) is the one the executable's refinement plays
+  (`Refine.stmtOf`) for every statement `Stmt.setupH` accepts (`model_eq_stmtOf`), so a drawn table is `stmtOf` of its
+  statement (`tableAt_stmtOf`), where `DecodesAll` is stated;
 * `Headline`: `flock_headline_exec`, the headline at `Placed.keyProg c hU n` with `pp`, `hConst`, `hZero`, `lay` and
   `rs` built, and `hHm` (e2e-hm), `hdec` (e2e-exec) and the assumptions of record taken as hypotheses.
 -/

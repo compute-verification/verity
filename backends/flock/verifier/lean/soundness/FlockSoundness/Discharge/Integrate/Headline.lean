@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Integrate.Sites
+import FlockSoundness.Discharge.Integrate.Bridge
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -63,11 +63,10 @@ Its hypotheses, past the session's inputs:
   the public file has no tables (`hpt`);
 * `hHm` (`HmRowComputes` at keyProg's rows), open: owner e2e-hm, at `saltCol := Discharge.Hm.saltCol`;
 * `hdec` (`DecodesAll`, R11b), open: owner e2e-exec (the framing decoder, `wr` as the server's record, `opn`, `fin`,
-  `capOf`). At a draw whose `DrawSetup` exists, the table is setupH's statement as `Layout.model` reads it
-  (`tableAt_stmt`); e2e-exec's acceptance plays `stmtOf`'s, so `hdec` there needs `Layout.model = stmtOf` (no branch
-  proves it; owner e2e-integrate). At a draw flock-verify accepts without a `DrawSetup` (its link points not `mPts`, a
-  one-level schedule) the table is unsatisfiable and `hdec` fails, so `hdec` also needs the law's draws to set up at
-  `mPts`;
+  `capOf`). At a draw whose `DrawSetup` exists, the table is `stmtOf` of setupH's statement (`tableAt_stmtOf`, by
+  `model_eq_stmtOf`), the statement e2e-exec's acceptance plays. At a draw flock-verify accepts without a `DrawSetup`
+  (its link points not `mPts`, a one-level schedule) the table is unsatisfiable and `hdec` fails, so `hdec` also needs
+  the law's draws to set up at `mPts`;
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
 * numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).
