@@ -176,31 +176,31 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   It is classical only (§9).
 
 **The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
-`ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record and, for comparison, under the other two
-assumptions. $Q_s$ is the expected number of commit strings the drawn units read, at most the $N_s$ leaves under the
-serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$ the prover's SHA-512 evaluations. The
-audits are the lifetime doc's A–D.
+`ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record, under strict-time collision resistance alone
+(proved), and, for comparison, under a random oracle. $Q_s$ is the expected number of commit strings the drawn units
+read, at most the $N_s$ leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$
+the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
 
 | Assumption | Knowledge + link | A | B | C | D |
 |---|---|---|---|---|---|
 | **Expected-time collision resistance** (A2, of record) | $t\cdot Q_s\,(8N_0/e)/2^{256}$ | $t\cdot2^{-218.4}$ | $t\cdot2^{-209.4}$ | $t\cdot2^{-209.4}$ | $t\cdot2^{-206.4}$ |
-| Strict-time collision resistance (comparison) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
+| Strict-time collision resistance alone (`cr/sha-512`, proved) | $t^{2/3}\cdot Q_s\,(12N_0/e)/2^{512/3}$ | $t^{2/3}\cdot2^{-132.5}$ | $t^{2/3}\cdot2^{-123.5}$ | $t^{2/3}\cdot2^{-123.5}$ | $t^{2/3}\cdot2^{-120.5}$ |
 | Random oracle (comparison; tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
 
 The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which the record doubles (below). The
-strict-time row is the earlier analysis, with $N_s$; it keeps $\sqrt{q^2/2^{513}}=q/2^{256.5}$, which holds for a
-budget $q$ fixed in advance.
+strict-time row is proved (`CROnly.linkCR_of_strict`, `CROnly.linkBoundE_at_cube`): the record's link finders, stopped
+at a budget $q$ fixed in advance with $q^3=t\cdot2^{512}$, up to lower-order terms (Strict time, below).
 
 The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
 
 | Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
 |---|---|---|---|---|
 | Expected-time (of record) | −145.4 | −129.4 | −109.4 | −99.4 |
-| Strict-time | −77.8 | −69.8 | −59.8 | −54.8 |
+| Strict-time (proved) | −80.9 | −70.2 | −56.9 | −50.2 |
 | Random oracle | −383 | −351 | −311 | −291 |
 | $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
 
-At $t=2^{80}$ the audits read −138.4, −129.4, −129.4 and −126.4 of record, and −72.2, −69.8, −68.3 and −66.8 under
+At $t=2^{80}$ the audits read −138.4, −129.4, −129.4 and −126.4 of record, and −79.2, −70.2, −70.2 and −67.2 under
 strict time.
 
 - **Expected-time collision resistance, of record.**
@@ -246,15 +246,21 @@ strict time.
   - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
     sets that read its target. The record counts $Q_s$ (Daniel, Sep 27); with $N_s$ it would be $t\cdot2^{-205.1}$ for
     audit B.
-- **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
-  linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
-  $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's
-  protocol (CDGSY24).
+- **Strict time, proved** (`FlockSoundness/CROnly/`). The link finders stopped at a budget $q$ fixed in advance meet
+  `cr/sha-512`'s $q^2/2^{513}$. Truncation and Markov (`expected_of_strict`) read that as A2's form at the per-run cost
+  $2^{256}(t/q+q^2/2^{513})$, and $q^3=t\cdot2^{512}$ balances the two, so $2(1+k)t/2^{256}$ becomes
+  $3(1+k)t^{2/3}/2^{512/3}$: $2^{-70.2}$ at $t=2^{80}$ for audit B, against the record's $2^{-129.4}$. Every e2e
+  theorem of the non-ZK session and the headline are restated under it (`ASSUMPTIONS.md`); none is about `--zk`,
+  whose session model receives `final_c'` before the inner proof, as main's verifier does not until #793. The earlier
+  analysis balanced the knowledge term's $N_0/(eK)$ against the finder's cost instead, which left a square root (a
+  first estimate of $2^{-65.3}$ at $t=2^{80}$, audit B). Improving substantially on the strict-time loss would improve
+  the analysis of Schnorr's protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
   openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
   global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
 - **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
-  proved under strict-time collision resistance. A2 enters only the value layer.
+  proved under strict-time collision resistance. A2 enters only the value layer, and `CROnly` replaces it there by
+  strict time at the price above.
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
 
