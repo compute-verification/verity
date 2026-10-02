@@ -102,22 +102,26 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
-    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none) : V Stmt :=
-  if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program
+    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
+    (publicInputs : Option ByteArray := none) : V Stmt :=
+  if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
+  else if publicInputs.isSome then
+    throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   else if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
 verifier's own `K` and work table, which a work draw's law is held to, `stratified` its own `K` for a stratified draw,
-and `closure` its closure map. -/
+`closure` its closure map, and `publicInputs` its own recomputation of the public input words. -/
 def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
     (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none)
-    (closure : Option (Std.HashMap Nat (Array Nat)) := none) : V (SessionSpec × Array Stmt) :=
-  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
+    (closure : Option (Std.HashMap Nat (Array Nat)) := none) (publicInputs : Option ByteArray := none) :
+    V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure publicInputs
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
-    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
+    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program publicInputs
     return (st.spec, #[st])
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
@@ -126,6 +130,14 @@ def programInput (args : List String) : IO (Except String (Option ByteArray)) :=
   let some f := argOf args "--program" | return .ok none
   match argOf args "--archive" with
   | none => try return .ok (some (← IO.FS.readBinFile f)) catch e => return .error s!"program: {e}"
+  | some dir => return (← archiveGet dir f).map some
+
+/-- `--public-inputs F`: the verifier's own recomputation of a statement's public input words (`HmIn.checkOwn`'s file), a
+path, or with `--archive` its SHA-512. -/
+def publicInputsInput (args : List String) : IO (Except String (Option ByteArray)) := do
+  let some f := argOf args "--public-inputs" | return .ok none
+  match argOf args "--archive" with
+  | none => try return .ok (some (← IO.FS.readBinFile f)) catch e => return .error s!"public inputs: {e}"
   | some dir => return (← archiveGet dir f).map some
 
 /-- `--partition F`: the verifier's own copy of the `verity/partition/v1` object the circuit binds (a path, or with `--archive`
@@ -223,11 +235,12 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
-`--stratified K`, `--program` and `--partition`, and a closure draw its own `--closure F`. Each DIR holds `session.json`
+`--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, and a circuit with public input ports
+its own `--public-inputs F` (§16.10). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--coins seed|os] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -256,6 +269,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
+  let publicInputs ← match ← publicInputsInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -265,7 +281,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
   let setupOf := fun (draw : Option Lean.Json) =>
-    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure with
+    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure publicInputs with
     | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -319,7 +335,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
@@ -333,7 +349,10 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  match buildStmt tags circuitB pubB compB coins tables none partition program with
+  let publicInputs ← match ← publicInputsInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  match buildStmt tags circuitB pubB compB coins tables none partition program publicInputs with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
@@ -364,10 +383,11 @@ def regionWordsCmd (args : List String) : IO UInt32 := do
   let res : V Nat := do
     let hidden := tags.hiddenOutputs
     let c ← if hidden then HmOut.parse tags circuitB tables else HmRow.parse tags circuitB tables
-    let pub ← if hidden then HmOut.loadPublic tags c pubB else HmRow.loadPublic tags c pubB
+    let pi ← if hidden then HmIn.parse c else pure {}
+    let pub ← if hidden then HmIn.loadPublic tags c pi pubB else HmRow.loadPublic tags c pubB
     let pin ← HmRow.pin c
-    let (da, db) := if hidden then HmOut.delta c pin else HmRow.delta c pin
-    let regions ← if hidden then HmOut.regions c pub else HmRow.regions c pub
+    let (da, db) := if hidden then HmIn.delta c pi pin else HmRow.delta c pin
+    let regions ← if hidden then do pure ((← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)) else HmRow.regions c pub
     HmRow.checkRegionWords c (da ++ extra.toArray) (db ++ extra.toArray) regions
     return (HmRow.sharedColumns regions).size
   let line := match res with
