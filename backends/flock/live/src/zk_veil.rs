@@ -1046,30 +1046,62 @@ pub fn eq_word(p: &[F128], x: usize) -> F128 {
 /// `GF(2^128)^k`, independently for each `v`, exactly when the vectors `(eq(p_1, x), ..., eq(p_k, x))` span `GF(2)^{128k}`.
 /// Returns the GF(2)-rank and whether it is full.
 pub fn mask_rank_ok(points: &[Vec<F128>], mask_words: &[usize]) -> (usize, bool) {
-    let k = points.len();
-    let limbs = 2 * k;
-    let mut rows: Vec<Vec<u64>> = mask_words.iter().map(|&x| {
-        points.iter().flat_map(|p| {
-            let e = eq_word(p, x);
+    let (rank, ok, ..) = rank_scan(points, mask_words, &[]);
+    (rank, ok)
+}
+
+/// A table's rank check across a session's reps: the claim points so far, and the positions (in the mask words) of the rows
+/// that spanned them. A later rep's check, over more points, takes those rows first: rows independent over the earlier points'
+/// columns stay independent over more columns.
+#[derive(Default)]
+pub struct MaskRank {
+    pub points: Vec<Vec<F128>>,
+    basis: Vec<usize>,
+}
+
+impl MaskRank {
+    /// Adds the claim points `new` and checks the rank over every point so far: [`mask_rank_ok`]'s rank and verdict, and the
+    /// rows it built.
+    pub fn add(&mut self, new: impl IntoIterator<Item = Vec<F128>>, mask_words: &[usize]) -> (usize, bool, usize) {
+        self.points.extend(new);
+        let (rank, ok, basis, built) = rank_scan(&self.points, mask_words, &self.basis);
+        self.basis = basis;
+        (rank, ok, built)
+    }
+}
+
+/// [`mask_rank_ok`]'s rows built one mask word at a time into an echelon basis (each basis row keyed by its lowest set bit),
+/// the words at positions `first` first and then the rest in order, until the rank is `128 k`: the column count, which no rank
+/// exceeds, so the rank and the verdict are a full elimination's. Returns the rank, whether it is full, the positions of the
+/// rows that entered the basis, and how many rows were built.
+fn rank_scan(points: &[Vec<F128>], mask_words: &[usize], first: &[usize]) -> (usize, bool, Vec<usize>, usize) {
+    let need = 128 * points.len();
+    let mut basis: Vec<Option<Vec<u64>>> = vec![None; need];
+    let (mut picked, mut built) = (Vec::with_capacity(need), 0);
+    let mut taken = vec![false; mask_words.len()];
+    first.iter().for_each(|&i| taken[i] = true);
+    for i in first.iter().copied().chain((0..mask_words.len()).filter(|&i| !taken[i])) {
+        if picked.len() == need {
+            break;
+        }
+        built += 1;
+        let mut row: Vec<u64> = points.iter().flat_map(|p| {
+            let e = eq_word(p, mask_words[i]);
             [e.lo, e.hi]
-        }).collect()
-    }).collect();
-    let mut rank = 0;
-    for col in 0..64 * limbs {
-        let (w, b) = (col / 64, col % 64);
-        let Some(piv) = (rank..rows.len()).find(|&r| (rows[r][w] >> b) & 1 == 1) else { continue };
-        rows.swap(rank, piv);
-        let pr = rows[rank].clone();
-        for (r, row) in rows.iter_mut().enumerate() {
-            if r != rank && (row[w] >> b) & 1 == 1 {
-                for (x, y) in row.iter_mut().zip(&pr) {
-                    *x ^= y;
+        }).collect();
+        while let Some(w) = row.iter().position(|&v| v != 0) {
+            let bit = 64 * w + row[w].trailing_zeros() as usize;
+            match &basis[bit] {
+                Some(b) => row[w..].iter_mut().zip(&b[w..]).for_each(|(x, y)| *x ^= y),
+                None => {
+                    basis[bit] = Some(row);
+                    picked.push(i);
+                    break;
                 }
             }
         }
-        rank += 1;
     }
-    (rank, rank == 64 * limbs)
+    (picked.len(), picked.len() == need, picked, built)
 }
 
 /// The constraints the honest pads fail (none for an honest prover; a dishonest prover's proof carries on to the verifier).
@@ -1377,5 +1409,71 @@ mod tests {
         assert!(ok, "rank {rank}");
         let (_, ok1) = mask_rank_ok(&pts, &words[..200]);
         assert!(!ok1, "200 words cannot span 256 dimensions");
+    }
+
+    /// Gaussian elimination over every mask word's row (the rank check before it stopped at full rank).
+    fn rank_by_elimination(points: &[Vec<F128>], mask_words: &[usize]) -> usize {
+        let mut rows: Vec<Vec<u64>> = mask_words.iter().map(|&x| points.iter().flat_map(|p| {
+            let e = eq_word(p, x);
+            [e.lo, e.hi]
+        }).collect()).collect();
+        let mut rank = 0;
+        for col in 0..128 * points.len() {
+            let (w, b) = (col / 64, col % 64);
+            let Some(piv) = (rank..rows.len()).find(|&r| (rows[r][w] >> b) & 1 == 1) else { continue };
+            rows.swap(rank, piv);
+            let pr = rows[rank].clone();
+            for (r, row) in rows.iter_mut().enumerate() {
+                if r != rank && (row[w] >> b) & 1 == 1 {
+                    row.iter_mut().zip(&pr).for_each(|(x, y)| *x ^= y);
+                }
+            }
+            rank += 1;
+        }
+        rank
+    }
+
+    #[test]
+    fn rank_scan_is_the_full_elimination() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([9; 32]));
+        let words: Vec<usize> = (0..8).flat_map(|b| (0..128).map(move |j| b * (1 << 15) + 12288 + j)).collect();
+        let pt = |rng: &mut ProverRng, i: u64| rng.f128s(1, 200 + i, 18);
+        let (p0, p1, p2, p3) = (pt(&mut rng, 0), pt(&mut rng, 1), pt(&mut rng, 2), pt(&mut rng, 3));
+        let cases: Vec<(Vec<Vec<F128>>, &[usize])> = vec![
+            (vec![p0.clone(), p1.clone()], &words[..]),
+            (vec![p0.clone(), p1.clone(), p2.clone(), p3.clone()], &words[..]),
+            (vec![p0.clone(), p1.clone(), p2.clone(), p3.clone()], &words[..520]),
+            (vec![p0.clone(), p1.clone()], &words[..200]),
+            (vec![p0.clone(), p0.clone()], &words[..]),
+            (vec![p0.clone(), vec![F128::ZERO; 18]], &words[..]),
+            (vec![vec![F128::ONE; 18], p1.clone()], &words[..300]),
+            (vec![], &words[..]),
+        ];
+        for (k, (pts, ws)) in cases.iter().enumerate() {
+            let want = rank_by_elimination(pts, ws);
+            let (rank, ok, picked, built) = rank_scan(pts, ws, &[]);
+            assert_eq!((rank, ok), (want, want == 128 * pts.len()), "case {k}");
+            assert_eq!(picked.len(), rank, "case {k}");
+            assert!(ok || built == ws.len(), "case {k}: a short rank reads every row");
+        }
+        let (_, ok, _, built) = rank_scan(&cases[1].0, &words, &[]);
+        assert!(ok && built < 600, "full rank over 4 points stops near 512 rows, not at {built} of {}", words.len());
+    }
+
+    #[test]
+    fn a_later_rep_keeps_the_basis() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([10; 32]));
+        let words: Vec<usize> = (0..8).flat_map(|b| (0..128).map(move |j| b * (1 << 15) + 12288 + j)).collect();
+        let pts: Vec<Vec<F128>> = (0..4).map(|i| rng.f128s(1, 300 + i, 18)).collect();
+        let mut mr = MaskRank::default();
+        let (r0, ok0, b0) = mr.add(pts[..2].to_vec(), &words);
+        assert_eq!((r0, ok0), mask_rank_ok(&pts[..2], &words));
+        let (r1, ok1, b1) = mr.add(pts[2..].to_vec(), &words);
+        assert_eq!((r1, ok1), mask_rank_ok(&pts, &words));
+        assert!(ok0 && ok1 && b0 < 300 && b1 < 600, "rows built: {b0}, then {b1}");
+        assert_eq!(mr.points, pts);
+        // a dependent pair added later: the check over every point so far falls short, as a full elimination's does
+        let (r2, ok2, _) = mr.add(vec![pts[0].clone()], &words);
+        assert_eq!((r2, ok2), (rank_by_elimination(&mr.points, &words), false));
     }
 }
