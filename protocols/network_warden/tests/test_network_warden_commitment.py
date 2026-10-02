@@ -14,7 +14,8 @@ from test_network_warden_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready
 
 
 def test_elided_digest_is_injective_on_left_packed_grids():
-    """Every left-packed grid on T = 2, r = 2 over a 2-frame alphabet has its own digest (as `fill_injective`)."""
+    """Every left-packed grid on T = 2, r = 2 over a 2-frame alphabet has its own digest (as
+    `SecurityProofs.FillInjective`)."""
     params = GridParams(buckets=2, allocation=2, frame_bytes=1)
     seen = {}
     for counts in itertools.product(range(3), repeat=2):
