@@ -27,6 +27,7 @@ import FlockSoundness.Discharge.Exec.FramesLigerito
 import FlockSoundness.Discharge.Exec.FramesRep
 import FlockSoundness.Discharge.Exec.Rounds
 import FlockSoundness.Discharge.Exec.Verdict
+import FlockSoundness.Discharge.Exec.Shape
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -75,5 +76,8 @@ import FlockSoundness.Discharge.Exec.Verdict
   bytes of chunk `k` of the rep's frames (`RepRounds`, `accepts_rep_rounds`);
 * `Verdict`: the openings and salts the proof files decode to (`opnOf`), and the verdict part of `Decodes`: at
   flock-verify's acceptance, each table's salted verdict at `capOfRoot root_B[j]` and `opnOf` accepts on the reps' runs
-  (`table_verdict_hm96`, `accepts_verdict_hm96`).
+  (`table_verdict_hm96`, `accepts_verdict_hm96`);
+* `Shape`: where a rep's coins fall among its messages is the game's: every run of a rep follows a static spine read
+  off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the
+  same messages and coins are runs on the same tape (`repC_tape`).
 -/
