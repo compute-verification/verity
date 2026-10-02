@@ -45,6 +45,21 @@ def addRoundJ {J : ℕ} (rs : Fin J → Fin 2 → List Round) (j : Fin J) (r : F
     Fin J → Fin 2 → List Round :=
   upd rs j r (rs j r ++ [rd])
 
+theorem upd_self {ζ : Sort*} {J : ℕ} (f : Fin J → Fin 2 → ζ) (j : Fin J) (r : Fin 2) (z : ζ) : upd f j r z j r = z :=
+  ite_eq_left ⟨rfl, rfl⟩
+
+theorem upd_ne {ζ : Sort*} {J : ℕ} (f : Fin J → Fin 2 → ζ) {j j' : Fin J} {r r' : Fin 2} (z : ζ)
+    (h : ¬ (j' = j ∧ r' = r)) : upd f j r z j' r' = f j' r' :=
+  ite_eq_right h
+
+theorem addRoundJ_self {J : ℕ} (rs : Fin J → Fin 2 → List Round) (j : Fin J) (r : Fin 2) (rd : Round) :
+    addRoundJ rs j r rd j r = rs j r ++ [rd] :=
+  upd_self _ _ _ _
+
+theorem addRoundJ_ne {J : ℕ} (rs : Fin J → Fin 2 → List Round) {j j' : Fin J} {r r' : Fin 2} (rd : Round)
+    (h : ¬ (j' = j ∧ r' = r)) : addRoundJ rs j r rd j' r' = rs j' r' :=
+  upd_ne _ _ h
+
 /-- **The coin server's rounds over `2J` streams** (PROTOCOL.md §7.1): the prover submits a round on any table's either
 rep, or stops, at most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed and appends
 the round to that stream. -/
@@ -124,6 +139,26 @@ def midJ (rs : Fin J → Fin 2 → List Round) (j : Fin J) (r : Fin 2) (o : Live
     (tapeFrom (dec j) (one j) ((rs j r).length + 1) ((o.reps j r).drop ((rs j r).length + 1)) ++
       (fin j r o.proofs).map .inl)
 
+theorem restJ_eq_mid (rs : Fin J → Fin 2 → List Round) (j : Fin J) (r : Fin 2) (b : ByteArray) (rd : Round)
+    (hb : rd.bytes = some b) (l : List Round) (o : LiveOutJ J mPts) (ho : o.reps j r = rs j r ++ rd :: l) :
+    restJ dec one fin rs j r o = (dec j (rs j r).length b).map .inl ++ midJ dec one fin rs j r o := by
+  simp only [restJ, midJ, ho, List.drop_left', List.getD_eq_getElem?_getD, List.getElem?_append_right le_rfl,
+    Nat.sub_self, List.getElem?_cons_zero, Option.getD_some, tapeFrom, hb, List.append_assoc, List.cons_append]
+  rw [show (rs j r ++ rd :: l).drop ((rs j r).length + 1) = l by rw [List.drop_append]; simp]
+
+theorem midJ_eq_rest (rs : Fin J → Fin 2 → List Round) (j : Fin J) (r : Fin 2) (rd : Round) (l : List Round)
+    (o : LiveOutJ J mPts) (ho : o.reps j r = rs j r ++ rd :: l) :
+    midJ dec one fin rs j r o =
+      .inr (coinMsg (one j (rs j r).length) rd) :: restJ dec one fin (addRoundJ rs j r rd) j r o := by
+  simp only [midJ, restJ, addRoundJ_self, List.length_append, List.length_singleton, ho,
+    List.getD_eq_getElem?_getD, List.getElem?_append_right le_rfl, Nat.sub_self, List.getElem?_cons_zero,
+    Option.getD_some]
+
+theorem restJ_other (rs : Fin J → Fin 2 → List Round) {j j' : Fin J} {r r' : Fin 2} (h : ¬ (j' = j ∧ r' = r))
+    (rd : Round) (o : LiveOutJ J mPts) :
+    restJ dec one fin (addRoundJ rs j r rd) j' r' o = restJ dec one fin rs j' r' o := by
+  simp only [restJ, addRoundJ_ne rs rd h]
+
 end Tapes
 
 /-! ## Following decoded messages -/
@@ -141,11 +176,29 @@ noncomputable def follow : Game α → List Msg → Option (Game α)
     | _ => none
 
 theorem follow_plays : ∀ (g : Game α) (ms : List Msg) {t : List Step} {a : α},
-    PlaysT g (ms.map .inl ++ t) a → ∃ g', follow g ms = some g' ∧ PlaysT g' t a := by
-  sorry
+    PlaysT g (ms.map .inl ++ t) a → ∃ g', follow g ms = some g' ∧ PlaysT g' t a
+  | g, [], t, a, h => ⟨g, by simp [follow], by simpa using h⟩
+  | .ret _, _ :: _, _, _, h => absurd (PlaysT.ret_inv h).1 (by simp)
+  | .send M k, ⟨M', m'⟩ :: ms, t, a, h => by
+      obtain ⟨m, hm, h'⟩ := PlaysT.send_inv (by simpa using h)
+      simp only [Sum.inl.injEq] at hm
+      cases hm
+      obtain ⟨g', h1, h2⟩ := follow_plays (k m) ms h'
+      exact ⟨g', by simp [follow, h1], h2⟩
+  | @Game.coin _ _ _ _ _, _ :: _, _, _, h => by
+      obtain ⟨x, hx, -⟩ := PlaysT.coin_inv (by simpa using h)
+      simp at hx
 
-theorem follow_allInh : ∀ {g : Game α} {ms : List Msg} {g' : Game α}, AllInh g → follow g ms = some g' → AllInh g' := by
-  sorry
+theorem follow_allInh : ∀ {g : Game α} {ms : List Msg} {g' : Game α}, AllInh g → follow g ms = some g' → AllInh g'
+  | _, [], _, hg, h => by simp only [follow, Option.some.injEq] at h; exact h ▸ hg
+  | .send M k, ⟨M', m'⟩ :: ms, _, hg, h => by
+      by_cases hM : M' = M
+      · subst hM
+        simp only [follow, dite_true, cast_eq] at h
+        exact follow_allInh (hg.send_k _) h
+      · simp [follow, hM] at h
+  | .ret _, _ :: _, _, _, h => by simp [follow] at h
+  | @Game.coin _ _ _ _ _, _ :: _, _, _, h => by simp [follow] at h
 
 open Classical in
 /-- The messages `ms` from `g`, as a path of the model's messages. -/
@@ -202,9 +255,15 @@ theorem InvJ.mono {caps : Fin J → Cp} {L L' : Game (LiveOutJ J mPts)} {gs : Fi
 
 variable (out)
 
+theorem allInh_batch {A : Type} : ∀ {l : List (Game A)}, (∀ g ∈ l, AllInh g) → AllInh (batch l)
+  | [], _ => .ret _
+  | g :: gs, h => (AllInh.interleave (h g (by simp)) (allInh_batch fun g' hg' => h g' (by simp [hg']))).map _
+
 theorem allInh_posOf (caps : Fin J → Cp) {gs : Fin J → Fin 2 → Game P} (h : ∀ j r, AllInh (gs j r)) :
-    AllInh (posOf out caps gs) := by
-  sorry
+    AllInh (posOf out caps gs) :=
+  allInh_batch fun g hg => by
+    obtain ⟨j, rfl⟩ := List.mem_ofFn.1 hg
+    exact AllInh.bind (fun _ => .send inferInstance fun _ => .ret _) (AllInh.interleave (h j 0) (h j 1))
 
 theorem allInh_upd {gs : Fin J → Fin 2 → Game P} (h : ∀ j r, AllInh (gs j r)) (j : Fin J) (r : Fin 2) {g : Game P}
     (hg : AllInh g) : ∀ j' r', AllInh (upd gs j r g j' r') := by
@@ -223,21 +282,31 @@ theorem posOf_upd_self (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (
   · rw [h.1, h.2]
   · rfl
 
-theorem posOf_upd_upd (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (j : Fin J) (r : Fin 2) (g g' : Game P) :
-    upd (upd gs j r g) j r g' = upd gs j r g' := by
-  funext j' r'
-  unfold upd
-  split_ifs <;> rfl
-
 theorem posOf_upd₀ (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (j : Fin J) (g : Game P) :
     batch (List.ofFn (Function.update (tabG out caps gs) j ((interleave g (gs j 1)).bind (KgJ out j (caps j))))) =
       posOf out caps (upd gs j 0 g) := by
-  sorry
+  unfold posOf
+  congr 2
+  funext j'
+  by_cases h : j' = j
+  · subst h
+    rw [Function.update_self]
+    simp [tabG, upd]
+  · rw [Function.update_of_ne h]
+    simp [tabG, upd, h]
 
 theorem posOf_upd₁ (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (j : Fin J) (g : Game P) :
     batch (List.ofFn (Function.update (tabG out caps gs) j ((interleave (gs j 0) g).bind (KgJ out j (caps j))))) =
       posOf out caps (upd gs j 1 g) := by
-  sorry
+  unfold posOf
+  congr 2
+  funext j'
+  by_cases h : j' = j
+  · subst h
+    rw [Function.update_self]
+    simp [tabG, upd]
+  · rw [Function.update_of_ne h]
+    simp [tabG, upd, h]
 
 /-- **Rep `r` of table `j` is a context of the session.** -/
 def ctxAt (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (j : Fin J) :
@@ -269,22 +338,58 @@ noncomputable def stepsEnd (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game 
 
 variable {out}
 
+/-- A live run's streams extend the rounds they had. -/
+theorem liveRoundsJ_out : ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Round) {rs' : Fin J → Fin 2 → List Round},
+    Out (liveRoundsJ dg J n rs) rs' → ∀ j r, ∃ l, rs' j r = rs j r ++ l
+  | 0, _, _, .ret _ => fun _ _ => ⟨[], by simp⟩
+  | _ + 1, _, _, .send none (.ret _) => fun _ _ => ⟨[], by simp⟩
+  | n + 1, rs, _, .send (some s) (.coin c h) => fun j r => by
+      obtain ⟨l, hl⟩ := liveRoundsJ_out n _ h j r
+      rw [hl]
+      by_cases hjr : j = s.tab ∧ r = s.rep
+      · obtain ⟨rfl, rfl⟩ := hjr
+        rw [addRoundJ_self]
+        exact ⟨roundOf dg s.bytes s.n c :: l, by simp⟩
+      · rw [addRoundJ_ne rs _ hjr]
+        exact ⟨l, rfl⟩
+
 theorem out_liveJ {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {n : ℕ} {rs : Fin J → Fin 2 → List Round}
     {o : LiveOutJ J mPts} (h : Out ((liveRoundsJ dg J n rs).bind (KLJ rootB pts)) o) :
     o.rootB = rootB ∧ o.pts = pts ∧ ∀ j r, ∃ l, o.reps j r = rs j r ++ l := by
-  sorry
+  obtain ⟨rs', hrs, ho⟩ := Out.of_bind h
+  have hl := liveRoundsJ_out dg n rs hrs
+  unfold KLJ at ho
+  cases ho with
+  | send proofs ho => cases ho; exact ⟨rfl, rfl, hl⟩
 
 /-- The live coin node of a round on stream `(j, r)`. -/
 abbrev roundL (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (n : ℕ) (rs : Fin J → Fin 2 → List Round)
     (j : Fin J) (r : Fin 2) (b : ByteArray) (k : ℕ) (c : Fin k → 𝔽) : Game (LiveOutJ J mPts) :=
   (liveRoundsJ dg J n (addRoundJ rs j r (roundOf dg b k c))).bind (KLJ rootB pts)
 
+theorem reps_coin {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {n : ℕ} {rs : Fin J → Fin 2 → List Round}
+    {j : Fin J} {r : Fin 2} {b : ByteArray} {k : ℕ} {o : LiveOutJ J mPts}
+    (ho : Out (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) o) :
+    ∃ c l, o.reps j r = rs j r ++ roundOf dg b k c :: l := by
+  cases ho with
+  | coin c ho =>
+    obtain ⟨-, -, h⟩ := out_liveJ dg ho
+    obtain ⟨l, hl⟩ := h j r
+    exact ⟨c, l, by rw [hl, addRoundJ_self]; simp⟩
+
 theorem dead_follow {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {n : ℕ}
     {rs : Fin J → Fin 2 → List Round} {j : Fin J} {r : Fin 2} {b : ByteArray} {k : ℕ} {gs : Fin J → Fin 2 → Game P}
     (hf : follow (gs j r) (dec j (rs j r).length b) = none)
     (hI : InvJ out ok pL opn caps (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) gs (restJ dec one fin rs)) :
     ∀ o, Out (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) o → ¬ pL o := by
-  sorry
+  intro o ho hp
+  obtain ⟨c, l, hl⟩ := reps_coin dg ho
+  obtain ⟨pend, hpl, -⟩ := hI o ho hp
+  have h := hpl j r
+  rw [restJ_eq_mid dec one fin rs j r b _ rfl l o hl] at h
+  obtain ⟨g', h1, -⟩ := follow_plays _ _ h
+  rw [hf] at h1
+  cases h1
 
 theorem inv_follow {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {n : ℕ}
     {rs : Fin J → Fin 2 → List Round} {j : Fin J} {r : Fin 2} {b : ByteArray} {k : ℕ} {gs : Fin J → Fin 2 → Game P}
@@ -292,10 +397,35 @@ theorem inv_follow {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 
     (hI : InvJ out ok pL opn caps (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) gs (restJ dec one fin rs)) :
     InvJ out ok pL opn caps (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) (upd gs j r g')
       (upd (restJ dec one fin rs) j r (midJ dec one fin rs j r)) := by
-  sorry
+  intro o ho hp
+  obtain ⟨c, l, hl⟩ := reps_coin dg ho
+  obtain ⟨pend, hpl, hok⟩ := hI o ho hp
+  refine ⟨pend, fun j' r' => ?_, hok⟩
+  by_cases hjr : j' = j ∧ r' = r
+  · obtain ⟨rfl, rfl⟩ := hjr
+    rw [upd_self, upd_self]
+    have h := hpl j' r'
+    rw [restJ_eq_mid dec one fin rs j' r' b _ rfl l o hl] at h
+    obtain ⟨g'', h1, h2⟩ := follow_plays _ _ h
+    rw [hf] at h1
+    cases h1
+    exact h2
+  · rw [upd_ne _ _ hjr, upd_ne _ _ hjr]
+    exact hpl j' r'
 
 /-- What a round's coins are to the model: one field element, or the vector of them. -/
 def coinTy (one : Bool) (k : ℕ) : Type := if one = true ∧ k = 1 then 𝔽 else (Fin k → 𝔽)
+
+theorem coinMsg_fst (b : ByteArray) (k : ℕ) (c : Fin k → 𝔽) (one : Bool) :
+    (coinMsg one (roundOf dg b k c)).1 = coinTy one k := by
+  by_cases hs : one = true ∧ k = 1
+  · obtain ⟨rfl, rfl⟩ := hs
+    rw [coinMsg_one]
+    unfold coinTy
+    rw [ite_eq_left ⟨rfl, rfl⟩]
+  · rw [coinMsg_vec dg b k c one hs]
+    unfold coinTy
+    rw [ite_eq_right hs]
 
 theorem dead_mid {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {n : ℕ}
     {rs : Fin J → Fin 2 → List Round} {j : Fin J} {r : Fin 2} {b : ByteArray} {k : ℕ} {gs : Fin J → Fin 2 → Game P}
@@ -305,7 +435,21 @@ theorem dead_mid {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 �
     (hI : InvJ out ok pL opn caps (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) (upd gs j r g')
       (upd (restJ dec one fin rs) j r (midJ dec one fin rs j r))) :
     ∀ o, Out (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) o → ¬ pL o := by
-  sorry
+  intro o ho hp
+  obtain ⟨c, l, hl⟩ := reps_coin dg ho
+  obtain ⟨pend, hpl, -⟩ := hI o ho hp
+  have h := hpl j r
+  rw [upd_self, upd_self, midJ_eq_rest dec one fin rs j r _ l o hl] at h
+  cases g' with
+  | ret _ => exact absurd (PlaysT.ret_inv h).1 (by simp)
+  | send _ _ =>
+    obtain ⟨m, hm, -⟩ := PlaysT.send_inv h
+    simp at hm
+  | coin Cm kk =>
+    obtain ⟨x, hx, -⟩ := PlaysT.coin_inv h
+    refine hg Cm _ _ kk rfl ?_
+    simp only [Sum.inr.injEq] at hx
+    exact (congrArg Sigma.fst hx).symm.trans (coinMsg_fst dg b k c _)
 
 theorem inv_coin {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {n : ℕ}
     {rs : Fin J → Fin 2 → List Round} {j : Fin J} {r : Fin 2} {b : ByteArray} {k : ℕ} {gs : Fin J → Fin 2 → Game P}
@@ -317,7 +461,22 @@ theorem inv_coin {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 �
     (x : Cm) :
     InvJ out ok pL opn caps (roundL dg rootB pts n rs j r b k (e x)) (upd gs j r (kk x))
       (restJ dec one fin (addRoundJ rs j r (roundOf dg b k (e x)))) := by
-  sorry
+  intro o ho hp
+  obtain ⟨pend, hpl, hok⟩ := hI o (.coin (e x) ho) hp
+  obtain ⟨-, -, hl⟩ := out_liveJ dg ho
+  refine ⟨pend, fun j' r' => ?_, hok⟩
+  by_cases hjr : j' = j ∧ r' = r
+  · obtain ⟨rfl, rfl⟩ := hjr
+    obtain ⟨l, hl'⟩ := hl j' r'
+    rw [addRoundJ_self, List.append_assoc, List.singleton_append] at hl'
+    have h := hpl j' r'
+    rw [upd_self, upd_self, midJ_eq_rest dec one fin rs j' r' _ l o hl', coinMsg_e dg b k _ x e he] at h
+    rw [upd_self]
+    exact h.coin_val
+  · have h := hpl j' r'
+    rw [upd_ne _ _ hjr, upd_ne _ _ hjr] at h
+    rw [upd_ne _ _ hjr, restJ_other dec one fin rs hjr]
+    exact h
 
 theorem inv_end {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽}
     {rs : Fin J → Fin 2 → List Round} {gs : Fin J → Fin 2 → Game P}
@@ -325,17 +484,27 @@ theorem inv_end {caps : Fin J → Cp} {rootB : Array ByteArray} {pts : Fin 2 →
     (hp : pL ⟨rootB, pts, rs, proofs⟩) :
     ∃ pend : Fin J → P × P, (∀ j r, PlaysT (gs j r) ((fin j r proofs).map .inl) (sel (pend j) r)) ∧
       ∀ j, ok j (out j (caps j) (pend j) (opn proofs j)) := by
-  sorry
+  obtain ⟨pend, hpl, hok⟩ := hI ⟨rootB, pts, rs, proofs⟩ (.send proofs (.ret _)) hp
+  refine ⟨pend, fun j r => ?_, hok⟩
+  simpa [restJ, tapeFrom] using hpl j r
 
-theorem allOk_ofFn {v : Fin J → OutT} (h : ∀ j, ok j (v j)) : AllOk ok dflt (List.ofFn v) := by
-  sorry
+theorem allOk_ofFn {v : Fin J → OutT} (h : ∀ j, ok j (v j)) : AllOk ok dflt (List.ofFn v) := fun j => by
+  rw [List.getD_eq_getElem?_getD, List.getElem?_ofFn]
+  simpa using h j
 
 theorem inv_init {G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P}
     (hdec : ∀ j, DecodesTable out ok pL opn dec one fin capOf G j) (rootB : Array ByteArray)
     (pts : Fin 2 → Fin mPts → 𝔽) (N : ℕ) :
     InvJ out ok pL opn (capOf rootB) ((liveRoundsJ dg J N fun _ _ => []).bind (KLJ rootB pts)) (fun j => G j pts)
       (restJ dec one fin fun _ _ => []) := by
-  sorry
+  intro o ho hp
+  obtain ⟨hr, hpts, -⟩ := out_liveJ dg ho
+  choose pend hp0 hp1 hok using fun j => hdec j o hp
+  subst hr hpts
+  refine ⟨pend, fun j r => ?_, hok⟩
+  rcases Fin.exists_fin_two.1 ⟨r, rfl⟩ with rfl | rfl
+  · simpa [restJ, repTapeJ, sel] using hp0 j
+  · simpa [restJ, repTapeJ, sel] using hp1 j
 
 variable (out ok pL opn)
 
@@ -390,10 +559,10 @@ noncomputable def coinJ (caps : Fin J → Cp) (rootB : Array ByteArray) (pts : F
           (Classical.choice (allInh_posOf out caps (allInh_upd h j r hg)).strategy)
       if hs : one j (rs j r).length = true ∧ k = 1 then
         if hC : Cm = 𝔽 then go (eOne hC hs.2) (.inl ⟨hs, hC, rfl⟩)
-        else dead (by unfold coinTy; rw [ite_cond_eq_true _ _ (eq_true hs)]; exact hC)
+        else dead (by unfold coinTy; rw [ite_eq_left hs]; exact hC)
       else
         if hC : Cm = (Fin k → 𝔽) then go (Equiv.cast hC) (.inr ⟨hs, hC, rfl⟩)
-        else dead (by unfold coinTy; rw [ite_cond_eq_false _ _ (eq_false hs)]; exact hC)
+        else dead (by unfold coinTy; rw [ite_eq_right hs]; exact hC)
   | .ret _, hg, hI => Sim.dead (prob_eq_zero_of_out (dead_mid dg dec one fin (fun _ _ _ _ hk => by cases hk) hI))
       (Classical.choice (allInh_posOf out caps (allInh_upd h j r hg)).strategy)
   | .send _ _, hg, hI => Sim.dead (prob_eq_zero_of_out (dead_mid dg dec one fin (fun _ _ _ _ hk => by cases hk) hI))
