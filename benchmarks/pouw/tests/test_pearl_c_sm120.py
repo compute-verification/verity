@@ -643,8 +643,8 @@ def A(arm_dir):
 
 def test_arm_accounting_is_the_schemes(A):
     """Work, W_ref and the credit are the scheme's on the arm's record, and G = 4's γ is #449's `bench.gamma` (the H100's
-    formula) at SM120_PRICES and the record's cap, 1/1,000; the unpromoted record credits no promotion adds, so its γ is its
-    own.  The hashed bytes are
+    formula) at SM120_PRICES, the record's cap ρ = 1/1,000 and TT_OUT's γ0 = 1/400 (the Lean's at every cap); the unpromoted
+    record credits no promotion adds, so its γ is its own.  The hashed bytes are
     -h1's: A's rows and B's under their domains, the message digests, the tile leaves and both trees' nodes."""
     from verity_pouw.protocol import Shape as MShape
     from verity_pouw.schemes import pearl_c as C
@@ -657,7 +657,7 @@ def test_arm_accounting_is_the_schemes(A):
     p = C.SM120_PRICES
     B.FADD_PER_MAC, B.PEEL_UNITS = Fraction(p.fadd, C.WINDOW), p.bf16_mac * C.PEEL_K
     B.FORMING_CREDITED, B.FORMING_A_ONLY = p.forming_credited, p.forming_a_only
-    B.GAMMA0 = B.RHO_CAP = Fraction(1, 1000)
+    B.RHO_CAP = Fraction(1, 1000)
     Shape = sys.modules["arm"].Shape
     for cls in ARMS:
         arm = getattr(A, cls)()
@@ -680,6 +680,7 @@ def test_arm_accounting_is_the_schemes(A):
             g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
             if cls == "PearlCSm120":
                 assert g == B.gamma(shape.n, shape.k)
+                assert w.gamma["basis"].startswith("Derived: TT_OUT γ0 = 1/400, ρ = 1/1000 on ")
             assert g["floor"] < g["cap"] < Fraction(1, 100) and g["cap"] < g["cap_chain_only"]
     arm = A.PearlCSm120()
     assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))

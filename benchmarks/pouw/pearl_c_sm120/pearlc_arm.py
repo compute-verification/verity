@@ -107,6 +107,9 @@ POISON = 0xA5
 NEGATIVE = ("the negative control: the call's buffers poisoned (0xA5) as before the transcript's call, then the call with A's "
             "row tree, seed_A, E_A's lines and every hash omitted and without the weight side, so it writes y (and C~ and U "
             "unfused) and nothing the transcript reads; the verifier must reject it")
+#: TT_OUT's γ0, a statement parameter apart from the debit cap: the Lean's γ takes it at 1/400 at every cap
+#: (`gammaFromTTOut`, cheap-binding.md §1)
+GAMMA0 = Fraction(1, 400)
 
 
 def padded(m: int) -> int:
@@ -115,18 +118,19 @@ def padded(m: int) -> int:
 
 def gamma(scheme: C.PearlC, shape) -> dict[str, str]:
     """γ at `shape` from the scheme's W_ref and credit (`bench.gamma`'s four readings on the H100): `cap`, the worst case under
-    the debit cap; `floor`, a zero debit; `*_chain_only`, TT_OUT crediting no forming.  TT_OUT's γ0 and the debit cap ρ
-    are the record's cap (`scheme.cap`, a statement parameter)."""
+    the debit cap; `floor`, a zero debit; `*_chain_only`, TT_OUT crediting no forming.  The debit cap ρ is the record's
+    (`scheme.cap`); TT_OUT's γ0 is `GAMMA0`."""
     s = MShape(shape.m, shape.k, shape.n)
     wref, credit = Fraction(scheme.wref(s)), Fraction(scheme.credit_of(s))
     forming = scheme.prices.forming_credited * s.m * s.k
-    gamma0 = rho = scheme.cap
-    out = {"cap": 1 - (1 - gamma0) * (1 - rho) * credit / wref,
-           "cap_chain_only": 1 - (1 - gamma0) * (credit - forming - rho * credit) / wref,
-           "floor": 1 - (1 - gamma0) * credit / wref,
-           "floor_chain_only": 1 - (1 - gamma0) * (credit - forming) / wref}
+    rho = scheme.cap
+    out = {"cap": 1 - (1 - GAMMA0) * (1 - rho) * credit / wref,
+           "cap_chain_only": 1 - (1 - GAMMA0) * (credit - forming - rho * credit) / wref,
+           "floor": 1 - (1 - GAMMA0) * credit / wref,
+           "floor_chain_only": 1 - (1 - GAMMA0) * (credit - forming) / wref}
     return {**{k: str(v) for k, v in out.items()},
-            "basis": f"Derived: TT_OUT γ0 = ρ = {rho} on {scheme.device.name} at its record's prices, G = {scheme.device.g}"}
+            "basis": f"Derived: TT_OUT γ0 = {GAMMA0}, ρ = {rho} on {scheme.device.name} at its record's prices, "
+                     f"G = {scheme.device.g}"}
 
 
 def expected(t, real: int, hashing: bool, ep: dict, tid: int, a_row: bytes) -> dict[str, bytes]:
