@@ -221,11 +221,4 @@ def HeadlineCard : Prop :=
           (fun S R => [T S R]) tab (rs.binding hHm) k Rw M ρ t' +
         ((∑ s, ks s : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹
 
-/-! ## Stubs -/
-
-theorem execRefines_where : ExecRefinesWhere := by sorry
-theorem decodesWhere_of_on : DecodesWhereOfOn := by sorry
-theorem mPts_at_card : MPtsAtCard := by sorry
-theorem headline_card : HeadlineCard := by sorry
-
 end FlockSoundness.Discharge.DrawWords
