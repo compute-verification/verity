@@ -3156,6 +3156,30 @@
    "assumptions": [],
    "type_hash": "682bff46731e3187f1a01b5cf87efc91922dcf57213856572d347456f97636c8"
   },
+  "FlockSoundness.Discharge.Zero.zeroCols_keyProg": {
+   "signature": [
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg {n : Nat} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {c : Flock.Circuit}",
+    "  (hU : FlockSoundness.Built c.unit) {si : FlockSoundness.Discharge.Placed.Sites plan tab}",
+    "  (hparse :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
+    "      Eq (Flock.HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables) (Except.ok c))",
+    "  (outs :",
+    "    Finset",
+    "      (Fin",
+    "        (FlockSoundness.Discharge.Placed.gates",
+    "          (FlockSoundness.Discharge.Placed.inGates n (FlockSoundness.Discharge.Placed.circuitRows c hU).nIn)",
+    "          (FlockSoundness.Discharge.Placed.circuitRows c hU) n))) :",
+    "  ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs).ZeroCols plan tab",
+    "    (FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg hU hparse outs).derived.place",
+    "    (Finset.instSingleton.singleton",
+    "      (Fin.castLE ⋯",
+    "        (FlockSoundness.Discharge.Placed.zeroGate n (FlockSoundness.Discharge.Placed.circuitRows c hU).nIn)))"
+   ],
+   "assumptions": [],
+   "type_hash": "d302042b41e0bed25399573ad77c04694ab6cba514eafe07ab94a5d2ae2d60f6"
+  },
   "FlockSoundness.Discharge.Zero.zeroCols_progPlaces": {
    "signature": [
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces {n : Nat} {Reg : Type} {mPts : Nat}",
@@ -6705,6 +6729,7 @@
     "FlockSoundness.Discharge.Zero.flatCopyPos_mem_zeros",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Refine.ofCircuit_extra",
@@ -7081,6 +7106,7 @@
     "FlockSoundness.Discharge.Zero.flatCopyPos_mem_zeros",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
@@ -7287,6 +7313,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -7471,6 +7498,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -7595,6 +7623,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -7737,6 +7766,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -8575,6 +8605,7 @@
     "FlockSoundness.Discharge.Placed.keyProg_wire_key",
     "FlockSoundness.Discharge.Zero.srcKey_zero_iff",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces"
    ]
   },
@@ -8601,6 +8632,7 @@
     "FlockSoundness.Discharge.Zero.oneGate_uniform",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
@@ -8615,7 +8647,8 @@
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_keyProg",
-    "FlockSoundness.Discharge.Placed.keyProg_wire_key"
+    "FlockSoundness.Discharge.Placed.keyProg_wire_key",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg"
    ]
   },
   "FlockSoundness.Discharge.Placed.Setup": {
@@ -8659,6 +8692,7 @@
     "FlockSoundness.Discharge.Zero.oneGate_uniform",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
@@ -8709,6 +8743,7 @@
     "FlockSoundness.Discharge.Placed.keyProg_wire_key",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces"
    ]
   },
@@ -8775,6 +8810,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -8864,7 +8900,7 @@
    ]
   },
   "FlockSoundness.ExecFlatCopies": {
-   "digest": "144231b4cb22cb568e6c0365d37410a47d707d7cf1511e4f03159cd26d0c1551",
+   "digest": "f0ad2ac8921f351cd94cfb6f685ce36a4fce191513e5f4bca8f2b1448c566beb",
    "definitions": {
     "FlockSoundness.Flat.RowBit": "dead0c812f85b7147fe63e0da16e65609df6ba1bdfd4287d9dd4d2375d49b56a",
     "FlockSoundness.Flat.cutCol": "ee4c88e5edc7edd0a7de30f88202aca54f4782a5a165581ca6fb5100c290f63f",
@@ -8879,9 +8915,12 @@
     "FlockSoundness.Flat.wireSrc": "10ba242f1e2ab9c0181776c8df5fd07aeed640840dad66eca071bbcccc3c5b1c",
     "FlockSoundness.Flat.wireWidth": "3b5d55214b48bed752f3cdd56acfbd037fab3738496920a733c41a16bfcc543f",
     "FlockSoundness.FlatDelta": "e26610bc110974d04e4ea11ddbe6b29a87f0880c92c91b6d10c1cab1ecdfd3be",
+    "FlockSoundness.flatCopyPos": "79d66393d5de9b608de996069ecb60991042cfa43e64a5c2694ea86406432f73",
     "FlockSoundness.flatSrcAt": "7e35eaedbe9ee8378b3cbdb6584d7db382cdf9bcc297d0052da4b2e809d03e71",
+    "FlockSoundness.flatZeroPos": "0cade5f9dd8ee323a9abc883709fd5e6e27092ecd9a6fb6c1bec045253655cd1",
     "FlockSoundness.portBits": "87a62dace7413f5fb73d60eff42d7f61d9185268a739c2883f3dd551066e3bba",
-    "FlockSoundness.portOf": "b8c65ec2ea12ae713c17294933f906e1fa465ba7337185ce7445b0169ff3b85b"
+    "FlockSoundness.portOf": "b8c65ec2ea12ae713c17294933f906e1fa465ba7337185ce7445b0169ff3b85b",
+    "FlockSoundness.setupH_flatTableClass": "f80866e9876bd79186a50c02f9264739ef8c7e930c6244bf6979c169735c6850"
    },
    "pins": [
     "FlockSoundness.Discharge.Aliased.aliased_of_copies",
@@ -8907,6 +8946,7 @@
     "FlockSoundness.Discharge.Zero.srcKey_zero_iff",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
@@ -8947,6 +8987,7 @@
     "FlockSoundness.Discharge.Zero.flatCopyPos_mem_zeros",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
@@ -8988,6 +9029,7 @@
     "FlockSoundness.Discharge.Zero.flatCopyPos_mem_zeros",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
@@ -9040,6 +9082,7 @@
     "FlockSoundness.Discharge.Zero.flatSrcAt_zero",
     "FlockSoundness.Discharge.Zero.srcKey_zero_iff",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces"
    ]
   },
@@ -9758,6 +9801,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -9876,6 +9920,7 @@
     "FlockSoundness.Discharge.Zero.oneGate_uniform",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -10440,6 +10485,7 @@
     "FlockSoundness.Discharge.Zero.flatCopyPos_mem_zeros",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -11230,6 +11276,7 @@
     "FlockSoundness.Discharge.Zero.UProg.zeroCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Zero.zeroCols_circuitProg",
     "FlockSoundness.Discharge.Zero.zeroCols_keyIdx",
+    "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
