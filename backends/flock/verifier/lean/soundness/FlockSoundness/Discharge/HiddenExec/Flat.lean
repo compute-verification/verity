@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.HiddenExec.Setup
+import FlockSoundness.Discharge.Hidden.Layout
 
 /-!
 # A hidden-output statement's flat twin
@@ -81,14 +81,14 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
 /-- **The flat twin of an untyped hidden statement has the layout the placement reads** (`layout_of`). -/
 theorem flat_layout (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : Layout (flat st) :=
-  have s := Hidden.setupHidden_spec h
-  layout_of (st := flat st) (parse_facts (parse_untyped ht s.parse).1) s.pin rfl rfl s.m s.kLog
+  have s := Hidden.setupHidden_spec' h
+  layout_of (st := flat st) (parse_facts (Hidden.parse_untyped ht s.parse).1) s.pin rfl rfl s.m s.kLog
 
 /-- **The flat twin's unit facts** (`unitFacts_of_parse`). -/
 theorem flat_unitFacts (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     Aliased.UnitFacts tags (flat st) :=
-  unitFacts_of_parse (st := flat st) (parse_untyped ht (Hidden.setupHidden_spec h).parse).1 rfl
+  unitFacts_of_parse (st := flat st) (Hidden.parse_untyped ht (Hidden.setupHidden_spec' h).parse).1 rfl
 
 /-! ## Δ's output pairs are at the rows' `sha512x3` slots -/
 
@@ -142,19 +142,19 @@ theorem deltaEntry_append_out {d : Array (ℕ × ℕ)} {c : Circuit} {r : ℕ}
     List.count_eq_zero.2 fun hm => hr _ hm rfl, Nat.add_zero]
 
 /-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, for `sha512/row/v1` rows, when
-its Δ is `HmRow.delta`'s, then `outPairs` (`Hidden.HiddenDelta`). -/
-theorem unitRowsFlat (hHD : Hidden.HiddenDelta) (ht : tags.typed = false)
+its Δ being `HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
+theorem unitRowsFlat (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false) : UnitRowsFlat st := by
-  have s := Hidden.setupHidden_spec h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  have s := Hidden.setupHidden_spec' h
+  obtain ⟨hp, hcr⟩ := Hidden.parse_untyped ht s.parse
   have L := flat_layout ht h
   have F := flat_unitFacts ht h
   intro s₀ hs₀ b hb r j hr
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
     rw [hr]; exact outPairs_ne_unit L F.parse F.check F.sha hv1 (checkRows_le hcr) hq hs₀ hb
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by rw [s.da, hHD]
-  have hdb : st.db = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by rw [s.db, hHD]
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by rw [s.da, Hidden.hidden_delta']
+  have hdb : st.db = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by rw [s.db, Hidden.hidden_delta']
   refine ⟨?_, ?_⟩
   · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val =
       rangesEntry st (slotEntryA st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).1 r.val j.val

@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.HiddenExec.Copies
+import FlockSoundness.Discharge.HiddenExec.Setup
 
 /-!
 # `ProgPlaces`, `hConst` and `hZero` from `Stmt.setupHidden`'s accept
@@ -7,7 +8,7 @@ import FlockSoundness.Discharge.HiddenExec.Copies
 hidden-output statements:
 
 * `AcceptedH T`: a run of `Stmt.setupHidden` that accepted, with a layout `L` of its statement (`Layout`, which
-  `Hidden.HiddenLayout` gives), whose unit slots' rows are its flat twin's (`UnitRowsFlat`, which `unitRowsFlat` gives),
+  `Hidden.hidden_layout` gives), whose unit slots' rows are its flat twin's (`UnitRowsFlat`, which `unitRowsFlat` gives),
   and whose block R1CS `L.model regs` is `T`. Its VU rows are the unit net's rows stacked `units_per_vu` times, placed at
   every VU (`AcceptedH.placement`); its aliasing comes from Δ's source keys (`AcceptedH.aliased_of_key`, through
   `aliased_of_copiesH`), and a stacked input that reads the zero carries 0 (`AcceptedH.zero_block`).
@@ -78,7 +79,7 @@ theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) 
 
 /-- An accepted statement's circuit is the one its circuit file parses to (`parse_untyped`). -/
 theorem c_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
-  have := (parse_untyped a.ht (Hidden.setupHidden_spec a.h).parse).1
+  have := (Hidden.parse_untyped a.ht (Hidden.setupHidden_spec' a.h).parse).1
   rw [hp] at this
   exact (Except.ok.inj this).symm
 
