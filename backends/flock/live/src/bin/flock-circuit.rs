@@ -3979,6 +3979,30 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
     });
 }
 
+/// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
+/// (`DIR/session.json` and `DIR/<table>.rep<r>.bin`), `Server::from_record` then `finish` over the session's tables (its draw
+/// split into `J`), one `UPSTREAM` line per session: the reference the Lean verifier's agreement check
+/// (`backends/flock/verifier/agree.py`) reads. The record's coin tree is not re-checked (the live server draws the coins).
+fn replay(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) {
+    let a: Vec<String> = std::env::args().collect();
+    let dirs = &a[a.iter().position(|x| x == "--sessions").map_or(a.len(), |i| i + 1)..];
+    for d in dirs {
+        let v = (|| -> Result<Value, String> {
+            let rec: Value = serde_json::from_slice(&std::fs::read(format!("{d}/session.json")).map_err(|e| format!("session files: {e}"))?)
+                .map_err(|e| format!("session files: {e}"))?;
+            let tabs = session_tables(st, inst, rec.get("unit_draw").filter(|x| x.is_object()), count)?;
+            let proofs = tabs.names().into_iter()
+                .flat_map(|t| (0..2).map(move |r| (t.clone(), r)))
+                .map(|(t, r)| { let p = std::fs::read(format!("{d}/{t}.rep{r}.bin")).unwrap_or_default(); ((t, r), p) })
+                .collect::<BTreeMap<_, _>>();
+            let mut s = Server::from_record(config_of(&tabs), Box::new(CircuitVerifier::new(tabs)), &rec, proofs)?;
+            let v = s.finish();
+            Ok(json!({"accepted": v["accepted"], "why": v["why"]}))
+        })().unwrap_or_else(|e| json!({"accepted": false, "why": e}));
+        println!("UPSTREAM\t{}", json!({"session": d, "verdict": v}));
+    }
+}
+
 fn refuse(why: String) -> ! {
     println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
     std::process::exit(2);
@@ -4045,6 +4069,7 @@ fn main() {
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
         "zkgk" => zkgk(&st, &inst),
+        "replay" => replay(&st, &inst, tables),
         "serve" => {
             let sv = serving(&st, &inst, tables);
             serve_loop(move || server_of(&sv, &st, &inst, tables))
@@ -4067,6 +4092,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|replay --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }

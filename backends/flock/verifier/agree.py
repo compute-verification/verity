@@ -1,7 +1,8 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
-        --public F [--registered F] [--tables DIR] [--expect FILE]... [--jobs J] --out DIR --sessions DIR...
+        --public F [--registered F] [--public-inputs F] [--tables DIR] [--zk] [--session-tables J] [--expect FILE]... \
+        [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -10,7 +11,8 @@ is its directory's basename, and `why` is a prefix of the Lean verifier's reason
 `upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
 of the Lean verifier's. A session directory may carry its own
 public file (`pub.bin`, a forgery's false statement), the verifier's own registered reads (`registered.json`, in place of
-`--registered`; null for none; upstream reads none) and its expected verdict (`case.json`, from the vectors patch's
+`--registered`; null for none; upstream reads none), its own public input words (`public-inputs.bin`, in place of
+`--public-inputs`; upstream reads none) and its expected verdict (`case.json`, from the vectors patch's
 `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
@@ -29,12 +31,19 @@ def reads(a, s):
     return a.registered
 
 
+def public_inputs(a, s):
+    """The verifier's own public input words for session `s`: its directory's `public-inputs.bin` when it has one, else the
+    set's `--public-inputs`."""
+    own = Path(s) / "public-inputs.bin"
+    return str(own) if own.exists() else getattr(a, "public_inputs", None)
+
+
 def groups(a):
-    """Sessions by the public file and the registered reads their verifier reads."""
+    """Sessions by the public file, the registered reads and the public input words their verifier reads."""
     g = {}
     for s in a.sessions:
         own = Path(s) / "pub.bin"
-        g.setdefault((str(own) if own.exists() else a.public, reads(a, s)), []).append(s)
+        g.setdefault((str(own) if own.exists() else a.public, reads(a, s), public_inputs(a, s)), []).append(s)
     return g
 
 
@@ -76,9 +85,9 @@ def chunks(xs, k):
     return [xs[i::k] for i in range(k)]
 
 
-def lean_cmd(a, public, registered=None):
-    """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
-    run's archive, by SHA-512."""
+def lean_cmd(a, public, registered=None, inputs=None):
+    """The Lean verifier's command for a public file, the verifier's registered reads and its public input words: every
+    statement object from the run's archive, by SHA-512."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
@@ -92,15 +101,23 @@ def lean_cmd(a, public, registered=None):
         cmd += ["--program", archived(a, a.program)]
     if registered:
         cmd += ["--registered", archived(a, registered)]
+    if inputs:
+        cmd += ["--public-inputs", archived(a, inputs)]
     if a.coins:
         cmd += ["--coins", a.coins]
-    return cmd + ["--session"]
+    return cmd + modes(a) + ["--session"]
+
+
+def modes(a):
+    """`--zk` and `--session-tables J`, which both verifiers read (absent from check.py's preflight namespace)."""
+    tables = getattr(a, "session_tables", None)
+    return (["--zk"] if getattr(a, "zk", False) else []) + (["--session-tables", tables] if tables else [])
 
 
 def upstream_cmd(a, public, extra=()):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
-    return [a.upstream, "replay", *extra, "--instances", public, flag, a.circuit, *tables, "--sessions"]
+    return [a.upstream, "replay", *extra, *modes(a), "--instances", public, flag, a.circuit, *tables, "--sessions"]
 
 
 def verdicts(a, slots=None):
@@ -110,11 +127,12 @@ def verdicts(a, slots=None):
     not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
     tasks = []                                                        # (kind, order, command, sessions)
     order = {}
-    for gi, ((public, registered), sessions) in enumerate(groups(a).items()):
+    for gi, ((public, registered, inputs), sessions) in enumerate(groups(a).items()):
         for si, s in enumerate(sessions):
             order[s] = (gi, si)
-        base = lean_cmd(a, public, registered)
-        for c in chunks(sessions, a.jobs):
+        base = lean_cmd(a, public, registered, inputs)
+        # a keyed coin tree's key is fresh once per verifier run, and a tampered session keeps its original's key
+        for c in [[s] for s in sessions] if a.zk else chunks(sessions, a.jobs):
             tasks.append(("lean", base, c))
         if a.upstream == LIVE:
             continue
@@ -173,8 +191,11 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
     ap.add_argument("--program", default=None, help="the program's descriptor bytes, to derive a template query's units")
     ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v0)")
+    ap.add_argument("--public-inputs", default=None, help="the verifier's own public input words (verity/flock-public-inputs/v1)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
+    ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")
+    ap.add_argument("--session-tables", default=None, help="the tables of every session")
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--out", required=True, type=Path)

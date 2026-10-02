@@ -423,9 +423,9 @@ the commitment protects the prover (§7 of the spec).
     lowercase hex.
   - The spec is `{"block", "rounds_log", "scheme", "streams"}`, the verifier's.
 - **Freshness** (`CoinTree.checkFresh`). `verify` refuses a session whose key an earlier session of the same run used.
-- **Scope.** Only `--zk` sessions carry a coin tree, and no statement this verifier implements is one yet. The checks run
-  once a statement's `Hello` names the scheme (`Stmt.spec`'s `coinTree`). `flock-verify coin-tree-check` runs them alone,
-  on §9's values (`test_lean_coin_tree.py`).
+- **Scope.** Only `--zk` sessions carry a coin tree (§16.14). The checks run once a statement's `Hello` names the scheme
+  (`Stmt.spec`'s `coinTree`). `flock-verify coin-tree-check` runs them alone, on §9's values (`test_lean_coin_tree.py`).
+  The round coins are the record's: the key and root are not opened against them.
 
 ## 8. The proof container
 
@@ -1419,6 +1419,13 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 - **Registered reads** are §16.10's. A registered port is an input row: an output row is its instance's own.
 - **Agreement:** README.
 
+### 16.14 `--zk` sessions (`verify --zk`, `Flock.Zk`)
+
+`--zk`, the verifier's setting, verifies `flock-circuit --zk` sessions (with `--session-tables J` and draws): the masked
+protocol on the keyed coin tree (§7.4), as `backends/flock/live/PROTOCOL.md` and upstream's `zk_veil.rs` define it.
+`Flock.ZkProof`, `Flock.ZkLigerito` and `Flock.Zk` state each check and leave §8–§13's code as it is. The identity's
+`hooks` are upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
@@ -1455,6 +1462,7 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
   requires `msg` on every round when `Hello` says `"rounds": "bytes retained"`, and checks its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root.
+- **D6:** a `--zk` record's `coin_tree` (§7.4, §16.14), which upstream's `from_record` ignores.
 
 At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
 in `redigest.py` and `fuzz.py`).
@@ -1608,6 +1616,8 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   the layout, not the verifier's equations.
 - **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
   bytes. Phase 2 generates both.
+- **`--zk` sessions (§16.14)** are not in `vectors.json`: the pinned upstream build predates `--zk`. `agree.py --zk`
+  compares them with `flock-circuit replay --zk` (`backends/flock/live`), and `zk_mutants.py` tampers with each check.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
@@ -1653,6 +1663,7 @@ Flock.Merkle          §14    verifyPath / verifyBatch
 Flock.Schedule        §15    fast100 : Nat → Option Schedule   (the table as data)
 Flock.Statement.*     §16    PureBlock, IrFrame, Circuit; Legacy (L-CV, L-ACC, L-TAIL, L-SAMPLE)
 Flock.Verify          §3     verify : Config → Record → Proofs → PublicInput → Verdict
+Flock.Zk*             §16.14 verify --zk
 ~~~
 
 The transcript state is threaded explicitly (a state monad over `Except`), never global. Level 3's theorems attach to
