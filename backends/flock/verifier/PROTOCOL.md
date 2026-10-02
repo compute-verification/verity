@@ -412,22 +412,21 @@ public header with it and records it.
 ### 7.4 The keyed coin tree (`coin-tree/hm96-sha512/v2`, `docs/coin-tree-v2.md`)
 
 The verifier's coins are committed at `Hello` in a coin tree whose every hash is prefixed by the prover's fresh 32-byte
-nonce. The server answers with the root and a fresh hm96 key for the session's tree. The key is drawn after the nonce,
-never reused, and never revealed before that answer. `Flock.CoinTree` checks the record; the openings need no check, since
+nonce. The server answers with the root and the session tree's hm96 key, drawn after the nonce, never reused, and never
+revealed before that answer. `Flock.CoinTree` checks the record; the openings need no check, since
 the commitment protects the prover (§7 of the spec).
 - **`Hello`.** `coins` is `{"block", "nonce", "rounds_log", "scheme", "streams"}`. The verifier's own `Hello` (`helloOf`
   with `Coins.tree`) leaves the nonce empty.
-- **R7** (`CoinTree.checkHello`). The received `coins.nonce` must be 64 lowercase hex digits. It is put into the
-  verifier's `Hello`, which is serialized canonically and must equal the received string byte for byte.
+- **R7** (`CoinTree.checkHello`). The received `coins.nonce` must be 64 lowercase hex digits. The verifier's
+  `Hello` with it, serialized canonically, must equal the received string byte for byte.
 - **The record's `coin_tree`** (`CoinTree.checkRecord`).
   - It has exactly `key`, `nonce`, `root` and `spec`.
   - The nonce is `Hello`'s. The key is 256 bytes with bit 2047 zero (bit 7 of byte 255), and the root 64 bytes, both
     lowercase hex.
   - The spec is `{"block", "rounds_log", "scheme", "streams"}`, the verifier's.
 - **Freshness** (`CoinTree.checkFresh`). `verify` refuses a session whose key an earlier session of the same run used.
-- **Scope.** Only `--zk` sessions carry a coin tree, and no statement this verifier implements is one yet. The checks run
-  once a statement's `Hello` names the scheme (`Stmt.spec`'s `coinTree`). `flock-verify coin-tree-check` runs them alone,
-  on §9's values (`test_lean_coin_tree.py`).
+- **Scope.** Only `--zk` sessions (§16.14) carry one; the checks run once `Hello` names the scheme (`Stmt.spec`'s
+  `coinTree`). `flock-verify coin-tree-check` runs them alone, on §9's values (`test_lean_coin_tree.py`).
 
 ## 8. The proof container
 
@@ -1391,7 +1390,7 @@ statements define such a session; any other statement refuses `J > 1`.
     drawn statement of `{"law": "subset", "population": N, "k": k, "units": part j}`, under the identity plus
     `session: {tables: J, table: j, units: "the draw's units (without a draw, the population's) in equal consecutive
     parts; table j proves part j as a subset draw of the population"}`.
-  - Every part comes from the session's draw. Nothing in the record describes a table's units.
+  - Nothing in the record describes a table's units.
 - **The session.**
   - Every table must have the same `m_pts`.
   - Σ = `SHA-512("verity/flock-circuit/sigma-tables" ‖ le64(J) ‖ Σ_0 ‖ … ‖ Σ_{J−1})`, and `root_F = Σ` (S6).
@@ -1403,9 +1402,8 @@ statements define such a session; any other statement refuses `J > 1`.
     `2J` rep streams. S14's roots are in table order, which is lexicographic.
   - Table `t`'s reps are the files `<t>.rep<r>.bin`. Each is verified against its table's statement and domain, and S18
     applies per table.
-- **Upstream's rules the record can't show.** One `Commit` carries every root. Every proof comes after the session's last
-  coin (the barrier). These are the live server's and the prover's rules. The barrier serves zero-knowledge; a verifier
-  accepts without it.
+- **Live rules the record can't show.** One `Commit` carries every root. Every proof comes after the session's last
+  coin (the barrier, which serves zero-knowledge; a verifier accepts without it).
 
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
@@ -1434,12 +1432,18 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 - **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row: an output row is its instance's own.
 - **Agreement:** README.
 
+### 16.14 `--zk` sessions
+
+`verify --zk` (the verifier's setting) checks `flock-circuit --zk` sessions (any `J`, draws, hidden outputs) by the live
+PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
+stays `NON_ZK_PROOF`. **Agreement:** README.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
 
-Upstream's Rust verifier (with `backends/flock/live`'s `Server::from_record` and `ReplayChallenger`) is the reference in a
-cross-validation test, run in CI on every change to the Lean verifier, the statements or the pinned files:
+Upstream's Rust verifier (below, with `backends/flock/live`'s `ReplayChallenger`) is the reference in a cross-validation test,
+run in CI on every change to the Lean verifier, the statements or the pinned files:
 
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
    - every honest session: both accept;
@@ -1449,8 +1453,8 @@ cross-validation test, run in CI on every change to the Lean verifier, the state
 2. **Fuzzing.** Mutations of honest vectors (a byte of a proof, a coin, a round digest, a record field, the public input)
    are generated with a fixed seed per CI run and a rolling seed per nightly run. Both verifiers must return the same
    verdict on each, and no mutation of a proof byte or of a round digest may be accepted by either.
-3. **Coverage.** The corpus covers every statement and layout in §16, `m` from 22 to 35 where a statement reaches it,
-   both coin sources (§7), and every check id of §5.3 and every rejection listed in §8–§14 at least once.
+3. **Coverage.** The corpus covers every statement and layout in §16 but `--zk` (§16.14), `m` from 22 to 35 where a
+   statement reaches it, `os` and `seed` coins (§7), every check id of §5.3 and every rejection in §8–§14 at least once.
 
 A disagreement fails CI and is resolved against the paper and this spec, never by copying upstream's behaviour without a
 spec change. After the gate passes, production runs only the Lean verifier; upstream's stays in CI as a regression oracle.
@@ -1468,6 +1472,7 @@ expectation):
   requires `msg` on every round when `Hello` says `"rounds": "bytes retained"`, and checks its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root.
+- **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
@@ -1616,8 +1621,8 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
 - **Spec self-check:** `transcript_check.py` rebuilds every round of a session from this spec alone (§6, §8, §9–§13,
   including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. It checks the transcript and
   the layout, not the verifier's equations.
-- **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
-  bytes.
+- **Missing:** no stored session uses `seed` coins or `--zk`, and none exercises the legacy L-TAIL path with a forged cut
+  word as bytes.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
@@ -1625,7 +1630,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 
 | id | topic | the paper | the spec (upstream) |
 |---|---|---|---|
-| A1 | zerocheck coins | `r ∈ F^{m−k_s}`, 7 fixed | 6 extra coins `r_skip` squeezed first and never read; kept so the transcript matches. Flipping any of their bits leaves an honest verdict unchanged, and would leave any verdict unchanged |
+| A1 | zerocheck coins | `r ∈ F^{m−k_s}`, 7 fixed | 6 extra coins `r_skip` squeezed first and never read; kept so the transcript matches. Flipping any of their bits leaves any verdict unchanged |
 | A2 | last coin | — | Ligerito's final claim-batching coin: read, but an honest proof satisfies the final equation for every value, so flipping its bits leaves an honest proof accepted (a dishonest proof's check depends on it) |
 | A3 | vanishing on S | the verifier checks `P_ab − P_z` vanishes on S; degree ≤ 126 | imposed by interpolating over S ∪ Λ with S = 0; degree ≤ 127 (Schwartz–Zippel `127/|F|`) |
 | A4 | `v†` | the verifier computes `P_z(λ)` | the prover sends `final_c_eval`; the verifier compares it with its interpolation; not absorbed |
@@ -1639,7 +1644,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 | A12 | proof of work | a small amount of grinding | Fast100 grinds only Ligerito's claim and consistency batching; under live coins every nonce is a message and is never checked (R4); structural zero-nonce checks remain where upstream has them (§8, §12, §13) |
 | A13 | statement binding | absent | label, statement digest and Merkle cap absorbed before the first coin |
 | A14 | extra claims | step 4, an auxiliary protocol | public-region claims at the verifier's link points, opened in the same batch as `ab` and `c`; their points and values are not absorbed (the session order fixes them before any Flock coin) |
-| A15 | `root_F` | — | not checked by the live server when `points = 2`; the spec requires `root_F = Σ` (S6), as the replay tools do |
+| A15 | `root_F` | — | the live server skips it when `points = 2`; the spec requires it (S6, D1), as the replay tools do |
 | A16 | `m > 35` | — | no Fast100 schedule; upstream panics (caught as a rejection); the spec rejects explicitly |
 
 ## 20. Mapping onto Lean

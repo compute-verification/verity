@@ -250,10 +250,11 @@ strict time.
   `cr/sha-512`'s $q^2/2^{513}$. Truncation and Markov (`expected_of_strict`) read that as A2's form at the per-run cost
   $2^{256}(t/q+q^2/2^{513})$, and $q^3=t\cdot2^{512}$ balances the two, so $2(1+k)t/2^{256}$ becomes
   $3(1+k)t^{2/3}/2^{512/3}$: $2^{-70.2}$ at $t=2^{80}$ for audit B, against the record's $2^{-129.4}$. Every e2e
-  theorem and the headline are restated under it (`ASSUMPTIONS.md`). The earlier analysis balanced the knowledge term's
-  $N_0/(eK)$ against the finder's cost instead, which left a square root (a first estimate of $2^{-65.3}$ at
-  $t=2^{80}$, audit B). Improving substantially on the strict-time loss would improve the analysis of Schnorr's
-  protocol (CDGSY24).
+  theorem of the non-ZK session and the headline are restated under it (`ASSUMPTIONS.md`); none is about `--zk`,
+  whose session model receives `final_c'` before the inner proof, as main's verifier does not until #793. The earlier
+  analysis balanced the knowledge term's $N_0/(eK)$ against the finder's cost instead, which left a square root (a
+  first estimate of $2^{-65.3}$ at $t=2^{80}$, audit B). Improving substantially on the strict-time loss would improve
+  the analysis of Schnorr's protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
   openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
   global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.

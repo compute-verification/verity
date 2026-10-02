@@ -14,6 +14,10 @@ byte source.
 
 At the best budget, `q³ = t'·2^512`, the link term's `2t'(1 + k)/2^256` becomes `3(1 + k)·q²/2^512`
 (`linkBoundE_at_cube`).
+
+**Scope.** Every theorem here, in `E2EMore` and in `Registered`, is about the non-ZK session (`batchedSession`), whose
+verifier checks `final_c` in the clear. None is about `--zk`, whose session model (`Discharge/ZkSession`) receives
+`final_c'` before the inner proof, as main's verifier does not until #793.
 -/
 
 namespace FlockSoundness.CROnly

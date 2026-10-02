@@ -1445,7 +1445,8 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
   let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
   let names := tags.tableNames count
-  return ({ tables := names, domain := tags.tableDomain count, sigma, hello := ← helloOf tags sigma mPts coins names, mPts,
-            retainRounds := tags.retainRounds, unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows }, sts)
+  let hello ← helloOf tags sigma mPts coins names
+  return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
 
 end Flock

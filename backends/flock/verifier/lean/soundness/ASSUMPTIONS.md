@@ -139,12 +139,16 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 | `δ_link`, the link term | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
 | `δ_link`, under `cr/sha-512` alone | `SHA512CRStrict` | `CROnly.linkCR_of_strict` (`LinkCRStrict`, `hCRs`: the same finders stopped at `q` evaluations) | `linkBoundE` at per-run cost `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`; at `q³ = t'·2^512` the hash part is `3(1 + k)·t'^{2/3}/2^{512/3}` (`CROnly.linkBoundE_at_cube`) |
 
-**`cr/sha-512` alone** (`FlockSoundness/CROnly/`). Every e2e theorem and the headline is restated with `hCRs` in place of
-`hCR` (`CROnly.flock_e2e_*`, `CROnly.uprog_e2e_*`, `CROnly.prog_e2e_count`, `_drawn`, `CROnly.flock_headline`), so they
-rest on `SHA512CRStrict` and no `SHA512CRExpected`. The price is the link term's: for audit B (`Q_s ≈ 2^24`, `ρ = 1/2`)
-`δ_link` is about `t^{2/3}·2^-123.5` against the record's `t·2^-209.4`, so `2^-70.2` instead of `2^-129.4` at `t = 2^80`.
-`expected_of_strict` (truncation at `q` and Markov) reads the stopped finder's bound as linear in its expected cost, which
-loses `(2(1 + k))^{1/3}` against the best budget for the finder's own cost.
+**`cr/sha-512` alone** (`FlockSoundness/CROnly/`). Every e2e theorem of the non-ZK session and the headline is restated
+with `hCRs` in place of `hCR` (`CROnly.flock_e2e_*`, `CROnly.uprog_e2e_*`, `CROnly.prog_e2e_count`, `_drawn`,
+`CROnly.flock_headline`), so they rest on `SHA512CRStrict` and no `SHA512CRExpected`. The price is the link term's: for
+audit B (`Q_s ≈ 2^24`, `ρ = 1/2`) `δ_link` is about `t^{2/3}·2^-123.5` against the record's `t·2^-209.4`, so `2^-70.2`
+instead of `2^-129.4` at `t = 2^80`. `expected_of_strict` (truncation at `q` and Markov) reads the stopped finder's
+bound as linear in its expected cost, which loses `(2(1 + k))^{1/3}` against the best budget for the finder's own cost.
+**Scope:** these are all theorems about the non-ZK session (`batchedSession`, `Audit/FlockBatched.lean`, whose verifier
+checks `final_c` in the clear). `--zk`'s soundness theorems (`Discharge/ZkSession`: `zk_flock_count`, `_execOS`) are
+about a model that receives `final_c'` before the inner proof, as main's verifier does not until #793. `CROnly` restates
+none of them, and calls nothing of main's `--zk` sound.
 
 The four `flock_e2e_*_hm96` theorems (`FlockSoundness/Binding/E2E.lean`) add the four:
 `miss_L(K) + ksAvgStrict + δ_link + δ_tree` for the count curve, the same without `miss_L(K)` for a drawn unit. `δ_tree`
