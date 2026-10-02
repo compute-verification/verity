@@ -367,6 +367,17 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     ]
 
 
+#: the registered tables the correspondence probes rather than flattens (`vectors.TableProbe`), by the id of the Definition that
+#: reads one; a Definition with a parameter over `checks.Options.input_budget` leaves needs its table here
+TABLE_PROBES: dict[str, Callable[[], Any]] = {}
+
+
+def table_probe(fn: Any) -> Any:
+    """The `vectors.TableProbe` of the registered table ``fn`` reads (`TABLE_PROBES`), or None."""
+    make = TABLE_PROBES.get(fn.id)
+    return None if make is None else make()
+
+
 #: roots the catalog could not build: (label, error); the suite requires none
 ROOT_ERRORS: list[tuple[str, str]] = []
 
@@ -538,5 +549,6 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics", "kind_of",
-           "load_registries", "reachable", "select", "subcircuit", "suite", "templates"]
+__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TABLE_PROBES", "TEMPLATE_PARAMS", "TINY", "boolean_call_families", "call_families",
+           "catalog", "definition", "family", "instance_statics", "kind_of", "load_registries", "reachable", "select", "subcircuit",
+           "suite", "table_probe", "templates"]
