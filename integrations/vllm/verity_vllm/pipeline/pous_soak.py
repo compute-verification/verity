@@ -57,6 +57,7 @@ SIZES_KIB = (64, 144, 384)
 CONFIGS = ("baseline", "tuned")
 CELL_S = 60.0
 SETTLE_S = 2.0
+CHUNK_S = 1800.0            # a chunk closes after the cell that ends this long after it opened: a crash loses at most one
 PASSES = 6
 TWINS_PER_PASS = 7          # timestamping-off twins of random cells in each pass (about 10%): the instrument's own cost
 PING_FRACTION = 0.1         # requests that are pings (op 2: the full payload from the staging buffer, no device work)
@@ -1025,6 +1026,8 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
     rec = np.concatenate(soak.recs) if soak.recs else np.zeros((0, len(REC)), np.int64)
     meta = np.concatenate(soak.rec_meta) if soak.rec_meta else np.zeros((0, 3), np.int64)
     steps = read_steps(soak.job / "steps.bin")
+    if "chunk_start_ns" in extra and len(steps):
+        steps = steps[steps[:, 2] >= extra["chunk_start_ns"] - 5_000_000_000]
     state, reqs, running = join_steps(rec[:, COL["t_send0"]], steps)
     arrays: dict[str, Any] = {"rec": rec, "rec_columns": np.array(REC), "rec_cell": meta[:, 0].astype(np.int16),
                               "rec_pass": meta[:, 1].astype(np.int16), "rec_run": meta[:, 2].astype(np.int32),
@@ -1078,20 +1081,56 @@ def cmd_verify(a) -> int:
     checker = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "check", "--setup", a.setup, "--job", a.job,
                                 "--fd", str(ring.fd), "--cpu", str(a.checker_cpu)], pass_fds=(ring.fd,))
     targets = f"{ready['pid']}:{ready['responder_tid']},{os.getpid()}:{os.getpid()},{checker.pid}:{checker.pid}"
-    sampler = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "sample", "--job", a.job, "--cpu",
-                                str(a.sampler_cpu), "--targets", targets, "--cpus", a.sample_cpus, "--gpu-uuid", a.gpu_uuid])
     soak.checking = lambda: checker.poll() is None
     sched = soak.schedule()
     extra["schedule_seed"] = sched["seed"]
     order = [e for p in sched["passes"] for e in p]
     per_pass = len(sched["passes"][0])
     table = sched["cells"]
-    extra["clock_cost_ns"] = {}
-    for name, clk in (("realtime", 0), ("monotonic", 1)):
-        out = (ctypes.c_int64 * 3)()
-        lib.soak_clock_cost(clk, 1_000_000, out)
-        extra["clock_cost_ns"][name] = {"min": out[0], "p50": out[1], "p999": out[2]}
+
+    def start_sampler() -> subprocess.Popen:
+        return subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.pous_soak", "sample", "--job", a.job, "--cpu",
+                                 str(a.sampler_cpu), "--targets", targets, "--cpus", a.sample_cpus, "--gpu-uuid", a.gpu_uuid])
+
+    def stop_sampler(p: subprocess.Popen) -> None:
+        p.send_signal(signal.SIGTERM)
+        try:
+            p.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            p.kill()
+
+    def open_chunk() -> dict[str, Any]:
+        cost = {}
+        for name, clk in (("realtime", 0), ("monotonic", 1)):
+            out = (ctypes.c_int64 * 3)()
+            lib.soak_clock_cost(clk, 1_000_000, out)
+            cost[name] = {"min": out[0], "p50": out[1], "p999": out[2]}
+        return {"index": len(chunks), "start_ns": time.time_ns(), "start_utc": utc(), "position_start": pos,
+                "checked0": int(ring.ctl[Ring.CHECKED]), "clock_cost_ns": cost}
+
+    def close_chunk(c: dict[str, Any], rc_: int) -> dict[str, Any]:
+        """The chunk so far into ``chunk-<job>-<index>.npz`` (the sampler stopped first, so its samples are the chunk's), and
+        a line of ``chunks.log``; the records start afresh."""
+        while (job / f"chunk-{job.name}-{c['index']:02d}.npz").exists():
+            c["index"] += 1
+        name = f"chunk-{job.name}-{c['index']:02d}.npz"
+        e = {**extra, "chunk_index": c["index"], "chunk_start_utc": c["start_utc"], "chunk_start_ns": c["start_ns"],
+             "clock_cost_ns": c["clock_cost_ns"], "position_start": c["position_start"], "position_end": pos,
+             "checked_blocks": int(ring.ctl[Ring.CHECKED]) - c["checked0"], "wrong": int(ring.ctl[Ring.WRONG]), "rc": rc_,
+             "end_utc": utc()}
+        out = write_chunk(job / name, soak, e)
+        (job / "samples.npz").unlink(missing_ok=True)
+        soak.runs, soak.recs, soak.rec_meta = [], [], []
+        with open(Path(a.state) / "chunks.log", "a") as f:
+            f.write(json.dumps({"chunk": name, "answers": out["answers"], "wrong": out["wrong"],
+                                "checked_blocks": out["checked_blocks"], "runs": len(out["runs"]), "rc": out["rc"],
+                                "summary": out["summary"], "validation": out["validation"], "utc": utc()}) + "\n")
+        return out
+
+    chunks: list[dict[str, Any]] = []
     pos = soak.position()
+    sampler = start_sampler()
+    chunk = open_chunk()
     rc = 0
     try:
         while pos < len(order) and not soak.stopped[0]:
@@ -1099,6 +1138,11 @@ def cmd_verify(a) -> int:
             deadline = int(a.until * 1e9)
             if time.time_ns() + need > deadline:
                 break
+            if soak.runs and time.time_ns() - chunk["start_ns"] >= a.chunk_s * 1e9:
+                stop_sampler(sampler)
+                chunks.append(close_chunk(chunk, 0))
+                sampler = start_sampler()
+                chunk = open_chunk()
             cid, ts = order[pos]
             cell = table[cid]
             try:
@@ -1131,18 +1175,9 @@ def cmd_verify(a) -> int:
             checker.wait(timeout=30)
         except subprocess.TimeoutExpired:
             checker.kill()
-        sampler.send_signal(signal.SIGTERM)
-        try:
-            sampler.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            sampler.kill()
-        extra.update({"checked_blocks": int(ring.ctl[Ring.CHECKED]), "wrong": int(ring.ctl[Ring.WRONG]),
-                      "position_end": pos, "rc": rc if not soak.stopped[0] else 99, "end_utc": utc()})
-        out = write_chunk(job / f"chunk-{job.name}.npz", soak, extra)
-        with open(Path(a.state) / "chunks.log", "a") as f:
-            f.write(json.dumps({"chunk": f"chunk-{job.name}.npz", "answers": out["answers"], "wrong": out["wrong"],
-                                "checked_blocks": out["checked_blocks"], "runs": len(out["runs"]), "rc": out["rc"],
-                                "summary": out["summary"], "validation": out["validation"], "utc": utc()}) + "\n")
+        stop_sampler(sampler)
+        extra["wrong"] = int(ring.ctl[Ring.WRONG])
+        chunks.append(close_chunk(chunk, rc if not soak.stopped[0] else 99))
     if extra["wrong"] or (job / "WRONG.json").exists():
         return 3
     return 99 if soak.stopped[0] else rc
@@ -1202,6 +1237,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--native", required=True)
     v.add_argument("--until", type=float, required=True, help="epoch seconds: no cell starts that would end after it")
     v.add_argument("--cell-s", type=float, default=CELL_S)
+    v.add_argument("--chunk-s", type=float, default=CHUNK_S, help="seconds of cells per chunk")
     v.add_argument("--cpu", type=int, default=93)
     v.add_argument("--checker-cpu", type=int, default=91)
     v.add_argument("--sampler-cpu", type=int, default=90)
