@@ -133,13 +133,14 @@ theorem data_foldl_append (f : ℕ → ByteArray) : ∀ G : ℕ,
         List.flatten_append]
       simp
 
-theorem getD_flatten_uniform {L : List (List UInt8)} (hL : ∀ l ∈ L, l.length = 128) :
-    ∀ (g j : ℕ), g < L.length → j < 128 → L.flatten.getD (g * 128 + j) default = (L.getD g []).getD j default := by
+theorem getD_flatten_uniform {L : List (List UInt8)} :
+    ∀ (g j : ℕ), (∀ i ≤ g, (L.getD i []).length = 128) → g < L.length → j < 128 →
+      L.flatten.getD (g * 128 + j) default = (L.getD g []).getD j default := by
   induction L with
-  | nil => intro g j hg; simp at hg
+  | nil => intro g j _ hg; simp at hg
   | cons l L ih =>
-      intro g j hg hj
-      have hl : l.length = 128 := hL l List.mem_cons_self
+      intro g j hL hg hj
+      have hl : l.length = 128 := hL 0 (Nat.zero_le _)
       rw [List.flatten_cons]
       cases g with
       | zero =>
@@ -149,23 +150,21 @@ theorem getD_flatten_uniform {L : List (List UInt8)} (hL : ∀ l ∈ L, l.length
           rw [List.getD_eq_getElem?_getD, List.getElem?_append_right (by rw [hl]; nlinarith), hl,
             show (g + 1) * 128 + j - 128 = g * 128 + j by ring_nf; omega, ← List.getD_eq_getElem?_getD,
             List.getD_cons_succ]
-          exact ih (fun l' hl' => hL l' (List.mem_cons_of_mem _ hl')) g j (by simp at hg; omega) hj
+          exact ih g j (fun i hi => by simpa using hL (i + 1) (by omega)) (by simp at hg; omega) hj
 
-/-- Byte `g·128 + j` of region "digest p"'s bytes at block `b` is byte `j` of VU `g`'s `b ‖ c`, when every VU's is 128
-bytes. -/
+/-- Byte `g·128 + j` of region "digest p"'s bytes at block `b` is byte `j` of VU `g`'s `b ‖ c`, when every VU's up to
+`g` is 128 bytes. -/
 theorem hmBytes_get {c : Circuit} {pub : Public} {p b g j : ℕ} (hg : g < c.g) (hj : j < 128)
-    (hsz : ∀ g' < c.g, (bcChunk c pub b g' p).size = 128) :
+    (hsz : ∀ g' ≤ g, (bcChunk c pub b g' p).size = 128) :
     (hmBytes c pub p b).get! (g * 128 + j) = (bcChunk c pub b g p).get! j := by
+  have hm : ∀ g' < c.g, ((List.range c.g).map fun g => (bcChunk c pub b g p).data.toList).getD g' [] =
+      (bcChunk c pub b g' p).data.toList := by
+    intro g' hg'
+    rw [List.getD_eq_getElem _ _ (by simpa using hg')]
+    simp
   rw [get!_eq_getD, get!_eq_getD, hmBytes, data_foldl_append,
-    getD_flatten_uniform _ g j (by simpa using hg) hj]
-  · have hm : ((List.range c.g).map fun g => (bcChunk c pub b g p).data.toList).getD g [] =
-        (bcChunk c pub b g p).data.toList := by
-      rw [List.getD_eq_getElem _ _ (by simpa using hg)]
-      simp
-    rw [hm]
-  · intro l hl
-    obtain ⟨g', hg', rfl⟩ := List.mem_map.1 hl
-    rw [Array.length_toList, ByteArray.size_data, hsz g' (List.mem_range.1 hg')]
+    getD_flatten_uniform g j (fun i hi => by
+      rw [hm i (by omega), Array.length_toList, ByteArray.size_data, hsz i hi]) (by simpa using hg) hj, hm g hg]
 
 /-! ### What a satisfying witness holds there -/
 
@@ -176,13 +175,13 @@ def inBlockOr (K x : ℕ) : Fin (2 ^ K) := if h : x < 2 ^ K then ⟨x, h⟩ else
 VU `g` (below `2^⌊log₂ g⌋`, all of them when the block's VU count is a power of two) and input port `p`, the 128 bytes
 at `bcAddr` are `bcChunk`, the public digest of the VU's instance (the pinned dummy past the population). It holds in
 the model's statement at setupH's layout whose regions contain the executable's (`hregs`), once every VU's `b ‖ c` in
-the block is 128 bytes (`hsz`). -/
+the block up to `g` is 128 bytes (`hsz`). -/
 theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions)
     {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
-    (hsz : ∀ g' < st.c.g, (bcChunk st.c st.pub o.val g' p).size = 128) :
+    (hsz : ∀ g' ≤ g, (bcChunk st.c st.pub o.val g' p).size = 128) :
     bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (inBlockOr st.c.kLog (bcAddr st.c g p j.val t.val))) =
       (bcChunk st.c st.pub o.val g p).data.toList := by
@@ -192,7 +191,7 @@ theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
   obtain ⟨hrf, -, -, hnd, -, hlt⟩ := mkRegion_spec hmk
   have hfree : r.free = hmFree st.c := by rw [hrf]
   have hbytes : r.bytes = hmBytes st.c st.pub p := by rw [hrf]
-  refine bytesAt_eq z _ _ (by rw [Array.length_toList, ByteArray.size_data, hsz g hg]) fun j t => ?_
+  refine bytesAt_eq z _ _ (by rw [Array.length_toList, ByteArray.size_data, hsz g le_rfl]) fun j t => ?_
   have hlen : (Refine.regionOf st.c.kLog (st.m - st.c.kLog) r).free.length = 10 + st.c.g.log2 := by
     rw [← List.length_map (f := Fin.val), regionOf_free_map _ _ _ (fun b hb => hlt b (by
       rw [hfree] at hb; exact Array.mem_toList_iff.1 hb)), hfree, hmFree_toList]
@@ -218,7 +217,7 @@ theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
   rw [hbytes, show (g * 1024 + (8 * j.val + t.val)) / 8 = g * 128 + j.val by omega,
     show (g * 1024 + (8 * j.val + t.val)) % 8 = t.val by omega, hmBytes_get hg j.isLt hsz, get!_eq_getD]
   have hjl : j.val < (bcChunk st.c st.pub o.val g p).data.toList.length := by
-    rw [Array.length_toList, ByteArray.size_data, hsz g hg]; exact j.isLt
+    rw [Array.length_toList, ByteArray.size_data, hsz g le_rfl]; exact j.isLt
   rw [List.getD_eq_getElem _ _ hjl]
   rfl
 
