@@ -155,7 +155,7 @@ def timing(a) -> dict:
     timed = [(t, x) for t, x in live if not x.get("warm")]
     zk = (o / "prover-zk").exists()
     env = {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_VERIFY_AHEAD", "FC_VERIFY_SERVERS", "FC_HOST_PREPIN", "BATCH", "N",
-                                          "BATCH_ANDS", "MAX_STATEMENT_BITS", "FLOCK_GEMM_TILE", "FC_VERIFIERS") if os.environ.get(k)}
+                                          "BATCH_ANDS", "MAX_STATEMENT_BITS", "FLOCK_GEMM_TILE", "FC_VERIFIERS", "FC_COINS") if os.environ.get(k)}
     out = {"schema": "vllm-overhead-timing/v0", "shape": rec.get("shape"), "definition": rec.get("definition"), "unit": rec.get("unit"),
            "word_gates": rec.get("word_gates"), "row_units": rec.get("row_units"), "ands": rec.get("ands"), "mode": "zk" if zk else "m0",
            "label": os.environ.get("VO_LABEL") or None, "env": env, "run": os.environ.get("RESEARCH_RUN_ID"), "t": time.time(),
