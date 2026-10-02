@@ -49,6 +49,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
+from verity.ir.program import RUN, input_prim
 from verity_vllm.commit import hiding, scheme
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
@@ -2457,6 +2458,15 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         "VocabParallelEmbedding": ("Embedding_v1",), "LogitsProcessor": ("Gemm_v1",), "Sampler": ("TokenSelect_v1",),
     }
 
+    #: the binding time (`verity.ir.program`) of the Program's `weights` parameter: per run until the weights are registered inputs
+    weights_binding = RUN
+
+    def _weights_inputs(self) -> list[str]:
+        """The input ids the registered weights are leaves of: one per leaf width of the registered tensors' dtypes, at `weights_binding`."""
+        names = (getattr(self, "weights_tree", None) or {}).get("names") or []
+        widths = {int(m[0]) for _n, dt, _s, _b in names if (m := re.search(r"\d+", str(dt)))} or {16}
+        return sorted(input_prim(w, self.weights_binding).id for w in widths)
+
     def _module_class(self, name: str) -> str:
         base = name.split("/")[0]
         if base == "runner.sampler":
@@ -2483,7 +2493,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 mc = self._module_class(m.name)
                 compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdigit() and m.name[3] == "."   # R15 S3: c<piece>.<kernel>/<role>
                 if m.name.endswith("/in") or (compiled_kernel and m.name.endswith("/ids")):
-                    cls, fam = "input_token_ids", ("Input32_v1",)
+                    cls, fam = "input_token_ids", (input_prim(32, RUN).id,)
                 elif "sampled_token_ids" in m.name:
                     cls, fam = "sampled_token_ids", ("TokenSelect_v1",)
                 elif compiled_kernel:
@@ -2504,7 +2514,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             "covers_families": sorted(d["families"]), "acquisitions": ["naturally-materialized", "registered-input"],
                             "evidence": f"forward hooks on {sorted(d['modules'])}; pos_leaf chunk={self.chunk}; per-step bind_root; run root"})
         if self.weights:
-            classes.append({"class": "weights", "how": "registered-input", "covers_families": ["Input16_v1"], "acquisitions": ["registered-input"],
+            classes.append({"class": "weights", "how": "registered-input", "covers_families": self._weights_inputs(), "acquisitions": ["registered-input"],
                             "rule": "register_weights(): per-tensor chunked pos_leaf subtree, fold of subtree roots bound with names/dtypes/shapes (once per process)",
                             "count": None, "bytes": self.weights["bytes"], "tensors": self.weights["tensors"], "evidence": f"root {self.weights['root'][:16]}"})
         # derived-from-bound classes whose SOURCE is a naturally-materialized word this committer binds (norm residual bf16 -> fp32 lift):
