@@ -155,6 +155,12 @@ nodes = ["vy-nebius-1"]
 run = ["systemd:vy-quiet-hold.timer", "systemd:vy-quiet-release.timer"]
 
 [[file]]
+path = "/usr/local/bin/vy-store-evict"
+src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-store-evict.timer", "systemd:vy-store-evict-research.timer"]
+
+[[file]]
 path = "/usr/local/bin/vy-usage"
 src = "tools/research/src/research/pods/nebius/sky/usage_report.py"
 nodes = ["vy-nebius-1"]
@@ -215,6 +221,26 @@ nodes = ["vy-nebius-1"]
 
 [[file]]
 path = "/etc/systemd/system/vy-quiet-release.timer"
+by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict.service"
+by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict.timer"
+by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict-research.service"
+by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict-research.timer"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
 
