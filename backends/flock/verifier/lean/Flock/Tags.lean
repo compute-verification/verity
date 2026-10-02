@@ -55,6 +55,9 @@ structure Tags where
   typed : Bool := false
   /-- #306: a session may prove its units in several tables; `none`: one table per session -/
   manyTables : Option TablesTags := none
+  /-- every output is a hidden row (PROTOCOL.md §16.13, `Flock.HmOut`): the rows are the input rows, then one
+  `hm96-sha512/row/v1` row per output port hashed in the circuit, and the public file has no output word -/
+  hiddenOutputs : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -196,41 +199,64 @@ def circuitEb90718fSelftest : Tags :=
 /-- `verity/flock-circuit` (PR #83 from `e51e2b86`): `eb90718f`'s statement with the e2e bindings: META `program_sha512` and a
 partition (a `verity/partition/v1` digest the verifier checks against its own copy of the partition object), and each
 instance's class in the public header. -/
-def circuit : Tags :=
-  { circuitEb90718f with name := "verity/flock-circuit", bindings := true }
+def circuitE51e2b86 : Tags :=
+  { circuitEb90718f with name := "verity/flock-circuit@e51e2b86", bindings := true }
 
 /-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
-def circuitSelftest : Tags :=
-  { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHm96 true }
+def circuitE51e2b86Selftest : Tags :=
+  { circuitE51e2b86 with name := "verity/flock-circuit@e51e2b86+seed-injection", identity := identityHm96 true }
 
 /-- `verity/flock-circuit` as of PR #83 `967b8d06`: `e51e2b86`'s statement with the identity text of `68ae79f2` (the round
 digest, the statement digest and Σ named SHA-512), and shared-row public files (`967b8d06`). From #306 a session may prove
 its units in several tables. -/
 def circuit967b8d06 : Tags :=
-  { circuit with
+  { circuitE51e2b86 with
     name := "verity/flock-circuit@967b8d06", identity := identityHm96 false true, sharedRows := true,
     manyTables := some { sigmaTag := "verity/flock-circuit/sigma-tables", domainPrefix := "flock-circuit/fast100x2/" } }
 
 def circuit967b8d06Selftest : Tags :=
   { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }
 
-/-- `verity/flock-circuit/types` (item 1e, #225, #273): `verity/flock-circuit`'s statement (with `967b8d06`'s identity text)
-with its unit as circuit types and a layout; the verifier derives the unit's rows (`Flock.Typed`). The identity and the
-statement digest's leading tag name the typed statement, as the prover's do, and it has its own Σ tag and domain (a new
-id gets new tags). -/
-def circuitTypes : Tags :=
+/-- `verity/flock-circuit/types` (item 1e, #225, #273) up to verity `210d32e1`: `verity/flock-circuit`'s statement (with
+`967b8d06`'s identity text) with its unit as circuit types and a layout; the verifier derives the unit's rows
+(`Flock.Typed`). The identity and the statement digest's leading tag name the typed statement, as the prover's do, and it has
+its own Σ tag and domain (a new id gets new tags). -/
+def circuitTypes210d32e1 : Tags :=
   { circuit967b8d06 with
-    name := "verity/flock-circuit/types", statement := "verity/flock-circuit/types", fileFormat := "flock-circuit/types",
+    name := "verity/flock-circuit/types@210d32e1", statement := "verity/flock-circuit/types", fileFormat := "flock-circuit/types",
     sigmaTag := "verity/flock-circuit/types/sigma", domainPrefix := "flock-circuit-types/fast100x2/rep",
     identity := identityHm96 false true "verity/flock-circuit/types", typed := true, manyTables := none }
 
+def circuitTypes210d32e1Selftest : Tags :=
+  { circuitTypes210d32e1 with
+    name := "verity/flock-circuit/types@210d32e1+seed-injection", identity := identityHm96 true true "verity/flock-circuit/types" }
+
+/-- The identity of a statement with hidden outputs: `967b8d06`'s text (or the typed statement's), naming them. -/
+def identityHidden (seedInjection : Bool) (statement : String := "verity/flock-circuit") : Json :=
+  (identityHm96 seedInjection true statement).setObjVal! "outputs"
+    (s "hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file has no output word")
+
+/-- `verity/flock-circuit` (PROTOCOL.md §16.13): `967b8d06`'s statement with every output hidden, an `hm96-sha512/row/v1` row
+hashed in the circuit after the input rows; the public file holds every row's `b ‖ c` and no output word. -/
+def circuit : Tags :=
+  { circuit967b8d06 with name := "verity/flock-circuit", identity := identityHidden false, hiddenOutputs := true }
+
+/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
+def circuitSelftest : Tags :=
+  { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHidden true }
+
+/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13): `210d32e1`'s typed statement with hidden outputs. -/
+def circuitTypes : Tags :=
+  { circuitTypes210d32e1 with
+    name := "verity/flock-circuit/types", identity := identityHidden false "verity/flock-circuit/types", hiddenOutputs := true }
+
 def circuitTypesSelftest : Tags :=
-  { circuitTypes with
-    name := "verity/flock-circuit/types+seed-injection", identity := identityHm96 true true "verity/flock-circuit/types" }
+  { circuitTypes with name := "verity/flock-circuit/types+seed-injection", identity := identityHidden true "verity/flock-circuit/types" }
 
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
-  circuit, circuitSelftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes, circuitTypesSelftest]
+  circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
+  circuitTypes210d32e1Selftest, circuit, circuitSelftest, circuitTypes, circuitTypesSelftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

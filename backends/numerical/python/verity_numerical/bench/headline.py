@@ -298,7 +298,7 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
 
     # a typed circuit cell (verity/flock-circuit/types) is compared with a flat one per instance only, never in one headline
     cells = [(c, views.backend_of(cfg_of[c.configuration]) if c.configuration in cfg_of else None, sub_of(c)) for c in V.admissible
-             if c.configuration != views.FLOCK_CIRCUIT_TYPED_CONFIG.id]
+             if c.configuration not in views.TYPED_CONFIGS]
     out = []
     for w in workloads:
         served = census.HARDWARE[w["serving"]["hardware"]]

@@ -1013,18 +1013,399 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
+/-!
+PROTOCOL.md §16.13: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
+The rows are the input rows (META `input_ports` of them), then one output row per output port: its name, its words
+zero-padded to whole SHA-512 blocks, an `hm96-sha512/row/v1` row hashed in the circuit like an input row. Δ adds each output
+row's message bits, copies of the output bits the circuit computes; the regions are every row's `b ‖ c`, and the public file
+holds nothing else of the outputs. The rows' parse, checks and Δ are `HmRow`'s over every row.
+-/
+namespace HmOut
+
+open HmRow
+
+/-- The input rows: the rows before one output row per output port. -/
+def nIn (c : Circuit) : Nat := c.ports.size - c.outPorts.size
+
+def inWords (c : Circuit) : Nat := (c.ports.extract 0 (nIn c)).foldl (· + ·.words) 0
+
+/-- What makes the rows inputs then outputs: META `input_ports` is the rows before one output row per output port, each
+named after its port with its words zero-padded to whole SHA-512 blocks, every row's name once; a unit's leaves and leaf
+cuts read input rows only. -/
+def checkRows (c : Circuit) : V Unit := do
+  let k ← J.nat c.metaJ "input_ports" "circuit META"
+  let names := (c.ports.map (·.name)).qsort (· < ·)
+  if k + c.outPorts.size != c.ports.size || (List.range (names.size - 1)).any (fun i => names[i]! == names[i + 1]!)
+      || (List.range c.outPorts.size).any (fun j =>
+        let (nm, w) := c.outPorts[j]!
+        (c.ports.getD (k + j) default).name != nm || (c.ports.getD (k + j) default).words != (w + 63) / 64 * 64) then
+    throw "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks), each name once"
+  let w := inWords c
+  if c.leavesIn.any (·.any (· ≥ (w : Int))) || c.leafCuts.any (·.2.2 ≥ w) then
+    throw "a unit's leaf or leaf cut reads an output row: units read the input rows only"
+
+/-- Parse the circuit file as `HmRow.parse` (a typed one as `HmRow.parseTyped`) reads it, its rows every row, and check
+them (`checkRows`). `HmRow.checkTyped` holds a template's instance inputs to every row, so it reads the template with the
+output rows' words after its inputs, and the circuit keeps the template's own block. -/
+def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+  let c ← if !tags.typed then HmRow.parse tags bytes tables else do
+    let (k, r) ← Typed.read tags bytes tables
+    match r with
+    | .inr t =>
+      let c ← HmRow.parse tags bytes tables (tmpl := some { t with ins := t.ins ++ t.outs.map fun (w, b) => ((w + 63) / 64 * 64, b) })
+      pure { c with typed := some (blockOf t), cls := some k }
+    | .inl unit => pure { (← HmRow.parse tags bytes tables (pre := #[("unit", unit)])) with cls := some k }
+  checkRows c
+  return c
+
+/-- Row `p` of the padding instance (u16 LE): zero, or an output row's pinned dummy outputs, zero-padded. -/
+def dummyRow (c : Circuit) (p : Nat) : ByteArray := Id.run do
+  let words := (c.ports.getD p default).words
+  let k := nIn c
+  let at_ := (c.outPorts.extract 0 (p - k)).foldl (· + ·.2) 0
+  let w := if p < k then 0 else (c.outPorts.getD (p - k) default).2
+  let mut row := ByteArray.empty
+  for i in [0:words] do
+    let v := if i < w then c.dummyOutputs.getD (at_ + i) 0 else 0
+    row := row.push (v % 256).toUInt8 |>.push (v / 256).toUInt8
+  return row
+
+/-- A row's `b ‖ c` under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix ‖ 0^192)`. -/
+def rowBcZeroSalt (row : ByteArray) : ByteArray :=
+  Sha512.hash (rowPrefix (row.size / 2) ++ row) ++
+    Sha512.hash (Hm96.Default512.saltPrefix ++ ByteArray.mk (Array.replicate SALT_BYTES 0))
+
+/-- `g o ↦` the first column of output word `o` of VU `g` (16 bits from it), where the circuit computes it: a typed
+instance's root's output group, the last stage's output port, or the unit that returns it. -/
+def outCol (c : Circuit) : Nat → Nat → Nat :=
+  let unit := c.unit
+  let ret := (List.range c.upv).foldl (fun r u =>
+    ((c.leavesOut.getD u #[]).foldl (fun (r, q) o => (r.set! o (u, q), q + 1)) (r, 0)).1) (Array.replicate c.outWords (0, 0))
+  let unitCols := portCols #[unit.outGroups.getD 0 default]
+  let tailCols := portCols (c.nets.getD c.outNet default).2.outGroups
+  fun g o =>
+    if c.typed.isSome then c.slotCol c.unitNet g 0 + (unit.outGroups.getD 0 default).col * WORD + 16 * o
+    else if c.outNet != c.unitNet then c.slotCol c.outNet g 0 + (tailCols.getD (c.outNetPorts.getD o 0) default).1
+    else
+      let (u, q) := ret.getD o (0, 0)
+      c.slotCol c.unitNet g u + (unitCols.getD q default).1
+
+/-- Δ: `HmRow.delta`'s, then per VU each output row's message bits: word `k` bit `t` (bit `t % 8` of row byte `2k + t / 8`) a
+copy of the output bit, zero (the unit range's first slot's forced-zero row) past its port's words. -/
+def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) := Id.run do
+  let (da, db) := HmRow.delta c pin
+  let (_, where_) := rowSlots c.ports
+  let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
+  let msgCol := fun (g p byte t : Nat) =>
+    let (k, o) := (byte / 128, byte % 128)
+    let (slot, sub) := where_[p]![k]!
+    c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+  let forcedZero := c.unitRange.slot 0 + c.unit.useful
+  let col := outCol c
+  let k0 := nIn c
+  let mut d : Array (Nat × Nat) := #[]
+  for g in [0:c.g] do
+    let mut at_ := 0
+    for j in [0:c.outPorts.size] do
+      let w := c.outPorts[j]!.2
+      for k in [0:(c.ports.getD (k0 + j) default).words] do
+        for t in [0:16] do
+          let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
+          d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
+      at_ := at_ + w
+  return (da ++ d, db ++ d)
+
+/-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
+def regions (c : Circuit) (pub : Public) : V (Array Region) := do
+  let bits := fun (lo n : Nat) => (Array.range n).map (lo + ·)
+  let hr := c.rangeOf c.hmNet
+  let hm := (c.nets.getD c.hmNet default).2
+  let lp := Nat.log2 (c.perVu.getD c.hmNet 1)
+  let bc0 := ((portCols hm.outGroups).getD 0 default).1
+  let np := c.ports.size
+  (Array.range np).mapM fun p =>
+    mkRegion c.kLog s!"digest {p}" (bits 0 10 ++ bits (hr.slotLog + lp) (Nat.log2 c.g)) (hr.start + p * 2 ^ hr.slotLog + bc0)
+      fun b => (Array.range c.g).foldl (fun acc g => acc ++ match c.instOf pub.n b g with
+        | some i => pub.digest i p np
+        | none => c.dummyDigests.getD p ByteArray.empty) ByteArray.empty
+
+/-- The verifier's public file: `HmRow.loadPublic`'s with no output word. A shared-row file's output rows are each
+instance's own: their tables one row per instance, every instance's ref its own row. -/
+def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
+  let pub ← HmRow.loadPublic tags { c with outPorts := #[] } file
+  if let some t := pub.tables then
+    let (np, k) := (c.ports.size, nIn c)
+    if (t.counts.extract k np).any (· != pub.n) then throw "header: an output row's table is not one row per instance"
+    if (List.range t.refs.size).any (fun x => x % np ≥ k && t.refs[x]! != x / np) then
+      throw "shared rows: an instance's output row is not its own"
+  return pub
+
+def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := HmRow.drawn { c with outPorts := #[] } pub draw
+
+/-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each row's over its table)
+against the header's, one tree per row; each row's pinned dummy `b ‖ c` against the padding instance's row under a zero
+salt. -/
+def checkPublic (c : Circuit) (pub : Public) : V Unit := do
+  let fv ← pub.frameV3
+  if (← J.str fv "frame" "public file") != "frame-v3-sha512"
+      || (← J.str fv "row_key_sha512" "public file") != hexOf (Sha512.hash Hm96.Default512.key) then
+    throw "the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key"
+  let np := c.ports.size
+  let (n, bcs, _) := pub.population.getD (pub.n, pub.digests, pub.outputs)
+  if let .ok d := pub.header.getObjVal? "unit_draw" then
+    let u ← Draw.UnitDraw.ofJson d
+    if (← J.nat pub.header "instances" "public file") != u.proved.size || pub.n != u.proved.size then
+      throw "U3: the statement's instances are not the drawn units and their closure"
+  let H := Sha512.hash
+  for p in [0:np] do
+    let port := c.ports[p]!
+    let dom ← pub.fv3Bytes "domain_ids" port.name
+    if (← J.str (← J.get fv "schemas" "public file") port.name "public file") != ROW_SCHEMA then
+      throw s!"row {port.name}: schema is not {ROW_SCHEMA}"
+    let (count, row) : Nat × (Nat → Nat) := match pub.tables with
+      | some t => (t.counts[p]!, fun r => t.starts[p]! + r)
+      | none => (n, fun i => i * np + p)
+    let leaves := (Array.range count).map fun r => FV3.leaf dom r ROW_SCHEMA (Hm96.Default512.treeLeaf (bcs.getD (row r) ByteArray.empty)) H
+    if FV3.root dom leaves H != (← pub.fv3Bytes "roots" port.name) then
+      throw s!"row {port.name}: the rows' b || c do not hash to the header's frame-v3-sha512 root"
+    if rowBcZeroSalt (dummyRow c p) != c.dummyDigests.getD p ByteArray.empty then
+      throw s!"the pinned dummy b || c of row {port.name} is not the padding instance's row under a zero salt"
+
+end HmOut
+
+/-!
+### Public input ports (§16.10)
+
+A statement with hidden outputs may name public input ports (META `public_inputs`): unit inputs that are no row but public
+words the verifier recomputes from public data, each port naming its recomputation (its `seed` and `derivation`). The units
+read them from `in` regions over whole words of every unit slot's leaf group (META `leaves_public`: each leaf's word among
+the public ports' words, or -1), with no Δ copy; the public file ends with every instance's public words, and the verifier
+takes them only when they equal its own recomputation (`--public-inputs`, `checkOwn`).
+-/
+namespace HmIn
+
+open HmRow
+
+def FORMAT : String := "verity/flock-public-inputs/v1"
+
+/-- META's public input ports: the list as META has it, each port's name and words, and each unit's public leaf map. -/
+structure Ports where
+  json : Json := Json.null
+  ports : Array (String × Nat) := #[]
+  leaves : Array (Array Int) := #[]
+  deriving Inhabited
+
+def Ports.words (pi : Ports) : Nat := pi.ports.foldl (· + ·.2) 0
+
+/-- The in regions' words in a unit slot: the smallest aligned power-of-two span `[w0, w0 + 2^e)` of 128-bit words holding
+every unit's public leaves (leaf `j` in word `col + j / 8` of the leaf group), as `(w0, e)`; `none` without a public leaf. -/
+def span (c : Circuit) (pi : Ports) : Option (Nat × Nat) :=
+  let col := (c.unit.inGroups.getD 0 default).col
+  let words := pi.leaves.foldl (fun acc l => (Array.range l.size).foldl (fun acc j => if l[j]! ≥ 0 then acc.push (col + j / 8) else acc) acc) #[]
+  if words.isEmpty then none else
+    let (a, b) := (words.foldl min words[0]!, words.foldl max words[0]!)
+    let e := if a ^^^ b == 0 then 0 else Nat.log2 (a ^^^ b) + 1
+    some (a / 2 ^ e * 2 ^ e, e)
+
+/-- Each in region's `2^s` words per unit slot: `7 + s` free bits beside the unit range's `log2ceil(count)` slot bits, at
+most `PT_LOCAL` of them. -/
+def inLog (c : Circuit) (e : Nat) : Nat := min e (PT_LOCAL - (7 + log2ceil c.unitRange.count))
+
+/-- META `public_inputs` (each port `{port, words, seed, derivation}`, a non-empty seed and derivation, nothing else) and
+`leaves_public`, checked: a port named once and no row's name; no typed instance; one public leaf map per unit, each public
+leaf a public word and a zero leaf of `leaves_in`; the unit range unpacked (the in regions read it); the in regions' words
+inside the leaf group, each leaf in them a public or a zero leaf in every unit. -/
+def parse (c : Circuit) : V Ports := do
+  let mj := c.metaJ
+  let .ok pj := mj.getObjVal? "public_inputs" | do
+    if J.has mj "leaves_public" then throw "META: leaves_public without public_inputs"
+    return {}
+  let ps ← J.asArr pj "META public_inputs"
+  if ps.isEmpty then throw "META: public_inputs names no port"
+  let ports ← ps.mapM fun p => do
+    let .obj kvs := p | throw "META: a public input is not an object"
+    let keys := (kvs.toArray.map (·.1)).qsort (· < ·)
+    let s := fun k => (p.getObjValAs? String k).toOption.getD ""
+    let w := (p.getObjValAs? Nat "words").toOption.getD 0
+    if keys != #["derivation", "port", "seed", "words"] || s "port" == "" || s "seed" == "" || s "derivation" == "" || w == 0 then
+      throw "META: a public input names no port, words, or recomputation (a non-empty seed and derivation)"
+    pure (s "port", w)
+  if !J.has mj "leaves_public" then throw "META: public_inputs without leaves_public"
+  let pi : Ports := { json := pj, ports, leaves := ← intLists mj "leaves_public" }
+  if c.typed.isSome then throw "public inputs: a typed statement's instance reads only rows"
+  let names := (ports.map (·.1) ++ c.ports.map (·.name)).qsort (· < ·)
+  if (List.range (names.size - 1)).any (fun i => names[i]! == names[i + 1]!) then
+    throw "public inputs: a port named twice, or both a row and a public input"
+  let np : Int := pi.words
+  if pi.leaves.size != c.upv || (List.range c.upv).any (fun u =>
+      let (lp, li) := (pi.leaves[u]!, c.leavesIn.getD u #[])
+      lp.size != li.size || (List.range lp.size).any fun j => lp[j]! < -1 || lp[j]! ≥ np || (lp[j]! ≥ 0 && li[j]! != -1)) then
+    throw "public inputs: the public leaf maps are not one per unit, each public leaf a public word and a zero leaf of leaves_in"
+  let ur := c.unitRange
+  if ur.packed then throw "public inputs: a packed unit range (the in region reads it)"
+  if 7 + log2ceil ur.count > PT_LOCAL then
+    throw s!"public inputs: {ur.count} unit slots, too many for an in region of at most {PT_LOCAL} free bits"
+  let some (w0, e) := span c pi | throw "public inputs: no unit reads a public word"
+  let g0 := c.unit.inGroups.getD 0 default
+  if w0 < g0.col || w0 + 2 ^ e > g0.col + g0.words then
+    throw s!"public inputs: the in region's words {w0}..{w0 + 2 ^ e} leave the unit's leaf group"
+  for u in [0:c.upv] do
+    let (lp, li) := (pi.leaves[u]!, c.leavesIn.getD u #[])
+    if let some j := (List.range li.size).find? (fun j => w0 ≤ g0.col + j / 8 && g0.col + j / 8 < w0 + 2 ^ e && lp[j]! < 0 && li[j]! ≥ 0) then
+      throw s!"public inputs: leaf {j} reads a row word inside the in region's words {w0}..{w0 + 2 ^ e}"
+  return pi
+
+/-- Whether block column `q` is a bit of a public leaf: in unit slot `k`'s leaf group (unit `k % upv`), leaf `j`'s 16 bits
+from `col 128 + 16 j`, a public word. -/
+def publicCol (c : Circuit) (pi : Ports) (q : Nat) : Bool :=
+  let ur := c.unitRange
+  let g0 := c.unit.inGroups.getD 0 default
+  let (k, at_) := ((q - ur.start) / 2 ^ ur.slotLog, (q - ur.start) % 2 ^ ur.slotLog)
+  ur.start ≤ q && k < ur.count && g0.col * WORD ≤ at_ && ((pi.leaves.getD (k % c.upv) #[]).getD ((at_ - g0.col * WORD) / 16) (-1)) ≥ 0
+
+/-- Δ: `HmOut.delta`'s without any entry of a public leaf's rows; a public leaf's bits are no copy but the in regions'. -/
+def delta (c : Circuit) (pi : Ports) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :=
+  let (da, db) := HmOut.delta c pin
+  if pi.ports.isEmpty then (da, db) else (da.filter (!publicCol c pi ·.1), db.filter (!publicCol c pi ·.1))
+
+/-- The in regions, `2^(e - s)` of them over the span `[w0, w0 + 2^e)` (`inLog`): region `r` is `2^s` words from word
+`w0 + r 2^s` of every unit slot, its bytes per slot the leaves' 16-bit words, u16 LE: a public leaf its instance's public word,
+zero for a zero leaf, a padding instance or a slot past the units. -/
+def regions (c : Circuit) (pi : Ports) (pub : Public) : V (Array Region) := do
+  let some (w0, e) := span c pi | return #[]
+  let bits := fun (lo n : Nat) => (Array.range n).map (lo + ·)
+  let ur := c.unitRange
+  let (sb, s, np) := (log2ceil ur.count, inLog c e, pi.words)
+  let col := (c.unit.inGroups.getD 0 default).col
+  (Array.range (2 ^ (e - s))).mapM fun r =>
+    let j0 := 8 * (w0 + r * 2 ^ s - col)
+    mkRegion c.kLog s!"in {r}" (bits 0 (7 + s) ++ bits ur.slotLog sb) (ur.start + (w0 + r * 2 ^ s) * WORD) fun b =>
+      (Array.range (2 ^ sb)).foldl (fun acc k =>
+        let (g, u) := (k / c.upv, k % c.upv)
+        let i := if k < ur.count then c.instOf pub.n b g else none
+        (Array.range (8 * 2 ^ s)).foldl (fun acc j =>
+          let q := (pi.leaves.getD u #[]).getD (j0 + j) (-1)
+          let v := match i with
+            | some i => if q ≥ 0 then pub.outputs.getD (i * np + q.toNat) 0 else 0
+            | none => 0
+          acc.push (v % 256).toUInt8 |>.push (v / 256).toUInt8) acc) ByteArray.empty
+
+/-- The verifier's public file: `HmOut.loadPublic`'s, then every instance's public words (`Public.outputs`), its header's
+`public_inputs` META's (and none without). -/
+def loadPublic (tags : Tags) (c : Circuit) (pi : Ports) (file : ByteArray) : V Public := do
+  let pub ← HmRow.loadPublic tags { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } file
+  match pub.header.getObjVal? "public_inputs", pi.ports.isEmpty with
+  | .error _, true => pure ()
+  | .ok h, false => if (← canon h) != (← canon pi.json) then throw "public file: header public_inputs is not the circuit's"
+  | _, _ => throw "public file: header public_inputs is not the circuit's"
+  if let some t := pub.tables then
+    let (np, k) := (c.ports.size, HmOut.nIn c)
+    if (t.counts.extract k np).any (· != pub.n) then throw "header: an output row's table is not one row per instance"
+    if (List.range t.refs.size).any (fun x => x % np ≥ k && t.refs[x]! != x / np) then
+      throw "shared rows: an instance's output row is not its own"
+  return pub
+
+def drawn (c : Circuit) (pi : Ports) (pub : Public) (draw : Json) : V Public :=
+  HmRow.drawn { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } pub draw
+
+/-- The verifier's own recomputation (`--public-inputs F`): a header line `{format, instances, ports}`, its ports META's
+`public_inputs` (each naming its seed and derivation), then every instance of the population's public words as the public
+file holds them (u16 LE, instance-major, the ports in order). The public file's words must be these; a circuit with no
+public input takes no such file, and one with public inputs needs it. -/
+def checkOwn (pi : Ports) (pop : Public) (own : Option ByteArray) : V Unit := do
+  match own, pi.ports.isEmpty with
+  | none, true => return
+  | some _, true => throw "--public-inputs: the circuit names no public input port"
+  | none, false => throw "public inputs: the circuit names public input ports; pass the verifier's own recomputation (--public-inputs F)"
+  | some f, false =>
+    let some nl := findByte f 10 | throw "--public-inputs: no header line"
+    let header ← match String.fromUTF8? (f.extract 0 nl) with
+      | some t => match Json.parse t with
+        | .ok j => pure j
+        | .error e => throw s!"--public-inputs: header: {e}"
+      | none => throw "--public-inputs: header is not UTF-8"
+    let ctx := "--public-inputs"
+    if (← J.str header "format" ctx) != FORMAT then throw s!"--public-inputs: not a {FORMAT} file"
+    let (n, pw) := ((pop.population.map (·.1)).getD pop.n, pi.words)
+    if (← J.nat header "instances" ctx) != n then throw s!"--public-inputs: not the population's {n} instances"
+    if (← canon (← J.get header "ports" ctx)) != (← canon pi.json) then
+      throw "--public-inputs: its ports (names, words, seeds, derivations) are not the circuit's public_inputs"
+    let body := f.extract (nl + 1) f.size
+    if body.size != 2 * n * pw then throw "--public-inputs: length"
+    let words := (pop.population.map (·.2.2)).getD pop.outputs
+    if let some x := (List.range (n * pw)).find? (fun x => words.getD x 0 != (body.get! (2 * x)).toNat + 256 * (body.get! (2 * x + 1)).toNat) then
+      let (i, w) := (x / pw, x % pw)
+      let starts := (pi.ports.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.2)) (#[], 0)).1
+      let k := ((List.range pi.ports.size).filter (starts[·]! ≤ w)).getLast?.getD 0
+      let pj := (pi.json.getArrVal? k).toOption.getD Json.null
+      let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
+      throw s!"public input {pi.ports[k]!.1}: word {w - starts[k]!} of instance {i} is not the verifier's own recomputation (seed {s "seed"}, derivation {s "derivation"})"
+
+end HmIn
+
+/-- `Stmt.setupH` for a statement with hidden outputs (`Tags.hiddenOutputs`): every check `setupH` makes, on `HmOut`'s rows,
+public file, Δ and regions, and on its public input ports (`HmIn`) against the verifier's own `publicInputs`. -/
+def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
+    (publicInputs : Option ByteArray := none) : V Stmt := do
+  let c ← HmOut.parse tags circuitFile tables
+  let pi ← HmIn.parse c
+  let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
+    else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
+  let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
+  let pop ← HmIn.loadPublic tags c pi publicFile
+  HmIn.checkOwn pi pop publicInputs
+  let pub ← match draw with
+    | some d => HmIn.drawn c pi pop d
+    | none => pure pop
+  if let some d := draw then
+    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+      let (law, _) ← HmRow.stratifiedLaw obj prog k
+      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+  HmOut.checkPublic c pub
+  let finding ← match finding0, partition, program with
+    | some f, some obj, some prog =>
+      let q := (obj.getObjVal? "query").toOption.getD Json.null
+      if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
+        let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+        pure (some { f with derived := true, note := ← HmRow.deriveTemplateUnits c obj prog indices })
+      else HmRow.qwordFinding c pub obj prog f
+    | f, _, _ => pure f
+  let n := pub.n
+  let blocksReal := (n + c.g - 1) / c.g
+  let nbl := max 3 (log2ceil (max blocksReal 1))
+  let m := c.kLog + nbl
+  if c.kLog > 26 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 26)"
+  let pin ← HmRow.pin c
+  let (da, db) := HmIn.delta c pi pin
+  let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
+  HmRow.checkRegionWords c da db regions
+  checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon tags.identity).toUTF8
+  for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
+  for d in [da, db] do
+    h := pushLe64 h d.size
+    for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
+  let digest := Sha512.hash h
+  let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
+           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+
 /-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, and `closure` its
-own closure map, which a work draw's closure is held to. -/
+draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, `closure` its
+own closure map, which a work draw's closure is held to, and `publicInputs` its own recomputation of the public input
+words (`HmIn.checkOwn`). -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
-    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none) :
-    V (SessionSpec × Array Stmt) := do
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
   -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
   if let some d := draw then
     if let .ok u := Draw.UnitDraw.ofJson d then
@@ -1053,8 +1434,17 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
       let (law, _) ← HmRow.workLaw obj prog K table
       if law != Draw.Law.work k strata then
         throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
+  if publicInputs.isSome && !tags.hiddenOutputs then
+    throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+  let setup := fun (t : Tags) (d : Option Json) => do
+    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+    else
+      let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
+      if J.has st.c.metaJ "public_inputs" then
+        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      pure st
   if count ≤ 1 then
-    let st ← Stmt.setupH tags circuitFile publicFile coins tables draw partition program
+    let st ← setup tags draw
     return (st.spec, #[st])
   let some tt := tags.manyTables | throw s!"{tags.name}: one table per session"
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
@@ -1070,14 +1460,17 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
     | none => do
-      let n := (← HmRow.loadPublic tags (← HmRow.parse tags circuitFile tables) publicFile).n
+      let n ← if tags.hiddenOutputs then do
+          let c ← HmOut.parse tags circuitFile tables
+          pure (← HmIn.loadPublic tags c (← HmIn.parse c) publicFile).n
+        else do pure (← HmRow.loadPublic tags (← HmRow.parse tags circuitFile tables) publicFile).n
       pure (n, Array.range n)
   splits units.size
   let k := units.size / count
   let sts ← (Array.range count).mapM fun j =>
     let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population), ("k", Lean.toJson k),
       ("units", Json.arr ((units.extract (j * k) (j * k + k)).map Lean.toJson))]
-    Stmt.setupH { tags with identity := tags.tableIdentity count j } circuitFile publicFile coins tables (some part) partition program
+    setup { tags with identity := tags.tableIdentity count j } (some part)
   let mPts := sts[0]!.mPts
   if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
   let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))

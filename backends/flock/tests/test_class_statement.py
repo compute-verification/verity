@@ -57,9 +57,10 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         text = (d / "circuit.txt").read_text()
         assert st["n"] == 8 and st["k_log"] <= FC.K_MAX and st["circuit_sha512"] == FC.digest(text)
         assert '"rule":"verity/partition/v1"' in text                      # the Q_word partition's own digest, not a provisional cover
-        assert len(st["ports"]) == len(st["shared_rows"]) and all(w % CS.BLOCK_WORDS == 0 for w in st["ports"])
+        assert list(st["shared_rows"]) == [f"p{j}" for j in range(len(st["ports"]))] + ["out"] and st["shared_rows"]["out"] == 8
+        assert all(w % CS.BLOCK_WORDS == 0 for w in st["ports"])          # the output row: one per instance, never shared
         if (s, cl) == gather:
-            assert st["shared_rows"] == {"p0": 1, "p1": 8}                  # one table row shared by every instance; a row per index
+            assert st["shared_rows"] == {"p0": 1, "p1": 8, "out": 8}        # one table row shared by every instance; a row per index
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
