@@ -133,14 +133,18 @@ theorem accepts_retained {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds
   have hsr : spec.retainRounds = true := (setupTables_retain hs).trans hr
   exact ⟨spec, sts, sess, hs, hd, hsr, decode_retained hsr hd⟩
 
+/-- `decode_retained` as `Refine/Frames.lean`'s `AllRetained`, for every stream. -/
+theorem decode_allRetained {text : String} {sess : Session} (hr : spec.retainRounds = true)
+    (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs i hi => by
+  rw [getElem!_pos s.rounds i hi]
+  exact decode_retained hr h s hs _ (Array.getElem_mem_toList hi)
+
 /-- **flock-verify's acceptance under retaining tags gives `AllRetained`** (`Refine/Frames.lean`) for every stream of
 the record it decodes: the hypothesis `squeeze_bindA`, `sample_bindA`, `forIn_answers` and `zerocheck_frames` take. -/
 theorem accepts_allRetained {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       ∀ s ∈ sess.streams.toList, AllRetained s.rounds := by
-  obtain ⟨spec, sts, sess, hs, hd, -, hb⟩ := accepts_retained hr h
-  refine ⟨spec, sts, sess, hs, hd, fun s hs' i hi => ?_⟩
-  rw [getElem!_pos s.rounds i hi]
-  exact hb s hs' _ (Array.getElem_mem_toList hi)
+  obtain ⟨spec, sts, sess, hs, hd, hsr, -⟩ := accepts_retained hr h
+  exact ⟨spec, sts, sess, hs, hd, decode_allRetained hsr hd⟩
 
 end FlockSoundness.Discharge.Exec

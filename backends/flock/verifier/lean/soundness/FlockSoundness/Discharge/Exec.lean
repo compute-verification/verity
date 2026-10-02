@@ -22,6 +22,11 @@ import FlockSoundness.Discharge.Exec.Live
 import FlockSoundness.Discharge.Exec.Merkle
 import FlockSoundness.Discharge.Exec.Retained
 import FlockSoundness.Discharge.Exec.Decode
+import FlockSoundness.Discharge.Exec.Emit
+import FlockSoundness.Discharge.Exec.FramesLigerito
+import FlockSoundness.Discharge.Exec.FramesRep
+import FlockSoundness.Discharge.Exec.Rounds
+import FlockSoundness.Discharge.Exec.Verdict
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -62,5 +67,13 @@ import FlockSoundness.Discharge.Exec.Decode
 * `Live`: R11 for one-table sessions of the live coin server, with `bad = ⊥`, given `Decodes` (`execRefines_one`), and
   the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
 * `Decode`: two pieces of `DecodesAll`: a run on two lists is a run on one tape with those messages and coins
-  (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`).
+  (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`);
+* `Emit`, `FramesLigerito`, `FramesRep`: the frames a run emits, round by round (`Emitted`, `chunks`), for each phase
+  of a rep and for the whole rep (`zerocheck_emitted`, `lincheck_emitted`, `ringSwitch_emitted`, `ligerito_frames`,
+  `rep_rounds`), on streams whose rounds all retained their bytes;
+* `Rounds`: so, when flock-verify accepts under tags that retain rounds, round `k` of each rep's stream retained the
+  bytes of chunk `k` of the rep's frames (`RepRounds`, `accepts_rep_rounds`);
+* `Verdict`: the openings and salts the proof files decode to (`opnOf`), and the verdict part of `Decodes`: at
+  flock-verify's acceptance, each table's salted verdict at `capOfRoot root_B[j]` and `opnOf` accepts on the reps' runs
+  (`table_verdict_hm96`, `accepts_verdict_hm96`).
 -/
