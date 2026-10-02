@@ -139,4 +139,8 @@ import FlockSoundness.ZK.Hiding
 import FlockSoundness.ZK.RealLeaves
 import FlockSoundness.ZK.Session
 import FlockSoundness.ZK.AdaptivePrefinal
+<<<<<<< HEAD
 import FlockSoundness.Discharge.Placed
+=======
+import FlockSoundness.Discharge.Const
+>>>>>>> origin/cursor/e2e-const-95d4
