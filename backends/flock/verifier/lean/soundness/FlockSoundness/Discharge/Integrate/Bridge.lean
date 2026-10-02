@@ -236,7 +236,7 @@ theorem model_eq (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - 
 
 end Model
 
-/-- **The accepted statement is `stmtOf`'s.** For a statement `Stmt.setupH` accepted on the untyped path, the model
+/-- **The accepted statement is `stmtOf`'s.** For a statement `Stmt.setupH` accepted on the untyped path, the
 statement `Placed.Accepted` reads (`Layout.model`: `placedA`, `placedB`) is the one the executable's refinement plays
 (`Refine.stmtOf`: `matA`, `matB`), at any regions. -/
 theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}

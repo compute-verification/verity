@@ -12,7 +12,7 @@ from a one-table acceptance:
 * the blocks: setupH's `nbl` is at least `log2ceil ⌈n / c.g⌉`, and a drawn statement's `n` is the draw's proved units
   (`setupH_n`, `Layout.drawn_spec`);
 * the schedule: flock-verify ran `fast100` on the table's `m` (`verify_one_ok`), and every executable `fast100` schedule
-  is the model's (`fast100_schedOf`) with at least two levels (`fast100_two`).
+  is `Accounting.fast100`'s (`fast100_schedOf`) with at least two levels (`fast100_two`).
 
 `drawSetup_of_accepts`: a one-table acceptance whose record's draw is `d` gives setupH's statement at `d` and the
 draw `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
@@ -33,7 +33,7 @@ theorem fast100_two (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some 
     simpa using key ⟨m, hm⟩ s hs
   · rw [exec_fast100_none m (by omega)] at hs; cases hs
 
-/-- The model's schedule at an `m` the executable's `fast100` schedules, with its two first levels. -/
+/-- `Accounting.fast100`'s schedule at an `m` the executable's `fast100` schedules, with its two first levels. -/
 theorem model_sched {m : ℕ} {s : Flock.Schedule} (hs : Flock.fast100 m = some s) :
     ∃ k0 l₀ l₁ rest ext, Accounting.fast100 m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ := by
   have h1 := fast100_schedOf m
