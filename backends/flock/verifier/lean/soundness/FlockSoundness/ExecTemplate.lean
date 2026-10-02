@@ -20,8 +20,10 @@ namespace FlockSoundness
 structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop where
   pre : ∃ more, c.nets.toList = (#[("root", t.root)] ++ t.layouts.map fun (e : String × Net × ℕ) => (e.1, e.2.1)).toList ++ more ∧
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
-  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks of `16 * words` bits -/
+  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks ∧ 0 < p.chunks ∧ p.bits = 16 * p.words
+  /-- a typed file's ports are all `sha512/row/v1` -/
+  v1 : tags.typed = true → ∀ p ∈ c.ports.toList, p.v2 = false
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
@@ -294,7 +296,8 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          portWords := rowPorts_words hrp, unitNet := findIdx?_lt hunit
+          portWords := fun p hp => (rowPorts_facts hrp p hp).1, v1 := fun ht p hp => (rowPorts_facts hrp p hp).2 ht
+          unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
