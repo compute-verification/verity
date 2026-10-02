@@ -328,7 +328,7 @@ def slotOpensZ (out : OutZC F D Sl) (r ℓ Q : ℕ) : List (ℕ × List F × Sl 
       (pj.1, (out.opens.rows r ℓ pj.2).1, out.opens.salts r ℓ pj.2, (out.opens.rows r ℓ pj.2).2)
 
 /-- Both reps' level-0 openings. -/
-def opens₀Hs (sch : Schedule) (out : OutZC F D Sl) : List (ℕ × List F × Sl × List D) :=
+def opens₀Z (sch : Schedule) (out : OutZC F D Sl) : List (ℕ × List F × Sl × List D) :=
   slotOpensZ out 0 0 (lvOf sch 0).queries ++ slotOpensZ out 1 0 (lvOf sch 0).queries
 
 /-- An opening verifies against `cap`: a row of `w` elements whose path verifies from its leaf under its salt. -/
@@ -339,10 +339,10 @@ def VerifiedZ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Le
 open Classical in
 /-- **The witness cap's openings, by position**: at each level-0 position, the first verifying 68-lane row a run opened
 there. -/
-noncomputable def op₀Hs (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+noncomputable def op₀Z (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (T : TabZK F mPts) (cap : Cap D) (out : OutZC F D Sl) :
     Fin (2 ^ (lvOf T.sch 0).logLen) → Option (Fin (width₀ T) → F) := fun p =>
-  (((opens₀Hs T.sch out).filter fun x =>
+  (((opens₀Z T.sch out).filter fun x =>
       decide (x.1 = p.val ∧ VerifiedZ H E Lf cap (width₀ T) (pathLen (lvOf T.sch 0)) x)).head?).map
     fun x lane => x.2.1.getD lane.val 0
 
@@ -355,7 +355,7 @@ level-0 position, the first verifying opening one of the runs made there, and ze
 noncomputable def extractTableZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (n : ℕ)
     (cap₀ : Cap D) (bs : List (List (OutZC F D Sl))) : Oracle F :=
   tabOfW (width₀ T) (lvOf T.sch 0).logLen
-    (Extract.firstTable (fun outs : List (OutZC F D Sl) => op₀Hs Hs.H Hs.E Hs.Lf T cap₀ (outs.getD n dfltOutZC))
+    (Extract.firstTable (fun outs : List (OutZC F D Sl) => op₀Z Hs.H Hs.E Hs.Lf T cap₀ (outs.getD n dfltOutZC))
       (fun _ _ => 0) bs)
 
 section Acc
