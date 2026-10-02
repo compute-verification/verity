@@ -94,6 +94,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-02 (7:23 AM PDT): an overhead reported to Daniel is the `--zk` prover's only (no M0 number and no `--zk`/M0
+  ratio), normalized to the chip's peak: prover seconds over the time the computation's FLOPs take at the census's dense
+  datasheet peak for its dtype, never over a measured runtime such as a vLLM run's.
 - 2026-10-01 (4:31 PM PDT): a table that tabulates a fixed function is a value even with no program parameter
   (`gelu_tanh_bf16`, `tanh_rn`). The only tables in an operation's own definition are the hardware's measured ones (the
   MUFU tables, `tanh_mufu` included), which stay gates with the floating-point formats' constants. The hidden read's cost
