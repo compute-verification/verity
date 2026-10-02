@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cerrno>
@@ -981,12 +982,13 @@ __device__ __forceinline__ uint64_t xor_and(uint64_t t, uint64_t s, uint64_t m) 
   return ((uint64_t)hi << 32) | lo;
 }
 
-// absorb_chunk for the Π₂ half of band_chain_pairs_kernel (hw = 8196: chunks 0 .. 481 hold 17 message words each, the last
-// chunk two, then the carry and the pad), in the bit-interleaved form (il_const) throughout, every word's contribution ANDed
-// with m (all ones, or zero on a lane that must not absorb), so both roles of a warp run the same instructions.
-template <bool LAST>
+// absorb_chunk for the Π₂ half of band_chain_pairs_kernel (every chunk but the last holds 17 message words, the last LW of
+// 1 .. 16, then the carry and the pad: hw = 8196 has LW = 2), in the bit-interleaved form (il_const) throughout, every
+// word's contribution ANDed with m (all ones, or zero on a lane that must not absorb), so both roles of a warp run the same
+// instructions.
+template <bool LAST, int LW>
 __device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_VECS], uint64_t& carry, uint64_t m) {
-  constexpr int words = LAST ? 2 : RATE_WORDS, tail = 18;
+  constexpr int words = LAST ? LW : RATE_WORDS, tail = 8 * LW + 2;
   auto shifted = [](uint64_t val, uint64_t c) -> uint64_t {  // (val << 16) | (c >> 48)
     return ((uint64_t)__funnelshift_l((uint32_t)(c >> 32), (uint32_t)(val >> 32), 8) << 32) |
            __funnelshift_l((uint32_t)c, (uint32_t)val, 8);
@@ -1022,15 +1024,18 @@ __device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 
+// HW: the half's words (a block's words + 4).
+template <int64_t HW>
 __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
     uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
     const uint64_t* __restrict__ cx, const int64_t* __restrict__ base, const int64_t* __restrict__ blk,
     const int64_t* __restrict__ len, const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next,
     int64_t groups, int calls) {
-  constexpr int64_t hw = 8196, xwords = 8192, nch = (hw + RATE_WORDS - 1) / RATE_WORDS, msg = 8 * hw + 2;
+  constexpr int64_t hw = HW, xwords = HW - 4, nch = (hw + RATE_WORDS - 1) / RATE_WORDS, msg = 8 * hw + 2;
   constexpr int64_t full = msg / RATE, xch = xwords / RATE_WORDS;
-  static_assert(nch == full + 1 && hw - full * RATE_WORDS == 2 && msg - full * RATE == 18,
-                "absorb_masked's layout: the last chunk holds two words, the carry, and the pad");
+  constexpr int LW = (int)(hw - full * RATE_WORDS);
+  static_assert(nch == full + 1 && LW >= 1 && LW < RATE_WORDS && msg - full * RATE == 8 * LW + 2,
+                "absorb_masked's layout: the last chunk holds LW words, the carry, and the pad");
   constexpr unsigned ALL = 0xffffffffu;
   const int lane = threadIdx.x & 31, rl = lane & 15, role = lane >> 4;
   const int64_t steps = 2 * (int64_t)calls + 1, tasks = groups * steps, cstride = pitch * SLOT_WORDS;
@@ -1071,8 +1076,8 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       const uint64_t* p = SLOT_AT(1, 0, r);
       if (role == 0 && act) slot_load_cg(p, v);
       for (int64_t cc = 0; cc < nch; ++cc) {
-        if (cc < full) absorb_masked<false>(x, v, carry, m);
-        else absorb_masked<true>(x, v, carry, m);
+        if (cc < full) absorb_masked<false, LW>(x, v, carry, m);
+        else absorb_masked<true, LW>(x, v, carry, m);
         p += cstride;
         if (role == 0 && act && cc + 1 < nch) slot_load_cg(p, v);
         keccak_f_il(x);
@@ -1141,7 +1146,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
         constexpr bool PLAIN = decltype(plain)::value;
 #pragma unroll 1
         for (int64_t cc = 0; cc < nch; ++cc) {
-          absorb_masked<false>(x, v, carry, cc > 0 ? m : 0);
+          absorb_masked<false, LW>(x, v, carry, cc > 0 ? m : 0);
           carry = cc > 0 ? carry : carry0;
           if constexpr (PLAIN) {
 #pragma unroll
@@ -1163,7 +1168,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       };
       if (x_in || (i == 9 && any_fin)) chunk_steps(std::false_type{});
       else chunk_steps(std::true_type{});
-      absorb_masked<true>(x, v, carry, m);
+      absorb_masked<true, LW>(x, v, carry, m);
       keccak_f_il(x);
     }
 #undef SLOT_AT
@@ -1199,21 +1204,26 @@ __global__ void il64_copy_kernel(const ulonglong2* __restrict__ src, ulonglong2*
 }
 
 // band_chain in one persistent launch of band_chain_pairs_kernel, one block of PAIRS_WARPS_PER_BLOCK warps per SM (a warp per
-// scheduler).  Chunks interleave_from .. 482 of both halves are converted to the bit-interleaved form first: every word of
-// the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.  X is read from an interleaved
-// copy of c, made first (c.numel() more bytes of device memory), so that each C row is converted once rather than once for
-// every row whose chain absorbs it.
+// scheduler), at the blocks of PAIRS_WIDTHS bytes.  Chunks interleave_from .. nch - 1 of both halves are converted to the
+// bit-interleaved form first: every word of the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts
+// leave them.  X is read from an interleaved copy of c, made first (c.numel() more bytes of device memory), so that each C
+// row is converted once rather than once for every row whose chain absorbs it.
+constexpr int64_t PAIRS_WIDTHS[] = {65536, 147456, 393216};
+
 void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t calls, torch::Tensor c,
                       torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest, torch::Tensor out,
                       int64_t interleave_from) {
+  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2,
+              "c must be contiguous uint8 [rows, width]");
+  const int64_t width = c.size(1), hw = width / 8 + 4;
+  TORCH_CHECK(std::find(std::begin(PAIRS_WIDTHS), std::end(PAIRS_WIDTHS), width) != std::end(PAIRS_WIDTHS),
+              "band_chain_pairs is compiled for blocks of 65536, 147456 and 393216 bytes, not ", width);
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
-              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
-              "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
-  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2 && c.size(1) == 65536,
-              "c must be contiguous uint8 [rows, 65536]");
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS,
+              "state must be the width's chunk-major int64 [2, nch, pitch, SLOT_WORDS]");
   TORCH_CHECK(reinterpret_cast<uintptr_t>(c.data_ptr()) % 16 == 0, "c must be 16-byte aligned");
   TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kUInt8 && out.is_contiguous() && out.size(0) == state.size(2) &&
-              out.size(1) == 65536, "out must be contiguous uint8 [pitch, 65536]");
+              out.size(1) == width, "out must be contiguous uint8 [pitch, width]");
   for (auto* t : {&base, &blk, &len, &dest})
     TORCH_CHECK(t->is_cuda() && t->scalar_type() == torch::kInt64 && t->is_contiguous() && t->numel() == state.size(2),
                 "base, blk, len must be int64 with one entry per state row");
@@ -1235,12 +1245,17 @@ void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t d
   if (interleave_from < state.size(1))
     chunked_interleave_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()),
                                                                     state.size(2), row0, rows, state.size(1), interleave_from);
-  band_chain_pairs_kernel<<<(unsigned)sms, 32u * PAIRS_WARPS_PER_BLOCK, 0, stream>>>(
-      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
-      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), reinterpret_cast<const uint64_t*>(cx.data_ptr<uint8_t>()),
-      base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(), len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(),
-      reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()), reinterpret_cast<uint64_t*>(sponge.data_ptr<int64_t>()),
-      ctl.data_ptr<int>(), ctl.data_ptr<int>() + groups, groups, (int)calls);
+  auto launch = [&](auto kernel) {
+    kernel<<<(unsigned)sms, 32u * PAIRS_WARPS_PER_BLOCK, 0, stream>>>(
+        reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
+        reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), reinterpret_cast<const uint64_t*>(cx.data_ptr<uint8_t>()),
+        base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(), len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(),
+        reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()), reinterpret_cast<uint64_t*>(sponge.data_ptr<int64_t>()),
+        ctl.data_ptr<int>(), ctl.data_ptr<int>() + groups, groups, (int)calls);
+  };
+  if (width == PAIRS_WIDTHS[0]) launch(band_chain_pairs_kernel<PAIRS_WIDTHS[0] / 8 + 4>);
+  else if (width == PAIRS_WIDTHS[1]) launch(band_chain_pairs_kernel<PAIRS_WIDTHS[1] / 8 + 4>);
+  else launch(band_chain_pairs_kernel<PAIRS_WIDTHS[2] / 8 + 4>);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 

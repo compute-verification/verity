@@ -105,6 +105,9 @@ segments).  `band_chain_kernel`'s 15,360 threads fill 480 of the RTX PRO 6000's 
 decodes at 2.80 against 1.60 GB/s there (untimed screens, art:4354a29314cf against art:468c10537551).  It runs from
 `CHUNKED_MIN_ROWS` rows (two segments), so a gates-only run on two segments exercises it."""
 
+PAIRS_WIDTHS = (65_536, 147_456, 393_216)
+"""The block widths `band_chain_pairs_kernel` is compiled for (`band_chain`'s is 65,536 alone)."""
+
 DECODE_PATHS: list[tuple[str, int]] = []
 """`(kernel, rows)` of each `decode_blocks` call, in order; the harness takes and clears them to record which decode ran."""
 
@@ -242,8 +245,8 @@ def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.
 
 def chain_call(width: int, device):
     """One row's chain of length 0 on `band_chain_pairs_kernel`, its inputs staged: one `Π₂` call, its first absorb then
-    rounds 1 .. 9 (W is written in round 9), each round's absorb one chunk behind the previous round's squeeze, so 483 +
-    9 * 484 = 4,839 sequential Keccak-f where absorbing and squeezing in turn takes 10 * (483 + 482) = 9,650.  A chain's later
+    rounds 1 .. 9 (W is written in round 9), each round's absorb one chunk behind the previous round's squeeze, so at 64 KiB
+    483 + 9 * 484 = 4,839 sequential Keccak-f where absorbing and squeezing in turn takes 10 * (483 + 482) = 9,650.  A chain's later
     calls cost the same (10 rounds of 484, the next first absorb overlapping round 10).  Returns the call."""
     from . import native
 
@@ -268,7 +271,8 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     r = len(order)
     base = seg * per_segment
     whole_from = CHUNKED_MIN_ROWS[0] if CHAIN_PAIRS[0] else max(CHUNKED_MIN_ROWS[0], CHUNKED_SPLIT_MAX_ROWS[0])
-    if CHUNKED[0] and CHUNKED_WHOLE[0] and r >= whole_from and width == 65_536 and c_flat.is_contiguous():
+    widths = PAIRS_WIDTHS if CHAIN_PAIRS[0] else (65_536,)
+    if CHUNKED[0] and CHUNKED_WHOLE[0] and r >= whole_from and width in widths and c_flat.is_contiguous():
         DECODE_PATHS.append(("band_chain_pairs" if CHAIN_PAIRS[0] else "band_chain", r))
         return _decode_whole(c_flat, seg, blk, ln, tags, base, order, width)
     starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
