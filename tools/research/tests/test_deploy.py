@@ -195,6 +195,36 @@ def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_r
     assert "restart when safe: tmux:a (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
 
 
+def test_installing_a_changed_unit_reloads_systemd_once_and_an_unchanged_one_does_not(world, monkeypatch):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    monkeypatch.setattr(deploy, "UNITS", f"{node}/units/")
+    _commit(repo, {"src/x.service": "[Service]\nAllowedCPUs=0-7\n", "src/x.timer": "[Timer]\n"}, "units")
+    _git(repo, "push", "-q", "origin", "main")
+    manifest.write_text(manifest.read_text() + "".join(f'\n[[file]]\npath = "{node}/units/x.{k}"\nsrc = "src/x.{k}"\nnodes = ["n"]\n'
+                                                       for k in ("service", "timer")))
+    n, calls, rc = deploy.load(manifest)["n"], [], [0]
+
+    def systemd(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        if "systemctl" in argv:
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, rc[0], b"", b"" if rc[0] == 0 else b"Access denied")
+        return local(name, argv, stdin)
+
+    deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+    assert calls == [["sudo", "-n", "systemctl", "daemon-reload"]] and (node / "units" / "x.service").read_text().endswith("0-7\n")
+    deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+    _commit(repo, {"src/c.py": "c4\n"}, "not a unit")
+    _git(repo, "push", "-q", "origin", "main")
+    deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+    assert len(calls) == 1
+
+    _commit(repo, {"src/x.timer": "[Timer]\nOnUnitActiveSec=5min\n"}, "a timer change")
+    _git(repo, "push", "-q", "origin", "main")
+    rc[0] = 1
+    with pytest.raises(RuntimeError, match=r"installed .*x\.timer, but `systemctl daemon-reload` failed \(exit 1\): Access denied"):
+        deploy.install(n, "origin/main", "lane-x", [], systemd, repo=repo)
+
+
 def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went(world, capsys):
     node, n = world["node"], world["nodes"]["n"]
     deploy.install(n, "origin/main", "lane-x", [], local, repo=world["repo"])
