@@ -5827,6 +5827,17 @@
    "assumptions": [],
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
+  "FlockSoundness.Discharge.HiddenExec.accepts_allRetainedAny": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_oneAny": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_rep_roundsAny": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_retainedAny": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_setupOne": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96Any": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_tables_hm96_of_leafAny": {},
+  "FlockSoundness.Discharge.HiddenExec.accepts_verdict_hm96Any": {},
+  "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden": {},
+  "FlockSoundness.Discharge.HiddenExec.setupTables_okAny": {},
+  "FlockSoundness.Discharge.HiddenExec.tableAtH_of_accepts": {},
   "FlockSoundness.Discharge.Hm.bc_site_col": {
    "signature": [
     "FlockSoundness.Discharge.Hm.bc_site_col {T : FlockSoundness.Model.Statement}",
