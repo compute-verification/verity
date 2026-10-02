@@ -16,7 +16,14 @@ of one is an operation when it is the registry's own Definition, so a decoded Pr
 rebuilds) lists their constants, and when every function it is bound to holds no data itself. A primitive is never on the
 list: it has no body, and the tables it reads are its own declaration (`PrimitiveDefinition.tables`).
 
-The list is fixed and versioned. Adding or removing an entry is a new `VERSION`, and so a new `digest()`.
+A statement may make a Program's input public (a public input port, `verity_flock.circuit.compose`'s ``public_inputs``) only
+when its value is the verifier's own recomputation from public data: the port names its seed and derivation, the verifier
+derives the words itself and refuses any other (the design owner's condition, 2 Oct 2026). The Program declares nothing new:
+the port is one of its run inputs. `public_data` is the guard's rule for such ports: a port whose derivation is not on
+`DERIVATIONS` is data, so a statement with public ports claims its values hidden only when `program_data(root)` and
+`public_data(public_inputs)` both return {}.
+
+The lists are fixed and versioned. Adding or removing an entry is a new `VERSION`, and so a new `digest()`.
 """
 from __future__ import annotations
 
@@ -42,6 +49,10 @@ OPERATIONS: frozenset[str] = frozenset({
     # `verity_pouw.circuit.hashes`)
     "PouwKeccakF1600_v1", "PouwSha512Compress_v1",
 })
+
+#: the recomputations a verifier runs from public data, by derivation id, which a public input port may carry. None is listed
+#: yet, so every public port is data; the first entry enters `spec()`, and so `digest()`.
+DERIVATIONS: frozenset[str] = frozenset()
 
 _LIBRARY_TABLES = frozenset(t.name for t in library.TABLES)
 
@@ -97,9 +108,22 @@ def program_data(root: Any) -> dict[str, list[tuple[int, str]]]:
     return _Guard().data(root)
 
 
+def public_data(public: dict[str, Any]) -> dict[str, list[tuple[int, str]]]:
+    """The guard's rule for a statement's public input ports (``{port: {"seed", "derivation"}}``): the data they hold, keyed
+    ``public input <port>``, [(0, the derivation it names)]. A port is no data only when it names a non-empty seed and a
+    derivation on `DERIVATIONS`. {} exactly when every public port is the verifier's own recomputation."""
+    out = {}
+    for port, r in public.items():
+        seed, derivation = (r.get("seed"), r.get("derivation")) if isinstance(r, dict) else (None, None)
+        if not (isinstance(seed, str) and seed and derivation in DERIVATIONS):
+            out[f"public input {port}"] = [(0, derivation if isinstance(derivation, str) else "")]
+    return out
+
+
 def spec() -> dict:
-    """The list as canonical data: what `digest` hashes."""
-    return {"format": TAG, "version": VERSION, "operations": sorted(OPERATIONS)}
+    """The lists as canonical data: what `digest` hashes (`DERIVATIONS` once it lists one)."""
+    return {"format": TAG, "version": VERSION, "operations": sorted(OPERATIONS),
+            **({"derivations": sorted(DERIVATIONS)} if DERIVATIONS else {})}
 
 
 def digest() -> str:
@@ -107,4 +131,5 @@ def digest() -> str:
     return hashlib.sha512(f"{TAG}/v{VERSION}".encode() + b"\0" + canonical_json(spec())).hexdigest()
 
 
-__all__ = ["OPERATIONS", "TAG", "VERSION", "digest", "is_library_table", "is_operation", "program_data", "spec"]
+__all__ = ["DERIVATIONS", "OPERATIONS", "TAG", "VERSION", "digest", "is_library_table", "is_operation", "program_data",
+           "public_data", "spec"]

@@ -116,7 +116,8 @@ def _missing(d, tmp):
 
 
 def _public_word_changed(d, tmp):
-    return d / "stage" / "circuit.txt", d / "records-cpu" / "public_input_claim_false.pub.bin", d / "stage" / "public-inputs-4.bin"
+    false = d / "records-cpu" / "public_input_claim_false.pub.bin"
+    return d / "stage" / "circuit.txt", false, d / "stage" / "public-inputs-4.bin"
 
 
 def _own_word_changed(d, tmp):
