@@ -167,6 +167,29 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert json.loads(capsys.readouterr().out)["n"]["entries"]
 
 
+def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    _git(repo, "checkout", "-q", "fix")
+    _commit(repo, {"src/d.py": "d1\n"}, "a new script")
+    _git(repo, "push", "-q", "origin", "fix")
+    _git(repo, "checkout", "-q", "main")
+    manifest.write_text(manifest.read_text() + f'\n[[file]]\npath = "{node}/bin/d.py"\nsrc = "src/d.py"\nnodes = ["n"]\n')
+    n = deploy.load(manifest)["n"]
+    d = next(e for e in deploy.drift(n, "origin/main", local, repo)["entries"] if e["path"].endswith("d.py"))
+    assert d["state"] == "absent" and "origin/main lacks src/d.py" in d["detail"]
+    with pytest.raises(RuntimeError, match="lacks the source of src/d.py"):
+        deploy.install(n, "origin/main", "lane-x", ["src/d.py"], local, repo=repo)
+    done = deploy.install(n, "origin/main", "lane-x", [], local, repo=repo)
+    assert [f["changed"] for f in done if f["path"].endswith("d.py")] == ["absent"] and not (node / "bin" / "d.py").exists()
+    deploy.install(n, "origin/fix", "lane-x", ["src/d.py"], local, repo=repo)
+    assert (node / "bin" / "d.py").read_text() == "d1\n"
+
+    assert deploy.manifest_at("origin/main", repo) is None
+    rel = deploy.MANIFEST.relative_to(deploy.REPO)
+    _commit(repo, {str(rel): "[nodes.m]\nrecord = '/r'\n"}, "a manifest")
+    assert set(deploy.load(text=deploy.manifest_at("HEAD", repo))) == {"m"}
+
+
 def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
     nodes = deploy.load()
     assert {"vy-nebius-1", "vy-nebius-2"} <= set(nodes)
