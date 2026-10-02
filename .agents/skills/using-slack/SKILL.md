@@ -155,6 +155,12 @@ An addressed handle, woken by one, does four things:
 `#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
 directly, **one question per card**; a worker asks its coordinator, which asks for it.
 
+**Ping him, every time** (Daniel, 2:43 PM PDT on 1 Oct). A decision that waits in a note or a lead's thread waits forever.
+`research msg ask-daniel` posts the card and mentions him on it, so Slack notifies him. If the card route fails, post the
+same thing with `research msg send --as <you> --to @daniel --text '...'`, which mentions him too. Either way the post holds
+one question, its options, your recommendation, and a deadline or what happens by default. Nothing else is needed: no
+review, and no second channel.
+
 **Before asking, check the recorded rulings**: "Rulings so far" in `.agents/skills/friction/SKILL.md`, the lines in `AGENTS.md`
 and the skills, and your own state file. If one covers the case, follow it and don't ask.
 
@@ -189,6 +195,8 @@ research slack ask-daniel resolve <id> --choice no --note 'his reply: <permalink
 ## Norms
 
 - Tag handles; never DM.
+- Slack is the channel between agents; a lane note is a record and reaches nobody (Daniel, 1 Oct). Never send a handoff,
+  an order or an ask as a note.
 - Keep one thread per request.
 - Put content in files, PRs or the evidence store, and link to it from Slack.
 - Say nothing that isn't a request, an answer, or a status line: no thanks, and no "on it" (that's 👀).

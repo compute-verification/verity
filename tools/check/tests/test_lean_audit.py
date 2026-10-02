@@ -127,7 +127,7 @@ def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     files = LA.COMMON.tracked_files()
-    keys = {p: LA.key(p, files, ["--all", "--build"]) for p in LA.packages(files)}
+    keys = {p: LA.key(p, files, LA.FLAGS) for p in LA.packages(files)}
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "tests-cache"))
     one, two = tmp_path / "machine-1", tmp_path / "machine-2"
     monkeypatch.setenv("CHECK_CACHE", str(one))
@@ -136,7 +136,7 @@ def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_
     assert CHECK.VERDICTS.export(pack) == 2
 
     (root / "tools/check/check.py").write_text("# check.py changed, and nothing the audit runs\n")
-    assert {p: LA.key(p, files, ["--all", "--build"]) for p in keys} == keys
+    assert {p: LA.key(p, files, LA.FLAGS) for p in keys} == keys
     monkeypatch.setenv("CHECK_CACHE", str(two))
     assert CHECK.verdicts_in(pack, None)["added"] == 2
     out = tmp_path / "out2"
@@ -145,7 +145,7 @@ def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_
     assert not (out / "ran.txt").exists() and sorted(doc["cached"]) == ["pkg/a", "pkg/b"] and doc["passed"]
 
     (root / "tools/check/common.py").write_text("# the helpers the audit step runs changed\n")
-    assert not set(keys.values()) & {LA.key(p, files, ["--all", "--build"]) for p in keys}
+    assert not set(keys.values()) & {LA.key(p, files, LA.FLAGS) for p in keys}
 
 
 def test_explain_names_the_inputs_a_miss_changed(tmp_path, monkeypatch):
@@ -153,7 +153,7 @@ def test_explain_names_the_inputs_a_miss_changed(tmp_path, monkeypatch):
     (root / "pkg/b/lean-audit.json").write_text("{}")
     cache = tmp_path / "cache" / "lean-audit"
     assert _run(tmp_path, 1)[0] == 0
-    assert LA.explain("pkg/b", cache) == (0, [f"pkg/b: PASS reused ({LA.key('pkg/b', LA.COMMON.tracked_files(), ['--all', '--build'])[:12]}): "
+    assert LA.explain("pkg/b", cache) == (0, [f"pkg/b: PASS reused ({LA.key('pkg/b', LA.COMMON.tracked_files(), LA.FLAGS)[:12]}): "
                                               "every file its audit reads is unchanged"])
     (root / "tools/check/check.py").write_text("# check.py changed\n")
     assert "PASS reused" in LA.explain("b", cache)[1][0]                          # a unique part of the path names it too

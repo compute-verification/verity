@@ -87,14 +87,16 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
  that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
- codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
- pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
+ codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`: the
+ statements of its guarantees, their proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
  package (`lean/`, whose `Pouw.Proofs.endToEnd` is the guarantee); see its `PROTOCOL.md`.
  `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
  channel: the warden, its audit and calibration, and its Lean package (`lean/`).
+ `protocols/nci` is novel communication intensity, the policy that throttles frontier training
+ and leaves inference alone; so far only its Lean package (`lean/`).
  Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
@@ -172,25 +174,37 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
+  `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
   named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
-  warden's timing-channel statements and proofs, Mathlib), and `packages/verity/lean/` (core's own
-  proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation, no dependencies). New Lean goes into the
-  package whose dependencies it needs, in a subdirectory and namespace of its own; a core-only proof goes into core's
-  package, never a backend's. All packages share one toolchain and
+  warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
+  core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
+  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
+  Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
+  a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
+  protocols' packages, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
+- Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
+  `Guarantees` (each a `def G : Prop`) are the trusted text, importing only one another, core's trusted text and
+  Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
+  each guarantee proved. The other packages move to this layout one at a time.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
-- A theorem that a ledger, a table or a PR cites as proved is pinned in `lean-audit.json`. `audit.py --update` records
-  it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
+- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is pinned in `lean-audit.json`.
+  `audit.py --update` records it. A changed record means the guarantee now says something else (its statement, or a
+  definition the statement reads).
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
-  `--update` prints (each changed signature before and after, each changed definition as it is now), and the merge
-  handoff names them.
-- A named assumption, or a hand-proved lemma a dependency could prove, has an entry in the package's `upstream` watch
-  list. The audit fails when the pinned dependency proves a theorem about it that nobody has acknowledged
-  (`tools/lean/upstream.py`). A document's "status upstream" cites that output; it is never written by hand.
+  `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
+  description names them. A guarantee that only moved to another module or name needs no reviewer when `--update
+  --moved MOVES.json` (old names to new) prints it as the same statement under its old names: its statement and every
+  definition it reads match their records.
+- A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
+  that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
+  dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
+  package's own definitions (PoUS's `LemmaA`) gets no entry, since no upstream theorem can mention them, and neither does
+  one about a single number (PoUS's `PrimeP16448`), whose entry would match every theorem about primes. A document's
+  "status upstream" cites that output; it is never written by hand.
 - Two agents never share a writable Lake build directory (`.lake`): parallel Lean work uses separate checkouts.
 - How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
 
@@ -238,7 +252,7 @@ rather than accumulating them.
 ## Where writing goes
 
 - This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
-- Lane reports, handoffs, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
+- Lane reports, checkpoints, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`. Notes are records, never messages: a handoff, an order or an ask goes on Slack (below), or to your own Cursor workers as a follow-up.
 - Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
@@ -251,7 +265,7 @@ rather than accumulating them.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
-jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan. Before
+jobs detached on the pod, write one-line checkpoints, and message someone only to unblock or to change their plan. Before
 starting work another agent could plausibly be doing, read the notes' `kb/onboarding.md`: check `research notes approaches`
 and claim yours at your first checkpoint (`research notes claim`).
 
