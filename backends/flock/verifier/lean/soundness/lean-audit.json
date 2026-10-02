@@ -4042,6 +4042,15 @@
    "assumptions": [],
    "type_hash": "c066115cd0efc962e5414000e3b08c77b1b855019c5d84e7a0fc6ebdd1d25b2f"
   },
+  "FlockSoundness.Discharge.Layout.portReads_of_portReadsB": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.portReads_of_portReadsB {c : Flock.Circuit} (hU : FlockSoundness.Built c.unit)",
+    "  (hu : instLENat.le c.unit.unitLog 32) (h : Eq (FlockSoundness.Discharge.Layout.portReadsB c.unit) Bool.true) :",
+    "  FlockSoundness.Discharge.Layout.PortReads c hU"
+   ],
+   "assumptions": [],
+   "type_hash": "fcb8265b86a49995e42126e6b91b33ba6a4b4d75a6dc2563fb0c07a7093a9b07"
+  },
   "FlockSoundness.Discharge.Layout.proved_lt_population": {
    "signature": [
     "FlockSoundness.Discharge.Layout.proved_lt_population {d : Lean.Json} {D : Flock.Draw.UnitDraw}",
@@ -4113,6 +4122,15 @@
    "signature": ["FlockSoundness.Discharge.Layout.rowPrefix_size (w : Nat) : Eq (Flock.HmRow.rowPrefix w).size 128"],
    "assumptions": [],
    "type_hash": "523c4862d6d7ba66aa05815f189fec5ea9efdfb6fa30c86d10ae6ab28ace3622"
+  },
+  "FlockSoundness.Discharge.Layout.scopeOk_spec": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.scopeOk_spec {c : Flock.Circuit} (hU : FlockSoundness.Built c.unit)",
+    "  (h : Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true) :",
+    "  And (Eq c.unit.inGroups.size 1) (And (Eq c.outNet c.unitNet) (FlockSoundness.Discharge.Layout.PortReads c hU))"
+   ],
+   "assumptions": [],
+   "type_hash": "c21cdc5307fe09424aa2145562e35e7df6dddc5cacd9411e337d6b167f9e2654"
   },
   "FlockSoundness.Discharge.Layout.setupH_drawn": {
    "signature": [
@@ -10627,7 +10645,12 @@
     "FlockSoundness.Discharge.Layout.PortReads": "98586edceca5020c42ca9653b9df5bdf8cfdb432fc75d4a73511dd383c845a14",
     "FlockSoundness.Discharge.Layout.portRowW": "4f8a74c9adb179b0de17326bbadd0b3b7524eba8e73d3bfd9109f2761306405b"
    },
-   "pins": ["FlockSoundness.Discharge.Layout.keyedRows_enc", "FlockSoundness.Discharge.Layout.keysRow_of_parse"]
+   "pins": [
+    "FlockSoundness.Discharge.Layout.keyedRows_enc",
+    "FlockSoundness.Discharge.Layout.keysRow_of_parse",
+    "FlockSoundness.Discharge.Layout.portReads_of_portReadsB",
+    "FlockSoundness.Discharge.Layout.scopeOk_spec"
+   ]
   },
   "FlockSoundness.Discharge.Layout.OfRows": {
    "digest": "5e47687253fe58f9728a87c4ef12b515730843921c8a2eef990f7db5ceaeae64",
@@ -10788,6 +10811,17 @@
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.Layout.rowEnc_inj",
     "FlockSoundness.Discharge.Layout.rowEnc_row"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.Scope": {
+   "digest": "773f6add18ce06781aa0973fc3cced070ae8de0e3bbe672dd25d4b1b6205ff87",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.portReadsB": "16eaebbe8a2b9a311bad200fb1092ec19fef83eb72dbc8fa50dab86ab555befc",
+    "FlockSoundness.Discharge.Layout.scopeOk": "298f974c1444a26b97219a4ece45debeeeabf2595453a61af3210d41c743d6b4"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.portReads_of_portReadsB",
+    "FlockSoundness.Discharge.Layout.scopeOk_spec"
    ]
   },
   "FlockSoundness.Discharge.Layout.Site": {
@@ -11187,6 +11221,8 @@
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
     "FlockSoundness.Discharge.Layout.keysRow_of_parse",
     "FlockSoundness.Discharge.Layout.outsOut_outsOf",
+    "FlockSoundness.Discharge.Layout.portReads_of_portReadsB",
+    "FlockSoundness.Discharge.Layout.scopeOk_spec",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -11323,6 +11359,8 @@
     "FlockSoundness.Discharge.Layout.out_pinned",
     "FlockSoundness.Discharge.Layout.out_site",
     "FlockSoundness.Discharge.Layout.outsOut_outsOf",
+    "FlockSoundness.Discharge.Layout.portReads_of_portReadsB",
+    "FlockSoundness.Discharge.Layout.scopeOk_spec",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Layout.stackPlace_val_comp",
     "FlockSoundness.Discharge.Layout.stackRow_input",
@@ -12310,7 +12348,9 @@
     "FlockSoundness.Discharge.Layout.out_pinned",
     "FlockSoundness.Discharge.Layout.out_site",
     "FlockSoundness.Discharge.Layout.outsOut_outsOf",
+    "FlockSoundness.Discharge.Layout.portReads_of_portReadsB",
     "FlockSoundness.Discharge.Layout.region_read",
+    "FlockSoundness.Discharge.Layout.scopeOk_spec",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Layout.stackPlace_val_comp",
     "FlockSoundness.Discharge.Layout.stackRow_input",
