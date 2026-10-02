@@ -199,18 +199,24 @@ PUBLIC_CS = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf
 
 def test_public_leaves_split_from_the_rows_and_lie_in_whole_words():
     """A public input port's leaves leave the units' row leaf map (a zero leaf there) for the public one, indexed among the
-    public ports' words; the in region is the aligned power-of-two span of words holding them, and a row leaf inside it is
-    refused."""
+    public ports' words; the in regions are the words holding them as aligned power-of-two blocks, and a row leaf in such a
+    word is refused."""
     owner, li, lp = FC._split_leaves([[0, 1, 2, 3, -1], [2, 3, 0, 1, -1]], [("x", 2), ("cs", 2)], {"cs": {}})
     assert owner == [(False, 0), (False, 1), (True, 0), (True, 1)]
     assert li == [[0, 1, -1, -1, -1], [-1, -1, 0, 1, -1]] and lp == [[-1, -1, 0, 1, -1], [0, 1, -1, -1, -1]]
     # 16 leaves of 16 bits in 2 words: the public ones are word 1's eight leaves in every unit
     li, lp = [list(range(8)) + [-1] * 8], [[-1] * 8 + list(range(8))]
-    assert FC.public_span((4, 2, [16] * 16), li, lp) == (5, 0)
-    with pytest.raises(ValueError, match="leaf 0 reads a row word inside the in region's words 4..6"):
-        FC.public_span((4, 2, [16] * 16), li, [[-1] * 7 + list(range(9))])
+    assert FC.public_blocks((4, 2, [16] * 16), li, lp) == [(5, 0)]
+    with pytest.raises(ValueError, match="leaf 0 reads a row word inside word 4, which holds a public word"):
+        FC.public_blocks((4, 2, [16] * 16), li, [[-1] * 7 + list(range(9))])
     with pytest.raises(ValueError, match="no unit reads a public word"):
-        FC.public_span((4, 2, [16] * 16), li, [[-1] * 16])
+        FC.public_blocks((4, 2, [16] * 16), li, [[-1] * 16])
+    # a row port of one word, then public ports of 1 + 2 + 2 words (Pearl-C4's row unit: x, then E, F_A, F_B), and a gap
+    li, lp = [list(range(8)) + [-1] * 48], [[-1] * 8 + list(range(40)) + [-1] * 8]
+    assert FC.public_blocks((0, 7, [16] * 56), li, lp) == [(1, 0), (2, 1), (4, 1)]
+    assert FC.public_blocks((0, 7, [16] * 56), li, [[-1] * 8 + list(range(8)) + [-1] * 32 + list(range(8, 16))]) == [(1, 0), (6, 0)]
+    assert FC.aligned_blocks([8, *range(9, 137)]) == [(8, 3), (16, 4), (32, 5), (64, 6), (128, 3), (136, 0)]
+    assert FC.aligned_blocks([0, 1, 2, 3]) == [(0, 2)] and FC.aligned_blocks([3, 5]) == [(3, 0), (5, 0)]
 
 
 @pytest.mark.slow

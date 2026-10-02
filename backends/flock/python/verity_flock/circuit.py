@@ -298,26 +298,42 @@ def _split_leaves(leaves: list[list[int]], in_ports: list[tuple[str, int]], publ
     return owner, li, lp
 
 
-def public_span(group: tuple, li: list[list[int]], lp: list[list[int]]) -> tuple[int, int]:
-    """The ``in`` region's words in a unit slot (PROTOCOL.md §16.10): the smallest aligned power-of-two span ``[w0, w0 + 2^e)`` of
-    128-bit words holding every public leaf, inside the leaf group, every leaf in it a public or a zero leaf in every unit.
-    Returns ``(w0, e)``."""
+def aligned_blocks(words: list[int]) -> list[tuple[int, int]]:
+    """Distinct words as aligned power-of-two blocks ``(w, e)`` (``w`` a multiple of ``2^e``), in order: each maximal run of
+    consecutive words cut from its start, every block the largest aligned one that fits in what is left of the run."""
+    out, ws = [], sorted(set(words))
+    i = 0
+    while i < len(ws):
+        a = b = ws[i]
+        while i < len(ws) and ws[i] == b:
+            i, b = i + 1, b + 1
+        while a < b:
+            e = (b - a).bit_length() - 1
+            while a % (1 << e):
+                e -= 1
+            out.append((a, e))
+            a += 1 << e
+    return out
+
+
+def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> list[tuple[int, int]]:
+    """The ``in`` regions' words in a unit slot (PROTOCOL.md §16.10): the 128-bit words holding a public leaf in some unit, as
+    :func:`aligned_blocks`, inside the leaf group, every leaf in them a public or a zero leaf in every unit."""
     col, words, bits = group
     if any(b != 16 for b in bits):
         raise ValueError("public inputs: the unit's leaves are not 16-bit words")
-    pub = [col + 16 * j // 128 for u in lp for j, x in enumerate(u) if x >= 0]
+    pub = {col + 16 * j // 128 for u in lp for j, x in enumerate(u) if x >= 0}
     if not pub:
         raise ValueError("public inputs: no unit reads a public word")
-    a, b = min(pub), max(pub)
-    e = (a ^ b).bit_length()
-    w0 = a >> e << e
-    if w0 < col or w0 + (1 << e) > col + words:
-        raise ValueError(f"public inputs: the in region's words {w0}..{w0 + (1 << e)} leave the unit's leaf group")
+    blocks = aligned_blocks(list(pub))
+    for w, e in blocks:
+        if w < col or w + (1 << e) > col + words:
+            raise ValueError(f"public inputs: the in region's words {w}..{w + (1 << e)} leave the unit's leaf group")
     for j in range(len(bits)):
-        if w0 <= col + 16 * j // 128 < w0 + (1 << e) and any(lp[u][j] < 0 and li[u][j] >= 0 for u in range(len(li))):
-            raise ValueError(f"public inputs: leaf {j} reads a row word inside the in region's words {w0}..{w0 + (1 << e)}: "
-                             f"lay the public ports out as whole words")
-    return w0, e
+        if col + 16 * j // 128 in pub and any(lp[u][j] < 0 and li[u][j] >= 0 for u in range(len(li))):
+            raise ValueError(f"public inputs: leaf {j} reads a row word inside word {col + 16 * j // 128}, which holds a public "
+                             f"word: lay the public ports out as whole words")
+    return blocks
 
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
@@ -328,8 +344,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     partition names, else :func:`program_sha512` of the subcircuit.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
-    recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from an ``in``
-    region (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_span`).
+    recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
+    regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
     The data guard counts a port whose derivation it does not list as data (``verity.ml.operations.public_data``)."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
@@ -359,7 +375,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     pins = [{"port": nm, "words": w, **public_inputs[nm]} for nm, w in in_ports if nm in public_inputs]
     owner, leaves_in, leaves_public = _split_leaves(lv["in"], in_ports, public_inputs)
     if pins:
-        public_span(low.layout.in_groups[0], leaves_in, leaves_public)
+        public_blocks(low.layout.in_groups[0], leaves_in, leaves_public)
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
     ports = ins + [out_row(nm, w) for nm, w in outs]
     ul = _slot_log(low.layout.useful)
