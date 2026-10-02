@@ -143,7 +143,8 @@ include hparse in
 registration's bit `outBitOf`, the population's returned output's, when those gates are returned outputs' bits
 (`OutsOut`); the shape region "out" packs is the parse's (`outShape_of_parse`). -/
 theorem keyProg_hout (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) :
     ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ ((keyProg c hU n).partition outs).io u,
       (keyProg c hU n).unit g = some u →
@@ -199,7 +200,7 @@ theorem keyProg_hout (ho : c.outNet = c.unitNet)
     rw [hcc]; exact hu')
   obtain ⟨hw, hsh⟩ := outShape_of_parse (hparse S R u hu) hU ho
   obtain ⟨hbl, hfit⟩ := hsh u' hu'
-  have := out_site (si.acc S R u hu) (hsite S R u hu) (by rw [hcc]; exact ho) (parse_facts hpar).typed hM
+  have := out_site (si.acc S R u hu) (hsite S R u hu M hM) (by rw [hcc]; exact ho) (parse_facts hpar).typed hM
     (u' := u') (j := j) (t := t) (by rw [hcc]; exact hu') hk (by rw [hpow]; exact hk) (by rw [hcc]; exact hw)
     (by rw [hcc]; exact fun j hj => (hbl j hj).1) (by rw [hcc]; exact fun j hj => (hbl j hj).2)
     (by rw [hcc]; exact hfit) (by rw [hcc]; exact hj) ht
@@ -213,7 +214,8 @@ variable (outs popOf) in
 noncomputable def keyRowsOut (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (encO_inj : Function.Injective encO) (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
       {oneG (c := c) (hU := hU) (n := n)})

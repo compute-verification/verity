@@ -241,7 +241,8 @@ variable {outs popOf} (rowW) in
 /-- **`rs` at `keyProg`'s places, with the row bytes `sha512/row/v1` hashes**: `keyRowsOut` with `enc := rowEnc`
 (`keyRow_enc`) and `bitCode` for the other commit strings. -/
 noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
       {oneG (c := c) (hU := hU) (n := n)})
@@ -253,7 +254,8 @@ noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet)
 
 /-- `keyRowsEnc`'s `enc` is `rowEnc`. -/
 theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet)
-    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
       {oneG (c := c) (hU := hU) (n := n)})

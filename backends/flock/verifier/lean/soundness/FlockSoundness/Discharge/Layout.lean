@@ -14,6 +14,7 @@ import FlockSoundness.Discharge.Layout.OutShape
 import FlockSoundness.Discharge.Layout.OutPin
 import FlockSoundness.Discharge.Layout.RowEnc
 import FlockSoundness.Discharge.Layout.KeysRow
+import FlockSoundness.Discharge.Layout.Outs
 import FlockSoundness.Discharge.Layout.Keyed
 
 /-!
@@ -57,6 +58,9 @@ from the decoder's places and the executable's regions:
   (`keyRow_enc`, [e2e-hm]'s `port_commit` row), and `rs` with it (`keyRowsEnc`);
 * `KeysRow`: `KeysRow` from the parse at row widths `16 · words` (`keysRow_of_parse`, `portRowW`), for a unit with only
   its leaf group whose rows read only port bits (`PortReads`, a circuit condition);
-* `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`), with
-  [e2e-const]'s and [e2e-zero]'s constant and zero gates.
+* `Outs`: the returned outputs' bits as the program's outputs (`outsOf`, with `OutsOut` by `outsOut_outsOf`: a unit's
+  committed gate it computes is an output, `computed_committed_output`, since no unit reads a gate another computes,
+  `keyProg_reads`);
+* `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
+  `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates.
 -/
