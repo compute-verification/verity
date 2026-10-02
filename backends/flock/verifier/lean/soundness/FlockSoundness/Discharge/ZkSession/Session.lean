@@ -9,9 +9,10 @@ import FlockSoundness.ExecDrawOS
 
 `sessionZK` is `SessionBatch.sessionB` with `--zk` tables, as Lean defines the protocol at the interactive-oracle layer:
 `Commit` sends every table's level-0 oracle, one link-point draw serves all tables, and then every table's reps run
-concurrently, each rep with its pads commitment, the masked level 0 and the inner proof (`tableAfterZK`). The session
-accepts when every table accepts (`acceptedZK`). A table (`TabZK`) carries its statement, its schedule and padded
-level 0, its link layout and its inner proof's layout, with the conditions `table_sound_pad_zk` reads.
+concurrently, each rep with its pads commitment, the masked algebraic phase and level 0, and the inner proof
+(`tableAfterZK`). The session accepts when every table accepts (`acceptedZK`). A table (`TabZK`) carries its statement,
+its schedule and padded level 0, its link layout, its pads' layout and its inner proof's, with the conditions
+`table_sound_pad_zk` reads.
 
 **Per table** (`sessionZK_sound`): the session accepts while table `j`'s committed values do not satisfy its statement
 (`CommittedPad`) with probability at most table `j`'s `padLinkError + (padRepError + εInner)²` (`TabZK.bound`), whatever
@@ -42,8 +43,9 @@ averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's pl
   game would carry `TabZK.after`'s compiled form.
 * *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (for [e2e-exec],
   as `verify_refines_hm96` does at M0), and with it the headline's `execAccept`.
-* *The algebraic phase's masking.* Each rep's zerocheck, lincheck and ring switch run in the clear here
-  (`repPadZK`); M1 masks them too (§4's other rows).
+* *`final_c'`'s place.* The protocol as Lean defines it receives `final_c'` before the inner proof (`restZK`); the live
+  verifier never absorbs it, and a prover that picks it after the inner proof's batching coins can cancel the batched
+  constraint. This statement describes the live verifier once it absorbs `final_c'` before the inner proof's label.
 * *The coin step in the session.* Coins here are fresh after each prover message (A6's per-round form). M2 draws them
   from a coin tree committed before the prover's first message; `coin_fresh` / `coinLeaf_fresh` (Coins.lean) bound each
   round's coins within `δ_hide` of fresh from `Assumptions.Hm96Hiding`, but composing that into this session needs a
@@ -58,8 +60,9 @@ open Game Model Accounting Audit
 open scoped ENNReal NNReal
 
 /-- **A `--zk` table of a batched session**: the statement and its schedule, the padded level 0 (`t` padding columns,
-`c₀`, `e` extra lanes), the link layout for the session's `m_pts`, and the inner proof's layout: the pads (`pads`, `tr`),
-the pads code `RS[F, dom, np + nP]` read at `q` positions `pos`, and a radius `δ` within its unique-decoding radius. -/
+`c₀`, `e` extra lanes), the link layout for the session's `m_pts`, and the inner proof's layout: the pads (level 0's
+`pads`, the algebraic phase's `padsA`, the triple's `tr`), the pads code `RS[F, dom, np + nP]` read at `q` positions
+`pos`, and a radius `δ` within its unique-decoding radius. -/
 structure TabZK (F : Type) [Field F] [Fintype F] [DecidableEq F] (mPts : ℕ) where
   S : Statement
   sch : Schedule
@@ -75,6 +78,7 @@ structure TabZK (F : Type) [Field F] [Fintype F] [DecidableEq F] (mPts : ℕ) wh
   hlay : S.LinkLayout ptLocal mPts
   np : ℕ
   pads : Pads0 np e
+  padsA : PadsA np
   tr : Triple np
   N : ℕ
   dom : Fin N ↪ F
@@ -94,7 +98,7 @@ namespace TabZK
 /-- The table after `Commit` sent its level-0 oracle `C₀`, at the link points `pts`. -/
 noncomputable def after (A : Arith F K) (T : TabZK F mPts) (C₀ : Oracle F) (pts : Fin 2 → Fin mPts → F) :
     Game (Bool × Oracle F) :=
-  tableAfterZK A T.pads T.tr T.dom T.nP T.q T.pos T.S T.sch T.hm T.t T.c₀ T.ptLocal mPts C₀ pts
+  tableAfterZK A T.pads T.padsA T.tr T.dom T.nP T.q T.pos T.S T.sch T.hm T.t T.c₀ T.ptLocal mPts C₀ pts
 
 /-- The table's committed values satisfy its statement (padded level 0). -/
 def Committed (A : Arith F K) (T : TabZK F mPts) (C : Oracle F) : Prop :=
@@ -111,8 +115,8 @@ theorem after_sound (A : Arith F K) (hA : A.Correct) (T : TabZK F mPts) (C : Ora
     value (fun out => out.1 = true ∧ ¬ T.Committed A out.2)
       (.coin (Fin 2 → Fin mPts → F) fun pts => T.after A C pts) ≤ T.bound :=
   haveI := T.hnP
-  tableAfterZK_sound A hA T.S T.sch T.hshape T.hmsch T.hm T.t T.hpad T.c₀ T.e T.ptLocal mPts T.hlay T.pads T.tr T.dom
-    T.nP T.q T.pos T.hpos T.δ T.hL T.hδ C
+  tableAfterZK_sound A hA T.S T.sch T.hshape T.hmsch T.hm T.t T.hpad T.c₀ T.e T.ptLocal mPts T.hlay T.pads T.padsA
+    T.tr T.dom T.nP T.q T.pos T.hpos T.δ T.hL T.hδ C
 
 end TabZK
 

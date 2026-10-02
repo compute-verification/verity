@@ -12,15 +12,14 @@ Under `--zk` the prover sends level 0's out-of-domain value, its lane rounds' me
 `claim_k + Σ_i ρ_i e_i + T'` (§4; written `claim_k + Σ_i ρ_i e_i − T'`, the same row in characteristic 2), two `F` rows by
 its coordinates `K = F ⊕ F·u` (`limbRows`), which the inner proof enforces.
 
-`ligeritoPadZK` is `Model.ligeritoPad` with those changes and nothing else; levels 1+ (`ligTail`) are verbatim.
-`repPadZK` runs the algebraic phase as `Model.repPad` does (in the clear: this file masks level 0 only) and then
-`ligeritoPadZK`.
+`ligeritoPadZK` is `Model.ligeritoPad` with those changes and nothing else; levels 1+ (`ligTail`) are verbatim. The
+masked rep (`Algebraic.lean`) runs it after the masked algebraic phase.
 
 **The coupling** (VEIL Lemma 4.3, "`v' − h` is a prover strategy for the unmasked protocol"): for every pad vector `h`,
-the masked rep ends with a true verdict and rows vanishing at `h` with probability at most the clear rep's acceptance
-probability (`repPadZK_couple`). Unmasking each message at `h` turns a masked strategy into a clear one; the claim forms
-evaluate at `h` to the clear claims (`fold_couple`), and when the rows vanish `T'` is the clear restart, after which the
-two games are the same game.
+masked level 0 ends with a true verdict and its row vanishing at `h` with probability at most the clear level 0's
+acceptance probability (`ligeritoPadZK_couple`). Unmasking each message at `h` turns a masked strategy into a clear one;
+the claim forms evaluate at `h` to the clear claims (`fold_couple`), and when the row vanishes `T'` is the clear
+restart, after which the two games are the same game.
 -/
 
 namespace FlockSoundness.Discharge.ZkSession
@@ -297,45 +296,5 @@ theorem ligeritoPadZK_couple (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch 
       rfl
     · rw [value_congr (q := fun _ => False) (fun acc => ⟨fun h' => hrow h'.2, False.elim⟩), value_false]
       exact zero_le
-
-/-! ## One rep -/
-
-/-- **A `--zk` rep's masked phase, level 0 masked**: the algebraic phase as `Model.repPad` runs it, then the masked
-level 0; returns its two lane-phase rows and the verdict. -/
-noncomputable def repPadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (S : Statement) (sch : Schedule)
-    (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m)) :
-    Game ((Fin 2 → Lin F np) × Bool) := do
-  match ← zerocheck A S.m with
-  | none => pure (fun _ => ⟨0, 0⟩, false)
-  | some zc =>
-    match ← lincheck A S zc with
-    | none => pure (fun _ => ⟨0, 0⟩, false)
-    | some ab =>
-      match ← opening A (by omega) (ab :: cClaim A zc :: extra) with
-      | none => pure (fun _ => ⟨0, 0⟩, false)
-      | some op => (ligeritoPadZK A P sch t c₀ r op.T op.b C₀).map fun o => (limbRows A o.1, o.2)
-
-/-- **The rep couples** (VEIL Lemma 4.3): at every pad vector `h`, the masked rep ends with a true verdict and rows
-vanishing at `h` with probability at most the clear rep's (`Model.repPad`) acceptance probability. -/
-theorem repPadZK_couple (A : Arith F K) (hA : A.Correct) {np e : ℕ} (P : Pads0 np e) (S : Statement)
-    (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m))
-    (h : Fin np → F) :
-    value (fun o => o.2 = true ∧ ∀ k, (o.1 k).eval h = 0) (repPadZK A P S sch hm t c₀ r C₀ extra) ≤
-      value (· = true) (repPad A S sch hm t c₀ e r C₀ extra) := by
-  simp only [repPadZK, repPad, bind_eq, pure_eq]
-  refine value_bind_mono _ fun o₁ => ?_
-  rcases o₁ with _ | zc
-  · simp
-  refine value_bind_mono _ fun o₂ => ?_
-  rcases o₂ with _ | ab
-  · simp
-  refine value_bind_mono _ fun o₃ => ?_
-  rcases o₃ with _ | op
-  · simp
-  dsimp only
-  rw [value_map]
-  refine (value_mono (q := fun o => o.2 = true ∧ LinK.eval A h o.1 = 0)
-    (fun o ho => ⟨ho.1, eval_eq_zero_of_limbRows A hA o.1 h ho.2⟩) _).trans ?_
-  exact ligeritoPadZK_couple A P sch t c₀ r op.T op.b C₀ h
 
 end FlockSoundness.Discharge.ZkSession
