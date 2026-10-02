@@ -1,4 +1,4 @@
-import NetTiming.Model.Grid
+import NetTiming.Protocol.Grid
 import Mathlib.Data.List.Basic
 
 /-!

@@ -1,4 +1,4 @@
-import NetTiming.Model.Grid
+import NetTiming.Protocol.Grid
 import Mathlib.Data.Sym.Card
 import Mathlib.Data.Set.Card
 import Mathlib.Order.Interval.Finset.Fin
