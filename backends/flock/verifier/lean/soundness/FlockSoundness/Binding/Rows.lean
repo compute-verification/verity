@@ -1,13 +1,16 @@
 import FlockSoundness.Binding.Layout
+import FlockLevel3.RowV2
 
 /-!
-# `hm96-sha512/row/v1` rows: the registration fact from `HmRowComputes`
+# `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`
 
-A layout's rows are the commit strings under the serving roots that hold `hm96-sha512/row/v1` leaves (`HmRows`): the
-circuit hashes each one's row in `sha512x3` slots and outputs its commit string `b ‖ c` from an `hm96` slot, the verifier
-hashes the public `b ‖ c` into the frame-v3-sha512 roots it checks against the registration (`HmRow.checkPublic`), and
-the statement pins the `hm96` slots' outputs to the public `b ‖ c` (`HmRow.regions`). The other commit strings (the
-returned outputs, u16 words hashed in the clear) have leaf schemes of their own (`other`).
+A layout's rows are the commit strings under the serving roots that hold `hm96-sha512/row/v1` or `/row/v2` leaves
+(`HmRows`): the circuit hashes each one's row in `sha512x3` slots and outputs its commit string `b ‖ c` from an `hm96` slot,
+the verifier hashes the public `b ‖ c` into the frame-v3-sha512 roots it checks against the registration
+(`HmRow.checkPublic`), and the statement pins the `hm96` slots' outputs to the public `b ‖ c` (`HmRow.regions`). The other
+commit strings (the returned outputs, u16 words hashed in the clear) have leaf schemes of their own (`other`). A
+`/row/v2` layout's rows are bit rows (`HmRows.v2`), hashed as `sha512/row/v2` hashes them (`FlockLevel3.RowV2.enc`), whose
+injectivity on rows of fewer than `2^64` bits is `FlockLevel3.RowV2.enc_inj`.
 
 The registration fact (`Layout.Registered`) for the scheme that puts `ExplicitLeaf.hm96` at the rows (`HmRows.scheme`)
 then follows from `Assumptions.HmRowComputes` (`HmRows.registered`): the `b ‖ c` a satisfying witness holds is the commit
@@ -24,8 +27,9 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
-/-- **A layout's `hm96-sha512/row/v1` rows**: which commit strings are rows (`isRow`), the bytes `sha512/row/v1` hashes
-for a row (`enc`: the row prefix, then its words, injective), the leaf scheme of the other commit strings (`other`), and
+/-- **A layout's `hm96-sha512/row/v1` or `/row/v2` rows**: which commit strings are rows (`isRow`), the bytes the row
+digest hashes for a row (`enc`, injective: `sha512/row/v1`'s row prefix then its words, or `sha512/row/v2`'s `P(ℓ)` then
+its bits, `v2`), the leaf scheme of the other commit strings (`other`), and
 where a drawn unit's table's witness holds a row's commit string `b ‖ c`: the addresses of its `hm96` slot's 128 output
 bytes, bit by bit (`bcAt`). Two facts about the layout:
 * `bc_registered`: in a satisfying witness, at each of the unit's wires held by a row, `SHA-512(leaf_prefix ‖ b ‖ c)` of
@@ -46,6 +50,27 @@ structure HmRows (lay : Layout P plan tab decode) where
     (other (lay.pos g)).leaf (lay.row S R u M (lay.pos g)) (lay.salt S R u M (lay.pos g)) = lay.regLeaf R (lay.pos g)
 
 attribute [instance] HmRows.decRow
+
+/-- **A layout's `hm96-sha512/row/v2` rows**: `HmRows` whose rows are bit rows of fewer than `2^64` bits (`bits`,
+injective on the layout's values), hashed as `sha512/row/v2` hashes them (`FlockLevel3.RowV2.enc`), so that `enc_inj` is
+`FlockLevel3.RowV2.enc_inj` after `bits`. -/
+def HmRows.v2 {lay : Layout P plan tab decode} (isRow : lay.Pos → Prop) [DecidablePred isRow]
+    (bits : lay.Val → {bs : List Bool // bs.length < 2 ^ 64}) (hbits : Function.Injective bits)
+    (other : lay.Pos → ExplicitLeaf lay.Val)
+    (bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
+      Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m))
+    (bc_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, isRow (lay.pos g) →
+      H512 (K512.leafPrefix ++ bytesAt (wit plan tab S R u M) (bcAt S R u (lay.pos g))) = lay.regLeaf R (lay.pos g))
+    (other_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, ¬ isRow (lay.pos g) →
+      (other (lay.pos g)).leaf (lay.row S R u M (lay.pos g)) (lay.salt S R u M (lay.pos g)) = lay.regLeaf R (lay.pos g)) :
+    HmRows lay where
+  isRow := isRow
+  enc v := FlockLevel3.RowV2.enc (bits v).1
+  enc_inj := FlockLevel3.RowV2.enc_inj.comp hbits
+  other := other
+  bcAt := bcAt
+  bc_registered := bc_registered
+  other_registered := other_registered
 
 /-- A place the circuit hashes a row: a drawn unit `u` of the draw `S` under the registration `R`, a message of its
 table, and one of the unit's wires. -/
@@ -90,7 +115,7 @@ theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
     exact hb
   · exact rs.other_registered S R u hu M hM g hg hrow
 
-/-- **The value binding of `hm96-sha512/row/v1` rows**: `Layout.binding` at the rows' scheme, from `HmRowComputes`. -/
+/-- **The value binding of `hm96-sha512/row/v1` or `/row/v2` rows**: `Layout.binding` at the rows' scheme, from `HmRowComputes`. -/
 noncomputable def binding (hHm : rs.Computes) : P.ValueBinding plan tab decode H512 :=
   lay.binding rs.scheme (rs.registered hHm)
 

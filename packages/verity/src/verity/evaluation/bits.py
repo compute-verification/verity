@@ -10,6 +10,7 @@ one body's wires at a time, not the flattened circuit's.
     evaluate_bits(target, *inputs)    the Definition's own signature: one 0/1 array per parameter, `evaluate_batch`'s shapes
     evaluate_words(target, *inputs)   its word view (`boolean.word_type`): element j of a port is one word, least significant
                                       bit first
+    peak_bytes(target, n)             a bound on the bytes `evaluate_bits` holds at once for n instances, its inputs aside
 
 `evaluate_batch` routes a Boolean composite here when no kernel is registered for it; the reference stays the oracle, and the
 tests compare the two.
@@ -28,10 +29,12 @@ from verity.ir.types import Type
 
 from .reference import refuse_registered_tables
 
-__all__ = ["Compiled", "compile", "evaluate_bits", "evaluate_words"]
+__all__ = ["Compiled", "compile", "evaluate_bits", "evaluate_words", "peak_bytes"]
 
 _KINDS = ("and", "xor", "not")
 _ROW_BUDGET = 1 << 28  # bytes of one body's wire rows per chunk of instances
+_ARRAY = 256  # bytes of one ndarray's header, shape and strides (a scan keeps two per iteration)
+_SLACK = 1 << 16  # bytes of numpy's iteration buffers and the frames' own objects
 
 
 @dataclass
@@ -265,6 +268,50 @@ def evaluate_bits(target: Any, *inputs: Any) -> np.ndarray:
     c = compile(target)
     bits, n = _leaf_bits(c, inputs)
     return _evaluate(c, bits).reshape((n, *type_shape(c.ret)))
+
+
+def _run_peak(c: Compiled, words: int, memo: dict) -> int:
+    """The bytes `_run(c, args)` holds at once beyond ``args``: its wire rows, and at each step what the step allocates (a gate
+    group's operand copies; a call's gathered argument rows, its callee's run and the outputs it copies back, per chunk of members;
+    a scan's iterates) on top of what earlier steps' locals still hold, and the returned rows."""
+    key = (id(c), words)
+    if key in memo:
+        return memo[key]
+    wb = 8 * words
+    held_call = held_scan = top = 0
+    for step in c.steps:
+        if step[0] == "gates":
+            top = max(top, held_call + held_scan + 3 * wb * max(len(g[1]) for g in step[1]))
+        elif step[0] == "call":
+            _, child, members, _, w = step
+            k, m = min(len(members), max(1, _ROW_BUDGET // (8 * child.size * words))), members.shape[1]
+            held_call = max(held_call, k * (m + w) * wb)
+            own = max(2 * k * m * wb, k * m * wb + _run_peak(child, k * words, memo), k * (m + 2 * w) * wb)
+            top = max(top, held_scan + held_call + own)
+        else:
+            _, child, _, _, _, n, cl, _ = step
+            cr, cin = len(child.ret_idx), child.n_params
+            after = (n * (2 * cr - cl) + cin) * wb + n * (2 * _ARRAY + 8)
+            loop = (cl + n * cr + 2 * cin) * wb + n * (2 * _ARRAY + 8) + _run_peak(child, words, memo)
+            top = max(top, held_call + held_scan + max(loop, after))
+            held_scan = max(held_scan, after)
+    top = max(top, held_call + held_scan + len(c.ret_idx) * wb)
+    memo[key] = 8 * c.size * words + top
+    return memo[key]
+
+
+def peak_bytes(target: Any, n: int = 1) -> int:
+    """An upper bound on the bytes `evaluate_bits(target, *inputs)` holds at once for ``n`` instances, the inputs aside:
+    `_leaf_bits`' two copies of the leaves, `_evaluate`'s output, and in one chunk of instances the packed parameter words,
+    `_run`'s rows (`_run_peak`) and `_unpack`'s copies, plus `_SLACK` for numpy's buffers. When the target's own body is wide (a GEMM's weight
+    leaves) nearly all of it is 17 bytes per parameter leaf and instance word (the leaves, their packed words, their wire rows)
+    and 8 per other wire; the transients are bounded by `_ROW_BUDGET` per level of nesting."""
+    c = compile(target)
+    P, R = c.n_params, len(c.ret_idx)
+    nc = min(n, 64 * max(1, _ROW_BUDGET // (8 * c.max_size)))
+    w = -(-nc // 64)
+    held = n * (P + R)
+    return _SLACK + max(2 * n * P, held + P * (-(-nc // 8) + 8 * w), held + 8 * P * w + _run_peak(c, w, {}), held + 80 * R * w)
 
 
 def _to_bits(words: np.ndarray, widths: list[int]) -> np.ndarray:

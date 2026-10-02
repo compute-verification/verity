@@ -251,6 +251,20 @@ if [ ! -f /etc/systemd/system/vy-disk-guard.timer ]; then
 fi
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-disk-guard.timer
+# the store eviction: hourly, as ubuntu (the job store's owner), drop only local copies the remote store holds until 2500 GB are free
+run sudo install -m 755 "$SRC/store_evict.sh" /usr/local/bin/vy-store-evict
+if [ ! -f /etc/systemd/system/vy-store-evict.timer ]; then
+  if [ "$mode" = --apply ]; then
+    printf '[Unit]\nDescription=store eviction: drop local copies the remote store holds\n\n[Service]\nType=oneshot\nUser=ubuntu\nNice=19\nIOSchedulingClass=idle\nExecStart=/usr/local/bin/vy-store-evict\n' \
+      | sudo tee /etc/systemd/system/vy-store-evict.service > /dev/null
+    printf '[Unit]\nDescription=store eviction every hour\n\n[Timer]\nOnBootSec=10min\nOnUnitActiveSec=1h\n\n[Install]\nWantedBy=timers.target\n' \
+      | sudo tee /etc/systemd/system/vy-store-evict.timer > /dev/null
+  else
+    echo "   would write vy-store-evict.service and vy-store-evict.timer (every hour, as ubuntu)"
+  fi
+fi
+run sudo systemctl daemon-reload
+run sudo systemctl enable --now vy-store-evict.timer
 
 step "5. the host's CUDA driver library for GPU-less pods (/workspace/jobs/cuda-driver)"
 # A coverage cell's Build task has no GPU, and so no driver libraries in its pod, but importing vLLM's CUDA platform (#536) loads
