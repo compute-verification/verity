@@ -23,8 +23,8 @@ those runs holds.
 
 What R11 still needs past this: `Decodes` itself, which is deterministic (R11b, the framing: the round bytes the coin
 server retains decode to the messages the proof files replay, and `wr` is the server's record); sessions of more than
-one table (production M0 runs one); and that the coin server's session is `liveTable`, whose coins are uniform and
-drawn after each round's bytes (A6).
+one table (M0's default is one, `--session-tables 1`); and that the coin server's session is `liveTable`, whose coins
+are uniform and drawn after each round's bytes (A6).
 -/
 
 namespace FlockSoundness.Discharge.Exec
