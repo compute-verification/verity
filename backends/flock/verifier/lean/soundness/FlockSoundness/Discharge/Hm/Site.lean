@@ -1,9 +1,9 @@
 /-
-`HmRowComputes` at e2e-layout's rows (`keyedRowsOuts_computes`). At a drawn unit's site in its table's accepted
-statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` output (`Layout.bcAddr`) is the commit string
-of the row prefix and the bytes at the message columns, under the salt at `saltCol` (`bc_site_commit`): `row_bc_setupH`,
-with each column in the block (`bcCol_lt`, `saltCol_lt`, `Layout.msgCol_lt_of_parse`), so the site's addresses read the
-block's bits (`bit_siteAddr`).
+`HmRowComputes` at e2e-layout's rows (`keyedRowsOuts_computes`, through their `PortCommits`, `portCommits`). At a drawn
+unit's site in its table's accepted statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` output
+(`bcCol`, the address the regions pin `Layout.bcAddr`) is the commit string of the row prefix and the bytes at the message
+columns, under the salt at `saltCol` (`bc_site_col`, `bc_site_commit`): `row_bc_setupH`, with each column in the block
+(`bcCol_lt`, `saltCol_lt`, `Layout.msgCol_lt_of_parse`), so the site's addresses read the block's bits (`bit_siteAddr`).
 -/
 import FlockSoundness.Discharge.Hm.Bc
 import FlockSoundness.Discharge.Layout
@@ -127,9 +127,25 @@ theorem bytesAt_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.n
   ofFn_site a z o N col hcol
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
-outputs, at block `o`, VU `g` and row port `p`, the 128 bytes at the `hm96` slot's output (`Layout.bcAddr`) are the
-commit string of the row prefix and the `2 · words` bytes at the message columns (`Typed.msgCol`), under the 192 bytes at
+outputs, at block `o`, VU `g` and row port `p`, the 128 bytes at the `hm96` slot's output (`bcCol`) are the commit string
+of the row prefix and the `2 · words` bytes at the message columns (`Typed.msgCol`), under the 192 bytes at
 `saltCol`. -/
+theorem bc_site_col (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
+    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
+    (hp : p < a.st.c.ports.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => Layout.siteAddr a o (bcCol a.st.c g p j.val t.val)) =
+      Binding.commitString ((HmRow.rowPrefix a.st.c.ports[p]!.words).data.toList ++
+        List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
+          FlockSoundness.bit (z (Layout.siteAddr a o (Typed.msgCol a.st.c g p j.val t.val))))
+        (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => Layout.siteAddr a o (saltCol a.st.c g p j.val t.val)) := by
+  have R := acc_rowRanges a
+  rw [bytesAt_site a z o 128 (bcCol a.st.c g p) (fun j hj t ht => bcCol_lt R hg hp hj ht),
+    bytesAt_site a z o 192 (saltCol a.st.c g p) (fun j hj t ht => saltCol_lt R hg hp hj ht),
+    ofFn_site a z o _ (Typed.msgCol a.st.c g p)
+      (fun j _ t ht => Layout.msgCol_lt_of_parse (setupH_spec a.ht a.h).1 hg hp j t ht)]
+  exact acc_row_bc a ho hz o hg hp
+
+/-- `bc_site_col` at the address the regions pin (`Layout.bcAddr`). -/
 theorem bc_site_commit (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
@@ -138,17 +154,13 @@ theorem bc_site_commit (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unit
         List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
           FlockSoundness.bit (z (Layout.siteAddr a o (Typed.msgCol a.st.c g p j.val t.val))))
         (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => Layout.siteAddr a o (saltCol a.st.c g p j.val t.val)) := by
-  have R := acc_rowRanges a
   have hbc : (fun (j : Fin 128) (t : Fin 8) => Layout.siteAddr a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       fun j t => Layout.siteAddr a o (bcCol a.st.c g p j.val t.val) := by
     funext j t
-    rw [Layout.bcAddr_eq_slotCol _ _ _ _ _ (perVu_hm_pow2 R)]
+    rw [Layout.bcAddr_eq_slotCol _ _ _ _ _ (perVu_hm_pow2 (acc_rowRanges a))]
     rfl
-  rw [hbc, bytesAt_site a z o 128 (bcCol a.st.c g p) (fun j hj t ht => bcCol_lt R hg hp hj ht),
-    bytesAt_site a z o 192 (saltCol a.st.c g p) (fun j hj t ht => saltCol_lt R hg hp hj ht),
-    ofFn_site a z o _ (Typed.msgCol a.st.c g p)
-      (fun j _ t ht => Layout.msgCol_lt_of_parse (setupH_spec a.ht a.h).1 hg hp j t ht)]
-  exact acc_row_bc a ho hz o hg hp
+  rw [hbc]
+  exact bc_site_col a ho hz o hg hp
 
 end Site
 
@@ -166,6 +178,20 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   {popOf : Reg → Public}
 
+include hparse in
+/-- **[e2e-layout]'s `PortCommits` at `saltCol`**: at every drawn unit's site, in a satisfying witness of its table, each
+row port's `b ‖ c` is the commit string of its row and salt (`bc_site_col`), when the unit returns the outputs. -/
+theorem portCommits (ho : c.outNet = c.unitNet) : PortCommits c si saltCol := by
+  intro S R u hu M hM q
+  have hce := (si.acc S R u hu).c_eq (hparse S R u hu)
+  have hb := bc_site_col (si.acc S R u hu) (by rw [hce]; exact ho) hM (si.o S R u hu) (si.hvu S R u hu)
+    (p := q.val) (by rw [hce]; exact q.isLt)
+  have hw : (si.acc S R u hu).st.c.ports[q.val]!.words = c.ports[q].words := by
+    rw [hce, getElem!_pos c.ports q.val q.isLt]
+    rfl
+  rw [hw] at hb
+  exact hb
+
 /-- **`HmRowComputes` at e2e-layout's rows** (`hHm` for `Layout.keyedRowsOuts` at `saltCol`): at every drawn unit's
 committed wire held by a row port `q`, in a satisfying witness of the unit's table, the `b ‖ c` at the port's `hm96`
 output is the commit string of the row's bytes (`rowEnc`) and the salt the witness holds at `saltCol`. -/
@@ -174,37 +200,8 @@ theorem keyedRowsOuts_computes {tags : Tags} {bytes : ByteArray} {tables : List 
     (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    (keyedRowsOuts hparse saltCol hc h1 hpr ho hsite (popOf := popOf)).Computes := by
-  unfold Binding.HmRows.Computes Assumptions.HmRowComputes
-  rintro ⟨S, R, u, M, g⟩ ⟨hu, hM, -, hrow⟩
-  dsimp only at hu hM hrow ⊢
-  revert hrow
-  generalize (keyedLayout hparse (outsOf c hU n) saltCol popOf).pos g = pos
-  rcases pos with ⟨u', q⟩ | g'
-  · intro _
-    have hce := (si.acc S R u hu).c_eq (hparse S R u hu)
-    have hq : q.val < (si.acc S R u hu).st.c.ports.size := by rw [hce]; exact q.isLt
-    have hwq : portRowW c q = 16 * (si.acc S R u hu).st.c.ports[q.val]!.words := by
-      rw [hce, getElem!_pos c.ports q.val q.isLt]
-      rfl
-    have hb := bc_site_commit (si.acc S R u hu) (by rw [hce]; exact ho) hM (si.o S R u hu) (si.hvu S R u hu) hq
-    show Binding.bytesAt _ (keyBcAddr si S R u q) = Binding.commitString
-      (rowEnc ((keyLayout (portRowW c) hparse (outsOf c hU n) saltCol popOf (outBitOf c hU n (outsOf c hU n) popOf)
-        bitCode).row S R u M (.inl (u', q))))
-      (Binding.bytesAt _ (keySaltAddr si saltCol S R u (.inl (u', q)) (hU := hU)))
-    have e1 : keyBcAddr si S R u q = fun (j : Fin 128) (t : Fin 8) => siteAddr (si.acc S R u hu) (si.o S R u hu)
-        (bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
-      funext j t
-      simp only [keyBcAddr, hu, dite_true]
-    have e2 : keySaltAddr si saltCol S R u (.inl (u', q)) (hU := hU) = fun (j : Fin 192) (t : Fin 8) =>
-        siteAddr (si.acc S R u hu) (si.o S R u hu) (saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
-      funext j t
-      simp only [keySaltAddr, hu, dite_true]
-    rw [keyRow_enc hparse (outsOf c hU n) saltCol popOf (outBitOf c hU n (outsOf c hU n) popOf) bitCode hu M u' q hwq,
-      e1, e2]
-    exact hb
-  · intro h
-    exact (Bool.false_ne_true h).elim
+    (keyedRowsOuts hparse saltCol hc h1 hpr ho hsite (popOf := popOf)).Computes :=
+  Layout.keyedRowsOuts_computes hparse saltCol hc h1 hpr ho hsite (portCommits hparse ho)
 
 end Keyed
 
