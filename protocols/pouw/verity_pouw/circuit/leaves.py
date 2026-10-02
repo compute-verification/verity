@@ -9,10 +9,9 @@ in gates is the work's own digest:
 The rows (`SCHEMAS`), each a row of 16-bit words with every narrower element packed low bits first (flock-fp's packed
 rows), so the row's bytes are the tensor's memory.  Each is committed under its row's and role's frame-leaf schema
 (`ROW_SCHEMA`): an `hm96-sha512/row-seg/v1` row (`sha512/row-seg/v1`: the bit row, 16 bits a word, any length, in 1 KiB
-segments that hash in parallel), an `hm96-sha512/row/v1` row (`sha512/row/v1`, role X and 16-bit words, as every C-Flock
-v1 port is, of whole SHA-512 blocks) or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a word, any length).  No
-digest names the row's role or schema, so the registration domain of the tree a row sits in binds the schema id, the word
-count and the role:
+segments that hash in parallel) or an `hm96-sha512/row/v2` row (`sha512/row/v2`: the bit row, 16 bits a word, any length,
+serial).  No digest names the row's role or schema, so the registration domain of the tree a row sits in binds the schema
+id, the word count and the role, and each tree holds exactly one (schema id, word count, role):
 
     row (schema id)               words                                              n words            role
     bf16 (pouw/row-bf16/v1)       k BF16 words                                       k                  X (A_i) or W (B_j)
@@ -27,14 +26,29 @@ count and the role:
     tile (pouw/tile-h0/v1)        the 32-byte tile digest (`PearlTileDigest`), two   16                 X
                                   bytes per word, low byte first
 
+    row        X (per call)    W (registered)
+    bf16       row-seg/v1      row/v2
+    fp32       row-seg/v1      row/v2
+    nvfp4-p    row-seg/v1      row/v2
+    fp8-p      row-seg/v1      row/v2
+    ok         row/v2          row/v2
+    tile       row/v2          (none)
+
 Every per-call row (role X) but ok and the tile digest is a row-seg row, so decode's serial hash chain is a segment's, not
-the row's (Daniel's ruling, card 637f70c6).  The registered rows (role W) keep the serial layout: bf16 and fp32 v1 rows
-(whole blocks: 64 | k and 32 | k), nvfp4-p and fp8-p v2 rows; ok and tile are v2 rows in either role.  nvfp4-p's codes and
-scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its elements.  Which unit
-ports make up each row is `pc4.PORTS` and `pc8.PORTS`.  `words_*` are each row's words from its elements, and `commit` and
-`tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute
-every serial row's vector through its ports (``backends/flock/tests/test_pouw_rows.py``; its row-seg port is still to
-come).  The anchored inputs are no row: they are public input regions (`anchors.region_words`).
+the row's (Daniel's ruling, card 637f70c6).  Every other row is a v2 row, the registered ones included, so each (row, role)
+has one leaf schema in the registered tree and in every statement that reads or writes it, and no row is `sha512/row/v1`
+(Daniel's ruling, Slack 1790973124.259289).  A v2 row costs what a v1 row of the same words would, a 128-byte prefix block
+and the row; the role byte that v2 drops is bound by the registration domain.  nvfp4-p's codes and scales are
+`rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its elements.
+
+Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, and `statement_rows` gives a unit's C-Flock rows from
+them: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
+output row's run of output ports, so a row a unit writes as several outputs (A′_i ‖ P_A,i: the codes, the scales and P)
+is one row of exactly their words, the row its readers commit.  `words_*` are each row's words from its elements, and
+`commit` and `tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's
+tests recompute every row's vector through its ports and commit a row-seg row written as several output ports as its
+reader does (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are public input regions
+(`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
@@ -46,9 +60,8 @@ from functools import lru_cache
 from typing import Sequence
 
 from verity.commitments import hm96
-from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG,
-                                        SCHEMA_HM96_SHA512_ROW_V2, row_bytes, sha512_row_digest, sha512_row_seg_word_digest,
-                                        sha512_row_v2_digest)
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
+                                        sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.types import Array, Value
 
@@ -68,10 +81,10 @@ SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "p
            "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16}
-_V1, _V2, _SEG = SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
-#: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, the registered rows
-#: (role W) of 16-bit elements v1 and the packed ones v2, and the admission bit and the tile digest v2
-ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V1, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V1,
+_V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
+#: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the registered
+#: rows (role W), the admission bit and the tile digest v2
+ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V2,
               ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
               ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2}
 
@@ -148,8 +161,8 @@ def words_tile(digest: bytes) -> list[int]:
 
 def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
     """x, the digest of a ``row`` row of 16-bit ``words`` in a tree of ``role``, under its schema (`ROW_SCHEMA`): core's
-    `sha512/row-seg/v1` digest of the words as a bit row, its `sha512/row/v1` digest (role X, whole SHA-512 blocks) or its
-    `sha512/row/v2` digest of 16 bits a word; an ok row's words pass `ok_of`."""
+    `sha512/row-seg/v1` or `sha512/row/v2` digest of the words as a bit row, 16 bits a word; an ok row's words pass
+    `ok_of`."""
     schema = ROW_SCHEMA.get((row, role))
     if schema is None:
         raise ValueError(f"no {row} row sits in a tree of role {role}")
@@ -159,11 +172,7 @@ def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
         raise ValueError(f"a {row} row is a positive number of words, not 0")
     if schema == _SEG:
         return sha512_row_seg_word_digest(words, 16)
-    if schema == _V2:
-        return sha512_row_v2_digest(row_bytes(words, 16), 16 * len(words))
-    if 2 * len(words) % 128:
-        raise ValueError(f"a {row} row ({schema}) is whole SHA-512 blocks, not {2 * len(words)} bytes")
-    return sha512_row_digest(words, 16, ROLE_X)
+    return sha512_row_v2_digest(row_bytes(words, 16), 16 * len(words))
 
 
 def commit(row: str, role: int, words: Sequence[int], salt: bytes) -> bytes:
@@ -177,6 +186,31 @@ def tree_leaf(bc: bytes) -> bytes:
     return INST.tree_leaf(KEY, bc)
 
 
+def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> dict:
+    """A unit's committed rows as its C-Flock statement's META names them, from its ports (``unit``: `pc4.PORTS[role]` or
+    `pc8.PORTS[role]`) at depth ``k``: ``row_schemas``, each row's [schema, bits] (`ROW_SCHEMA`, ``16 ROW_WORDS``), the input
+    rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
+    then the output rows, and ``out_row_ports``, each output row's run of output ports.  The output rows' ports are the
+    unit's outputs, once each and in order."""
+    reads = reads or {}
+    ins, outs, runs = [], [], []
+    for row, role, ps in unit["rows"]:
+        entry = [ROW_SCHEMA[row, role], 16 * ROW_WORDS[row](k)]
+        if all(isinstance(p, str) for p in ps):
+            n = {reads.get(p, 1) for p in ps}
+            if len(n) != 1:
+                raise ValueError(f"a {row} row's ports {ps} are not read the same number of rows")
+            ins += [entry] * n.pop()
+        elif all(isinstance(p, int) for p in ps):
+            outs.append(entry)
+            runs.append(list(ps))
+        else:
+            raise ValueError(f"a {row} row is input ports or output ports, not {ps}")
+    if [p for run in runs for p in run] != list(range(sum(map(len, runs)))):
+        raise ValueError(f"the output rows' ports {runs} are not the unit's outputs, once each and in order")
+    return {"row_schemas": ins + outs, "out_row_ports": [len(run) for run in runs]}
+
+
 __all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
-           "digest_bytes", "ok_of", "row_digest", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
+           "digest_bytes", "ok_of", "row_digest", "statement_rows", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
            "words_fp8_p", "words_nvfp4_p", "words_ok", "words_tile"]
