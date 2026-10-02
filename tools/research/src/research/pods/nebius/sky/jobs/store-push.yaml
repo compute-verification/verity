@@ -49,7 +49,7 @@ config:
     pod_config:
       metadata:
         labels:
-          kueue.x-k8s.io/queue-name: deployments-cpu
+          kueue.x-k8s.io/queue-name: backfill      # the dispatcher tops up only VY_DISPATCH_DEPTH's queues; it borrows idle quota
           kueue.x-k8s.io/priority-class: backfill
       spec:
         terminationGracePeriodSeconds: 300

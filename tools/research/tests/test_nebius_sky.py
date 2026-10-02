@@ -85,7 +85,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
     assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
                     "commit-pack": ("deployments-gpu", "circuits-gpu"),
                     "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench"),
-                    "store-push": ("deployments-cpu", "backfill")}
+                    "store-push": ("backfill", "backfill")}
 
 
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
