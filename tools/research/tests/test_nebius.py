@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -1262,6 +1263,28 @@ def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_nod
     [replay] = hand_back(2)
     assert "--task 2" in replay
     assert hand_back(1, proof="1") == []
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_a_commit_that_goes_back_to_node_1_keeps_its_lease_and_pinned_template(tmp_path):
+    """A `lease: self` Commit that comes back from node 2 without its lease runs as a whole-GPU pod and holds the GPU through its CPU
+    prep. Both ways back (dispatch_n1 after a stop or failure, reclaim after a long wait) take their `dispatch.py submit` flags from
+    submit_args, which keeps every item field that submit takes."""
+    text = (NEBIUS / "n2_commit.sh").read_text()
+    body = lambda name: re.search(rf"^{name}\(\) \{{.*?^\}}\n", text, re.M | re.S).group(0)
+    item = tmp_path / "item.json"
+    item.write_text(json.dumps({"tree": "/t", "lease": "self", "template_sha": "87e09228d7e0", "priority": "circuits-gpu",
+                                "resources": {"gpu": {"gpus": 1}}, "env": {"ROW": "gemma2-9b__bf16", "REPLAY_DEFERRED": "1"},
+                                "n2": {"commit_key": "vllm-epoch-run/cov-gm148-r2"}}))
+    out = subprocess.run(["bash", "-c", f"set -euo pipefail\n{body('submit_args')}\nsubmit_args {item}"], check=True, capture_output=True,
+                         text=True).stdout
+    words = shlex.split(out)
+    pairs = dict(zip(words[::2], words[1::2]))
+    assert pairs["--lease"] == "self" and pairs["--template-sha"] == "87e09228d7e0" and pairs["--priority"] == "circuits-gpu"
+    assert json.loads(pairs["--resources"]) == {"gpu": {"gpus": 1}}
+    assert [w for w in words if w.startswith("ROW=") or w.startswith("REPLAY_DEFERRED=")] == ["ROW=gemma2-9b__bf16", "REPLAY_DEFERRED=1"]
+    assert 'ITEM_ARGS=($(submit_args "$1"))' in body("load_item") and 'args=($(submit_args "$item"))' in body("reclaim")
+    assert "--priority" not in body("load_item") + body("reclaim"), "one list of the item's flags, in submit_args"
 
 
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
