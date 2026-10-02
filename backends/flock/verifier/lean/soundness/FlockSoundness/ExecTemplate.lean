@@ -334,13 +334,13 @@ theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String
     exact Or.inr ⟨net, c', rfl, hc', (Except.ok.inj h).symm⟩
 
 /-- **What `Stmt.setupH` accepted, for a typed statement** (`tags.typed = true`): the circuit `parseTyped` accepted, the
-pin `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 26`. -/
+pin `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/
 theorem setupH_spec_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = true) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     HmRow.parseTyped tags cf tables = .ok st.c ∧ HmRow.pin st.c = .ok st.pin ∧
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
-      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 26 := by
+      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 27 := by
   unfold Stmt.setupH at h
   simp (config := { zeta := false }) only [ht, ↓reduceIte] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)

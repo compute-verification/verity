@@ -73,7 +73,7 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
 SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
 SHA_LOG = HM_LOG = 18
 MASK_LOG = 14
-K_MAX = 26
+K_MAX = 27
 #: The partition is a named query of the program, P = Q(C) (Daniel, 2026-09-27): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Until core's verity/partition/v1 lands (#111), the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
@@ -458,6 +458,15 @@ def _dummy(low: IL.Lowering, ports: list[Port], sub=None) -> dict:
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     bc = _commit_strings(ports, {p.name: np.zeros((1, p.words), np.uint16) for p in ports}, {p.name: [bytes(SALT_BYTES)] for p in ports})
     return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": [int(x) for x in outs[0]]}
+
+
+def coins(live: list[dict]) -> str | None:
+    """The coins M0's sessions ran on, as their LIVE records name them: ``os-seed-prf`` when the verdict opens the step-0 seed (the
+    binary's default), ``live-os`` when the identity names per-round OS coins (``FC_COINS=os``); None for anything else (a
+    ``--zk`` session's committed coin tree) and for sessions that differ."""
+    modes = {"os-seed-prf" if (x.get("verdict") or {}).get("coin_seed") else
+             "live-os" if str((x.get("identity") or {}).get("coins", "")).startswith("live-os") else None for x in live}
+    return modes.pop() if len(modes) == 1 else None
 
 
 def digest(text: str) -> str:
