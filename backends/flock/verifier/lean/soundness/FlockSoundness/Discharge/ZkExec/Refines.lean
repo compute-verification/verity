@@ -13,6 +13,7 @@ import FlockSoundness.Discharge.Exec.Headline
 namespace FlockSoundness.Discharge.ZkExec
 
 open Game Audit Exec Refine Flock
+open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -26,9 +27,28 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
 
 theorem execRefinesZK_one : ExecRefinesZKOne G out acc I wr opn dg dec one fin capOf N L := by
-  sorry
+  intro hinh hdec τ
+  have h0 : prob (fun _ => False) (auditLive L Reg (liveOf dg mPts N wr)) τ = 0 :=
+    prob_eq_zero_of_out (fun _ _ h => h) τ
+  unfold ExecRefines
+  rw [h0, add_zero]
+  show ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (LiveAcceptsZK I) ((liveOf dg mPts N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) ≤
+    ∑ ω : L.Ω, (Fintype.card L.Ω : ℝ≥0∞)⁻¹ *
+      prob (fun o => o.1 = true) ((sessionZC G out acc (L.draw ω) τ.1).map fun ok => (ok, L.draw ω))
+        ((simAuditZK G out acc I wr opn dg dec one fin capOf N hinh hdec τ).2 ω)
+  refine Finset.sum_le_sum fun ω _ => mul_le_mul_right ?_ _
+  unfold simAuditZK sessionZC
+  rw [prob_strategy_map, prob_strategy_map, prob_map]
+  unfold liveOf
+  rw [prob_map]
+  exact live_le (out (L.draw ω) τ.1) _ (fun x => acc (L.draw ω) τ.1 x = true) (opn (L.draw ω) τ.1) dg
+    (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (G (L.draw ω) τ.1)
+    (hinh (L.draw ω) τ.1) (hdec (L.draw ω) τ.1) _
 
 theorem zk_headline_exec_one : ZkHeadlineExecOne G out acc I wr opn dg dec one fin capOf N L := by
-  sorry
+  intro hinh hdec τ Q B hB
+  have h := exec_le_of_refines (execRefinesZK_one G out acc I wr opn dg dec one fin capOf N L hinh hdec τ) Q hB
+  rwa [prob_eq_zero_of_out (fun _ _ h => h) τ, add_zero] at h
 
 end FlockSoundness.Discharge.ZkExec
