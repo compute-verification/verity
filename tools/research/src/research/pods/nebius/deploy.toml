@@ -109,6 +109,12 @@ nodes = ["vy-nebius-1"]
 run = ["tmux:node1-dispatch", "tmux:commit-release"]
 
 [[file]]
+path = "/workspace/jobs/dispatch/dispatch.env"
+src = "tools/research/src/research/pods/nebius/dispatch-n1.env"
+nodes = ["vy-nebius-1"]
+run = ["tmux:node1-dispatch"]
+
+[[file]]
 path = "/workspace/verity-guest/bin/n1_lease.py"
 src = "tools/research/src/research/pods/nebius/n1_lease.py"
 nodes = ["vy-nebius-1"]
@@ -286,6 +292,21 @@ nodes = ["vy-nebius-2"]
 [[file]]
 path = "/workspace/pouw/infra/bin/check_slot.sh"
 src = "tools/research/src/research/pods/nebius/check_slot.sh"
+nodes = ["vy-nebius-2"]
+
+[[file]]
+path = "/usr/local/bin/vy-check-slot-d"
+src = "tools/research/src/research/pods/nebius/check_slot_d.sh"
+nodes = ["vy-nebius-2"]
+
+[[file]]
+path = "/usr/local/bin/vy-provers"
+src = "tools/research/src/research/pods/nebius/provers.sh"
+nodes = ["vy-nebius-2"]
+
+[[file]]
+path = "/usr/local/bin/vy-pous-quiet"
+src = "tools/research/src/research/pods/nebius/pous_quiet.sh"
 nodes = ["vy-nebius-2"]
 
 [[file]]
