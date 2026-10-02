@@ -21,6 +21,8 @@ pin, the openings after release, the closure) reads host memory only. From there
 (``run_main``), before the interpreter's teardown could open one. A Commit that still needs the device after its last run, or whose
 context did not go, keeps the lease to its exit and says why (``kept_reason``). Prechecks, manifest and weights of record come before
 the Commit process; the verdict, the row's records and the research run's publish after it. Without ``GPU_LEASE`` nothing changes.
+A TP Commit (`pipeline.tp.lease`) takes all its GPUs with one ``acquire`` and gives them back together after its last run's
+finalize, its ranks off their devices first (``keep`` and ``let_go`` are the two ends either release comes to).
 
 ``gpu_lease.json`` beside the row records the lease: requested and started (written by the Commit and the holder), released and the
 stage it was released after (``released_at``: the Commit's last run, or ``process.end`` with ``kept``, the reason), and the minutes
@@ -260,10 +262,15 @@ def on_gpus(uuids: list[str]) -> list[str] | None:
     return [u for u in uuids if u in on]
 
 
-def _gone(drv: Any, uuids: list[str], wait: Callable[[float], Any], tries: int = 10) -> str | None:
+def uuids(environ: MutableMapping[str, str]) -> list[str]:
+    """The leased GPUs' UUIDs (``GPU_LEASE_UUID``, which the holder set)."""
+    return [u for u in environ.get("GPU_LEASE_UUID", "").split(",") if u]
+
+
+def _gone(drv: Any, leased_uuids: list[str], wait: Callable[[float], Any], tries: int = 10) -> str | None:
     """None once the device has no context and nvidia-smi lists nothing on the leased GPUs, else why not (after ``tries`` looks)."""
     for k in range(tries):
-        left, on = drv.active(), on_gpus(uuids)
+        left, on = drv.active(), on_gpus(leased_uuids)
         if not left and on == []:
             return None
         if k + 1 < tries:
@@ -321,7 +328,7 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
     the file names why instead. Returns whether the GPU was released."""
     if not _HELD or not last:
         return False
-    holder, ours, fds, started, environ = _HELD[0]
+    environ = _HELD[0][4]
     tl.start("gpu_lease.release", after=after)
     why, err, drv = kept_reason(args, coms, eng, environ), None, None
     spans: dict[str, float] = {}
@@ -334,15 +341,28 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
         try:
             drv = DRIVER()
             drv.reset()
-            why = _gone(drv, [u for u in environ.get("GPU_LEASE_UUID", "").split(",") if u], wait)
+            why = _gone(drv, uuids(environ), wait)
         except (OSError, RuntimeError) as e:
             why = f"the CUDA context could not be reset: {e!r}"[:300]
         spans = {"shutdown_s": round(t1 - t0, 3), "reset_s": round(time.perf_counter() - t1, 3)}
     if why is not None:
-        _note(started, kept=why, after=after, shutdown_error=err)
-        tl.end("gpu_lease.release", released=False, why=why)
-        print(f"[delta] GPU LEASE kept to the Commit's exit: {why}", flush=True)
-        return False
+        return keep(tl, why, after=after, shutdown_error=err)
+    let_go(tl, drv, after=after, shutdown_error=err, spans=spans, done=f"engine shut down{' (' + err + ')' if err else ''}, CUDA context reset")
+    return True
+
+
+def keep(tl: Any, why: str, *, after: str, shutdown_error: str | None = None, **fields: Any) -> bool:
+    """The lease kept to the Commit's exit, ``gpu_lease.released`` saying why (``kept``); returns False (not released)."""
+    _note(_HELD[0][3], kept=why, after=after, shutdown_error=shutdown_error, **fields)
+    tl.end("gpu_lease.release", released=False, why=why)
+    print(f"[delta] GPU LEASE kept to the Commit's exit: {why}", flush=True)
+    return False
+
+
+def let_go(tl: Any, drv: Any, *, after: str, shutdown_error: str | None, spans: dict[str, Any], done: str) -> None:
+    """Once nothing of the Commit is on the leased GPUs (``done`` says how): every lease lock closed at once, the holder told (EOF)
+    and waited for, ``gpu_lease.released`` written with the time and ``after``; from here no CUDA in this process (``_watch``)."""
+    holder, ours, fds, started, environ = _HELD[0]
     _RELEASED.set()
     _no_device()
     t2 = time.perf_counter()
@@ -359,12 +379,11 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
     _HELD.clear()
     t = time.time()
     spans["holder_s"] = round(time.perf_counter() - t2, 3)
-    _note(started, released=_utc(t), t=round(t, 3), released_at=after, shutdown_error=err, **spans)
+    _note(started, released=_utc(t), t=round(t, 3), released_at=after, shutdown_error=shutdown_error, **spans)
     threading.Thread(target=_watch, args=(drv, started), daemon=True).start()
-    tl.end("gpu_lease.release", released=True, after=after, shutdown_error=err, **spans)
-    print(f"[delta] GPU LEASE released after {after}: engine shut down{' (' + err + ')' if err else ''}, CUDA context reset, nothing on "
-          f"{environ.get('GPU_LEASE_UUID')}; the checks that follow read host memory", flush=True)
-    return True
+    tl.end("gpu_lease.release", released=True, after=after, shutdown_error=shutdown_error, **spans)
+    print(f"[delta] GPU LEASE released after {after}: {done}, nothing on {environ.get('GPU_LEASE_UUID')}; the checks that follow read "
+          "host memory", flush=True)
 
 
 def _watch(drv: Any, started: str, wait: Callable[[float], Any] = time.sleep, every_s: float = WATCH_S) -> None:
@@ -461,7 +480,7 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
                            "kept": rel.get("kept") or (None if rel.get("released") else "the Commit ended before its release (its last run was "
                                                        "not an instrumented one, or it ended before that run's records)"),
                            "rc": rc, "started": None, "waited_min": None, "held_min": None}
-    rec.update({k: rel[k] for k in ("shutdown_s", "reset_s", "holder_s", "shutdown_error", "context_reappeared", "threads") if rel.get(k) is not None})
+    rec.update({k: rel[k] for k in ("shutdown_s", "reset_s", "holder_s", "shutdown_error", "context_reappeared", "threads", "ranks") if rel.get(k) is not None})
     tr, ts = _stamp(_requested(started)), _stamp(started)
     if tr is not None:
         rec["requested"] = _utc(tr)

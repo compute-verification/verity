@@ -35,14 +35,16 @@ def fake_smi(tmp_path: Path, looks: list[str]) -> Path:
 
 
 def fake_lease(tmp_path: Path, gpu: str = "5") -> str:
-    """A stand-in for gpu-lease: records its arguments, locks <gpu>.lock on a descriptor CMD inherits, sets CUDA_VISIBLE_DEVICES and
-    runs CMD as its child with its stdin, as gpu-lease does, with `fake_smi` (listing nothing) as its nvidia-smi."""
+    """A stand-in for gpu-lease: records its arguments, locks <g>.lock for each GPU g of ``gpu`` (comma-separated) on a descriptor CMD
+    inherits, sets CUDA_VISIBLE_DEVICES and runs CMD as its child with its stdin, as gpu-lease does, with `fake_smi` (listing nothing)
+    as its nvidia-smi."""
     if not (tmp_path / "bin" / "nvidia-smi").exists():
         fake_smi(tmp_path, [])
+    locks = "".join(f'exec {{fd}}>>"{tmp_path}/{g}.lock"; flock -x $fd\n' for g in gpu.split(","))
     p = tmp_path / "gpu-lease"
     p.write_text(f'#!/usr/bin/env bash\necho "$*" > "{tmp_path}/lease.args"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
-                 f'exec 7>>"{tmp_path}/{gpu}.lock"; flock -x 7\nexport PATH="{tmp_path}/bin:$PATH"\n'
-                 f'export CUDA_VISIBLE_DEVICES={gpu} CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID=GPU-{gpu}\n"$@" 0<&0 &\nwait $!\n')
+                 f'{locks}export PATH="{tmp_path}/bin:$PATH"\nexport CUDA_VISIBLE_DEVICES={gpu} CUDA_DEVICE_ORDER=PCI_BUS_ID '
+                 f'GPU_LEASE_UUID={",".join("GPU-" + g for g in gpu.split(","))}\n"$@" 0<&0 &\nwait $!\n')
     p.chmod(0o755)
     return str(p)
 
