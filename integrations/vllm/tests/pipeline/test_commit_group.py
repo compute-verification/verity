@@ -81,6 +81,18 @@ def test_each_row_runs_in_its_own_environment_with_the_leased_devices_kept(monke
         os.environ.update(was)
 
 
+def test_a_row_on_the_reused_engine_has_what_the_engines_build_wrote_into_the_environment():
+    r = {"env": {"SWEEP_DIR": "/s/b", "CUBLAS_WORKSPACE_CONFIG": ":4096:8"}}
+    env0 = {"PATH": "/bin", "SWEEP_DIR": "/s/a"}
+    assert CG.row_environ(env0, r, None) == {"PATH": "/bin", "SWEEP_DIR": "/s/b", "CUBLAS_WORKSPACE_CONFIG": ":4096:8"}
+    eng = SimpleNamespace(environ={"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"})
+    assert CG.row_environ(env0, r, eng) == {"PATH": "/bin", "SWEEP_DIR": "/s/b", "CUBLAS_WORKSPACE_CONFIG": ":16:8",
+                                            "CUBLASLT_WORKSPACE_SIZE": "1"}
+    assert CG.row_environ(env0, r, SimpleNamespace()) == CG.row_environ(env0, r, None)
+    src = Path(CG.__file__).read_text()
+    assert 'cli.set_environment(row_environ(env0, r, (cd._HOT or {}).get("eng")), keep=GL.LEASED)' in src
+
+
 def test_the_devices_a_later_row_keeps_are_the_ones_the_lease_holder_sets():
     assert "(" + ", ".join(f'"{k}"' for k in GL.LEASED) + ")" in GL._HOLDER
 
