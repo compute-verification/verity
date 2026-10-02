@@ -2932,6 +2932,32 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
         v.header["frame_v3"]["roots"][&name] = json!(hex(&root));
     }
     check_public(&st.c, &v).expect("the false statement is self-consistent");
+    // a recorded case's false statement is the verifier's own file (DIR/<case>.pub.bin) under its real public digest, so the
+    // record replays from files and a replay reaches the proof, not the session parameters
+    let dir = arg("--record-dir", "");
+    if !dir.is_empty() {
+        let case = match what {
+            "output" => "output_claim_false",
+            "ref" => "row_ref_claim_false",
+            "row" => "output_row_committed_false",
+            _ => "digest_claim_false",
+        };
+        let mut bytes = serde_json::to_vec(&v.header).unwrap();
+        bytes.push(b'\n');
+        for bc in &v.bcs {
+            bytes.extend_from_slice(bc);
+        }
+        if let Some(t) = &v.tables {
+            for r in &t.refs {
+                bytes.extend_from_slice(&r.to_le_bytes());
+            }
+        }
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = std::path::Path::new(&dir).join(format!("{case}.pub.bin"));
+        std::fs::write(&p, &bytes).unwrap();
+        v.public_sha512 = Instances::load(p.to_str().unwrap(), &st.c).unwrap().public_sha512;
+        return v;
+    }
     let mut h = Sha512::new();
     h.update(v.public_sha512);
     h.update(what.as_bytes());
