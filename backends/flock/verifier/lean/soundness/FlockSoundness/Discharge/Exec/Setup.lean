@@ -63,6 +63,12 @@ theorem range_mapM_ok {β ε : Type} {f : ℕ → Except ε β} {k : ℕ} {ys : 
   have := hall j (by rw [Array.size_range]; omega) hj
   rwa [Array.getElem_range] at this
 
+theorem mPts_of_any {sts : Array Stmt} {m : ℕ} (h : ¬ (sts.any fun x => x.mPts != m) = true) :
+    ∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = m := by
+  intro j hj
+  by_contra hne
+  exact h (Array.any_eq_true.2 ⟨j, hj, by simpa using hne⟩)
+
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
@@ -76,9 +82,9 @@ theorem setupTables_ok
       .ok (spec, sts)) :
     (count ≤ 1 ∧ ∃ st, Stmt.setupH tags cf pf coins tables draw partition program = .ok st ∧ spec = st.spec ∧
         sts = #[st]) ∨
-      (1 < count ∧ sts.size = count ∧ ∀ (j : ℕ) (hj : j < sts.size), ∃ d,
+      (1 < count ∧ sts.size = count ∧ (∀ (j : ℕ) (hj : j < sts.size), ∃ d,
         Stmt.setupH { tags with identity := tags.tableIdentity count j } cf pf coins tables (some d) partition
-          program = .ok sts[j]) := by
+          program = .ok sts[j]) ∧ (∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts) ∧ spec.points = 2) := by
   unfold Stmt.setupTables at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
   replace h : jp0 () = .ok (spec, sts) := by
@@ -106,7 +112,7 @@ theorem setupTables_ok
   · exact Or.inl ⟨by assumption, _, by assumption, rfl, rfl⟩
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
-    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩⟩
+    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩, mPts_of_any (by assumption), rfl⟩
 
 /-- A table's tags in a session of `count` tables: the statement's for one, under `Tags.tableIdentity` for several. -/
 def tagsAt (tags : Tags) (count j : ℕ) : Tags :=
@@ -126,7 +132,7 @@ theorem setupTables_setupH
     0 < sts.size ∧ ∀ (j : ℕ) (hj : j < sts.size), ∃ d,
       Stmt.setupH (tagsAt tags count j) cf pf coins tables d partition program = .ok sts[j] ∧
         (count ≤ 1 → d = draw) := by
-  rcases setupTables_ok h with ⟨hc, st, hst, -, rfl⟩ | ⟨hc, hsz, hall⟩
+  rcases setupTables_ok h with ⟨hc, st, hst, -, rfl⟩ | ⟨hc, hsz, hall, -⟩
   · refine ⟨by simp, fun j hj => ⟨draw, ?_, fun _ => rfl⟩⟩
     have hj0 : j = 0 := by simpa using hj
     subst hj0
@@ -135,6 +141,18 @@ theorem setupTables_setupH
     obtain ⟨d, hd⟩ := hall j hj
     refine ⟨some d, ?_, fun h1 => absurd h1 (by omega)⟩
     simpa [tagsAt, show ¬ count ≤ 1 by omega] using hd
+
+/-- The session's two link points have every table's length. -/
+theorem setupTables_points
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    spec.points = 2 ∧ ∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts := by
+  rcases setupTables_ok h with ⟨-, st, -, rfl, rfl⟩ | ⟨-, -, -, hm, hp⟩
+  · exact ⟨rfl, fun j hj => by
+      have : j = 0 := by simpa using hj
+      subst this
+      rfl⟩
+  · exact ⟨hp, hm⟩
 
 /-- **flock-verify's acceptance sets up each table with `setupH`**: when `Accepts I t`, every table's statement is
 `setupH`'s, under the table's tags and at some draw, the record's for a one-table session. -/
