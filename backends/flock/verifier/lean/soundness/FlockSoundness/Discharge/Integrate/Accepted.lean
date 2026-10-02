@@ -17,7 +17,7 @@ from a one-table acceptance:
 `drawSetup_of_accepts`: a one-table acceptance whose record's draw is `d` gives setupH's statement at `d` and the
 draw `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
 then `tableAt`'s table at `S` is `stmtOf` of the statement flock-verify accepted. The link points are setupH's
-`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (`setupH_mPts`).
+`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (e2e-exec's `Exec.setupH_mPts_drawn`).
 -/
 
 namespace FlockSoundness.Discharge.Integrate
@@ -68,13 +68,11 @@ theorem g_pos {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteAr
   · exact h0
 
 set_option maxHeartbeats 2000000 in
-/-- **setupH's instances, blocks and link points**: `n` is the (drawn) public file's, `nbl = max 3 (log2ceil ⌈n / c.g⌉)`,
-and `m_pts = PT_LOCAL + nbl`. -/
+/-- **setupH's instances and blocks**: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`. -/
 theorem setupH_n {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
-    st.n = st.pub.n ∧ st.nbl = max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) ∧
-      st.mPts = PT_LOCAL + st.nbl := by
+    st.n = st.pub.n ∧ st.nbl = max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) := by
   unfold Stmt.setupH at h
   dsimp only at h
   simp only [throw_bind', pure_bind] at h
@@ -82,7 +80,7 @@ theorem setupH_n {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coi
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    exact ⟨rfl, rfl, rfl⟩
+    exact ⟨rfl, rfl⟩
 
 /-- `n` instances fit `c.g · 2^nbl` slots when `nbl ≥ log2ceil ⌈n / g⌉`. -/
 theorem fits_blocks {n g : ℕ} (hg : 0 < g) : n ≤ g * 2 ^ max 3 (log2ceil (max ((n + g - 1) / g) 1)) := by
@@ -94,20 +92,6 @@ theorem fits_blocks {n g : ℕ} (hg : 0 < g) : n ≤ g * 2 ^ max 3 (log2ceil (ma
       _ ≤ 2 ^ log2ceil (max ((n + g - 1) / g) 1) := le_two_pow_log2ceil _
       _ ≤ _ := Nat.pow_le_pow_right (by norm_num) (le_max_right _ _)
   exact h1.trans (Nat.mul_le_mul_left g h2)
-
-/-- **setupH's link points at a draw**: a statement setupH sets up at the draw JSON `d` has
-`m_pts = PT_LOCAL + max 3 (log2ceil (max ⌈|D.proved| / c.g⌉ 1))`, for `D` the draw `d` decodes to. So `m_pts` is a
-function of how many units the draw proves and of the circuit's VUs per block, and two draws proving the same number of
-units have the same link points. -/
-theorem setupH_mPts {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
-    {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
-    {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st) :
-    ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧
-      st.mPts = PT_LOCAL + max 3 (log2ceil (max ((D.proved.size + st.c.g - 1) / st.c.g) 1)) := by
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn h
-  obtain ⟨D, hD, -, hn, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨hn', hnbl, hm⟩ := setupH_n h
-  exact ⟨D, hD, by rw [hm, hnbl, hn', hn]⟩
 
 variable {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
   (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -126,7 +110,7 @@ theorem drawSetup_of_setupH {st : Stmt}
   obtain ⟨D', hD', -, hn, -⟩ := Layout.drawn_spec hdr
   rw [hD] at hD'
   cases hD'
-  obtain ⟨hn', hnbl, -⟩ := setupH_n h
+  obtain ⟨hn', hnbl⟩ := setupH_n h
   have hblk : D.proved.size ≤ st.c.g * 2 ^ st.nbl := by
     rw [hnbl, ← hn, ← hn']
     exact fits_blocks hg

@@ -79,7 +79,7 @@ Its hypotheses, past the session's inputs:
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
   `model_eq_stmtOf`), the statement e2e-exec's acceptance plays. At an accepted draw whose link points are not `mPts`
   the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted draw of the law to set up at
-  `mPts`; setupH's link points are `PT_LOCAL + max 3 (log2ceil ⌈|D.proved| / c.g⌉)` (`setupH_mPts`);
+  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (e2e-exec's `setupH_mPts_drawn`, `setupH_mPts_eq`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
 * numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).
