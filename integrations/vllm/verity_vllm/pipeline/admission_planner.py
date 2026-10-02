@@ -232,7 +232,7 @@ def plan(sizing: dict[str, Any], requests: list[dict[str, Any]], *, mode: dict[s
         lf = float(m["levels_factor"])
         block = int(sizing.get("prefill_block_bytes") or sizing.get("block_bytes") or peak_bytes)
         terms["gpu_staging"] = {"bytes": block, "where": "device", "how": f"whole-step device block (per-step-block path) {block >> 20} MiB", "measured_by": "arena_sizing block_bytes"}
-        # chunk-leaf-v1 unbounded: `_PinnedPool.take` slices (every window's transient copy) are returned only by pool.reset() at the END
+        # chunk-leaf-v1 unbounded: `PinnedPool.take` slices (every window's transient copy) are returned only by pool.reset() at the END
         # of the run, so pinned host grows with the run's raw bytes WHATEVER --retain says (FP8-STAGING §1 (2): B1 25.1 GB raw in 31.9 GB
         # of pool under retain none); retain host adds the levels (x1.25, F-dA-15)
         terms["host_staging"] = {"bytes": int(run_total * (lf if retain == "host" else 1.0)), "where": "host",

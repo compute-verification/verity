@@ -65,6 +65,7 @@ import Pouw.SecurityProofs.PearlC.ChainCapKernelGamma
 import Pouw.SecurityProofs.PearlC.ChainCapLoopGamma
 import Pouw.SecurityProofs.PearlC.ChainOnlyGamma
 import Pouw.SecurityProofs.PearlC.DeviceCapGamma
+import Pouw.SecurityProofs.PearlC.DeviceCapRev1Gamma
 import Pouw.SecurityProofs.PearlC.DeviceChainCapGamma
 import Pouw.SecurityProofs.PearlC.DeviceFp4Gamma
 import Pouw.SecurityProofs.PearlC.DeviceGamma
