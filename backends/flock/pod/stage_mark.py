@@ -31,6 +31,14 @@ def sha256(p: Path) -> str:
     return h.hexdigest()
 
 
+def sha512(p: Path) -> str:
+    h = hashlib.sha512()
+    with p.open("rb") as f:
+        while b := f.read(1 << 24):
+            h.update(b)
+    return h.hexdigest()
+
+
 def files(d: Path) -> dict[str, str]:
     return {f.name: sha256(f) for f in sorted(d.iterdir()) if f.is_file() and f.name not in ("rec.json", "serve.log")}
 
@@ -67,11 +75,15 @@ def main() -> int:
         if not entry:
             for e in sorted(root.iterdir()):
                 r = json.loads((e / "rec.json").read_text()) if len(e.name) == 32 and (e / "rec.json").exists() else {}
-                if r.get("shape") == shape and (r.get("stage") or {}).get("circuit_sha512") == csha and files(e) == fs:
+                # class_statement deletes a stage-only shape's circuit and .bin files once its cache entry holds copies: the
+                # entry's circuit is then checked against the record's digest
+                if r.get("shape") == shape and (r.get("stage") or {}).get("circuit_sha512") == csha and (
+                        files(e) == fs if fs else (e / "circuit.txt").is_file() and sha512(e / "circuit.txt") == csha):
                     entry = e.name
                     break
         if not entry:
             return finish(o, {"op": op, "ok": False, "why": f"the stage wrote no entry in {root} holding these bytes"}, t0)
+        fs = files(root / entry)
         key, parts = ident(o, shape)
         mark = {"ident": key, **parts, "entry": entry, "files": fs, "circuit_sha512": csha, "stage_s": rec.get("stage_s"),
                 "stage_py_maxrss_gb": rec.get("stage_py_maxrss_gb"), "row_units": rec.get("row_units"), "definition": rec.get("definition"),
