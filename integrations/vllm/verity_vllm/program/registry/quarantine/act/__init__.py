@@ -3,7 +3,8 @@
 
   _C.silu_and_mul   act_and_mul_kernel<bf16, silu_kernel>   ->  SiluMul_v2{I} over SiluMulBf16_v2
 
-`SiluMul_v1` (b1) stays the Definition the accepted records bind; `_v2` is bound by no vocabulary until it is admitted.
+Both are PROMOTED to `verity_vllm.program.registry.act` (the `b1-eager-v3` vocabulary's `silu_mul` kind); the modules here
+re-export them for the difftest adapter. `SiluMul_v1` (b1) stays the kind of the older vocabularies.
 """
 from __future__ import annotations
 
