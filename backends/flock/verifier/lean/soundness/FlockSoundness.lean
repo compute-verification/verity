@@ -151,3 +151,4 @@ import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
 import FlockSoundness.ZK.GK
+import FlockSoundness.Discharge.Hidden
