@@ -71,12 +71,11 @@ grader and its sandbox. Everything else is checked by machine. Docstring paths s
 **The audit.** `tools/lean/audit.py` audits every declaration under `Pous`: allowed axioms, named assumptions, escapes,
 orphan files, import layers (Protocol imports no assumption, guarantee or proof; Assumptions only Protocol; Guarantees
 no proof), a kernel replay, and the pinned theorems' records. `lean-audit.json` pins the sanity theorems, every
-`Pous.SecurityProofs.X`, the stacked one-way bound, the band certificate, and the dense scheme at the deployment point
-(`dense_meets_64`, `seg_meets_14`, and `segTag_meets_14` for the implementation's tagged keying, with
-`segTag_auditSecure`) and its per-segment tags (`domainSep_equiv`, `tag_injective_14`), the raw-storage refutations the
-`m1p` pins cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the non-vacuity pins `complete`, `tight`
-and `tight_p16448`, and the refutation `not_meetsOn_b19_k88`). A changed record needs a named statement reviewer
-(Verity's `AGENTS.md`).
+`Pous.SecurityProofs.X` (among them the stacked one-way bound, the band certificate, and the dense scheme at the 64 KB
+point, with the implementation's tagged keying and its per-segment tags), the raw-storage refutations the `m1p` pins
+cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the non-vacuity pins `complete`, `tight` and
+`tight_p16448`, and the refutation `not_meetsOn_b19_k88`). A changed record needs a named statement reviewer (Verity's
+`AGENTS.md`).
 
 **Submissions** are one file that imports only the trusted layers (`Pous.Protocol`, `Pous.Assumptions`,
 `Pous.Guarantees`), the proved `Pous.SecurityProofs.Sanity` and `Pous.SecurityProofs.Accounting.Numbers`, and

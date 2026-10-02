@@ -16,6 +16,8 @@ import Pous.Protocol.Model.BandChain
 import Pous.Protocol.Model.Pebbling
 import Pous.Protocol.Model.SampledAudit
 import Pous.Guarantees.P2
+import Pous.Protocol.Model.BandGraph
+import Pous.Protocol.Model.SegLift
 
 /-!
 # Guarantees
@@ -696,5 +698,104 @@ def ChainDenseMeets111 : Prop :=
   ∀ salt : Bits 256,
     Meets (Pous.Sponge.chainDense (2 ^ 16) 8192 512 (Pous.Sponge.dom salt)) .sequential 64 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
+
+/-! ### Proved results cited outside the package
+
+The types of ten theorems that the protocol's documents and code cite, written out so that each citation names a
+guarantee. Each is proved in `Pous.SecurityProofs` under its own name, from the theorem its docstring names. -/
+
+open DRG Labelling in
+/-- **The one-way bound for the stacked graph** (B2's graph under B5, with the bridge's hardness at
+`s = ⌊(1 − ε)n⌋`, `D = ⌊βn⌋ − 1`, `k = n − ⌈εn/2⌉ + 1`). In `ℓ ≥ 1/(1 − α)` stacked `(n, α, β)`-depth-robust layers
+joined by superconcentrators, numbered topologically by `e`, with one-way data-carrying labels, an `m`-bit
+preprocessor and `(⌊βn⌋ − 1, Q)`-bounded online programs answer at least `n − ⌈εn/2⌉ + 1` of the `n` last-layer
+challenges with probability at most `N · 2^m · ((n(Q + 1) + N)² / 2^w)^(⌊(1 − ε)n⌋ + 1)`. Proof:
+`PousBridge.b5_stacked`. -/
+def B5Stacked : Prop :=
+  ∀ {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V] (α β ε : ℝ)
+    (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)
+    (hnode : ∀ i, Function.Injective (node i)) (hlevel : ∀ i a, level (node i a) = i)
+    (hdr : ∀ i, DepthRobust n (drg i) α β)
+    (hsc : ∀ i j : Fin ℓ, (j : ℕ) = i + 1 → DisjointPaths node level green i j)
+    (hn : 0 < n) (hε : 0 < ε) (hε1 : ε ≤ 1) (hℓ : 1 ≤ (1 - α) * ℓ) (hβ : 1 ≤ β * n)
+    (e : V ≃ Fin N) (G : TopoDAG N) (hG : ∀ u v, e u ∈ G.par (e v) ↔ StackedEdge node drg green u v)
+    (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ)
+    (w m Q : ℕ) (d : Fin N → Bits w)
+    (A₁ : (LabelQry N w → Bits w) → Bits m)
+    (A₂ : Bits m → Fin N → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
+    (hA₂ : ∀ σ c, (A₂ σ c).Bounded (⌊β * n⌋₊ - 1) Q),
+    pr (fun H : LabelQry N w → Bits w =>
+        n - ⌈ε / 2 * n⌉₊ + 1 ≤ ((Finset.univ.image fun b => e (node t b)).filter fun c =>
+          (A₂ (A₁ H) c).run H = label G d H c).card) ≤
+      N * 2 ^ m * ((((n * (Q + 1) + N) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ w) ^ (⌊(1 - ε) * n⌋₊ + 1)
+
+open Dense in
+/-- **The dense scheme meets the requirement at the 64 KB point**, random-oracle `H`, with sequential reveal, `D = 5`
+rounds, `Q = 2^20`, `k = 106` challenges and `ε = 2^-128`: correct, rate 1, and every `⌊ρ|C|⌋`-bit adversary is
+accepted with probability at most `1% + 2^-128`. Proof: `PousDenseReCert.dense_meets_64`. -/
+def DenseMeets64 : Prop :=
+  Pous.Meets (denseScheme (2 ^ 9) 524288) .sequential 5 (2 ^ 20) 106 ((2⁻¹ : ENNReal) ^ 128)
+
+open Dense PousDenseReCert in
+/-- **The segmented dense scheme meets the requirement at 14 GB** (`N = 448` segments of `2^9` blocks of 64 KB),
+random-oracle `H`, sequential reveal, `D = 5`, `Q = 2^20`, `k = 106`, `ε = 2^-128`. Same `k` as one segment: the audit
+soundness is per-block, so it does not degrade with the number of segments. Proof: `PousDenseReCert.seg_meets_14`. -/
+def SegMeets14 : Prop :=
+  Pous.Meets (segScheme 448 (2 ^ 9) 524288) .sequential 5 (2 ^ 20) 106 ((2⁻¹ : ENNReal) ^ 128)
+
+open Dense PousDenseReCert in
+/-- **The 14 GB theorem for the implementation's keying.** The tagged segmented dense scheme (448 segments of `2^9`
+blocks of 64 KB, oracle `H(salt ‖ u64 s, local query)`) meets the requirement for every salt, random-oracle `H`,
+sequential reveal, `D = 5`, `Q = 2^20`, `k = 106`, `ε = 2^-128`. Proof: `PousDenseReCert.segTag_meets_14`. -/
+def SegTagMeets14 : Prop :=
+  ∀ salt : Bits 192,
+    Pous.Meets (segTagScheme 448 (2 ^ 9) 524288 salt) .sequential 5 (2 ^ 20) 106 ((2⁻¹ : ENNReal) ^ 128)
+
+open Dense Labelling in
+/-- **The tagged scheme is as secure as the global one.** For a query map `f` that is injective and sends segment
+`s`'s queries to their global form, every sequential-audit bound of `segScheme` holds for `segTagScheme`: a tagged
+adversary, with its queries sent through `f`, is a global adversary accepted with the same probability. Proof:
+`PousDenseReCert.segTag_auditSecure`. -/
+def SegTagAuditSecure : Prop :=
+  ∀ {N B ℓ : ℕ} [NeZero (N * B)] (salt : Bits 192)
+    (f : Bits (192 + 64) × LabelQry B ℓ → LabelQry (N * B) ℓ) (hf : Function.Injective f)
+    (htag : ∀ (s : Fin N) i p,
+      f (tag salt s.val, (i, p)) = (segIndexEquiv N B (s, i), PousDenseReCert.liftPar N B ℓ s p))
+    {S D Q k : ℕ} {δ ε : ℝ≥0∞} (h : AuditSecure (segScheme N B ℓ) .sequential S D Q k δ ε),
+    AuditSecure (segTagScheme N B ℓ salt) .sequential S D Q k δ ε
+
+open Dense in
+/-- **Distinct tags give the same domain separation as global indices.** The per-segment tagged keying
+`(s, i) ↦ (tag_s, i)` is the global-index keying (`segIndexEquiv`) composed with an injective relabeling `t`, for
+`N ≤ 2^64` segments. So keying by `tag_s = salt ‖ u64 s` separates the `N·B` blocks exactly as global indices do.
+Proof: `PousDenseReCert.domainSep_equiv`. -/
+def DomainSepEquiv : Prop :=
+  ∀ (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Bits 192),
+    ∃ t : Fin (N * B) → Bits (192 + 64) × Fin B, Function.Injective t ∧
+      ∀ p : Fin N × Fin B, (tag salt p.1.val, p.2) = t (segIndexEquiv N B p)
+
+open Dense in
+/-- **Satisfiability witness at 14 GB:** the implementation's tags `salt ‖ u64 s` are distinct across the 448
+segments. Proof: `PousDenseReCert.tag_injective_14`. -/
+def TagInjective14 : Prop :=
+  ∀ salt : Bits 192, Function.Injective (fun s : Fin 448 => tag salt s.val)
+
+open ColumnGame in
+/-- **`B(220, 12)` at `d = 10`** (`D = 20` oracle rounds), in the two-directional column game: saving at most 3
+labels. Proof: `PousP3Column.band_twoWay_220_12`. -/
+def BandTwoWay220_12 : Prop :=
+  ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3
+
+open ColumnGame in
+/-- **`B(220, 12)` at `d = 11`** (`D ≤ 22`), in the two-directional column game: saving at most 3 labels. Proof:
+`PousP3Column.band_twoWay_220_12_d11`. -/
+def BandTwoWay220_12D11 : Prop :=
+  ColumnHard (PousP3Column.bandGraph 220 12) 11 220 3
+
+open ColumnGame in
+/-- **`B(220, 16)` at `d = 12`** (`D ≤ 24`), in the two-directional column game: saving at most 3 labels. Proof:
+`PousP3Column.band_twoWay_220_16`. -/
+def BandTwoWay220_16 : Prop :=
+  ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
 end Pous.Guarantees

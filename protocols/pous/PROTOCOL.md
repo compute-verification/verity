@@ -442,9 +442,9 @@ sequential audit at `ε = 2^-128`, so an adversary holding `⌊ρ|C|⌋` bits pa
 
 | Theorem | Store | `D` rounds, `Q` queries | `k` |
 |---|---|---|---|
-| `PousDenseReCert.dense_meets_64` | one segment: 512 blocks of 64 KB (32 MiB) | 5, `2^20` | 106 |
-| `PousDenseReCert.seg_meets_14` | 448 such segments (14 GB) | 5, `2^20` | 106 |
-| `PousDenseReCert.segTag_meets_14` | the same 448 segments, keyed as the implementation keys them, for every salt | 5, `2^20` | 106 |
+| `Pous.SecurityProofs.DenseMeets64` (`Pous.Guarantees.DenseMeets64`) | one segment: 512 blocks of 64 KB (32 MiB) | 5, `2^20` | 106 |
+| `Pous.SecurityProofs.SegMeets14` (`Pous.Guarantees.SegMeets14`) | 448 such segments (14 GB) | 5, `2^20` | 106 |
+| `Pous.SecurityProofs.SegTagMeets14` (`Pous.Guarantees.SegTagMeets14`) | the same 448 segments, keyed as the implementation keys them, for every salt | 5, `2^20` | 106 |
 | `Pous.SecurityProofs.DenseMeets` (`Pous.Guarantees.DenseMeets`) | one segment: `2^16` blocks of 1 KB | 64, `2^20` | 107 |
 
 Each composes B5 (`dense_timedINC`, `seg_timedINC`, from the pebbling bounds `complete_hard` and `seg_hard`) with
@@ -490,13 +490,10 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`Pous/Protocol/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
 | `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
-
-Also proved and pinned in `lean-audit.json`, with no `Pous.Guarantees` statement: the one-way bound on Fisch's stacked
-graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the
-band graph `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels
-(`PousP3Column.band_twoWay_*`); and the dense scheme at the deployment point (`PousDenseReCert.dense_meets_64`,
-`seg_meets_14`, `segTag_meets_14` with its transfer `segTag_auditSecure`, `domainSep_equiv` and `tag_injective_14`,
-above).
+| `B5Stacked` | the one-way bound on Fisch's stacked graph | proved |
+| `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
+| `SegTagAuditSecure`, `DomainSepEquiv`, `TagInjective14` | the tagged keying's transfer: the tagged scheme is as secure as the global one, and the tags relabel the global indices injectively (448 distinct tags) | proved |
+| `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over

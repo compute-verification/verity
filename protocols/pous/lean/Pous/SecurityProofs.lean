@@ -160,4 +160,17 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
   exact ⟨h1, h2, h3, h0, (PousMargin.b19_64_129 b hsp hb D).2.2.2.2, (PousMargin.b19_128_129 b hsp hb D).2.2.2.2,
     (PousMargin.b19_256_129 b hsp hb D).2.2.2.2⟩
 
+/-! ## Proved results cited outside the package (`Pous/Guarantees.lean`) -/
+
+theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
+theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64
+theorem SegMeets14 : Pous.Guarantees.SegMeets14 := PousDenseReCert.seg_meets_14
+theorem SegTagMeets14 : Pous.Guarantees.SegTagMeets14 := @PousDenseReCert.segTag_meets_14
+theorem SegTagAuditSecure : Pous.Guarantees.SegTagAuditSecure := @PousDenseReCert.segTag_auditSecure
+theorem DomainSepEquiv : Pous.Guarantees.DomainSepEquiv := @PousDenseReCert.domainSep_equiv
+theorem TagInjective14 : Pous.Guarantees.TagInjective14 := @PousDenseReCert.tag_injective_14
+theorem BandTwoWay220_12 : Pous.Guarantees.BandTwoWay220_12 := PousP3Column.band_twoWay_220_12
+theorem BandTwoWay220_12D11 : Pous.Guarantees.BandTwoWay220_12D11 := PousP3Column.band_twoWay_220_12_d11
+theorem BandTwoWay220_16 : Pous.Guarantees.BandTwoWay220_16 := PousP3Column.band_twoWay_220_16
+
 end Pous.SecurityProofs
