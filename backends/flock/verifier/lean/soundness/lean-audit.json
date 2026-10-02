@@ -8745,6 +8745,15 @@
    "assumptions": [],
    "type_hash": "55ce0c3f69256f367ad81143d9b49c0f90f44653843f1d655b4f32af35659278"
   },
+  "FlockSoundness.Discharge.ZkLink.allInh_repZCAt": {},
+  "FlockSoundness.Discharge.ZkLink.sessionZC_eq": {},
+  "FlockSoundness.Discharge.ZkLink.sessionZK_eq": {},
+  "FlockSoundness.Discharge.ZkLink.zc_knowledgeSound": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_countC": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_countC_execOS": {},
+  "FlockSoundness.Discharge.ZkLink.zk_flock_count_execOS_m1_cr": {},
+  "FlockSoundness.Discharge.ZkLink.zk_linkSoundC": {},
+  "FlockSoundness.Discharge.ZkLink.zk_linkSoundE": {},
   "FlockSoundness.Discharge.ZkSession.TabZK.after_sound": {
    "signature": [
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
