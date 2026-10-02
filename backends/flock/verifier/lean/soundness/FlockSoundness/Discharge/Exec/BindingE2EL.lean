@@ -26,11 +26,12 @@ be SHA-512; each at its finders' budgets:
 * `δ_tree` is `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1), for a rewinding at the serving roots (`tr`)
   whose finder satisfies `SHA512CRStrict` at budget `qT` (`hT`).
 
-**`δ_tree`.** "Accept" is `execAccept`, read from the registered roots, and the bound counts it with the model's
-acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event that the
-executable accepts and the model rejects by runs that open a serving root off its plurality (`TreeRewind.covers`). That
-cover is the link from the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis. The
-skeleton's `hExec` (every accept is the model's) gives a cover with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
+**`δ_tree`.** "Accept" is `execAccept`, read from the registered roots, and the bound counts it with the Lean
+protocol's acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event
+that the executable accepts and the Lean protocol rejects by runs that open a serving root off its plurality
+(`TreeRewind.covers`). That cover is the link from the executable's openings to the Lean protocol's (R11), still open,
+so `tr` is a named hypothesis. The skeleton's `hExec` (every accept is the Lean protocol's) gives a cover with no
+positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
 
 **A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every law `L`, the live
 draw `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
