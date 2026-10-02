@@ -134,6 +134,11 @@ inductive Coins where
   | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
+/-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
+(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
+def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
+  if coins == .os && t.liveOs then { t with identity := Tags.liveOsIdentity t.identity } else t
+
 /-- Everything a session needs about the statement. -/
 structure Stmt where
   tags : Tags
