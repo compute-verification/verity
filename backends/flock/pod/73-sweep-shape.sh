@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# vllm-overhead's copy of proofs-rows' 73-sweep-shape.sh (notes afb4bd35, sha256 328072ae...), plus, for the weighted overhead
+# (vllm_overhead.py beside it):
+#   MODE=shape (not STAGE_ONLY): each shape's prove process runs under gemm_hill.py stamp (out/<k>/stamps.tsv: every LIVE line
+#              with its epoch), and vllm_overhead.py timing writes out/<k>/timing.json (steady-state session and prove-only
+#              seconds per statement and per unit); on a GPU, the job first takes CPUS (16) cores of free 16-core slices
+#              (cpu-slices.sh, as 74-gemm-hill.sh does) and pins to them, so it never shares a pinned prover's cores
+#   SUMMARY gains timings (every shape's timing.json)
 # proofs-rows' copy of backends/flock/pod/73-sweep-shape.sh (backend-sweep-2's, at 70e99f57), with the (b) stage/prove split:
 #   MODE=shape STAGE_ONLY=1 ...   (no GPU) the chunk's statement exactly as its GPU job would stage it (the same settings, so the
 #              same FLOCK_STAGE_CACHE key), into the cache, and a marker $FLOCK_STAGE_CACHE/staged/<ident>.json with the files' sha256
@@ -29,8 +36,16 @@
 # env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+if [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ] && [ -z "${SWEEP_PINNED:-}" ]; then
+  . backends/flock/pod/cpu-slices.sh
+  hold_slices "${CPUSET:-}" "${CPUS:-16}" || exit 1
+  cpus=$(taskset -c "$SLICE_CPUS" python3 -c "import os; print(','.join(map(str, sorted(os.sched_getaffinity(0)))))") || exit 1
+  export SWEEP_PINNED=$cpus RAYON_NUM_THREADS=$(echo $cpus | tr ',' '\n' | wc -l)
+  export OMP_NUM_THREADS=$RAYON_NUM_THREADS
+  exec taskset -c $cpus bash "$0" "$@"
+fi
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/sweep-shape}; mkdir -p $R/out
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); sha256sum $HERE/73-sweep-shape.sh $HERE/stage_mark.py | tee $R/out/script.sha256
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); sha256sum $HERE/73-sweep-shape.sh $HERE/stage_mark.py $HERE/vllm_overhead.py | tee $R/out/script.sha256
 SWEEP=${SWEEP:-/workspace/jobs/sweep2}; D=$SWEEP/$ROW; mkdir -p $D
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/flock-sweep2}; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} SM=${SM:-120}
@@ -68,7 +83,16 @@ with open(sys.argv[2], "w") as f:
         f.write(f"{sh}\t{s['word_gates']}\t{s['row_units']}\t{json.dumps(sorted(defs.get(sh, [])))}\n")
 print(f"{len(rows)} shapes, {sum(s['row_units'] or 0 for _, s in rows)} row units")
 EOF
-  cp $R/out/program.json $R/out/cut/counts.json $R/out/shapes.tsv $D/ || exit 1 ;;
+  cp $R/out/program.json $R/out/cut/counts.json $R/out/shapes.tsv $D/ || exit 1
+  python3 $HERE/vllm_overhead.py census --counts $D/counts.json --out $D/census.json | tee $R/out/census.txt || exit 1
+  # the same cut without --select: what it leaves out (the token-select Calls), for the census's exclusions
+  if [ "${CUT_ALL:-1}" = 1 ]; then
+    $PY -m verity_flock.class_statement --program-graph $R/out/program.json --partition q-word --out $R/out/cut-all --counts-only \
+      && cp $R/out/cut-all/counts.json $D/counts-all.json \
+      && python3 $HERE/vllm_overhead.py census --counts $D/counts.json --counts-all $D/counts-all.json --out $D/census.json > $R/out/census-all.txt
+    echo "cut_all_s=$SECONDS" | tee -a $R/out/cut-timing.txt
+  fi
+  cp $D/census.json $R/out/ ;;
 stage|shape)
   rc=0; k=0; SHAPES=${SHAPES:-$SHAPE}
   so=0; { [ $MODE = stage ] || [ "${STAGE_ONLY:-0}" = 1 ]; } && so=1
@@ -91,10 +115,14 @@ EOF
   st=${SELFTEST:-0}; case ",${SELFTEST_SHAPES:-}," in *",$SHAPE,"*) st=1 ;; esac
   req=0; [ $so = 0 ] && [ "${REQUIRE_STAGED:-0}" = 1 ] && req=1
   [ $req = 1 ] && { "${MARK[@]}" pre $O $SHAPE || { rc=3; continue; }; }
-  OUT=$O bash backends/flock/pod/70-class-sweep.sh DEFS=$O/defs.json SHAPES=$O/shapes.txt SELECT=${SELECT:-units} \
+  WR=; [ $so = 0 ] && WR="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $O/stamps.tsv --"
+  OUT=$O WRAP=$WR bash backends/flock/pod/70-class-sweep.sh DEFS=$O/defs.json SHAPES=$O/shapes.txt SELECT=${SELECT:-units} \
     SELFTEST=$st SELFTEST_LARGEST=0 STAGE_ONLY=$so || rc=1
   if [ $so = 1 ]; then "${MARK[@]}" write $O $SHAPE || rc=1
-  elif [ $req = 1 ]; then "${MARK[@]}" post $O $SHAPE || rc=3; fi
+  else
+    [ $req = 1 ] && { "${MARK[@]}" post $O $SHAPE || rc=3; }
+    python3 $HERE/vllm_overhead.py timing $O --warm ${WARM:-1} --runs ${RUNS:-3} || rc=1
+  fi
   done ;;
 sampled-stage|sampled)
   A=$SWEEP/sampled/$ROW; mkdir -p $A; rc=0
@@ -131,7 +159,8 @@ split = {"stage_only": sys.argv[6] == "1", "staged": sum(1 for r in staged if "s
          "stage_cached": sum(1 for r in recs if r.get("stage_cached")), "stage_s": round(sum(r.get("stage_s") or 0 for r in recs + staged), 3),
          "stage_checks": [json.loads(f.read_text()) for f in sorted(out.glob("*/stage-check.json"))],
          "statement_digests": sorted({r["live"]["statement_digest"] for r in recs if (r.get("live") or {}).get("statement_digest")}),
-         "script_sha256": (out / "script.sha256").read_text().split() if (out / "script.sha256").exists() else None}
+         "script_sha256": (out / "script.sha256").read_text().split() if (out / "script.sha256").exists() else None,
+         "timings": [json.loads(f.read_text()) for f in sorted(out.glob("*/timing.json"))]}
 live = [r["live"] for r in recs if r.get("live")]
 st = [r["selftest"] for r in recs if r.get("selftest")]
 gpu = [c for x in st for c in x.get("gpu_cases", [])]
