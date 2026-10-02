@@ -223,10 +223,6 @@ def HeadlineCard : Prop :=
 
 /-! ## Stubs -/
 
-theorem word_uniform : WordUniform := by sorry
-theorem word_reject : WordReject := by sorry
-theorem fallback_rare : FallbackRare := by sorry
-theorem draw_card_rare : DrawCardRare := by sorry
 theorem execRefines_where : ExecRefinesWhere := by sorry
 theorem decodesWhere_of_on : DecodesWhereOfOn := by sorry
 theorem mPts_at_card : MPtsAtCard := by sorry
