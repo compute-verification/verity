@@ -1,5 +1,5 @@
-"""The Definitions with a program value as an input rather than a constant: the norms' epsilon (the served, quarantine and
-reference norms), the attention softmax scale, the attention softcap's two words, and the scalars of the elementwise kinds (a logits
+"""The Definitions with a program value as an input rather than a constant: the norms' epsilon (the served and reference norms;
+the quarantine's `LayerNormAten_v2` stays in `quarantine.ln.layer_norm_aten`, out of the registry's load), the attention softmax scale, the attention softcap's two words, and the scalars of the elementwise kinds (a logits
 softcap's `1 / C` and `C`, `variance + eps`).
 
 Each takes the f32 word the kernel reads (an `eps` argument; FA2's `scale_softmax_log2`) as its last parameter(s), which a
@@ -11,7 +11,6 @@ from verity.ir.defs import composite
 from verity.ir.types import Array, Tuple
 from verity_vllm.program.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, ref_prims as RP
 from verity_vllm.program.registry.prims import BF16, F32
-from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
 
 
 @composite("RMSNormTriton", 3, ["N"],
@@ -31,14 +30,6 @@ def RMSNormFusedCudaV4(B, S, x, res, w, eps):
     """`RMSNormFusedCuda_v2{N, EPS}` with the epsilon an input (the f32 word `fused_add_rms_norm` passes the kernel) rather than a
     constant of the Definition: the program registers it."""
     return b1.RMSNormFusedCuda.body(B, S, x, res, w, eps)
-
-
-@composite("LayerNormAten", 2, ["N"],
-           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("b", Array(S.N, BF16)), ("eps", F32)), Array(S.N, BF16)),
-           conformance="quarantine (lane cov-ln): LayerNormAten_v1's body with eps an input")
-def LayerNormAtenV2(B, S, x, w, b, eps):
-    """`LayerNormAten_v1{N, EPS}` with the epsilon an input (the f32 word `vectorized_layer_norm_kernel` reads)."""
-    return _LN.LayerNormAten.body(B, S, x, w, b, eps)
 
 
 @composite("RMSNormRef", 2, ["N", "DT"],

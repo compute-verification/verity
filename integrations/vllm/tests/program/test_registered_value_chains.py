@@ -144,7 +144,7 @@ def test_reference_norm_eps_inputs(DT, eps):
 def test_layer_norm_aten_eps_input(eps):
     rng = np.random.default_rng(20)
     N, eb = 16, P.bits_of(np.float32(eps))
-    old, new = bind(LN.LayerNormAten, N=N, EPS=eps), bind(VI.LayerNormAtenV2, N=N)
+    old, new = bind(LN.LayerNormAten, N=N, EPS=eps), bind(LN.LayerNormAtenV2, N=N)
     assert new.id == "LayerNormAten_v2{N=16}"
     for _ in range(3):
         x, w, b = _bf16(rng, N, 4.0), _bf16(rng, N), _bf16(rng, N)

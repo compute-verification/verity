@@ -606,7 +606,7 @@ def AttentionHeadSoftcap(B, S, q, k, v, *extra, block=AttnBlockSoftcap):
 def AttentionSoftcap(B, S, q, kc, vc, *extra, head=AttentionHeadSoftcap):
     """`Attention_v3`'s body over `AttentionHeadSoftcap_v1{T, D, BN, CAP}` (GQA: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]`).
     Gemma-2-2B: NH = 8, KVH = 4, D = 256, CAP = 50.0, BN = `fa2_kblock_n(256)`; sliding-window layers need nothing more below 4096
-    tokens (FA2 `Is_local = false` there).  `extra` / `head`: `AttentionSoftcap_v4`'s."""
+    tokens (FA2 `Is_local = false` there)."""
     T, NH, KVH, D, BN = S.T, S.NH, S.KVH, S.D, S.BN
     cap = {} if extra else {"CAP": S.CAP}
     G = NH // KVH
