@@ -246,13 +246,15 @@ def codeAt (y : Array F128) (j : Nat) : F128 :=
   let x : F128 := ⟨(j + 1).toUInt64, 0⟩
   y.foldr (fun c acc => acc * x + c) 0
 
-/-- Live PROTOCOL.md §5: the inner proof that the committed pads satisfy `cons` and the triple's constraints. -/
-def verifyInner (lay : PadLayout) (pr : InnerProof) (cons : Array (String × Lin)) : TM Unit := do
+/-- Live PROTOCOL.md §5: the inner proof that the committed pads satisfy `cons` and the triple's constraints. `finalC`, the
+proof's `final_c'`, is a constant of two of `cons` that nothing before absorbs; it is absorbed before `ε`. -/
+def verifyInner (lay : PadLayout) (pr : InnerProof) (finalC : F128) (cons : Array (String × Lin)) : TM Unit := do
   let msg := lay.len + K_PAD
   let n := msg.nextPowerOfTwo * 2 ^ INNER_LOG_INV_RATE
   check (pr.y.size == msg && pr.opened.size == Q && pr.salts.size == Q && pr.paths.size == Q && pr.root.size == 64
     && pr.tauCommit.size == 64 && pr.tauSalt.size == TAU_SALT_BYTES) "zk inner: malformed proof"
   label LABEL_INNER
+  absorbF finalC
   let eps ← sample
   absorbSlice #[pr.rho, pr.sigma]
   let cons := cons ++ triple lay eps pr.rho pr.sigma
@@ -301,7 +303,7 @@ def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (s
     let lg ← match ligeritoConstraints lay rec p.ligerito zp.level0 with
       | .ok v => pure v
       | .error e => throw e
-    verifyInner lay zp.inner
+    verifyInner lay zp.inner p.zerocheck.finalC
       (rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lg)
   let ((), tr) ← prog.run (Transcript.init stream.rounds (spec.domain t r).toUTF8)
   if tr.k != stream.rounds.size then throw s!"S15/R2: {name}: {stream.rounds.size - tr.k} recorded rounds were never consumed"
