@@ -21,11 +21,13 @@ def definition(subcircuit, T: int):
 
 
 def values(subcircuit) -> list[tuple[int, int]]:
-    """The program's constants the units take as values, ``(width, value)``: FA2's ``scale_softmax_log2`` (``b1``'s
-    ``_scale_log2_bits(D)``, the f32 every block of the Definition multiplies by)."""
-    from verity_vllm.program.registry.b1 import _scale_log2_bits
+    """The program's constants the units take as values, ``(width, value)``: FA2's ``scale_softmax_log2``, the f32 every
+    block of the Definition multiplies by (``set_params_fprop``: ``float(D ** -0.5) * M_LOG2E`` in double, narrowed to f32).
+    ``ir_lower`` refuses a value no constant gate of the Definition holds."""
+    import numpy as np
 
-    return [(32, _scale_log2_bits(int(subcircuit.params["D"])))]
+    s = float(np.float32(int(subcircuit.params["D"]) ** -0.5))
+    return [(32, int(np.float32(s * 1.4426950408889634).view(np.uint32)))]
 
 
 def lowering(subcircuit, T: int):

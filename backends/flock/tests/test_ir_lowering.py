@@ -958,13 +958,11 @@ def test_attention_units_are_tensor_core_steps():
 def test_attention_scale_is_a_value():
     """The softmax scale is the program's: the circuit statement's lowering reads it from the values row (every k-step
     returns it to the tail), so no tail constant holds it; the unit rows are the frame lowering's, and the cut words and the
-    outputs are the IR's on the captured T = 129 head."""
-    from verity_vllm.program.registry.b1 import _scale_log2_bits
-
+    outputs are the IR's on the captured T = 129 head; the scale is FA2's ``scale_softmax_log2`` at D = 64."""
     s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
     mod = REG.module("attention-head")
     low, frame = mod.lowering_for_set(s), mod.frame_lowering_for_set(s)
-    scale = _scale_log2_bits(64)
+    scale = 0x3E38AA3B
     U = low.units
     assert low.values == (scale,) and U.relay == {0: len(U.cut) - 1} and low.leaves["in_ports"][-1] == [64, 16]
     assert scale not in {op[2] for op in low.cut["tail"] if op[1] == "Const"}
