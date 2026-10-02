@@ -170,13 +170,6 @@
   }
  },
  "pins": {
-  "FlockSoundness.Audit.twoStage_compute": {},
-  "FlockSoundness.Audit.effEscape_bernoulli_subset_le": {},
-  "FlockSoundness.Audit.twoStage_wrong_set_le": {},
-  "FlockSoundness.Audit.twoStage_compute_closed": {},
-  "FlockSoundness.Audit.Partition.Refines.oracle₂_compute": {},
-  "FlockSoundness.Audit.Partition.flock_two_stage_compute": {},
-  "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed": {},
   "FlockSoundness.Audit.InfluenceWitness.A.accepts": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
@@ -1142,6 +1135,25 @@
    "assumptions": [],
    "type_hash": "a5478b79433351d1d1f31b10beea24cc88ea72bfca8552fa609c6ab67775798f"
   },
+  "FlockSoundness.Audit.Partition.Refines.oracle₂_compute": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.Refines.oracle₂_compute {nc nf : Nat} {C : FlockSoundness.Audit.Circuit}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} (r : Pf.Refines Pc)",
+    "  {L₁ : FlockSoundness.Audit.Law nc} {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Int : Finset (Fin nc) → Type}",
+    "  {ext : (S₁ : Finset (Fin nc)) → Int S₁ → Fin C.N → Bool}",
+    "  {session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  {ε : ENNReal} (hs : Pf.SessionSound₂ Pc ext session ε) (w : Fin nc → Real) {δ : ENNReal} {W : Real}",
+    "  (hW : FlockSoundness.Audit.IsHarmBound₂ L₁ L₂ r.parent w δ W)",
+    "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ (Fin C.N → Bool) Int session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o => And (Eq o.fst Bool.true) (Real.instLT.lt W ((Pc.wrong (FlockSoundness.Audit.reg₂ σ)).sum fun u => w u)))",
+    "      (FlockSoundness.Audit.twoStage L₁ L₂ (Fin C.N → Bool) Int session) σ)",
+    "    (instHAdd.hAdd δ ε)"
+   ],
+   "assumptions": [],
+   "type_hash": "251cd221ab9c9525c151776c1d7317fbd0782b170d4ec1d5b1440861db48aff6"
+  },
   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
    "signature": [
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence {C : FlockSoundness.Audit.Circuit} {nf nc : Nat}",
@@ -1502,6 +1514,58 @@
    ],
    "assumptions": [],
    "type_hash": "ae096dced281a511ad71fc70a4362616b8559d08f30955e8d7a01a8e2f558353"
+  },
+  "FlockSoundness.Audit.Partition.flock_two_stage_compute": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute {nc nf : Nat} {C : FlockSoundness.Audit.Circuit}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} (r : Pf.Refines Pc)",
+    "  (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockSoundness.Audit.FlockTable) (hlow : Pf.LoweringSound plan)",
+    "  {L₁ : FlockSoundness.Audit.Law nc} {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Int : Finset (Fin nc) → Type}",
+    "  (ext : (S₁ : Finset (Fin nc)) → Int S₁ → Fin C.N → Bool) (w : Fin nc → Real) {δ : ENNReal} {W : Real}",
+    "  (hW : FlockSoundness.Audit.IsHarmBound₂ L₁ L₂ r.parent w δ W)",
+    "  (σ :",
+    "    (FlockSoundness.Audit.twoStage L₁ L₂ (Fin C.N → Bool) Int fun S R S₁ I =>",
+    "        FlockSoundness.Audit.Partition.flockSession plan S",
+    "          (FlockSoundness.Audit.Partition.extend R (ext S₁ I))).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o => And (Eq o.fst Bool.true) (Real.instLT.lt W ((Pc.wrong (FlockSoundness.Audit.reg₂ σ)).sum fun u => w u)))",
+    "      (FlockSoundness.Audit.twoStage L₁ L₂ (Fin C.N → Bool) Int fun S R S₁ I =>",
+    "        FlockSoundness.Audit.Partition.flockSession plan S (FlockSoundness.Audit.Partition.extend R (ext S₁ I)))",
+    "      σ)",
+    "    (instHAdd.hAdd δ (ENNReal.ofReal (instHPow.hPow 2 (-205))))"
+   ],
+   "assumptions": [],
+   "type_hash": "b001dbc3820939c01d1c8e1037f49529801d207b0a57dd4337913847799abe06"
+  },
+  "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed {nc nf : Nat} {C : FlockSoundness.Audit.Circuit}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} (r : Pf.Refines Pc)",
+    "  (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockSoundness.Audit.FlockTable) (hlow : Pf.LoweringSound plan)",
+    "  {num den : Nat} [NeZero den] (hnum : instLENat.le num den) (n k : Fin nc → Nat)",
+    "  (hk : ∀ (u : Fin nc), instLENat.le (k u) (n u)) (hn : ∀ (u : Fin nc), instLENat.le 1 (n u))",
+    "  (e : (u : Fin nc) → Function.Embedding (Fin (n u)) (Fin nf))",
+    "  (hcov :",
+    "    ∀ (u : Fin nc) (v : Fin nf), Eq (r.parent v) u → Exists fun i => Eq (Function.instFunLikeEmbedding.coe (e u) i) v)",
+    "  {Int : Finset (Fin nc) → Type} (ext : (S₁ : Finset (Fin nc)) → Int S₁ → Fin C.N → Bool) (w : Fin nc → Real)",
+    "  {δ : ENNReal} {W : Real} (hW : FlockSoundness.Audit.IsHarmBoundClosed num den n k w δ W)",
+    "  (σ :",
+    "    (FlockSoundness.Audit.twoStage (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "        (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) (Fin C.N → Bool) Int fun S R S₁ I =>",
+    "        FlockSoundness.Audit.Partition.flockSession plan S",
+    "          (FlockSoundness.Audit.Partition.extend R (ext S₁ I))).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o => And (Eq o.fst Bool.true) (Real.instLT.lt W ((Pc.wrong (FlockSoundness.Audit.reg₂ σ)).sum fun u => w u)))",
+    "      (FlockSoundness.Audit.twoStage (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "        (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) (Fin C.N → Bool) Int fun S R S₁ I =>",
+    "        FlockSoundness.Audit.Partition.flockSession plan S (FlockSoundness.Audit.Partition.extend R (ext S₁ I)))",
+    "      σ)",
+    "    (instHAdd.hAdd δ (ENNReal.ofReal (instHPow.hPow 2 (-205))))"
+   ],
+   "assumptions": [],
+   "type_hash": "cb34da31f32ee464dcc64cb00894d3c1b5b338d50f81ea59708bb44f4eecd3e5"
   },
   "FlockSoundness.Audit.Partition.outputs_eq_of_separates": {
    "signature": [
@@ -1937,6 +2001,24 @@
    "assumptions": [],
    "type_hash": "48bbaae4280d3b9c15adf18d740ae49085adb806fe29260c78e6df73f9bb0555"
   },
+  "FlockSoundness.Audit.effEscape_bernoulli_subset_le": {
+   "signature": [
+    "FlockSoundness.Audit.effEscape_bernoulli_subset_le {nc nf num den : Nat} [NeZero den] (hnum : instLENat.le num den)",
+    "  (parent : Fin nf → Fin nc) (n k : Fin nc → Nat) (hk : ∀ (u : Fin nc), instLENat.le (k u) (n u))",
+    "  (hn : ∀ (u : Fin nc), instLENat.le 1 (n u)) (e : (u : Fin nc) → Function.Embedding (Fin (n u)) (Fin nf))",
+    "  (hcov :",
+    "    ∀ (u : Fin nc) (v : Fin nf), Eq (parent v) u → Exists fun i => Eq (Function.instFunLikeEmbedding.coe (e u) i) v)",
+    "  (B : Finset (Fin nc)) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Audit.effEscape (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "      (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) parent B)",
+    "    (B.prod fun u =>",
+    "      instHDiv.hDiv (instHSub.hSub (instHMul.hMul den (n u)) (instHMul.hMul num (k u))).cast",
+    "        (instHMul.hMul den (n u)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "6beced2e800a5410a335b9985f9a349f596937795fd61dbb3de280d77830a35b"
+  },
   "FlockSoundness.Audit.extraction_audit_window": {
    "signature": [
     "FlockSoundness.Audit.extraction_audit_window {n m : Nat} {σ : Fin n → Fin m} {k : Fin m → Nat}",
@@ -2195,6 +2277,77 @@
    ],
    "assumptions": [],
    "type_hash": "60f5cd76631591e53f7f3649af8e13bb6f579669b075fdf4b5eda40fdfb2eb67"
+  },
+  "FlockSoundness.Audit.twoStage_compute": {
+   "signature": [
+    "FlockSoundness.Audit.twoStage_compute {nc nf : Nat} {L₁ : FlockSoundness.Audit.Law nc}",
+    "  {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  (A : FlockSoundness.Audit.Analysis₂ L₁ L₂ Reg Int session) {εks δlink : ENNReal} (hks : A.KnowledgeSound εks)",
+    "  (hlink : A.LinkSound δlink) (w : Fin nc → Real) {δ : ENNReal} {W : Real}",
+    "  (hW : FlockSoundness.Audit.IsHarmBound₂ L₁ L₂ A.parent w δ W)",
+    "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o => And (Eq o.fst Bool.true) (Real.instLT.lt W ((A.wrongC (A.committedCOf σ)).sum fun u => w u)))",
+    "      (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session) σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "7a9a41e8976948d18fe24a051d604468b94551a8b6cf84387862693a48ecc7e0"
+  },
+  "FlockSoundness.Audit.twoStage_compute_closed": {
+   "signature": [
+    "FlockSoundness.Audit.twoStage_compute_closed {nc nf num den : Nat} [NeZero den] (hnum : instLENat.le num den)",
+    "  (n k : Fin nc → Nat) (hk : ∀ (u : Fin nc), instLENat.le (k u) (n u)) (hn : ∀ (u : Fin nc), instLENat.le 1 (n u))",
+    "  (e : (u : Fin nc) → Function.Embedding (Fin (n u)) (Fin nf)) {Reg : Type} {Int : Finset (Fin nc) → Type}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  (A :",
+    "    FlockSoundness.Audit.Analysis₂ (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "      (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) Reg Int session)",
+    "  (hcov :",
+    "    ∀ (u : Fin nc) (v : Fin nf), Eq (A.parent v) u → Exists fun i => Eq (Function.instFunLikeEmbedding.coe (e u) i) v)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (w : Fin nc → Real) {δ : ENNReal}",
+    "  {W : Real} (hW : FlockSoundness.Audit.IsHarmBoundClosed num den n k w δ W)",
+    "  (σ :",
+    "    (FlockSoundness.Audit.twoStage (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "        (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) Reg Int session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o => And (Eq o.fst Bool.true) (Real.instLT.lt W ((A.wrongC (A.committedCOf σ)).sum fun u => w u)))",
+    "      (FlockSoundness.Audit.twoStage (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "        (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) Reg Int session)",
+    "      σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "9e25f78b9d9c4d1e73cdeb8589d307e94ecc5232e69b4ddc297066c05fcc022a"
+  },
+  "FlockSoundness.Audit.twoStage_wrong_set_le": {
+   "signature": [
+    "FlockSoundness.Audit.twoStage_wrong_set_le {nc nf num den : Nat} [NeZero den] (hnum : instLENat.le num den)",
+    "  (n k : Fin nc → Nat) (hk : ∀ (u : Fin nc), instLENat.le (k u) (n u)) (hn : ∀ (u : Fin nc), instLENat.le 1 (n u))",
+    "  (e : (u : Fin nc) → Function.Embedding (Fin (n u)) (Fin nf)) {Reg : Type} {Int : Finset (Fin nc) → Type}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  (A :",
+    "    FlockSoundness.Audit.Analysis₂ (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "      (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) Reg Int session)",
+    "  (hcov :",
+    "    ∀ (u : Fin nc) (v : Fin nf), Eq (A.parent v) u → Exists fun i => Eq (Function.instFunLikeEmbedding.coe (e u) i) v)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (B : Finset (Fin nc))",
+    "  (σ :",
+    "    (FlockSoundness.Audit.twoStage (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "        (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) Reg Int session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o => And (Eq o.fst Bool.true) (Finset.instPartialOrder.le B (A.wrongC (A.committedCOf σ))))",
+    "      (FlockSoundness.Audit.twoStage (FlockSoundness.Audit.Law.bernoulli nc num den)",
+    "        (fun u => FlockSoundness.Audit.subsetIn ⋯ (e u)) Reg Int session)",
+    "      σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd (B.prod fun u => FlockSoundness.Audit.subsetFactor num den n k u) εks) δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "dc8bae6ee8a2c1e6849f42e6cb17fbcd8f3d6f7c1115dc4609287ead604aaaa1"
   },
   "FlockSoundness.Binding.HmRows.registered": {
    "signature": [
@@ -9530,6 +9683,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -9609,6 +9764,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -9734,6 +9891,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -9816,6 +9975,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -9904,6 +10065,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -9991,6 +10154,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -10068,6 +10233,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -10145,6 +10312,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -10266,6 +10435,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -10367,6 +10538,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -10452,6 +10625,8 @@
     "FlockSoundness.Accounting.instDecidableOk": "6ff45e7f70c0f9683114f2e765e0f9c5c8ce64c01d70afc473dd93b28887b614"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -10546,6 +10721,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -10793,6 +10970,7 @@
     "FlockSoundness.Audit.InfluenceWitness.W.lemma47",
     "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits",
     "FlockSoundness.Audit.Partition.IsRowsUnit.computes_of_cert",
+    "FlockSoundness.Audit.Partition.Refines.oracle₂_compute",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.Separates.mono",
     "FlockSoundness.Audit.Partition.Separates.union",
@@ -10807,6 +10985,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Audit.Partition.outputs_eq_of_separates",
     "FlockSoundness.Audit.Partition.separates_exits",
     "FlockSoundness.Binding.HmRows.registered",
@@ -10927,6 +11107,18 @@
     "FlockSoundness.Audit.extraction_audit_work_closure"
    ]
   },
+  "FlockSoundness.Audit.Examples": {
+   "digest": "1b3591ca85957c92357fcdda4b7edd831e6ee447d95b3e0c312bc464a20a5aeb",
+   "definitions": {
+    "FlockSoundness.Audit.Law.map": "4e000a624e95c11abf7a0587aa3b7e2db59cc6457ea91140a1c5515fad976a11"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
+    "FlockSoundness.Audit.effEscape_bernoulli_subset_le",
+    "FlockSoundness.Audit.twoStage_compute_closed",
+    "FlockSoundness.Audit.twoStage_wrong_set_le"
+   ]
+  },
   "FlockSoundness.Audit.Extraction": {
    "digest": "507d7c17912c38a7909b0f4b4213356a890e4a91846d6082870601459ca2a112",
    "definitions": {
@@ -10958,6 +11150,23 @@
     "FlockSoundness.Discharge.ZkSession.zk_flock_count_execOS",
     "FlockSoundness.Discharge.ZkSession.zk_flock_count_execOS_m1",
     "FlockSoundness.Discharge.ZkSession.zk_knowledgeSound"
+   ]
+  },
+  "FlockSoundness.Audit.Flock": {
+   "digest": "92c47c9ba79910319b31d83dbedd64b073371c2eb8143bbe47e7a75a7b66d92e",
+   "definitions": {
+    "FlockSoundness.Audit.FlockTable": "359f4f6585a973ac8ac2466d56ebab3edf7985fcc109ad544206af22a625e6e9",
+    "FlockSoundness.Audit.FlockTable.S": "7903f1bcc589abb294e9837d4f27cc6ac215b7faff0c762d4442f17bc1a37021",
+    "FlockSoundness.Audit.FlockTable.game": "b92a6b9ac63ea3b56f31bc07181e2f7c3e63ad3c53a1c2c1782a5ae1c84c4c0c",
+    "FlockSoundness.Audit.FlockTable.mPts": "e7fb6c68bf81c5c4b4b524be5e28a221551a6066329b46cd7722b073d1bf8113",
+    "FlockSoundness.Audit.FlockTable.ptLocal": "e4323466ba369e40e91d1c3288cc64d87473de454d7734d16764b0c53acbfcbe",
+    "FlockSoundness.Audit.FlockTable.sch": "2ba5111444d93c57ccad45ecf5e92b8126def43c25c0af8befb40bf80733ad7c",
+    "FlockSoundness.Audit.Partition.LoweringSound": "a783a03a7eca004204305316e82fe5bc89b87beb55a0b8557e7cd39e07132019",
+    "FlockSoundness.Audit.Partition.flockSession": "fb0328a4974a217d8052878b71d2320c61acef7410d0eacff95aafdfc61b1d79"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed"
    ]
   },
   "FlockSoundness.Audit.FlockBatched": {
@@ -11346,9 +11555,10 @@
    ]
   },
   "FlockSoundness.Audit.Law": {
-   "digest": "0bcfa96d57b2865df62e8190a772f69947019185ef759ba286203535b7ddafda",
+   "digest": "a77100297020ff04630e7649609f1b73416aee869faadbc1c8e40b6f23221565",
    "definitions": {
     "FlockSoundness.Audit.Law": "b1c204e017af5bb6aa902ec06acf3cb78a691b879095cd7b24e39eb599e5ddc4",
+    "FlockSoundness.Audit.Law.bernoulli": "2f16d1d541405db53864a529c73be6b7317f3cfdd24019a56ed83ff8576703e5",
     "FlockSoundness.Audit.Law.draw": "25176231b8f5791fbcfa94fd3f40216ba705a18d0167f9909672de5676d63b86",
     "FlockSoundness.Audit.Law.escape": "8dca2af149d09f76f11b001a4ac128eb8e9060a013b88cdd1555b89b8c44e2e9",
     "FlockSoundness.Audit.Law.fintype": "5e1d51451a55852f84d7ee82b418c80fcb346643a2eb234b7c031ad5928324b3",
@@ -11390,6 +11600,7 @@
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Law.work_escape_le_count",
+    "FlockSoundness.Audit.Partition.Refines.oracle₂_compute",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -11401,6 +11612,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
@@ -11415,6 +11628,7 @@
     "FlockSoundness.Audit.audit_work_of_record",
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.effEscape_bernoulli_subset_le",
     "FlockSoundness.Audit.extraction_audit_window",
     "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
@@ -11424,6 +11638,9 @@
     "FlockSoundness.Audit.extraction_audit_work_rest",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
     "FlockSoundness.Audit.prob_auditReg",
+    "FlockSoundness.Audit.twoStage_compute",
+    "FlockSoundness.Audit.twoStage_compute_closed",
+    "FlockSoundness.Audit.twoStage_wrong_set_le",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -11652,7 +11869,7 @@
    "pins": ["FlockSoundness.Audit.Law.stratified_miss_eq_greedy"]
   },
   "FlockSoundness.Audit.TwoStage": {
-   "digest": "215dfb94f0e7c76882ae43724ec9b72cf89bf52d24571a675e2f69dfa3fac2e4",
+   "digest": "f80c86b83ec6f3c5b2ccc0e0f8a5ef2ea730ffffa24ded5c74dc4d5836d85d5f",
    "definitions": {
     "FlockSoundness.Audit.Analysis₂": "a08a628a65aa09f989cd41377165203cf72854ee30c8ca950fa1ab485aed48de",
     "FlockSoundness.Audit.Analysis₂.KnowledgeSound": "4ba3c6114960163696c3edd804da07aeaba8ba0ab49dc752e88ed0aa91e79e2d",
@@ -11660,13 +11877,17 @@
     "FlockSoundness.Audit.Analysis₂.TrC": "effdc44d1ad5101bf51c2611c8a28706d2c455a2fc0c96a7a8baa26514616974",
     "FlockSoundness.Audit.Analysis₂.TrF": "4e549034e309934508dadb41407fb64a422bedf5efdbc9656709d880dd20cf24",
     "FlockSoundness.Audit.Analysis₂.committedC": "fe85f9dd70496a9f821b135368bb383a65917d5bda16de2aa3c4b52846538fb6",
+    "FlockSoundness.Audit.Analysis₂.committedCOf": "a67d9a730e4cf40ae71492d2e02b8d739f7a15395cd120e0ebf66c5c99898185",
     "FlockSoundness.Audit.Analysis₂.committedF": "a80f23549b0e9d1dc4f55fa7f4abacaa7ac9290629bc495f0ab5621c22e631b2",
     "FlockSoundness.Audit.Analysis₂.ksFail": "25b77d62b5237df05d35d15c666b167537e5da3ade2344caa431f15367c896ba",
     "FlockSoundness.Audit.Analysis₂.linkFail": "9e67db2206da37115367a9f1d6a9023ccb3c86874099df9cebb26eb6720bfd5e",
+    "FlockSoundness.Audit.Analysis₂.parent": "440ccc6e1be33c12f8840b441f5c811da6dc6b249748f5aa621a7abd7e969e8c",
+    "FlockSoundness.Audit.Analysis₂.wrongC": "14c0231629dbbee67d51a65f86246ef8f90c602f75d289eca0bbb5dd35e8fe1d",
     "FlockSoundness.Audit.Cont₁": "143e4bcd4523b96247524184512e22db11a9799351606beb5415feb30cc709d7",
     "FlockSoundness.Audit.Cont₂": "34d5e9f8b84bcd9f6d193aec78ac8ac1d48757c02db54b036d4175d172bf7187",
     "FlockSoundness.Audit.Partition.AnchorsSound₂": "693df68f8eefe5547fe3465d17dcc6a2169a5a6ab947fe0a67c867708ead03ac",
     "FlockSoundness.Audit.Partition.Refines.analysis₂": "d464cc97d0b2c374d31996fce9c47d8445dd9162fe7e9af40f17ebc5c752bd15",
+    "FlockSoundness.Audit.Partition.SessionSound₂": "4d32b456c86404dcaebfd5d36952f84d268afdc7b470bb028adb4a2817d0d303",
     "FlockSoundness.Audit.Partition.extend": "876638b86cfc448f74fada587b55a96c112d262a41c84ca474bc101948ed9603",
     "FlockSoundness.Audit.cont₁": "2f38fe1c550e0ecead56b3e69cafa8b01a95971e985f863b3ea2e340341004b4",
     "FlockSoundness.Audit.effEscape": "6ba40dc415aec6003d9d7d04183258ad384c3bbfeb1d8b63f5cf3796e11a6444",
@@ -11677,7 +11898,32 @@
    "pins": [
     "FlockSoundness.Audit.InfluenceWitness.Two.accepts",
     "FlockSoundness.Audit.InfluenceWitness.Two.influence",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence"
+    "FlockSoundness.Audit.Partition.Refines.oracle₂_compute",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
+    "FlockSoundness.Audit.effEscape_bernoulli_subset_le",
+    "FlockSoundness.Audit.twoStage_compute",
+    "FlockSoundness.Audit.twoStage_compute_closed",
+    "FlockSoundness.Audit.twoStage_wrong_set_le"
+   ]
+  },
+  "FlockSoundness.Audit.TwoStageCompute": {
+   "digest": "3dde0ac77f573ed235ffbeb40a5f619cfda871fd3ba0ac5cee208eb7949ddc51",
+   "definitions": {
+    "FlockSoundness.Audit.IsHarmBoundClosed": "046ae3241d4eda7f2368ca8ce711dbe9731daa7e0bf15a170c344d054c201a86",
+    "FlockSoundness.Audit.IsHarmBound₂": "6ddd7ffaf09a17ec484692a24a41b99aa9911a0ebf5fe740266b993011794cf5",
+    "FlockSoundness.Audit.subsetFactor": "828d793f91b423adfa1565d71acf90904be1b8d48a35a3305abe97b62ea0866a",
+    "FlockSoundness.Audit.subsetIn": "570a94e85f734dff7ba44b5669e3970888caed01b37a49e74289c2db9e8d07e2"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partition.Refines.oracle₂_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
+    "FlockSoundness.Audit.effEscape_bernoulli_subset_le",
+    "FlockSoundness.Audit.twoStage_compute",
+    "FlockSoundness.Audit.twoStage_compute_closed",
+    "FlockSoundness.Audit.twoStage_wrong_set_le"
    ]
   },
   "FlockSoundness.Audit.Window": {
@@ -12224,6 +12470,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -13328,6 +13576,7 @@
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Law.work_escape_le_count",
+    "FlockSoundness.Audit.Partition.Refines.oracle₂_compute",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -13339,6 +13588,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
@@ -13353,6 +13604,7 @@
     "FlockSoundness.Audit.audit_work_of_record",
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.effEscape_bernoulli_subset_le",
     "FlockSoundness.Audit.extraction_audit_window",
     "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
@@ -13362,6 +13614,9 @@
     "FlockSoundness.Audit.extraction_audit_work_rest",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
     "FlockSoundness.Audit.prob_auditReg",
+    "FlockSoundness.Audit.twoStage_compute",
+    "FlockSoundness.Audit.twoStage_compute_closed",
+    "FlockSoundness.Audit.twoStage_wrong_set_le",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -13501,6 +13756,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -13630,6 +13887,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -13810,6 +14069,9 @@
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
+    "FlockSoundness.Audit.twoStage_compute",
+    "FlockSoundness.Audit.twoStage_compute_closed",
+    "FlockSoundness.Audit.twoStage_wrong_set_le",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -13995,6 +14257,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14205,6 +14469,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14571,6 +14837,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
@@ -14827,6 +15095,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -14970,6 +15240,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -15064,6 +15336,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
@@ -15169,6 +15443,8 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute",
+    "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed",
     "FlockSoundness.Binding.HmRows.registered",
     "FlockSoundness.Binding.HmRows.registered_weights_hm96",
     "FlockSoundness.Binding.Layout.collide_spec",
