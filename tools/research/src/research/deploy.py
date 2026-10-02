@@ -28,8 +28,9 @@ every installed byte is in a pushed commit. Each file is written beside the old 
 and mode (a running script keeps its inode; a new file gets the entry's `mode`, else the repository's), and the old one is linked
 under `.deploy-prev/` in its directory. One line per changed file
 goes to the node's record (path, blob, commit, ref, who, when). When a process still runs the old version of a changed file, it
-prints the entry's `run` (else the path): restart those when it's safe, and `drift` says `restart` until you do. `--dry-run`
-installs nothing and says which files would change.
+prints the entry's `run` (else the path): restart those when it's safe, and `drift` says `restart` until you do. A changed unit
+under /etc/systemd/system/ is loaded with `systemctl daemon-reload`, which restarts nothing: a oneshot's next start runs it.
+`--dry-run` installs nothing and says which files would change.
 """
 from __future__ import annotations
 
@@ -51,6 +52,7 @@ REPO = Path(__file__).resolve().parents[4]
 PROJECT = "verity"
 HISTORY = 400                  # REF's commits searched for a stale file's version
 AHEAD_DAYS = 21                # origin's branches searched for an unrecorded file's commit
+UNITS = "/etc/systemd/system/"  # a changed unit here takes effect only after `systemctl daemon-reload`
 
 # Runs on the node (stdlib): each path's git blob, mtime and the oldest start of a process whose argv names it, the files the
 # managed patterns and trees hold, and the record's last line per path.
@@ -425,6 +427,11 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, dry: bo
         raise RuntimeError(f"{node.name}: install failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
     changed = json.loads(r.stdout)
     now = [f["path"] for f, c in zip(files, changed) if c]
+    if any(p.startswith(UNITS) for p in now):
+        r = run(node.name, ["sudo", "-n", "systemctl", "daemon-reload"], None)
+        if r.returncode != 0:
+            raise RuntimeError(f"{node.name}: installed {', '.join(p for p in now if p.startswith(UNITS))}, but `systemctl daemon-reload` "
+                               f"failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
     after = probe(node, now, run) if now else {"files": {}, "procs": {}}
 
     def old_code(p: str) -> bool:
