@@ -178,4 +178,6 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   (`statement`, and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06`.
 - `--zk` sessions (§16.14): no pinned upstream build has them, so check's agreement step replays none. `agree.py --zk`
   compares Lean's verdicts with the live build's `replay --zk`, and `test_lean_zk.py` with its server's, on the sessions of
-  `art:8126390c` (`@967b8d06+seed-injection`).
+  `art:8126390c` (`@967b8d06+seed-injection`). With public input ports, `agree.py --zk --public-inputs F` holds the
+  sessions to the verifier's own words. `zk_mutants.py --public-inputs F` adds `zk-public-input-flipped` (D7), and
+  `test_lean_public_inputs.py` checks the `--zk` verdicts on its fixture's `records-zk/`.
