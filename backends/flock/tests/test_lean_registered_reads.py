@@ -120,7 +120,7 @@ def test_an_honest_registered_statement_is_accepted_and_reports_its_roots(rope, 
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
     assert line["registered"] == {"cs": {"value": VALUE, "root": staged.reg.root.hex()}}
-    assert line["partition"]["units"] == "derived"
+    assert line["partition_check"]["units"] == "derived"
 
 
 def test_registered_reads_need_the_verifiers_own_roots(rope, staged):
