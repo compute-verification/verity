@@ -146,6 +146,45 @@ def test_a_failed_commits_partial_bundle_teaches_nothing(pacer):
     assert pacer.estimate_gb(B8) == 120.0 and not pacer.SIZES.exists()
 
 
+YI = "yi15-6b__bf16__rtxpro6000__tp1__b8__i1024__o128__{}"   # no size: the formula guesses it as Phi-3-mini, 120 GB at b8
+
+
+def active(pacer) -> list[str]:
+    return sorted(n for n, w in pacer.cluster["wls"].items() if w["spec"]["active"])
+
+
+def test_six_commits_of_a_model_with_no_size_go_one_at_a_time_until_the_first_has_taught_it(pacer):
+    """2 Oct: qwen25-3b and yi15-6b b32 Commits, guessed 1.3-6x low by the formula, took node 1's disk from 61% to 80% in 26 min."""
+    for n in range(6):
+        commit(pacer, f"cov-u{n}", YI.format(n), active=False)
+    commit(pacer, "cov-p", B8, active=False)                 # a model the pacer has a size for isn't held back by them
+    pacer.tick()
+    assert active(pacer) == ["cov-p", "cov-u0"]              # all seven would fit the 1200 GB cap at the formula's 120 GB
+    for n in ("cov-u0", "cov-p"):
+        pacer.cluster["wls"][n]["status"] = {"admission": {"clusterQueue": "deployments-gpu"}}
+    pacer.written[YI.format(0)] = 30.0
+    pacer.tick()
+    assert active(pacer) == ["cov-p", "cov-u0"] and pacer.cluster["policy"] == "Hold"    # the next arrival may be a yi15-6b too
+    del pacer.cluster["wls"]["cov-u0"]
+    pacer.cluster["jobs"]["job-cov-u0"]["status"] = {"succeeded": 1}
+    pacer.tick()                                             # its 30 GB for 8 x 1152 taught it: 37.5 GB each from now on
+    assert active(pacer) == ["cov-p", "cov-u1", "cov-u2", "cov-u3", "cov-u4", "cov-u5"] and pacer.cluster["policy"] == "None"
+
+
+def test_a_commit_of_a_model_with_no_size_admitted_on_arrival_holds_the_queue_for_the_next_one(pacer):
+    """2 Oct: five of those six arrived while the gate was open, and Kueue admitted each the moment it arrived."""
+    commit(pacer, "cov-u0", YI.format(0), admitted=True)
+    pacer.tick()
+    assert pacer.cluster["policy"] == "Hold"
+    commit(pacer, "cov-u1", YI.format(1))                    # arrives under the hold: active, not admitted
+    pacer.tick()
+    assert active(pacer) == ["cov-u0"]
+    del pacer.cluster["wls"]["cov-u0"]
+    pacer.cluster["jobs"]["job-cov-u0"]["status"] = {"failed": 1}   # a failed one teaches nothing: cov-u1 is the next to go
+    pacer.tick()
+    assert active(pacer) == ["cov-u1"] and pacer.cluster["policy"] == "None"
+
+
 def test_the_lease_pool_holders_go_to_their_own_local_queue_on_the_same_cluster_queue(monkeypatch):
     monkeypatch.setenv("VY_POOL_QUEUE", "deployments-gpu")
     monkeypatch.setenv("VY_POOL_LOCAL_QUEUE", "deployments-gpu-pool")
