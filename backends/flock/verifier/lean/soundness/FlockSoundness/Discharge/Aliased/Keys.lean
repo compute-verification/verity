@@ -39,12 +39,16 @@ def srcAt (c : Circuit) (k p t : ℕ) : Src :=
     if (c.leavesIn.getD k #[])[p]! < 0 then .zero else
       let x := ((c.leavesIn.getD k #[])[p]!).toNat
       let q := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x)).getD 0
-      .msg q (2 * (x - (Typed.starts c)[q]!) + t / 8) (t % 8)
+      if 16 * (x - (Typed.starts c)[q]!) + t < c.ports[q]!.bits then
+        .msg q (2 * (x - (Typed.starts c)[q]!) + t / 8) (t % 8)
+      else .zero
   else
     match c.leafCuts.toList.filter (fun e => decide (e.1 = k ∧ e.2.1 = p)) with
     | e :: _ =>
       let q := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ e.2.2)).getD 0
-      if t < 16 then .msg q (2 * (e.2.2 - (Typed.starts c)[q]!) + t / 8) (t % 8) else .zero
+      if t < 16 && 16 * (e.2.2 - (Typed.starts c)[q]!) + t < c.ports[q]!.bits then
+        .msg q (2 * (e.2.2 - (Typed.starts c)[q]!) + t / 8) (t % 8)
+      else .zero
     | [] => match c.wires.toList.filter (fun w => decide (w.dst = (c.unitNet, k, p))) with
       | w :: _ => .wire w.src.1 w.src.2.1
           (((portCols (c.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).1 + t)
@@ -58,12 +62,11 @@ def realize (c : Circuit) (g : ℕ) : Src → ℕ
   | _ => 0
 
 theorem srcAt_ne_pad (c : Circuit) (k p t k' off : ℕ) : srcAt c k p t ≠ .pad k' off := by
-  unfold srcAt
-  split
-  · split <;> simp
-  · split
-    · split <;> simp
-    · split <;> simp
+  intro h
+  unfold srcAt at h
+  dsimp only at h
+  repeat' split at h
+  all_goals cases h
 
 /-- **Δ's source is its key's column, or a forced-zero row at the zero key.** -/
 theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
@@ -77,8 +80,10 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
     unfold Flat.leafSrc
     by_cases hl : (c.leavesIn.getD (s₀ % c.upv) #[])[p]! < 0
     · refine Or.inl ⟨?_, Or.inl ?_⟩ <;> simp only [hl, ↓reduceIte]
-    · refine Or.inr ⟨?_, ?_⟩ <;> simp only [hl, ↓reduceIte, realize]
-      exact Src.noConfusion
+    · simp only [hl, ↓reduceIte]
+      split_ifs
+      · exact Or.inr ⟨Src.noConfusion, rfl⟩
+      · exact Or.inl ⟨rfl, Or.inl rfl⟩
   · simp only [hp, ↓reduceIte]
     rcases hf : c.leafCuts.toList.filter (fun e => decide (e.1 = s₀ % c.upv ∧ e.2.1 = p)) with _ | ⟨e, l⟩
     · rcases hw : c.wires.toList.filter (fun w => decide (w.dst = (c.unitNet, s₀ % c.upv, p))) with _ | ⟨w, l'⟩
@@ -88,10 +93,10 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
         · exact Src.noConfusion
         · omega
     · unfold Flat.cutSrc
-      by_cases ht : t < 16
-      · refine Or.inr ⟨?_, ?_⟩ <;> simp only [hf, ht, ↓reduceIte, realize]
-        exact Src.noConfusion
-      · refine Or.inl ⟨?_, Or.inr ?_⟩ <;> simp only [hf, ht, ↓reduceIte]
+      simp only [hf]
+      split_ifs
+      · exact Or.inr ⟨Src.noConfusion, rfl⟩
+      · exact Or.inl ⟨rfl, Or.inr rfl⟩
 
 /-- **VU-stacked input `x`'s key**: copy `x / W`'s input at slot offset `x % W` (`W = inWords · WORD`), `srcAt` at the
 port bit it is, or the padding row it is. -/
@@ -109,7 +114,9 @@ theorem srcAt_leaf (c : Circuit) (k : ℕ) {p : ℕ} (t : ℕ) (hp : p < (c.unit
   simp only [hp, ↓reduceIte]
   split
   · exact Or.inl rfl
-  · exact Or.inr ⟨_, _, _, rfl, Nat.mod_lt _ (by decide)⟩
+  · split
+    · exact Or.inr ⟨_, _, _, rfl, Nat.mod_lt _ (by decide)⟩
+    · exact Or.inl rfl
 
 /-- **A unit with only leaf inputs**: every stacked input at a port bit has the zero key or a message bit's. -/
 theorem srcKey_leaf (c : Circuit) (h1 : c.unit.inGroups.size = 1) (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ}
