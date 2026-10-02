@@ -1429,7 +1429,7 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 ### 16.14 `--zk` sessions
 
 `verify --zk`, the verifier's setting, checks `flock-circuit --zk` sessions (any `J`, draws) after the same setup, public
-input words included (D7), by `backends/flock/live/PROTOCOL.md`'s masked protocol on §7.4's coin tree (`Flock.Zk*`).
+inputs too (D7), by `backends/flock/live/PROTOCOL.md`'s masked protocol on §7.4's coin tree (`Flock.Zk*`).
 `hooks` is upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
 
 ## 17. Acceptance, assumptions and trust
@@ -1455,8 +1455,8 @@ Lean verifier without a spec change. After the gate passes, production runs only
 stays in CI as a regression oracle.
 
 "Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
-(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is stricter in these places, and
-a vector that exercises one carries the upstream verdict it expects (`upstream_accepted`):
+(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is stricter in these places; a
+vector exercising one carries upstream's expected verdict (`upstream_accepted`):
 
 - **D1:** `root_F = Σ` (S6). Upstream's server checks it only for statements without link points; the statement replay tools
   check it.
@@ -1467,9 +1467,9 @@ a vector that exercises one carries the upstream verdict it expects (`upstream_a
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root.
 - **D6:** a `--zk` record's `coin_tree` (§7.4, §16.14); upstream ignores it.
-- **D7:** public input words (§16.10, also under `--zk`): upstream takes no recomputation and accepts any word.
+- **D7:** public input words (§16.10, also `--zk`): upstream takes no recomputation, and accepts any.
 
-The corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks` in `redigest.py` and `fuzz.py`).
+The corpus's `upstream_checks` names the closed ones per set (`--upstream-checks` in `redigest.py`, `fuzz.py`).
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
 unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
