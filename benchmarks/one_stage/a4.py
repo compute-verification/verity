@@ -3,7 +3,8 @@ session, then the same cell with the weights committed in the statement, for the
 
     PYTHONPATH=<tree>/packages/verity/src:<tree>/backends/numerical/python:<tree>/backends/flock/python:<tree>/integrations/vllm:<tree>/protocols/sampled_proofs \\
       python benchmarks/one_stage/a4.py --bin flock-circuit --lean flock-verify --out DIR [--K 2048] [--n 8] [--cols 16]
-      [--k 8] [--windows 2] [--statement verity/flock-circuit@967b8d06+seed-injection]
+      [--k 8] [--windows 2] [--baseline 1] [--statement verity/flock-circuit@967b8d06+seed-injection] [--zk-bin B]
+      [--statement-check R]
 
 * **Program.** `RegisteredGemm`: `n` Calls of `GemmCoordinate_v2{K, DOT=AmpereBF16TcDot16_v2}` (the generated BF16 set's
   instances), Call `i` reading its activation row `x[i]` (a per-run input) and the weight column `W[pos[i]]`, `W` a root
@@ -19,6 +20,12 @@ session, then the same cell with the weights committed in the statement, for the
   registered root. The audit record holds the roots the Lean verdict opened against.
 * **Baseline.** The same statement with the `w` table under fresh salts and no `registered` header (`--baseline`): the
   weights committed inside the statement, verified without registered reads.
+* **`--zk`** (`--zk-bin`, a `flock-circuit` build with `--zk`): one registered and one in-statement statement, each proved
+  under M0 and `--zk` and verified by that build's own server. The Lean verifier implements no `--zk` statement
+  (`backends/flock/verifier/PROTOCOL.md` §7), so for the `--zk` session it checks only the registered file's reads
+  (`statement --registered`), and its `verify` verdict on the `--zk` session is recorded as it is.
+* **`--statement-check R`**: no proof; the Lean verifier's statement check of a registered and an in-statement file, timed
+  R times each: the reads' cost outside the proof (their paths), which grows with W's columns and not with K.
 """
 from __future__ import annotations
 
@@ -48,7 +55,7 @@ from verity.ir.types import Array  # noqa: E402
 from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registered as G, registration as R  # noqa: E402
+from verity_sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as R  # noqa: E402
 
 SCHEME = a0.SCHEME
 VALUE = "W"
@@ -366,7 +373,7 @@ def negatives(a, st: dict, n: int, wd: Path, result: dict, law, reg: G.Registere
     codes = R.check(later, program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[*log], registered=values).codes
     neg["registration-re-registers-W-under-another-root (R7-held)"] = {"refused": "R7-held" in codes, "codes": list(codes)}
     neg.update({k: v for k, v in a0.audit_negatives(result, law, a.delta, {r["port"]: r["root"] for r in rec["roots"]}).items()
-                if k.startswith("registered") or k.startswith("session-root")})
+                if k.startswith(("registered", "session-root"))})
     return neg
 
 
