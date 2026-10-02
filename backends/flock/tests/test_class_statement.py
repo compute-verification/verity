@@ -164,22 +164,23 @@ def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_i
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(CS.subprocess, "run", run)
     monkeypatch.setattr(CS, "cache_slot_circuits", lambda: None)
-    monkeypatch.setattr(CS, "_stage_job", lambda s: {"shape": s, "stage": {"n": 16}, "table_reads": {}})
+    monkeypatch.setattr(CS, "_stage_job", lambda s: {"shape": s, "stage": {"n": 16, "k_log": st["k_log"]}, "table_reads": {}})
     args = ["--model", "tiny", "--partition", "q-word", "--sample", "1", "--selftest-only", "--selftest", "1", "--selftest-gpu",
             "--selftest-cases", ",".join(cases), "--selftest-binary", "flock-circuit-seeded"]
     argvs = {}
-    for jobs, on, order in (("1", "caller", cases), ("3", "pool", cases[::-1])):
+    # at k_log 27 the GPU cases run one at a time on the caller, as with --selftest-jobs 1
+    for jobs, k_log, on, order in (("1", 26, "caller", cases), ("3", 26, "pool", cases[::-1]), ("3", 27, "caller", cases)):
         st.update(argv={}, finished=[], started=threading.Barrier(len(cases)), returned={c: threading.Event() for c in cases},
-                  caller=threading.current_thread())
+                  caller=threading.current_thread(), k_log=k_log)
         (tmp_path / "selftests.jsonl").unlink(missing_ok=True)
         assert CS.main([*args, "--selftest-jobs", jobs, "--out", str(tmp_path)]) == 0
         (rec,) = [json.loads(ln) for ln in (tmp_path / "selftests.jsonl").read_text().splitlines()]
         assert st["finished"] == order
         assert rec["selftest"]["all_pass"] is True and rec["selftest"]["subset"] == cases
         assert rec["selftest"]["gpu_cases"] == [{"case": c, "pass": True, "on": on} for c in cases]
-        argvs[jobs] = st["argv"]
-    assert argvs["3"] == argvs["1"]                                # each case its own process, with the same binary and arguments
-    assert all(cmd[0] == "flock-circuit-seeded" and "--gpu" in cmd and cmd[-2:] == ["--only", c] for c, cmd in argvs["3"].items())
+        argvs[jobs, k_log] = st["argv"]
+    assert argvs["3", 26] == argvs["1", 26] == argvs["3", 27]      # each case its own process, with the same binary and arguments
+    assert all(cmd[0] == "flock-circuit-seeded" and "--gpu" in cmd and cmd[-2:] == ["--only", c] for c, cmd in argvs["3", 26].items())
 
 
 def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
@@ -195,3 +196,16 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="honest")["all_pass"] is True
     assert "--gpu" in seen[0] and seen[0][-2:] == ["--only", "gpu_paths_agree"]
     assert "--gpu" not in seen[1]
+
+
+def test_each_selftest_case_keeps_its_stderr_beside_the_class_records(monkeypatch, tmp_path: Path):
+    def run(cmd, **_kw):
+        case = cmd[cmd.index("--only") + 1] if "--only" in cmd else None
+        return CS.subprocess.CompletedProcess(cmd, 0, stdout=f'NEG\t{{"case": "{case}", "pass": false}}\n',
+                                              stderr=f"thread 'main' panicked: {case}: out of memory\n")
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    assert CS.prove("flock-circuit", tmp_path, 16, 0, selftest="gpu_proofs_match_cpu", gpu=True)["all_pass"] is False
+    CS.prove("flock-circuit", tmp_path, 16, 0, selftest=True)
+    assert (tmp_path / "selftest-gpu_proofs_match_cpu.err").read_text() == "thread 'main' panicked: gpu_proofs_match_cpu: out of memory\n"
+    assert (tmp_path / "selftest-all.err").read_text() == "thread 'main' panicked: None: out of memory\n"

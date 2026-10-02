@@ -62,6 +62,9 @@ READ_CASES = ("honest", "unit_internal_bit_flipped", "unit_input_differs_from_it
 #: and with --selftest-gpu, the GPU prover's paths against each other and against the CPU prover, and its sessions verified
 #: beside the next ones' proving against one at a time (byte-identical proofs)
 GPU_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu", "verify_ahead_matches_serial")
+#: a GPU case's process holds about 9, 18 and 31 GiB of the device at k_log 25, 26 and 27 (B = 16): from this k_log on, three at
+#: once overfill a 96 GiB card, so a statement's GPU cases run one at a time whatever --selftest-jobs says
+GPU_SERIAL_K_LOG = 27
 EXPERIMENTAL = "verity/flock/experimental-owners"
 
 
@@ -533,6 +536,9 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     if selftest:
         cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)] + (["--gpu"] if gpu else [])
         r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True, timeout=timeout)
+        # the case's panics and the prover's phase lines, which its record does not keep
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"selftest-{selftest if isinstance(selftest, str) else 'all'}.err").write_text(r.stderr)
         lines = [ln for ln in r.stdout.splitlines() if ln.startswith(("SELFTEST", "NEG"))]
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("NEG")]
         head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), None)
@@ -867,7 +873,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "subset adds GPU_CASES)")
     ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
     ap.add_argument("--selftest-jobs", type=int, default=1, help="case processes run at once (a read-bearing circuit's or "
-                    "--selftest-cases'; each still its own process, the records in case order); each parses the circuit itself")
+                    "--selftest-cases'; each still its own process, the records in case order); each parses the circuit itself. "
+                    "GPU cases of a statement at k_log >= GPU_SERIAL_K_LOG run one at a time")
     ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
                     help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
@@ -972,11 +979,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
-                        if a.selftest_jobs <= 1:
+                        jobs = 1 if g and (rec["stage"].get("k_log") or 0) >= GPU_SERIAL_K_LOG else a.selftest_jobs
+                        if jobs <= 1:
                             runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
                         else:
                             from concurrent.futures import ThreadPoolExecutor
-                            with ThreadPoolExecutor(min(a.selftest_jobs, len(cases))) as ex:
+                            with ThreadPoolExecutor(min(jobs, len(cases))) as ex:
                                 runs = list(ex.map(lambda c: prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g), cases))
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
                                            "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)} | \

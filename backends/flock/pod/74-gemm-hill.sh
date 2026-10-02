@@ -134,7 +134,9 @@ if [ -n "${ZKAUDIT_RUNS:-}" ]; then
   done
   [ $zok = 1 ]; exit
 fi
-# the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, under 5 GB of the GPU's)
+# the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, and of the GPU's about 9,
+# 18 and 31 GiB at k_log 25, 26 and 27, so class_statement runs a k_log 27 gate's one at a time); each case's stderr is kept as
+# out/gate/classes/*/selftest-<case>.err, beside the class's prove.out
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial SELFTEST_JOBS=3"
 ok=1
 if [ "${SERVE_ONLY:-0}" = 1 ]; then
