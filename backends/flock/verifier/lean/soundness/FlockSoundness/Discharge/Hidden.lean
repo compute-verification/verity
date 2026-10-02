@@ -6,6 +6,7 @@ import FlockSoundness.Discharge.Hidden.Public
 import FlockSoundness.Discharge.Hidden.Delta
 import FlockSoundness.Discharge.Hidden.Rows
 import FlockSoundness.Discharge.Hidden.Layout
+import FlockSoundness.Discharge.Hidden.Flat
 import FlockSoundness.Discharge.Hidden.Theorems
 
 /-!
@@ -19,5 +20,7 @@ import FlockSoundness.Discharge.Hidden.Theorems
 * `Delta`: Δ as `HmRow.delta`'s, then `outPairs` (`hidden_delta'`);
 * `Rows`: an output row's message bytes are its compressions' (`out_chunks`: `HmRow.rowPorts`' v2 rows, `HmOut.checkRows`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
+* `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
+  row's message bits as copies of `outSrc` (`msg_copy`);
 * `Theorems`: one theorem per frozen statement.
 -/
