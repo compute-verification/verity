@@ -193,8 +193,8 @@ theorem drawn_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.
   cases hD'
   have hpub : pub.tables = none := by rw [htab, hpt]; rfl
   unfold Public.digest
-  rw [hpub, hpt, hdig]
-  simp only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+  rw [hpub, hpt, hdig, ite_eq_right (by simp [hpt])]
+  dsimp only
   refine foldl_extract_getD pop.digests D.proved (fun u hu => ?_) _ hr hp
   have := hlt u hu
   rw [hsz, hpopn] at *
