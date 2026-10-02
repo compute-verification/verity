@@ -3,7 +3,7 @@
  "exempt": {
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock"
  },
- "meaning": ["FlockProofs", "Flock.CircuitType", "Flock.Library", "Flock.Layout"],
+ "meaning": ["FlockProofs", "Flock.CircuitType", "Flock.Library", "Flock.Layout", "Flock.HmNets"],
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it",
@@ -38,6 +38,102 @@
    ],
    "assumptions": [],
    "type_hash": "8b51a2bc209063b9a70f8ff3a37cb03145aa863e76568467c9d23b3c58b9ff2d"
+  },
+  "Flock.HmNets.check_ok": {
+   "signature": [
+    "Flock.HmNets.check_ok {c : Flock.Circuit} (h : Eq (Flock.HmNets.check c) (Except.ok Unit.unit)) :",
+    "  And",
+    "    (Exists fun g =>",
+    "      And (Eq Flock.HmNets.sha512x3Net.get (Except.ok g)) (Eq (c.nets.getD c.shaNet instInhabitedProd.default).snd g))",
+    "    (Exists fun g =>",
+    "      And (Eq Flock.HmNets.hm96Net.get (Except.ok g)) (Eq (c.nets.getD c.hmNet instInhabitedProd.default).snd g))"
+   ],
+   "assumptions": [],
+   "type_hash": "03d5e27d14955f30047137fbfdb5c307097c72857f4eb221dc6536d9625fd7c2"
+  },
+  "Flock.HmNets.col_and": {
+   "signature": [
+    "Flock.HmNets.col_and (nIn inRows k : Nat) :",
+    "  Eq (Flock.HmNets.col nIn inRows (instHAdd.hAdd nIn k)) (instHAdd.hAdd inRows k)"
+   ],
+   "assumptions": [],
+   "type_hash": "6c4f9ff2319e5d0caddadeefa4349623179a555fcf38c725b43bdb0036e3c031"
+  },
+  "Flock.HmNets.col_input": {
+   "signature": [
+    "Flock.HmNets.col_input {nIn inRows v : Flock.HmNets.Var} (h : instLTNat.lt v nIn) : Eq (Flock.HmNets.col nIn inRows v) v"
+   ],
+   "assumptions": [],
+   "type_hash": "189d25100894b6ac613555467904d8552d16af5e7b33d5baecb9c464ab0a0aa9"
+  },
+  "Flock.HmNets.hm96Net_get": {
+   "signature": [
+    "Flock.HmNets.hm96Net_get : Eq Flock.HmNets.hm96Net.get (Flock.HmNets.netOf \"hm96\" (Flock.HmNets.hmLaid Unit.unit))"
+   ],
+   "assumptions": [],
+   "type_hash": "0cac01b8696ba5f8014eb99582ad41bc1b2973ff17e2d454cb7a5ace1f262b8d"
+  },
+  "Flock.HmNets.hmLaid_eq": {
+   "signature": [
+    "Flock.HmNets.hmLaid_eq :",
+    "  Eq (Flock.HmNets.hmLaid Unit.unit)",
+    "    (Flock.HmNets.layout (StateT.run (Flock.HmNets.hm96Row Flock.Hm96.Default512.key) Flock.HmNets.St.empty).snd",
+    "      Flock.HmNets.HM_IN Flock.HmNets.HM_OUT",
+    "      (StateT.run (Flock.HmNets.hm96Row Flock.Hm96.Default512.key) Flock.HmNets.St.empty).fst.snd.snd.snd.toArray)"
+   ],
+   "assumptions": [],
+   "type_hash": "66e52502eca88fb7a435655a04e0a14bb5264bddeac08e9b249ea58c56969689"
+  },
+  "Flock.HmNets.layout_rows": {
+   "signature": [
+    "Flock.HmNets.layout_rows (st : Flock.HmNets.St) (inBits outBits : Array Nat) (outs : Array Flock.HmNets.Lin) :",
+    "  have l := Flock.HmNets.layout st inBits outBits outs;",
+    "  have nIn := Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 inBits;",
+    "  have inRows := instHMul.hMul (Flock.HmNets.groupWords nIn) Flock.WORD;",
+    "  have span :=",
+    "    instHMul.hMul (Flock.HmNets.groupWords (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 outBits)) Flock.WORD;",
+    "  have start :=",
+    "    instHMul.hMul (instHDiv.hDiv (instHSub.hSub (instHAdd.hAdd (instHAdd.hAdd inRows st.rows.length) span) 1) span)",
+    "      span;",
+    "  And (Eq l.constPos (instHAdd.hAdd start span))",
+    "    (And",
+    "      (∀ (i : Nat),",
+    "        instLTNat.lt i nIn →",
+    "          And (Eq (l.ra.getD i List.nil.toArray) (List.cons i List.nil).toArray)",
+    "            (Eq (l.rb.getD i List.nil.toArray) (List.cons i List.nil).toArray))",
+    "      (And",
+    "        (∀ (k : Nat) (hk : instLTNat.lt k st.rows.reverse.length),",
+    "          And",
+    "            (Eq (l.ra.getD (instHAdd.hAdd inRows k) List.nil.toArray)",
+    "              (Flock.HmNets.cols nIn inRows l.constPos (List.instGetElemNatLtLength.getElem st.rows.reverse k hk).a))",
+    "            (Eq (l.rb.getD (instHAdd.hAdd inRows k) List.nil.toArray)",
+    "              (Flock.HmNets.cols nIn inRows l.constPos (List.instGetElemNatLtLength.getElem st.rows.reverse k hk).b)))",
+    "        (∀ (j : Nat) (hj : instLTNat.lt j outs.size),",
+    "          And",
+    "            (Eq (l.ra.getD (instHAdd.hAdd start j) List.nil.toArray)",
+    "              (Flock.HmNets.cols nIn inRows l.constPos (Array.instGetElemNatLtSize.getElem outs j hj)))",
+    "            (Eq (l.rb.getD (instHAdd.hAdd start j) List.nil.toArray) (List.cons l.constPos List.nil).toArray))))"
+   ],
+   "assumptions": [],
+   "type_hash": "4a5a5bea339829446975cfab3e8a3fe9b19adb93cd4fdac1bc81205e8de03526"
+  },
+  "Flock.HmNets.sha512x3Net_get": {
+   "signature": [
+    "Flock.HmNets.sha512x3Net_get :",
+    "  Eq Flock.HmNets.sha512x3Net.get (Flock.HmNets.netOf \"sha512x3\" (Flock.HmNets.shaLaid Unit.unit))"
+   ],
+   "assumptions": [],
+   "type_hash": "0c628df07c540b65ae6cdc08f30aadd0c5f747ac43282f01665915dd149ee1c4"
+  },
+  "Flock.HmNets.shaLaid_eq": {
+   "signature": [
+    "Flock.HmNets.shaLaid_eq :",
+    "  Eq (Flock.HmNets.shaLaid Unit.unit)",
+    "    (Flock.HmNets.layout (StateT.run Flock.HmNets.compression3 Flock.HmNets.St.empty).snd Flock.HmNets.SHA_IN",
+    "      Flock.HmNets.SHA_OUT (StateT.run Flock.HmNets.compression3 Flock.HmNets.St.empty).fst.snd.flatten.toArray)"
+   ],
+   "assumptions": [],
+   "type_hash": "1cffead6921b5582ab47953ba77ae11432ec982c007a7a6fd92bd7b9a7ce2a7c"
   },
   "Flock.Layout.check_ok": {
    "signature": [
@@ -241,6 +337,122 @@
     "Flock.instReprItem.repr": "7fc49b35cf29bc03dd0033497992ec607f4b3a5ae8daa4fd06659e0c13a9ae9d"
    },
    "pins": ["Flock.CircuitType.check_ok", "Flock.Layout.check_ok"]
+  },
+  "Flock.HmNets": {
+   "digest": "3b5874b39edb63df11df576d9cb94fe0fd9e9e3aac6b56538f3a22e5d3551240",
+   "definitions": {
+    "Flock.HmNets.CARRY_EVERY": "0489aba962d61c2f58849e5a4fed0085239c4d9bd037485d4fe637fe506d76a4",
+    "Flock.HmNets.HM_IN": "ab27c035f4bbeb070d285964f14404e0276453712e615ccf387552f10a349983",
+    "Flock.HmNets.HM_OUT": "f8eb3301b102e7cf8a190455c5429e9a9576d27f214817c532570b9f89a3efde",
+    "Flock.HmNets.Laid": "6a9e4f684dbd2477c4d591a010b0fb6ce8df9eb67a42e60825fbb7666b58ef7e",
+    "Flock.HmNets.Laid.constPos": "01e61fcdc4c8747ed681b5aa403970b3c93890091b7ec2f1bb357ca040beec53",
+    "Flock.HmNets.Laid.inGroups": "48d3ba3866f4f57bcf3117bfeaf42f09abf712626d2e9125f3d9f6e57e389584",
+    "Flock.HmNets.Laid.outGroups": "5615d1e0efa1a5b20068b8482b0f5f2e048a654076483fe6dc907be7dfe0c5d6",
+    "Flock.HmNets.Laid.ra": "51b5f45d0fa1309b00477181c615fdbec04e9f5e3f2e8b72aa459b5b4f045d5d",
+    "Flock.HmNets.Laid.rb": "eede4d4453aab773790ee18acce283cf377be9dd15d7146f3c48684ee0cf38fe",
+    "Flock.HmNets.Laid.useful": "5a7cea43e6ec61fa25fb1d8ae6285318a26085605ed7c82068b7f827332cd897",
+    "Flock.HmNets.Lin": "133264054c0070b6e40d5052c97478985f8c71c6303715e2b78ec441b9c96c96",
+    "Flock.HmNets.Lin.c": "efe8110ae82012687394862d7a568fc9f744a289d828210c9badc207fb72c0db",
+    "Flock.HmNets.Lin.const": "afde6c1456acf68ee3616cd0a8806851fd2c30d0178e63deb9f8aa413e63d59a",
+    "Flock.HmNets.Lin.instHXor": "064e90c443e7ea9ac0f0c65b89fed4104745ae2e8366aa4ae74382847d630506",
+    "Flock.HmNets.Lin.isConst": "94b1a100e13aaa993767a8dacc432f6158aa1eb1104580a851cc0e31ead70463",
+    "Flock.HmNets.Lin.one": "4f59e1b2d7047f037136cf532c1efae865173f24cff4ce7d92c4b28f24af42a7",
+    "Flock.HmNets.Lin.s": "41626cf629a831787d501fb9c28900100d09d16ba639063140034de0906f2449",
+    "Flock.HmNets.Lin.var": "1c776a908903afdfb18de2ac67bea561707fc97c270cfff861bf168a5460e5da",
+    "Flock.HmNets.Lin.xor": "59c6e610d006623775839bf46a2958575814e1574a861c2c375f2491ff4e175d",
+    "Flock.HmNets.Lin.zero": "2bc7d89cf8ac740fdeb1949cf2aff4570560a691b0542a304a078b6db77ca042",
+    "Flock.HmNets.M": "5647a6b9421cfbf8e368ce933fac41265ef7d158f28815d2f7319bfe9888a9a0",
+    "Flock.HmNets.Regs": "9e9df55706125029919ea88051f2681fde264a401033ee0455bc05f330cbd3b5",
+    "Flock.HmNets.Regs.a": "7f997b7e95ff7eb9f62b43f0bbfd667ab457b7cbc690be5f242074db2ec588b2",
+    "Flock.HmNets.Regs.b": "531f8fe726e6970fb46462daab5441247cda1e8046121534cdefb48172c91c2c",
+    "Flock.HmNets.Regs.c": "8cce51ae0efbe35102167308bde0cab488f1e7ae00d88826ec128272aaccb014",
+    "Flock.HmNets.Regs.d": "250f41e04c8959eed89903f161f9866d58c97d93bd8ddfca9b63775eb136ec5b",
+    "Flock.HmNets.Regs.e": "265c9c7e97c60ee46625c9f5ed792829ebe28eb87d9e3676f88dff2f1144eff4",
+    "Flock.HmNets.Regs.f": "1bbee56e8e8c749156baf750dcb194a71853e7e17e3357414b948beea70ffcec",
+    "Flock.HmNets.Regs.g": "110a4e165c8d22bb1e6ccded030a7d434def1f19169b8ee297974402d303f160",
+    "Flock.HmNets.Regs.h": "9d9028f91269859b09a6134789d837bf68db61e318fff5be3f1aebd4a69450ac",
+    "Flock.HmNets.Regs.ofList": "ea90da3d940c4045595fdfc4bd5faed51906a259270693c97c3361fe2d9d87f8",
+    "Flock.HmNets.Regs.toList": "17834df32bae76837dc1729f466228fef913f27ee8eee11f76a4356b7ac11786",
+    "Flock.HmNets.Row": "a502081f72ef0e2711a1dca221134a6e3c648cc81537863f96978aa169769b1b",
+    "Flock.HmNets.Row.a": "c86c7f3c30bde45c0519d27c66065c2c17144034c7ff96c3082bc44e0afb9f35",
+    "Flock.HmNets.Row.b": "7c95f884276cbc961393f9eb88c14a83d26caf4695859cfbd855856ac94799f2",
+    "Flock.HmNets.SHA_IN": "cae42a3d8cc0a0a187aea5bf8905854a5f134b72ab93e94e4cf154c3b2cad0c9",
+    "Flock.HmNets.SHA_OUT": "bb11e11a396d22896b745d9cdb4dde8aff5a93f4268e93767cfd0d5bf7568bc5",
+    "Flock.HmNets.St": "ec1ef574f4025612483b6c0f48bba50c1c4597f2e836f13a7c26a1e61c1d5c6f",
+    "Flock.HmNets.St.empty": "c1f72bfa5d74b30b7ca557db18f282bbacd643a95e5a58c346f055b004da72b2",
+    "Flock.HmNets.St.next": "70719e1c24729596ff23b477d3e34d6d6ebb6dbca8f0027aace38cff285bb8a7",
+    "Flock.HmNets.St.rows": "c40b58fcbbb0bcdea702d7b4e8668e14d7703c5a5b0f5c8fd1335ef25feda83a",
+    "Flock.HmNets.Var": "ff542890c59e9105bc9df3c4eebefa9dd968bbdf48172945f4ade7a8f8dc43c4",
+    "Flock.HmNets.Word": "07973ac686255be36e731db5e7362d04b33a02d1ba1e04e66b034a8317e17689",
+    "Flock.HmNets.add2": "58dd619d7e7e29d44940c6e1b8366399a8b9f9b4270d5b1b3bf3552bf1402df2",
+    "Flock.HmNets.add2Go": "8bf09a33dcc5c5fff4f420e30b4554f04c340bf4367b2018c9327508646d2cc2",
+    "Flock.HmNets.addN": "b21fe2e54ecb459e72ea9bf4aa67ff56e5ddbbeeef6f7c135c322dedc1b4b128",
+    "Flock.HmNets.and": "40832eb7da61d011cda5a68230cfb9ed27a99b70d90799982734e6112691c3b9",
+    "Flock.HmNets.bsig0W": "6b2bfcc7dc32b4f15d8c5acdab01d1057b32bc4dd9a24238edb1d10275070bf3",
+    "Flock.HmNets.bsig1W": "80ccd2bd7b4f84271f18d7a13098316382e73141c593fe1ae631a44685d27f06",
+    "Flock.HmNets.carryCommit": "bbd096c22d67cf8e1844e5bb74900191c1e2a08855a2e2095398b35154b660e8",
+    "Flock.HmNets.chW": "54d163c30f0f08d86b851be5d4ee7023d8b46b1ef8eb925c91928cfaa5ccd85b",
+    "Flock.HmNets.check": "0c71ac75b9636b9b972f9f19fc4d56c93595c35b6c4068d7a35d040c9bc08545",
+    "Flock.HmNets.checkNet": "998889e81182013e1ce174c065791ff51feaf57a13a5c1d80cb8ed7b5c4bced0",
+    "Flock.HmNets.checkNets": "efdf0e12c1c5aac2c6261d6b64a155d1e32fe983c245259800983a6e98f63689",
+    "Flock.HmNets.col": "eaf16c5faa3709c14a140208e30a1f0c9b085a9260dffba84ce196a490cd8e75",
+    "Flock.HmNets.cols": "6a5d34f3e2167fa85a80054b86ae238f0eb2581c793fd8ff2f04c9a3064ffbf2",
+    "Flock.HmNets.commit": "b87665e60f0033d59dc6f44cd3e69debf4d5609131ceb60dec5609aab4443fc1",
+    "Flock.HmNets.commitW": "8e513e4176ddfe123b5321121205bf8581e4d5e3ce9ddea5094cc344e876f3fa",
+    "Flock.HmNets.compress": "be24878a5b9cc1a7357d4388596378b503d8f8d850453d01689fa82a48d63dca",
+    "Flock.HmNets.compression": "5c9cba02ce9c59d748304329b69fb39f730b77ee59428fba60ed929e0d44787c",
+    "Flock.HmNets.compression3": "957c5f631f03cf827f7fa6cf40958a1371bf94a272a69ba5bfac153a6223cf57",
+    "Flock.HmNets.constW": "11b5b4a2d92160630805f2c08aa8375e3652a4a6b5e5f72ecdf9c40f48a4ff0d",
+    "Flock.HmNets.firstDiff": "4db04f1a526c0f2ad7b890e7ebb0bf019dcc545b8472711f3bc246b769947766",
+    "Flock.HmNets.fresh": "a218bfac8b17b6457facba61d54db4afbb80544e0b73cdfa190a9ce9e7ed27a1",
+    "Flock.HmNets.groupWords": "ab16439aa3854c865f70eb402e495a948895f401e2aa80e100279fa1ea320f58",
+    "Flock.HmNets.hm96Net": "af84a5733559b1c2144a800b50d0b7c1301c10b0b139c4c298f1a99b49355a1c",
+    "Flock.HmNets.hm96Row": "1699fe57271bd573eeb445c670c1af1ab811d934458c3a9212cd1bcfbaa79eb4",
+    "Flock.HmNets.hmLaid": "10308122ca3a5a5396ed708dbeb77b3b9e5e38fa75eff69e3351a3d0e473d1a9",
+    "Flock.HmNets.input": "f59821973ccc5a4b0eafd0a783a5bed3351bf43f5e1079b2a4c0880ec0b0405d",
+    "Flock.HmNets.instDecidableEqGroup": "99088c9493a76faf3c2ee1db0c44a61648345efcdc0d22b3671030008b4076ed",
+    "Flock.HmNets.instDecidableEqGroup.decEq": "ed0eb9d662e271b402eb94310ca966d31bf3ed80784fc43ab7dcb0d25880bb7f",
+    "Flock.HmNets.instDecidableEqLookupTable": "76f5f24d95c8abfce86383ff4ab9f5363d8056dceef1c10ba5823d1e8ef3171b",
+    "Flock.HmNets.instDecidableEqLookupTable.decEq": "9e8751a3fcac515f2e47896d0a018e9a591c4e9ff6df7b7a4d9df40540006764",
+    "Flock.HmNets.instDecidableEqNet": "692bc847ca5e7a7caa2645e88b3ae6203febf49678bc5a180a93bf9ff4ef7960",
+    "Flock.HmNets.instDecidableEqNet.decEq": "6f7693b5ff2c338ecfa8d0e813182d0b17f61dc84339c6d0ae9ec18db0798a43",
+    "Flock.HmNets.instDecidableEqSparse": "3f929b6ea9ff92380cb8c4d4bf782a543cf95093352ba4b731006d68fd8f9f54",
+    "Flock.HmNets.instDecidableEqSparse.decEq": "314fdfed9e061b6200429bbeadc2d37847f4150b9ca81e7fa49caa86a4d0385d",
+    "Flock.HmNets.kAt": "25e783e97a4aff4999af6e98b244f27f3bf0950b81d9e9531bb62caef1a804cf",
+    "Flock.HmNets.layout": "78e2bb4c90768661b496908b5f3b41161b162329199ff7b2d198c467f490aa75",
+    "Flock.HmNets.maj": "585ee1b6e5620da2595b8a998fb311dd09668821d19be7d668872ac31d9ca426",
+    "Flock.HmNets.majW": "02d1d5fd0aa44b421d2d9249e5eb25a0b095faf149e2f093db226aac8358d3b8",
+    "Flock.HmNets.maskBit": "42e188735d39217175e507b3809069da31411fe7a8069f8e01e758a0a8f76c7a",
+    "Flock.HmNets.netOf": "b091fc20cf3a0d34dcb9e73eda6f583c21214ce872b121e6fcb681613909a931",
+    "Flock.HmNets.rot": "eeccb2a5b8222e0de18d7cdcded2c95771fbb412385a72a2fb8e040c5719aaca",
+    "Flock.HmNets.roundW": "7bf6b3f3bbd55434aba6ec9df1fb7d529eacd3de238c662e6abede75a66eb572",
+    "Flock.HmNets.rounds": "142c3ea1c527c48f2ee3556915c6e8891b0a51492fe41cc8e687d7637e04558d",
+    "Flock.HmNets.saltMid": "d51091192f52cc27efdf9e7f540f3bf989f46d0fc97d7eda03a63b9773c54fcd",
+    "Flock.HmNets.saltTail": "5d6484fbd6dc17069854ec9a24ec0cb5bbb993d9579c6aae3cc741cfef39e807",
+    "Flock.HmNets.saltWords": "62f8f229c92b3087d89d2d86b340e728d838fe7e8393c356117c0ee4448db9c7",
+    "Flock.HmNets.schedStep": "04eb67ef08f5ee205cd4e242de18c966107e0411b377791c53ce341405a08d89",
+    "Flock.HmNets.schedule": "d9efd0ff4ac6bdbc1c4cb157850f3e5222cca187451cfc17a18848613485785d",
+    "Flock.HmNets.sha512x3Net": "23140fef39709d064e9172ce59783417d721947b49ca8095eb5ae7894c855ab1",
+    "Flock.HmNets.shaLaid": "3c7aa94ea59be954d9e129582ee6b3491205c8e30a37abaeae5c33ca681f1a5c",
+    "Flock.HmNets.shr": "d935fe75c8c5ca09f0b97e18a38860f925556f919bda4fd52c16a93332df8af5",
+    "Flock.HmNets.ssig0W": "2ade908b6948ecb4c6a662f57f45234205693f553d99ba29b8ab773cca385735",
+    "Flock.HmNets.ssig1W": "f8116e1e88c0a526a03aef3c32473d6c892107f392f4f7c6c462d4bf33a9eedb",
+    "Flock.HmNets.symm": "c17bcf9438ff2331fba7c8d2bc7cc0ec62f6bb77999f3ec5a0620bb3aed7d48f",
+    "Flock.HmNets.wordBit": "b025117b36e3241c040f8b9521528c1eb83c77bc0538e84972215e0d90d9931a",
+    "Flock.HmNets.words": "b2ae1bac336b3f0cb89bf57a6efa2071685fad68fda480f93bdef72b80d13fff",
+    "Flock.HmNets.xor3": "140777d0a8403e9bb1e0087fa646740acfefc1d6a68db88534cf0b022e5ec8f3",
+    "Flock.HmNets.xorW": "8dc4538d76c03337e641b8cb730139b3debc541f18f34aa95d0d5de93f4aee17"
+   },
+   "pins": [
+    "Flock.HmNets.check_ok",
+    "Flock.HmNets.col_and",
+    "Flock.HmNets.col_input",
+    "Flock.HmNets.hm96Net_get",
+    "Flock.HmNets.hmLaid_eq",
+    "Flock.HmNets.layout_rows",
+    "Flock.HmNets.sha512x3Net_get",
+    "Flock.HmNets.shaLaid_eq"
+   ]
   },
   "Flock.Layout": {
    "digest": "f44d569383de402067a51894721822b6931e025c9dfa216851c40f7c9da330c7",
