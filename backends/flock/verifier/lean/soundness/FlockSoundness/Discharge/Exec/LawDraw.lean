@@ -5,7 +5,7 @@ import FlockSoundness.Discharge.Exec.Pts
 # How many units the live law draws
 
 `Law.execOS`'s draw at `ω` is `univ.filter (· ∈ d.units)` when `runOS` returns `d`, and every unit when the run would
-read past the model's bytes. This file counts the first case: under `ExecStrata σ k S`, a stratified draw that succeeds
+read past the source's bytes. This file counts the first case: under `ExecStrata σ k S`, a stratified draw that succeeds
 holds exactly `∑ s, k s` units (`execOS_draw_card`), so every draw of the live stratified law has `∑ s, k s` units or
 is every unit (`execOS_draw_card_or`).
 
@@ -18,7 +18,7 @@ is every unit (`execOS_draw_card_or`).
 * `setupH_mPts_execOS`, `setupH_mPts_execOS_or`: with `Pts.lean`, when the draw file written for a draw proves exactly
   its units (no closure), `setupH` at the law's draw sets up at `mPtsOf c.g (∑ s, k s)` on every run that succeeds, and
   at `mPtsOf c.g n` on the others. So one `mPts` serves every draw of the law when those two agree; otherwise the runs
-  that read past the model's bytes set up at another.
+  that read past the source's bytes set up at another.
 -/
 
 namespace FlockSoundness.Discharge.Exec
@@ -229,7 +229,7 @@ theorem execOS_draw_card (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m �
   exact stratified_card σ k S hS hd
 
 /-- **Every draw of the live stratified law has `∑ s, k s` units, or is every unit** (a run that would read past the
-model's bytes). -/
+source's bytes). -/
 theorem execOS_draw_card_or (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum)
     (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin m → ℕ}
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) :
@@ -264,7 +264,7 @@ theorem setupH_mPts_execOS {tags : Tags} {cf pf : ByteArray} {coins : Coins} {ta
 
 open Flock in
 /-- **`m_pts` at every draw of the live law**, under the same `hdj`: `mPtsOf c.g (∑ s, k s)`, or `mPtsOf c.g n` at a
-run that would read past the model's bytes, whose draw is every unit (`execOS_draw_card_or`). -/
+run that would read past the source's bytes, whose draw is every unit (`execOS_draw_card_or`). -/
 theorem setupH_mPts_execOS_or {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} {c : Flock.Circuit}
     (hc : (if tags.typed then HmRow.parseTyped tags cf tables else HmRow.parse tags cf tables) = .ok c)

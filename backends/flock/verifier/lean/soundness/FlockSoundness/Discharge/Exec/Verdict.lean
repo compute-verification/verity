@@ -31,7 +31,7 @@ open Flock Refine Model Game
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The openings and salts the proof files decode to**: rep `r`'s proof file `bs[r]`, decoded at the table's shape
-(the default proof when it does not decode), read as the model's openings (`opensOf`) and salts (`saltsOf`). -/
+(the default proof when it does not decode), read as the game's openings (`opensOf`) and salts (`saltsOf`). -/
 def opnOf (st : Setup) (sch : Flock.Schedule) (n : ℕ) (bs : Array ByteArray) : Opens 𝔽 Dig × Salts (List UInt8) :=
   let p : ℕ → Proof := fun r => ((decodeProof (shapeOf st sch n) bs[r]!).toOption).getD default
   (opensOf (p 0) (p 1) sch, saltsOf (p 0) (p 1) sch)
