@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.Zero.Cols
 import FlockSoundness.Discharge.Zero.Stack
 import FlockSoundness.Discharge.Aliased.Keys
 import FlockSoundness.Discharge.Placed.Wiring
+import FlockSoundness.Discharge.Placed.Keyed
 import FlockSoundness.Discharge.Const.Inst
 
 /-!
@@ -18,6 +19,8 @@ The untyped statement `Stmt.setupH` accepted places a VU (`upv` stacked copies o
   source reads the zero.
 - `srcKey_zero_iff`: Δ's source key (`Aliased.srcKey`) at a stacked input is the zero exactly when the input reads the
   zero, so `zeroCols_keyIdx`, on the gates indexed by those keys (`Aliased.keyIdx`), assumes nothing about the wiring.
+  `zeroCols_progPlaces` is the same at `Placed.progPlaces`, and `zeroCols_keyProg` at `Placed.Sites.progPlaces_keyProg`,
+  which takes only the sites and the parse.
 -/
 
 open Flock FlockLevel3
@@ -273,6 +276,17 @@ theorem zeroCols_progPlaces (si : Placed.Sites plan tab)
       (Placed.progPlaces si hrows outs (Const.Prog.instC _ outs) hal).derived.place
       {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
   zeroCols_keyIdx si hrows hparse _ (fun _ => rfl) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl)
+
+/-- **`hZero` at `Placed.Sites.progPlaces_keyProg`**, the places of the circuit's program on Δ's source keys that take
+only the sites and the parse: every column on the zero gate carries 0 in every satisfying witness. -/
+theorem zeroCols_keyProg (hU : Built c.unit) {si : Placed.Sites plan tab}
+    (hparse : ∀ S R u (h : u ∈ S),
+      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+    (outs : Finset (Fin (Placed.gates (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU) n))) :
+    ((Placed.keyProg c hU n).partition outs).ZeroCols plan tab
+      (Placed.Sites.progPlaces_keyProg hU hparse outs).derived.place
+      {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
+  zeroCols_progPlaces si (Placed.Sites.rowsOf_keyProg hU hparse) hparse outs
 
 end circuit
 
