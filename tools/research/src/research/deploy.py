@@ -23,8 +23,9 @@ that setup script, and drift checks only that it exists. Exit 0 when every entry
 every installed byte is in a pushed commit. Each file is written beside the old one and renamed over it with the old one's owner
 and mode (a running script keeps its inode; a new file gets the entry's `mode`, else the repository's), and the old one is linked
 under `.deploy-prev/` in its directory. One line per changed file
-goes to the node's record (path, blob, commit, ref, who, when). It prints what runs each changed file (`run`): restart those when
-it's safe, and `drift` says `restart` until you do.
+goes to the node's record (path, blob, commit, ref, who, when). When a process still runs the old version of a changed file, it
+prints the entry's `run` (else the path): restart those when it's safe, and `drift` says `restart` until you do. `--dry-run`
+installs nothing and says which files would change.
 """
 from __future__ import annotations
 
@@ -77,11 +78,16 @@ for pid in filter(str.isdigit, os.listdir("/proc")):
     try:
         argv = [a.decode(errors="replace") for a in open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0") if a]
         start = btime + int(open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]) / hz
-        cwd = os.readlink(f"/proc/{pid}/cwd") if any(not a.startswith("/") for a in argv) else "/"
     except (OSError, IndexError, ValueError):
         continue
+    try:
+        cwd = os.readlink(f"/proc/{pid}/cwd")
+    except OSError:
+        cwd = None                     # another user's process (root's, under sudo): its absolute arguments still count
     for a in argv:
-        p = os.path.normpath(os.path.join(cwd, a))
+        if cwd is None and not a.startswith("/"):
+            continue
+        p = os.path.normpath(os.path.join(cwd or "/", a))
         if p in want:
             procs[p] = min(procs.get(p, start), start)
 record = {}
@@ -367,13 +373,24 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, dry: bo
                                                       check=True).stdout).decode()}
              for p, (_, sha, mode, e) in sorted(want.items())]
     if dry:
-        return [{"path": f["path"], "src": want[f["path"]][0], "changed": None, "run": want[f["path"]][3].run} for f in files] + skipped
+        seen = probe(node, [f["path"] for f in files], run)["files"]
+        return [{"path": f["path"], "src": want[f["path"]][0], "run": [],
+                 "changed": False if (seen.get(f["path"]) or {}).get("blob") == f["blob"] and f["mode"] is None else None}
+                for f in files] + skipped
     req = {"files": files, "commit": commit, "ref": ref, "by": by, "record": node.record}
     r = run(node.name, ["sudo", "-n", "python3", "-c", INSTALL], json.dumps(req).encode())
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: install failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
     changed = json.loads(r.stdout)
-    return [{"path": f["path"], "src": want[f["path"]][0], "changed": c, "run": want[f["path"]][3].run}
+    now = [f["path"] for f, c in zip(files, changed) if c]
+    after = probe(node, now, run) if now else {"files": {}, "procs": {}}
+
+    def old_code(p: str) -> bool:
+        got, started = after["files"].get(p) or {}, after["procs"].get(p)
+        return started is not None and "mtime" in got and started < got["mtime"] - 1
+
+    return [{"path": f["path"], "src": want[f["path"]][0], "changed": c,
+             "run": (want[f["path"]][3].run or [f["path"]]) if c and old_code(f["path"]) else []}
             for f, c in zip(files, changed)] + skipped
 
 
@@ -424,7 +441,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     for f in done:
         mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)"}[f["changed"]]
         print(f"{mark:13} {f['path']}  <- {f['src']}")
-    runs = sorted({r for f in done if f["changed"] is True for r in f["run"]})
+    runs = sorted({r for f in done for r in f["run"]})
     if runs:
         print(f"restart when safe: {', '.join(runs)} (`research deploy drift --node {ns.node}` says `restart` until then)")
     return 0

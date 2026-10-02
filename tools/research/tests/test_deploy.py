@@ -114,15 +114,22 @@ def test_drift_names_each_files_state_and_the_strays(world):
 def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(world):
     a = world["node"] / "bin" / "a.py"
     a.write_text("a2\n")
+
+    def no_cwd(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        # another user's process (root's, under sudo): /proc/PID/cwd is unreadable
+        hide = "import os\n_rl = os.readlink\ndef _no(p):\n    if p.endswith('/cwd'): raise PermissionError(p)\n    return _rl(p)\nos.readlink = _no\n"
+        return local(name, [*argv[:2], hide + argv[2], *argv[3:]] if argv[2] == deploy.PROBE else argv, stdin)
+
     holder = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(a)], stdin=subprocess.PIPE)
     try:
         os.utime(a, (FUTURE, FUTURE))
-        rep = deploy.drift(world["nodes"]["n"], "origin/main", local, world["repo"])
+        reps = [deploy.drift(world["nodes"]["n"], "origin/main", run, world["repo"]) for run in (local, no_cwd)]
     finally:
         holder.stdin.close()
         holder.wait()
-    e = next(e for e in rep["entries"] if e["path"] == str(a))
-    assert e["state"] == "ok" and "restart tmux:a" in e["restart"]
+    for rep in reps:
+        e = next(e for e in rep["entries"] if e["path"] == str(a))
+        assert e["state"] == "ok" and "restart tmux:a" in e["restart"]
 
 
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
@@ -155,6 +162,32 @@ def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically
     assert "installed     " in capsys.readouterr().out and (node / "bin" / "c.py").read_text() == "c1\n"
     with pytest.raises(RuntimeError, match="not in deploy.toml for n: nope"):
         deploy.install(n, "origin/main", "lane-x", ["nope"], local, repo=repo)
+
+
+def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_runs_old_code(world, capsys):
+    node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, repo=repo)
+    _commit(repo, {"src/a.py": "a3\n", "src/c.py": "c3\n"}, "v3")
+    _git(repo, "push", "-q", "origin", "main")
+    dry = deploy.install(n, "origin/main", "lane-x", [], local, dry=True, repo=repo)
+    assert {Path(f["path"]).name: f["changed"] for f in dry} == {"a.py": None, "b": False, "c.py": None, "x.yaml": False}
+    assert (node / "bin" / "a.py").read_text() == "a2\n"
+
+    def installed_later(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        r = local(name, argv, stdin)
+        if argv[:2] == ["sudo", "-n"]:
+            for f in json.loads(stdin)["files"]:
+                os.utime(f["path"], (FUTURE, FUTURE))
+        return r
+
+    holder = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(node / "bin" / "a.py")], stdin=subprocess.PIPE)
+    try:
+        assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=installed_later, manifest=world["manifest"], repo=repo) == 0
+    finally:
+        holder.stdin.close()
+        holder.wait()
+    out = capsys.readouterr().out
+    assert "restart when safe: tmux:a (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
 
 
 def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsys):
