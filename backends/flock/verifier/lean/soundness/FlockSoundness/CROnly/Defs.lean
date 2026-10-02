@@ -60,7 +60,12 @@ continuation `τ`, for the finder `Partition.LinkCR` builds for each commit stri
 evaluations (`truncOut`, `truncCost`), with each run of the prover costing `t'`. It asks of each finder what `LinkCR` asks,
 but in the strict form: the stopped finder makes at most `q` evaluations on every outcome, so it finds a collision with
 probability at most `q²/2^513`. As `LinkCR`, it is a hypothesis about the finders built from one prover, not about every
-finder. -/
+finder.
+
+When the first trial already reads two values, `outC`'s `Classical.choose` may still take the second opening from the
+trial `nextRead` finds, which `finderCost` does not charge. The success event does not depend on that choice: any choice
+gives a collision through `vb.collide`, so the finder that reads only its first trial has the same success at the same
+cost. -/
 def LinkCRStrict (k Rw M : ℕ) (t' q : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512CRStrict Hc
     (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
