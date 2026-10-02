@@ -28,7 +28,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `stage/`: `circuit.stage(IL.lowering(rope_head.definition(sub), rope_head.UNIT + "/x4", group=4), set, 0, 4, out,
 #: public_inputs=PUBLIC)` on `generate(rope-head/d64/neox-bf16, 4, 20260926)`; `records-cpu/`: `flock-circuit selftest
 #: --instances inst-4.bin --circuit circuit.txt --record-dir` (CPU, non-zk) at 54146af61; `records-zk/`: its honest and
-#: public_input_claim_false cases under `selftest --zk`, from #793 merged in
+#: public_input_claim_false cases under `selftest --zk` at ee6375f51 (#793's 757b697e8, final_c' absorbed)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 #: the same set under the x8 lowering (`cs` in words 2..3 of a unit's leaf group), its META edited so that each unit's second
 #: x word (leaves 8..15) is a second public port `xh` (`XH`): public words 1..3, two in regions of blocks (1, 0) and (2, 1)
