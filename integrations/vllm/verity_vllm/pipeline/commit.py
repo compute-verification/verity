@@ -1110,6 +1110,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_manifest = None
     if getattr(args, "padded_finalize", False) and not args.required_manifest:
         raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record (B9.1); nothing to pad without it")
+    if getattr(args, "padded_finalize", False) and getattr(args, "leaf_scheme", hiding.DEFAULT_LEAF_SCHEME) != scheme.NAME:
+        raise SystemExit(f"--padded-finalize needs --leaf-scheme {scheme.NAME}: the padding steps are position-leaf blocks, not defined under {args.leaf_scheme} leaves")
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
