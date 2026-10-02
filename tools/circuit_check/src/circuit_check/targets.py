@@ -336,6 +336,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Attention_v9", lambda: bind(boolean_attention.AttentionV9, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
                                       **boolean_attention.ATTENTION_FA3)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
+        # the Definitions whose program values are inputs (eps, the attention scale); the chain's second block rescales (T = BN + 1)
+        ("RMSNormTriton_v3", lambda: bind(b1.RMSNormTritonV3, N=64)),
+        ("RMSNormFusedCuda_v4", lambda: bind(b1.RMSNormFusedCudaV4, N=64)),
+        ("Attention_v10", lambda: bind(b1.AttentionV10, T=17, NH=1, KVH=1, D=16, BN=16)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
         ("AllGather_v1", lambda: b1_tp2.all_gather(4, 8)),

@@ -187,6 +187,19 @@ def RMSNormTriton(B, S, x, w):
     """`out_j = bf16_rne((inv * x_j) * w_j)`, `inv = div.full(1, sqrt.approx.ftz(fma(rcp(n), sum, eps)))`, `sum` =
     chunks of 1024 columns, 128 threads x 8 columns (`acc = x1*x1; fma(x0,x0,acc); fma(x2..x7)`), warp
     butterfly xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)`, chunks added in order from +0."""
+    return _rms_norm_triton(B, S, x, w, None)
+
+
+@composite("RMSNormTriton", 3, ["N"],
+           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("eps", F32)), Array(S.N, BF16)),
+           conformance="exact-model-tested: RMSNormTriton_v1's body with eps an input")
+def RMSNormTritonV3(B, S, x, w, eps):
+    """`RMSNormTriton_v1{N, EPS}` with the epsilon an input (the f32 word the kernel reads, `eps` of `_rms_norm_kernel`) rather than a
+    constant of the Definition: the program registers it."""
+    return _rms_norm_triton(B, S, x, w, eps)
+
+
+def _rms_norm_triton(B, S, x, w, eps):
     N = S.N
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
     chunk_sums = []
@@ -212,7 +225,7 @@ def RMSNormTriton(B, S, x, w):
     for cs in chunk_sums:
         total = B.call(P.F32Add, total, cs)
     rcp_n = B.call(P.DivFullRcp, B.call(f32c(float(N))))
-    mean_eps = B.call(P.F32Fma, rcp_n, total, B.call(f32c(S.EPS)))
+    mean_eps = B.call(P.F32Fma, rcp_n, total, B.call(f32c(S.EPS)) if eps is None else eps)
     rms = B.call(P.MufuSqrtFtz, mean_eps)
     inv = B.call(P.F32Mul, B.call(P.DivFullScaleA, B.call(f32c(1.0)), rms), B.call(P.DivFullRcp, rms))
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
@@ -241,13 +254,14 @@ def _cub_block_reduce_sum(B, partials: list[Coll]) -> Coll:
     return var
 
 
-def _fused_rms_epilogue(B, S, r, rf, var, w):
+def _fused_rms_epilogue(B, S, r, rf, var, w, eps=None):
     """`s_variance = rsqrtf(variance / hidden_size + epsilon)` (IEEE div, IEEE add, MUFU.RSQ via
     `rsqrt.approx.f32` range scaling); `out_j = (bf16)((float)res'_j * s * (float)w_j)` — two f32 products
-    left to right, `__float2bfloat16` (RNE, canonical NaN 0x7FFF)."""
+    left to right, `__float2bfloat16` (RNE, canonical NaN 0x7FFF).  `eps`: the epsilon input, or None for the
+    Definition's `EPS` constant."""
     N = S.N
     mean = B.call(P.F32Div, var, B.call(f32c(float(N))))
-    arg = B.call(P.F32Add, mean, B.call(f32c(S.EPS)))
+    arg = B.call(P.F32Add, mean, B.call(f32c(S.EPS)) if eps is None else eps)
     sc = B.call(P.RsqrtApprox, arg)
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
     y = B.batch(P.F32Mul, B.batch(P.F32Mul, rf, sc, axes=(0, None)), wf, axes=(0, 0))
@@ -306,6 +320,20 @@ def RMSNormFusedCuda(B, S, x, res, w):
     the launched threads (`_cub_block_reduce_sum`: per-warp shfl_down tree 1,2,4,8,16; warp aggregates added
     sequentially from warp 0 — 32 warps for N=1536, 18 for N=576); `s = rsqrtf(var / N + eps)`;
     `out_j = bf16((res'_j * s) * w_j)`. Returns (normed, res')."""
+    return _rms_norm_fused_cuda(B, S, x, res, w, None)
+
+
+@composite("RMSNormFusedCuda", 4, ["N"],
+           lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("eps", F32)),
+                      Tuple(Array(S.N, BF16), Array(S.N, BF16))),
+           conformance="exact-model-tested: RMSNormFusedCuda_v2's body with eps an input")
+def RMSNormFusedCudaV4(B, S, x, res, w, eps):
+    """`RMSNormFusedCuda_v2{N, EPS}` with the epsilon an input (the f32 word `fused_add_rms_norm` passes the kernel) rather than a
+    constant of the Definition: the program registers it."""
+    return _rms_norm_fused_cuda(B, S, x, res, w, eps)
+
+
+def _rms_norm_fused_cuda(B, S, x, res, w, eps):
     N = S.N
     r = B.batch(P.Bf16AddF2fp, x, res, axes=(0, 0))
     rf = B.batch(P.Bf16ToF32, r, axes=(0,))
@@ -317,7 +345,7 @@ def RMSNormFusedCuda(B, S, x, res, w):
             acc = B.call(P.F32Fma, rf[j], rf[j], acc)
         partials.append(acc)
     var = _cub_block_reduce_sum(B, partials)
-    return _fused_rms_epilogue(B, S, r, rf, var, w)
+    return _fused_rms_epilogue(B, S, r, rf, var, w, eps)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -738,6 +766,10 @@ def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev):
     sums l[4], o[D]); with `FIRST` the state arguments are ignored (kernel `Is_first`).  `BN = 64` is `AttnBlock_v1` gate for
     gate.  Conformance: `test_derived_rows` gate-by-gate at D = 64 / BN = 128; the 128×64 SmolLM2-135M record's two-block rows
     (D54 acceptance, pending)."""
+    return _attn_block_v3(B, S, q, k, v, m_prev, l_prev, o_prev, None)
+
+
+def _attn_block_v3(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
     D, NVIS, FIRST, BN = S.D, S.NVIS, S.FIRST, S.BN
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"AttnBlock_v3: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
@@ -748,7 +780,8 @@ def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    if scale_log2 is None:
+        scale_log2 = B.call(const(32, _scale_log2_bits(D)))
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -792,6 +825,10 @@ def AttentionHeadV3(B, S, q, k, v):
     """`AttentionHead_v1`'s body over `AttnBlock_v3{..., BN}`: causal attention of one query at position T-1 over keys 0..T-1,
     ceil(T / BN) blocks visited last -> first; epilogue `sum = (l0 + l2) + (l1 + l3)`, `inv = (sum == 0 || NaN) ? 1 : rcp(sum)`,
     `out = bf16(o * inv)`.  ``BN`` = the kernel's kBlockN, a declared static (D57)."""
+    return _attention_head_v3(B, S, q, k, v, AttnBlockV3, ())
+
+
+def _attention_head_v3(B, S, q, k, v, block, extra):
     T, D, BN = S.T, S.D, S.BN
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -807,15 +844,15 @@ def AttentionHeadV3(B, S, q, k, v):
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = bind(AttnBlockV3, D=D, NVIS=nvis, FIRST=first, BN=BN)
+        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN)
         if first:
             z = B.call(ZERO32)
             m0 = z
             l0 = _Coll(Array(4, F32), concat([z.refs] * 4))
             o0 = _Coll(Array(D, F32), concat([z.refs] * D))
-            st = B.call(blk, q, kb, vb, m0, l0, o0)
+            st = B.call(blk, q, kb, vb, m0, l0, o0, *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(P.Fa2InvSum, total)
@@ -831,14 +868,53 @@ def AttentionHeadV3(B, S, q, k, v):
            conformance="exact-model-tested")
 def AttentionV3(B, S, q, kc, vc):
     """`Attention_v1`'s body over `AttentionHead_v3{T, D, BN}` (GQA: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]`)."""
+    return _attention_v3(B, S, q, kc, vc, AttentionHeadV3, ())
+
+
+def _attention_v3(B, S, q, kc, vc, head, extra):
     T, NH, KVH, D, BN = S.T, S.NH, S.KVH, S.D, S.BN
     G = NH // KVH
     outs = []
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
         vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(bind(AttentionHeadV3, T=T, D=D, BN=BN), q[g * G:(g + 1) * G], kg, vg, axes=(0, None, None)))
+        outs.append(B.batch(bind(head, T=T, D=D, BN=BN), q[g * G:(g + 1) * G], kg, vg, *extra,
+                            axes=(0, None, None) + (None,) * len(extra)))
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
+
+
+# Attention with the softmax scale an input: `scale_log2` is the f32 word FA2's `set_params_fprop` hands the kernel
+# (`scale_softmax_log2`, `_scale_log2_bits(D)` on vLLM's `D**-0.5`), which the program registers; the chain is v3's otherwise.
+
+
+@composite("AttnBlock", 10, ["D", "NVIS", "FIRST", "BN"],
+           lambda S: (((("q", Array(S.D, BF16)), ("k", Array(S.BN, Array(S.D, BF16))), ("v", Array(S.BN, Array(S.D, BF16))),
+                        ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)), ("scale_log2", F32))),
+                      Tuple(F32, Array(4, F32), Array(S.D, F32))),
+           conformance="exact-model-tested: AttnBlock_v3's body with the scale an input")
+def AttnBlockV10(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+    """`AttnBlock_v3{D, NVIS, FIRST, BN}` with `scale_log2` an input."""
+    return _attn_block_v3(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2)
+
+
+@composite("AttentionHead", 10, ["T", "D", "BN"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16))),
+                       ("scale_log2", F32)), Array(S.D, BF16)),
+           conformance="exact-model-tested: AttentionHead_v3's body over AttnBlock_v10")
+def AttentionHeadV10(B, S, q, k, v, scale_log2):
+    """`AttentionHead_v3{T, D, BN}` over `AttnBlock_v10`, every block reading the one `scale_log2`."""
+    return _attention_head_v3(B, S, q, k, v, AttnBlockV10, (scale_log2,))
+
+
+@composite("Attention", 10, ["T", "NH", "KVH", "D", "BN"],
+           lambda S: ((("q", Array(S.NH, Array(S.D, BF16))),
+                       ("kc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))),
+                       ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))), ("scale_log2", F32)),
+                      Array(S.NH, Array(S.D, BF16))),
+           conformance="exact-model-tested: Attention_v3's body over AttentionHead_v10")
+def AttentionV10(B, S, q, kc, vc, scale_log2):
+    """`Attention_v3{T, NH, KVH, D, BN}` over `AttentionHead_v10`, every head reading the one `scale_log2`."""
+    return _attention_v3(B, S, q, kc, vc, AttentionHeadV10, (scale_log2,))
 
 
 def _forward_positions_v4(B, C: dict, BN: int, toks: Coll, weights: Coll, T0: int, n_pos: int, caches: list[tuple[Coll, Coll]] | None):
