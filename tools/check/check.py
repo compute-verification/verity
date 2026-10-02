@@ -10,7 +10,8 @@
                                                             dependency bundles; with --on, in a free check slot of M
                                                             (`tools/check/slot.py`), the lock and cores the train checks take;
                                                             --agreement sends the upstream build whatever the commit changes
-                                                            (a train that changes a pinned guarantee elsewhere: `train.sh`)
+                                                            (a train that changes a pinned guarantee elsewhere: `train.sh`);
+                                                            a warning first when the commit can't land on REF as it is
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
@@ -348,10 +349,21 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     return subprocess.run(argv, cwd=ROOT).returncode
 
 
+def landable(base: str) -> bool:
+    """Whether `research merge` could land HEAD on ``base`` as it is: ``base`` is in HEAD, or merging HEAD into it leaves HEAD's own
+    tree (the gate's `tree_identical`). Otherwise the tree that lands is a merge nobody checked yet."""
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, "HEAD"], cwd=ROOT, capture_output=True).returncode == 0:
+        return True
+    r = subprocess.run(["git", "merge-tree", "--write-tree", base, "HEAD"], cwd=ROOT, capture_output=True, text=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == head
+
+
 def record(argv: list[str]) -> int:
     """`--record [--on MACHINE] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the pinned
     upstream build and inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF
-    (default origin/main), or whenever --agreement is given."""
+    (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
+    (`landable`) gets a warning and is checked anyway."""
     on = base = None
     agreement = False
     rest = []
@@ -368,7 +380,12 @@ def record(argv: list[str]) -> int:
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
-    base = base or "origin/main"
+    if base is None:
+        subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
+        base = "origin/main"
+    if not landable(base):
+        print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
+              f"other than its own, so `research merge` won't take this check)")
     changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
     from research.merge import rule_touches
 

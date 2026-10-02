@@ -6,13 +6,15 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
-    research queue ready PR [--by LANE]            the owner's word that the PR is ready at its current head (a new push needs it again)
+    research queue ready PR [--by LANE]            the owner's word that the PR is ready at its current head (a new push needs it again),
+                                                   once the quick tier passes there (`QuickTier`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
 has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
-writes, so a new push needs a new one; once the queue lands trains it replaces the merge request
-(until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
+writes, so a new push needs a new one, and only after the quick tier passes at that head: `suites.py --quick` on the suites the PR
+changes, from a clean checkout (`QuickTier`); a failure refuses and names the tests.  Once the queue lands trains it replaces the
+merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
@@ -46,9 +48,11 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -548,14 +552,84 @@ def _render(entries: dict[int, Entry]) -> str:
     return "\n".join(lines) or "no open PRs"
 
 
-def ready(github, store, number: int | None, by: str) -> int:
-    """`research queue ready PR`: write `ready = true` on `pr:{n}@{its current head}`, and push it to the store's remote."""
+#: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
+SUITES = "tools/check/suites.py"
+QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
+#: variables that would point the quick tier's Python at the caller's tree or environment instead of the checkout's own
+CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
+
+
+class QuickTier:
+    """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout: one worktree of the caller's
+    repository per machine under `root`, checked out at the head and cleaned of everything but its `.venv` for each PR (one PR at a
+    time: `{name}.lock`), so its environment syncs only what moved.  Passes are cached by input (`suites.py`), so a re-run after a
+    failure runs only what failed."""
+
+    def __init__(self, repo: Path, remote: str, root: Path | None = None):
+        self.repo, self.remote = Path(repo), remote
+        self.root = Path(root or Path.home() / ".research" / "queue" / "ready")
+
+    def __call__(self, pr: PR) -> str | None:
+        """None when the tier passes at ``pr``'s head; else what failed, for the refusal."""
+        common = Path(_out(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+        wt = self.root / hashlib.sha256(str(common).encode()).hexdigest()[:12]
+        self.root.mkdir(parents=True, exist_ok=True)
+        lock = open(self.root / f"{wt.name}.lock", "w")  # noqa: SIM115  (held until this returns)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            _git(self.repo, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/ready/main",
+                 f"+refs/pull/{pr.number}/head:refs/queue/ready/pr")
+            if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
+                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
+            _git(self.repo, "worktree", "prune")
+            if not (wt / ".git").exists():
+                shutil.rmtree(wt, ignore_errors=True)
+                _git(self.repo, "worktree", "add", "-q", "--detach", "--force", str(wt), pr.head)
+            else:
+                _git(wt, "checkout", "-q", "--detach", "--force", pr.head)
+            _git(wt, "clean", "-qffdx", "-e", "/.venv")
+            base = _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
+            report, logs = self.root / f"{wt.name}.json", self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
+            report.unlink(missing_ok=True)
+            env = {k: v for k, v in os.environ.items() if k not in CALLER_ENV}
+            runner = wt / SUITES
+            changed = ["--changed", base]
+            if runner.is_file() and '"--changed"' not in runner.read_text():
+                print(f"research queue: {pr.head[:12]}'s suites.py predates --changed, so every suite runs (merge main into the branch "
+                      f"to run only the ones it changes)", flush=True)
+                changed = []
+            try:
+                rc = subprocess.run([*QUICK_TIER, *changed, "--json", str(report), "--logs", str(logs)], cwd=wt, env=env).returncode
+            except FileNotFoundError as e:
+                return f"can't run it here ({e})"
+            if rc == 0:
+                return None
+            try:
+                rows = json.loads(report.read_text())
+            except (OSError, ValueError):
+                return f"`suites.py` exited {rc} before it reported (its output is above)"
+            failed = [r for r in rows if r.get("status") == "failed"]
+            if not failed:
+                return f"`suites.py` exited {rc}: the tests changed files in the checkout (its output is above)"
+            return "; ".join(f"{r['name']}: {', '.join(r.get('failed_tests') or []) or 'see ' + str(r.get('log') or logs)}" for r in failed)
+        finally:
+            lock.close()
+
+
+def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
+    """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `QuickTier`), and once it passes write
+    `ready = true` on `pr:{n}@{that head}` and push it to the store's remote."""
     from .store.cli import _label_write_through
 
     pr = next((p for p in github.open_prs() if p.number == number), None) if number is not None else None
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
+    print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
+    if (failed := tier(pr)) is not None:
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier failed: {failed}. Push a fix, "
+              f"or run `research queue ready {pr.number}` again: what passed is reused, so a re-run runs only what failed", file=sys.stderr)
+        return 1
     target = grant_target(pr.number, pr.head)
     store.add_label(target, vocab.READY, True, by)
     said, lost = _label_write_through(store, target)
@@ -587,7 +661,7 @@ def main(argv: list[str]) -> int:
             raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
         store = LocalStore(a.store)
         if a.command == "ready":
-            return ready(GitHub(repo), store, a.pr, a.by)
+            return ready(GitHub(repo), store, a.pr, a.by, QuickTier(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), remote))
         labels = StoreGrants(store)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None)
