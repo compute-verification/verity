@@ -1,5 +1,6 @@
 import Pouw.Guarantees.NCP
 import Pouw.SecurityProofs.NCP.Proofs
+import Pouw.SecurityProofs.NCP.GameProofs
 import Pouw.SecurityProofs.NCP.RelationWitness
 import Pouw.SecurityProofs.NCP.RouteUProofs
 import Pouw.SecurityProofs.NCP.RouteUWordProofs
@@ -8,8 +9,8 @@ import Pouw.SecurityProofs.NCP.RouteUWordProofs
 # Proofs of NCP's guarantees
 
 One theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G` per guarantee, which is the theorem in
-`Pouw.NCP.Proofs`, `Pouw.NCP.RelationWitness`, `Pouw.NCP.RouteUProofs` and `Pouw.NCP.RouteUWordProofs` that proves the
-same statement under its old name.
+`Pouw.NCP.Proofs`, `Pouw.NCP.GameProofs`, `Pouw.NCP.RelationWitness`, `Pouw.NCP.RouteUProofs` and
+`Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name.
 -/
 
 namespace Pouw.SecurityProofs.NCP
@@ -25,6 +26,7 @@ theorem WrapWordFloorIndU : Pouw.Guarantees.NCP.WrapWordFloorIndU := Pouw.NCP.Ro
 theorem Cancel : Pouw.Guarantees.NCP.Cancel := Pouw.NCP.Proofs.cancel
 theorem Stacked : Pouw.Guarantees.NCP.Stacked := Pouw.NCP.Proofs.stacked
 theorem Range : Pouw.Guarantees.NCP.Range := Pouw.NCP.Proofs.range
+theorem ShiftBy24Admissible : Pouw.Guarantees.NCP.ShiftBy24Admissible := @Pouw.NCP.GameProofs.shiftBy24_admissible
 theorem IndependentWitness : Pouw.Guarantees.NCP.IndependentWitness := Pouw.NCP.RelationWitness.independentWitness
 theorem BiasU8Iff : Pouw.Guarantees.NCP.BiasU8Iff := Pouw.NCP.RouteUProofs.biasU8Iff
 theorem CheckedUEq : Pouw.Guarantees.NCP.CheckedUEq := Pouw.NCP.RouteUProofs.checkedU_eq
