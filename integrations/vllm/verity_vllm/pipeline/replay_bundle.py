@@ -17,7 +17,9 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
 A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
-held for the two in turn; a slim one is written at the C2 site, after the challenge its reads come from.
+held for the two in turn; the bundle's device-resident tensors and the engine's facts are read before `start` returns, so nothing
+after it reads the device and a leased Commit can give its GPU back there (`gpu_lease.release`); a slim one is written at the C2
+site, after the challenge its reads come from.
 `open_bundle` checks every file against the manifest before anything is read from it.
 """
 from __future__ import annotations
@@ -78,31 +80,42 @@ def refuse(args: Any) -> None:
 
 @dataclass
 class Started:
-    """A full store's write running beside the checks before the C2 site (`start`)."""
+    """A full store's write running beside the checks before the C2 site (`start`), and the engine's facts read when it began."""
     future: Future
     hashed: dict[str, str]
+    engine: dict[str, Any]
 
 
 def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) -> Started | None:
     """The full store's write, started once the run root is fixed, in a thread beside the binding and manifest coverage that precede the
     C2 site: the store is final at finalize and every one of those checks only reads it, so `defer` takes the same files and digests
-    without waiting for both in turn.  None when `defer` would not write the full store from here: no deferral, a slim one (its reads come
-    from the challenge), a live-only replay, a retention other than host, or a store over the cap."""
+    without waiting for both in turn.  The registered tensors the bundle carries (`weights_extra`, read from the device) and the engine's
+    facts of record are read here, before it returns.  None when `defer` would not write the full store from here: no deferral, a slim
+    one (its reads come from the challenge), a live-only replay, a retention other than host, or a store over the cap."""
     if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
             or C2.live_only(SimpleNamespace(protocols=protocols)) or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
         return None
+    from verity_vllm.check.replay.driver import engine_facts_of_record
+
     hashed: dict[str, str] = {}
+    try:
+        extras: Any = weights_extra(com, rc)
+    except ValueError as e:                          # raised where the write is taken (`defer`), as before
+        extras = e
+    engine = engine_facts_of_record()
     pool = ThreadPoolExecutor(1, thread_name_prefix="replay-bundle")
 
     def write() -> float:
         t0 = time.perf_counter()
-        write_store(out, pair, com, rc, digests=hashed)
+        if isinstance(extras, ValueError):
+            raise extras
+        write_store(out, pair, com, rc, digests=hashed, extras=extras)
         return time.perf_counter() - t0
 
     fut = pool.submit(write)
     pool.shutdown(wait=False)
-    return Started(fut, hashed)
+    return Started(fut, hashed, engine)
 
 
 def prepare(args: Any) -> Any:
@@ -165,7 +178,8 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result, "engine_of_record": engine_facts_of_record(), "slim": slim, HASHED: hashed}
+           "vc_result": vc_result, "engine_of_record": started.engine if started is not None else engine_facts_of_record(), "slim": slim,
+           HASHED: hashed}
     row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"] = deferred_records(path(out, pair))
     deferred[pair] = ctx
     tl.end("validate.replay_bundle", pair=pair)
@@ -233,30 +247,21 @@ def _registered(model: Any) -> dict[str, Any]:
     return out
 
 
-def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
-                digests: dict[str, str] | None = None, touched: SD.Touched | None = None) -> Path:
-    """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extra_names`: the registered
-    tensors whose bytes go into the bundle (default: the registered buffers and engine constants, which no checkpoint holds).
-    ``digests`` receives the sha256 of the store's step files as they were written (by their path in the bundle)."""
+def weights_extra(com: Any, rc: Any, extra_names: set[str] | None = None) -> tuple[dict[str, Any], list[tuple[int, str, Any]]]:
+    """The committed weights tree of the run and the bytes of the registered tensors the bundle carries, `(index in the tree's names,
+    name, bytes)`, read from where they live (the device).  `extra_names`: those tensors (default: the registered buffers and engine
+    constants, which no checkpoint holds)."""
     import torch
 
     from verity_vllm.check.weights_of_record import ENGINE_CONSTANT_RE
 
-    p = partial(out, pair)
-    if p.exists():
-        shutil.rmtree(p)
-    dumped: dict[str, str] = {}
-    SD.dump(com, rc, p / "store", digests=dumped, touched=touched)
-    if digests is not None:
-        digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree = getattr(com, "weights_tree", None)
     if not tree or (rc.weight_registration or {}).get("root") != tree.get("root"):
         raise ValueError("replay bundle: the committer kept no weights tree for the run's committed weights root (register_weights)")
     buffers = {n for n, b in com.model.named_buffers() if isinstance(b, torch.Tensor) and b.numel()}
     want = (buffers | {n for n, *_ in tree["names"] if ENGINE_CONSTANT_RE.search(n)}) if extra_names is None else set(extra_names)
     reg = _registered(com.model)
-    extra = {}
-    (p / "weights" / "extra").mkdir(parents=True, exist_ok=True)
+    extra = []
     for i, (name, _dt, _shape, nb) in enumerate(tree["names"]):
         if name not in want:
             continue
@@ -264,9 +269,28 @@ def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_n
         raw = SD._as_bytes(t.view(torch.uint8) if t.dtype != torch.uint8 else t)
         if len(raw) != int(nb):
             raise ValueError(f"replay bundle: {name} holds {len(raw)} B, registered {nb} B")
+        extra.append((i, name, raw))
+    return tree, extra
+
+
+def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
+                digests: dict[str, str] | None = None, touched: SD.Touched | None = None,
+                extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None) -> Path:
+    """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extras`: `weights_extra`'s
+    answer, read before (default: read here, with `extra_names`).  ``digests`` receives the sha256 of the store's step files as they
+    were written (by their path in the bundle)."""
+    p = partial(out, pair)
+    if p.exists():
+        shutil.rmtree(p)
+    dumped: dict[str, str] = {}
+    SD.dump(com, rc, p / "store", digests=dumped, touched=touched)
+    if digests is not None:
+        digests.update({f"store/{k}": v for k, v in dumped.items()})
+    tree, extra = extras if extras is not None else weights_extra(com, rc, extra_names)
+    (p / "weights" / "extra").mkdir(parents=True, exist_ok=True)
+    for i, _name, raw in extra:
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw)
-        extra[name] = i
-    doc = tree | {"extra": extra}
+    doc = tree | {"extra": {name: i for i, name, _raw in extra}}
     (p / "weights" / "tree.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return p
 
