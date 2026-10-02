@@ -84,7 +84,8 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         seen[f.stem] = (queue, prio)
     assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
                     "commit-pack": ("deployments-gpu", "circuits-gpu"),
-                    "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+                    "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench"),
+                    "store-push": ("backfill", "backfill")}
 
 
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
@@ -472,6 +473,9 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
             continue
         if f.stem == "commit-pack":           # a pilot: each Commit it runs is config-run's gpu task script, job tree included
             assert tasks == 0 and "job_tree.sh" not in t and 'pilot=$SRC/sky/commit_pack.py' in t, f.name
+            continue
+        if f.stem == "store-push":            # only imports `research` from the tree, never writes it
+            assert tasks == 0 and "job_tree.sh" not in t and 'PYTHONDONTWRITEBYTECODE: "1"' in t, f.name
             continue
         assert t.count('job_tree.sh" "$SRC")') == t.count('job_tree.sh" --mine)') == tasks >= 1, f.name
         assert "pod_bootstrap.sh" not in t and t.count('vllm_bootstrap.sh" ') == tasks, f.name
