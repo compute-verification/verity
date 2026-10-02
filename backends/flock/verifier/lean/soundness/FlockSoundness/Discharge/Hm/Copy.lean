@@ -511,17 +511,15 @@ theorem blockBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2
 
 /-- **The block rows at an input bit of a row net's slot** with one copy `(x, src)`: at a self row `x` of a
 `sha512x3` or `hm96` slot below the net's input rows, where Δ_A and Δ_B write `(x, x)` and `(x, src)` and nothing else,
-the level-0 rows are `[src]`, in A and in B. -/
+the level-0 rows are `[src]`, in A and in B (zero when `src` is past the block). -/
 theorem inBit_rows {st : Stmt} (R : RowRanges st.c) {n s off x src : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
     (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
     (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hx : x < 2 ^ st.c.kLog)
-    (hsrc : src < 2 ^ st.c.kLog)
     (hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2))
     (j : Fin (2 ^ st.c.kLog)) :
-    placedA st ⟨x, hx⟩ j = (if j = ⟨src, hsrc⟩ then 1 else 0) ∧
-      placedB st ⟨x, hx⟩ j = (if j = ⟨src, hsrc⟩ then 1 else 0) := by
+    placedA st ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧ placedB st ⟨x, hx⟩ j = (if j.val = src then 1 else 0) := by
   have hnn := R.rowNet_lt hn
   obtain ⟨hm, hk, -, hsl⟩ := R.range hnn
   have h32 : (st.c.nets.getD n default).2.unitLog ≤ 32 := by
@@ -552,16 +550,38 @@ theorem inBit_rows {st : Stmt} (R : RowRanges st.c) {n s off x src : ℕ} (hn : 
       rw [add_zero, sparseEntry_ofRows hb, ofRows_row hb hw, count_slot _ (by rw [hsl]; exact hlb) j]
       push_cast; ring
   have hval : (([x].count j.val + ((if j.val = x then 1 else 0) + (if j.val = src then 1 else 0)) : ℕ) : ZMod 2) =
-      if j = (⟨src, hsrc⟩ : Fin (2 ^ st.c.kLog)) then 1 else 0 := by
-    have hj : (j = (⟨src, hsrc⟩ : Fin (2 ^ st.c.kLog))) ↔ j.val = src := Fin.ext_iff
+      if j.val = src then 1 else 0 := by
     by_cases h1 : j.val = x <;> by_cases h2 : j.val = src
-    · rw [ite_eq_left (hj.2 h2), ite_eq_left h1, ite_eq_left h2, h1, List.count_singleton_self]; decide
-    · rw [ite_eq_right (fun h => h2 (hj.1 h)), ite_eq_left h1, ite_eq_right h2, h1, List.count_singleton_self]
-      decide
-    · rw [ite_eq_left (hj.2 h2), ite_eq_right h1, ite_eq_left h2, List.count_eq_zero.2 (by simpa using h1)]; decide
-    · rw [ite_eq_right (fun h => h2 (hj.1 h)), ite_eq_right h1, ite_eq_right h2,
-        List.count_eq_zero.2 (by simpa using h1)]; decide
+    · rw [ite_eq_left h1, ite_eq_left h2, ite_eq_left h2, h1, List.count_singleton_self]; decide
+    · rw [ite_eq_left h1, ite_eq_right h2, ite_eq_right h2, h1, List.count_singleton_self]; decide
+    · rw [ite_eq_right h1, ite_eq_left h2, ite_eq_left h2, List.count_eq_zero.2 (by simpa using h1)]; decide
+    · rw [ite_eq_right h1, ite_eq_right h2, ite_eq_right h2, List.count_eq_zero.2 (by simpa using h1)]; decide
   exact ⟨(hE j.val).1.trans hval, (hE j.val).2.trans hval⟩
+
+/-- A row `[src]` in A and in B (zero when `src` is past the block) holds what `src` holds, in every block of a
+satisfying witness. -/
+theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl))
+    {x src : ℕ} (hx : x < 2 ^ S.kLog)
+    (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
+      S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
+    blockBit S z o x = blockBit S z o src := by
+  by_cases hsrc : src < 2 ^ S.kLog
+  · have he : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) =
+        if j = (⟨src, hsrc⟩ : Fin (2 ^ S.kLog)) then 1 else 0 := fun j => by simp [Fin.ext_iff]
+    have hcopy : CopyRow S ⟨x, hx⟩ ⟨src, hsrc⟩ := ⟨fun j => (h j).1.trans (he j), fun j => (h j).2.trans (he j)⟩
+    rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq hz o]
+  · have hne : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) = 0 :=
+      fun j => ite_eq_right fun (e : j.val = src) => hsrc (e ▸ j.isLt)
+    have hzr : ZeroRow S ⟨x, hx⟩ := ⟨fun j => (h j).1.trans (hne j), fun j => (h j).2.trans (hne j)⟩
+    rw [blockBit_of_lt _ z o hx, hzr.block_eq hz o]
+    unfold blockBit
+    simp only [hsrc, dite_false]
+
+theorem blockBit_constSrc {S : Model.Statement} {z : Model.Witness S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
+    {pin : ℕ} (ws : Array UInt64) (t : ℕ) (hpin : blockBit S z o pin = true)
+    (hzero : blockBit S z o (zeroCol c) = false) : blockBit S z o (constSrc c pin ws t) = wordsBit ws t := by
+  unfold constSrc
+  cases h : wordsBit ws t <;> simp [hpin, hzero]
 
 /-- Δ's flat pairs at an input bit of a row net's slot with one copy `(x, src)`: `(x, x)` and `(x, src)`, when the slot
 constants' pairs, the leaf pairs and the cut pairs write nothing there. -/
@@ -593,7 +613,7 @@ theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types 
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
     (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
-    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hsrc : src < 2 ^ st.c.kLog)
+    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off])
     (hf : (rowCopies st.c st.pin ++ wireCopies st.c).filter (fun e => e.1 = x) = [(x, src)]) :
     blockBit (T.model regs) z o x = blockBit (T.model regs) z o src := by
   have R := RowRanges.ofT T C P
@@ -624,9 +644,7 @@ theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types 
       T.tail_zero hd hul U hy true, T.tail_zero hd hul U hy false, Nat.add_zero]
     exact ⟨rfl, rfl⟩
   have hx : x < 2 ^ (T.model regs).kLog := hat.lt T.bound hm
-  have hcopy : CopyRow (T.model regs) ⟨x, hx⟩ ⟨src, hsrc⟩ :=
-    ⟨fun j => (inBit_rows R hn hat hl hself hx hsrc hδ j).1, fun j => (inBit_rows R hn hat hl hself hx hsrc hδ j).2⟩
-  rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq hz o]
+  exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
 
 end Loc
 
