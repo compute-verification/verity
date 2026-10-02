@@ -454,14 +454,16 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
-/-- `typed-expand FILE [--out F]`: a `verity/flock-circuit/types` file (item 1e) parsed as `verify` parses it, its unit's
-rows derived (`HmOut.parse`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
-`--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
+/-- `typed-expand FILE [--statement ID] [--out F]`: a typed file (item 1e; `ID` by default `verity/flock-circuit/types`, or
+`verity/flock-circuit/types@210d32e1`) parsed as `verify` parses it, its unit's rows derived (`HmOut.parse`, or
+`HmRow.parseTyped` for a statement with public outputs). One `TYPED` line: the circuits, the unit's rows, and the file's
+SHA-512 and class. With `--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
 def typedExpandCmd (args : List String) : IO UInt32 := do
-  let some path := args.head? | IO.eprintln "typed-expand FILE [--out F]"; return 2
+  let some path := args.head? | IO.eprintln "typed-expand FILE [--statement ID] [--out F]"; return 2
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuitTypes.name) |>.filter (·.typed)
+    | IO.eprintln "typed-expand: --statement names no typed statement"; return 2
   let bytes ← IO.FS.readBinFile path
-  let tags := Tags.circuitTypes
-  let line ← match HmOut.parse tags bytes with
+  let line ← match (if tags.hiddenOutputs then HmOut.parse tags bytes else HmRow.parseTyped tags bytes) with
     | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
     | .ok c =>
       if let some out := argOf args "--out" then

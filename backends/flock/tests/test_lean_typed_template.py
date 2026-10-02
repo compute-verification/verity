@@ -53,6 +53,21 @@ def test_the_verifier_reads_a_typed_template(gemm):
     assert st["circuit_sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest() and st["regions"] == 3
 
 
+def test_typed_expand_reads_the_public_output_form(gemm):
+    """`typed-expand --statement` parses a `types@210d32e1` file as `verify` does; the default, `verity/flock-circuit/types`
+    with hidden outputs (PROTOCOL.md §16.13), refuses it."""
+    root, _ = gemm
+    circuit = root / "stage" / "circuit.txt"
+
+    def expand(*statement: str) -> dict:
+        p = subprocess.run([str(BIN), "typed-expand", str(circuit), *statement], capture_output=True, text=True)
+        return json.loads(next(ln for ln in p.stdout.splitlines() if ln.startswith("TYPED ")).split(" ", 1)[1])
+
+    old = expand("--statement", STATEMENT)
+    assert old["ok"] and old["sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest(), old
+    assert not expand()["ok"]
+
+
 def test_it_gives_the_rust_provers_sessions_their_verdicts(gemm, tmp_path):
     root, _ = gemm
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(root / "records"), str(tmp_path)], check=True,
