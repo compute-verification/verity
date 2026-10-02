@@ -194,7 +194,8 @@ train). `research deploy drift` reads each node and names every file that isn't 
 `missing`), every process still running a file installed after it started (`restart`), and every file in a managed directory
 that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
-`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it.
+`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
+--by WHO` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
