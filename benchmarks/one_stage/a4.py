@@ -121,6 +121,9 @@ def main() -> int:
     ap.add_argument("--zk-bin", default=None, help="a flock-circuit build with --zk: one registered and one in-statement "
                                                      "statement proved under M0 and --zk, M0's own verifier")
     ap.add_argument("--zk-runs", type=int, default=2)
+    ap.add_argument("--statement-check", type=int, default=0,
+                    help="R: stage a registered and an in-statement file (no proof) and time the Lean verifier's statement check "
+                         "of each R times, with and without --registered")
     a = ap.parse_args()
     a0.STATEMENT_ID = a.statement
     out = Path(a.out)
@@ -232,6 +235,8 @@ def main() -> int:
     summary["windows"] = windows
     if a.zk_bin:
         summary["zk"] = zk_sessions(a, text, s, out / "zk", rows["x"], outs, reg, pos, n, st_dir)
+    if a.statement_check:
+        summary["statement_check"] = statement_check(a, text, s, out / "statement-check", rows["x"], outs, reg, pos, n, st_dir)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = all(x.get("accepted") for x in windows) and all(v["refused"] for x in windows for v in (x.get("negatives") or {}).values())
     print("A4 " + json.dumps({"ok": ok}), flush=True)
@@ -297,6 +302,37 @@ def zk_sessions(a, text: str, s: InputSet, out: Path, rows_x, outs, reg: G.Regis
                 res[name]["lean_verify_zk_session"] = {"accepted": v["accepted"], "why": v.get("why")}
             print(f"A4 zk {name} lean " + json.dumps({k: v for k, v in res[name].items() if k.startswith("lean")}), flush=True)
         os.remove(d / f"inst-{n}.bin")
+    return res
+
+
+def statement_check(a, text: str, s: InputSet, out: Path, rows_x, outs, reg: G.Registered, pos: list[int], n: int,
+                    st_dir: Path) -> dict:
+    """The verifier's per-session cost of the registered reads outside the proof: the Lean verifier's `statement` on the
+    registered file with `--registered` (every table row's path and every instance's position) against the in-statement
+    file without it, `--statement-check` times each, and the public files' sizes."""
+    import subprocess
+
+    res: dict = {}
+    stmt = a.statement.split("+", 1)[0]
+    for name, registered in (("registered", True), ("in-statement", False)):
+        st = stage_window(text, s, out / name, rows_x, outs, reg, pos, registered, n)
+        d = st["dir"]
+        os.remove(d / f"inst-{n}.bin")
+        pub = d / f"pub-{n}.bin"
+        args = [a.lean, "statement", "--statement", stmt, "--circuit", str(d / "circuit.txt"), "--public", str(pub),
+                "--partition", str(st_dir / "partition.json"), "--program", str(st_dir / "program.json"),
+                *(["--registered", str(st_dir / "registered.json")] if registered else [])]
+        times, rc, line = [], None, ""
+        for _ in range(a.statement_check):
+            t = time.time()
+            p = subprocess.run(args, capture_output=True, text=True, check=False)
+            times.append(round(time.time() - t, 3))
+            rc, line = p.returncode, (p.stdout.strip().splitlines() or [""])[0]
+        res[name] = {"rc": rc, "seconds": times, "stage_s": st["stage_s"], "pub_bytes": pub.stat().st_size,
+                     "pub_header_bytes": len(pub.read_bytes().split(b"\n", 1)[0]),
+                     "registered": json.loads(line).get("registered") if line.startswith("{") else None,
+                     "why": None if rc == 0 else (p.stdout + p.stderr)[-400:]}
+        print(f"A4 statement-check {name} " + json.dumps(res[name]), flush=True)
     return res
 
 
