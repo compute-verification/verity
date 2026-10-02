@@ -30,6 +30,7 @@ import FlockSoundness.Discharge.Exec.Verdict
 import FlockSoundness.Discharge.Exec.Shape
 import FlockSoundness.Discharge.Exec.Pts
 import FlockSoundness.Discharge.Exec.LiveOn
+import FlockSoundness.Discharge.Exec.LawDraw
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -86,5 +87,8 @@ import FlockSoundness.Discharge.Exec.LiveOn
   for a drawn session the draw's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two draws
   that prove as many units (`setupH_mPts_eq`);
 * `LiveOn`: `Live`'s R11 and headline with the decoder right at the law's draws only (`DecodesOn`, `execRefines_on`,
-  `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`).
+  `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
+* `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
+  model's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
+  `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`).
 -/
