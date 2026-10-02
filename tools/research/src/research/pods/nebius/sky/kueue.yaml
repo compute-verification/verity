@@ -140,6 +140,11 @@ spec: {clusterQueue: deployments-gpu}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
+metadata: {name: deployments-gpu-pool, namespace: default}   # circuits' lease-pool GPU holders (n1_lease.py VY_POOL_LOCAL_QUEUE), outside the pacer's hold
+spec: {clusterQueue: deployments-gpu}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
 metadata: {name: deployments-cpu, namespace: default}
 spec: {clusterQueue: deployments-cpu}
 ---
