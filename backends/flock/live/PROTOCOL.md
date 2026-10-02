@@ -1,24 +1,34 @@
 # verity/flock-circuit: the masked protocol (M1) and its coin commitment (M2)
 
 What `flock-circuit --zk` sends, where every mask comes from, and what the verifier checks. This is the layout the Lean
-reference prover must reproduce byte for byte (soundness DESIGN.md §6: a deterministic function of statement, witness,
-prover seed and verifier coins), and the statement its zero-knowledge theorem is about.
+reference prover must reproduce byte for byte (soundness DESIGN.md §6: a deterministic function of the statement, the
+witness, the prover's three random draws of §2 and the verifier's answers), and the statement its zero-knowledge theorem
+is about.
 
 Code:
 - `src/zk_veil.rs`: masking, replay, constraints, the inner proof, the simulator's pieces.
-- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`; M2's
-  `VStar`, `gk_simulate`, `rewind`, `zkrewind`.
+- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `gpu_zk_device`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`,
+  `zkaudit`; the session (`session_proved`, `session_finish`); M2's `VStar`, `gk_simulate`, `rewind`, `zkrewind`.
 - `src/coin_tree.rs` (M2): the verifier's coin commitment and the prover's check of every opening.
+- `src/lib.rs`: the wire messages (`Req`, `Resp`), the round frames, the verifier's coin server (`Server`).
+- `src/zk_hooks.rs`: the prover's randomness (`ProverRng`, `LeafSalts`, `coin_nonce`).
 - `../flock-zk-b684b12.patch`: Ligerito level 0's hiding in upstream Flock (`pcs::ligerito::zk`, `commit::commit_zk`, the F256
   split prover and verifier).
 
-**Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a session sends is masked, committed or
-public, and the audit (`zkaudit`) attributes every byte. The target notion is VEIL's special honest-verifier zero
-knowledge for the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11),
-statistical in the common-reference-string model under the assumptions of §7. Malicious-verifier zero knowledge comes from
-M2's coin commitment and single rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared
-level 0's extra lanes; §7 now gives each rep its own pair, and the re-review grants M1 with conditions. The proof class
-stays `NON_ZK_PROOF` until the Lean proof covers it.
+**Status.** Lane flock-zk. `--zk` proves on the CPU prover and on the device (`--zk --gpu`, one table per session), for
+every statement `zk_shape_ok` admits (§7); RoPE d64 and GEMM are the ones run so far. The audit (`zkaudit`) attributes
+every byte. Every message a session sends is masked, committed or public, except `Hello`'s nonce ν (§1), which is fresh
+prover randomness independent of everything else. The target notion is VEIL's special honest-verifier zero knowledge for
+the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11), statistical
+given the common-reference-string step and the assumptions of §7. Malicious-verifier zero knowledge is M2's: the coin
+commitment and a single rewind (§9). M1's hiding claims are proved in Lean for the protocol as Lean defines it; that
+`flock-circuit --zk` computes that protocol is open (§7, "What Lean proves"), and so is §9's simulator theorem. The first
+red-team review (red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives each rep its own pair,
+and the re-review grants M1 with conditions. The proof class stays `NON_ZK_PROOF` until §7's gaps close.
+
+The `--zk` identity carries two stale strings: `hooks.stage` is `m2-prototype (committed verifier coins, CPU)` though the
+device proves too, and `hashes.coin_derivation` is `sha256 (verity.randomness)` though coin-tree v2 derives no coin (§9).
+Both are inside the statement digest, so correcting them moves every `--zk` statement's digest.
 
 Conventions. The field is GF(2^128) (`F128`, characteristic 2, so `+` is `−`). F256 is `F128 ⊕ F128·U`, written by
 coordinates `(c0, c1)`. An F128's bytes are `lo` then `hi`, each little-endian. `v'` is a sent (masked) value, `v` the
@@ -26,10 +36,45 @@ value upstream's prover computed, `h` a pad, and `v' = v + h`. `m` is the dense 
 (RoPE: `m = 25..27`, `k_log = 22`). Ligerito at `m = 25`: `initial_k = 6` (64 lanes), `L = 2^12` rows per lane, rates
 `1/2, 1/4, 1/8, 1/16`, queries `277, 106, 71, 53` (level 0's count is §7's, above Fast100's 218), OOD samples `1, 2, 2, 2`.
 
-## 1. Order of one repetition
+## 1. The session, and the order of one repetition
 
-Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. Items marked M1 are new; the rest is
-M0 and upstream Flock.
+**The session.** The prover sends requests and the verifier answers each (`Req`, `Resp` in `src/lib.rs`: a tag byte, then
+the fields, a string or byte string as `u32le(len) ‖ bytes`; on TCP each message is `u32le(len) ‖ message`). Under `--zk`,
+in this order:
+
+~~~text
+Register                                   → Draw: the unit draw (JSON, or null), before Hello fixes the statement
+Hello (the session's parameters, JSON)     → Coins (20): the coin tree's root (4 words), then the verifier's key K (16) (§9)
+per table, in order; per rep r = 0, 1:
+  Open {"<table>/rep<r>", parent "", the rep's domain, at 0}   → Ok
+  table 0, rep 0 only, from its level-0 commitment, before its first round:
+    Commit {root_f: Σ, roots: every table's level-0 root, publics: []}   → Coins: the two link points, opened (§9)
+    Link (2J F128 zeros)                   → Ok
+  Round {stream, content, n} per squeeze    → Coins: n coins, then their opening (§9)
+Proof {table, rep, bytes} per table and rep, in order   → Ok
+Finish                                     → Verdict
+~~~
+
+- `Hello` is `SessionConfig::hello_with_nonce`, serde_json with sorted keys: `coins` (§9's schedule, with `nonce` the
+  prover's ν as 64 lowercase hex digits), `digests: "sha512"`, `flavor: "rs"`, `link: {m, points: 2, sigma: Σ}`,
+  `profile: "fast100"`, `reps: 2`, `rounds: "bytes retained"`, `tables`. The verifier compares it byte for byte with its own
+  `Hello` carrying that ν (R7). ν is 32 fresh OS bytes, once per session (`zk_hooks::coin_nonce`, §2).
+- Rep 1's stream opens after rep 0's last round, on the CPU and on the device; no stream forks under `--zk`.
+- `Commit` and `Link` come from table 0 rep 0's level-0 hook, since the verifier refuses every round before `Link` (R5).
+  Σ is `session_sigma`. `publics` is empty: the verifier reads the public words from its own file. `Link` is `y = 0` for
+  every table (nothing is prover-supplied), and the verifier refuses any other `y`. Rep 1's level-0 root must be rep 0's,
+  and a later table's reps must bind the root it committed, or the prover stops (C1's root check, §9).
+- A round's `content` is every frame the rep's challenger absorbed since its previous squeeze, ending with the squeeze's
+  header; a stream's first round begins with its domain's frame. A frame is a 16-byte header `[op][kind][0; 6][u64le len]`
+  and its payload, zero-padded to 16 bytes: `DOMAIN 01`, `LABEL 02`, `BYTES 05` (len in bytes); `OBSERVE 03` (kind `01`
+  one F128, `02` a slice; len in F128s); `SQUEEZE 04` (kind `01` for `sample_f128`, `02` for `sample_f128_vec`; len the
+  coin count `n`). A 0-coin squeeze sends no round. The block below lists one rep's frames.
+- Every answer's coins carry their opening, which the prover checks before it uses a coin (`coin_tree::Checked`, §9).
+- The barrier: every `Proof` follows the session's last coin. If the prover stops (any refusal, a coin that does not
+  open), it sends `Finish` alone, with no `Proof`.
+
+Everything below is on the rep's live stream (`circuit/rep{r}`; `circuit-NN/rep{r}` with several tables), in this order.
+Items marked M1 are new; the rest is M0 and upstream Flock.
 
 ~~~text
 bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
@@ -60,7 +105,9 @@ proof bytes         bincode (Commitment, R1csProofLigerito with the masked field
 ~~~
 
 `final_c'` is sent only in the proof: upstream never absorbs it. The claim order in the opening is ab, then c, then the
-region claims (region-major, then the two link points).
+region claims (region-major, then the two link points). Every grinding nonce is the constant 0, both the `bytes nonce`
+above (`u64le(0)`) and the proof's nonce fields: live coins need no grinding (`LiveChallenger::grind_pow`, the device's
+`Framer`).
 
 ## 2. The pads
 
@@ -90,16 +137,23 @@ The first `hab` pads mask sent values, and the last four are committed auxiliari
 `Layout::absorbed()`: the rows above in order, minus `fc`. The algebraic phase is masked between the zerocheck label and
 the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and `-close-v0`.
 
-**Randomness.** Everything comes from `ProverRng`, which is ChaCha20 keyed by the session's `ProverSeed` (a fresh
-`getrandom` draw). `f128s(stream, index, n)` reads `16n` bytes from byte offset `32·index` of the stream. With
-`base = rep << 32`:
+**Randomness.** A session draws three independent values from the OS (`getrandom`), each once, and nothing else:
+- the `ProverSeed` (32 bytes), which keys `ProverRng` (ChaCha20): every pad, mask, padding coefficient and extra lane below,
+  and τ's salt;
+- the `LeafSalts` key (32 bytes, `LeafSalts::for_seed`), which expands every hm96 leaf salt (§3, §7);
+- `Hello`'s nonce ν (32 bytes, `zk_hooks::coin_nonce`, §1).
+
+None is derived from the transcript or from another. With an injected seed (feature `seed-injection`, a test harness only)
+the salt key is the seed's ChaCha20 stream 3 and ν its stream 8, so a harness's sessions repeat. `f128s(stream, index, n)`
+reads `16n` bytes from byte offset `32·index` of `ProverRng`'s stream. With `base = rep << 32`:
 
 ~~~text
 per rep r:
-  h      = f128s(4, base, s)            then h[hab] := h[fa]·h[fb],  h[tw] := h[tx]·h[ty]
-  mu     = f128s(5, base, s)            the dot-product mask
-  pad_h  = f128s(4, base + 2^24, 192)   the pads codeword's padding
-  pad_mu = f128s(5, base + 2^24, 192)
+  h        = f128s(4, base, s)            then h[hab] := h[fa]·h[fb],  h[tw] := h[tx]·h[ty]
+  mu       = f128s(5, base, s)            the dot-product mask
+  pad_h    = f128s(4, base + 2^24, 192)   the pads codeword's padding
+  pad_mu   = f128s(5, base + 2^24, 192)
+  tau_salt = f128s(4, base + 2^25, 12)    τ's commitment's salt, 192 bytes (§5)
 per session (both reps):
   mask slot, block b: f128s(1, b · 2^(mask_log−7), 2^(mask_log−7))    (M0's hook, uniform in --zk)
   Ligerito level 0 (one codeword, both reps open it):
@@ -110,7 +164,7 @@ per session (both reps):
 The level-0 padding of the 64 witness lanes is shared by the reps, as is the codeword; each pair of extra lanes and its
 padding belongs to one rep (§7).
 
-Streams 1–3 belong to M0: mask, padding, and the injected-seed salt tape. None of this is derived from the transcript.
+Streams 1–3 belong to M0: mask, padding, and an injected seed's salt key; stream 8 is an injected seed's ν.
 
 **Several tables** (`--session-tables J`, the CPU prover). Table `j` reads every stream above at ChaCha20 stream
 `purpose | j << 32` (`ProverRng::for_table`). Its salt trees are ids `j << 32` (its level-0 tree) and up, below the next
@@ -122,9 +176,9 @@ a salt. Table 0's addresses are a one-table session's, and a one-table session's
 The code is Reed–Solomon over GF(2^128). The message is `(h ‖ pad_h)` of length `L_h = s + 192`, read as coefficients
 of `Σ m_i X^i`. The code is evaluated at the `N = 8 · next_pow2(L_h)` points `x_j = F128(lo = j + 1, hi = 0)`, which
 gives RoPE `N = 4096`. There are two rows, `C(h ‖ pad_h)` and `C(mu ‖ pad_mu)`. Leaf `j` is the `hm96-sha512/v1` leaf of
-`x = SHA-512(bytes(C_h[j]) ‖ bytes(C_mu[j]))`. Its salt is leaf `j` of a fresh tree id from the proof's `LeafSalts`
-(ChaCha20 blocks `3j..3j+2` under the salt key, nonce `id`). The id comes from `next_id()`, so it is never 0 and never
-reused. Nodes are `SHA-512(left ‖ right)`. The 64-byte root is the item after `verity-flock-zk-pads-v0`.
+`x = SHA-512(bytes(C_h[j]) ‖ bytes(C_mu[j]))`. Its salt is leaf `j` of a fresh tree id from the session's `LeafSalts`
+(its own OS key, §2; ChaCha20 blocks `3j..3j+2` under the salt key, nonce `id`). The id comes from `next_id()`, so it is
+never 0 and never reused. Nodes are `SHA-512(left ‖ right)`. The 64-byte root is the item after `verity-flock-zk-pads-v0`.
 
 ## 4. The constraints
 
@@ -159,7 +213,8 @@ It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from
 
 1. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
 2. `γ` (10) ← V. Both sides form `(c, t)`. P computes `τ = ⟨c, mu⟩` and sends its commitment
-   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, M2).
+   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with the rep's 192-byte `tau_salt` (§2;
+   `tau_commitment`, M2).
 3. `β` ← V. P refuses `β = 0`. P sends `Y = (h + β mu ‖ pad_h + β pad_mu)`.
 4. 168 query words ← V, reduced to `j = lo mod N`. P opens `(C_h[j], C_mu[j])` with salts and paths. The proof carries
    `τ` and its salt.
@@ -182,7 +237,14 @@ words (`2^(mask_log−7)` per block, all blocks, uniform bits `u`) add `Σ_{x �
 points `p_1..p_k` seen so far (ab and c of each rep, up to 4), that sum is uniform on `F^k`, independently for every `v`,
 exactly when `(eq(p_1, x), .., eq(p_k, x))` over the mask words span `GF(2)^{128k}`. The prover checks this rank at the
 opening's label, before any `s_hat_v` leaves (`mask_rank_ok`, 2–4 ms), and stops otherwise. RoPE: rank 512 needed, from
-1024 words. Region claims' `s_hat_v` are functions of public region data (`Stmt::region_s_hat_v`).
+1024 words.
+
+Region claims' `s_hat_v` are functions of public region data (`Stmt::region_s_hat_v`) given **H_reg, the region-word
+check**. A region claim's ring-switch message carries all 128 bits of every word the region covers, so every column that
+shares a word with a partial region's columns (`circuit::region_shared_columns`) must be one of them or be forced to zero:
+its rows in the combined A and B are both empty, so `0·0 = z_q`. `Stmt::new` refuses any other statement
+(`circuit::region_word_violation`), in both modes, before `Hello`; the selftest `region_word_shared_refused` checks the
+refusal. Lean takes H_reg as the hypothesis `hreg : T.sReg w = T.pubReg`.
 
 ## 7. Ligerito level 0 (VEIL Figs. 8–9), and zero knowledge for the session
 
@@ -256,7 +318,7 @@ level-0 queries, levels 1+, and the inner proof. The prover's randomness is spen
 |---|---|---|
 | masked algebraic and level-0 exposed values | the pads `h` (a bijection, §2) | per rep |
 | `s_hat_v` of the 4 masked claims | the mask slot, jointly over all 4 claim points (the rank check, §6) | session |
-| region `s_hat_v` | public data | |
+| region `s_hat_v` | public data, given H_reg (§6) | |
 | the 64 witness lanes' entries at every opened level-0 position of either rep | their padding `μ_l`, `t_pad ≥` those positions | session |
 | `y_1'^r`, hence every level-1+ message and row of rep `r` | `R^r` through `W^r` | per rep |
 | `ybar^r` | `pad_{R^r}` through `W^r` | per rep |
@@ -278,29 +340,28 @@ is the minimum.
   `enforced_extra`. For fixed coins the view is F128-linear in the witness and the randomness, and it hides the witness
   exactly when the witness's images lie in the span of the randomness's. Even with all of both `y_1'^r` revealed, the
   per-rep pairs hide it; a shared pair does not, nor does `t_pad` below the distinct opened positions. The verifier's row
-  check holds on the model.
+  check holds at that size.
 - selftest `zk_session_relations_vary_with_the_seed` (RoPE `m = 25`, one coin seed): the finding's two functionals
   (`session_relations`: 521 F256 values at level 0, 42 at level 1) differ in every word between two prover seeds. A
   prover that folds rep 0's pair in both reps (rejected by the verifier) reproduces the leak: every word is equal.
 - The statistics (§8) test both functionals as classes of one value per session.
 
 **Assumptions.** The table's argument is exact (perfect hiding) for uniform prover randomness, given the commitments hide.
-- **hm96-sha512 hiding is statistical, in the standard model** (`verity/commitments/hm96/PROTOCOL.md` §3: a
+- **hm96-sha512 hiding is statistical, with no random oracle** (`verity/commitments/hm96/PROTOCOL.md` §3: a
   leftover-hash-lemma argument over the Hankel family, which uses no property of SHA-512). Caps, paths and roots are
   functions of the leaves, so they inherit the bound. It needs:
   - uniform, independent salts, never reused: leaf `j` of tree `id` takes ChaCha20 blocks `3j … 3j+2` under nonce `id`, and
     `next_id()` is never 0 and never repeats (level 0 is the one tree both reps share, each leaf salted once); the pads
-    trees and τ's commitment have their own salts;
-  - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under `hash-derived-key`.
-    The distance is then about `N·2^-192`, with `N` every leaf ever committed under the key (an `m = 25` session commits
-    about 2^14.4), so a lifetime of `2^64` leaves stays within `2^-128`.
-- **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
-  with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
-  No random oracle is involved.
-- **The one caveat is the randomness source.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20
-  output under the session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`). The claim is statistical when that output
-  is treated as uniform, as hm96 §3 treats such streams (and `os.urandom`); otherwise it is computational, under ChaCha20
-  as a PRG.
+    trees take their own ids, and τ's commitment takes its own salt (`tau_salt`, §2);
+  - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under the assumption
+    `hash-derived-key`. The distance is then about `N·2^-192`, with `N` every leaf ever committed under the key (an
+    `m = 25` session commits about 2^14.4), so a lifetime of `2^64` leaves stays within `2^-128`. This figure is argued on
+    paper, not in Lean (gap 5 below).
+- **The prover's randomness is assumed uniform.** Every pad, mask, padding coefficient, extra lane and `tau_salt` is
+  ChaCha20 output under the `ProverSeed`, and every leaf salt is ChaCha20 output under the `LeafSalts` key: two independent
+  OS draws (§2). The hiding claims are statistical under the assumption that this output is uniform, as hm96 §3 treats such
+  streams (and `os.urandom`); otherwise they are computational, with ChaCha20 as a PRG (gap 4 below). ν, the third draw, is
+  sent as drawn.
 - **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
   verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
@@ -314,6 +375,39 @@ Negatives, each rejected on both reps (RoPE CPU selftest):
 - `T'` forged;
 - `ybar` forged;
 - `e` forged with an honest `T'`. Ligerito accepts this one, and only the inner proof's lane-phase rows reject it.
+
+**What Lean proves, and for what.** Lean defines the protocol in `FlockSoundness.ZK`
+(`backends/flock/verifier/lean/soundness/`): one table's prover `Table.view` and simulator `Table.sim`, and a session of
+`J` tables over disjoint randomness. Every theorem below is pinned in that package's `lean-audit.json`:
+- one table, both reps, at coins the prover does not refuse: `Table.table_shvzk` (exact, for uniform randomness) and, with
+  real hm96 leaves, `Table.table_shvzk_hm96` (within `2·|leaves|·δ₁`);
+- a session of `J` tables: `Session.session_shvzk`, `Session.session_shvzk_hm96`;
+- the refusals and the session's order: `Session.sent_admits`, `Session.session_prefinal_indep_cut`;
+- every message before the last coin, against a verifier that adapts with its own tape (Lemma C, §9):
+  `Session.adaptive_prefinal_hm96_tape`;
+- the openings: `level0_openings_uniform` and `padOnto_M1` (level 0), `padsOnto_monomial` (the inner proof).
+
+The named assumptions are `Assumptions.Hm96Hiding` (hm96 hiding, `δ₁` per leaf) and `Assumptions.PadNonvanishing`
+(`X_L + c ≠ 0` on level 0's domain, checked on upstream's NTT). **So M1 is statistical special honest-verifier zero
+knowledge for one session, for the protocol as Lean defines it**, with distance about `N·2^-192` (claim ids
+`statistical-hiding`, `common-reference-string`, `hash-derived-key`). That the same holds for `flock-circuit --zk` rests
+on what is open:
+- **gap 3, code to Lean.** No Lean reference prover computes this file's messages, and no differential test ties one to
+  `flock-circuit --zk` on the CPU or the device. The theorems' hypotheses are not discharged for the code: `hreg` (H_reg,
+  §6), `InnerHolds` (the honest pads satisfy the inner proof), the tables' disjoint randomness (§2), `PadOnto`'s
+  `nS ≤ t_pad` (item 6) and `PadsOnto`'s `nQ ≤ 192` (168 queries, §5).
+- **gap 4, the randomness:** ChaCha20 output as uniform (above) is an assumption, not yet a named `Prop`.
+- **gap 5, `δ₁`'s value:** `Hm96Hiding`'s `δ₁`, and so the `N·2^-192` figure, comes from hm96 §3 and the
+  common-reference-string step under `hash-derived-key`, both on paper.
+- **gaps 1 and 2**, for §9's malicious-verifier zero knowledge only.
+
+**Outside the analysis.**
+- `Hello`'s nonce ν: fresh prover randomness, independent of the witness and of every other draw, so a simulator samples it.
+  Lean's `Table.View` does not hold it.
+- Public constants: every grinding nonce is 0 (§1), and `Link` is all zeros.
+- Timing. The verifier observes every round's latency, and neither this text nor Lean covers it. The witness build reads
+  the data, and the simulator's runs prove the zero witness (`Plan::zero_witness`), so nothing makes their timing match a
+  real run's.
 
 ## 8. The simulator, evidence, and what M1 still needs
 
@@ -376,29 +470,45 @@ the statistics' relation classes.
 
 ## 9. M2: the verifier's coin commitment and the single-rewind simulator
 
-Malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md §2 and §6,
+Malicious-verifier zero knowledge for one batched session, as the soundness lane states it (ASSUMPTIONS.md §2 and §6,
 DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round by round,
-and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
+and a Goldreich–Kahan simulator rewinds once, to just after that commitment. Lean proves three pieces: Lemma C
+(`Session.adaptive_prefinal_hm96_tape`: every message before the last coin hides the witness against a verifier that adapts
+with its own tape), the coin tree's binding (`coin_opening_binding_keyed`) and the rewind count's numeric step
+(`gk_ratio_le_third`). The simulator's theorem (gap 1) and the extraction as an algorithm (gap 2) are on paper, and that
+the code computes the protocol as Lean defines it is gap 3 (§7).
 
-**The coin commitment** (`src/coin_tree.rs`, scheme `coin-tree/hm96-sha512/v1`, `SessionConfig::coin_tree`).
-- The schedule is pinned in `Hello` (`coins: {scheme, streams, rounds_log, block}`): streams `session`, `circuit/rep0`,
-  `circuit/rep1`; `2^8` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most 277 coins in one
-  (level 0's queries); the session stream's round 0 is the two link points.
-- At `Hello` the verifier draws every block and a 192-byte salt per (stream, round) and commits: per block the chain
-  `T_512 = SHA-512(TAIL)`, `T_i = SHA-512(CHAIN ‖ c_i ‖ T_{i+1})`; the leaf's digest `x = SHA-512(ROUND ‖ u32be(stream) ‖
-  u32be(round) ‖ T_0)` and the leaf `hm96::leaf(x, salt)`; each stream's leaves under a SHA-512 tree (a subtree), and the
-  streams' roots under one more, padded with `SHA-512(PAD)`. The 64-byte root is `Hello`'s answer (4 F128 words), before
-  the prover's first message (`Commit`).
-- Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
-  the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
-  and stops at one that does not open, before it answers anything that depends on it.
-- This replaces M0's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
-  rank, dependent `ρ`) stay functions of committed coins.
-- **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
-  (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
-  assumption M2's zero knowledge adds: SHA-512 collision resistance (`cr/sha-512`), which holds whatever salts V* chooses
-  (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers the commitment must
-  be collapse-binding (ASSUMPTIONS.md §6).
+**The coin commitment** (`src/coin_tree.rs`, scheme `coin-tree/hm96-sha512/v2`, `SessionConfig::coin_tree`).
+- The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`, then each
+  table's `<table>/rep0`, `<table>/rep1` (`circuit/rep0`, `circuit/rep1` for one table); `2^8` rounds per stream; blocks of
+  512 coins. A RoPE rep uses 100 rounds and at most 277 coins in one (level 0's queries); the session stream's round 0 is
+  the link points. `nonce` is the prover's ν (§1).
+- At `Hello` the verifier draws from `/dev/urandom` its session key `K` first (256 bytes, bit 2047 cleared), then per
+  (stream, round) the block and a 192-byte salt `y`, and commits under ν. Write `H_ν(m) = SHA-512(ν ‖ m)`; the tags are
+  `verity/coin-tree/{tail,chain,round,pad}/v2\0`. Per block, the chain is `T_512 = H_ν(TAIL)`,
+  `T_i = H_ν(CHAIN ‖ c_i ‖ T_{i+1})`, and the round digest `x = H_ν(ROUND ‖ u32be(stream) ‖ u32be(round) ‖ T_0)`. The leaf
+  is hm96 under `K`:
+  `H_ν(LP(K) ‖ x ⊕ M(K)·y ‖ H_ν(SP ‖ y))`, where `LP(K)` is hm96's leaf tag then `SHA-512(K)` (not prefixed by ν) and `SP`
+  its salt tag, each zero-padded to 128 bytes (`Rules`). Each stream's leaves go under a tree of nodes `H_ν(l ‖ r)` (a
+  subtree), and the streams' roots under one more, padded with `H_ν(PAD)`.
+- `Hello`'s answer is 20 F128 words: the 64-byte root (4), then `K` (16) (`answer_words`). It comes before the prover's
+  first message (`Commit`), and `K` leaves the verifier there, not before. The prover stops at an answer of any other
+  length, or at a `K` with bit 2047 set.
+- Every later answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening
+  reveals only the coins the round uses. The prover checks every opening against the root, under its own ν and the answer's
+  `K`, before it uses a coin (`coin_tree::Checked`). It stops at one that does not open, before it answers anything that
+  depends on it. The test `v2_reproduces_the_specs_vectors` pins the scheme's bytes.
+- This replaces M0's step 0 (a seed commitment with derived streams): no coin is derived, and no PRF is used. The
+  prover's refusals (`β = 0`, the mask rank, dependent `ρ`) stay functions of committed coins.
+- **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses. It is statistical with no random
+  oracle (hm96 `PROTOCOL.md` §3), since `K`, every block and every salt are fresh draws, and `K` is drawn after ν, so it is
+  uniform whatever ν the prover picks. The Lean verifier refuses a session whose key an earlier session of the same run
+  used (`CoinTree.checkFresh`, the verifier's `PROTOCOL.md` §7.4). *Binding* is the one assumption M2's zero knowledge
+  adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` (`cr/sha-512`). It holds whatever key and salts V* chooses (hm96 §4
+  holds for every key), and a collision found before ν existed opens nothing. Lean proves that two openings of one
+  position give a collision under ν (`coin_opening_binding_keyed`). That theorem gives the collision's existence, and
+  finding it is the extraction, gap 2. Against quantum verifiers the commitment must be collapse-binding
+  (ASSUMPTIONS.md §6).
 
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
@@ -406,7 +516,8 @@ and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
    written in (`Stmt::write_regions`: `b ‖ c` and the declared outputs), the mask slot uniform, fresh masks. Every message
    before the proofs is masked, committed or public (§7, §5), and the region claims' `s_hat_v` are the public ones, so this
    run is distributed as a real one until the proofs, which follow the last coin. If it stops before the proofs (V*
-   aborted or cheated, or the prover refused a degenerate coin), its view is the output.
+   aborted or cheated, or the prover refused a degenerate coin), its view is the output. Every later run keeps this run's ν:
+   the estimation runs' `Hello` carries it (`Plan::coin_nonce`), and each rewind resends this run's `Hello` (`rewind`).
 2. **The extracted coins.** Every opening V* sent, checked against its commitment; the link points and each rep's rounds.
 3. **Estimation** (`zk_veil::gk_estimate`). Fresh dummy runs against V*, with no cap and not counting the extraction run,
    until `t` of them reach the proofs; `p̃ = t / runs`. It runs only after an extraction run that reached the proofs
@@ -479,8 +590,8 @@ rejected by the inner proof alone).
 **Still to do.**
 - **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
   belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
-- **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
-  expanded from ChaCha20 like the hm96 salts.
+- **The device.** `--zk --gpu` proves one table per session (`gpu_zk_device`); the selftest `gpu_proofs_match_cpu` checks
+  that its proofs and transcripts are the CPU prover's, byte for byte.
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
   - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
     table's Σ. The server refuses at configuration a Bernoulli law (its count is random), a count J does not divide, and
@@ -519,5 +630,12 @@ rejected by the inner proof alone).
     strategy's 136 tests passes.
   - The rewinds are independent trials (`zkgk`, 40 attempts). cap-gated: 22 real sessions complete and 21 fresh rewinds
     (p = 1.0), against 1 rewind on a reused dummy. late-gated: 16 real and 24 fresh (p = 0.12), against 40 reused.
-- **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
-  `COMPLETE_*` class.
+- **Review.** red-team-proofs-554 reviewed this text against the code and Lean
+  (`note:20261002T0426Z-reply-from-red-team-proofs-554-zk-protocol-review`). Its text conditions (the session framing,
+  coin-tree v2, `tau_salt`, H_reg, the randomness sources, the status) are in §1, §2, §6, §7 and this section.
+  `COMPLETE_HVZK_BACKEND` still needs, with a red-team review of the first two:
+  - a Lean reference prover tied to `flock-circuit --zk` by byte-for-byte differential tests on the CPU and the device;
+  - the hypotheses of §7's gap 3 discharged for the code;
+  - a class statement that names gaps 4 and 5 and excludes timing.
+
+  `COMPLETE_ZK_BACKEND` also needs gaps 1 and 2.
