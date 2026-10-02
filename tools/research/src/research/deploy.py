@@ -15,7 +15,10 @@ comes from, and the patterns (`managed`) under which nothing else should live.
   unknown   no commit we know has it: edited in place, or a copy nobody committed
   missing   not there
   absent    the manifest lists it and REF lacks its source (a checkout's manifest ahead of REF)
-and `restart` when a process running the file started before it was installed: it still runs the old code. A file that a
+and `restart` when a process running the file started before it was installed: it still runs the old code. That is a process
+whose argv names the file or, for a [[file]] no process names, a pane of a `tmux:SESSION` its `run` names: a loop may read
+a file once, at start, without naming it (node 1's dispatcher and its dispatch.env), and only respawning its pane clears it.
+A file that a
 `managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`, `*.prev-*`) or a script outside the repository.
 A file in a tree that REF lacks is `ahead` instead when a recent origin branch has it (a PR adding the file).
 Each one should move into the repository and the manifest, or into the attic: `attic` moves strays (`--backups`: every one named
@@ -52,8 +55,8 @@ PROJECT = "verity"
 HISTORY = 400                  # REF's commits searched for a stale file's version
 AHEAD_DAYS = 21                # origin's branches searched for an unrecorded file's commit
 
-# Runs on the node (stdlib): each path's git blob, mtime and the oldest start of a process whose argv names it, the files the
-# managed patterns and trees hold, and the record's last line per path.
+# Runs on the node (stdlib): each path's git blob, mtime and the oldest start of a process whose argv names it (none: of a pane
+# of a tmux session that runs it), the files the managed patterns and trees hold, and the record's last line per path.
 PROBE = r'''
 import glob, hashlib, json, os, sys
 req = json.loads(sys.argv[1])
@@ -79,10 +82,12 @@ for t in req["trees"]:
         found.update(os.path.join(d, n) for n in names if not n.endswith(".pyc"))
 btime = next(int(ln.split()[1]) for ln in open("/proc/stat") if ln.startswith("btime"))
 hz, want, procs = os.sysconf("SC_CLK_TCK"), set(req["paths"]), {}
+def started(pid):
+    return btime + int(open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]) / hz
 for pid in filter(str.isdigit, os.listdir("/proc")):
     try:
         argv = [a.decode(errors="replace") for a in open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0") if a]
-        start = btime + int(open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]) / hz
+        start = started(pid)
     except (OSError, IndexError, ValueError):
         continue
     try:
@@ -94,6 +99,19 @@ for pid in filter(str.isdigit, os.listdir("/proc")):
             continue
         p = os.path.normpath(os.path.join(cwd or "/", a))
         if p in want:
+            procs[p] = min(procs.get(p, start), start)
+import subprocess
+panes = {}
+for p, sessions in req["panes"].items():
+    for s in sessions if p not in procs else []:
+        if s not in panes:
+            try:
+                out = subprocess.run(["tmux", "list-panes", "-s", "-t", "=" + s, "-F", "#{pane_pid}"], capture_output=True,
+                                     text=True, timeout=10).stdout
+                panes[s] = [started(pid) for pid in out.split() if pid.isdigit()]
+            except (OSError, subprocess.SubprocessError, IndexError, ValueError):
+                panes[s] = []
+        for start in panes[s]:
             procs[p] = min(procs.get(p, start), start)
 record = {}
 try:
@@ -291,8 +309,16 @@ def ssh_runner(project: str = PROJECT) -> Runner:
     return run
 
 
+def sessions(node: Node, path: str) -> list[str]:
+    """The tmux sessions whose panes run the [[file]] ``path`` (its `run = ["tmux:NAME"]`). Not a tree's files: its `run` names
+    what runs some of them, and the rest a pane never reads (a job's script, read when the job starts)."""
+    e = next((e for e in node.entries if e.path == path and not e.tree), None)
+    return [r.removeprefix("tmux:") for r in (e.run if e else []) if r.startswith("tmux:")]
+
+
 def probe(node: Node, paths: list[str], run: Runner) -> dict:
-    req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record}
+    req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record,
+           "panes": {p: s for p in paths if (s := sessions(node, p))}}
     r = run(node.name, ["python3", "-c", PROBE, json.dumps(req)], None)
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: probe failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
