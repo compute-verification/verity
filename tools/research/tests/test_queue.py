@@ -354,6 +354,7 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
 
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
+# it knows "--changed"
 import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
@@ -400,3 +401,7 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     world.gh.put(1, h2, ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and _git(wt, "rev-parse", "HEAD") == h2
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
+    h3 = world.change({"tools/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
+    world.gh.put(1, h3, ready=False)
+    assert tier(world.gh.prs[1]) is None
+    assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite

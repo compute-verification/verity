@@ -553,7 +553,8 @@ def _render(entries: dict[int, Entry]) -> str:
 
 
 #: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
-QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", "tools/check/suites.py", "--quick"]
+SUITES = "tools/check/suites.py"
+QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: variables that would point the quick tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 
@@ -591,8 +592,14 @@ class QuickTier:
             report, logs = self.root / f"{wt.name}.json", self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
             report.unlink(missing_ok=True)
             env = {k: v for k, v in os.environ.items() if k not in CALLER_ENV}
+            runner = wt / SUITES
+            changed = ["--changed", base]
+            if runner.is_file() and '"--changed"' not in runner.read_text():
+                print(f"research queue: {pr.head[:12]}'s suites.py predates --changed, so every suite runs (merge main into the branch "
+                      f"to run only the ones it changes)", flush=True)
+                changed = []
             try:
-                rc = subprocess.run([*QUICK_TIER, "--changed", base, "--json", str(report), "--logs", str(logs)], cwd=wt, env=env).returncode
+                rc = subprocess.run([*QUICK_TIER, *changed, "--json", str(report), "--logs", str(logs)], cwd=wt, env=env).returncode
             except FileNotFoundError as e:
                 return f"can't run it here ({e})"
             if rc == 0:
