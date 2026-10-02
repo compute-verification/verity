@@ -1,4 +1,5 @@
-"""Pinned vectors for the tile checks' hiding rows (`verity_pouw.circuit.leaves`): ``uv run python
+"""Pinned vectors for the tile checks' committed rows (`verity_pouw.circuit.leaves`), against which C-Flock's ports are
+mapped: ``uv run python
 protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.json``.  A change to that file is a change to
 a row schema and needs a reason in the PR.
 
