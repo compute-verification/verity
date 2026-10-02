@@ -4,13 +4,16 @@
 A primitive reads a table when its evaluator reaches an indexable constant (one it closes over, or a global or module
 attribute of the code it calls) or a memoized loader that returns anything but a word, or when C-Flock's lowering of it reads
 one (`Circuit.lookup` by name, or `fp.lookup`'s table laid into the linear forms). A table read by name must be declared under
-that name; one without a name needs the primitive to declare at least one table."""
+that name; one without a name needs the primitive to declare at least one table. A lifted primitive runs its base primitive's
+evaluator, so it reads, and declares, the base's tables."""
 from __future__ import annotations
 
 import array
 import dis
 import functools
+import importlib
 import itertools
+import pkgutil
 import sys
 import types
 
@@ -24,6 +27,8 @@ from verity.ml.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
+from verity_vllm.program.registry import lifted as L
+from verity_vllm.program.registry import quarantine as Q
 
 #: the fewest entries an indexable constant has to be a table
 MIN_ENTRIES = 16
@@ -145,10 +150,18 @@ def _lowered(p: PrimitiveDefinition) -> tuple[set[str], int]:
     return {n for n, _i, _w in C.lookups if n is not _LAID_IN}, sum(n >= MIN_ENTRIES for n in laid)
 
 
+def _base(p: PrimitiveDefinition) -> PrimitiveDefinition:
+    """The primitive whose evaluator `p` runs: a lift's (or its ordinary-operand form's) base, behind a wrapper that holds only
+    operand widths and encodings, and that runs the base only under an enable no word of WORDS gives it."""
+    while (q := getattr(p, "ordinary_of", None) or getattr(p, "lifted_from", None)) is not None and q is not p:
+        p = q
+    return p
+
+
 def undeclared(p: PrimitiveDefinition) -> list[str]:
     """What `p` reads by index and does not declare."""
-    tables, loaders = _reach(p.evaluate)
-    loads = _loaded(p, loaders)
+    tables, loaders = _reach(_base(p).evaluate)
+    loads = _loaded(_base(p), loaders)
     named, laid = _lowered(p)
     named |= {n for _w, n in loads if n is not None}
     unnamed = tables + laid + sum(n is None for _w, n in loads)
@@ -159,13 +172,24 @@ def undeclared(p: PrimitiveDefinition) -> list[str]:
     return out
 
 
+def _primitives() -> list[PrimitiveDefinition]:
+    """Every primitive Verity defines, the same in any session: the registries, the vLLM registry's quarantine, and both lifts of
+    each (made on demand, so a session holds only those its tests asked for); never one a test module registered."""
+    TG.load_registries()
+    for m in pkgutil.walk_packages(Q.__path__, f"{Q.__name__}."):
+        importlib.import_module(m.name)
+    for p in [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition) and TG._authored(d)]:
+        if not p.id.startswith("Lifted[") and not hasattr(p, "ordinary_of"):
+            L.lifted_prim(p)
+    return [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition) and TG._authored(d)]
+
+
 @pytest.mark.slow
 def test_every_registered_primitive_declares_the_tables_it_reads():
     """Lowers every primitive C-Flock has a piece for (about 30 s, most of it the Gumbel pieces): a table only the lowering
     reads, as SiluMulBf16's is, never shows in its evaluator."""
-    TG.load_registries()
-    prims = [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition)]
-    assert len(prims) > 100
+    prims = _primitives()
+    assert len(prims) > 300
     assert [x for p in prims for x in undeclared(p)] == []
 
 

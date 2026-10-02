@@ -263,7 +263,7 @@ def _strict_wrapper(p: PrimitiveDefinition) -> PrimitiveDefinition:
 
     lp = PrimitiveDefinition(f"Lifted[{p.id}]", 1, tuple((n, lift_type(t)) for n, t in p.params), Value(wout + 1), ev,
                              doc=f"strict lift of {p.id} (SPEC §3.1): INV on any invalid operand, ⊥ on any ⊥ operand, else 0‖{p.id}",
-                             conformance="protocol-defined")
+                             conformance="protocol-defined", tables=p.tables)
     lp.lifted_from = p  # type: ignore[attr-defined]
     lp.lift_class = "strict"  # type: ignore[attr-defined]
     return lp
@@ -335,7 +335,7 @@ def _enable_wrap(lp: PrimitiveDefinition, original_id: str, *, reason: str) -> P
 
     ep = PrimitiveDefinition(f"Lifted[{original_id}]", LIFT_VERSION, tuple(lp.params) + ((ENABLE_PARAM, ENABLE_T),), Value(wout + 1), ev,
                              doc=f"enabled lift of {original_id} (LIFTING-SPEC v0.6 A9.3): enable=1 → {lp.id}'s relation; enable=0 → ⊥ whatever "
-                                 f"the operands; other enable words → INV. {reason}", conformance="protocol-defined")
+                                 f"the operands; other enable words → INV. {reason}", conformance="protocol-defined", tables=lp.tables)
     ep.lifted_from = getattr(lp, "lifted_from", None) or lp  # type: ignore[attr-defined]
     ep.lift_class = getattr(lp, "lift_class", "strict")  # type: ignore[attr-defined]
     ep.lift_enabled = True  # type: ignore[attr-defined]
@@ -907,7 +907,7 @@ def with_ordinary(p: PrimitiveDefinition, mask: int) -> PrimitiveDefinition:
             params.append((nm, t))
     op = _OrdinaryOperandsPrimitive(p.id, p.version, tuple(params), p.ret, p.evaluate,
                                     doc=f"{p.id} with ordinary (unwidened) operands {mask:#x} (LIFTING-SPEC v0.7 A11 / G1): the same relation",
-                                    conformance=p.conformance, register=False)
+                                    conformance=p.conformance, register=False, tables=p.tables)
     op.ord = mask
     for attr in ("lifted_from", "lift_class", "lift_enabled", "lifted_v1", "lift_reason", "family"):
         if hasattr(p, attr):
