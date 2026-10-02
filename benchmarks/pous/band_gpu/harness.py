@@ -100,6 +100,11 @@ round's squeeze, about half the sequential Keccak-f of the others, with its bit-
 LAUNCH_BOUND_FRACTION = 0.5
 """A plain-arm bandwidth below this fraction of the device-copy bandwidth is flagged launch-bound."""
 
+PLAIN_WARMUP_S = 0.5
+"""Device seconds of untimed forwards the plain arm runs before its first rep.  The GPU idles through the CPU gates before
+it and runs its first tens of ms after them slow: at T=1 on Llama-3.1-8B, 5.36 against 3.47 ms a forward for up to 11 reps,
+enough to put the median of 20 there (art:232d274d2fd9)."""
+
 
 def quantiles(xs: list[float]) -> dict[str, float]:
     s = sorted(xs)
@@ -210,6 +215,8 @@ class Backend:
     """The band's encoder at another in-degree (the pinned vector's, when the run's `d` is not the registered one)."""
     memory: Callable[[Callable[[], Any]], dict[str, int]] | None = None
     """Runs `fn` and returns the device memory allocated before it and the peak while it ran (`max_memory_allocated`)."""
+    warmup_s: float = 0.0
+    """Device seconds of untimed forwards the plain arm runs before its first rep (the GPU's: `PLAIN_WARMUP_S`)."""
 
 
 def set_kernels(flags: dict[str, Any]) -> dict[str, Any]:
@@ -358,7 +365,8 @@ def gpu(scheme: Any, build_dir: str, kernels: dict[str, Any]) -> Backend:
     smi_id = device_uuid(device.index)
     return Backend(device, lambda w, t: dense.encode(w, t, window), lambda c, t: dense.decode_segments(c, t, window),
                    codec.segment_tags, tag_bytes, responder, timer, graphed, copy_bw, lambda: _sm_clock_mhz(smi_id), step,
-                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)), memory=memory)
+                   keccak_latency, recompute, facts, lambda d: (lambda w, t: dense.encode(w, t, d)), memory=memory,
+                   warmup_s=PLAIN_WARMUP_S)
 
 
 def _nvcc_version() -> str | None:
@@ -632,8 +640,12 @@ def recompute_gate(recompute: dict[str, Any]) -> dict[str, Any]:
 
 def _plain_arm(backend: Backend, w: Any, pl: list[tuple[str, int, int, int, int]], xs: dict[int, dict[int, Any]], tokens: list[int],
                reps: int) -> tuple[dict[int, list[float]], dict[int, dict[str, Any]]]:
-    """The plain arm, `W` itself resident: each `T`'s reps and how they were timed."""
+    """The plain arm, `W` itself resident: the backend's `warmup_s` of untimed forwards, then each `T`'s reps and how they were
+    timed."""
     flat = w.view(-1)
+    spent = 0.0
+    while tokens and spent < backend.warmup_s:
+        spent += backend.timer(lambda: forward(flat, pl, xs[tokens[0]]))
     out, how = {}, {}
     for t in tokens:
         out[t], how[t] = _timed_arm(backend, lambda t=t: forward(flat, pl, xs[t]), reps)

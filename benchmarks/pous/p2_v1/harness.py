@@ -149,7 +149,7 @@ FRAMINGS = {f.impl: f for f in (V1, V3)}
 class Backend:
     """What P2's arm computes with: `bind(params, prefix)` gives the kernels of one setup's key prefix (`keys(first,
     count)`, `encode(m_rows, first)`, `decode(c_rows, first)`, `raised()`) on `[n, W/8]` big-endian rows; `responder`,
-    `timer`, `graphed`, `copy_bw`, `clock_mhz` and `facts` as the band's `Backend`."""
+    `timer`, `graphed`, `copy_bw`, `clock_mhz`, `facts` and `warmup_s` as the band's `Backend`."""
 
     device: Any
     bind: Callable[[R.Params, bytes], Any]
@@ -159,6 +159,7 @@ class Backend:
     copy_bw: Callable[[], float] | None = None
     clock_mhz: Callable[[], float] | None = None
     facts: Callable[[], dict[str, Any]] = dict
+    warmup_s: float = 0.0
 
 
 def gpu(lib_dir: str, build_dir: str) -> Backend:
@@ -203,7 +204,7 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
 
     smi_id = H.device_uuid(device.index)
     return Backend(device, lambda params, prefix: Kernels(lib_dir, build_dir, params, prefix), responder, timer,
-                   graphed, copy_bw, lambda: H._sm_clock_mhz(smi_id), facts)
+                   graphed, copy_bw, lambda: H._sm_clock_mhz(smi_id), facts, warmup_s=H.PLAIN_WARMUP_S)
 
 
 def rows(values: list[int], width: int, device: Any) -> Any:

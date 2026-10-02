@@ -477,6 +477,23 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
     assert not harness.step_floor(fake, 2, 300_000, facts)["below_certificate"]
 
 
+def test_the_plain_arm_warms_the_device_up_before_its_first_rep_and_keeps_no_warmup_rep(monkeypatch):
+    harness = _harness()
+    ran = []
+    monkeypatch.setattr(harness, "forward", lambda flat, pl, x: ran.append(x))
+
+    def timer(fn):
+        fn()
+        return 0.125
+
+    fake = harness.Backend("cpu", None, None, None, None, None, timer, warmup_s=harness.PLAIN_WARMUP_S)
+    reps, how = harness._plain_arm(fake, types.SimpleNamespace(view=lambda *_: None), [], {1: "x1", 8: "x8"}, [1, 8], 3)
+    warm = int(harness.PLAIN_WARMUP_S / 0.125)
+    assert warm > 0 and ran == ["x1"] * warm + ["x1"] * 4 + ["x8"] * 4           # then each T: one untimed call, 3 reps
+    assert reps == {1: [0.125] * 3, 8: [0.125] * 3} and not how[1]["graphed"]
+    assert harness.Backend("cpu", None, None, None, None, None, timer).warmup_s == 0           # the CPU stand-in's: none
+
+
 SMI_STUB = """\
 import os, sys
 args = sys.argv[1:]
