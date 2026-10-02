@@ -95,10 +95,11 @@ simp with that.
   hypothesis, or move a verifier check into an assumption. That list is also what the statement reviewer checks.
 - **Pin what you cite.** When a ledger row, a table or a PR description says a theorem is proved, add its name under
   `pins` and run `python tools/lean/audit.py --update PKG`. Commit the record with the proof.
-- **Watch upstream for what you assume.** A new named assumption, or a lemma you prove by hand that ArkLib, VCVio or
-  CompPoly could prove, gets an entry under `upstream.watch` in the package's `lean-audit.json`. The entry lists the
-  constants its statement is about. The audit fails when the pinned dependency proves an unacknowledged theorem about
-  them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
+- **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
+  (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
+  The entry lists the dependency's constants that the statement is about. An assumption stated over the package's own
+  definitions gets none: no upstream theorem can mention them, so the entry could never fire. The audit fails when the
+  pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
   (`soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
@@ -108,7 +109,7 @@ simp with that.
   change, your edit changed what that theorem says: undo it, or say so in the PR and update the ledger.
 - **A changed record needs a named statement reviewer.** The axiom checks and the replay pass a weakened definition
   (a vacuous theorem is still a theorem), so paste what `--update` printed into the PR, and ask someone other than the
-  author to read it. The merge handoff names that reviewer.
+  author to read it. The PR description names that reviewer.
 
 ## Before the PR
 
@@ -123,6 +124,10 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
+  because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
+  `path` require changes no revision, so a feature PR may add it. Python's protocols still import only `verity` and
+  themselves (`tests/test_protocol_boundaries.py`).
 - 2026-10-01: there are theorems and assumptions, and a theorem is **proved under its assumptions**; there is no third
   status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one than a
   fact about our own circuit that we mean to prove (`HmRowComputes`). So what a theorem assumes is explicit and hard to

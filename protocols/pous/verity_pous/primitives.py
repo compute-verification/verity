@@ -58,6 +58,33 @@ PI_DOMAIN = 0x48
 P_DOMAIN = 0x50
 EM_KEY_DOMAIN = 0x4B
 
+FEISTEL_ROUNDS = 10
+ROUND_PREFIX_BYTES = 2
+"""A round function's input before its half: the domain byte and `u8(i)`."""
+SHAKE256_RATE = 136
+"""SHAKE256's rate in bytes: one Keccak-f[1600] per 136 bytes absorbed or squeezed."""
+KECCAK_F_NS = 50
+"""The assumed floor of one sequential Keccak-f[1600], 50 ns (no ASIC): the conversion of a deadline into rounds rests
+on it, outside Lean."""
+
+
+def pi2_keccak_f(m: int) -> int:
+    """The sequential Keccak-f per call of the Feistel-SHAKE256 `Π₂` (`2m + 512` bits) in a long overwrite chain:
+    `FEISTEL_ROUNDS` times the blocks one round function absorbs, the prefix and a half of `m/8 + 32` bytes (the pad
+    takes at least one byte).  At `m = 524288` (64 KiB labels) that is 10 × 483 = 4,830.
+
+    The rounds stream: round `i + 1` absorbs `L ⊕ F_i(R)`, and its absorb block `k` needs only round `i`'s squeeze
+    block `k`, so a round boundary costs one round's absorb.  A call boundary is a round boundary: the next call's
+    right half is this call's last round output.  Counting each round's absorb and then the rest of its squeeze
+    (`⌈half / 136⌉ − 1` more) strictly in sequence gives 10 × (483 + 482) = 9,650 at 64 KiB, about twice this."""
+    half = (2 * m + CAPACITY_BITS) // 16
+    return FEISTEL_ROUNDS * ((ROUND_PREFIX_BYTES + half) // SHAKE256_RATE + 1)
+
+
+def pi2_call_ns(m: int) -> int:
+    """The adversary's fastest `Π₂` call on `m`-bit labels: `pi2_keccak_f(m)` Keccak-f of at least `KECCAK_F_NS`."""
+    return pi2_keccak_f(m) * KECCAK_F_NS
+
 
 def key_query(params: Params, tag: int, layer: int, node: int, labels: Mapping[int, int] | Sequence[int]) -> KeyQuery:
     """Node `node`'s key query: Lean `parentsOf L v = fun u => if u ∈ G.par v then some (L u) else none`."""
@@ -336,14 +363,14 @@ class Feistel10:
     def forward(self, x: int, t: bytes = b"") -> int:
         b = x.to_bytes(self.nbytes, "little")
         left, right = b[:self.nbytes // 2], b[self.nbytes // 2:]
-        for i in range(1, 11):
+        for i in range(1, FEISTEL_ROUNDS + 1):
             left, right = right, _xor(left, self.f(i, t, right))
         return int.from_bytes(left + right, "little")
 
     def inverse(self, y: int, t: bytes = b"") -> int:
         b = y.to_bytes(self.nbytes, "little")
         left, right = b[:self.nbytes // 2], b[self.nbytes // 2:]
-        for i in range(10, 0, -1):
+        for i in range(FEISTEL_ROUNDS, 0, -1):
             left, right = _xor(right, self.f(i, t, left)), left
         return int.from_bytes(left + right, "little")
 

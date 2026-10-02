@@ -115,6 +115,39 @@ def test_the_build_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay
     assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", 1)
 
 
+def test_a_leased_commit_mounts_its_queues_lease_pool_and_requests_no_gpu(dispatch, tmp_path, monkeypatch):
+    tree = _tree(tmp_path / "t")
+    monkeypatch.setattr(dispatch, "LEASE_HOSTDIRS", {"deployments-gpu": "/run/gpu-lease-circuits"})
+    job = dispatch.render(_item(tree, lease="self"), "lane/c1", 1, 0)
+    assert job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "deployments-gpu"
+    pod = job["spec"]["template"]["spec"]
+    c = pod["containers"][0]
+    assert "nvidia.com/gpu" not in c["resources"]["requests"] and pod["hostPID"] and pod["runtimeClassName"] == "nvidia"
+    vol = next(v for v in pod["volumes"] if v["name"] == "gpu-lease")
+    assert vol["hostPath"]["path"] == "/run/gpu-lease-circuits"
+    assert next(m for m in c["volumeMounts"] if m["name"] == "gpu-lease")["mountPath"] == "/run/gpu-lease"
+    env = {e["name"]: e["value"] for e in c["env"]}
+    assert env["GPU_LEASE_DIR"] == "/run/gpu-lease" and env["NVIDIA_VISIBLE_DEVICES"] == "all"
+    monkeypatch.setattr(dispatch, "LEASE_HOSTDIRS", {})
+    pod = dispatch.render(_item(tree, lease="self"), "lane/c1", 1, 0)["spec"]["template"]["spec"]
+    assert next(v for v in pod["volumes"] if v["name"] == "gpu-lease")["hostPath"]["path"] == "/run/gpu-lease"
+
+
+def test_a_one_off_invocation_takes_the_loops_settings_from_dispatch_env(dispatch, tmp_path, monkeypatch):
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    os.environ.pop("VY_LEASE_HOSTDIRS", None)
+    os.environ.pop("VY_DISPATCH_CPUS", None)
+    os.environ["VY_PROVER_CPUS"] = "128-191"
+    dispatch.ROOT.mkdir(parents=True, exist_ok=True)
+    (dispatch.ROOT / "dispatch.env").write_text("# node 1's loop\nVY_LEASE_HOSTDIRS=deployments-gpu=/run/gpu-lease-circuits\n"
+                                                "VY_DISPATCH_CPUS=96-127\nVY_PROVER_CPUS=128-175\n")
+    mod = _load(NEBIUS / "dispatch.py", "dispatch", monkeypatch)
+    assert mod.LEASE_HOSTDIRS == {"deployments-gpu": "/run/gpu-lease-circuits"}
+    assert (mod.CPUS, mod.PROVER_CPUS) == ("96-127", "128-191")
+    pod = mod.render(_item(_tree(tmp_path / "t"), lease="self"), "lane/c1", 1, 0)["spec"]["template"]["spec"]
+    assert next(v for v in pod["volumes"] if v["name"] == "gpu-lease")["hostPath"]["path"] == "/run/gpu-lease-circuits"
+
+
 def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp_path):
     item = _item(_tree(tmp_path / "t"))
     dispatch.route(item, "lane/c1", 1)

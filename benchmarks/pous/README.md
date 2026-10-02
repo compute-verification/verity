@@ -7,7 +7,9 @@ scheme's certified parameters.
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
   - Qwen2.5-0.5B: every linear weight and the tied head, 15,075 blocks of 64 KiB;
-  - Qwen2.5-7B: layer 0 and the head, 23,744 blocks.
+  - Qwen2.5-7B: layer 0 and the head, 23,744 blocks;
+  - Llama-3.1-8B: layer 0 and the untied head, 22,688 blocks (band-gpu and the reference; not in `vllm-gpu`'s frozen
+    harness).
 - `bench.py` is the harness: one command per (scheme, implementation, weight set, hardware). It writes `bench-result.json`
   (`verity-pous/bench-result/v1`), and `result.json` under `research run`.
   - Every implementation passes the same gates:
@@ -42,7 +44,10 @@ Implementations:
     bound on attacker latency, from the honest kernel with per-step launches and a host sync, so it overstates the margin; the
     gate fails when no challenge hit a dropped block);
   - the `Π₂` step floor, the fastest honest kernel (an upper bound on an attacker's), with the SM clock sampled while it
-    runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it;
+    runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the
+    certificate's `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the
+    rounds' absorbs stream behind the squeezes; `protocols/pous/PROTOCOL.md`), so `D = 5` covers `Δ + RTT < 1.449` ms
+    and the band's cliff at `d = 12` is about 3.14 ms;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).

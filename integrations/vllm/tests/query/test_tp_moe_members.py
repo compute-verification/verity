@@ -96,6 +96,7 @@ MANIFEST_SHA256 = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__gree
                    "1e0ac00b1aa797a00024a059cb741e58fa7053960d7a3115f07a95dda9fd362e"}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("row", sorted(STORED))
 def test_the_stored_tp2_moe_builds_merge_with_every_peer_bound(tmp_path, row):
     """#75 and #70: the TP row's own `build-global` over the stored rank Programs (`TpRow.manifest_global`'s arguments) is complete,

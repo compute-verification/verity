@@ -250,6 +250,31 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
 
 
+def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
+    """`Q_call` v1 beside `Q_word`: a Boolean Call's units, committed bits and the values two units compute (reported); a Call with
+    a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
+    from verity.ir.defs import PrimitiveDefinition
+    from verity.ir.types import Array, Value
+
+    fn = TG.definition(BOOL_RECOMPUTE)
+    rec, failed = _partition(fn, 2)
+    assert not failed and rec["q_call"] == QCALL_ROPE
+    add64 = PrimitiveDefinition("CircuitCheckAdd64", 1, (("a", Value(64)), ("b", Value(64))), Value(64), lambda a, b: (a + b) % (1 << 64),
+                                register=False)
+    wide = _composite("CircuitCheckWide64", ((("a", Array(2, Value(64))),), Value(64)), lambda B, S, a: B.call(add64, a[0], a[1]))
+    F = CK.Findings()
+    rec, _rule = CK.partition(wide, OPTS, F, {}, applies=True)
+    assert rec["q_call"]["inapplicable"] == {"definition": wide.id, "gate": 0, "primitive": add64.id, "width": 64, "X": 32, "why": "gate-too-wide"}
+    assert [w["name"] for w in F.warnings if w["code"] == "q-call-inapplicable"] == [f"partition/q-call-inapplicable {wide.id}: 1 gate-too-wide"]
+    assert not [f for f in F.failures if f["code"].startswith("q-call")]
+    assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
+
+
+#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a unit, and the same values computed in two units as v2 reports
+QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
+              "codes": []}
+
+
 def test_the_boolean_versions_of_the_served_calls_are_calls():
     """Sigma's image of the word Call families (`boolean_version`, the switch's `word=` table) is held as Calls."""
     calls = TG.call_families()
