@@ -4,6 +4,8 @@
 # One cohort (nebius). GPU generation and CPU checking are separate queues (Daniel, 16:05Z: batch everything):
 #   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 6 GPUs (Daniel 1 Oct 01:35Z: circuits' vLLM work first),
 #                    a fixed 4 vCPU per GPU and 640 GiB, borrowing up to 320 GiB more (a batch-8 Commit requests 170 GB and peaks at 78 GB or less; 2 Oct 02:16Z). Every pod it runs requests at most 4 vCPU per GPU (test_nebius_sky) and bursts onto idle cores.
+#                    It borrows up to 72 idle vCPU more: a leased Commit requests no GPU but up to 16 vCPU, so 24 + 8 admitted only two
+#                    while 8 GPUs sat idle (2 Oct 14:25Z).
 #   deployments-cpu  a vLLM deployment's CPU work (Builds, replay and checks): no GPU, and it can't borrow one. 640 GiB of its own (160 moved from the GPU queue, 2 Oct
 #                    02:16Z: Builds wait on memory, Commits book little), and it borrows up to 384 GiB of idle memory, which the Commits reclaim from its Builds (priority 500) but not its replays (600).
 #   provers          the provers' floor of 2 GPUs, one per proving lane, plus 1 borrowed (Daniel 1 Oct 01:35Z). It borrows idle GPUs, CPU and memory from the cohort (Daniel 19:12Z: one pool, borrowing
@@ -49,7 +51,7 @@ spec:
     - name: vy-nebius-1
       resources:
       - {name: nvidia.com/gpu, nominalQuota: "6", borrowingLimit: "2"}
-      - {name: cpu, nominalQuota: "24", borrowingLimit: "8"}
+      - {name: cpu, nominalQuota: "24", borrowingLimit: "72"}
       - {name: memory, nominalQuota: "640Gi", borrowingLimit: "320Gi"}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
