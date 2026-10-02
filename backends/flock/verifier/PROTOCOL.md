@@ -1434,7 +1434,7 @@ cross-validation test, run in CI on every change to the Lean verifier, the state
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
    - every honest session: both accept;
    - every record-level negative: both reject, except the recipes marked `accept` (both accept), `info` (both return
-     the same verdict) and the two divergence recipes D1, D2 below (the Lean verifier rejects, upstream accepts);
+     the same verdict) and the divergence recipes D1, D2 below (the Lean verifier rejects, upstream accepts);
    - every red-team forgery, materialised as a record and proofs: both reject.
 2. **Fuzzing.** Mutations of honest vectors (a byte of a proof, a coin, a round digest, a record field, the public input)
    are generated with a fixed seed per CI run and a rolling seed per nightly run. Both verifiers must return the same
@@ -1442,17 +1442,15 @@ cross-validation test, run in CI on every change to the Lean verifier, the state
 3. **Coverage.** The corpus covers every statement and layout in §16, `m` from 22 to 35 where a statement reaches it,
    both coin sources (§7), and every check id of §5.3 and every rejection listed in §8–§14 at least once.
 
-A disagreement fails CI and is resolved against the paper and this spec, never by copying upstream's behaviour into the
-Lean verifier without a spec change. After the gate passes, production runs only the Lean verifier; upstream's verifier
-stays in CI as a regression oracle.
+A disagreement fails CI and is resolved against the paper and this spec, never by copying upstream's behaviour without a
+spec change. After the gate passes, production runs only the Lean verifier; upstream's stays in CI as a regression oracle.
 
-"Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
-(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in five
-places, and the corpus marks the vectors that exercise them with the upstream verdict they expect
-(`upstream_accepted` in an expectation):
+"Upstream's verifier" means `Server::from_record` then `Server::finish` with the statement's `StatementVerifier` (and,
+for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in these
+places, and the corpus marks the vectors that exercise them with upstream's expected verdict (`upstream_accepted` in an
+expectation):
 
-- **D1:** `root_F = Σ` (S6). Upstream's server checks it only for statements without link points; the statement replay tools
-  check it.
+- **D1:** `root_F = Σ` (S6). Upstream's server skips it for statements with link points; the replay tools check it.
 - **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
   outside the rep prefixes.
 - **D3:** `link.sigma = Σ` (S4). Upstream's `from_record` ignored the field before PR #83 `b3baabd8`; Σ was bound there
@@ -1462,15 +1460,15 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
   whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root (set 16).
+- **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
 
-At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
-in `redigest.py` and `fuzz.py`).
+D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` field names them per set (`--upstream-checks` in
+`redigest.py` and `fuzz.py`).
 
-Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
-unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
-proof-of-work sites are accepted as messages, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream
-panics (`m` without a schedule, `|s_hat_v| ≠ 128`), its statement verifier catches the panic as a rejection and the spec
-rejects explicitly.
+Elsewhere the spec follows upstream, even where upstream is lenient without soundness cost: record keys for unconfigured
+tables, `matrix_evals` and bytes after the proof pair are ignored, nonces at proof-of-work sites are accepted as
+messages, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream panics (`m` without a schedule,
+`|s_hat_v| ≠ 128`), its statement verifier catches the panic as a rejection; the spec rejects explicitly.
 
 ### 17.2 Assumptions (for Table 1 and the soundness lane)
 
