@@ -1,0 +1,60 @@
+# Node 1's job store to the remote: `research data pending` (MODE=pending) or `research data push --pending` (MODE=push) on
+# RESEARCH_STORE, from a pod, because the pods' Secret `research-r2` holds the only R2 credentials on node 1: neither host user has
+# a store remote (circuits, 2 Oct 07:57Z). Once a run's files are on the remote, the hourly `vy-store-evict` can drop their local
+# copies. The pod runs as uid 1000, ubuntu, the job store's owner, with `research` from the item's tree (`tree`, a commit's
+# /workspace/research/src/<sha>). Its report is /workspace/jobs/store-push/<MODE>-<UTC stamp>.json. A ready file:
+#   {"template": "store-push", "tree": "/workspace/research/src/<sha>", "env": {"MODE": "pending"}}
+name: store-push
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 4            # uploads are network-bound; --jobs is per artifact
+  memory: 16
+  labels:
+    budget-line: nebius-config-run
+
+envs:
+  OMP_NUM_THREADS: "4"
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store
+  PYTHONDONTWRITEBYTECODE: "1"   # it only reads the tree, which uid 1000 can't write: no job tree of its own
+  MODE: pending
+  PUSH_JOBS: "8"
+  OUT: /workspace/jobs/store-push
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH
+  export PYTHONPATH=$SRC/tools/research/src
+  mkdir -p "$OUT"
+  out=$OUT/$MODE-$(date -u +%Y%m%dT%H%M%SZ).json
+  research() { nice -n 10 ionice -c 3 /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research "$@"; }
+  echo "store-push: $MODE on $RESEARCH_STORE with research from $SRC; report $out"
+  case "$MODE" in
+    pending) rc=0; research data pending --json > "$out" || rc=$?; [ "$rc" -le 1 ] ;;   # exit 1: something is pending
+    push) research data push --pending --jobs "$PUSH_JOBS" --json > "$out" ;;
+    *) echo "store-push: MODE is pending or push, not $MODE" >&2; exit 2 ;;
+  esac
+  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print({k: len(v) if isinstance(v, list) else v for k, v in r.items()} if isinstance(r, dict) else len(r))' "$out"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-cpu
+          kueue.x-k8s.io/priority-class: backfill
+      spec:
+        terminationGracePeriodSeconds: 300
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
