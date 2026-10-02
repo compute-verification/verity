@@ -43,6 +43,7 @@ from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_group as RG
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
@@ -89,7 +90,7 @@ class SingleRow(Row):
             if stage_on(self.stages, "commit"):
                 self.commit()
             if stage_on(self.stages, "replay"):
-                RC.replay(self)
+                RG.replay(self) if self.ck_.group else RC.replay(self)
                 self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
@@ -733,7 +734,8 @@ class SingleRow(Row):
             self.tl("validate.manifest_verify", "end", ("rc", 1))
             self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
 
-    def commit(self) -> None:
+    def commit_prepare(self) -> tuple[int, list[str]]:
+        """The Commit stage up to its command line -> (its timeout, its command)."""
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)
@@ -769,6 +771,14 @@ class SingleRow(Row):
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
         cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
+        return to, cmd
+
+    def commit(self) -> None:
+        d, ck = self.d, self.ck_
+        if ck.group:
+            self.replay_pending = RG.commit(self, CAP)
+            return
+        to, cmd = self.commit_prepare()
         t0 = int(time.time())
         if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
