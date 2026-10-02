@@ -28,6 +28,8 @@ import FlockSoundness.Discharge.Exec.FramesRep
 import FlockSoundness.Discharge.Exec.Rounds
 import FlockSoundness.Discharge.Exec.Verdict
 import FlockSoundness.Discharge.Exec.Shape
+import FlockSoundness.Discharge.Exec.Pts
+import FlockSoundness.Discharge.Exec.LiveOn
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -79,5 +81,10 @@ import FlockSoundness.Discharge.Exec.Shape
   (`table_verdict_hm96`, `accepts_verdict_hm96`);
 * `Shape`: where a rep's coins fall among its messages is the game's: every run of a rep follows a static spine read
   off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the
-  same messages and coins are runs on the same tape (`repC_tape`).
+  same messages and coins are runs on the same tape (`repC_tape`);
+* `Pts`: a `setupH` statement's link points, `mPtsOf` of the circuit's `g` and the units it proves (`setupH_facts`),
+  for a drawn session the draw's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two draws
+  that prove as many units (`setupH_mPts_eq`);
+* `LiveOn`: `Live`'s R11 and headline with the decoder right at the law's draws only (`DecodesOn`, `execRefines_on`,
+  `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`).
 -/
