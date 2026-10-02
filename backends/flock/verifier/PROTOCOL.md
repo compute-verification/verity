@@ -347,9 +347,6 @@ the same as `verity_sampled_proofs.one_stage`'s, in `protocols/sampled_proofs/RE
 **The work law** is the draw law's second version (Daniel approved work-proportional sizing on Sep 28,
 `note:20260929T0340Z-handoff-from-pous-rulings-2`). It keeps the stratified law's strata and sampler; only the sizes
 differ. The stratified law is unchanged.
-- **Work.** Each template's PoUW work per unit comes from the verifier's own work table (`--work-table F`: a JSON
-  object from template descriptor id to a natural number, in any fixed unit). Units that do no PoUW work, such as
-  dequantization, the quantizer and attention, have work 0. A template the table does not name refuses the law
 - **Work and floors.** Each template's PoUW work per unit, and its floor, come from the verifier's own work table
   (`--work-table F`: a JSON object from template descriptor id to the work, a natural number in any fixed unit, or to
   `{"work": w, "floor": f}` with `f ≥ 1`; the floor is one when the table gives only the work). Units that do no PoUW
@@ -412,7 +409,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
-public header with it and records it; until then no recorded session carries one.
+public header with it and records it.
 
 ### 7.4 The keyed coin tree (`coin-tree/hm96-sha512/v2`, `docs/coin-tree-v2.md`)
 
@@ -1447,7 +1444,7 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
 - **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
   outside the rep prefixes.
 - **D3:** `link.sigma = Σ` (S4). Upstream's `from_record` ignored the field before PR #83 `b3baabd8`; Σ was bound there
-  through `Hello` (S2) and `root_F` (S6). Found by fuzzing (seed 20260926). Closed upstream at `b3baabd8`.
+  through `Hello` (S2) and `root_F` (S6). Closed upstream at `b3baabd8`.
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignored the retained bytes before its
   server retained them. Closed upstream at `631567f7`, where `from_record` requires `msg` on every round of a statement
   whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
@@ -1536,7 +1533,6 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
     - for `hm96-sha512/v1`, `Hm96.leafPair` gives the outer inputs, or the salt digest's (`leafPair_collides`), or the rows'
       when their row hashes are one.
   - The propositions `merkle_binding_collision` and `MerkleScheme.collision_hash` are corollaries.
-  - A test evaluates the extractor on a toy scheme with 1-byte digests, whose accepted checks do collide.
   - The executable only ever hashes digest-width children: `merkleCheck` refuses a sibling or cap entry of another width,
     and the running digests are hash outputs.
   - Nodes and leaves are not tag-separated in the unsalted schemes, and binding doesn't need it. Both openings climb from
@@ -1582,8 +1578,6 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
     rows, and `KONST` is 2^48 − 1.
   - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
-- Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
-  `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
 ## 18. Test vectors
 
@@ -1592,29 +1586,24 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
 
 - **Honest sessions: 50 sets, 100 sessions,** each with `expect: accept`, taken from the verifier runs of cells that
   verify-flock-pure replayed and labelled `verified=accepted`, and red-team-flock(-2, -3) labelled `NON_ZK_PROOF`:
-  - pure-block: `Chunk(3)` (H100, A100), `Fp8` (4090, H100), `ShaBf16`, `ShaFp8`, `Fp4`, `ShaFp4` (5090), `Chunk(n)` at
-    real K (spine sets, L40S), 23 cells; point coordinates `m_pts` 26–28;
+  - pure-block: `Chunk(3)`, `Fp8`, `ShaBf16`, `ShaFp8`, `Fp4`, `ShaFp4`, `Chunk(n)` at real K, 23 cells; `m_pts` 26–28;
   - IR frame v2 and v3: elementwise (#101 and served), attention per-T (T = 4 … 257) and the three attention class cells,
     23 cells; `m_pts` 19–25;
   - IR sampling (2 cells, legacy L-SAMPLE) and vllm-block (1 cell, same verifier path, outside this spec's statements);
   - the PR #83 circuit statement: 2 loopback sessions of the SiLU 128-row run (`art:6250c04f`, `m_pts` 31, `os` coins).
-  Each set names its record artifact, the verifier run and commit, the public input files, the recorded `Hello` and
-  statement digest. Ten sets (the earliest pure-block cells) are pre-G2 records (§5.1).
-- **Record-level negatives: 20 recipes.** Twelve ran on two cells in verify-flock-pure's replay run `r20260925-222222-a2cf`
-  (`art:487b77de`), with outcomes: 9 rejected, 1 accepted as required, 2 informational. The required acceptance is
-  `unused_high_bits_of_query_coin`: flipping bit 127 of a query coin must not change the verdict (§13.5). The two
-  informational cases are explained in §19 (A1, A2): both are accepted on honest proofs, correctly. Eight new recipes cover
-  S6 (D1), S11 (D2), S13, S15, a proof byte flip and a relabelled profile.
+  Ten sets (the earliest pure-block cells) are pre-G2 records (§5.1).
+- **Record-level negatives: 20 recipes** (recorded outcomes in the manifest). One must be accepted:
+  `unused_high_bits_of_query_coin` (flipping bit 127 of a query coin must not change the verdict, §13.5). Two are
+  informational, explained in §19 (A1, A2): both are accepted on honest proofs, correctly. Eight cover S6 (D1), S11 (D2),
+  S13, S15, a proof byte flip and a relabelled profile.
 - **Forgeries: 12 red-team runs,** including R-BREAK (`art:8d04b53f`: two honest reps over different witnesses, accepted by
   upstream's Fiat–Shamir r2 verifier; this spec rejects it at S13/S16/S18). The runs stored their harnesses and verdict
-  tables, not the forged records and proofs. Phase 2 materialises them with a `--dump` of each selftest case (the plan is in
-  the manifest) before the Lean verifier's gate.
+  tables, not the forged records and proofs (the manifest's `dump_plan`).
 - **Spec self-check:** `transcript_check.py` rebuilds every round of a session from this spec alone (§6, §8, §9–§13,
-  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. On the first vector of all 50
-  honest sets, both reps, `m` 25 to 34, every recorded round matches (`art:430c513a`). It checks the transcript and the
-  layout, not the verifier's equations.
+  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record (the manifest's
+  `spec_transcript_check`). It checks the transcript and the layout, not the verifier's equations.
 - **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
-  bytes. Phase 2 generates both.
+  bytes.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
