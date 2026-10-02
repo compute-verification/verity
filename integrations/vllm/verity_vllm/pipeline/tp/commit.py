@@ -32,6 +32,7 @@ from pathlib import Path
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.pipeline.tp import config_run as TPC
+from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 
 TP_ROOT_TAG = b"verity/tp-run-root/v1"
@@ -601,13 +602,7 @@ def main(args: Options) -> int:
               + (f"; tp partials {m.get('tp_partial_source')}" if (m.get("tp_partial_source") or {}).get("relabel_rank") is not None else ""), flush=True)
         if rm and rm.get("program_digest_matches") is False:
             raise SystemExit(f"fail-closed: rank {m['rank']}: manifest Program digest != this rank's Program digest")
-    # warm-up instrumented
-    llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
-    r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
-    fin = llm.collective_rpc("tp2_commit_finalize", timeout=args.rpc_timeout)
-    (out / "finalize_warmup.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
-    print(f"[tp2commit] warm-up instrumented: {r['wall_s']:.3f}s; ranks {[(f['rank'], f['leaves'], f['errors_n'], f['errors'][:2]) for f in fin]}", flush=True)
-    llm.collective_rpc("tp2_commit_reset", timeout=args.rpc_timeout)
+    WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling), out, args.committer, args.rpc_timeout)
 
     rows: list[dict] = []
     tokens_ref = None
@@ -693,7 +688,7 @@ def main(args: Options) -> int:
                         cblock = {"run_root": f["run_root"], "steps": f["steps"], "leaves": f["leaves"], "bytes_bound": f["bytes_bound"], "tensors": f["tensors"],
                                   "root_ready_delay_s": f["root_ready_delay_s"], "finalize_s": f["finalize_s"], "spans_total_s": f["spans_total_s"],
                                   "extra": {"expected_tensors": f["expected_tensors"], "committed_tensors": f["committed_tensors"], "errors_n": f["errors_n"], "errors": f["errors"],
-                                            "identity_check": f.get("identity_check"), "expected_manifest": f.get("expected_manifest")},
+                                            "identity_check": f.get("identity_check"), "expected_manifest": f.get("expected_manifest"), "bounded_staging": f.get("bounded_staging")},
                                   "openings": {k2: op_r.get(k2) for k2 in ("n", "verified", "generate_s", "verify_s", "bytes_mean", "error")},
                                   "classes": f["classes"], "weight_registration": f["weight_registration"],
                                   "persistent_bytes": f["persistent_bytes"], "temporary_bytes_peak": f["temporary_bytes_peak"]}
