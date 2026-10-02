@@ -14,6 +14,7 @@ ping served from pinned host memory by the same responder thread).
 """
 from __future__ import annotations
 
+import bisect
 import gc
 import os
 import socket
@@ -37,7 +38,7 @@ def quantiles(xs: list[float]) -> dict[str, float]:
     s = sorted(xs)
     if not s:
         return {}
-    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]  # noqa: E731
+    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]
     return {"n": len(s), "min": s[0], "p50": at(0.5), "p99": at(0.99), "p99.9": at(0.999), "max": s[-1]}
 
 
@@ -154,6 +155,37 @@ def tail(audits: list[tuple[audit.Answer, ...]], windows_us: tuple[int, ...] = W
             "answers": sum(len(a) for a in audits), "late_over": late, "audits_passing": passing, "slowest": slowest}
 
 
+#: `histogram`'s bins: 40 per decade from 1 µs to 100 ms, bin i is [EDGES_US[i], EDGES_US[i + 1])
+BINS_PER_DECADE = 40
+EDGES_US = tuple(10 ** (k / BINS_PER_DECADE) for k in range(5 * BINS_PER_DECADE + 1))
+#: `run` records the epoch time of every answer slower than this (µs)
+SLOW_US = 150
+
+
+def histogram(values_us: list[float], edges_us: tuple[float, ...] = EDGES_US) -> dict[str, Any]:
+    """Integer counts of `values_us` in the log bins `edges_us`, with the values below the first edge and at or past the last."""
+    counts = [0] * (len(edges_us) - 1)
+    under = over = 0
+    for x in values_us:
+        i = bisect.bisect_right(edges_us, x) - 1
+        if i < 0:
+            under += 1
+        elif i >= len(counts):
+            over += 1
+        else:
+            counts[i] += 1
+    return {"counts": counts, "under": under, "over": over}
+
+
+def histograms(answers: list[audit.Answer]) -> dict[str, Any]:
+    """`histogram` of every answer's elapsed time on the verifier's clock and the responder's server and device times."""
+    report = lambda a, key: (a.report or {}).get(key, 0) * 1e6
+    return {"unit": "us", "bins_per_decade": BINS_PER_DECADE, "edges_us": list(EDGES_US),
+            "elapsed": histogram([a.elapsed_ns / 1e3 for a in answers]),
+            "server": histogram([report(a, "server_s") for a in answers]),
+            "device": histogram([report(a, "device_s") for a in answers])}
+
+
 def sched_of(pid: int | str = "self", only_cpu: int | None = None) -> dict[str, dict[str, int]]:
     """Linux scheduler counters of a process's threads (all, or those whose affinity is the single core `only_cpu`): run-queue
     wait and run time (`schedstat`, ns) and involuntary switches; empty where /proc has none."""
@@ -194,8 +226,9 @@ def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audit
         responder_cpu: int | None = None) -> dict[str, Any]:
     """Calibrate the round trip, fix the allowance (`allowance_ns` when given, a deployment's fixed allowance; else
     `allowance`: a quantile of the calibration, `p99.9` or `max`), run `audits` `protocol.Verifier` audits (the first is the
-    audit of record), recalibrate.  Every audit's verdict under the calibration's allowances is recorded too, and the tail at
-    fixed windows (`tail`).  A scheme without a certificate at these parameters audits at `k` (default `audit.CHALLENGES`) as
+    audit of record), recalibrate.  Every audit's verdict under the calibration's allowances is recorded too, the tail at
+    fixed windows (`tail`), the log histograms of every answer's times (`histograms`) and the epoch time at which each answer
+    slower than `SLOW_US` arrived.  A scheme without a certificate at these parameters audits at `k` (default `audit.CHALLENGES`) as
     research.  The scheduler's counters of this thread and of the server's responder thread (`server_pid`'s thread pinned to
     `responder_cpu`) over the audits say how long either waited for its core.
 
@@ -218,23 +251,35 @@ def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audit
         results = []
         me = str(threading.get_native_id())
         responder = (lambda: sched_of(server_pid, responder_cpu)) if server_pid and responder_cpu is not None else dict
-        s0, r0, t0 = sched_of(), responder(), time.time()
+        stamps: list[int] = []
+
+        def respond(i: int) -> tuple[bytes, dict[str, Any]]:
+            out = r.block(i)
+            stamps.append(time.perf_counter_ns())
+            return out
+
+        s0, r0 = sched_of(), responder()
+        t0, pc0 = time.time(), time.perf_counter_ns()
         for _ in range(audits):
             v = protocol.Verifier(scheme, vk, protocol.challenge_key(os.urandom(32), vk), k=k, rtt_allowance_ns=allowance_ns,
                                   research=research)
-            results.append((v, v.run(r.block)))
+            results.append((v, v.run(respond)))
         t1, s1, r1 = time.time(), sched_of(), responder()
         rtt_after = calibrate(r, pings)
     finally:
         r.close()
         gc.enable()
     answers = [a for _, res in results for a in res.answers]
+    slow = [{"epoch_s": t0 + (stamp - pc0) / 1e9, "elapsed_us": a.elapsed_ns / 1e3, "audit": n, "j": a.j}
+            for (n, a), stamp in zip(((n, a) for n, (_, res) in enumerate(results) for a in res.answers), stamps)
+            if a.elapsed_ns > SLOW_US * 1000]
     first_v, first = results[0]
     under = {q: sum(all(a.correct and a.elapsed_ns <= audit.DEADLINE_NS + int(rtt[q] * 1e9) for a in res.answers) for _, res in results)
              for q in ("p50", "p99.9", "max")}
     return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "rtt_allowance_ns": allowance_ns,
             "allowance": "fixed" if fixed else allowance,
             "tail": tail([res.answers for _, res in results]), "audits_window_epoch_s": [t0, t1],
+            "histograms": histograms(answers), "slow_answers": {"over_us": SLOW_US, "answers": slow},
             "sched": {"verifier": sched_delta({me: s0[me]} if me in s0 else {}, s1), "responder": sched_delta(r0, r1)},
             "limit_ns": first_v.limit_ns, "k": first_v.k, "scheme": scheme.name, "research_mode": research, "gaps": list(first_v.gaps),
             "profile": first_v.profile().to_json() if first.accepted else None,

@@ -11,7 +11,6 @@ import pytest
 from verity_pous import audit, band, dense, protocol
 from verity_pous.params import Params
 from verity_pous.verifier import VerifierKey
-
 from verity_vllm.pipeline import pous_verifier as pv
 
 SMALL = {"p3/v1": Params(n=8, wc=64, k=3, segments=2), "dense-chain/v1": dense.DenseParams(8, 64 * 8, segments=2),
@@ -71,7 +70,7 @@ def test_honest_passes_and_dropped_fails(name):
 
 
 def test_a_fixed_allowance_replaces_the_quantile_and_the_tail_covers_every_answer():
-    scheme, w, salt, segments, vk = _small("band-chain/d12/v1")
+    scheme, _, _, segments, vk = _small("band-chain/d12/v1")
     honest = _run([b for seg in segments for b in seg], scheme, vk, allowance_ns=51_000)
     assert honest["rtt_allowance_ns"] == 51_000 and honest["allowance"] == "fixed" and honest["limit_ns"] == 551_000
     assert honest["rtt"]["n"] == 20 and honest["rtt_after"]["n"] == 20
@@ -79,6 +78,43 @@ def test_a_fixed_allowance_replaces_the_quantile_and_the_tail_covers_every_answe
     assert t["audits"] == 2 and t["answers"] == 32 and t["windows_us"] == list(pv.WINDOWS_US)
     assert len(t["slowest"]) == 32 and t["slowest"][0]["server_us"] == pytest.approx(2.0) and t["slowest"][0]["device_us"] == pytest.approx(1.0)
     assert set(honest["sched"]) == {"verifier", "responder"}
+    h = honest["histograms"]
+    assert len(h["edges_us"]) == 201 and h["edges_us"][0] == 1.0 and h["edges_us"][-1] == pytest.approx(1e5)
+    for key in ("elapsed", "server", "device"):
+        assert len(h[key]["counts"]) == 200 and sum(h[key]["counts"]) + h[key]["under"] + h[key]["over"] == 32
+    assert h["server"]["counts"][pv.bisect.bisect_right(h["edges_us"], 2.0) - 1] == 32
+    slow = honest["slow_answers"]
+    assert slow["over_us"] == pv.SLOW_US
+    w0, w1 = honest["audits_window_epoch_s"]
+    assert all(s["elapsed_us"] > pv.SLOW_US and w0 <= s["epoch_s"] <= w1 + 1e-3 for s in slow["answers"])
+
+
+def test_histogram_bins_are_log_spaced_with_explicit_edges_and_overflow():
+    assert pv.EDGES_US[40] == 10.0 and pv.EDGES_US[80] == 100.0 and pv.EDGES_US[120] == 1000.0
+    h = pv.histogram([0.5, 1.0, 1.05, 57.0, 57.0, 99_999.0, 100_000.0, 1e6])
+    assert h["under"] == 1 and h["over"] == 2 and sum(h["counts"]) == 5
+    assert h["counts"][0] == 2                                  # [1, 10^(1/40)) holds 1.0 and 1.05
+    assert h["counts"][70] == 2                                 # 57 µs: 10^(70/40) ≤ 57 < 10^(71/40)
+    assert h["counts"][199] == 1
+    assert pv.histogram([10.0])["counts"][40] == 1              # an edge belongs to the bin it opens
+
+
+def test_slow_answers_carry_their_audit_and_epoch_time(monkeypatch):
+    scheme, _, _, segments, vk = _small("band-chain/d12/v1")
+    clock = iter(range(0, 10**12, 200_000))                     # every answer takes 200 µs on this verifier's clock
+    real = audit.TimedVerifier.__init__
+
+    def slow_clock(self, *args, **kw):
+        real(self, *args, **kw)
+        self.clock = lambda: next(clock)
+
+    monkeypatch.setattr(audit.TimedVerifier, "__init__", slow_clock)
+    honest = _run([b for seg in segments for b in seg], scheme, vk, allowance_ns=51_000)
+    slow = honest["slow_answers"]["answers"]
+    assert [(s["audit"], s["j"]) for s in slow] == [(n, j) for n in range(2) for j in range(16)]
+    assert all(s["elapsed_us"] == 200.0 for s in slow)
+    assert [s["epoch_s"] for s in slow] == sorted(s["epoch_s"] for s in slow)
+    assert honest["histograms"]["elapsed"]["counts"][pv.bisect.bisect_right(pv.EDGES_US, 200.0) - 1] == 32
 
 
 def _answers(elapsed_us: list[float], wrong: tuple[int, ...] = ()) -> tuple[audit.Answer, ...]:
