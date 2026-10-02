@@ -23,7 +23,8 @@ lock is not in the line: it takes that slot whenever it frees.
 started, its command) or `free`, and the window that blocks it, if any; then one line per live waiter. A check that came through
 here also names its run (RESEARCH_RUN_ID), the tree it checks (its working directory, which `research run` names by commit) and who
 asked (`--by NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in `check-NAME.who` beside the lock, shown only
-while its pid holds the lock, so a hand-run `flock` is never shown as the check that came before it.
+while its pid holds the lock, so a hand-run `flock` is never shown as the check that came before it. A waiting check prints
+the same lines, the waiters before it only, each time its reason to wait changes, so its log says whom it waits behind.
 """
 from __future__ import annotations
 
@@ -133,7 +134,8 @@ def _read(p: Path) -> dict:
         return {}
 
 
-def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[str]:
+def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), before: str | None = None) -> list[str]:
+    """`--status`'s lines; with `before` (a ticket's name), only the waiters that came before it."""
     out = []
     for slot in slots:
         pid, held = holder(lock_dir / f"check-{slot['name']}.lock", proc), "free"
@@ -150,6 +152,8 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
         out.append(f"{slot['name']}  cores {slot['cpus']}  {held}" + (f"; blocked: {why}" if why else ""))
     line = lock_dir / LINE
     for p in sorted(line.iterdir()) if line.is_dir() else []:
+        if before is not None and p.name >= before:
+            break
         if p.name.startswith("."):
             continue
         try:
@@ -233,6 +237,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now()) or 'busy'}" for s in slots) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
+            for ln in status(slots, SLOTS.parent, now(), before=ticket.name):
+                print(f"slot:   {ln}", file=sys.stderr, flush=True)
             told = why
         sleep(POLL_S)
     ticket.unlink()
