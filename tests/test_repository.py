@@ -56,9 +56,9 @@ BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, twenty vLLM workload
-#: specs (the grid's B16/B32 4096-token and B64 1024-token rows) and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them
-#: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
-#: (`research data fetch-fixtures`).
+#: specs (the grid's B16/B32 4096-token and B64 1024-token rows) and two vLLM logs. Each is capped at its size rounded up to
+#: 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
+#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
