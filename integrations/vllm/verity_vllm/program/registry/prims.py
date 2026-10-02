@@ -63,7 +63,8 @@ def _silu_f32_bits(g_f32_bits: int) -> int:
     return bits_of(np.float32(g / (1.0 + math.exp(-g))))
 
 
-@primitive("SiluMulBf16", 1, [("g", BF16), ("u", BF16)], BF16, conformance="exact-model-tested")
+@primitive("SiluMulBf16", 1, [("g", BF16), ("u", BF16)], BF16, conformance="exact-model-tested",
+           tables=(("silu_bf16", "registered"),))
 def SiluMulBf16(g: int, u: int) -> int:
     """vLLM CUDA `act_and_mul_kernel<silu>` (eager): bf16(f32(bf16(silu_f32(g))) * u); W4b's model, exact on
     every captured element in numerics.md; `silu_f32` is the float64-exact stand-in for expf+div."""
