@@ -527,6 +527,24 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3"))]
 
 
+def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_the_scale_an_input():
+    """The same step on the RTX PRO 6000 host (cc 12.0, FA2's per-iteration Check_inf): attention is `Attention_v11`, the frontend's
+    choice there (`targets.attention_spec(..., scale_input=True)`), with the scale its last `Supplied` operand; the norms as above."""
+    import dataclasses
+
+    from verity_vllm.observe.fold.resolver import Supplied
+    from verity_vllm.program.registry import b1
+
+    events, start = decode_step(num_sms=188)
+    se = step_events(events)
+    base = _context_on_host(start, se.sample, 188, (12, 0))
+    specs = by_spec(resolve_step(se, dataclasses.replace(base, profile=dataclasses.replace(base.profile, registered_values=True))))
+    (a,) = [r for k, v in specs.items() if k.startswith("Attention_v11{T=33,NH=9,KVH=3,D=64,") for r in v]
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert "RMSNormTriton_v3{N=576}" in specs and "RMSNormFusedCuda_v4{N=576}" in specs
+    assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3", "Attention_v5"))]
+
+
 def test_rope_group_q_and_k():
     events, start = decode_step()
     se = step_events(events)

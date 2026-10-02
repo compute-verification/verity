@@ -59,3 +59,31 @@ def test_supplied_parameters_without_their_input_nodes_are_refused(memory, tmp_p
     json.dump(pj, open(p, "w"))
     with pytest.raises(ValueError, match="not the parameters' Input nodes"):
         C.load_oracle(reg_dir, "reg")
+
+
+def _build_dir(tmp_path, name, registered):
+    d = tmp_path / name
+    d.mkdir()
+    sup = {"supplied": {"registration": {"param": 1, "name": "values", "fields": []}, "run": []}} if registered else {}
+    (d / "result.json").write_text(json.dumps({"program": {"digest": "d", **sup}, "spec_histogram": {}}))
+    return str(d)
+
+
+def test_the_match_folds_under_registered_values_when_the_builds_programs_register_them(tmp_path):
+    """The Match's folds bind the value-input Definitions exactly when the Build's Programs register their values (`result.json`
+    `program.supplied`), so a `registered_values` row compares like with like; Programs that disagree are refused by name."""
+    from verity_vllm.observe.fold.supplied import program_registered_values
+    from verity_vllm.pipeline import cli
+    from verity_vllm.pipeline.match import Plan
+    reg, const = _build_dir(tmp_path, "reg", True), _build_dir(tmp_path, "const", False)
+    assert program_registered_values([reg]) and not program_registered_values([const]) and not program_registered_values([])
+    with pytest.raises(SystemExit, match="some Programs register"):
+        program_registered_values([reg, const])
+    wl = tmp_path / "workload.json"
+    wl.write_text(json.dumps({"requests": [{"request_id": "r-0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}]}))
+    base = ["--case", "LLAMA32_1B", "--profile", "generic", "--workload", str(wl), "--out", str(tmp_path / "match")]
+    for dirs, want in (([reg], True), ([const], False)):
+        plan = Plan(cli.parse("match", [*base, *(a for d in dirs for a in ("--program-dir", d))], {}))
+        assert all(("--registered-values" in plan.cmd(s)) == want for s in ("fold", "fold_2"))
+    a = cli.parse("match", ["--worker", "fold", "--log", "l", "--profile", "generic", "--out", "o", "--registered-values"], {})
+    assert a.registered_values is True
