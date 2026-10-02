@@ -240,6 +240,25 @@ def test_the_tor_presets_leave_zerocopy_out_and_end_with_the_runs_note():
                                     else a["description"])
 
 
+def test_the_tor_presets_give_s_at_d0_from_the_file_before_its_exclusions():
+    soak, raw = _soak(), _soak()
+    for r in raw["survival"]:                                        # the raw file's 144 KiB answers all at 5 ms
+        if raw["cells"][r["cell"]]["block_bytes"] == 147_456 and r["timestamping"]:
+            r["s"] = [1.0 if t <= 5000 else 0.0 for t in raw["t_us"]]
+            r["max_us"] = 5000.0
+    built = E.build(generated_at="x", commit="test", soak=(soak, "art:soak"), soak_raw=(raw, "art:raw"))
+    plain = E.build(generated_at="x", commit="test", soak=(soak, "art:soak"))
+    for a, b in zip(plain["honest_models"], built["honest_models"]):
+        assert a["curves"] == b["curves"]
+        if a["id"] not in E.SOAK_PRESETS:
+            assert a == b
+            continue
+        here = [E.survival_at(c["t_us"], c["survival_fraction"], E.tau_us(0, E.call_ns(c["block_bytes"]), 1)) for c in a["curves"]]
+        tail = b["description"][len(a["description"]):]
+        assert tail.startswith("  S at d = 0 (64, 144, 384 KiB) is " + ", ".join(f"{x:.3g}" for x in here) + " here")
+        assert "with the runs this file leaves out (art:raw) it would be" in tail and tail.split("would be ")[1].split(", ")[1] == "1"
+
+
 def test_measured_from_pooled_histograms():
     edges = [10 ** (k / 40) for k in range(201)]
 

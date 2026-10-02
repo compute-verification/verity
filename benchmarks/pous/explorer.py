@@ -22,13 +22,14 @@ here, from the file alone:
 5. bound = ε_proof(D) + sampling.
 
     uv run python benchmarks/pous/explorer.py --out pous-explorer.json [--histograms verify-honest.json ...]
-        [--soak pous-soak-v1.json=art:… [--soak-note TEXT]]
+        [--soak pous-soak-v1.json=art:… [--soak-note TEXT] [--soak-raw pous-soak-full.json=art:…]]
 
 `--histograms` pools the series' `verify-honest.json` histograms into the `measured` preset (two runs or more); without it
 `measured` is run 1's quantiles and window counts (`RUN1`).  `--soak` builds the off-host presets from a `pous-soak/v1`
 file's ToR-equivalent curves (`soak_presets`): `rack` from `tor_400_tuned`, `rack-100g` from `tor_100_default`, and
 `datacenter` as `tor_100_default` plus its fabric round trip; each block from its own cells, not shifted, each audit rate
-weighted equally.  `--soak-note` ends each of their descriptions with what the file's run was.
+weighted equally.  `--soak-note` ends each of their descriptions with what the file's run was, and `--soak-raw` (the soak
+file before the runs it leaves out) with the S at d = 0 those runs would give.
 """
 from __future__ import annotations
 
@@ -473,19 +474,26 @@ SOAK_PRESETS = {
 }
 
 
-def soak_presets(soak: dict[str, Any], source: str, note: str | None = None) -> list[dict[str, Any]]:
+def soak_presets(soak: dict[str, Any], source: str, note: str | None = None,
+                 raw: tuple[dict[str, Any], str] | None = None) -> list[dict[str, Any]]:
     """The ToR presets (`SOAK_PRESETS`): per block, `soak_pooled` of the metric; `datacenter` adds the fabric round trip
     (`FABRIC_RTT`, `FABRIC_INCAST`) on `FINE`.  Each description states every modeled parameter, and S at d = 0, 64 KiB
-    under both weightings, then `note`."""
+    under both weightings, then `note`; with `raw` (the file before its exclusions, and its source), S at d = 0 per block
+    from both files."""
     metrics = {m["id"]: m for m in soak["metrics"]}
     tau0 = tau_us(0, call_ns(65_536), 1)
 
-    def pooled(mid: str, metric: str, b: int, by_answers: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
-        s, info = soak_pooled(soak, metric, b, by_answers)
+    def pooled(mid: str, metric: str, b: int, by_answers: bool = False,
+               doc: dict[str, Any] = soak) -> tuple[dict[str, Any], dict[str, Any]]:
+        s, info = soak_pooled(doc, metric, b, by_answers)
         if mid == "datacenter":
             s = np.array(curve(sum_s(soak_fine(s), rtt_s(*FABRIC_RTT, *FABRIC_INCAST)), 65_536))
         return {"block_bytes": b, "t_us": [round(t, 9) for t in T_US],
                 "survival_fraction": [float(f"{max(x, S_FLOOR):.6g}") for x in s]}, info
+
+    def d0(cs: list[dict[str, Any]]) -> str:
+        return ", ".join(f"{survival_at(c['t_us'], c['survival_fraction'], tau_us(0, call_ns(c['block_bytes']), 1)):.3g}"
+                         for c in cs)
 
     out = []
     for mid, (metric, label) in SOAK_PRESETS.items():
@@ -510,6 +518,10 @@ def soak_presets(soak: dict[str, Any], source: str, note: str | None = None) -> 
                      f"{FABRIC_INCAST[2]:g}) incast delay.")
         if note:
             desc += f"  {note}"
+        if raw:
+            full = [pooled(mid, metric, b, doc=raw[0])[0] for b in BLOCK_BYTES]
+            desc += (f"  S at d = 0 (64, 144, 384 KiB) is {d0(list(curves))} here; with the runs this file leaves out "
+                     f"({raw[1]}) it would be {d0(full)}.")
         out.append({"id": mid, "label": label, "kind": "empirical" if mid != "datacenter" else "assumed",
                     "description": desc, "sources": [source], "curves": list(curves)})
     return out
@@ -568,9 +580,10 @@ def source_commit() -> str:
 
 def build(histograms: list[dict[str, Any]] | None = None, generated_at: str | None = None,
           commit: str | None = None, soak: tuple[dict[str, Any], str] | None = None,
-          soak_note: str | None = None) -> dict[str, Any]:
+          soak_note: str | None = None, soak_raw: tuple[dict[str, Any], str] | None = None) -> dict[str, Any]:
     """The `pous-explorer/v1` document; `soak` (a `pous-soak/v1` document and its source) replaces the off-host presets
-    with `soak_presets`, their descriptions ending with `soak_note`."""
+    with `soak_presets`, their descriptions ending with `soak_note` and, with `soak_raw`, the S at d = 0 the soak file's
+    excluded runs would give."""
     if histograms and len(histograms) >= 2:
         measured, answers = measured_histograms(histograms)
         measured_sources = [d.get("source", "series verify-honest.json") for d in histograms]
@@ -588,7 +601,7 @@ def build(histograms: list[dict[str, Any]] | None = None, generated_at: str | No
                        "curves": [{"block_bytes": b, "t_us": [round(t, 9) for t in T_US], "survival_fraction": curve(s, b)}
                                   for b in BLOCK_BYTES]})
     if soak:
-        tor = {m["id"]: m for m in soak_presets(*soak, soak_note)}
+        tor = {m["id"]: m for m in soak_presets(*soak, soak_note, soak_raw)}
         models = [x for m in models for x in ([tor["rack"], tor["rack-100g"]] if m["id"] == "rack" else [tor.get(m["id"], m)])]
     doc = {"schema": SCHEMA,
            "generated_at_utc": generated_at or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -612,6 +625,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="series verify-honest.json files to pool into `measured`, each with its source (an art id)")
     ap.add_argument("--soak", metavar="PATH=SOURCE", help="a pous-soak/v1 file (and its art id) for the ToR presets")
     ap.add_argument("--soak-note", help="a sentence ending each ToR preset's description: what the soak file's run was")
+    ap.add_argument("--soak-raw", metavar="PATH=SOURCE", help="the soak file before its exclusions (and its art id): each ToR "
+                    "preset's description gives S at d = 0 from both")
     a = ap.parse_args(argv)
     docs = []
     for arg in a.histograms:
@@ -623,7 +638,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.soak:
         path, _, source = a.soak.partition("=")
         soak = (json.loads(Path(path).read_text()), source or path)
-    doc = build(docs, soak=soak, soak_note=a.soak_note)
+    raw = None
+    if a.soak_raw:
+        path, _, source = a.soak_raw.partition("=")
+        raw = (json.loads(Path(path).read_text()), source or path)
+    doc = build(docs, soak=soak, soak_note=a.soak_note, soak_raw=raw)
     text = json.dumps(doc, separators=(",", ":"), ensure_ascii=False)
     Path(a.out).write_text(text + "\n")
     print(f"{a.out}: {len(text):,} bytes, {len(doc['vectors'])} vectors", file=sys.stderr)
