@@ -34,6 +34,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
@@ -210,6 +211,15 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
 
 #: the environment variable that caps the float64 dense chain's threads (`dense_rows.use_threads`; the words do not depend on it)
 DENSE_THREADS_ENV = "VERITY_DENSE_THREADS"
+
+
+def set_environment(environ: Mapping[str, str], keep: tuple[str, ...] = ()) -> None:
+    """Make the process environment ``environ``, but for the ``keep`` keys the process has, which keep their values: each row of a grouped
+    Commit (`commit_group`) runs in its own row's environment, on the devices the lease of its first row set."""
+    held = {k: os.environ[k] for k in keep if k in os.environ}
+    os.environ.clear()
+    os.environ.update(environ)
+    os.environ.update(held)
 
 
 def process_settings(environ: MutableMapping[str, str]) -> None:
