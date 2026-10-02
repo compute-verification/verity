@@ -4124,6 +4124,7 @@
    "assumptions": [],
    "type_hash": "523c4862d6d7ba66aa05815f189fec5ea9efdfb6fa30c86d10ae6ab28ace3622"
   },
+  "FlockSoundness.Discharge.Layout.scopeOk_ports": {},
   "FlockSoundness.Discharge.Layout.scopeOk_spec": {
    "signature": [
     "FlockSoundness.Discharge.Layout.scopeOk_spec {c : Flock.Circuit} (hU : FlockSoundness.Built c.unit)",
