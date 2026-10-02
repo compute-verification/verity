@@ -1228,6 +1228,34 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_node_2_again(tmp_path):
+    """cov-cg04-norm-taps-2 went from node 1 to node 2 seven times (22:30-23:06Z, 1 Oct): node 2 handed it back after two stops,
+    and node 1's offload moved it again 120 s later. A Commit handed back (task 1) goes into node 1's reclaimed.txt, which offload
+    skips, before node 1's dispatcher takes it; a replay (task 2) doesn't, and a proof goes to neither. `dispatch_n1` runs as the
+    script defines it, with ssh faked."""
+    fn = re.search(r"^dispatch_n1\(\) \{.*?^\}\n", (NEBIUS / "n2_commit.sh").read_text(), re.M | re.S).group(0)
+    bin_, log = tmp_path / "bin", tmp_path / "ssh.log"
+    bin_.mkdir()
+    (bin_ / "ssh").write_text(f'#!/bin/sh\n[ "$1" = -n ] && shift\nshift\necho "$*" >> {log}\n')
+    (bin_ / "ssh").chmod(0o755)
+
+    def hand_back(task: int, proof: str = "") -> list[str]:
+        log.write_text("")
+        subprocess.run(["bash", "-c", f"set -euo pipefail\n{fn}\nITEM_ARGS=(--env ROW=r)\ndispatch_n1 {task}"], check=True,
+                       capture_output=True, env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "N1": "vy-n1", "GUEST": "/g",
+                                                 "DISPATCH": "/d.py", "KUBE_DISPATCH": "KUBECONFIG=k", "TREE": "/t", "PROOF": proof,
+                                                 "COMMIT_KEY": "vllm-epoch-run/cov-cg04-norm-taps-2"})
+        return log.read_text().splitlines()
+
+    mark, submit = hand_back(1)
+    assert mark == "echo vllm-epoch-run/cov-cg04-norm-taps-2 >> /g/reclaimed.txt"
+    assert "/d.py submit config-run vllm-epoch-run/cov-cg04-norm-taps-2 --tree /t --task 1" in submit
+    [replay] = hand_back(2)
+    assert "--task 2" in replay
+    assert hand_back(1, proof="1") == []
+
+
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
