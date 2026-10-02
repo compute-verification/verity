@@ -37,20 +37,30 @@ SAMPLER = re.compile(r"^(GumbelTopPTokenSelect|GumbelTokenSelect|TokenSelect|Top
 
 def graph_calls(g: dict, modules: str | None = None) -> dict[str, int]:
     """A program graph's Call count per Call Definition (descriptor id); a varying group (attention over key counts) expanded to
-    one id per value. ``modules``: a module-path prefix to keep."""
+    one id per value. A group varying over several statics (FA2's ``MASKED_FROM`` and ``T``) keys ``varying_calls`` by their
+    values joined with commas, in the order of ``varying``. ``modules``: a module-path prefix to keep."""
     calls: dict[str, int] = collections.Counter()
     for x in g["groups"]:
         if modules and not x["module"].startswith(modules):
             continue
         if x.get("varying"):
-            (axis, (lo, hi)), = x["varying"].items()
-            per = x.get("varying_calls") or {str(v): 1 for v in range(int(lo), int(hi) + 1)}
+            axes = list(x["varying"])
+            if x.get("varying_calls"):
+                per = x["varying_calls"]
+            else:
+                (_, (lo, hi)), = x["varying"].items()
+                per = {str(v): 1 for v in range(int(lo), int(hi) + 1)}
             base = (x.get("definition_ids") or [None])[0]
             if base is None:
                 continue
             scale = x["calls"] // max(1, sum(int(c) for c in per.values()))
             for v, n in per.items():
-                calls[re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(v)}", base)] += int(n) * scale
+                vals = v.split(",")
+                assert len(vals) == len(axes), (axes, v)
+                fid = base
+                for axis, val in zip(axes, vals):
+                    fid = re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(val)}", fid)
+                calls[fid] += int(n) * scale
         elif x.get("spec"):
             calls[x["spec"]] += x["calls"]
     return dict(calls)

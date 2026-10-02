@@ -21,6 +21,13 @@ def test_graph_calls_expands_a_varying_group():
     assert CW.graph_calls(g, "m.layers.0.mlp") == {"SiluMul_v1{I=512}": 4}
 
 
+def test_graph_calls_expands_a_group_varying_over_two_statics():
+    att = "Attention_v5{{T={t},NH=32,KVH=8,D=128,BN=64,MASKED_FROM={m}}}"
+    g = _graph([{"module": "m.layers.0.attn", "spec": None, "calls": 3, "varying": {"MASKED_FROM": [0, 1], "T": [1, 65]},
+                 "varying_calls": {"0,1": 1, "0,64": 1, "1,65": 1}, "definition_ids": [att.format(t=1, m=0)]}])
+    assert CW.graph_calls(g) == {att.format(t=1, m=0): 1, att.format(t=64, m=0): 1, att.format(t=65, m=1): 1}
+
+
 def test_grid_keeps_every_tail_the_largest_and_a_geometric_step():
     ts = list(range(1, 1001))
     got = CW.grid(ts, 64, 24)
