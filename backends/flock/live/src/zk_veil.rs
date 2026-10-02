@@ -1127,11 +1127,9 @@ mod tests {
     fn layout_is_a_bijection_on_the_exposed_values() {
         let lay = Layout::new(25, 22, 1, 6);
         let mut seen = vec![false; lay.len()];
-        for i in lay.absorbed() {
+        for i in lay.absorbed().into_iter().chain([lay.fc()]) {
             assert!(!std::mem::replace(&mut seen[i], true));
         }
-        assert!(!seen[lay.fc()], "final_c is absorbed by the inner proof, not masked in the algebraic phase");
-        seen[lay.fc()] = true;
         assert!(seen[..lay.exposed()].iter().all(|x| *x));
         assert_eq!(lay.len(), lay.exposed() + 4);
     }

@@ -1554,7 +1554,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
         add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
         add("masked (proof): inner tau (<c, mu>, mu uniform) and its commitment's salt", 16 + inner.tau_salt.len());
-        add("masked (proof): final_c' (never absorbed; its pad h_fc)", 16);
+        add("masked (proof): final_c' (its pad h_fc; absorbed by the inner proof)", 16);
         let nonces_zero = pr.pcs_open.batching_nonces.iter().all(|x| *x == 0);
         add(if nonces_zero { "public (proof): the opening's batching nonces (live coins: always 0)" } else { "CLEAR (proof): nonzero batching nonces" },
             8 * pr.pcs_open.batching_nonces.len());
