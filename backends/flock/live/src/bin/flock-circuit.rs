@@ -857,7 +857,7 @@ struct ZkRep {
     lay: Layout,
     pads: zkv::Pads,
     ic: zkv::InnerCommit,
-    points: Arc<Mutex<Vec<Vec<F128>>>>,
+    points: Arc<Mutex<zkv::MaskRank>>,
     /// a dishonest prover: absorb and send values masked with pads other than the committed ones
     pad_mismatch: bool,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
@@ -869,7 +869,7 @@ struct ZkRep {
 /// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
 #[allow(clippy::too_many_arguments)]
 fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
-              points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
+              points: &Arc<Mutex<zkv::MaskRank>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
     let tz0 = Instant::now();
     let lay = zk_layout(st);
     let mut pads = zkv::Pads::draw(prng, &lay, rep);
@@ -888,7 +888,7 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
 /// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 draw's seconds, and each rep's
 /// pads with their tree's salt id.
 fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
-              points: &Arc<Mutex<Vec<Vec<F128>>>>) -> (f64, [(ZkRep, u64); 2]) {
+              points: &Arc<Mutex<zkv::MaskRank>>) -> (f64, [(ZkRep, u64); 2]) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
     let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
@@ -951,11 +951,11 @@ fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C
     let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
     mch.at_open = Some(Box::new(move |coins: &[F128]| {
         let tr = Instant::now();
-        let mut all = pts.lock().unwrap_or_else(PoisonError::into_inner);
-        all.extend(claim_word_points(&st2, &lay, coins)?);
-        let (rank, ok) = zkv::mask_rank_ok(&all, &words);
-        eprintln!("ZKRANK\t{}", json!({"points": all.len(), "mask_words": words.len(), "rank": rank, "need": 128 * all.len(), "s": tr.elapsed().as_secs_f64()}));
-        if ok { Ok(()) } else { Err(format!("degenerate coins: the mask slot's weights have rank {rank} < {} over {} claim points", 128 * all.len(), all.len())) }
+        let mut mr = pts.lock().unwrap_or_else(PoisonError::into_inner);
+        let (rank, ok, rows) = mr.add(claim_word_points(&st2, &lay, coins)?, &words);
+        let n = mr.points.len();
+        eprintln!("ZKRANK\t{}", json!({"points": n, "mask_words": words.len(), "rows": rows, "rank": rank, "need": 128 * n, "s": tr.elapsed().as_secs_f64()}));
+        if ok { Ok(()) } else { Err(format!("degenerate coins: the mask slot's weights have rank {rank} < {} over {n} claim points", 128 * n)) }
     }));
     (mch, sent)
 }
@@ -2453,7 +2453,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
     // the rank check's claim points: per table (each has its own mask slot)
-    let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
+    let points_t: Vec<Arc<Mutex<zkv::MaskRank>>> = tabs.list.iter().map(|_| Arc::default()).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
     // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
