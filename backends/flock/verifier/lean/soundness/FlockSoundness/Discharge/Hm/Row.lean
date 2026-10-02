@@ -179,15 +179,15 @@ output bit `t < 1024` of the hm96 slot is bit `t` of `commitString (rowPrefix wo
 theorem row_commit {words n : ℕ} (hn : 0 < n) (hw : 2 * words = 128 * n) {data : List UInt8}
     (hd : data.length = 128 * n) (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < n, sub k < 3)
     (hrows : ∀ k < n, stHolds (zs k) (compression3.run St.empty).2)
-    (hcv0 : ∀ q < 512, zs 0 (1536 * sub 0 + q) = wordsBit (HmRow.midstate words) q)
-    (hchain : ∀ k, k + 1 < n → ∀ q < 512,
+    (hcv0 : ∀ q : ℕ, q < 512 → zs 0 (1536 * sub 0 + q) = wordsBit (HmRow.midstate words) q)
+    (hchain : ∀ k, k + 1 < n → ∀ q : ℕ, q < 512 →
       zs (k + 1) (1536 * sub (k + 1) + q) = bit (zs k) ((compression3.run St.empty).1.2.getD (sub k) []) q)
     (hmsg : ∀ k < n, ∀ o < 128, ∀ t < 8,
       zs k (1536 * sub k + 512 + wordBit (8 * o + t)) = bitL data (8 * (128 * k + o) + t))
     (zh : Var → Bool) (hh : stHolds zh ((hm96Row Hm96.Default512.key).run St.empty).2)
-    (hcvh : ∀ q < 512, zh q = bit (zs (n - 1)) ((compression3.run St.empty).1.2.getD (sub (n - 1)) []) q)
-    (hpadh : ∀ q < 1024, zh (512 + q) = wordsBit (HmRow.padWords words) q)
-    {s : List UInt8} (hs : s.length = 192) (hy : ∀ q < 1536, zh (1536 + q) = bitL s q) :
+    (hcvh : ∀ q : ℕ, q < 512 → zh q = bit (zs (n - 1)) ((compression3.run St.empty).1.2.getD (sub (n - 1)) []) q)
+    (hpadh : ∀ q : ℕ, q < 1024 → zh (512 + q) = wordsBit (HmRow.padWords words) q)
+    {s : List UInt8} (hs : s.length = 192) (hy : ∀ q : ℕ, q < 1536 → zh (1536 + q) = bitL s q) :
     ∀ t < 1024, bit zh ((hm96Row Hm96.Default512.key).run St.empty).1.2.2.2 t =
       bitL (Binding.commitString ((HmRow.rowPrefix words).data.toList ++ data) s) t := by
   set P := padData (rowMsg words data) with hP
