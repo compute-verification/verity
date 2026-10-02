@@ -18,6 +18,9 @@ slots file, CMD runs as it is. Stdlib only: it runs before uv.
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
 lock is not in the line: it takes that slot whenever it frees.
+
+`python3 tools/check/slot.py --status`: one line per slot, with who holds its lock (the pid in /proc/locks, when that process
+started, its command) or `free`, and the window that blocks it, if any.
 """
 from __future__ import annotations
 
@@ -81,6 +84,49 @@ def take(slots: list[dict], lock_dir: Path, now: datetime) -> tuple[dict, int] |
     return None
 
 
+def holder(lock: Path, proc: Path = Path("/proc")) -> int | None:
+    """The pid whose flock holds `lock`, from /proc/locks (a waiter's line has `->` before FLOCK), or None while it's free."""
+    try:
+        st = lock.stat()
+    except FileNotFoundError:
+        return None
+    want = (os.major(st.st_dev), os.minor(st.st_dev), st.st_ino)
+    for line in (proc / "locks").read_text().splitlines():
+        f = line.split()
+        if len(f) > 5 and f[1] == "FLOCK" and f[5].count(":") == 2:
+            maj, mn, ino = f[5].split(":")
+            if (int(maj, 16), int(mn, 16), int(ino)) == want:
+                return int(f[4])
+    return None
+
+
+def started(pid: int, proc: Path = Path("/proc")) -> datetime | None:
+    """When `pid` started: its stat's starttime (clock ticks after boot) plus the boot time."""
+    try:
+        ticks = int((proc / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()[19])
+        btime = next(int(ln.split()[1]) for ln in (proc / "stat").read_text().splitlines() if ln.startswith("btime "))
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+    return datetime.fromtimestamp(btime + ticks / os.sysconf("SC_CLK_TCK"), timezone.utc)
+
+
+def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[str]:
+    out = []
+    for slot in slots:
+        pid, held = holder(lock_dir / f"check-{slot['name']}.lock", proc), "free"
+        if pid is not None:
+            t = started(pid, proc)
+            try:
+                cmd = (proc / str(pid) / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+            except OSError:
+                cmd = "(gone)"
+            since = f" since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)" if t else ""
+            held = f"held by pid {pid}{since}: {cmd[:200]}"
+        why = blocked(slot, now)
+        out.append(f"{slot['name']}  cores {slot['cpus']}  {held}" + (f"; blocked: {why}" if why else ""))
+    return out
+
+
 def join(lock_dir: Path) -> tuple[Path, int]:
     """This waiter's ticket in the line and the descriptor holding its lock; named by arrival, and locked before it is visible."""
     d = lock_dir / LINE
@@ -115,6 +161,12 @@ def ahead(ticket: Path) -> int:
 
 
 def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
+    if argv[:1] == ["--status"]:
+        if not SLOTS.exists():
+            print(f"no check slots on this machine ({SLOTS})")
+            return 0
+        print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
+        return 0
     cmd = argv[argv.index("--") + 1:] if "--" in argv else argv
     if not cmd:
         sys.exit("usage: slot.py -- CMD...")
