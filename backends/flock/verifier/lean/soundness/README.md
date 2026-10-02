@@ -163,6 +163,7 @@ link term per audit.
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
+| Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; the Goldreich–Kahan simulator and the link to the code remain |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
@@ -385,9 +386,29 @@ term below 2^-170.
   step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
   (`placement_of_setupH`). What a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).
 
-## 3. Zero knowledge (planned; not yet proved)
+## 3. Zero knowledge (Lemmas A, B and C proved for the model; the simulator not yet)
 
 The masked protocol and the reference prover are in DESIGN.md §6, and the session model in DESIGN.md §11.
+
+**In Lean** (`FlockSoundness/ZK/`, pinned, the standard axioms only), for the model of one masked table `ZK/Table.lean`
+(the reference prover `Table.view`, the simulator `Table.sim`) and sessions of `J` of them:
+
+- **Lemma B**, special honest-verifier zero knowledge at a fixed coin vector where the prover refuses nothing:
+  `table_shvzk`; with real hm96 leaves, within `2·N_hid·δ₁` under `Hm96Hiding`, `table_shvzk_hm96`; per session,
+  `session_shvzk_hm96`.
+- **Lemma A**, the pre-final view on two witnesses carrying the public region data (the dummy is one) has one
+  distribution: `table_prefinal_indep` where the prover refuses nothing, and at every coin vector on what is sent before
+  it refuses (a failing rank check, dependent `ρ^r`, `β = 0`), in the code's order, `session_prefinal_indep_cut`
+  (`ZK/Cut.lean`, `ZK/Refusal.lean`).
+- **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
+  prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
+  `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).
+- M2's coin openings bind under SHA-512 collision resistance (T6, `coin_opening_binding_keyed`), and T7's numeric step
+  (`gk_ratio_le_third`).
+
+**Not in Lean:** the Goldreich–Kahan simulator and its bound (the hybrids, the estimation, the rewinds with fresh dummy
+openings, T6's extraction as an algorithm); the link from `flock-circuit --zk` to the model (the Lean reference prover and
+its differential test, DESIGN.md §6); ChaCha20 as uniform randomness.
 
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
@@ -458,7 +479,7 @@ The weights are committed once and every later proof opens that root. The analys
    `HmRowComputes` (phase 2i) and the layout's facts.
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
-3. **Stages 1e and 3, zero knowledge and the reference prover** (§3), after M1's masking spec: first the special
-   honest-verifier ZK lemma, then Goldreich–Kahan simulation of one batched session.
+3. **Stages 1e and 3, zero knowledge and the reference prover** (§3): Lemmas A, B and C are proved for the model;
+   Goldreich–Kahan simulation of one batched session and the Lean reference prover tied to `flock-circuit --zk` remain.
 4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".

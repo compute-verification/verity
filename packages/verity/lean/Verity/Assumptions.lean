@@ -1,4 +1,4 @@
-import Verity.TC.Spec
+import Verity.Protocol.TC.Spec
 
 /-!
 # Named assumptions

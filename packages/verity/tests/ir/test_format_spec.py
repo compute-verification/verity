@@ -18,7 +18,7 @@ from verity.ir import codec, cut, partition_object as PO
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ir.layout import resolve
 from verity.ir.parts import n_members
-from verity.ir.program import INPUT_ID, Program, is_input
+from verity.ir.program import INPUT_ID, Program, input_id, is_input
 from verity.ir.refs import Affine, Coll, Concat, array_of, refs_from_json, strided_view, tuple_of
 from verity.ir.types import Array, Record, Tuple, Value, type_from_json
 
@@ -240,6 +240,9 @@ TAKES = [[["Array", 2, ["Array", 4, ["Value", 32]]], {"affine": ["n", 0, 0, 8]},
          [["Array", 2, ["Array", 2, ["Value", 32]]], {"strided": ["n", 4, 0, 2, 1, 2, 4]}, 1, 0]]
 INPUT_IDS = ["Input16_v1", "Input1_v1", "Input128_v1", "Input016_v1", "Input0_v1", "Input16_v2", "Input16", "input16_v1",
              "Input16_v1 ", "XInput16_v1", "Input-16_v1", "Input1a_v1"]
+#: run and registered input ids, and near misses
+BINDING_IDS = ["Input16_v1", "RegisteredInput16_v1", "RegisteredInput1_v1", "RegisteredInput016_v1", "RegisteredInput0_v1",
+               "RegisteredInput16_v2", "RegisteredInput16", "registeredInput16_v1", "Registered16_v1", "RegisteredInput16_v1 "]
 LOWERINGS = [["Array", 2, ["Array", 3, ["Value", 16]]], ["Record", [["h", ["Array", 2, ["Value", 16]]], ["b", ["Value", 32]]]],
              ["Array", 2, ["Tuple", [["Value", 16], ["Value", 32]]]], ["Array", 0, ["Value", 16]]]
 #: (label, root scope as (node, member) steps, reference)
@@ -332,12 +335,23 @@ REJECT = [
     ("a binding unlike the key's record", lambda d: _set_binding(d, "N", 5), "keyed by its id and binding record"),
     ("a composite id that is not Name_vN", lambda d: d["definitions"]["TPair_v1"].update(id="TPair_v01"), "Name_vN"),
     ("a root with a parameter", lambda d: _root(d)["params"].append(["x", ["Value", 32]]), "without parameters"),
+    ("an Input node inside a Definition", lambda d: _inner_input(d, "Input32_v1"), "appears only in the root's body"),
+    ("a RegisteredInput node inside a Definition", lambda d: _inner_input(d, "RegisteredInput32_v1"), "appears only in the root's body"),
 ]
 
 
 def _rename(desc: dict, old: str, new: str) -> None:
     desc["definitions"][new] = dict(desc["definitions"].pop(old), id=new)
     desc["callees"][desc["callees"].index(old)] = new
+
+
+def _inner_input(desc: dict, fid: str) -> None:
+    """TPair's second node, `s + a`, becomes an input node: TPair returns (a + b, an input no parameter binds)."""
+    if fid not in desc["callees"]:
+        desc["callees"].append(fid)
+        desc["definitions"][fid] = {"form": "primitive", "id": fid, "params": [], "ret": ["Value", 32]}
+    desc["definitions"]["TPair_v1"]["body"]["nodes"][1] = {"args": [], "fn": desc["callees"].index(fid), "form": "primitive",
+                                                           "out": desc["types"].index(["Value", 32])}
 
 
 def _graph(g: cut.CallGraph) -> dict:
@@ -390,6 +404,9 @@ def build() -> dict:
     wg = W.circuit
     k = next(k for k, n in enumerate(W.root.body.nodes) if not is_input(n.fn))
     lo = W.root.body.offsets[k]
+    registered = Program(PROG, registered=("r",))
+    rdesc = codec.encode_program(registered)
+    R = codec.decode_program(json.loads(_canon(rdesc)), REG)
     rejects = []
     for label, edit, _ in REJECT:
         d = json.loads(_canon(desc))
@@ -420,6 +437,11 @@ def build() -> dict:
         "input_lowering": [[t, [[n.fn.id, n.form, list(n.axes), n.n] for n in Program(_identity(t)).root.body.nodes]] for t in LOWERINGS],
         "program": {"root": D.root.id, "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(D.root.body.nodes) if is_input(n.fn)],
                     "input_gates": program.input_gates, "calls": [[k, fn.id] for k, fn in PO.calls(D)]},
+        "binding_ids": [[i, list(input_id(i)) if input_id(i) else None] for i in BINDING_IDS],
+        "registered_program": {"registered": ["r"], "descriptor": _canon(rdesc), "program_digest_sha256": codec.program_digest(rdesc),
+                               "program_sha512": PO.program_sha512(rdesc),
+                               "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(R.root.body.nodes) if is_input(n.fn)],
+                               "calls": [[k, fn.id] for k, fn in PO.calls(R)]},
         "layout": _layout(D),
         "forward_reference": _forward(desc),
         "wiring": sorted(cut.WIRING),
@@ -579,6 +601,19 @@ def test_input_nodes_are_recognised_by_id(live, decoded):
     assert live["input_ids"] == VECTORS["input_ids"] and live["program"] == VECTORS["program"]
     assert [i for i, ok in VECTORS["input_ids"] if ok] == ["Input16_v1", "Input1_v1", "Input128_v1"]
     assert [k for k, n in enumerate(decoded.root.body.nodes) if is_input(n.fn)] == [k for k, _, _ in VECTORS["program"]["input_nodes"]]
+
+
+def test_registered_inputs_are_recognised_by_id_and_bound_into_the_digest(live, decoded):
+    assert live["binding_ids"] == VECTORS["binding_ids"] and live["registered_program"] == VECTORS["registered_program"]
+    assert [i for i, b in VECTORS["binding_ids"] if b] == ["Input16_v1", "RegisteredInput16_v1", "RegisteredInput1_v1"]
+    reg = VECTORS["registered_program"]
+    R = codec.decode_program(json.loads(reg["descriptor"]), REG)
+    assert reg["calls"] == VECTORS["program"]["calls"] and R.circuit.size == decoded.circuit.size
+    assert [[k, n] for k, _, n in reg["input_nodes"]] == [[k, n] for k, _, n in VECTORS["program"]["input_nodes"]]
+    assert [fid for _, fid, _ in reg["input_nodes"]] == ["Input32_v1", "RegisteredInput16_v1", "RegisteredInput32_v1"]
+    assert reg["program_digest_sha256"] != VECTORS["program_digest_sha256"] and codec.program_digest(json.loads(reg["descriptor"])) == reg["program_digest_sha256"]
+    assert [R.circuit.gate(g).prim.id for g in range(R.circuit.size) if not is_input(R.circuit.gate(g).prim)] == [
+        decoded.circuit.gate(g).prim.id for g in range(decoded.circuit.size) if not is_input(decoded.circuit.gate(g).prim)]
 
 
 def test_input_lowering(live):

@@ -8,6 +8,13 @@
 # that passed leaves a stamp keyed by the job tree, the arguments and the venv's installed packages. A later job with the same key
 # skips the bootstrap without taking the lock. The key is re-read inside the lock, since another job may have just finished it. A
 # different tree, role or mode, or any change to the venv's packages, means a new key and a real bootstrap.
+#
+# A leased job's pod has no GPU of its own (GPU_LEASE set, dispatch.py's `lease: self`): a real GPU-mode bootstrap takes one from the
+# lease, and takes it before the host-wide lock, never while holding it. A bootstrap that held the lock while it waited for a GPU
+# stopped every other bootstrap on the host, CPU ones included, for as long as its pool had none to give: on vy-nebius-1 the circuits
+# pool's holders queue in deployments-gpu behind the very GPU-stage pods whose bootstraps waited (Oct 1 22:13-23:02Z). Taken in this
+# order, a holder of the lock waits for nothing but its own bootstrap; the cost is a leased GPU idle while its bootstrap waits for the
+# lock, which the log says.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tree=$(cd "$here/../../../../../../.." && pwd)
@@ -24,9 +31,15 @@ if [ -e "$stamps/$k" ]; then
   echo BOOTSTRAP-OK
   exit 0
 fi
+if [ -n "${GPU_LEASE:-}" ] && [ -z "${VY_BOOTSTRAP_LEASED:-}" ] && [[ " $* " != *" --cpu "* ]]; then
+  VY_BOOTSTRAP_LEASED=1 exec "$GPU_LEASE" 1 --wait --max-min 60 --mem-gb 0 -- bash "$here/vllm_bootstrap.sh" "$@"
+fi
 cd "$tree/integrations/vllm"
 exec 9>> "$work/.vllm-bootstrap.lock"
-flock 9
+if ! flock -n 9; then
+  [ -z "${VY_BOOTSTRAP_LEASED:-}" ] || echo "[bootstrap] holding leased GPU ${CUDA_VISIBLE_DEVICES:-?}; waiting for the host-wide lock"
+  flock 9
+fi
 k=$(key "$@")
 if [ -e "$stamps/$k" ]; then
   echo "[bootstrap] cached while waiting (stamp $k); skipped"
