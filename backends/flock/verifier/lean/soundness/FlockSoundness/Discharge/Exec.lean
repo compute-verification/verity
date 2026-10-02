@@ -12,6 +12,12 @@ import FlockSoundness.Discharge.Exec.SessionBatchAccL
 import FlockSoundness.Discharge.Exec.FlockBatchedL
 import FlockSoundness.Discharge.Exec.FlockBatchedAccL
 import FlockSoundness.Discharge.Exec.StrictCRL
+import FlockSoundness.Discharge.Exec.FlockLinkL
+import FlockSoundness.Discharge.Exec.FlockLinkedL
+import FlockSoundness.Discharge.Exec.FlockPublicL
+import FlockSoundness.Discharge.Exec.E2EL
+import FlockSoundness.Discharge.Exec.BindingE2EL
+import FlockSoundness.Discharge.Exec.HeadlineL
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -33,6 +39,14 @@ import FlockSoundness.Discharge.Exec.StrictCRL
   `analysisBEL`), its knowledge term discharged (`flock_batched_knowledgeSoundEL`);
 * `StrictCRL`: the salted finders under `SHA512CRStrict`: the compiled theorem (`table_sound_compiled_strictL`) and the
   knowledge term, at most `StrictCR.ksAvgStrict`, the unsalted closed form (`ksAvgBE_le_strictL`);
+* `FlockLinkL`, `FlockLinkedL`, `FlockPublicL`: the link theorem over the salted session
+  (`flock_batched_linkSoundEL`), and with it the count curve and drawn-unit bound at the public transcript
+  (`flock_batched_count_publicL`, `flock_batched_drawn_publicL`); the binding (`ValueBinding`), the value layer's
+  bound (`linkBoundE`) and the public wires' facts are the unsalted ones;
+* `E2EL`, `BindingE2EL`: the end-to-end theorems over the salted session (`flock_e2e_countL`, `Prog.flock_e2e_countL`,
+  `flock_e2e_count_hm96L`, `flock_e2e_drawn_hm96L`);
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
-  `flock_headline_exec_L`).
+  `flock_headline_exec_L`);
+* `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
+  at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for R11.
 -/
