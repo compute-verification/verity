@@ -13,6 +13,7 @@ from verity.ir.program import Program
 from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import value_inputs as VI
 
 
 def _bf16(rng, n: int, scale: float = 1.0) -> list[int]:
@@ -35,7 +36,7 @@ def _const_id(bits: int) -> str:
 def test_rmsnorm_triton_eps_input(eps):
     rng = np.random.default_rng(1)
     N, eps_bits = 64, P.bits_of(np.float32(eps))
-    old, new = bind(b1.RMSNormTriton, N=N, EPS=eps), bind(b1.RMSNormTritonV3, N=N)
+    old, new = bind(b1.RMSNormTriton, N=N, EPS=eps), bind(VI.RMSNormTritonV3, N=N)
     assert new.id == "RMSNormTriton_v3{N=64}"
     for _ in range(3):
         x, w = _bf16(rng, N), _bf16(rng, N)
@@ -48,7 +49,7 @@ def test_rmsnorm_triton_eps_input(eps):
 def test_rmsnorm_fused_cuda_eps_input(eps):
     rng = np.random.default_rng(2)
     N, eps_bits = 64, P.bits_of(np.float32(eps))
-    old, new = bind(b1.RMSNormFusedCuda, N=N, EPS=eps), bind(b1.RMSNormFusedCudaV4, N=N)
+    old, new = bind(b1.RMSNormFusedCuda, N=N, EPS=eps), bind(VI.RMSNormFusedCudaV4, N=N)
     assert new.id == "RMSNormFusedCuda_v4{N=64}"
     for _ in range(3):
         x, res, w = _bf16(rng, N), _bf16(rng, N), _bf16(rng, N)
@@ -63,7 +64,7 @@ def test_attention_scale_input():
     T, NH, KVH, D, BN = 20, 2, 1, 16, 16
     scale = b1._scale_log2_bits(D)
     old = bind(b1.AttentionV3, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
-    new = bind(b1.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
+    new = bind(VI.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
     for _ in range(2):
         q, kc, vc = _bf16(rng, NH * D, 0.5), _bf16(rng, T * KVH * D, 0.5), _bf16(rng, T * KVH * D)
         assert _flat(evaluate(new, q, kc, vc, scale)) == _flat(evaluate(old, q, kc, vc))

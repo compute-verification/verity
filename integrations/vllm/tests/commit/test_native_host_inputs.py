@@ -1,14 +1,12 @@
 """The committer names the Program inputs its classes cover by binding and leaf width (`verity.ir.program.input_prim`), never by literal id."""
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from verity.ir.program import REGISTRATION, RUN
-from verity_vllm.commit.committer.native_host import NativeHostCommitter
+from verity_vllm.commit.committer.input_classes import weights_inputs
 
 
 def _inputs(names, binding=RUN):
-    return NativeHostCommitter._weights_inputs(SimpleNamespace(weights_tree={"names": names}, weights_binding=binding))
+    return weights_inputs({"names": names}, binding)
 
 
 def test_weights_cover_one_input_per_registered_leaf_width():

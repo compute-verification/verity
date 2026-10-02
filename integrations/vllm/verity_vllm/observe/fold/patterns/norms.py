@@ -10,6 +10,7 @@ import numpy as np
 from verity.ir.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import value_inputs as VI
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
@@ -68,7 +69,7 @@ class RMSNormTritonLaunch:
         roots = ctx.roots_of(w)
         spec, operands = bind(b1.RMSNormTriton, N=n_cols, EPS=self.eps if self.eps is not None else eps), (PerRow(x), Shared(w))
         if getattr(ctx.profile, "registered_values", False):
-            spec, operands = bind(b1.RMSNormTritonV3, N=n_cols), operands + (eps_input(self.eps if self.eps is not None else eps),)
+            spec, operands = bind(VI.RMSNormTritonV3, N=n_cols), operands + (eps_input(self.eps if self.eps is not None else eps),)
         return Compute(spec, M, operands, (PerRow(out),), (node.id,), hint=hint_of(node, roots[0].name if roots else "rms_norm"),
                        kernels=(self.kernel,), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
 
@@ -103,7 +104,7 @@ class FusedAddRMSNorm:
         roots = ctx.roots_of(w)
         spec, operands = bind(b1.RMSNormFusedCuda, N=N, EPS=self.eps if self.eps is not None else eps), (PerRow(x), PerRow(res), Shared(w))
         if getattr(ctx.profile, "registered_values", False):
-            spec, operands = bind(b1.RMSNormFusedCudaV4, N=N), operands + (eps_input(self.eps if self.eps is not None else eps),)
+            spec, operands = bind(VI.RMSNormFusedCudaV4, N=N), operands + (eps_input(self.eps if self.eps is not None else eps),)
         return Compute(spec, M, operands, (PerRow(x), PerRow(res)), (node.id,),
                        hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)

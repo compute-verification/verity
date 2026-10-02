@@ -32,6 +32,7 @@ from verity.ir.defs import bind
 from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
+from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
 from verity_vllm.program.registry import gemm_bias as GB
@@ -382,7 +383,7 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
         if cap is not None:
             raise UnregisteredTarget("the attention scale is an input only on the unsoftcapped chains (Attention_v10, Attention_v11)")
         if uses_accepted_kinds(profile):
-            return bind(b1.AttentionV10, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
+            return bind(VI.AttentionV10, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
         if fa2_check_inf(profile) and row is not None and own_rows is not None:
             return bind(F2.AttentionV11, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
                         MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))

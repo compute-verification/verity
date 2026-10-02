@@ -18,6 +18,7 @@ from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
+from verity_vllm.program.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
@@ -66,9 +67,9 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM=None):
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
 _VALUE_KINDS = {
-    "rmsnorm_value": lambda N: ir_bind(b1.RMSNormTritonV3, N=N),
-    "rmsnorm_fused_value": lambda N: ir_bind(b1.RMSNormFusedCudaV4, N=N),
-    "attention_value": lambda T, NH, KVH, D: ir_bind(b1.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
+    "rmsnorm_value": lambda N: ir_bind(_vi.RMSNormTritonV3, N=N),
+    "rmsnorm_fused_value": lambda N: ir_bind(_vi.RMSNormFusedCudaV4, N=N),
+    "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
 }
 _VALUE_NOTES = {

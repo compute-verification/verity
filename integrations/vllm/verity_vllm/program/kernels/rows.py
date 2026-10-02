@@ -27,6 +27,7 @@ import numpy as np
 from verity.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
+from verity_vllm.program.kernels import value_rows as VR
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
 EVALUATORS = {
@@ -75,13 +76,7 @@ EVALUATORS = {
                     "per-iteration Check_inf, registry.fa2_check_inf; targets.fa2_check_inf)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
-    # the Definitions whose program values are inputs (`TargetProfile.registered_values`): the same evaluators, the value read from the operand
-    "Attention_v10": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v10{T,NH,KVH,D,BN}: Attention_v3's evaluator with "
-                     "scale_log2 the f32 word of its last operand)",
-    "Attention_v11": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v11{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v5's "
-                     "evaluator with scale_log2 the f32 word of its last operand)",
-    "RMSNormTriton_v3": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows (eps the f32 word of the last operand)",
-    "RMSNormFusedCuda_v4": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows (eps the f32 word of the last operand)",
+    **VR.EVALUATORS,
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
@@ -322,17 +317,15 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     # The AttnBlock INTERIORS inside the row (Q_fine_v1 units) live in the M1 export stream, which the replay does not read -- the
     # report names that mechanism with the row count (ATTENTION_INTERIOR_MECHANISM).
     T, NH, KVH, Dh, BN = (int(statics[k]) for k in ("T", "NH", "KVH", "D", "BN"))
-    scale_input = family in ("Attention_v10", "Attention_v11")
-    arity = 4 if scale_input else 3
+    arity = 4 if family in VR.SCALE_INPUT else 3
     if len(ops) != arity:                                                    # [R17-14] the Definition's arity (q, kc, vc[, scale_log2]): a row wiring another is by name
-        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes {arity} "
-                       f"(q, K history, V history{', scale_log2' if scale_input else ''})")
+        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes {arity} (q, K history, V history{', scale_log2' * (arity == 4)})")
     if family in ("Attention_v2", "Attention_v4", "Attention_v5", "Attention_v11"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
         dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
     masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5", "Attention_v11") else None
-    scale_bits = _word32(ops[3], family, "scale_log2") if scale_input else None
+    scale_bits = VR.word32(ops[3], family, "scale_log2") if arity == 4 else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
                        f"(twins: {sorted(D.TC_DOT16_BY_PRIM)} x {sorted(D.INV_SUM_BY_PRIM)})")
@@ -348,31 +341,13 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
         raise Declined(f"{family}: {e}") from None
     if nonfin.any():
         raise Declined(f"{family}: {int(nonfin.sum())} heads have a non-finite operand / accumulator (outside the vectorised twins' domain)")
-    out = np.asarray(out, dtype=np.uint16).reshape(NH * Dh)
-    return {"out": out}
-
-
-def _word32(op: np.ndarray, family: str, name: str) -> int:
-    w = np.asarray(op).reshape(-1)
-    if w.size != 1:
-        raise Declined(f"{family}: {name} is {w.size} words, the Definition reads one f32 word")
-    return int(w[0]) & 0xFFFFFFFF
-
-
-def _eps_of(statics: dict[str, Any], ops: Sequence[np.ndarray], n: int, family: str) -> float:
-    """EPS: the static, or the f32 word of the operand after the `n` the constant-holding twin takes (`RMSNormTriton_v3`, `RMSNormFusedCuda_v4`)."""
-    if "EPS" in statics:
-        return _eps(statics)
-    if len(ops) != n + 1:
-        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes {n + 1} (eps last)")
-    return float(np.uint32(_word32(ops[n], family, "eps")).view(np.float32))
+    return {"out": np.asarray(out, dtype=np.uint16).reshape(NH * Dh)}
 
 
 def rmsnorm_triton(statics: dict[str, Any], ops: Sequence[np.ndarray], family: str = "RMSNormTriton_v1") -> dict[str, np.ndarray]:
     from verity_vllm.program.kernels import derived_rows as D
     N = int(statics["N"])
-    r = D.rmsnorm_triton_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(N),
-                              _eps_of(statics, ops, 2, family))
+    r = D.rmsnorm_triton_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(N), _eps(statics) if "EPS" in statics else VR.eps(ops, 2, family))
     return {"out": np.asarray(r["out"], dtype=np.uint16).reshape(N)}
 
 
@@ -380,7 +355,7 @@ def rmsnorm_fused(statics: dict[str, Any], ops: Sequence[np.ndarray], family: st
     from verity_vllm.program.kernels import derived_rows as D
     N = int(statics["N"])
     r = D.rmsnorm_fused_v2_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(1, N),
-                                np.asarray(ops[2], dtype=np.uint16).reshape(1, N), _eps_of(statics, ops, 3, family))
+                                np.asarray(ops[2], dtype=np.uint16).reshape(1, N), _eps(statics) if "EPS" in statics else VR.eps(ops, 3, family))
     return {"0": np.asarray(r["normed"], dtype=np.uint16).reshape(N), "1": np.asarray(r["resid"], dtype=np.uint16).reshape(N)}
 
 
@@ -695,28 +670,6 @@ def _sample(index: dict[int, str] | None = None) -> Callable[..., list[np.ndarra
     return sample
 
 
-def _eps_words(rng: np.random.Generator, n: int, **statics: Any) -> np.ndarray:
-    """A norm's eps: the served 1e-5 / 1e-6 on half the rows, else drawn log-uniform over [1e-8, 1e-2]."""
-    e = np.where(rng.random(n) < 0.5, rng.choice([1e-5, 1e-6], n), 10.0 ** rng.uniform(-8, -2, n))
-    return np.asarray(e, dtype=np.float32).view(np.uint32)
-
-
-def _scale_words(rng: np.random.Generator, n: int, **statics: Any) -> np.ndarray:
-    """The attention scale: D^-0.5 * log2(e) of the row's D on half the rows, else drawn over [0.02, 0.5]."""
-    from verity_vllm.program.registry import b1
-    s = np.asarray(rng.uniform(0.02, 0.5, n), dtype=np.float32).view(np.uint32)
-    return np.where(rng.random(n) < 0.5, np.uint32(b1._scale_log2_bits(int(statics["D"]))), s).astype(np.uint32)
-
-
-def _sample_value(value: Callable[..., np.ndarray]) -> Callable[..., list[np.ndarray]]:
-    """`_sample()` for every parameter but the last, a program value in its served range for that one."""
-    rest = _sample()
-
-    def sample(rng: np.random.Generator, n: int, params: Sequence[Any], **statics: Any) -> list[np.ndarray]:
-        return [*rest(rng, n, params[:-1], **statics), value(rng, n, **statics)]
-    return sample
-
-
 def _sample_gumbel(rng: np.random.Generator, n: int, params: Sequence[Any], **statics: Any) -> list[np.ndarray]:
     """logits, top_p in [0.05, 1], seed, pos, temperature in [0.3, 2], and splits S in {1, 2, 4, 8}."""
     f32 = lambda a: np.asarray(a, dtype=np.float32).view(np.uint32)  # noqa: E731
@@ -752,11 +705,7 @@ def _check_targets() -> dict[str, list]:
                          for m in (2, 0)],
         "RMSNormTriton_v1": [bind(b1.RMSNormTriton, N=16, EPS=1e-6)],
         "RMSNormFusedCuda_v2": [bind(b1.RMSNormFusedCuda, N=16, EPS=1e-6)],
-        "Attention_v10": [bind(b1.AttentionV10, **attn)],
-        "Attention_v11": [bind(fa2_check_inf.AttentionV11, **dict(attn, T=40), DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=m)
-                          for m in (2, 0)],
-        "RMSNormTriton_v3": [bind(b1.RMSNormTritonV3, N=16)],
-        "RMSNormFusedCuda_v4": [bind(b1.RMSNormFusedCudaV4, N=16)],
+        **VR.check_targets(),
         "SiluMul_v1": [bind(b1.SiluMul, I=8)],
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
@@ -800,10 +749,10 @@ _row("Attention_v4", partial(attention, "Attention_v4"), ("out",))
 _row("Attention_v5", partial(attention, "Attention_v5"), ("out",))
 _row("RMSNormTriton_v1", rmsnorm_triton, ("out",))
 _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))
-_row("Attention_v10", partial(attention, "Attention_v10"), ("out",), _sample_value(_scale_words))
-_row("Attention_v11", partial(attention, "Attention_v11"), ("out",), _sample_value(_scale_words))
-_row("RMSNormTriton_v3", partial(rmsnorm_triton, family="RMSNormTriton_v3"), ("out",), _sample_value(_eps_words))
-_row("RMSNormFusedCuda_v4", partial(rmsnorm_fused, family="RMSNormFusedCuda_v4"), ("0", "1"), _sample_value(_eps_words))
+_row("Attention_v10", partial(attention, "Attention_v10"), ("out",), VR.sample_value(_sample(), VR.scale_words))
+_row("Attention_v11", partial(attention, "Attention_v11"), ("out",), VR.sample_value(_sample(), VR.scale_words))
+_row("RMSNormTriton_v3", partial(rmsnorm_triton, family="RMSNormTriton_v3"), ("out",), VR.sample_value(_sample(), VR.eps_words))
+_row("RMSNormFusedCuda_v4", partial(rmsnorm_fused, family="RMSNormFusedCuda_v4"), ("0", "1"), VR.sample_value(_sample(), VR.eps_words))
 _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))

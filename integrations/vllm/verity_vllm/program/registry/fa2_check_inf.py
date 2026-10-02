@@ -53,10 +53,10 @@ def AttnBlockV5(B, S, q, k, v, m_prev, l_prev, o_prev):
     """`AttnBlock_v2` with FA2's per-iteration `Check_inf` as the static `CHECK`: with it the rescale reads the guarded running max
     (`GuardNegInfZero`), as in v2; without it (an unmasked iteration) the rescale reads the running max as it is.  `max * scale` reads the
     guarded running max in every block.  `FIRST` needs `CHECK` (the first iteration runs `Check_inf`)."""
-    return _attn_block_v5(B, S, q, k, v, m_prev, l_prev, o_prev, None)
+    return _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, None)
 
 
-def _attn_block_v5(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
     D, NVIS, FIRST, BN, DOT, CHECK = S.D, S.NVIS, S.FIRST, S.BN, S.DOT, S.CHECK
     if FIRST and not CHECK:
         raise ValueError("AttnBlock_v5: the first iteration runs Check_inf (FIRST needs CHECK)")
@@ -109,10 +109,10 @@ def AttentionHeadV5(B, S, q, k, v):
     """`AttentionHead_v2` over `AttnBlock_v5`: causal attention of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited
     last -> first, block b with `CHECK = b >= MASKED_FROM` (FA2's masking iterations; `fa2_masked_from`); epilogue
     `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`."""
-    return _attention_head_v5(B, S, q, k, v, AttnBlockV5, ())
+    return _check_inf_head(B, S, q, k, v, AttnBlockV5, ())
 
 
-def _attention_head_v5(B, S, q, k, v, block, extra):
+def _check_inf_head(B, S, q, k, v, block, extra):
     T, D, BN, DOT, INV, MF = S.T, S.D, S.BN, S.DOT, S.INV, S.MASKED_FROM
     nb = (T + BN - 1) // BN
     if not 0 <= MF <= nb - 1:
@@ -152,10 +152,10 @@ def _attention_head_v5(B, S, q, k, v, block, extra):
 def AttentionV5(B, S, q, kc, vc):
     """`Attention_v2` over `AttentionHead_v5{T, D, BN, DOT, INV, MASKED_FROM}`: GQA, head h reads KV head h // (NH/KVH); every head of the
     row shares its tile, so one MASKED_FROM."""
-    return _attention_v5(B, S, q, kc, vc, AttentionHeadV5, ())
+    return _check_inf_attention(B, S, q, kc, vc, AttentionHeadV5, ())
 
 
-def _attention_v5(B, S, q, kc, vc, head, extra):
+def _check_inf_attention(B, S, q, kc, vc, head, extra):
     T, NH, KVH, D = S.T, S.NH, S.KVH, S.D
     G = NH // KVH
     head = bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
@@ -167,7 +167,7 @@ def _attention_v5(B, S, q, kc, vc, head, extra):
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 
-# The v5 chain with the softmax scale an input (`scale_log2`, as `b1.AttentionV10` reads it for the v3 chain).
+# The v5 chain with the softmax scale an input (`scale_log2`, as `value_inputs.AttentionV10` reads it for the v3 chain).
 
 
 @composite("AttnBlock", 11, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"],
@@ -177,7 +177,7 @@ def _attention_v5(B, S, q, kc, vc, head, extra):
            conformance="not-yet-established: AttnBlock_v5's body with the scale an input")
 def AttnBlockV11(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
     """`AttnBlock_v5{D, NVIS, FIRST, BN, DOT, CHECK}` with `scale_log2` an input."""
-    return _attn_block_v5(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2)
+    return _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2)
 
 
 @composite("AttentionHead", 11, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"],
@@ -186,7 +186,7 @@ def AttnBlockV11(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
            conformance="not-yet-established: AttentionHead_v5's body over AttnBlock_v11")
 def AttentionHeadV11(B, S, q, k, v, scale_log2):
     """`AttentionHead_v5{T, D, BN, DOT, INV, MASKED_FROM}` over `AttnBlock_v11`, every block reading the one `scale_log2`."""
-    return _attention_head_v5(B, S, q, k, v, AttnBlockV11, (scale_log2,))
+    return _check_inf_head(B, S, q, k, v, AttnBlockV11, (scale_log2,))
 
 
 @composite("Attention", 11, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"],
@@ -197,7 +197,7 @@ def AttentionHeadV11(B, S, q, k, v, scale_log2):
            conformance="not-yet-established: Attention_v5's body over AttentionHead_v11")
 def AttentionV11(B, S, q, kc, vc, scale_log2):
     """`Attention_v5{T, NH, KVH, D, BN, DOT, INV, MASKED_FROM}` over `AttentionHead_v11`, every head reading the one `scale_log2`."""
-    return _attention_v5(B, S, q, kc, vc, AttentionHeadV11, (scale_log2,))
+    return _check_inf_attention(B, S, q, kc, vc, AttentionHeadV11, (scale_log2,))
 
 
 FA2_CHECK_INF_COMPOSITES = [AttnBlockV5, AttentionHeadV5, AttentionV5, AttnBlockV11, AttentionHeadV11, AttentionV11]
