@@ -16,7 +16,7 @@ as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
 * `unequalDraws`: unit `u` is in class `⌊log_ρ (w u / a)⌋`, so it does work in `[aρ^j, aρ^{j+1})`. On each class,
   `ConverseAsymptotic` at `K_j = ⌈C/(aρ^j)⌉` bounds its draws (`class_bound`), and the classes' bounds sum.
 * `unequalCost_of_le`: the same per class, weighted by the class's cheapest unit, with `c(ρt) ≤ ρ·c(t)`. It assumes
-  `a ≤ A`, which every `n ≥ 1` implies; without it `Guarantees.UnequalCost` is false at `n = 0` (`not_unequalCost`).
+  `a ≤ A`, which every `n ≥ 1` implies; without it the statement is false at `n = 0` (`unequalCost_needs_le`).
 -/
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
@@ -454,8 +454,8 @@ theorem mul_unitCost_le {f o ρ t x : ℝ} (hf : 0 ≤ f) (ho : 0 ≤ o) (hρ : 
     nlinarith
   nlinarith
 
-/-- **The converse for unequal units, in cost**, with the hypothesis `a ≤ A` that `Guarantees.UnequalCost` lacks.
-Every `n ≥ 1` implies it; at `n = 0`, without it, the statement is false (`not_unequalCost`). -/
+/-- **The converse for unequal units, in cost.** Every `n ≥ 1` implies `a ≤ A`; at `n = 0`, without it, the statement
+is false (`unequalCost_needs_le`). -/
 theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : Fin n → ℝ) {ρ a A C δ f o : ℝ}
     (hρ : 1 < ρ) (ha : 0 < a) (haA : a ≤ A) (hw : ∀ u, a ≤ w u ∧ w u ≤ A) (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
     (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : Law n) (hL : MeetsTarget L w C δ) :
@@ -547,10 +547,16 @@ theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : F
         ring
     _ ≤ _ := sum_le_sum hbound
 
-/-- **`UnequalCost` fails with no units.** At `n = 0`, `∀ u, a ≤ w u ∧ w u ≤ A` is vacuous, so `A` may be negative and
-`c(A) = f + o·A` with it. At `ρ = 2`, `a = 1`, `A = −1`, `C = 1`, `δ = 1/2`, `f = 0`, `o = 1`, the bound is
-`log 2 · (1 + log 2 / 2) > 0`, while every law on no units costs `0`. -/
-theorem not_unequalCost : ¬ Guarantees.UnequalCost := by
+/-- **`UnequalCost` needs `a ≤ A`**: the statement without it fails with no units. At `n = 0`,
+`∀ u, a ≤ w u ∧ w u ≤ A` is vacuous, so `A` may be negative and `c(A) = f + o·A` with it. At `ρ = 2`, `a = 1`, `A = −1`,
+`C = 1`, `δ = 1/2`, `f = 0`, `o = 1`, the bound is `log 2 · (1 + log 2 / 2) > 0`, while every law on no units costs
+`0`. -/
+theorem unequalCost_needs_le : ¬ ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a →
+    (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C →
+      ∀ L : Law n, MeetsTarget L w C δ →
+        Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
+            ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
+              (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u) := by
   intro h
   have hmeets : MeetsTarget (Law.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
     rw [Finset.eq_empty_of_isEmpty B, Finset.sum_empty] at hB

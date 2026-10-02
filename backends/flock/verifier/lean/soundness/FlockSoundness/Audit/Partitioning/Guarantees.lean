@@ -17,7 +17,7 @@ definitions they read are in `Partitioning.Model`; `Λ` below is `ln(1/δ)`.
 * `HeavyUnit`: a unit doing work at least `C` is drawn with probability at least `1 − δ`.
 * `UnequalDraws`, `UnequalCost`: with unequal units of work in `[a, A]` and `A · Λ ≤ C`, every law meeting the target
   draws at least `1/ρ` of `Achievability`'s `F/C · Λ` (`F` the total work), and pays at least `1/ρ²` of its cost, less
-  one term per class `[aρ^j, aρ^{j+1})` of units.
+  one term per class `[aρ^j, aρ^{j+1})` of units. `UnequalCost` also assumes `a ≤ A`, which matters only with no units.
 
 **Exfiltration**, as `audit_exfiltration` bounds it: the target is `CertifiesLeak L b δ ℓ`. These compare upper bounds
 on the leak, not leaks an adversary achieves.
@@ -97,10 +97,11 @@ def UnequalDraws : Prop :=
 
 /-- **The converse for unequal units, in cost**, with unit `u` costing `c(w u) = f + o · w u`: every law meeting the
 target pays at least `Λ (1 − AΛ/(2C)) (∑_u w u · c(w u)/(ρ²C) · (1 − A/C) − J · c(A))`, against `Achievability`'s
-`Λ/C · ∑_u w u · c(w u)`. -/
+`Λ/C · ∑_u w u · c(w u)`. Any unit implies `a ≤ A`; with no units the bounds on `w` say nothing, and without `a ≤ A` a
+negative `A` makes `c(A)` negative and the bound positive while every law costs `0`. -/
 def UnequalCost : Prop :=
-  ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ →
-    δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
+  ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a → a ≤ A → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C →
+    0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
       Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
           ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
             (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u)

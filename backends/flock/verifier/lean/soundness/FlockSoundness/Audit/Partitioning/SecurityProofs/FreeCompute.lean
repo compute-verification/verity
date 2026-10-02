@@ -212,7 +212,7 @@ theorem HeavyUnit : Guarantees.HeavyUnit := by
 
 theorem UnequalDraws : Guarantees.UnequalDraws := Unequal.unequalDraws ConverseAsymptotic
 
-theorem UnequalCost : Guarantees.UnequalCost := by
-  sorry
+theorem UnequalCost : Guarantees.UnequalCost := fun _ w _ _ _ _ _ _ _ hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL =>
+  Unequal.unequalCost_of_le ConverseAsymptotic w hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL
 
 end FlockSoundness.Audit.Partitioning.SecurityProofs
