@@ -120,13 +120,18 @@ def main() -> None:
     low, port_words, span = lowering(act, uc, f"unit-class/{sh[:16]}", groups, names, set(ports))
     t_lower = time.time() - t0
     first = ta.regions(ROLE, 0)
-    per_row = {p for p, a in shape.ports[ROLE]["regions"].items() if shape.derivations[a].per_row}
+    anchor = shape.ports[ROLE]["regions"]
+    per_row = {p for p, a in anchor.items() if shape.derivations[a].per_row}
     regs = [{p: ta._region(ROLE, p, i) if p in per_row else first[p] for p in first} for i in range(N)]
+    # the unit's leaves are the anchors' values (G's FP32 words), not their u16 region words
+    shared = {p: ta._derive(anchor[p], ()) for p in first if p not in per_row}
+    leaf_vals = [{p: ta._derive(anchor[p], (ta._ids(anchor[p])[i],)) if p in per_row else shared[p] for p in first}
+                 for i in range(N)]
     rng = np.random.default_rng(20261002)
     widths = [act.width(-1 - p) for p in range(act.params)]
     ins, want = [[] for _ in uc.inputs], [[] for _ in uc.outputs]
     for i in range(N):
-        vals = {"x": [int(w) for w in bf16(rng.standard_normal(K))], **regs[i]}
+        vals = {"x": [int(w) for w in bf16(rng.standard_normal(K))], **leaf_vals[i]}
         words = [0] * act.params
         for nm, _t in params:
             for j, v in enumerate(vals[nm]):
