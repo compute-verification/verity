@@ -19,6 +19,7 @@ import FlockSoundness.Discharge.Exec.E2EL
 import FlockSoundness.Discharge.Exec.BindingE2EL
 import FlockSoundness.Discharge.Exec.HeadlineL
 import FlockSoundness.Discharge.Exec.Live
+import FlockSoundness.Discharge.Exec.Merkle
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -29,6 +30,9 @@ import FlockSoundness.Discharge.Exec.Live
   table run (`sessionG`, `batchedSessionG`);
 * `Setup`: flock-verify's acceptance sets up each table with `setupH` (`accepts_setupH`, `setupH_public`);
 * `Tables`: each accepted table is one accepting run of `tableAfterL` at `leaf512` (`accepts_tables_hm96`);
+* `Merkle`: each table `setupH` accepts commits with the tags' leaf scheme (`setupH_find`), so with `hm96Sha512` under
+  every `hm96Rows` tag pinned today (`setupH_hm96`), and `accepts_tables_hm96` without `hms`
+  (`accepts_tables_hm96_of_leaf`);
 * `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of
