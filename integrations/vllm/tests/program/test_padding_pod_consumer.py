@@ -3,7 +3,8 @@ padding steps registered before the run-root fold (`add_padding_steps`) become s
 appended as a step of its own; a MIXED step (B > 1) is REFOLDED from the committer's retained leaf digests + the padding leaves, no
 active byte re-read.  Openings of executed and padding leaves verify against the committer's original roots with the committer's
 `verify()`; a tampered padding word does not.  The pod's padded map (`padded_binding_map_of_committer`) binds the FULL cap population.
-Torch-free: the host (unpacked) committer path -- `commit_offline` is the exact hashing / layout / root code of the worker thread."""
+Torch-free: the host (unpacked) committer path -- `commit_offline` is the exact hashing / layout / root code of the worker thread.
+The padding rule's leaves are vllm-v1 position-leaf blocks: these committers select `--leaf-scheme vllm-v1` (hm96 refuses padding)."""
 from __future__ import annotations
 
 import hashlib
@@ -48,7 +49,7 @@ def _executed(present: dict[int, list[str]]) -> list[list[tuple[str, bytes]]]:
 
 
 def _committer() -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=PDB)
+    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=PDB, leaf_scheme=scheme.NAME)
 
 
 def _ids_at(ids: list[dict], rid: str, step: int) -> list[dict]:
@@ -249,7 +250,7 @@ def test_the_padding_leaf_rule_is_the_committers_not_the_environment(monkeypatch
               requests=[{"request_id": "req-a", "index": 0, "max_tokens": CAP, "arrive_step": 0}], served_tokens={"req-a": [17, 0]})
     host = PS.padding_for_committer(_committer(), **kw)
     assert sorted(ps.step for ps in host) == [2, 3, 4] and {ps.layout for ps in host} == {"host-pos-leaf"}
-    gpu = NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=PDB, gpu_tree=True)
+    gpu = NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=PDB, gpu_tree=True, leaf_scheme=scheme.NAME)
     assert {ps.layout for ps in PS.padding_for_committer(gpu, **kw)} == {"chunk-leaf-v1"}
     gpu.layout = "chunk-leaf-v2"
     v2 = PS.padding_for_committer(gpu, **kw)
