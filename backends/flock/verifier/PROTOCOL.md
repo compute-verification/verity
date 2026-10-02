@@ -1159,20 +1159,12 @@ The algorithm step by step and the agreement evidence (`cut_check_agree.py`, `qw
 every pinned vector, all of #101's Definitions, the LM-head `Gemm` in 100 s at 9 GB) are in
 `note:20260929T1052Z-report-flock-verifier-qword-cut-check`.
 
-An input node is a parameterless primitive of either binding time (core's PROTOCOL.md §5): `Input<w>_v1`, bound per run, or
-`RegisteredInput<w>_v1`, bound at registration (`Program.inputId?`, which records the binding time on the decoded
-Definition). Both are inputs to every query, never Calls, and registering an input changes no cut.
+An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound at registration; core's PROTOCOL.md §5):
+`Program.inputId?` records the binding time; both are inputs to every query, never Calls.
 
-**`Q_call` v1 over the verifier's own copy of the program** (`Flock.Qcall`; `flock-verify qcall-program`; reference
-`verity.ir.cut`'s "Q_call v1" and `verity.ir.partition_object`, core's PROTOCOL.md §11): each Call's computing gates (those of
-a primitive with parameters; input and constant gates are inputs), split depth first in layout order into pieces of at most
-`X` bits out (an activation's body nodes, a call node's callee, a batch or scan's members), each computing gate in exactly
-one unit; `gate-too-wide`, a non-topological program and a root batch or scan are inapplicable, with core's detail. Each
-Definition's cut is checked once by the partition invariant, a value computed in two units reported (`recomputed_across`)
-rather than refused, and `unit-too-wide`. `qcall_agree.py` checks every evaluation of `qcall_vectors.json` field for field
-(units, owners, committed sets, each Call's gates, `locate`, the verdict), its verify and order refusals, which units a
-statement over a template may claim (`qcall-program --template T --units …`), core's input ids of both binding times
-(`input-ids`, `format_vectors.json`), and a program with registered inputs at several X, under `Q_call` and `Q_word`.
+**`Q_call` v1** (`Flock.Qcall`, `flock-verify qcall-program`; core's PROTOCOL.md §11) is core's evaluation, refusals and cut
+check, as `Flock.Qcall` documents them. `qcall_agree.py` checks it against `qcall_vectors.json` field for field, with
+`format_vectors.json`'s input ids and a program with registered inputs.
 
 Still ahead: the leaf positions.
 
