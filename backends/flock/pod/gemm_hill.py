@@ -1,28 +1,32 @@
-"""BF16 GemmCoordinate hillclimb: one K's proving overhead against its GPU's spec peak, its throughput and its GPU utilization.
+"""GemmCoordinate hillclimb (BF16, and the sm_120 FP8 / FP4 rows): one K's proving overhead against its GPU's spec peak, its
+throughput and its GPU utilization.
 
-An attempt (74-gemm-hill.sh) runs a preflight check of the prover's byte identity at B = 16 (the GPU's proofs and transcripts
-equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving equal those verified one at
-a time), then proves one m = 35 statement of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}` (the BF16 dot of 16 that sm_90's wgmma and sm_120's
-mma.m16n8k16 run) untiled, warm once and timed three times, with nvidia-smi sampling the GPU every second from the job's start.
-Per coordinate (one FP32 output word of a K-long dot product):
+An attempt (74-gemm-hill.sh, DTYPE=bf16|e4m3|nvf4|mxf4) runs a preflight check of the prover's byte identity at B = 16 (the
+GPU's proofs and transcripts equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving
+equal those verified one at a time), then proves one m = 35 statement of the dtype's coordinate (DTYPES: BF16's
+`GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`, the BF16 dot of 16 that sm_90's wgmma and sm_120's mma.m16n8k16 run;
+`GemmCoordinate{E4m3,Nvf4,Mxf4}_v1{K, DOT}` over sm_120's FP8 dot of 32 and block-scaled FP4 dots of 64) untiled, warm once and
+timed three times, with nvidia-smi sampling the GPU every second from the job's start. Per coordinate (one FP32 output word of a
+K-long dot product):
 
-- overhead = T_session / T_native: the interaction with the verifier is part of the algorithm. T_session is the timed
-  sessions' wall time back to back (prover work, every coin round trip, each verdict; with FC_VERIFY_AHEAD the prover proves
-  the next sessions while earlier ones are verified), from the warm session's verdict to the last timed one's, over their
-  coordinates; T_native = 2 K FLOP / P_peak, P_peak the census line's dense BF16 tensor-core peak at FP32 accumulate
-  (--peak-id). Beside it, prove-only: M0's T_prove (gemm_slowdown.statement_seconds, the median timed statement's witness wait
-  plus both reps) over T_native.
-- throughput: coordinates per second, 1 / T_session, with 1 / T_prove beside it.
+- overhead = T_session / T_native = peak / R, R = 2 K VUs / T_session: the interaction with the verifier is part of the algorithm.
+  T_session is the timed sessions' wall time back to back (prover work, every coin round trip, each verdict), from the warm
+  session's verdict to the last timed one's, over their coordinates (staging is setup_s, beside it); T_native = 2 K FLOP / P_peak,
+  P_peak the census line's dense tensor-core peak at FP32 accumulate (--peak-id, the dtype's by default). Beside it, prove-only:
+  M0's T_prove (gemm_slowdown.statement_seconds, the median timed statement's witness wait plus both reps) over T_native.
+- throughput: coordinates per second, 1 / T_session, with 1 / T_prove beside it (with FC_VERIFY_AHEAD the prover proves the
+  next sessions while earlier ones are verified).
 - GPU utilization: nvidia-smi dmon's sm% (the fraction of each second some kernel ran, so an upper bound on DCGM's SM-active)
   averaged over the timed sessions (steady) and over the job's whole GPU-held wall time (the seconds before the sampler started
-  count as idle); and the timed sessions' GPU-held seconds per coordinate.
+  count as idle); and the timed sessions' GPU-held seconds per coordinate (T_session).
 - the verifier's seconds per statement: its verdict's verify_s, the median of the timed sessions.
 
 A coordinate is the campaign contract's VU (verity_numerical.bench.contract: K MACs, 2 K FLOP): result.json is a contract result
 (t.total = T_prove per statement, its buckets, vu.*, verifier.seconds, fixed.setup_seconds = staging), with the overhead against
 the RTX PRO peak under the workload's own `hill.` names, since the contract's overhead.vs_native_peak divides by the profile's
-H100 anchor. hillclimb.json is the step's verity/hillclimb-point/v0 record (throughput = VUs / T_session; gpu_util and
-gpu_held_s_per_vu over the timed sessions, the verifier's verdicts included), which `rollup` appends to its subcircuit's roll-up.
+anchor; a dtype with no campaign target (MXFP4) gets the preflight check's verdict and the `hill.` names only. hillclimb.json is the step's
+verity/hillclimb-point/v0 record (throughput = VUs / T_session; gpu_util and gpu_held_s_per_vu over the timed sessions, the
+verifier's verdicts included), which `rollup` appends to its subcircuit's roll-up.
 
 A GPU session (74-gemm-hill.sh POINTS=N) is one tree, one binary, one FC_* set and one K: one preflight check, then N points,
 each the same statement's sweep. Every point's record cites the session's preflight check (outputs.json refs.preflight, its
@@ -32,7 +36,9 @@ its sweep plus the seconds outside every point split equally (gpu_held_s_amortiz
 gpu_held_s_job is the session's only when it has one point. With N > 1, each point's contract result is out/p<i>/result.json
 and result.json is the session's (`session`).
 
-    python gemm_hill.py defs --K 8192 --out defs.json [--n 1024]      # the Gemm_v2 row whose coordinates are the statement's lanes
+    python gemm_hill.py defs --K 8192 --out defs.json [--n 1024] [--dtype e4m3]   # N and the class sweep's DEFS= or PROGRAM=
+    python gemm_hill.py fill --dtype e4m3 --K 8192 --preflight staged.jsonl   # the instances that fill m = 35, from the preflight
+                                                                              # check's staging
     python gemm_hill.py dmon --out dmon.tsv [--gpu 0]                  # nvidia-smi dmon -s u every second, each line after its epoch
     python gemm_hill.py stamp --out stamps.tsv -- BINARY prove ...    # the prover, its stdout passed through and each line stamped
     python gemm_hill.py key --binary-sha binary.sha256 --out key.json # what a point shares with its session's preflight check
@@ -63,17 +69,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gemm_slowdown as GS  # noqa: E402
 
-DOT = "HopperBF16WgmmaDot16_v1"
-DEFINITION = re.compile(r"GemmCoordinate_v2\{K=(\d+),DOT=" + DOT + r"\}")
+#: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target
+#: (verity.proofs.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none
+DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000-server/bf16", "bf16-hopper-mma-draft/2026-09-22"),
+          "e4m3": ("GemmCoordinateE4m3_v1", "BlackwellE4m3QmmaDot32_v1", "rtx-pro-6000-server/e4m3", "fp8-sm120-mma-draft/2026-09-30"),
+          "nvf4": ("GemmCoordinateNvf4_v1", "BlackwellNvf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", "nvfp4-sm120-mma-draft/2026-09-22"),
+          "mxf4": ("GemmCoordinateMxf4_v1", "BlackwellMxf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", None)}
 M = 35
-#: instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's row
-#: slot and its rows' hashing): 24, 24, 25, 26. K = 16384 is at Stmt.InRange's k_log <= 26
+#: BF16's instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's
+#: row slot and its rows' hashing): 24, 24, 25, 26. K = 16384 is at Stmt.InRange's k_log <= 26. The FP8 / FP4 rows take theirs
+#: from the preflight check's staging (`fill`)
 INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512}
-PEAK_ID = "rtx-pro-6000-server/bf16"
-QUESTION = ("what is BF16 GemmCoordinate_v2{K} proving overhead against the RTX PRO 6000 spec peak, its throughput and its GPU "
-            "utilization, at this step?")
-#: the campaign target whose operands and accumulator these are (verity_flock.bench.PROFILES["bf16-hopper"])
-PROFILE = "bf16-hopper-mma-draft/2026-09-22"
 #: a session's coins, from its verdict: `os-seed-prf` (M0's default: the verifier's 256-bit OS-random seed, committed at Hello
 #: and opened in the verdict, every round's coins its SHA-256 counter-mode PRF) or `live-os` (the verifier's OS draws, round by
 #: round); points under different coin modes are never compared
@@ -84,39 +90,44 @@ COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-
 #: inferred later
 SCHEMES = {"os-seed-prf": "flock-i-v1", "live-os": "flock-i-v1+livecoins"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
-#: a tree folds column-major when its circuit.rs builds slot types this way. Read from the source, not the commit's ancestry:
-#: the step-0 trees descend from the fold (d1775df80) and revert it
-FOLD_MARK = ("backends/flock/live/src/circuit.rs", "CscCircuit::from_matrices")
-#: circuit.rs's git blob ids that fold, and the flags each carries. The fold as granted (d1775df80 = cde1c7ac1: red-team-proofs-554's
-#: grant on art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8) carries none, nor does it with 750e344fd (= acca35385
-#: = ab5087cd4, the session verifier's C0 = I check once per statement: red-team-proofs-554's Q3c(a) grant on
-#: art:2aef6594e7d5510a22c7cb7e7afa54fd20d954ceabf3d910a7437567ba204686). Any other circuit.rs that folds is a fold nobody reviewed
-FOLDS = {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
-         "a38a04e336a687c52ab0d642aa4674e90669399d": ()}
+def definition(dtype: str) -> re.Pattern:
+    name, dot = DTYPES[dtype][:2]
+    return re.compile(re.escape(name) + r"\{K=(\d+),DOT=" + dot + r"\}")
 
 
-def verifier_flags(root: Path) -> list[str]:
-    """The flags the verifier source of the tree at `root` carries; a circuit.rs that can't be read is a fold nobody reviewed."""
-    try:
-        src = (root / FOLD_MARK[0]).read_bytes()
-    except OSError:
-        return ["verifier-fold-unreviewed"]
-    if FOLD_MARK[1].encode() not in src:
-        return []
-    blob = hashlib.sha1(b"blob %d\0" % len(src) + src).hexdigest()
-    return list(FOLDS.get(blob, ("verifier-fold-unreviewed",)))
+def subcircuit(K: int, dtype: str = "bf16") -> dict:
+    name, dot = DTYPES[dtype][:2]
+    return {"id": f"{dtype}/{name}/K={K}", "dtype": dtype, "definition": name, "K": K, "dot": dot}
 
 
-def subcircuit(K: int) -> dict:
-    return {"id": f"bf16/GemmCoordinate_v2/K={K}", "dtype": "bf16", "definition": "GemmCoordinate_v2", "K": K, "dot": DOT}
+def question(dtype: str, K: int) -> str:
+    if dtype == "bf16":
+        return (f"what is BF16 GemmCoordinate_v2{{K={K}}} proving overhead against the RTX PRO 6000 spec peak, its throughput and its "
+                "GPU utilization, at this step?")
+    return f"what is {dtype} GemmCoordinate{{K={K}}} proving overhead against the RTX PRO 6000 spec peak, at this step?"
 
 
 def defs(a) -> None:
-    n = a.n or INSTANCES.get(a.K)
+    """Print the statement's instance count and its class sweep source (70-class-sweep.sh's DEFS= or PROGRAM=)."""
+    n = a.n or (INSTANCES.get(a.K) if a.dtype == "bf16" else None)
     if not n:
         raise SystemExit(f"K = {a.K}: no instance count for m = {M} (pass --n)")
-    Path(a.out).write_text(json.dumps({f'Gemm_v2{{K={a.K},N={n},DOT={{"fn":"{DOT}"}}}}': 1}) + "\n")
-    print(n)
+    if a.dtype == "bf16":
+        Path(a.out).write_text(json.dumps({f'Gemm_v2{{K={a.K},N={n},DOT={{"fn":"{DTYPES["bf16"][1]}"}}}}': 1}) + "\n")
+        print(n, f"DEFS={a.out}")
+    else:
+        print(n, f"PROGRAM=backends/flock/pod/gemm_fp.py:{a.dtype}_K{a.K}_N{n}")
+
+
+def fill(a) -> None:
+    """The instances that fill an m = M statement of the preflight check's class: the most, a power of two, whose blocks fit
+    2^M bits."""
+    recs = [r for r in _records(Path(a.preflight)) if (m := definition(a.dtype).fullmatch(r.get("definition") or "")) and int(m.group(1)) == a.K]
+    st = (recs[-1] if recs else {}).get("stage") or {}
+    if not st.get("k_log") or not st.get("vus_per_block"):
+        raise SystemExit(f"{a.preflight}: no staged {a.dtype} K = {a.K} class")
+    per_instance = (1 << st["k_log"]) // st["vus_per_block"]
+    print(max(st["vus_per_block"], 1 << (((1 << M) // per_instance).bit_length() - 1)))
 
 
 def dmon(a) -> None:
@@ -319,6 +330,41 @@ def _commit(root: Path) -> dict:
         return {"commit": os.environ.get("COMMIT"), "dirty": None, "via": "env COMMIT"}
 
 
+#: per verifier source, its mark, the flag a version nobody reviewed carries, and the git blob ids of the reviewed versions with
+#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1, art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8)
+#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d, art:f865ea7822990772c557751642e3c0c17212b6703ec2f8f5292f5f63fe5dd1f1)
+#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, granted as
+#: art:2aef6594e7d5510a22c7cb7e7afa54fd20d954ceabf3d910a7437567ba204686)
+VERIFIER_SOURCES = (
+    ("circuit.rs", "CscCircuit", "verifier-fold-unreviewed",
+     {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
+      "a38a04e336a687c52ab0d642aa4674e90669399d": ()}),
+    ("session_verify.rs", "pub enum Lincheck", "lincheck-partial-unreviewed",
+     {"a12b4c15fa1138e91b8ffda7040f49737af30bbd": (),
+      "9d3b834f078fb2e9cfb6c37876eaea063d06dafc": ()}),
+)
+
+
+def verifier_flags(root: Path, lincheck: str | None) -> list[str]:
+    """The flags of the verifier changes a tree's prover binary is built with (red-team-proofs-554's Q3 and Q3b), read from the
+    sources it compiles, since a synced tree has no history: the column-major fold, and the structured lincheck when FC_LINCHECK
+    leaves it on (unset or partial; `both` rejects unless it equals upstream's flat fold, `flat` is upstream's). A source that
+    carries its change but none of the reviewed versions, or a circuit.rs that can't be read, is a change nobody reviewed."""
+    live = root / "backends/flock/live/src"
+    flags: list[str] = []
+    for name, mark, unreviewed, reviewed in VERIFIER_SOURCES:
+        if name == "session_verify.rs" and (lincheck or "partial") != "partial":
+            continue
+        try:
+            src = (live / name).read_bytes()
+        except OSError:
+            flags += [unreviewed] if name == "circuit.rs" else []
+            continue
+        if mark.encode() in src:
+            flags += reviewed.get(hashlib.sha1(b"blob %d\0" % len(src) + src).hexdigest(), (unreviewed,))
+    return list(dict.fromkeys(flags))
+
+
 def _phases(path: Path) -> dict[str, list[float]]:
     out: dict[str, list[float]] = {}
     for ln in path.read_text().splitlines() if path.exists() else []:
@@ -365,10 +411,11 @@ def _sha256(path: str | None) -> str | None:
 def metrics(a) -> None:
     now = time.time()
     census = {h["id"]: h for h in json.loads(Path(a.census).read_text())}
+    a.peak_id = a.peak_id or DTYPES[a.dtype][2]
     peak = census[a.peak_id]
     head = Path(a.gpu_csv).read_text().splitlines()[:2] if a.gpu_csv and Path(a.gpu_csv).exists() else []
     gpu = dict(zip(head[0].split(","), (v.strip() for v in head[1].split(",")))) if len(head) == 2 else {}
-    recs = [r for r in _records(Path(a.sweep)) if (m := DEFINITION.fullmatch(r.get("definition") or "")) and int(m.group(1)) == a.K]
+    recs = [r for r in _records(Path(a.sweep)) if (m := definition(a.dtype).fullmatch(r.get("definition") or "")) and int(m.group(1)) == a.K]
     rec = recs[-1] if recs else {}
     lv, st = rec.get("live") or {}, rec.get("stage") or {}
     g = GS.preflight(Path(a.preflight) if a.preflight else None, shapes_needed=1)
@@ -482,15 +529,23 @@ def metrics(a) -> None:
         flags.append("tile-statement-unreviewed")
     if st.get("tile") or not rec.get("stage"):
         flags.append("draft-554-unreviewed")
-    flags += verifier_flags(Path(a.root))
+    # four FP4 or two FP8 elements a u16 leaf (FLOCK_PACK_WORDS=1): another statement and input commitment, not reviewed yet
+    if st.get("packed"):
+        flags.append("packed-statement-unreviewed")
+    # core's bit rows (FLOCK_CORE_ROWS=1): new core protocol, and the verifiers' derivation of their constants not reviewed yet
+    if st.get("row_schemas"):
+        flags.append("core-rows-statement-unreviewed")
+    flags.extend(verifier_flags(Path(a.root), os.environ.get("FC_LINCHECK")))
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
     if out.get("accepted") and not rec.get("domain"):
         flags.append("domain-unrecorded")
+    if not DTYPES[a.dtype][3]:
+        flags.append("no-campaign-target")
     out["vcpu"] = len(os.environ["HILL_PINNED"].split(",")) if os.environ.get("HILL_PINNED") else len(os.sched_getaffinity(0))
     status = g["status"] if out["accepted"] else "failed"
     try:
-        res = _contract_result(a, out, g, status, rec, lv, peak)
+        res = _contract_result(a, out, g, status, rec, lv, peak) if DTYPES[a.dtype][3] else _bare_result(a, out, g, status, lv, peak)
     except (ImportError, ValueError, KeyError, TypeError) as e:
         res = {"schema": "research/result/v0.1", "run_id": out["run_id"] or "unknown", "workload_fingerprint": None, "measurements": [],
                "validation": {"status": "failed", "checker": "the campaign contract", "detail": f"{type(e).__name__}: {e}"[:900]}}
@@ -517,6 +572,39 @@ def _validate(res: dict) -> list[str]:
     return contract.validate(res)
 
 
+def _hill(out: dict, lv: dict, peak: dict) -> list[dict]:
+    """The step's own measurements, under the workload's `hill.` names: the overhead against the RTX PRO peak and its parts."""
+    b = lv.get("buckets") or []
+    rep = lambda k: sum(r.get(k) or 0.0 for r in b)  # noqa: E731
+    return [*[{"name": f"hill.{k}", "value": out[k], "unit": u} for k, u in (
+                ("overhead", "ratio"), ("overhead_prove_only", "ratio"), ("t_session_s_per_coord", "s"), ("t_native_s_per_coord", "s"),
+                ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"), ("gpu_util_job", "fraction"),
+                ("gpu_held_s_per_coord", "s"), ("gpu_held_s_job", "s"), ("session_s_per_statement", "s"),
+                ("gpu_held_s_point", "s"), ("gpu_held_s_amortized", "s"), ("gpu_held_s_session", "s")) if out.get(k) is not None],
+            {"name": "hill.peak_flop_per_second", "value": peak["flop_per_second"], "unit": "FLOP/s"},
+            *[{"name": f"hill.t_{k[2:]}", "value": rep(k), "unit": "s"} for k in ("t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito")
+              if any(k in r for r in b)]]
+
+
+def _bare_result(a, out: dict, g: dict, status: str, lv: dict, peak: dict) -> dict:
+    """result.json for a dtype with no campaign target: no contract fingerprint (its profile must be a target), the preflight
+    check's verdict and the step's `hill.` measurements."""
+    fp = {"contract": None, "subcircuit": subcircuit(a.K, a.dtype)["id"], "definition": out.get("definition"), "K": a.K,
+          "B": out.get("coords_per_statement"), "statement_digest": out.get("statement_digest"), "dense_m": out.get("m"),
+          "k_log": out.get("k_log"), "domain": out.get("domain"), "coins": out.get("coins"), "session": out.get("session"), "commit": out["commit"]["commit"],
+          "dirty": out["commit"]["dirty"], "binary_sha256": _read(a.binary_sha), "hill_peak": {"census_id": a.peak_id,
+          "flop_per_second": peak["flop_per_second"], "device": peak.get("device")}, "vcpu": out["vcpu"], "flags": out["flags"]}
+    pre = "" if a.points == 1 else f"p{a.point}/"
+    return {"schema": "research/result/v0.1", "run_id": out["run_id"] or "local", "workload_fingerprint": fp,
+            "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.PREFLIGHT_CASES),
+                           "detail": f"{a.dtype}: no verity.proofs.target, so no contract fingerprint; "
+                                     + (g.get("why") or json.dumps(g.get("shapes")))[:700],
+                           "evidence": ["out/preflight/classes/results.jsonl"]},
+            "measurements": _hill(out, lv, peak) if status == "passed" and out.get("statement_s") else [],
+            "measurement_files": [f"out/{pre}metrics.json", f"out/{pre}results.jsonl"],
+            "artifacts": [Path(a.hillclimb).name if a.hillclimb else "hillclimb.json"]}
+
+
 def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, peak: dict) -> dict:
     """The campaign contract's result.json for this step (verity_numerical.bench.contract): one statement's coordinates are
     the VUs, t.total its prover seconds (M0's T_prove), the buckets both reps of the median timed run."""
@@ -535,17 +623,9 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
               *([contract.measurement("fixed.setup_seconds", out["setup_s"])] if out.get("setup_s") is not None else []),
               # nvidia-smi's framebuffer use at 1 s samples over the job: a lower bound on the device peak
               *([contract.measurement("mem.peak_device_bytes", int(out["gpu_mem_peak_gib"] * 2**30))] if out.get("gpu_mem_peak_gib") else []),
-              *[{"name": f"hill.{k}", "value": out[k], "unit": u} for k, u in (
-                  ("overhead", "ratio"), ("overhead_prove_only", "ratio"), ("t_session_s_per_coord", "s"), ("t_native_s_per_coord", "s"),
-                  ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"),
-                  ("gpu_util_job", "fraction"), ("gpu_held_s_per_coord", "s"), ("gpu_held_s_job", "s"), ("session_s_per_statement", "s"),
-                  ("gpu_held_s_point", "s"), ("gpu_held_s_amortized", "s"), ("gpu_held_s_session", "s"))
-                if out.get(k) is not None],
-              {"name": "hill.peak_flop_per_second", "value": peak["flop_per_second"], "unit": "FLOP/s"},
-              *[{"name": f"hill.t_{k[2:]}", "value": rep(k), "unit": "s"} for k in ("t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito")
-                if any(k in r for r in b)]]
+              *_hill(out, lv, peak)]
     fp = contract.fingerprint(
-        profile=PROFILE, domain=out.get("domain") or "total", K=a.K, B=out.get("coords_per_statement") or 1, proof_class="NON_ZK_PROOF",
+        profile=DTYPES[a.dtype][3], domain=out.get("domain") or "total", K=a.K, B=out.get("coords_per_statement") or 1, proof_class="NON_ZK_PROOF",
         authentication="included-hash", zk_mode=contract.ZK_NONE,
         security={"target": -100, "profile": "fast100", "reps": 2, "coins": COINS.get(out.get("coins"), out.get("coins"))},
         hardware=contract.probe_hardware(),
@@ -556,7 +636,7 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
         preprocessing="none amortised: the statement's circuit is lowered and staged once per process (fixed.setup_seconds); every timed "
                       "session builds its witness and proves both reps afresh",
         retention="retained", instances=None,
-        subcircuit=subcircuit(a.K)["id"], definition=out.get("definition"), statement_digest=out.get("statement_digest"), dense_m=out.get("m"),
+        subcircuit=subcircuit(a.K, a.dtype)["id"], definition=out.get("definition"), statement_digest=out.get("statement_digest"), dense_m=out.get("m"),
         k_log=out.get("k_log"), tile=out.get("tile"), vcpu=out["vcpu"], hill_peak={"census_id": a.peak_id, "flop_per_second": peak["flop_per_second"],
                                                                                     "device": peak.get("device")},
         coins=out.get("coins"), session=out.get("session"), flags=out["flags"], hill={"step": a.step, "label": a.label})
@@ -579,7 +659,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
     """The step's verity/hillclimb-point/v0 record (lanes/console/20260930T2259Z-handoff-from-proofs-hillclimb-plots-spec)."""
     t = timed[-1][0] if timed else time.time()
     cap = gpu.get("compute_cap") or ""
-    return {"schema": POINT_SCHEMA, "subcircuit": subcircuit(a.K), "step": a.step, "label": a.label, "commit": out["commit"]["commit"],
+    return {"schema": POINT_SCHEMA, "subcircuit": subcircuit(a.K, a.dtype), "step": a.step, "label": a.label, "commit": out["commit"]["commit"],
             "run_id": out["run_id"], "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)),
             "hardware": {"gpu": gpu.get("name"), "sm": f"sm_{cap.replace('.', '')}" if cap else None, "node": a.node, "vcpu": out["vcpu"]},
             "peak_flop_per_s": peak["flop_per_second"], "peak_census_id": a.peak_id, "vus": out.get("coords_per_statement"),
@@ -591,7 +671,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "session": (out.get("session") or {}).get("label"), "scheme": SCHEMES.get(out.get("coins")),
             # flock-circuit is both the prover (`prove`) and the verifier (`serve`)
             "impl": {"commit": out["commit"]["commit"], "prover_sha256": _read(a.binary_sha), "verifier_sha256": _read(a.binary_sha)},
-            "flags": flags, "question": os.environ.get("QUESTION") or QUESTION.replace("{K}", f"{{K={a.K}}}"),
+            "flags": flags, "question": a.question or os.environ.get("QUESTION") or question(a.dtype, a.K),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
             "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why"),
@@ -844,7 +924,8 @@ def plot(a) -> None:
                       | {"id": p["subcircuit"]["id"]} for p in pts]))
     if a.put:
         meta = {"what": "hillclimb plots, one per subcircuit: overhead, throughput, GPU utilization and GPU-held s / VU over the steps",
-                "sources": a.points, "runs": [p.get("run_id") for p in pts], "question": QUESTION}
+                "sources": a.points, "runs": [p.get("run_id") for p in pts],
+                "questions": sorted({p.get("question") for p in pts if p.get("question")})}
         r = subprocess.run([*research, "data", "put", "--kind", "plot/v1", "--tree", str(out), "--meta", json.dumps(meta), "--preserve"],
                            capture_output=True, text=True)
         print(r.stdout.strip() or r.stderr.strip())
@@ -856,9 +937,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd_", required=True)
     d = sub.add_parser("defs")
+    d.add_argument("--dtype", choices=sorted(DTYPES), default="bf16")
     d.add_argument("--K", type=int, required=True)
     d.add_argument("--n", type=int, default=None)
     d.add_argument("--out", required=True)
+    f = sub.add_parser("fill")
+    f.add_argument("--dtype", choices=sorted(DTYPES), default="bf16")
+    f.add_argument("--K", type=int, required=True)
+    f.add_argument("--preflight", "--gate", dest="preflight", required=True)    # --gate: its old name
     dm = sub.add_parser("dmon")
     dm.add_argument("--out", required=True)
     dm.add_argument("--gpu", default=None)
@@ -870,6 +956,7 @@ def main() -> None:
     s.add_argument("--out", required=True)
     s.add_argument("cmd", nargs=argparse.REMAINDER)
     m = sub.add_parser("metrics")
+    m.add_argument("--dtype", choices=sorted(DTYPES), default="bf16")
     m.add_argument("--K", type=int, required=True)
     m.add_argument("--preflight", "--gate", dest="preflight")    # --gate: its old name
     m.add_argument("--sweep", required=True)
@@ -882,11 +969,12 @@ def main() -> None:
     m.add_argument("--slice")
     m.add_argument("--gpu-csv")
     m.add_argument("--census", default="census/hardware.json")
-    m.add_argument("--peak-id", default=PEAK_ID)
+    m.add_argument("--peak-id", default=None, help="the census line (default: the dtype's, DTYPES)")
     m.add_argument("--root", default=".")
     m.add_argument("--binary-sha", default=None)
     m.add_argument("--step", type=int, default=0)
     m.add_argument("--label", default="baseline")
+    m.add_argument("--question", default=None, help="the research question the job answers (default: the step's, question())")
     m.add_argument("--node", default="vy-nebius-1")
     m.add_argument("--point", type=int, default=0)
     m.add_argument("--points", type=int, default=1)
@@ -912,8 +1000,8 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--put", action="store_true")
     a = ap.parse_args()
-    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "key": key, "session": session, "rollup": rollup,
-     "plot": plot}[a.cmd_](a)
+    {"defs": defs, "fill": fill, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "key": key, "session": session,
+     "rollup": rollup, "plot": plot}[a.cmd_](a)
 
 
 if __name__ == "__main__":

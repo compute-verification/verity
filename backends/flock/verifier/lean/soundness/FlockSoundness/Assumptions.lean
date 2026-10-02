@@ -140,8 +140,8 @@ advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
 
-/-- **`HmRowComputes` (`circuit/hm96-sha512-row`): the circuit's row hashing computes the `hm96-sha512/row/v1` commit
-string**, the circuit side of the value binding (verified-lowering design, phase 2i).
+/-- **`HmRowComputes` (`circuit/hm96-sha512-row`): the circuit's row hashing computes the `hm96-sha512/row/v1` or
+`hm96-sha512/row/v2` commit string**, the circuit side of the value binding (verified-lowering design, phase 2i).
 
 The circuit hashes each serving row in `sha512x3` slots, SHA-512 compressions chained from the row prefix's midstate and
 closed by the padding compression, then outputs the row's commit string `b ‖ c` from an `hm96` slot, under the row's
@@ -149,6 +149,13 @@ private salt `y`: `x = H(row)`, `b = x ⊕ M·y`, `c = H(salt_prefix ‖ y)` (`F
 that the slots compute this: at every `w` the circuit's constraints accept (`sat w`), the commit string the `hm96` slot
 outputs (`bc w`) is the one computed from the row's bytes (`row w`) and the salt (`salt w`) that the slots read, for `H`
 SHA-512 on bytes, the salt prefix and the mask `y ↦ M·y`.
+
+For a `sha512/row/v2` bit row of `ℓ` bits (`FlockLevel3.RowV2.enc`), it covers the constants the verifier derives from `ℓ`
+alone and Δ pins: the prefix `P(ℓ)`'s midstate as the first `cv` (in the row's first compression or, for a row of no
+compression before its last block, in its `hm96` slot); every message bit at or past `ℓ` (the last byte's zero fill bits
+and SHA-512's padding, in a block with row bytes or in a block of its own); and a unit's leaf bit past `ℓ`, read from its
+slot's forced-zero row. That these constants are SHA-512's padding of `P(ℓ)` and the row's bytes is part of what it
+assumes, not proved here.
 
 It is a fact about the slot circuits and their wiring, not about SHA-512, and it is not cryptographic: phase 2i is to
 prove it from the `sha512x3` and `hm96` sections of the circuit file. The theorems that bind rows to registered digests

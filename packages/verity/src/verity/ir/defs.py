@@ -58,8 +58,17 @@ class FunctionDefinition:
         return f"{self.name}_v{self.version}"
 
 
+#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.ml.library`) or a
+#: ``registered`` input of the program, which the primitive still holds while it declares it
+TABLE_KINDS = ("library", "registered")
+
+
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
+    """`tables`: every table the primitive's definition reads by index (its evaluator, or the circuit that proves it), as
+    ``(name, kind)`` with a kind of `TABLE_KINDS`. Such a table is no gate of the program, so only its declaration shows it
+    (`constants.program_data`)."""
+
     name: str
     version: int
     params: tuple[tuple[str, Type], ...]
@@ -68,11 +77,16 @@ class PrimitiveDefinition(FunctionDefinition):
     doc: str = ""
     conformance: str = "not-yet-established"  # exact-model-tested | model-untested | not-yet-established
     register: bool = True
+    tables: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.ret, Value):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
         self.params = tuple((n, t) for n, t in self.params)
+        self.tables = tuple((n, k) for n, k in self.tables)
+        bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
+        if bad:
+            raise ValueError(f"{self.id}: a table is a {' or '.join(TABLE_KINDS)} table, not {bad}")
         if self.register:
             REGISTRY.add(self)
 
@@ -513,11 +527,12 @@ class Builder:
 
 
 def primitive(name: str, version: int, params: Sequence[tuple[str, Type]], ret: Value, doc: str = "",
-              conformance: str = "not-yet-established"):
+              conformance: str = "not-yet-established", tables: Sequence[tuple[str, str]] = ()):
     """Decorator: register a one-output primitive with a total evaluator on encodings."""
 
     def deco(fn: Callable[..., int]) -> PrimitiveDefinition:
-        return PrimitiveDefinition(name, version, tuple(params), ret, fn, doc=doc or (fn.__doc__ or ""), conformance=conformance)
+        return PrimitiveDefinition(name, version, tuple(params), ret, fn, doc=doc or (fn.__doc__ or ""), conformance=conformance,
+                                   tables=tuple(tables))
 
     return deco
 
@@ -534,4 +549,4 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
 
 
 __all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
-           "Body", "Builder", "primitive", "composite", "Explicit", "concat"]
+           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
