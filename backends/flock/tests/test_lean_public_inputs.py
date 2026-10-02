@@ -1,7 +1,8 @@
 """Public input ports (PROTOCOL.md §16.10): the Lean verifier reads a hidden-output statement whose unit reads a public
 input port (RoPE's `cs`, its cos/sin table) from in regions, as the Rust prover writes it, on its recorded CPU selftest
 sessions, with the public words in one aligned block of the unit's leaf group and in two, and holds the public file's words to
-the verifier's own recomputation (`--public-inputs F`).
+the verifier's own recomputation (`--public-inputs F`), also on `--zk` sessions, where the live server reads no recomputation
+and this is the only check that does (PROTOCOL.md §17.1, D7).
 
 It is the one test in `check` of public input ports against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has them. So it catches a verifier that disagrees with the prover on the in regions,
@@ -26,7 +27,8 @@ VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `stage/`: `circuit.stage(IL.lowering(rope_head.definition(sub), rope_head.UNIT + "/x4", group=4), set, 0, 4, out,
 #: public_inputs=PUBLIC)` on `generate(rope-head/d64/neox-bf16, 4, 20260926)`; `records-cpu/`: `flock-circuit selftest
-#: --instances inst-4.bin --circuit circuit.txt --record-dir` (CPU, non-zk) at 54146af61
+#: --instances inst-4.bin --circuit circuit.txt --record-dir` (CPU, non-zk) at 54146af61; `records-zk/`: its honest and
+#: public_input_claim_false cases under `selftest --zk`, from #793 merged in
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 #: the same set under the x8 lowering (`cs` in words 2..3 of a unit's leaf group), its META edited so that each unit's second
 #: x word (leaves 8..15) is a second public port `xh` (`XH`): public words 1..3, two in regions of blocks (1, 0) and (2, 1)
@@ -235,6 +237,49 @@ def test_the_honest_statement_is_the_provers(stores, layout, regions):
     st = json.loads(p.stdout)
     record = json.loads((store / "records-cpu" / "honest.json").read_text())["record"]
     assert st["regions"] == regions and st["hello"] == record["hello"] and st["sigma"] in st["hello"]
+
+
+def _verify_zk(store: Path, session: Path, pub: Path, own: Path | None) -> dict:
+    flags = ["--public-inputs", str(own)] if own else []
+    p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(store / "stage" / "circuit.txt"),
+                        "--public", str(pub), *flags, "--zk", "--session", str(session)], capture_output=True, text=True)
+    [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+    return v
+
+
+@pytest.fixture(scope="module")
+def zk_sessions(store, tmp_path_factory):
+    out = tmp_path_factory.mktemp("zk")
+    subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(store / "records-zk"), str(out)], check=True,
+                   capture_output=True)
+    return out
+
+
+@pytest.mark.parametrize("case", ["honest", "public_input_claim_false"])
+def test_zk_sessions_get_their_verdicts(store, zk_sessions, case, tmp_path):
+    """`verify --zk` under the verifier's own recomputation of the session's public words: the honest session accepted, a
+    false public word's rejected by the proof once the verifier's file says the same word."""
+    s = zk_sessions / case
+    pub = s / "pub.bin" if (s / "pub.bin").exists() else store / "stage" / "pub-4.bin"
+    head, _ = _split(store / "stage" / "public-inputs-4.bin")
+    v = _verify_zk(store, s, pub, _join(head, pub.read_bytes()[-_words(store):], tmp_path / "own.bin"))
+    assert v["accepted"] == (case == "honest") == json.loads((s / "case.json").read_text())["live"]["accepted"], v["why"]
+    assert case == "honest" or not v["why"].startswith(("S2", "setup")), v["why"]
+
+
+def test_zk_refuses_a_flipped_anchor_bit_the_live_server_accepted(store, zk_sessions, tmp_path):
+    """The live server reads no recomputation, so under `--zk` only this check holds the public words to the verifier's
+    own (D7): the session it accepted is refused when one bit of the verifier's words differs."""
+    s = zk_sessions / "honest"
+    assert json.loads((s / "case.json").read_text())["live"]["accepted"]
+    head, body = _split(store / "stage" / "public-inputs-4.bin")
+    v = _verify_zk(store, s, store / "stage" / "pub-4.bin", _join(head, bytes([body[0] ^ 1]) + body[1:], tmp_path / "own.bin"))
+    assert not v["accepted"] and v["why"] == "setup: public input cs: word 0 of instance 0 " + OWN_REFUSAL
+
+
+def test_zk_refuses_a_missing_public_inputs(store, zk_sessions):
+    v = _verify_zk(store, zk_sessions / "honest", store / "stage" / "pub-4.bin", None)
+    assert not v["accepted"] and v["why"] == "setup: " + REFUSALS["missing_public_inputs"][1]
 
 
 def test_the_two_block_files_name_both_ports(stores):
