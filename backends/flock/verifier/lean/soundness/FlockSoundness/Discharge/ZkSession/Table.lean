@@ -25,18 +25,25 @@ open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **One `--zk` table, level 0 masked**: the level-0 commitment, the link points, and both reps, each with its own
-pads commitment, masked phase and inner proof. Both reps place their pads by `P` and `tr` (the same layout, §2, over
-each rep's own pads). -/
+/-- A `--zk` table after its level-0 commitment `C₀` and the link points `pts`: both reps, each with its own pads
+commitment, masked phase and inner proof. Both reps place their pads by `P` and `tr` (the same layout, §2, over each
+rep's own pads). -/
+noncomputable def tableAfterZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (tr : Triple np) {N : ℕ}
+    (dom : Fin N ↪ F) (nP q : ℕ) (pos : F → Fin N) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ)
+    (c₀ : F) (ptLocal mPts : ℕ) (C₀ : Oracle F) (pts : Fin 2 → Fin mPts → F) : Game (Bool × Oracle F) := do
+  let extra := extraClaims S ptLocal mPts pts
+  let accepts ← interleave (repZK dom np nP q pos tr (repPadZK A P S sch hm t c₀ 0 C₀ extra))
+    (repZK dom np nP q pos tr (repPadZK A P S sch hm t c₀ 1 C₀ extra))
+  pure (accepts.1 && accepts.2, C₀)
+
+/-- **One `--zk` table, level 0 masked**: the level-0 commitment, the link points, and both reps
+(`tableAfterZK`). -/
 noncomputable def tablePadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (tr : Triple np) {N : ℕ} (dom : Fin N ↪ F)
     (nP q : ℕ) (pos : F → Fin N) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F)
     (ptLocal mPts : ℕ) : Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)
   let pts ← draw (Fin 2 → Fin mPts → F)
-  let extra := extraClaims S ptLocal mPts pts
-  let accepts ← interleave (repZK dom np nP q pos tr (repPadZK A P S sch hm t c₀ 0 C₀ extra))
-    (repZK dom np nP q pos tr (repPadZK A P S sch hm t c₀ 1 C₀ extra))
-  pure (accepts.1 && accepts.2, C₀)
+  tableAfterZK A P tr dom nP q pos S sch hm t c₀ ptLocal mPts C₀ pts
 
 /-- **A `--zk` rep is sound**: from a doomed start over the padded witnesses, the rep (pads commitment, masked phase,
 inner proof) accepts with probability at most `padRepError + εInner`. -/
@@ -59,10 +66,10 @@ theorem rep_sound_pad_zk (A : Arith F K) (hA : A.Correct) (S : Statement) (sch :
     (repPadZK_couple A hA P S sch hm t c₀ r C extra h).trans
       (rep_sound_pad A hA S sch hshape hmsch hm t hpad c₀ e r mPts C extra hextra hdoom)
 
-/-- **Soundness of one `--zk` table, level 0 masked** (interactive-oracle layer). For every prover strategy, the
-verifier accepts both reps while the committed values do not satisfy the statement with probability at most
+/-- **A `--zk` table after its commitment**: whatever level-0 commitment `C` the prover sent, the rest of the table
+(link points, both reps) accepts while `C` is not `CommittedPad` with probability at most
 `padLinkError + (padRepError + εInner)²`. -/
-theorem table_sound_pad_zk (A : Arith F K) (hA : A.Correct)
+theorem tableAfterZK_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
@@ -73,15 +80,13 @@ theorem table_sound_pad_zk (A : Arith F K) (hA : A.Correct)
     (pos : F → Fin N) (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     (δ : ℝ≥0) (hL : np + nP ≤ N)
     (hδ : δ ≤ Code.relativeUniqueDecodingRadius (ReedSolomon.code dom (np + nP) : Set (Fin N → F)))
-    (σ : Strategy (tablePadZK A P tr dom nP q pos S sch hm t c₀ ptLocal mPts)) :
-    prob (fun out => out.1 = true ∧ ¬ CommittedPad A S sch t c₀ out.2)
-      (tablePadZK A P tr dom nP q pos S sch hm t c₀ ptLocal mPts) σ ≤
+    (C : Oracle F) :
+    value (fun out => out.1 = true ∧ ¬ CommittedPad A S sch t c₀ out.2)
+      (.coin (Fin 2 → Fin mPts → F) fun pts => tableAfterZK A P tr dom nP q pos S sch hm t c₀ ptLocal mPts C pts) ≤
       ENNReal.ofReal (padLinkError sch (S.shape mPts) t) +
         (ENNReal.ofReal (padRepError sch (S.shape mPts) t e) + εInner N F q δ) ^ 2 := by
-  refine (prob_le_value _ _ σ).trans ?_
   set ε := ENNReal.ofReal (padRepError sch (S.shape mPts) t e) + εInner N F q δ with hε
-  simp only [tablePadZK, bind_eq, pure_eq, recv, draw, bind_send, bind_ret, bind_coin, value_send]
-  refine iSup_le fun C => ?_
+  simp only [tableAfterZK, bind_eq, pure_eq]
   by_cases hC : CommittedPad A S sch t c₀ C
   · have h0 : value (fun out : Bool × Oracle F => out.1 = true ∧ ¬ CommittedPad A S sch t c₀ out.2)
         (.coin (Fin 2 → Fin mPts → F) fun pts =>
@@ -113,5 +118,29 @@ theorem table_sound_pad_zk (A : Arith F K) (hA : A.Correct)
         _ ≤ _ := value_interleave_le (fun b : Bool => b = true) (fun b : Bool => b = true) _ _
         _ ≤ ε * ε := mul_le_mul' (hrep 0) (hrep 1)
     · rw [sq]
+
+/-- **Soundness of one `--zk` table, level 0 masked** (interactive-oracle layer). For every prover strategy, the
+verifier accepts both reps while the committed values do not satisfy the statement with probability at most
+`padLinkError + (padRepError + εInner)²`. -/
+theorem table_sound_pad_zk (A : Arith F K) (hA : A.Correct)
+    (S : Statement) (sch : Schedule)
+    (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
+      sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
+        levelsChained sch.levels sch.ext = true)
+    (hmsch : sch.m = S.m) (hm : 13 ≤ S.m) (t : ℕ) (hpad : PadOK sch.level₀ t) (c₀ : F) (e : ℕ)
+    (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
+    {np : ℕ} (P : Pads0 np e) (tr : Triple np) {N : ℕ} (dom : Fin N ↪ F) (nP q : ℕ) [NeZero (np + nP)]
+    (pos : F → Fin N) (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
+    (δ : ℝ≥0) (hL : np + nP ≤ N)
+    (hδ : δ ≤ Code.relativeUniqueDecodingRadius (ReedSolomon.code dom (np + nP) : Set (Fin N → F)))
+    (σ : Strategy (tablePadZK A P tr dom nP q pos S sch hm t c₀ ptLocal mPts)) :
+    prob (fun out => out.1 = true ∧ ¬ CommittedPad A S sch t c₀ out.2)
+      (tablePadZK A P tr dom nP q pos S sch hm t c₀ ptLocal mPts) σ ≤
+      ENNReal.ofReal (padLinkError sch (S.shape mPts) t) +
+        (ENNReal.ofReal (padRepError sch (S.shape mPts) t e) + εInner N F q δ) ^ 2 := by
+  refine (prob_le_value _ _ σ).trans ?_
+  simp only [tablePadZK, bind_eq, recv, draw, bind_send, bind_ret, bind_coin, value_send]
+  exact iSup_le fun C => tableAfterZK_sound A hA S sch hshape hmsch hm t hpad c₀ e ptLocal mPts hlay P tr dom nP q
+    pos hpos δ hL hδ C
 
 end FlockSoundness.Discharge.ZkSession
