@@ -1062,6 +1062,26 @@ def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake
     assert box
 
 
+def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_back(fake, registry, routes_dirs, capsys):
+    inbox(fake, routes_dirs, "vllm-epoch-run")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "first")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "second")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "third")
+    rc, out, _ = run(capsys, "read", "--as", "vllm-epoch-run", "--json")
+    first, second, third = json.loads(out)
+    assert rc == 0 and "third" in third["text"]
+    rc, out, _ = run(capsys, "read", "--as", "vllm-epoch-run", "--since", first["ts"], "--json")
+    assert rc == 0 and [m["ts"] for m in json.loads(out)] == [second["ts"], third["ts"]]
+    assert json.loads(run(capsys, "read", "--as", "vllm-epoch-run", "--json")[1]) == []
+    assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
+    slack.mark_read("vllm-epoch-run", [second])
+    assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
+    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--since", first["ts"])
+    assert rc == 2 and "neither --since nor --as" in err
+    rc, _, err = run(capsys, "read")
+    assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
+
+
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
     inbox(fake, routes_dirs, "circuits")
     run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
