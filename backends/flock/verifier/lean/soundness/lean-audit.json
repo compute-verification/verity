@@ -4394,6 +4394,24 @@
    "assumptions": [],
    "type_hash": "b64aa36ddf08d7a2462528a063ee67a178fab380687cae684fd75b4751ebd187"
   },
+  "FlockSoundness.Discharge.Integrate.setupH_mPts": {
+   "signature": [
+    "FlockSoundness.Discharge.Integrate.setupH_mPts {tags : Flock.Tags} {circuitFile publicFile : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {d : Lean.Json} {partition : Option Lean.Json}",
+    "  {program : Option ByteArray} {st : Flock.Stmt}",
+    "  (h :",
+    "    Eq (Flock.Stmt.setupH tags circuitFile publicFile coins tables (Option.some d) partition program) (Except.ok st)) :",
+    "  Exists fun D =>",
+    "    And (Eq (Flock.Draw.UnitDraw.ofJson d) (Except.ok D))",
+    "      (Eq st.mPts",
+    "        (instHAdd.hAdd Flock.PT_LOCAL",
+    "          (Nat.instMax.max 3",
+    "            (Flock.log2ceil",
+    "              (Nat.instMax.max (instHDiv.hDiv (instHSub.hSub (instHAdd.hAdd D.proved.size st.c.g) 1) st.c.g) 1)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "334b98bf6372f137637fbe7990f8d37f8fa14c83390cc1deffeb89277ed6be63"
+  },
   "FlockSoundness.Discharge.Integrate.sitesAt_bcSite": {
    "signature": [
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs} {mPts : Nat}",
@@ -10041,6 +10059,7 @@
     "FlockSoundness.Discharge.Integrate.drawSetup_of_setupH",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
+    "FlockSoundness.Discharge.Integrate.setupH_mPts",
     "FlockSoundness.Discharge.Integrate.sitesAt_bcSite",
     "FlockSoundness.Discharge.Integrate.sitesAt_inj",
     "FlockSoundness.Discharge.Integrate.sitesAt_parse",
