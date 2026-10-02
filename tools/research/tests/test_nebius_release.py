@@ -98,6 +98,22 @@ def test_with_nothing_in_flight_a_big_commit_is_let_through(pacer):
     assert pacer.cluster["wls"]["cov-b"]["spec"]["active"] is True and pacer.cluster["policy"] == "None"
 
 
+def test_a_pending_lease_pool_holder_opens_the_gate_so_admitted_commits_get_their_gpu(pacer):
+    commit(pacer, "cov-a", B8, admitted=True)
+    pacer.disk["bundles"] = 1100
+    pacer.tick(NOW)
+    assert pacer.cluster["policy"] == "Hold"
+    pacer.cluster["wls"]["gpu-pool-circuits-1"] = {
+        "metadata": {"name": "gpu-pool-circuits-1", "ownerReferences": [{"kind": "Job", "name": "gpu-pool-circuits-1"}]},
+        "spec": {"queueName": "deployments-gpu", "active": True, "podSets": [{"template": {"spec": {"containers": [{}]}}}]},
+        "status": {}}
+    pacer.tick(NOW)
+    assert pacer.cluster["policy"] == "None"
+    pacer.cluster["wls"]["gpu-pool-circuits-1"]["status"] = {"admission": {"clusterQueue": "deployments-gpu"}}
+    pacer.tick(NOW)
+    assert pacer.cluster["patches"] == ["Hold", "None", "Hold"]
+
+
 def test_at_80_percent_disk_it_holds_even_under_the_cap(pacer):
     pacer.disk.update(bundles=10, pct=80.0)
     pacer.tick(NOW)

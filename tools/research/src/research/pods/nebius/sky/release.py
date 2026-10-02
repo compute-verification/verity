@@ -124,19 +124,34 @@ GATE = ROOT / "gpu-held"                                      # exists while the
 GUARD_STATE = "/var/lib/vy-disk-guard/held"                   # the queues the disk guard holds
 
 
+def pool_holders_pending():
+    """Whether a lease pool's GPU holder (n1_lease.py's `gpu-pool-*` Jobs, which queue in GPU_QUEUE) waits for admission. It
+    brings a GPU to Commits already admitted, so the gate opens for it: held, those Commits would wait for a GPU forever, and the
+    projection that keeps the gate closed would never fall (Oct 1, 9:09-9:31 PM PDT)."""
+    for w in json.loads(k("get", "workloads", "-o", "json"))["items"]:
+        st = w.get("status") or {}
+        own = [o["name"] for o in w["metadata"].get("ownerReferences", []) if o["kind"] == "Job"]
+        if (w["spec"].get("queueName") == GPU_QUEUE and own and own[0].startswith("gpu-pool-") and not st.get("admission")
+                and w["spec"].get("active", True)
+                and not any(c["type"] == "Finished" and c["status"] == "True" for c in st.get("conditions", []))):
+            return True
+    return False
+
+
 def guard_holds():
     """The queues the disk guard holds (its state file is root's)."""
     return set(subprocess.run(["sudo", "cat", GUARD_STATE], capture_output=True, text=True).stdout.split())
 
 
-def gate(close, projected, cap, now=None):
+def gate(close, projected, cap, now=None, why=None):
     """Kueue admits a leased Commit (it requests no GPU) the moment it arrives, before a tick can deactivate it, so the pacer holds
     GPU_QUEUE itself (stopPolicy Hold: nothing new is admitted, nothing running is touched) while `close`, and lets it go
     otherwise. tick() closes it while the admitted Commits' projection plus the next Commit's (the next released or waiting one,
     else the largest admitted, standing for the next arrival) would pass the cap, or the disk is at DISK_PAUSE_PCT. With no Commit
     admitted it always opens (outside the 78% latch), so a big one can't starve. It only undoes its own hold, never in the quiet
-    hour (12:30-13:30Z, whose own timers hold and release) or while the disk guard lists the queue. `projected` is the projection
-    with the next Commit, for the log."""
+    hour (12:30-13:30Z, whose own timers hold and release) or while the disk guard lists the queue. A lease pool's GPU holder
+    waiting for admission opens it too (pool_holders_pending()). `projected` (the projection with the next Commit) and `why`
+    are for the log."""
     policy = k("get", "clusterqueue", GPU_QUEUE, "-o", "jsonpath={.spec.stopPolicy}").strip() or "None"
     g = time.gmtime(now)
     quiet = (12, 30) <= (g.tm_hour, g.tm_min) < (13, 30)
@@ -152,7 +167,7 @@ def gate(close, projected, cap, now=None):
     if not GATE.exists():
         return
     if policy == "Hold" and not quiet and GPU_QUEUE not in guard_holds():
-        log(f"projected {projected:.0f} GB with the next Commit fits under the {cap} GB cap: releasing {GPU_QUEUE}")
+        log(f"{why or f'projected {projected:.0f} GB with the next Commit fits under the {cap} GB cap'}: releasing {GPU_QUEUE}")
         if not DRY:
             k("patch", "clusterqueue", GPU_QUEUE, "--type=merge", "-p", '{"spec":{"stopPolicy":"None"}}')
     if not DRY:
@@ -222,7 +237,9 @@ def tick(now=None):
     base = gb + sum(rest.get(w["name"], 0) for w in admitted)
     reserve = estimate_gb(waiting[0]["row"]) if waiting else max((estimate_gb(w["row"]) for w in admitted), default=0.0)
     room = (not admitted and not latched) or base + reserve <= cap
-    gate(not room or disk >= DISK_PAUSE_PCT, base + reserve, cap, now)
+    full = not room or disk >= DISK_PAUSE_PCT
+    holders = full and pool_holders_pending()
+    gate(full and not holders, base + reserve, cap, now, why="a lease pool's GPU holder waits for admission" if holders else None)
     if not DRY:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text("\n".join(sorted(released)) + "\n")
