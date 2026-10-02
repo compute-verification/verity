@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Hidden.Defs
+import FlockSoundness.Discharge.Hidden.Facts
 
 /-!
 # The soundness of a hidden-output statement (`Stmt.setupHidden`)
@@ -17,7 +17,7 @@ The frozen statements of `Defs.lean`, one theorem each:
 
 namespace FlockSoundness.Discharge.Hidden
 
-theorem setupHidden_spec : SetupHiddenSpec := by sorry
+theorem setupHidden_spec : SetupHiddenSpec := fun h => setupHidden_spec' h
 
 theorem hidden_delta : HiddenDelta := by sorry
 
