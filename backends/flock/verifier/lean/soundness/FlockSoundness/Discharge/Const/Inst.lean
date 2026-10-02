@@ -14,6 +14,8 @@ instance a `ProgPlaces` carries, and holds for the program's own wiring:
   computed rows on the new gates, its constant on `one`.
 * `Prog.oneAt p u`: the gate `p` wires unit `u`'s constant to, which `instC` puts it on (`instC_wire_one`).
 * `Prog.insAt p u i`: the gate `p` wires unit `u`'s input `i` to, which `instC` puts it on (`instC_wire_input`).
+* `instC_wire_input_gate`: when every unit's constant is on one gate, a column of `instC` on any other program input is
+  an input column wired there, as `ZeroCols` needs at the zero's gate.
 -/
 
 namespace FlockSoundness.Discharge.Const.Prog
@@ -164,5 +166,34 @@ theorem instC_wire_one : (instC p outs u).wire (p.rows u).one = oneAt p u :=
 theorem instC_wire_input (c : Fin (p.rows u).w) (hc : c.val < (p.rows u).nIn) :
     (instC p outs u).wire c = insAt p u c.val :=
   rowsWireC_wire_input p u c hc
+
+omit p outs u in
+/-- **A column of an instance on a gate outside its unit is an input column or the constant's**: every computed
+column's gate is the unit's. -/
+theorem col_of_unit_ne {C : Audit.Circuit} {m : ℕ} {P : Audit.Partition C m} {v : Fin m} {R : Rows}
+    (I : P.IsRowsUnit v R) (c : Fin R.w) (h : P.unit (I.wire c) ≠ some v) : c.val < R.nIn ∨ c = R.one := by
+  rcases Nat.lt_or_ge c.val R.nIn with hi | hi
+  · exact Or.inl hi
+  by_cases ho : c = R.one
+  · exact Or.inr ho
+  have h1 : c.val ≠ R.nIn + R.nComp := fun e => ho (Fin.ext e)
+  have h2 : c.val < R.nIn + R.nComp + 1 := c.isLt
+  have hlt : c.val - R.nIn < R.nComp := by omega
+  have hcomp : c = R.comp ⟨c.val - R.nIn, hlt⟩ := Fin.ext (by simp only [Rows.comp]; omega)
+  rw [hcomp] at h
+  exact absurd (I.mem _) h
+
+/-- **A column of `instC` on a program input other than the constant's gate is an input column**, wired to that gate. -/
+theorem instC_wire_input_gate {one g : Fin N} (hp : OneGate p one) (hg : p.unit g = none) (hne : g ≠ one)
+    (c : Fin (p.rows u).w) (hw : (instC p outs u).wire c = g) :
+    c.val < (p.rows u).nIn ∧ insAt p u c.val = g := by
+  have hout : (p.partition outs).unit ((instC p outs u).wire c) ≠ some u := by
+    change p.unit ((instC p outs u).wire c) ≠ some u
+    rw [hw, hg]
+    simp
+  rcases col_of_unit_ne (instC p outs u) c hout with hc | hc
+  · exact ⟨hc, (instC_wire_input p outs u c hc).symm.trans hw⟩
+  · rw [hc, instC_wire_one] at hw
+    exact absurd (hw.symm.trans (hp u)) hne
 
 end FlockSoundness.Discharge.Const.Prog
