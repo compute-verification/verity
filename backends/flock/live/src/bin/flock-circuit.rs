@@ -477,7 +477,7 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
         let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
-        zkv::verify_inner(inner, &zk_layout(st), cons, ch)
+        zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
     .map_err(|e| e.chars().take(200).collect::<String>())
@@ -1108,7 +1108,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     cons.extend(zkv::ligerito_constraints(&zk.lay, &rec, &zkv::ligerito_exposed(&proof.pcs_open.ligerito, &zk.lay), t_prime).unwrap_or_else(|e| panic!("{e}")));
     let fails = zkv::failing(&cons, &zk.pads.h);
     let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
-    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
     let o = bk.as_object_mut().expect("buckets");
