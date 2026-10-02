@@ -83,3 +83,27 @@ def test_a_child_forked_after_its_parent_died_exits_at_once():
         os._exit(0)
     _, status = os.waitpid(pid, 0)
     assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 1
+
+
+def _pdeathsig(_=None) -> tuple[int, int]:
+    import ctypes
+    sig = ctypes.c_int(0)
+    assert ctypes.CDLL(None, use_errno=True).prctl(2, ctypes.byref(sig), 0, 0, 0) == 0   # PR_GET_PDEATHSIG
+    return os.getpid(), sig.value
+
+
+def _die(_=None) -> None:
+    os.kill(os.getpid(), signal.SIGKILL)
+
+
+def test_a_replacement_worker_sets_no_signal_and_the_pool_terminates():
+    """The pool forks a dead worker's replacement from its worker-handler thread, which `terminate()` ends: a signal following that
+    thread would kill the replacement inside `terminate()`, maybe holding the task queue's read lock, and `terminate()` would hang."""
+    from verity_vllm.check.replay.fork import fork_pool
+
+    with fork_pool(1) as pool:
+        first, sig = pool.apply(_pdeathsig)
+        assert sig == signal.SIGKILL
+        pool.apply_async(_die)
+        second, sig = pool.apply(_pdeathsig)
+        assert second != first and sig == 0
