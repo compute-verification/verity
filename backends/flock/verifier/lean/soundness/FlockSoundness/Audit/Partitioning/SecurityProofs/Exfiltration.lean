@@ -2,6 +2,7 @@ import FlockSoundness.Audit.Partitioning.Guarantees
 import FlockSoundness.Audit.Partitioning.SecurityProofs.FreeCompute
 import FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
 import FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
+import FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 
 /-!
 # Optimal partitioning against exfiltration: the proofs
@@ -15,6 +16,9 @@ The proofs of the exfiltration statements of `Partitioning.Guarantees`.
   width condition and the counting of `Exfil.locBits_succ_le` and `Exfil.locBits_succ_ge` put `ℓ` below the `(K+1)`-th
   rung of `r·n` units of width `b'`, so `ConverseAsymptotic` at `K + 1` applies there, and
   `(r·n − K)·c(s/r) ≥ (n − K)·c(s)` since `r ≥ 1` and `f, o ≥ 0`.
+
+The statements of their witnesses, `Witness.exfiltration` and `Witness.refinement`, are `Exfil.witness_exfiltration`
+and `Exfil.witness_refinement`.
 -/
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
