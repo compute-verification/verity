@@ -4,12 +4,15 @@ coordinates it claims and on those it hands back (subnormal and overflowing step
 `Gemm_v1`'s row kernel is the same on either path and against the reference."""
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
 from verity.evaluation import self_check
 from verity.ir.defs import bind
-from verity_vllm.pipeline import cli
 from verity_vllm.program.kernels import dense_rows as DR
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import rows
@@ -236,14 +239,25 @@ def test_the_words_are_the_same_at_any_thread_count(dot_id, monkeypatch):
     monkeypatch.setattr(DR, "_THREADS", [DR.MAX_THREADS])
     monkeypatch.setattr(DR.os, "sched_getaffinity", lambda _pid: set(range(64)))
     for env, n in (("", DR.MAX_THREADS), ("1", 1), ("16", 16), ("64", 64), ("0", DR.MAX_THREADS), ("many", DR.MAX_THREADS)):
-        DR.use_threads(None)
-        cli.process_settings({cli.DENSE_THREADS_ENV: env})
+        DR.use_threads(env)
         assert DR.threads() == n, env
         out, nf = DR.dot_chain(x, w, dot_id)
         assert np.array_equal(out, ref) and np.array_equal(nf, ref_nf), env
     monkeypatch.setattr(DR.os, "sched_getaffinity", lambda _pid: {0, 1, 2})
     DR.use_threads(16)
     assert DR.threads() == 3
+
+
+@pytest.mark.parametrize(("env", "cap"), [("16", 16), ("many", DR.MAX_THREADS), (None, DR.MAX_THREADS)])
+def test_a_process_takes_the_cap_from_its_environment_at_import(env, cap):
+    """No caller passes `VERITY_DENSE_THREADS`: a process that imports the module, as every stage process of a row does, is capped
+    by its own environment under `use_threads`' rule."""
+    environ = {k: v for k, v in os.environ.items() if k != "VERITY_DENSE_THREADS"}
+    if env is not None:
+        environ["VERITY_DENSE_THREADS"] = env
+    out = subprocess.run([sys.executable, "-c", "from verity_vllm.program.kernels import dense_rows as DR; print(DR._THREADS[0])"],
+                         env=environ, capture_output=True, text=True, check=True).stdout
+    assert int(out) == cap
 
 
 def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch):

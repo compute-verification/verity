@@ -208,16 +208,10 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
 
 
-#: the environment variable that caps the float64 dense chain's threads (`dense_rows.use_threads`; the words do not depend on it)
-DENSE_THREADS_ENV = "VERITY_DENSE_THREADS"
-
-
 def process_settings(environ: MutableMapping[str, str]) -> None:
-    """The process-wide settings every command takes from the environment: the dense chain's threads, and a leased Commit's lease
-    (`gpu_lease.acquire` reads and sets this environment)."""
-    if environ.get(DENSE_THREADS_ENV):
-        from verity_vllm.program.kernels import dense_rows
-        dense_rows.use_threads(environ[DENSE_THREADS_ENV])
+    """The process-wide settings every command takes from the environment: a leased Commit's lease (`gpu_lease.acquire` reads and
+    sets this environment).  The dense chain's threads are not among them: `dense_rows` reads `VERITY_DENSE_THREADS` when it is
+    imported, and importing it here would need the core, which a Build's top-level process does not have on its path."""
     if environ.get("VERITY_LEASE_STARTED"):
         from verity_vllm.pipeline import gpu_lease
         gpu_lease.use_environ(environ)
