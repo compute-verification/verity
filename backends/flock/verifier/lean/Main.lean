@@ -99,14 +99,24 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
+/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports are among its
+input rows: an output row is its instance's own (§16.13). -/
+def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit := do
+  if st.tags.hiddenOutputs then
+    let outRows := (st.c.ports.extract (HmOut.nIn st.c) st.c.ports.size).map (·.name)
+    if let some reg := (registered.getD #[]).find? (outRows.contains ·.name) then
+      throw s!"registered reads: {reg.name} is an output row, its instance's own, never a registered value's"
+  Registered.check st.c st.pub registered (Registered.derived st.partition)
+
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
     (registered : Option (Array Registered.Port) := none) : V Stmt :=
   if tags.hm96Rows then do
-    let st ← Stmt.setupH tags circuitB pubB coins tables draw partition program
-    Registered.check st.c st.pub registered (Registered.derived st.partition)
+    let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program
+      else Stmt.setupH tags circuitB pubB coins tables draw partition program
+    checkRegistered st registered
     return st
   else do
     if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
@@ -123,7 +133,7 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     V (SessionSpec × Array Stmt) :=
   if tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
-    for st in sts do Registered.check st.c st.pub registered (Registered.derived st.partition)
+    for st in sts do checkRegistered st registered
     return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
@@ -262,6 +272,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
@@ -355,6 +366,7 @@ def statementCmd (args : List String) : IO UInt32 := do
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
@@ -397,11 +409,12 @@ def regionWordsCmd (args : List String) : IO UInt32 := do
     | [some q, some col] => some (q, col)
     | _ => none
   let res : V Nat := do
-    let c ← HmRow.parse tags circuitB tables
-    let pub ← HmRow.loadPublic tags c pubB
+    let hidden := tags.hiddenOutputs
+    let c ← if hidden then HmOut.parse tags circuitB tables else HmRow.parse tags circuitB tables
+    let pub ← if hidden then HmOut.loadPublic tags c pubB else HmRow.loadPublic tags c pubB
     let pin ← HmRow.pin c
-    let (da, db) := HmRow.delta c pin
-    let regions ← HmRow.regions c pub
+    let (da, db) := if hidden then HmOut.delta c pin else HmRow.delta c pin
+    let regions ← if hidden then HmOut.regions c pub else HmRow.regions c pub
     HmRow.checkRegionWords c (da ++ extra.toArray) (db ++ extra.toArray) regions
     return (HmRow.sharedColumns regions).size
   let line := match res with
@@ -488,14 +501,16 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
-/-- `typed-expand FILE [--out F]`: a `verity/flock-circuit/types` file (item 1e) parsed as `verify` parses it, its unit's
-rows derived (`HmRow.parseTyped`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
-`--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
+/-- `typed-expand FILE [--statement ID] [--out F]`: a typed file (item 1e; `ID` by default `verity/flock-circuit/types`, or
+`verity/flock-circuit/types@210d32e1`) parsed as `verify` parses it, its unit's rows derived (`HmOut.parse`, or
+`HmRow.parseTyped` for a statement with public outputs). One `TYPED` line: the circuits, the unit's rows, and the file's
+SHA-512 and class. With `--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
 def typedExpandCmd (args : List String) : IO UInt32 := do
-  let some path := args.head? | IO.eprintln "typed-expand FILE [--out F]"; return 2
+  let some path := args.head? | IO.eprintln "typed-expand FILE [--statement ID] [--out F]"; return 2
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuitTypes.name) |>.filter (·.typed)
+    | IO.eprintln "typed-expand: --statement names no typed statement"; return 2
   let bytes ← IO.FS.readBinFile path
-  let tags := Tags.circuitTypes
-  let line ← match HmRow.parseTyped tags bytes with
+  let line ← match (if tags.hiddenOutputs then HmOut.parse tags bytes else HmRow.parseTyped tags bytes) with
     | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
     | .ok c =>
       if let some out := argOf args "--out" then

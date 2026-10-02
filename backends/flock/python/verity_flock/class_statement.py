@@ -21,8 +21,9 @@ M0's statement proves a template's identical units with every instance's input r
   digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
   under the tag ``verity/flock/experimental-owners``).
 
-This is a synthetic layout, not the scheme's layout rule over the partition (which is not specified yet), and M0's statement
-publishes the declared outputs, where a partition's unit outputs are committed values.  Every class is one plain
+This is a synthetic layout, not the scheme's layout rule over the partition (which is not specified yet). M0's statement commits
+the outputs as hidden rows like the inputs (one ``out`` row per instance, its ``b || c`` public), so a partition's unit outputs
+are committed values whose row a reading unit can open.  Every class is one plain
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
 record carries the class's table reads and its unit's matrix entries.  `distinct_calls` builds a served row's workload from its program graph:
@@ -666,7 +667,7 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
                                "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
-         "verifier": f"pod {remote.get('host')}" if remote else "loopback",
+         "verifier": f"pod {remote.get('host')}" if remote else "loopback", "coins": FC.coins(live),
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
          # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,

@@ -1,8 +1,8 @@
 """A unit class of any partition as a ``verity/flock-circuit`` statement (`verity_flock.class_statement`): on circuit-check's tiny
 Serve_v1 under `Q_word`, two table-free classes and the embedding gather compose with one row port per input source, their
 laid-out unit rows agree with the reference on synthetic lanes, a source read by several instances is one shared row (the
-gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`` names a built ``flock-circuit`` binary, a
-loopback session accepts each."""
+gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`` names a proving build of ``flock-circuit``, a
+loopback session accepts each, on the coins ``FC_COINS`` names."""
 from __future__ import annotations
 
 import hashlib
@@ -58,12 +58,14 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         text = (d / "circuit.txt").read_text()
         assert st["n"] == 8 and st["k_log"] <= FC.K_MAX and st["circuit_sha512"] == FC.digest(text)
         assert '"rule":"verity/partition/v1"' in text                      # the Q_word partition's own digest, not a provisional cover
-        assert len(st["ports"]) == len(st["shared_rows"]) and all(w % CS.BLOCK_WORDS == 0 for w in st["ports"])
+        assert list(st["shared_rows"]) == [f"p{j}" for j in range(len(st["ports"]))] + ["out"] and st["shared_rows"]["out"] == 8
+        assert all(w % CS.BLOCK_WORDS == 0 for w in st["ports"])          # the output row: one per instance, never shared
         if (s, cl) == gather:
-            assert st["shared_rows"] == {"p0": 1, "p1": 8}                  # one table row shared by every instance; a row per index
+            assert st["shared_rows"] == {"p0": 1, "p1": 8, "out": 8}        # one table row shared by every instance; a row per index
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
+            assert live["coins"] == ("live-os" if os.environ.get("FC_COINS") == "os" else "os-seed-prf")
 
 
 def _fp_class(dtype: str, K: int):
@@ -207,9 +209,9 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
 
 
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
-    """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each port's row schema and length in
-    bits and no single ``row_schema``, its row constants are core's prefixes, and its circuit is neither other frame's. From the
-    prover's file, every committed row's elements give core's bit-row digest, ``b || c`` with its salt, the frame leaf under the
+    """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
+    (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
+    is neither other frame's. From the prover's file, every committed row's elements give core's bit-row digest, ``b || c`` with its salt, the frame leaf under the
     hiding schema, and the header's root under the domain its binding names, using ``verity.commitments`` only."""
     from verity.commitments import hm96
     from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
@@ -220,12 +222,12 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
     lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
     st = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "core", key, core_rows=True)
-    schemas = [["hm96-sha512/row/v2", 1024], ["hm96-sha512/row/v2", 1024]]
+    schemas = [["hm96-sha512/row/v2", 1024]] * 3
     assert st["packed"] is True and st["row_schemas"] == schemas and st["ports"] == [64, 64]
     meta = json.loads((tmp_path / "core" / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert "row_schema" not in meta and meta["row_schemas"] == schemas
-    assert [r["prefix"] for r in meta["rows"]] == [sha512_row_v2_prefix(1024).hex()] * 2
-    assert [p.bits for p in FC._meta_ports(meta)] == [1024, 1024]
+    assert [r["prefix"] for r in meta["rows"]] == [sha512_row_v2_prefix(1024).hex()] * 3
+    assert [p.bits for p in FC._meta_ports(meta)] == [1024] * 3
     others = {CS.stage(units, "q-word", s, cl, lanes, tmp_path / fr, key, packed=fr == "packed")["circuit_sha512"] for fr in ("plain", "packed")}
     assert len(others) == 2 and st["circuit_sha512"] not in others
 
@@ -260,19 +262,22 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
 
 def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_not_whole_parameters(monkeypatch, tmp_path: Path):
     """A bit row of any length stages, its leaves ``ceil(bits / 16)`` words: NVF4 K=256's rows are 1152 bits, 144 bytes, one
-    compression and then a last block that holds 16 row bytes and SHA-512's padding. NVF4 K=128's (576 bits, 72 bytes) fit the
-    padding block with no compression before it, which the circuit refuses (its ``sha512x3`` range, the pin's, would hold no
-    slot). A source that is not one whole parameter, a row length that is not its leaves', and tiling are refused."""
+    compression and then a last block that holds 16 row bytes and SHA-512's padding; the output row (§16.13) is a bit row of its
+    64 words. NVF4 K=128's (576 bits, 72 bytes) fit the padding block with no compression before it, so the output row's is the
+    statement's one (with none, the circuit's ``sha512x3`` range, the pin's, would hold no slot). A source that is not one whole
+    parameter, a row length that is not its leaves', and tiling are refused."""
     from verity_flock import sha512_circuit as S
 
     units, s, cl, act, uc, groups = _fp_class("nvf4", 256)
     st = CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k256", b"k" * 32, core_rows=True)
-    assert st["row_schemas"] == [["hm96-sha512/row/v2", 1152]] * 2 and st["ports"] == [72, 72]
+    assert st["row_schemas"] == [["hm96-sha512/row/v2", 1152]] * 2 + [["hm96-sha512/row/v2", 1024]] and st["ports"] == [72, 72]
     meta = json.loads((tmp_path / "k256" / "circuit.txt").read_text().split("\n", 2)[1][5:])
-    assert [c for _p, _w, c in meta["ports"]] == [1, 1] and [r["pad"] for r in meta["rows"]] == [S.pad_tail(128 + 144).hex()] * 2
+    assert [c for _p, _w, c in meta["ports"]] == [1, 1, 1]
+    assert [r["pad"] for r in meta["rows"]] == [S.pad_tail(128 + 144).hex()] * 2 + [S.pad_tail(128 + 128).hex()]
     units, s, cl, act, uc, groups = _fp_class("nvf4", 128)
-    with pytest.raises(ValueError, match="no row has a compression before its last block"):
-        CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k128", b"k" * 32, core_rows=True)
+    CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k128", b"k" * 32, core_rows=True)
+    meta = json.loads((tmp_path / "k128" / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert [c for _p, _w, c in meta["ports"]] == [0, 0, 1]
     merged, _joins, bits = CS.element_rows(act, uc, groups)
     for bad in ([groups[0][:64], groups[0][64:], *groups[1:]], [groups[0][::-1], *groups[1:]], [groups[0] + groups[1], *groups[2:]]):
         with pytest.raises(ValueError, match="not one whole parameter"):
@@ -298,11 +303,10 @@ def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_no
         CS.stage_tiled(units, "q-word", s, cl, (), tmp_path, b"", 4, 4, 1)
 
 
-def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list | None]:
+def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list]:
     """At (dtype, K), from the coordinate Definition's parameters through the stager's own layout and core's prefixes: the default
     and packed frames' port prefixes (one ``sha512/row/v1`` row per parameter, its words as `class_lowering` pads them) and the
-    new frame's, ``(prefix, bits)`` per row, or None where the circuit refuses the shape (no row with a compression before its
-    last block)."""
+    new frame's, ``(prefix, bits)`` per row."""
     gemm_fp = _gemm_fp()
     fn = gemm_fp.coordinate(dtype, K)
     sig = dict(fn.signature()[0])
@@ -311,8 +315,6 @@ def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list | None]:
            for fr in ("default", "packed")}
     bits = [sum(sig[nm].n * sig[nm].elem.w for nm in row) for row in CS.ELEMENT_ROWS[fn.id.split("{")[0]]]
     ports = [FC._port(f"p{i}", -(-b // 16), b) for i, b in enumerate(bits)]
-    if all(p.comps == 0 for p in ports):
-        return old, None
     return old, [(p.layout().prefix, p.bits) for p in ports]
 
 
@@ -328,30 +330,25 @@ def _gemm_fp():
 def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
     """Every port's prefix in the new, default and packed frames, at the test shapes, K = 64 ... 16384 (the 12 cells among them):
     each new prefix is core's ``P(l)`` for the row's own bits (codes then scales), so a prefix names a length and nothing else, x
-    and W rows of one shape share it (by design: the frame leaf binds the port's domain), and none equals an old-frame prefix;
-    the refused shapes are exactly those whose rows fit SHA-512's padding block (at most 111 bytes: no compression before it),
-    so every cell stages, MXF4 K=2048's partial last block among them. The derivation agrees with the stager's own lowering
-    and `element_rows` at K=128."""
+    and W rows of one shape share it (by design: the frame leaf binds the port's domain), and none equals an old-frame prefix.
+    Every shape stages, MXF4 K=2048's partial last block among them: rows that fit SHA-512's padding block (at most 111 bytes)
+    have no compression before it, and the output row's (§16.13) is the statement's. The derivation agrees with the stager's
+    own lowering and `element_rows` at K=128."""
     from verity.commitments.rowleaf import sha512_row_v2_prefix
 
     shapes = [(d, k) for d in ROW_BITS for k in (64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384)]
     new: dict[bytes, tuple] = {}
     old: set[bytes] = set()
-    refused = []
     for dtype, K in shapes:
         frames, rows = _frame_prefixes(dtype, K)
         for fr, prefixes in frames.items():
             assert prefixes[0] == prefixes[1], (dtype, K, fr, "the old frames' x and W rows share a prefix")
             old.update(prefixes)
-        if rows is None:
-            refused.append((dtype, K))
-            continue
         assert [b for _p, b in rows] == [ROW_BITS[dtype](K)] * 2 and [p for p, _b in rows] == [sha512_row_v2_prefix(ROW_BITS[dtype](K))] * 2
         for prefix, b in rows:
             assert new.setdefault(prefix, b) == b, (dtype, K, b, new[prefix])
     assert not set(new) & old
-    assert refused == [("e4m3", 64), ("nvf4", 64), ("nvf4", 128), ("mxf4", 64), ("mxf4", 128)]
-    assert len(new) == len({ROW_BITS[d](k) for d, k in shapes if (d, k) not in refused})
+    assert len(new) == len({ROW_BITS[d](k) for d, k in shapes})
 
     for dtype in ROW_BITS:
         _units, _s, _cl, act, uc, groups = _fp_class(dtype, 128)
@@ -545,6 +542,30 @@ def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0
         live = CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=3)
         assert (live["accepted"], live["why"]) == (accepted, why), (verdicts, rc)
         assert live["timed_runs"] == len(verdicts) - 1
+
+
+def test_a_live_statement_records_the_coins_its_sessions_ran_on(monkeypatch, tmp_path: Path):
+    (tmp_path / "circuit.txt").write_text("circuit")
+    seed, os_ = {"verdict": {"coin_seed": {"commitment": "ab"}}}, {"identity": {"coins": "live-os (every round's coins ...)"}}
+    tree = {"identity": {"hooks": {"zk": True}}}
+    st: dict = {}
+
+    class Prove:
+        def __init__(self, cmd, stdout, stderr):
+            if "-o" in cmd:
+                Path(cmd[cmd.index("-o") + 1]).write_text("1024\n")
+            stdout.write("".join(f"LIVE\t{json.dumps({'run': i, 'warm': i == 0, 'accepted': True, **x})}\n" for i, x in enumerate(st["live"])))
+            self.returncode = 0
+
+        def wait(self):
+            return 0
+
+    monkeypatch.delenv("FC_VERIFIERS", raising=False)
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"]))
+    monkeypatch.setattr(CS.subprocess, "Popen", Prove)
+    for live, coins in (([seed] * 2, "os-seed-prf"), ([os_] * 2, "live-os"), ([tree] * 2, None), ([seed, os_], None)):
+        st["live"] = live
+        assert CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=1)["coins"] == coins, live
 
 
 def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Path):

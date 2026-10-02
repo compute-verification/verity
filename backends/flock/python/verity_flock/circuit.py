@@ -11,11 +11,17 @@ prefix ``P(bits)`` the row's ``ceil(bits / 8)`` bytes then SHA-512's padding. Th
 prefix, the blocks, and every message bit at or past it (the last byte's fill bits, then the padding: a whole padding block,
 a last block of the row's bytes and padding, or an extra block of padding alone) as Δ constants.
 
+A row is an input port's words or an output port's (an output row: the port's words, zero-padded to whole SHA-512 blocks, its
+message bits copies of the bits the circuit computes). META ``ports`` lists the input rows, then one output row per output port;
+``input_ports`` counts the input rows. An output is a value like an input: committed under its hiding leaf, never published, and
+the committed output row is what a unit that reads it opens.
+
 Private by default. The public data are the frame-v3-sha512 roots, each row's ``b || c`` (the serving tree's leaves are
-functions of it), the declared outputs, and the layout below. Every other word (every compression's chaining value, every
-word a unit, a tail stage or a lookup reads from another) stays inside the witness, joined by copy constraints (Δ) inside a
-block: no public intermediate word, and the verifier evaluates no part of the computation (a tail, the Gumbel noise of a
-public seed included, is a slot type of the circuit or the template has no statement here).
+functions of it), and the layout below. Every other word (every output word, every compression's chaining value, every word a
+unit, a tail stage or a lookup reads from another) stays inside the witness, joined by copy constraints (Δ) inside a block: no
+public value, and the verifier evaluates no part of the computation (a tail, the Gumbel noise of a public seed included, is a
+slot type of the circuit or the template has no statement here). Private means absent from the public file: M0's transcript is
+a function of the witness (``NON_ZK_PROOF``, its mask slots zeros), so only ``--zk`` targets hiding from the transcript.
 
 One or more whole instances (VUs) per block. A block is the same for every block (Flock's ``A = I ⊗ A_0 + Δ``) and holds aligned
 ranges of slots of a few types:
@@ -23,17 +29,19 @@ ranges of slots of a few types:
 * ``sha512x3``: three independent SHA-512 compressions (:mod:`sha512_circuit`, 2^18 bits): a row's blocks after its constant
   first block but its last, chained by Δ (the first from the prefix's midstate, a Δ constant), the row's bits the message
   bits (a bit row's message bits past its length Δ constants);
-* ``hm96``: one per input port (``per_vu`` a power of two): the row's last compression (its last block: a ``sha512/row/v1``
-  row's padding block, a Δ constant; a bit row's last bytes, if any, and padding, its bits past the length Δ constants; its
+* ``hm96``: one per row (``per_vu`` a power of two): the row's last compression (its last block: a ``sha512/row/v1`` row's
+  padding block, a Δ constant; a bit row's last bytes, if any, and padding, its bits past the length Δ constants; its
   chaining value the previous compression's, or for a row of no other compression the midstate), then ``b || c`` from the
   salt; its ``bc`` output is the public region of the row;
 * ``unit``: the template's identical units (2^unit_log bits), each input bit a copy of the message bit that hashes it (a bit
-  row's leaf bits past its length: of the forced-zero row);
+  row's leaf bits past its length: of the forced-zero row), each output row's message bit a copy of the output bit it
+  commits (zero past the port's words);
 * ``mask``: 2^14 free cells (``A = B = I``), reserved for zero-knowledge masks and filled by the prover's mask hook (zeros in
   M0), apart from the forced-zero padding (positions no range covers).
 
 A padding instance (the block's unused instances and every block past the last) is the all-zero instance with zero salts; its
-``b || c`` and outputs are pinned here (``dummy``), so the verifier knows every public value of every block.
+rows' ``b || c`` (its output rows hold the zero instance's outputs) and outputs are pinned here (``dummy``), so the verifier
+knows every public value of every block.
 
 The composite circuit (``flock-circuit``) is the statement's meaning: a ``META`` line (ports, ranges, each row's constants,
 the wires, the units' leaf and output maps, the pinned dummy values, the leaf-commitment scheme, the program digests, the
@@ -73,7 +81,7 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
 SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
 SHA_LOG = HM_LOG = 18
 MASK_LOG = 14
-K_MAX = 26
+K_MAX = 27
 #: The partition is a named query of the program, P = Q(C) (Daniel, 2026-09-27): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Until core's verity/partition/v1 lands (#111), the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
@@ -212,7 +220,7 @@ def _port(name: str, words: int, bits: int | None = None) -> Port:
 
 
 def _meta_ports(meta: dict) -> list[Port]:
-    """META's input ports, each a bit row of the length its ``row_schemas`` entry names (absent: ``sha512/row/v1`` rows)."""
+    """META's rows, each a bit row of the length its ``row_schemas`` entry names (absent: ``sha512/row/v1`` rows)."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 
     if "row_schemas" not in meta:
@@ -220,6 +228,23 @@ def _meta_ports(meta: dict) -> list[Port]:
     if any(s != SCHEMA_HM96_SHA512_ROW_V2 for s, _bits in meta["row_schemas"]):
         raise ValueError(f"row_schemas: each port's is {SCHEMA_HM96_SHA512_ROW_V2}")
     return [_port(nm, w, bits) for (nm, w, _), (_s, bits) in zip(meta["ports"], meta["row_schemas"], strict=True)]
+
+
+def out_row(name: str, words: int, bit_row: bool = False) -> Port:
+    """Output port ``name``'s row: its ``words`` output words, zero-padded to whole SHA-512 blocks (64 words each); in a
+    statement of bit rows (``row_schemas``), a bit row of exactly those words' bits."""
+    w = -(-words // 64) * 64
+    return Port(name, w, 16 * w if bit_row else None)
+
+
+def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port]) -> dict:
+    """Each output port's words ``{port: (n, words)}`` as its output row's (zero past the port's words)."""
+    out = {}
+    for (nm, w), p in zip(out_ports, rows):
+        v = np.asarray(outs[nm], dtype=np.uint16).reshape(-1, w)
+        out[nm] = np.zeros((len(v), p.words), dtype=np.uint16)
+        out[nm][:, :w] = v
+    return out
 
 
 def _row_consts(p: Port) -> dict:
@@ -337,7 +362,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
     partition names, else :func:`program_sha512` of the subcircuit. ``port_bits``: each input port's bit row length (its
-    ``sha512/row/v2`` rows), which META names per port (``row_schemas``) in place of the one ``row_schema``."""
+    ``sha512/row/v2`` rows; the output rows then bit rows of all their words), which META names per port (``row_schemas``)
+    in place of the one ``row_schema``."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -358,8 +384,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if port_bits is not None and None in port_bits:
         raise ValueError(f"{low.name}: bit rows on every input port or on none")
     bits_of = port_bits or [None] * len(sub.inputs)
-    ports = [_port(p.name, w, b) for p, (w, _), b in zip(sub.inputs, lv["in_ports"], bits_of, strict=True)]
+    ins = [_port(p.name, w, b) for p, (w, _), b in zip(sub.inputs, lv["in_ports"], bits_of, strict=True)]
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
+    ports = ins + [out_row(nm, w, bit_row=bool(port_bits)) for nm, w in outs]
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -406,9 +433,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     row_schema = {"row_schemas": [[p.schema, p.bits] for p in ports]} if port_bits else {"row_schema": ROW_SCHEMA}
     meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, **row_schema, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
-            "ports": [[p.name, p.words, p.comps] for p in ports], "out_ports": outs, "ranges": ranges, "rows": [_row_consts(p) for p in ports],
-            "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
-            "dummy": _dummy(low, ports, sub), "leaf_scheme": LEAF_SCHEME,
+            "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
+            "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"],
+            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, ins, outs, ports[len(ins):], sub), "leaf_scheme": LEAF_SCHEME,
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
@@ -446,18 +473,33 @@ def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, lis
     return out
 
 
-def _dummy(low: IL.Lowering, ports: list[Port], sub=None) -> dict:
-    """The all-zero instance's ``b || c`` (zero rows, zero salts; per port) and output words (every output leaf), as the padding
-    instances hold (a tail that returns the outputs: the template's reference evaluation of the zero instance)."""
-    n_in = sum(p.words for p in ports)
+def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port], sub=None) -> dict:
+    """The all-zero instance's output words (every output leaf) and every row's ``b || c`` under zero salts (its zero input rows,
+    then its output rows), as the padding instances hold (a tail that returns the outputs: the template's reference evaluation of
+    the zero instance)."""
+    n_in = sum(p.words for p in ins)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
     if low.units.tail_rets:
-        ev = sub.evaluate({p.name: [np.zeros(w, dtype=np.uint16)] for p, w in zip(sub.inputs, [q.words for q in ports])})
+        ev = sub.evaluate({p.name: [np.zeros(w, dtype=np.uint16)] for p, w in zip(sub.inputs, [q.words for q in ins])})
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
-    bc = _commit_strings(ports, {p.name: np.zeros((1, p.words), np.uint16) for p in ports}, {p.name: [bytes(SALT_BYTES)] for p in ports})
-    return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": [int(x) for x in outs[0]]}
+    words = [int(x) for x in outs[0]]
+    at = np.cumsum([0] + [w for _, w in out_ports])
+    rows = {p.name: np.zeros((1, p.words), np.uint16) for p in ins}
+    rows.update(out_rows({nm: words[at[j]:at[j + 1]] for j, (nm, _) in enumerate(out_ports)}, [tuple(x) for x in out_ports], orows))
+    ports = ins + orows
+    bc = _commit_strings(ports, rows, {p.name: [bytes(SALT_BYTES)] for p in ports})
+    return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": words}
+
+
+def coins(live: list[dict]) -> str | None:
+    """The coins M0's sessions ran on, as their LIVE records name them: ``os-seed-prf`` when the verdict opens the step-0 seed (the
+    binary's default), ``live-os`` when the identity names per-round OS coins (``FC_COINS=os``); None for anything else (a
+    ``--zk`` session's committed coin tree) and for sessions that differ."""
+    modes = {"os-seed-prf" if (x.get("verdict") or {}).get("coin_seed") else
+             "live-os" if str((x.get("identity") or {}).get("coins", "")).startswith("live-os") else None for x in live}
+    return modes.pop() if len(modes) == 1 else None
 
 
 def digest(text: str) -> str:
@@ -467,13 +509,13 @@ def digest(text: str) -> str:
 
 # --- instance files -----------------------------------------------------------------------------------------------------------
 
-def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo: int, hi: int, rows: dict, outs: dict, salts: dict):
-    """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per input port (``hm96-sha512/row/v2`` for a
-    bit row; over ``rows[port]``: the instances' rows, or a shared-row file's table), a ``u16`` word tree per output port
-    (instance-major words), each under a domain bound to the set, the range, the port and its schema. Returns the header's
-    ``frame_v3`` entry and every row's ``b || c``."""
+def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts: dict):
+    """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per row (``hm96-sha512/row/v2`` for a
+    bit row; the input rows, then the output rows; over ``rows[port]``: the instances' rows, or a shared-row file's table),
+    each under a domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and
+    every row's ``b || c``."""
     from verity.commitments import hm96
-    from verity.commitments.frame_v3 import FrameV3, WordLeaf
+    from verity.commitments.frame_v3 import FrameV3
     from verity.commitments.frame_v3 import Port as FPort
     from verity.commitments.identity import identity_digest
     from verity.commitments.indexed import RangeIndexedDomain
@@ -482,25 +524,19 @@ def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo
 
     from . import ir_frame
 
-    inst, n = hm96.SHA512, hi - lo
-    schemas = {**{p.name: p.schema for p in ports}, **{nm: "u16" for nm, _ in out_ports}}
-    counts = {**{p.name: len(rows[p.name]) for p in ports}, **{nm: n * w for nm, w in out_ports}}
+    inst = hm96.SHA512
+    schemas = {p.name: p.schema for p in ports}
     bind, doms = {}, {}
-    for name in schemas:
-        bind[name] = bytes.fromhex(identity_digest(ir_frame.BINDING_TAG, {"set": input_set.name, "content_digest": input_set.content_digest,
-                                                                          "lo": int(lo), "hi": int(hi), "port": name, "schema": schemas[name]}))
-        doms[name] = CommitmentDomain(bind[name], ir_frame.OWNER, RangeIndexedDomain(0, counts[name]), hash="sha512")
-    fv = FrameV3({**{p.name: FPort(doms[p.name], p.leaf()) for p in ports},
-                  **{nm: FPort(doms[nm], WordLeaf("u16", 2)) for nm, _ in out_ports}})
+    for p in ports:
+        bind[p.name] = bytes.fromhex(identity_digest(ir_frame.BINDING_TAG, {"set": input_set.name, "lo": int(lo), "hi": int(hi), "port": p.name,
+                                                                            "schema": p.schema}))
+        doms[p.name] = CommitmentDomain(bind[p.name], ir_frame.OWNER, RangeIndexedDomain(0, len(rows[p.name])), hash="sha512")
+    fv = FrameV3({p.name: FPort(doms[p.name], p.leaf()) for p in ports})
     bcs = _commit_strings(ports, rows, salts)
     roots = {}
     for p in ports:
         leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bc), p.schema) for i, bc in enumerate(bcs[p.name])]
         roots[p.name] = fv.root(p.name, leaves).hex()
-    for name, _ in out_ports:
-        flat = np.asarray(outs[name], dtype=np.uint64).reshape(-1)
-        roots[name] = fv.root(name, [fv.tree_leaf(name, r, fv.leaf_layout(name, r).digest(int(v).to_bytes(2, "big")))
-                                     for r, v in enumerate(flat.tolist())]).hex()
     return {"frame": "frame-v3-sha512", "roots": roots, "domain_ids": {k: d.domain_id.hex() for k, d in doms.items()},
             "bindings": {k: b.hex() for k, b in bind.items()}, "owner": ir_frame.OWNER, "schemas": schemas,
             "row_key_sha512": hashlib.sha512(inst.default_key).hexdigest()}, bcs
@@ -535,35 +571,41 @@ def share(rows: dict) -> tuple[dict, dict]:
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None) -> dict:
-    """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
-    sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
-    every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
-    and every instance's output words (u16 LE, output leaves in order). ``path`` gets the prover's file (``None``: none),
-    ``pub_path`` the verifier's own file from the same salts, which has neither rows nor salts: it never holds a private word.
+    """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
+    circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
+    the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
+    (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes). ``path`` gets the prover's file (``None``: none), ``pub_path`` the verifier's own file
+    from the same salts, which has neither rows nor salts: it never holds a value, an output word included.
 
     ``share_rows``: each input port's distinct rows are one committed table (header ``shared_rows: {port: R_p}``, the port's
     frame-v3 tree over them; :func:`share`), and the rows, salts and ``b || c`` are the tables' (port-major, table order), with
-    every instance's refs (u32 LE, instance-major, ports in order) between the ``b || c`` and the outputs. ``rows`` and ``outs``
+    every instance's refs (u32 LE, instance-major, ports in order) after the ``b || c``: the refs show which instances read
+    equal rows, so this dedupe suits rows whose equality is the program's structure (``tables`` below is value-independent). An
+    output row is its instance's own
+    (its table the instances' output rows in order, never deduplicated, so equal outputs stay apart). ``rows`` and ``outs``
     (``{port: (n, words)}``) replace the set's range as the instances' words.
 
-    ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``): the shared-row tables and refs as given, in their
-    order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt). ``salts``
-    (``{port: [192-byte salt, ...]}``, one per table row, or per instance without tables): the committer's own salts.
+    ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``, input ports): the shared-row tables and refs as given,
+    in their order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt).
+    ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
+    committer's own salts.
 
-    ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the ports whose table rows are rows of a
-    registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3 path to
-    the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``."""
+    ``registered`` (``{port: {"value", "positions", "paths"}}``, input ports, with ``tables``): the ports whose table rows are
+    rows of a registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3
+    path to the registered root (``verity_sampled_proofs.one_stage.registered``); the header's ``registered``. An output row
+    is never registered: it is its instance's own."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
     ports = _meta_ports(meta)
+    ins, orows = ports[:meta["input_ports"]], ports[meta["input_ports"]:]
     out_ports = [tuple(x) for x in meta["out_ports"]]
     if outs is None:
         outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
     if registered is not None:
-        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
+        if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ins}:
             raise ValueError("registered: some input ports' tables, given with their tables, refs and registered salts")
         words = {p.name: p.words for p in ports}
         for name, e in registered.items():
@@ -571,11 +613,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
             if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
                 raise ValueError(f"registered port {name}: a value, and one position and path per table row")
     if tables is not None:
-        if set(tables) != {p.name for p in ports} or set(refs) != {p.name for p in ports}:
+        if set(tables) != {p.name for p in ins} or set(refs) != {p.name for p in ins}:
             raise ValueError("tables and refs: one per input port")
-        rows = {p.name: np.ascontiguousarray(tables[p.name], dtype=np.uint16).reshape(-1, p.words) for p in ports}
-        refs = {p.name: np.asarray(refs[p.name], dtype=np.int64).reshape(-1) for p in ports}
-        for p in ports:
+        rows = {p.name: np.ascontiguousarray(tables[p.name], dtype=np.uint16).reshape(-1, p.words) for p in ins}
+        refs = {p.name: np.asarray(refs[p.name], dtype=np.int64).reshape(-1) for p in ins}
+        for p in ins:
             r = refs[p.name]
             if len(r) != n or not len(rows[p.name]) or r.min(initial=0) < 0 or r.max(initial=0) >= len(rows[p.name]):
                 raise ValueError(f"port {p.name}: one ref per instance, each a row of its table")
@@ -584,12 +626,15 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
             rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
         refs = None
         if share_rows:
-            rows, refs = share({p.name: rows[p.name] for p in ports})
+            rows, refs = share({p.name: rows[p.name] for p in ins})
+    rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows)}
+    if refs is not None:
+        refs.update({p.name: np.arange(n) for p in orows})
     if salts is None:
         salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
         raise ValueError("salts: one 192-byte salt per row")
-    fv, bcs = statement(ports, out_ports, input_set, lo, hi, rows, outs, salts)
+    fv, bcs = statement(ports, input_set, lo, hi, rows, salts)
     G = meta["vus_per_block"]
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
     if len(indices) != n or any(a >= b for a, b in zip(indices, indices[1:])) or min(indices, default=0) < 0:
@@ -597,8 +642,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     units = {"vus_per_block": G, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
              "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
     head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
-            "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha512": digest(text),
-            "units": units, "frame_v3": fv, "rows": True}
+            "range": [lo, hi], "instances": n, "circuit_sha512": digest(text), "units": units, "frame_v3": fv, "rows": True}
     if registered is not None:
         head["registered"] = {name: {"value": e["value"], "positions": [int(x) for x in e["positions"]], "paths": list(e["paths"])}
                               for name, e in registered.items()}
@@ -608,7 +652,6 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         public += np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes()
     else:
         public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
-    public += np.concatenate([outs[nm] for nm, _ in out_ports], axis=1).astype("<u2").tobytes()
     if path is not None:
         if refs is not None:
             private = b"".join(np.ascontiguousarray(rows[p.name].astype("<u2")).tobytes() for p in ports)
@@ -661,7 +704,7 @@ def main(argv=None) -> int:
     """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR [--partition H --program H --unit-indices FILE]``:
     the composite circuit, then for each N the prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N),
     their global unit indices from FILE's JSON list, else [0, N)); prints the pin and the class. ``--class-only``: compose and
-    print only (the class a partition names)."""
+    print only (the class a partition names). ``--typed``: the typed statement instead."""
     import argparse
 
     from verity_numerical.bench.input_sets import InputSet
@@ -675,6 +718,7 @@ def main(argv=None) -> int:
     ap.add_argument("--unit-indices", default=None, help="a JSON list: the global unit index of each staged instance, ascending")
     ap.add_argument("--class-only", action="store_true")
     ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
+    ap.add_argument("--typed", action="store_true", help="the typed statement (verity_flock.typed_statement.stage)")
     a = ap.parse_args(argv)
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
@@ -684,9 +728,12 @@ def main(argv=None) -> int:
                           "program_sha512": program_sha512(s.subcircuit, set_statics(s))}))
         return 0
     idx = json.loads(Path(a.unit_indices).read_text()) if a.unit_indices else None
+    if a.typed:
+        from verity_flock import typed_statement
+    stage_ = typed_statement.stage if a.typed else stage
     for n in a.n:
-        stage(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
-              share_rows=a.share_rows)
+        stage_(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
+               share_rows=a.share_rows)
     text = (Path(a.out) / "circuit.txt").read_text()
     print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest(text), "class_sha512": class_digest(text), "n": a.n}))
     return 0

@@ -130,7 +130,7 @@ def test_it_gives_the_rust_provers_sessions_their_verdicts(tmp_path):
     subprocess.run([sys.executable, str(LEAN.parent / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
                    check=True, capture_output=True)
     sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())
-    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit/types+seed-injection",
+    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit/types@210d32e1+seed-injection",
                         "--circuit", str(root / "stage" / "circuit.txt"), "--public", str(root / "stage" / "pub-4.bin"),
                         "--session", *map(str, sessions)], capture_output=True, text=True)
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
