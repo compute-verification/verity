@@ -49,7 +49,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme
+from verity_vllm.commit import hiding, registered_weights as RW, scheme  # noqa: N812
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
@@ -1155,8 +1155,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     # ------------------------------------------------------------------ lifecycle
 
     def register_weights(self) -> dict:
-        """Registered input: every parameter + buffer hashed once (chunked pos_leaf leaves, per-tensor subtree, fold of subtree roots).
-        Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
+        """Registered input: every parameter + buffer hashed once (vllm-v1: chunked pos_leaf leaves, per-tensor subtree, fold of subtree
+        roots; hiding: `registered_weights`). Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
         t0 = time.perf_counter()
         # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
         # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
@@ -1170,11 +1170,11 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
-        items = list(self.model.named_parameters()) + list(self.model.named_buffers())
+        items = [(n, p) for n, p in list(self.model.named_parameters()) + list(self.model.named_buffers())
+                 if isinstance(p, torch.Tensor) and p.numel() and not (id(p) in seen or seen.add(id(p)))]
+        if self.hiding is not None:
+            return RW.register(self, items, t0, mode, _dtype_name)
         for name, p in items:
-            if not isinstance(p, torch.Tensor) or id(p) in seen or p.numel() == 0:
-                continue
-            seen.add(id(p))
             src = p.detach().contiguous().reshape(-1)          # 0-dim buffers (e.g. scales) -> 1 element
             flat = src.view(torch.uint8) if src.dtype != torch.uint8 else src
             nb = int(flat.numel())

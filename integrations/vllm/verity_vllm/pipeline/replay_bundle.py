@@ -7,6 +7,7 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
     weights/tree.json the committed weights root and the tree under it (`register_weights`): geo digest, chunk, the registered tensors
                       [name, dtype, shape, nbytes] in order and their tensor roots; `extra` names the registered tensors whose bytes
                       are in the bundle (buffers and engine constants, not checkpoint tensors)
+    weights/registration.key  the registration key of a hiding weights root (`registered_weights`): the row salts, prover material
     weights/extra/    those tensors' bytes, `<index>.bin` by their position in `names`
     binding_map.json  the run's binding map (`binding_map_p<pair>.json`)
     context.json      everything else the replay reads: the requests, sampling, served tokens, stop rule of record, the replay's
@@ -34,6 +35,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm.commit import registered_weights as RW
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.pipeline import c2_replay as C2
 
@@ -268,6 +270,8 @@ def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_n
         extra[name] = i
     doc = tree | {"extra": extra}
     (p / "weights" / "tree.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+    if tree.get("scheme") == RW.NAME:
+        (p / "weights" / RW.KEY_FILE).write_bytes(com._registration_key)
     return p
 
 

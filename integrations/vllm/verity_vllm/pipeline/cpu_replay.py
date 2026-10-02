@@ -49,7 +49,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import scheme
+from verity_vllm.commit import registered_weights as RW
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
@@ -139,12 +139,8 @@ def undecided(c: dict[str, Any], bundle: str) -> None:
         vc["result"] = None
 
 
-def tensor_root(raw: np.ndarray, chunk: int) -> bytes:
-    mv = memoryview(raw).cast("B")
-    return scheme.fold([scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])
-
-
-def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any) -> tuple[str, np.ndarray | None, str | None, bool]:
+def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, key: bytes | None = None
+              ) -> tuple[str, np.ndarray | None, str | None, bool]:
     """(source, the tensor's bytes when they open against its tensor root, why not, whether the bytes were read at all)."""
     from verity_vllm.check import weights_of_record as WR
 
@@ -160,7 +156,9 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any) -> tuple[str,
         raw = np.ascontiguousarray(words).reshape(-1).view(np.uint8)
     if raw.size != int(nb):
         return src, None, f"{raw.size} B, registered {nb} B", True
-    if tensor_root(raw, int(tree["chunk"])) != bytes.fromhex(tree["tensor_roots"][i]):
+    if key is None and tree.get("scheme") == RW.NAME:
+        return src, None, f"the bundle holds no {RW.KEY_FILE} for its {RW.NAME} weights root", True
+    if RW.tensor_root(tree, i, raw, key) != bytes.fromhex(tree["tensor_roots"][i]):
         return src, None, "tensor root != the committed tensor root", True
     return src, raw, None, True
 
@@ -169,12 +167,12 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
                  ) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     """The registered tensors in the widths the replay reads, each opened against the committed weights root, and the weights check."""
     t0 = time.perf_counter()
-    names = tree["names"]
-    roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
-    folded = scheme.weights_root(bytes.fromhex(tree["geo_digest"]), scheme.names_digest(names), roots).hex()
+    names, kp = tree["names"], Path(bundle) / "weights" / RW.KEY_FILE
+    key = kp.read_bytes() if kp.is_file() else None
+    folded = RW.tree_root(tree)
     servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in WORDS]
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck)), servable))
+        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck, key)), servable))
     words: dict[str, np.ndarray] = {}
     mismatched, unopened, by_src = [], [], {"checkpoint": 0, "bundle": 0}
     for i, src, raw, why, read in opened:

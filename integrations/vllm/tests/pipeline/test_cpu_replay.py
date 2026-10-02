@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import scheme
+from verity_vllm.commit import registered_weights as RW, scheme  # noqa: N812
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
@@ -55,13 +55,29 @@ def world(tmp_path):
     for i, (name, (dt, a)) in enumerate(_served().items()):
         raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
         names.append([name, dt, list(a.shape), int(raw.size)])
-        roots.append(CPU.tensor_root(raw, CHUNK))
+        roots.append(RW.tensor_root({"chunk": CHUNK}, i, raw, None))
         if name == "model.rotary_emb.cos_sin_cache":
             (bundle / "weights" / "extra" / f"{i}.bin").write_bytes(raw.tobytes())
             extra[name] = i
     root = scheme.weights_root(GEO, scheme.names_digest(names), roots).hex()
     tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root, "chunk": CHUNK, "geo_digest": GEO.hex(), "extra": extra}
     return {"ck": ckd, "bundle": bundle, "tree": tree, "root": root}
+
+
+KEY = bytes(range(32))
+
+
+@pytest.fixture
+def registered(world):
+    """`world` under the hiding weights root, its registration key in the bundle."""
+    program, names, roots = "ab" * 32, world["tree"]["names"], []
+    for i, (name, (_dt, a)) in enumerate(_served().items()):
+        roots.append(RW.value_root(program, name, i, np.ascontiguousarray(a).reshape(-1).view(np.uint8), list(a.shape), KEY)[0])
+    root = RW.weights_root(GEO, names, roots).hex()
+    world["tree"] = {"scheme": RW.NAME, "program": program, "names": names, "tensor_roots": [r.hex() for r in roots], "root": root,
+                     "geo_digest": GEO.hex(), "extra": world["tree"]["extra"]}
+    (world["bundle"] / "weights" / RW.KEY_FILE).write_bytes(KEY)
+    return world | {"root": root}
 
 
 def _open(w):
@@ -109,6 +125,28 @@ def test_a_changed_bundle_constant_fails_by_name(world):
     _, wc = _open(world)
     assert wc["equal"] is False and wc["mismatched"] == [{"name": "model.rotary_emb.cos_sin_cache", "source": "bundle",
                                                           "why": "tensor root != the committed tensor root"}]
+
+
+def test_the_checkpoint_opens_against_a_hiding_weights_root_with_the_bundles_key(registered):
+    words, wc = _open(registered)
+    assert wc["equal"] is True and wc["opened"] == 3 and wc["opened_by_source"] == {"checkpoint": 2, "bundle": 1}
+    assert np.array_equal(words[QKV], _served()[QKV][1].reshape(-1))
+    shard = registered["ck"] / "model.safetensors"
+    b = bytearray(shard.read_bytes())
+    b[-(PARTS["model.norm.weight"].nbytes + 3)] ^= 1
+    shard.write_bytes(bytes(b))
+    _, wc = _open(registered)
+    assert wc["equal"] is False and [m["name"] for m in wc["mismatched"]] == [QKV]
+
+
+def test_a_hiding_weights_root_opens_nothing_without_its_key(registered):
+    kp = registered["bundle"] / "weights" / RW.KEY_FILE
+    kp.write_bytes(bytes(32))
+    _, wc = _open(registered)
+    assert wc["equal"] is False and wc["mismatched_n"] == 3 and {m["why"] for m in wc["mismatched"]} == {"tensor root != the committed tensor root"}
+    kp.unlink()
+    _, wc = _open(registered)
+    assert wc["equal"] is False and wc["mismatched_n"] == 3 and all(RW.KEY_FILE in m["why"] for m in wc["mismatched"])
 
 
 def test_a_tree_that_is_not_the_committed_root_opens_nothing_of_record(world):
