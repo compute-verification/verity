@@ -31,7 +31,8 @@ Pous/Sanity.lean, Pous/Accounting/Numbers.lean   proved: the definitions are not
 PousProofs/                         proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
 PousProofs/P2/                      proved: the `m1p` pins (Count, Rows, Domain, Margin); P2 in the cost model
                                     (RingBasic: `MeetsOn` at `L = Q` gives `Meets`, honest storage is accepted;
-                                    RingTight: recomputing the roots breaks `MeetsOn`)
+                                    RingTight: recomputing the roots breaks `MeetsOn`; RingTrunc: dropping low
+                                    bits breaks `k = 88` from `L = 2^30`)
 PousProofs/Chain/Flat.lean          proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
 PousProofs/Pinned.lean              PousProofs.X : Pous.Pinned.X for each proved pinned statement
@@ -63,8 +64,8 @@ records. `lean-audit.json` pins the sanity theorems, every `PousProofs.X`, the s
 certificate, and the dense scheme at the deployment point (`dense_meets_64`, `seg_meets_14`, and `segTag_meets_14` for the
 implementation's tagged keying, with `segTag_auditSecure`) and its per-segment tags (`domainSep_equiv`,
 `tag_injective_14`), the raw-storage refutations the `m1p` pins cite, and P2 in the cost model (`PousP2Ring`:
-`meets_of_meetsOn` and the non-vacuity pins `complete`, `tight` and `tight_p16448`). A changed record needs a named
-statement reviewer (Verity's `AGENTS.md`).
+`meets_of_meetsOn`, the non-vacuity pins `complete`, `tight` and `tight_p16448`, and the refutation
+`not_meetsOn_b19_k88`). A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 **Submissions** are one file that imports only `Pous` and `Mathlib.*` and declares
 `theorem solution : Pous.Pinned.<Name>`. `grade.sh` builds the trusted layer and the grader first and records their

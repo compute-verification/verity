@@ -31,4 +31,5 @@ import PousProofs.P2.Domain
 import PousProofs.P2.Margin
 import PousProofs.P2.RingBasic
 import PousProofs.P2.RingTight
+import PousProofs.P2.RingTrunc
 import PousProofs.Pinned

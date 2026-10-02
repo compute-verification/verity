@@ -593,7 +593,8 @@
    "signature": ["PousProofs.TransposeMixing : Pous.Pinned.TransposeMixing"],
    "assumptions": [],
    "type_hash": "e94f8f3ccca2b6da0a0e6cd9e91039ecb2947ece93dd7b20fd3ce99d5e44f934"
-  }
+  },
+  "PousP2Ring.not_meetsOn_b19_k88": {}
  },
  "reads": {
   "Pous.Accounting.LemmaA": {

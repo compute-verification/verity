@@ -250,7 +250,8 @@ end Run
 with `(p+1)/4 < 2^n`: a responder that keeps no state and recomputes each challenged block (`recBlock`) within
 `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries is always right, so `p2ring` fails `MeetsOn`
 in the sequential audit at every `D ≥ 2(n + 1)`, `Q ≥ 2`, `L ≥ 4n + 5`, `k` and `ε`. At P2's modulus this is
-`D ≥ 32,894` (`tight_p16448`). No `(D, L)` at which `MeetsOn` holds is proved. -/
+`D ≥ 32,894` (`tight_p16448`). No `(D, L)` at which `MeetsOn` holds is proved; at P2's parameters and `k ≤ 88` it
+fails from `D = 2` once `L ≥ 2^30` (`not_meetsOn_b19_k88`). -/
 theorem tight (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p)
     (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n) (D Q L k : ℕ) (hD : 2 * (n + 1) ≤ D) (hQ : 2 ≤ Q)
     (hL : 4 * n + 5 ≤ L) (ε : ℝ≥0∞) : ¬ MeetsOn (p2ring B w p b) .sequential D Q L k ε := by
