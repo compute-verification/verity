@@ -14,8 +14,8 @@ the 65,536 bf16 words.  An instance with a non-finite operand or result word is 
 result is recomputed by `derived_rows.dot_bf16`, so every word equals the int64 twin's.  `gemm_row` is the same chain under any
 k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products, a 26-bit adder and floor -133, so `U = 2^(e - 25)`).  The W side (values and exponents, transposed)
 is prepared once per weight buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place), and
-coordinates are split over up to `threads()` threads (`MAX_THREADS`, or the cap the CLI passes `use_threads` from
-`VERITY_DENSE_THREADS`); the words do not depend on the split.
+coordinates are split over up to `threads()` threads (`MAX_THREADS`, or the cap `VERITY_DENSE_THREADS` sets when this module is
+imported, `use_threads`); the words do not depend on the split.
 """
 from __future__ import annotations
 
@@ -221,13 +221,16 @@ _THREADS: list[int] = [MAX_THREADS]
 
 
 def use_threads(n: int | str | None) -> None:
-    """Cap the chain's threads at `n` (the CLI passes `VERITY_DENSE_THREADS`); None, or a value that is not a positive integer, is
+    """Cap the chain's threads at `n` (at import, `VERITY_DENSE_THREADS`); None, or a value that is not a positive integer, is
     `MAX_THREADS`."""
     try:
         k = MAX_THREADS if n is None else int(n)
     except ValueError:
         k = MAX_THREADS
     _THREADS[0] = k if k > 0 else MAX_THREADS
+
+
+use_threads(os.environ.get("VERITY_DENSE_THREADS"))
 
 
 def threads() -> int:
