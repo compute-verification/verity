@@ -295,6 +295,26 @@ def oidc_token(aud: str) -> str:
     return token
 
 
+class _Identity:
+    """This agent's OIDC token for one audience, fetched when first needed and again when the server rejects a cached one.
+    Cursor's tokens live 300 s, so a long-running client's (a relay, `ask-daniel --wait`) goes stale; a 401 means the server
+    refused before acting, so the one retry can't post or file anything twice."""
+
+    def __init__(self, aud: str):
+        self.aud, self.token = aud, None
+
+    def send(self, request: Callable[[str], Any]) -> Any:
+        cached = self.token is not None
+        self.token = self.token or oidc_token(self.aud)
+        try:
+            return request(self.token)
+        except urllib.error.HTTPError as e:
+            if e.code != 401 or not cached:
+                raise
+        self.token = oidc_token(self.aud)
+        return request(self.token)
+
+
 def via(token: str | None) -> str:
     """`direct` (the bot token, to Slack) or `broker`: the broker only without a token, or when RESEARCH_SLACK_VIA says so."""
     forced = os.environ.get("RESEARCH_SLACK_VIA", "")
@@ -335,7 +355,7 @@ class Slack:
     def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None, transport=None):
         self.via = via(token)
         self.token = token if self.via == "direct" else None
-        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, None
+        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, _Identity(BROKER)
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
         if not dry_run and self.via == "direct" and not token:
             raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
@@ -371,8 +391,7 @@ class Slack:
         body = json.dumps({"method": method, "args": args}).encode()
         if len(body) > BROKER_MAX_BODY:
             raise SlackError(f"{method}: {len(body)} bytes is more than the broker takes ({BROKER_MAX_BODY}); put the content in a file and link it")
-        self._oidc = self._oidc or oidc_token(BROKER)
-        return self.transport(BROKER, body, {"Authorization": f"Bearer {self._oidc}", "Content-Type": "application/json"})
+        return self._oidc.send(lambda t: self.transport(BROKER, body, {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}))
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
         items: list[dict] = []
@@ -1623,15 +1642,14 @@ class AskDaniel:
 
     def __init__(self):
         self.base = (os.environ.get("RESEARCH_ASK_DANIEL_URL") or ASK_DANIEL).rstrip("/")
-        self._oidc: str | None = None
+        self._oidc = _Identity(ASK_DANIEL)
 
     def call(self, method: str, path: str = "", body: dict | None = None) -> dict:
-        self._oidc = self._oidc or oidc_token(ASK_DANIEL)
         data = None if body is None else json.dumps(body).encode()
-        headers = {"Authorization": f"Bearer {self._oidc}", **({"Content-Type": "application/json"} if data else {})}
+        ctype = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {ASK_DANIEL}{path}"
         try:
-            out = http_json(method, self.base + path, data, headers)
+            out = self._oidc.send(lambda t: http_json(method, self.base + path, data, {"Authorization": f"Bearer {t}", **ctype}))
         except urllib.error.HTTPError as e:
             raise RouteError(route_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
