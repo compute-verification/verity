@@ -2512,6 +2512,36 @@
    "assumptions": [],
    "type_hash": "7972fc6f708df9d7d2b5ba2e176dd88e11d33607f9b3db16a2252cc5b96e1a6b"
   },
+  "FlockSoundness.Discharge.Exec.Exact.kinds": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.Exact.kinds {α : Type} {g : FlockSoundness.Game α} {ts : List FlockSoundness.Game.Step}",
+    "  {a : α} (hp : g.PlaysT ts a) {σ : List FlockSoundness.Discharge.Exec.Kind} :",
+    "  FlockSoundness.Discharge.Exec.Exact g σ → Eq (List.map FlockSoundness.Discharge.Exec.kindOf ts) σ"
+   ],
+   "assumptions": [],
+   "type_hash": "d2ea3fb8ec6cbc7495a8df1a21e48b10d6831b4803baa658ec300f50aaa3966e"
+  },
+  "FlockSoundness.Discharge.Exec.Spine.prefix": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.Spine.prefix {α : Type} {g : FlockSoundness.Game α} {ts : List FlockSoundness.Game.Step}",
+    "  {a : α} (hp : g.PlaysT ts a) {σ : List FlockSoundness.Discharge.Exec.Kind} :",
+    "  FlockSoundness.Discharge.Exec.Spine g σ → (List.map FlockSoundness.Discharge.Exec.kindOf ts).IsPrefix σ"
+   ],
+   "assumptions": [],
+   "type_hash": "55372c0676b484927ab8d455bd63c46d282ebbeeaabf3676d451593bdef06776"
+  },
+  "FlockSoundness.Discharge.Exec.Spine.tape": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.Spine.tape {α : Type} {g : FlockSoundness.Game α} {ts : List FlockSoundness.Game.Step}",
+    "  {a : α} {σ : List FlockSoundness.Discharge.Exec.Kind} (hp : g.PlaysT ts a)",
+    "  (hs : FlockSoundness.Discharge.Exec.Spine g σ) :",
+    "  Eq ts",
+    "    (FlockSoundness.Discharge.Exec.weave (List.take ts.length σ) (List.filterMap Sum.getLeft? ts)",
+    "      (List.filterMap Sum.getRight? ts))"
+   ],
+   "assumptions": [],
+   "type_hash": "56d0c251dab92c64659c9b1ba42c575d4cdb99245b469ef9d4305b74f2110379"
+  },
   "FlockSoundness.Discharge.Exec.accepts_allRetained": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_allRetained {I : FlockSoundness.Discharge.Exec.Inputs}",
@@ -3180,6 +3210,16 @@
    "assumptions": [],
    "type_hash": "574e95b97ae84a1bc431c673226d1d2b7ad0619b867f211273d1e78e546b04d3"
   },
+  "FlockSoundness.Discharge.Exec.ligeritoC_spine": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine {F K : Type} [Field F] [Fintype F] [Field K] [DecidableEq K] {D : Type}",
+    "  (A : FlockSoundness.Model.Arith F K) (r : Nat) (sch : FlockSoundness.Accounting.Schedule) (T : F) (b : Nat → F) :",
+    "  FlockSoundness.Discharge.Exec.Spine (FlockSoundness.Model.ligeritoC A r sch T b)",
+    "    (FlockSoundness.Discharge.Exec.ligShape F K D sch)"
+   ],
+   "assumptions": [],
+   "type_hash": "c1df7a1b171d25b0fb1855e01165bedc794c55582b132d4a43df6dc67d5559ee"
+  },
   "FlockSoundness.Discharge.Exec.ligerito_frames": {
    "signature": [
     "FlockSoundness.Discharge.Exec.ligerito_frames (ms : Flock.MerkleScheme) (sch : Flock.Schedule) (T : Flock.F128)",
@@ -3206,6 +3246,16 @@
    "assumptions": [],
    "type_hash": "73fb287891d8ac5d34097cb17e0ff386a51c34a27f5fc97299367b51f9d7ccf2"
   },
+  "FlockSoundness.Discharge.Exec.lincheck_exact": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.lincheck_exact {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
+    "  (A : FlockSoundness.Model.Arith F K) (S : FlockSoundness.Model.Statement) (zc : FlockSoundness.Model.ZcOut F S.m) :",
+    "  FlockSoundness.Discharge.Exec.Exact (FlockSoundness.Model.lincheck A S zc)",
+    "    (FlockSoundness.Discharge.Exec.lcShape F S.kLog)"
+   ],
+   "assumptions": [],
+   "type_hash": "1dbde5811301b00fe2cfda5adaffbe59f1b64c613edce91b5f27ce6ed2e6db59"
+  },
   "FlockSoundness.Discharge.Exec.live_le_sessionBL": {
    "signature": [
     "FlockSoundness.Discharge.Exec.live_le_sessionBL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : Nat}",
@@ -3229,6 +3279,17 @@
    "assumptions": [],
    "type_hash": "f4de1c86e1b51d94b956813033b1792937fdf5ee5eceead58c37a8404232cd26"
   },
+  "FlockSoundness.Discharge.Exec.opening_exact": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.opening_exact {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
+    "  (A : FlockSoundness.Model.Arith F K) {m : Nat} (hm : instLENat.le 7 m)",
+    "  (claims : List (FlockSoundness.Model.Claim F m)) :",
+    "  FlockSoundness.Discharge.Exec.Exact (FlockSoundness.Model.opening A hm claims)",
+    "    (FlockSoundness.Discharge.Exec.opShape F claims.length)"
+   ],
+   "assumptions": [],
+   "type_hash": "36d9dc288e00e471cc21f3403a9e9121d2091296f1da50964119f232b9cc7611"
+  },
   "FlockSoundness.Discharge.Exec.opnOf_pair": {
    "signature": [
     "FlockSoundness.Discharge.Exec.opnOf_pair {st : Flock.Setup} {sch : Flock.Schedule} {n : Nat} {b₀ b₁ : ByteArray}",
@@ -3239,6 +3300,45 @@
    ],
    "assumptions": [],
    "type_hash": "882232f585b8a1c8342263a1e4dbc67069c0d7ce05f1f836bcf18769f750098d"
+  },
+  "FlockSoundness.Discharge.Exec.repC_kinds": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.repC_kinds {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [DecidableEq K]",
+    "  {D : Type} (A : FlockSoundness.Model.Arith F K) (r : Nat) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hm : instLENat.le 13 S.m)",
+    "  (extra : List (FlockSoundness.Model.Claim F S.m)) {ts : List FlockSoundness.Game.Step}",
+    "  {p : FlockSoundness.Model.PendL F D} (h : (FlockSoundness.Model.repC A r S sch hm extra).PlaysT ts p) :",
+    "  (List.map FlockSoundness.Discharge.Exec.kindOf ts).IsPrefix",
+    "    (FlockSoundness.Discharge.Exec.repShape F K D S.m S.kLog extra.length sch)"
+   ],
+   "assumptions": [],
+   "type_hash": "6dcbec8e26548edb7092ae1bd3c39c6b2fef22340f2fed4e0a216ec2ec05f206"
+  },
+  "FlockSoundness.Discharge.Exec.repC_spine": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.repC_spine {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [DecidableEq K]",
+    "  {D : Type} (A : FlockSoundness.Model.Arith F K) (r : Nat) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hm : instLENat.le 13 S.m)",
+    "  (extra : List (FlockSoundness.Model.Claim F S.m)) :",
+    "  FlockSoundness.Discharge.Exec.Spine (FlockSoundness.Model.repC A r S sch hm extra)",
+    "    (FlockSoundness.Discharge.Exec.repShape F K D S.m S.kLog extra.length sch)"
+   ],
+   "assumptions": [],
+   "type_hash": "5a8b83a53ea27ec5be4a70bc955dd503eaacf417db04cfe0eb44d2a00eb504e1"
+  },
+  "FlockSoundness.Discharge.Exec.repC_tape": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.repC_tape {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [DecidableEq K]",
+    "  {D : Type} (A : FlockSoundness.Model.Arith F K) (r : Nat) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hm : instLENat.le 13 S.m)",
+    "  (extra : List (FlockSoundness.Model.Claim F S.m)) {ts ts' : List FlockSoundness.Game.Step}",
+    "  {p p' : FlockSoundness.Model.PendL F D} (h : (FlockSoundness.Model.repC A r S sch hm extra).PlaysT ts p)",
+    "  (h' : (FlockSoundness.Model.repC A r S sch hm extra).PlaysT ts' p')",
+    "  (hms : Eq (List.filterMap Sum.getLeft? ts) (List.filterMap Sum.getLeft? ts'))",
+    "  (hcs : Eq (List.filterMap Sum.getRight? ts) (List.filterMap Sum.getRight? ts')) : Eq ts ts'"
+   ],
+   "assumptions": [],
+   "type_hash": "5d397e288102b72996de2763cca207eaf59d1db914f2bbe27f1c60fe53ff9cd4"
   },
   "FlockSoundness.Discharge.Exec.rep_rounds": {
    "signature": [
@@ -3628,6 +3728,15 @@
    ],
    "assumptions": [],
    "type_hash": "6179dab25ce068843153c46d688f4f43017add255bc34afdd1eb8fa2972ad7d3"
+  },
+  "FlockSoundness.Discharge.Exec.zerocheck_exact": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.zerocheck_exact {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
+    "  (A : FlockSoundness.Model.Arith F K) (m : Nat) :",
+    "  FlockSoundness.Discharge.Exec.Exact (FlockSoundness.Model.zerocheck A m) (FlockSoundness.Discharge.Exec.zcShape F m)"
+   ],
+   "assumptions": [],
+   "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
   "FlockSoundness.Game.Plays.toT": {
    "signature": [
@@ -7948,8 +8057,12 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
     "FlockSoundness.Discharge.Exec.ligerito_frames",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.rep_rounds",
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
@@ -8061,8 +8174,12 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
     "FlockSoundness.Discharge.Exec.ligerito_frames",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.rep_rounds",
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
@@ -9651,6 +9768,46 @@
     "FlockSoundness.Discharge.Exec.setupH_tagsAt_hm96"
    ]
   },
+  "FlockSoundness.Discharge.Exec.Shape": {
+   "digest": "ba5f73371b6ce3afd5bdc9b3a4b2c71d945ebf632cddefa1a2b9a0dac85073e9",
+   "definitions": {
+    "FlockSoundness.Discharge.Exec.Exact": "6bbcff77331ac86eb3565c04cb8bf476995a1d4402d5ca6e397fd04e4c8c9d1f",
+    "FlockSoundness.Discharge.Exec.Exact.coin": "bc1101c786337be263735dd0349706ef5fb42b2cd0485ae7f73c89b7f822ecc8",
+    "FlockSoundness.Discharge.Exec.Exact.ret": "947859f9224f40e99ae0cd07ded0f2407fdbd0ff89971f1011992896c4208797",
+    "FlockSoundness.Discharge.Exec.Exact.send": "0f0ba928cb45890ded71bca19d4ea791099fba7ad524a1f914a78ced3f2f2707",
+    "FlockSoundness.Discharge.Exec.Kind": "bf2ca749cd824815d1a6fa24c9bc50eeece30ad545b3611cbe8c0af550a24019",
+    "FlockSoundness.Discharge.Exec.Kind.coin": "2493855a8409b2197f75fc589c5e5ac65f556b240562c056d4cf2b06bc3671a3",
+    "FlockSoundness.Discharge.Exec.Kind.msg": "d4338202e876113cf5e801cde88b562f21b8e91fb279c03847a9eb3b6ff2b954",
+    "FlockSoundness.Discharge.Exec.Spine": "b51efa67140b0f6c79686f832f41f3d3516d87c57fa87d0558d4200e39bea807",
+    "FlockSoundness.Discharge.Exec.Spine.coin": "9960afefff294d8f055b28da3778de5b3f625e7f299819dc94099e02b2973adf",
+    "FlockSoundness.Discharge.Exec.Spine.ret": "92ed6f164612ed77acb9ba836b65deabf2b83d660cf5e325e81c874490c2aa6f",
+    "FlockSoundness.Discharge.Exec.Spine.send": "1e27cefa38bc559fc88019bc8a9cb36f3ce82940b202bb514efc7257cc127a4e",
+    "FlockSoundness.Discharge.Exec.foldShape": "dd5b830f34a5337e5441de5b0517ea128db57a2d9fb2dbcbfe50ed1668d4c84d",
+    "FlockSoundness.Discharge.Exec.kindOf": "d549bca8630fc8c1c913dfe421d09c86f99153746be9d93a261018bc097c8683",
+    "FlockSoundness.Discharge.Exec.lcShape": "039fa0d2f362aff96850f3a85dc1100ee587ef2b723c4a3a7bbdd213204c0893",
+    "FlockSoundness.Discharge.Exec.ligShape": "bfe2d72de7383e5e90995f834cb0c7fd3e12b68b957a33093da468ea0bad13ef",
+    "FlockSoundness.Discharge.Exec.oodShape": "de66d27cf2898d1c7273f7aa23159924c1d2963bbdc75d8d8564e193ced877e5",
+    "FlockSoundness.Discharge.Exec.opShape": "5e568b4ca47f734a72a8d6c2c7b117134b60eb155686fe3f2d17d74c7ff67584",
+    "FlockSoundness.Discharge.Exec.pairRounds": "3f0cf559c1ce3fdb03f192fb91e2fd5341a31ff20ef6261c3f8fb641fcf5c664",
+    "FlockSoundness.Discharge.Exec.qbShape": "131cbfbdaabd6aea1c157d5bea6eba83aa8077734862704025b9ba85b4fedd2b",
+    "FlockSoundness.Discharge.Exec.recShape": "d1c17358438cfb8ceb2014aed4458acfeafeb2ee302bdac4578df0fb9a72f85b",
+    "FlockSoundness.Discharge.Exec.repShape": "fd2637096f36a935bd109673814b9991b54693d521a2860f6e8ac26ad43a0ee7",
+    "FlockSoundness.Discharge.Exec.switches": "cfdcfdb99a706db7b7483bfb5c1dc5ba8561013b52ccbd88a9de04bb84054021",
+    "FlockSoundness.Discharge.Exec.weave": "e9f1ea59a77fc41a745ee648297503aa6d8caf904e03414d97ed9852543487cf",
+    "FlockSoundness.Discharge.Exec.zcShape": "4581fe4ea723bb3fd5aef3ed93ec4c5427572f521786f276f59c0f2ecc2df53f"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Exec.Exact.kinds",
+    "FlockSoundness.Discharge.Exec.Spine.prefix",
+    "FlockSoundness.Discharge.Exec.Spine.tape",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
+    "FlockSoundness.Discharge.Exec.lincheck_exact",
+    "FlockSoundness.Discharge.Exec.opening_exact",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.zerocheck_exact"
+   ]
+  },
   "FlockSoundness.Discharge.Exec.StrictCRL": {
    "digest": "4bb41afb7f25a299682d7213f860df55981d1d70708534c1fb9740522f6ac277",
    "definitions": {
@@ -9959,6 +10116,9 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Exec.Exact.kinds",
+    "FlockSoundness.Discharge.Exec.Spine.prefix",
+    "FlockSoundness.Discharge.Exec.Spine.tape",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
@@ -9966,10 +10126,17 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
+    "FlockSoundness.Discharge.Exec.lincheck_exact",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.opening_exact",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.Exec.zerocheck_exact",
     "FlockSoundness.Game.Plays.toT",
     "FlockSoundness.Game.Sim.prob_le",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -10854,11 +11021,18 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
+    "FlockSoundness.Discharge.Exec.lincheck_exact",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.opening_exact",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
+    "FlockSoundness.Discharge.Exec.zerocheck_exact",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -10980,9 +11154,13 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
     "FlockSoundness.Discharge.Exec.ligerito_frames",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
     "FlockSoundness.Discharge.Exec.opnOf_pair",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.rep_rounds",
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
@@ -11088,8 +11266,12 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.ligeritoC_spine",
     "FlockSoundness.Discharge.Exec.ligerito_frames",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.rep_rounds",
     "FlockSoundness.Discharge.Exec.rep_rounds_retained",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
@@ -11194,10 +11376,16 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.lincheck_exact",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.opening_exact",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.Exec.zerocheck_exact",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -11358,7 +11546,12 @@
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.lincheck_exact",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.opening_exact",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_spine",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
@@ -11665,8 +11858,13 @@
     "FlockSoundness.Refine.tapeFrom": "29dfaad7239d41edb30d4726b61d156f71a2ee4eadf254f5bc916001fc300995"
    },
    "pins": [
+    "FlockSoundness.Discharge.Exec.Exact.kinds",
+    "FlockSoundness.Discharge.Exec.Spine.prefix",
+    "FlockSoundness.Discharge.Exec.Spine.tape",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Game.Plays.toT",
     "FlockSoundness.Prog.flock_headline_live",
     "FlockSoundness.Refine.live_le",
@@ -11809,11 +12007,16 @@
     "FlockSoundness.Refine.consumed": "f1305ea18d82be85c70863432b87183bb840ed401f47367931b708465000387e"
    },
    "pins": [
+    "FlockSoundness.Discharge.Exec.Exact.kinds",
+    "FlockSoundness.Discharge.Exec.Spine.prefix",
+    "FlockSoundness.Discharge.Exec.Spine.tape",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96",
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.live_le_sessionBL",
+    "FlockSoundness.Discharge.Exec.repC_kinds",
+    "FlockSoundness.Discharge.Exec.repC_tape",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Game.Plays.toT",
     "FlockSoundness.Prog.flock_headline_live",
