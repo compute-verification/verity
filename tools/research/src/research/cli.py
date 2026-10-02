@@ -8,6 +8,8 @@
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
+  research cancel <run-id> --reason TEXT [--by WHO]   # SIGTERM to the run's workload process group, recorded as a manual cancel;
+                                                 # never the runner, never SIGKILL, so it still records the exit and publishes custody
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
@@ -412,7 +414,8 @@ def _survive_stray_signals() -> None:
 
     def note(signum: int, _frame: object) -> None:
         print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
-              f"and publishes the run when the workload exits; stop the workload with `kill -TERM -<pgid>` (status.json)", file=sys.stderr, flush=True)
+              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from the launcher, or "
+              f"`kill -TERM -<pgid>` (status.json) here, and never SIGKILL the runner", file=sys.stderr, flush=True)
 
     for s in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(s, note)
@@ -768,6 +771,28 @@ def cmd_fetch(argv: list[str]) -> int:
     return 0
 
 
+def cmd_cancel(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
+                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
+    ap.add_argument("ref")
+    ap.add_argument("--reason", required=True)
+    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
+    ap.add_argument("--runs-dir", default=None)
+    ns = ap.parse_args(argv)
+    try:
+        run_dir = R.resolve(R.runs_root(ns.runs_dir), ns.ref)
+        out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
+    except (FileNotFoundError, LookupError, remote.Refused) as e:
+        print(f"research cancel: {e}", file=sys.stderr)
+        return 1
+    if not out["delivered"]:
+        print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
+        return 1
+    print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
+          f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
+    return 0
+
+
 def cmd_compare(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research compare")
     ap.add_argument("baseline")
@@ -986,6 +1011,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_inspect(rest)
     if cmd == "fetch":
         return cmd_fetch(rest)
+    if cmd == "cancel":
+        return cmd_cancel(rest)
     if cmd == "compare":
         return cmd_compare(rest)
     if cmd == "launch-request":
