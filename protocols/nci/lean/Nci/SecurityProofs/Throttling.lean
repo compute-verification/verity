@@ -148,15 +148,6 @@ theorem sum_card_products {n : ℕ} (P : Partition D n) :
 
 end Counting
 
-theorem gates_subset_computed {C : Circuit} {n : ℕ} (P : Partition C n) (u : Fin n) : P.gates u ⊆ C.computed :=
-  fun g hg => by
-    simp only [Circuit.computed, mem_filter, mem_univ, true_and]
-    cases h : C.isInput g
-    · rfl
-    · rw [← P.input_iff] at h
-      rw [P.mem_gates, h] at hg
-      cases hg
-
 open Classical in
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"). -/
@@ -185,7 +176,7 @@ theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
   have hK : 0 < α * Γ := mul_pos hα (by exact_mod_cast Nat.pos_of_ne_zero hdeg.2)
   have hGr : (0 : ℝ) < c.G := by exact_mod_cast hG
   obtain ⟨s, hsum, hs⟩ := hPS n P fun u => ⟨(hP u).1, hcap u⟩
-  have hreads := fun u => iu_reads D c Γ (α * Γ) b_w b_a d hd ha.le hA (P.gates u) (gates_subset_computed P u)
+  have hreads := fun u => iu_reads D c Γ (α * Γ) b_w b_a d hd ha.le hA (P.gates u) (P.gates_subset_computed u)
     (hP u).1 (hcap u)
   have key : ∀ μ ∈ Set.Ioo (0 : ℝ) 1, min ((1 + √μ) ^ 2 * (b_w * b_a * d / (α * Γ)))
       (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / (α * Γ)))) * c.G ≤ α * D.D.size D.D.computed := by
