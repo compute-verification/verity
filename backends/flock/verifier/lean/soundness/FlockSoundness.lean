@@ -141,6 +141,7 @@ import FlockSoundness.ZK.RealLeaves
 import FlockSoundness.ZK.Session
 import FlockSoundness.ZK.AdaptivePrefinal
 import FlockSoundness.Discharge.Hm
+import FlockSoundness.Discharge.Layout
 import FlockSoundness.Discharge.Zero
 import FlockSoundness.Discharge.Const
 import FlockSoundness.Discharge.Placed
