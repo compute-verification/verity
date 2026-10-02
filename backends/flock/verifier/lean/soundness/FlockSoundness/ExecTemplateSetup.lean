@@ -871,7 +871,7 @@ theorem setupH_templateLayout (ht : tags.typed = true)
     refine ⟨by rw [hc], by rw [hc]; exact P.typed, ?_⟩
     have P' : ParseFactsT tags t st.c := by
       rw [hc]
-      exact ⟨P.pre, P.portWords, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
+      exact ⟨P.pre, P.portWords, P.v1, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
         P.leavesIn, P.wires, P.leafCuts⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
@@ -1184,7 +1184,7 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
     have C := check_facts_typed P.typed hcheck
     have P' : ParseFactsT tags t st.c := by
       rw [hc]
-      exact ⟨P.pre, P.portWords, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
+      exact ⟨P.pre, P.portWords, P.v1, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
         P.leavesIn, P.wires, P.leafCuts⟩
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by

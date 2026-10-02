@@ -5,7 +5,7 @@ import FlockSoundness.ExecParse
 
 `parse_facts`: a circuit file `HmRow.parse` accepted has only nets `Net.ofRows` built (its text nets, and a typed flat
 class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), `sha512/row/v1` ports of
-whole SHA-512 blocks (`rowPorts_words`), the unit, `sha512x3` and `hm96` nets and every range's net among its nets, passed
+whole SHA-512 blocks of `16 * words` bits (`rowPorts_facts`), the unit, `sha512x3` and `hm96` nets and every range's net among its nets, passed
 `HmRow.check`, and its `sha512x3` and `hm96` nets are the verifier's (`HmNets.check`), entered only by the rows' wires
 (`wires_prefix`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
@@ -113,9 +113,11 @@ theorem wires_prefix {wires derived : Array Wire} {p : ℕ → Bool}
     simpa using hrest i hi
 
 set_option maxHeartbeats 1000000 in
-/-- `HmRow.rowPorts`' `sha512/row/v1` ports are whole SHA-512 blocks. -/
-theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
-    ∀ p ∈ ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks := by
+/-- `HmRow.rowPorts`' `sha512/row/v1` ports are whole SHA-512 blocks of `16 * words` bits, and a typed file's ports are
+all `sha512/row/v1`. -/
+theorem rowPorts_facts {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
+    ∀ p ∈ ports.toList, (p.v2 = false → 2 * p.words = 128 * p.chunks ∧ 0 < p.chunks ∧ p.bits = 16 * p.words) ∧
+      (typed = true → p.v2 = false) := by
   unfold HmRow.rowPorts at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) v2 one at h
   obtain ⟨s, -, h⟩ := except_bind_ok h
@@ -123,19 +125,20 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
   replace h := ite_throw_ok h
   simp (config := { zeta := false }) only [jp0] at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
-  replace h := ite_throw_ok h
+  obtain ⟨hvt, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jp1] at h
   obtain ⟨listedPorts, -, h⟩ := except_bind_ok h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
-  obtain ⟨lengths, h⟩ : ∃ l, jp2 l = .ok ports := by
+  obtain ⟨lengths, hlen, h⟩ : ∃ l, (v2 = false → l = Array.replicate listedPorts.size none) ∧ jp2 l = .ok ports := by
     split at h
-    · obtain ⟨s, -, h⟩ := except_bind_ok h
+    · rename_i hv
+      obtain ⟨s, -, h⟩ := except_bind_ok h
       extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpv at h
       replace h := ite_throw_ok h
       simp (config := { zeta := false }) only [jpv] at h
       obtain ⟨l, -, h⟩ := except_bind_ok h
-      exact ⟨l, h⟩
-    · exact ⟨_, h⟩
+      exact ⟨l, fun hf => by simp only [hf, Bool.false_eq_true] at hv, h⟩
+    · exact ⟨_, fun _ => rfl, h⟩
   simp (config := { zeta := false }) only [jp2] at h
   obtain ⟨ports', hmap, h⟩ := except_bind_ok h
   obtain ⟨listed, -, h⟩ := except_bind_ok h
@@ -147,7 +150,7 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
   replace h := ite_throw_ok h
   simp (config := { zeta := false }) only [jp4] at h
   cases h
-  intro p hp hv
+  intro p hp
   obtain ⟨i, -, hf⟩ := array_mapM_ok hmap p hp
   obtain ⟨a, -, hf⟩ := except_bind_ok hf
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpa at hf
@@ -162,21 +165,31 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
     simp (config := { zeta := false }) only [jpn] at hf
     cases hf
     simp only [Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hbad
-    show 2 * words = 128 * comps
-    omega
-  · extract_lets (config := { underBinder := false, onlyGivenNames := true }) want jpw at hf
+    exact ⟨fun _ => ⟨by show 2 * words = 128 * comps; omega, by show 0 < comps; omega, rfl⟩, fun _ => rfl⟩
+  · rename_i l hl
+    extract_lets (config := { underBinder := false, onlyGivenNames := true }) want jpw at hf
     replace hf := ite_throw_ok hf
     simp (config := { zeta := false }) only [jpw] at hf
     cases hf
-    cases hv
+    refine ⟨fun hv => (by cases hv), fun ht => ?_⟩
+    have hv : v2 = false := by
+      cases hv : v2
+      · rfl
+      · simp [hv, ht] at hvt
+    rw [hlen hv] at hl
+    by_cases hi : i < listedPorts.size
+    · rw [getElem!_pos _ _ (by simpa using hi)] at hl
+      simp at hl
+    · rw [getElem!_neg _ _ (by simpa using hi)] at hl
+      simp at hl
 
 /-! ## What `HmRow.parse` accepted -/
 
 /-- **What `HmRow.parse` accepted.** -/
 structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
-  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks of `16 * words` bits -/
+  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks ∧ 0 < p.chunks ∧ p.bits = 16 * p.words
   /-- the rows' chains and hm96 inputs come first, and no other wire enters the `sha512x3` or `hm96` net -/
   rowWires : ∃ rest, c.wires.toList = (HmRow.rowWires c.ports c.shaNet c.hmNet).toList ++ rest ∧
     ∀ w ∈ rest, w.dst.1 ≠ c.shaNet ∧ w.dst.1 ≠ c.hmNet
@@ -460,7 +473,7 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · cases hi
   refine ⟨?_, ⟨more, hm, hmore⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
   have hrowWires := wires_prefix (p := rowNet) hwires
-  exact { nets := hbuilt, portWords := rowPorts_words hrp,
+  exact { nets := hbuilt, portWords := fun p hp => (rowPorts_facts hrp p hp).1,
           rowWires := by
             obtain ⟨rest, hl, hr⟩ := hrowWires
             refine ⟨rest, hl, fun w hw => ?_⟩
