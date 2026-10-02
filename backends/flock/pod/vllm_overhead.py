@@ -341,7 +341,7 @@ def _sha(p: str) -> str:
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
-def main(argv=None) -> None:
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd_", required=True)
     c = sub.add_parser("census")
@@ -369,8 +369,10 @@ def main(argv=None) -> None:
     p.add_argument("--config", required=True)
     p.add_argument("--result", required=True)
     a = ap.parse_args(argv)
-    {"census": census, "timing": timing, "rollup": rollup, "point": point}[a.cmd_](a)
+    out = {"census": census, "timing": timing, "rollup": rollup, "point": point}[a.cmd_](a)
+    # a shape job whose statement wasn't accepted fails, so the dispatcher's record says so
+    return 1 if a.cmd_ == "timing" and not out["accepted"] else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

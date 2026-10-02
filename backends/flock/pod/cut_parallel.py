@@ -3,10 +3,7 @@
     cut_parallel.py PROGRAM_JSON OUT_DIR [--jobs 8] [--python PY]
 
 Q_word cuts each Call on its own, so the counts of disjoint sets of Call Definitions merge exactly: their `calls` and
-`per_definition` are disjoint, and a shape's `units` and `row_units` add. A shape that Definitions of different statics share
-(attention's per-head units across key counts, RMSNorm's across N) is named in each chunk by the first Call that holds it there, so
-the merge names it by the least of those names; they agree on its word gates and on its family (the name before `{`, all that
-`vllm_overhead.py rollup` prices by), which the merge checks. The Definitions are dealt to the chunks by an estimated
+`per_definition` are disjoint, and a shape's `units` and `row_units` add. The Definitions are dealt to the chunks by an estimated
 cost (an attention Call's key count T, which its cut time follows; any other Definition is cheap), so a row whose one-process cut
 holds every Definition in one Program (hours, and tens of GB, for 1,151 attention key counts) takes minutes. Writes OUT_DIR/
 counts.json (the token-select Calls left out, as `--select` does), counts-all.json (with them) and shapes.tsv (as
@@ -22,10 +19,6 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-
-
-def family(spec: str) -> str:
-    return spec.split("{", 1)[0]
 
 
 def cost(fid: str) -> int:
@@ -49,7 +42,8 @@ def merge(parts: list[dict]) -> dict:
         out["per_definition"] |= p["per_definition"]
         for sh, s in p["shapes"].items():
             o = out["shapes"].setdefault(sh, {"definition": s["definition"], "units": 0, "row_units": 0, "word_gates": s["word_gates"]})
-            assert o["word_gates"] == s["word_gates"] and family(o["definition"]) == family(s["definition"]), (sh, o, s)
+            assert o["word_gates"] == s["word_gates"], sh
+            # a shape is one circuit; its representative unit's Definition is the first a process met, so chunks may name others
             o["definition"] = min(o["definition"], s["definition"])
             o["units"] += s["units"]
             o["row_units"] += s["row_units"] or 0

@@ -6,6 +6,13 @@
 #              seconds per statement and per unit); on a GPU, the job first takes CPUS (16) cores of free 16-core slices
 #              (cpu-slices.sh, as 74-gemm-hill.sh does) and pins to them, so it never shares a pinned prover's cores
 #   SUMMARY gains timings (every shape's timing.json)
+#   PIN=1      any other mode takes and pins to its CPUS (16) cores the same way, so a no-GPU cut or stage job in the provers
+#              queue stays off the cores of a timed prover
+#   MODE=cut CUT_JOBS=<n>: the counts cut in n processes by Call Definition (cut_parallel.py, vllm-overhead-moe's), counts.json
+#              and counts-all.json at once, in place of the one-process cut and its CUT_ALL re-cut
+#   MODE=shape VERIFIERS=DIR: the verifier in another pod, as 74-gemm-hill.sh's: SERVE_ONLY=1 (GPU=0 PIN=1) takes each shape from
+#              the cache and serves its WARM + RUNS sessions on this pod's address, published under DIR, one shape after another;
+#              the GPU job with VERIFIERS=DIR alone proves against them, so it starts once the first shape's address is published
 # proofs-rows' copy of backends/flock/pod/73-sweep-shape.sh (backend-sweep-2's, at 70e99f57), with the (b) stage/prove split:
 #   MODE=shape STAGE_ONLY=1 ...   (no GPU) the chunk's statement exactly as its GPU job would stage it (the same settings, so the
 #              same FLOCK_STAGE_CACHE key), into the cache, and a marker $FLOCK_STAGE_CACHE/staged/<ident>.json with the files' sha256
@@ -36,7 +43,7 @@
 # env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-if [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ] && [ -z "${SWEEP_PINNED:-}" ]; then
+if { { [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ]; } || [ "${PIN:-0}" = 1 ]; } && [ -z "${SWEEP_PINNED:-}" ]; then
   . backends/flock/pod/cpu-slices.sh
   hold_slices "${CPUSET:-}" "${CPUS:-16}" || exit 1
   cpus=$(taskset -c "$SLICE_CPUS" python3 -c "import os; print(','.join(map(str, sorted(os.sched_getaffinity(0)))))") || exit 1
@@ -45,7 +52,7 @@ if [ "${MODE:-}" = shape ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${GPU:-1}" = 1 ]
   exec taskset -c $cpus bash "$0" "$@"
 fi
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/sweep-shape}; mkdir -p $R/out
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); sha256sum $HERE/73-sweep-shape.sh $HERE/stage_mark.py $HERE/vllm_overhead.py | tee $R/out/script.sha256
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); sha256sum $HERE/73-sweep-shape.sh $HERE/stage_mark.py $HERE/vllm_overhead.py $HERE/cut_parallel.py | tee $R/out/script.sha256
 SWEEP=${SWEEP:-/workspace/jobs/sweep2}; D=$SWEEP/$ROW; mkdir -p $D
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/flock-sweep2}; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} SM=${SM:-120}
@@ -57,6 +64,8 @@ unset CARGO_TARGET_DIR
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done
+# a prebuilt BINARY skips 70-class-sweep.sh's build, which is where it puts CUDA 13.3's runtime on the library path
+if [ -n "${BINARY:-}" ]; then C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}; fi
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; } | tee $R/out/host.txt
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src:$REPO/protocols/sampled_proofs:$REPO/protocols/one_stage:$REPO/protocols/pouw
 case ${MODE:?cut or shape} in
@@ -67,6 +76,17 @@ cut)
   $PY -m verity_vllm.pipeline.cli program-graph $R/out/program.json $BUILD/build_request/instances.json.gz \
     --row "{\"row\": \"$ROW\"}" || exit 1
   echo "graph_s=$SECONDS" | tee $R/out/cut-timing.txt
+  if [ -n "${CUT_JOBS:-}" ]; then
+    [ "${SELECT:-units}" = units ] || { echo "CUT_JOBS cuts under --select units only"; exit 1; }
+    OMP_NUM_THREADS=1 $PY $HERE/cut_parallel.py $R/out/program.json $R/out/cut --jobs $CUT_JOBS --python $PY || exit 1
+    echo "cut_s=$SECONDS" | tee -a $R/out/cut-timing.txt
+    cp $R/out/program.json $R/out/cut/counts.json $R/out/cut/counts-all.json $R/out/cut/shapes.tsv $D/ || exit 1
+    cp $R/out/cut/shapes.tsv $R/out/ || exit 1
+    python3 $HERE/vllm_overhead.py census --counts $D/counts.json --counts-all $D/counts-all.json --out $D/census.json \
+      | tee $R/out/census.txt || exit 1
+    cp $D/census.json $R/out/
+    exit 0
+  fi
   $PY -m verity_flock.class_statement --program-graph $R/out/program.json --partition q-word --out $R/out/cut \
     --select ${SELECT:-units} --counts-only || exit 1
   echo "cut_s=$SECONDS" | tee -a $R/out/cut-timing.txt
@@ -96,6 +116,9 @@ EOF
 stage|shape)
   rc=0; k=0; SHAPES=${SHAPES:-$SHAPE}
   so=0; { [ $MODE = stage ] || [ "${STAGE_ONLY:-0}" = 1 ]; } && so=1
+  srv=0; [ "${SERVE_ONLY:-0}" = 1 ] && { : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR}"; srv=1; }
+  [ -n "${VERIFIERS:-}" ] && [ $srv = 0 ] && export FC_VERIFIERS=$VERIFIERS
+  if [ $so = 0 ] && [ -n "${BINARY:-}" ] && ldd $BINARY | grep 'not found'; then echo "BINARY can't load its libraries"; exit 1; fi
   MARK=("${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}" $HERE/stage_mark.py)
   for SHAPE in ${SHAPES//,/ }; do
   k=$((k + 1)); O=$R/out/$k; mkdir -p $O
@@ -115,10 +138,11 @@ EOF
   st=${SELFTEST:-0}; case ",${SELFTEST_SHAPES:-}," in *",$SHAPE,"*) st=1 ;; esac
   req=0; [ $so = 0 ] && [ "${REQUIRE_STAGED:-0}" = 1 ] && req=1
   [ $req = 1 ] && { "${MARK[@]}" pre $O $SHAPE || { rc=3; continue; }; }
-  WR=; [ $so = 0 ] && WR="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $O/stamps.tsv --"
+  WR=; [ $so = 0 ] && [ $srv = 0 ] && WR="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $O/stamps.tsv --"
   OUT=$O WRAP=$WR bash backends/flock/pod/70-class-sweep.sh DEFS=$O/defs.json SHAPES=$O/shapes.txt SELECT=${SELECT:-units} \
-    SELFTEST=$st SELFTEST_LARGEST=0 STAGE_ONLY=$so || rc=1
+    SELFTEST=$st SELFTEST_LARGEST=0 STAGE_ONLY=$so SERVE_ONLY=$([ $srv = 1 ] && echo $VERIFIERS) || rc=1
   if [ $so = 1 ]; then "${MARK[@]}" write $O $SHAPE || rc=1
+  elif [ $srv = 1 ]; then :
   else
     [ $req = 1 ] && { "${MARK[@]}" post $O $SHAPE || rc=3; }
     python3 $HERE/vllm_overhead.py timing $O --warm ${WARM:-1} --runs ${RUNS:-3} || rc=1

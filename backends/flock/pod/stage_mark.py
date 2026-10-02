@@ -31,6 +31,14 @@ def sha256(p: Path) -> str:
     return h.hexdigest()
 
 
+def sha512(p: Path) -> str:
+    h = hashlib.sha512()
+    with p.open("rb") as f:
+        while b := f.read(1 << 24):
+            h.update(b)
+    return h.hexdigest()
+
+
 def files(d: Path) -> dict[str, str]:
     return {f.name: sha256(f) for f in sorted(d.iterdir()) if f.is_file() and f.name not in ("rec.json", "serve.log")}
 
@@ -65,15 +73,14 @@ def main() -> int:
         fs, csha = files(o / "classes" / shape[:16]), rec["stage"].get("circuit_sha512")
         entry = rec.get("stage_cached")
         if not entry:
-            # class_statement deletes a fresh stage's *.bin and circuit.txt from OUT_K once they are cached, so the entry is the
-            # one whose record is this stage's (shape, stage, row units), the newest if several are; post checks it is the one proved
-            hits = []
             for e in sorted(root.iterdir()):
                 r = json.loads((e / "rec.json").read_text()) if len(e.name) == 32 and (e / "rec.json").exists() else {}
-                if (r.get("shape") == shape and r.get("stage") == rec["stage"] and r.get("row_units") == rec.get("row_units")
-                        and (not fs or files(e) == fs)):
-                    hits.append(((e / "rec.json").stat().st_mtime, e.name))
-            entry = max(hits)[1] if hits else None
+                # class_statement deletes a stage-only shape's circuit and .bin files once its cache entry holds copies: the
+                # entry's circuit is then checked against the record's digest
+                if r.get("shape") == shape and (r.get("stage") or {}).get("circuit_sha512") == csha and (
+                        files(e) == fs if fs else (e / "circuit.txt").is_file() and sha512(e / "circuit.txt") == csha):
+                    entry = e.name
+                    break
         if not entry:
             return finish(o, {"op": op, "ok": False, "why": f"the stage wrote no entry in {root} holding these bytes"}, t0)
         fs = files(root / entry)
