@@ -9,6 +9,7 @@ import FlockSoundness.Discharge.Hidden.Layout
 import FlockSoundness.Discharge.Hidden.Flat
 import FlockSoundness.Discharge.Hidden.Committed
 import FlockSoundness.Discharge.Hidden.Theorems
+import FlockSoundness.Discharge.Hidden.Wide.Theorems
 
 /-!
 # Hidden outputs: `Stmt.setupHidden`'s soundness at the protocol as Lean defines it
@@ -25,5 +26,7 @@ import FlockSoundness.Discharge.Hidden.Theorems
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
   its VU computes (`outputs_committed'`);
-* `Theorems`: one theorem per frozen statement.
+* `Theorems`: one theorem per frozen statement;
+* `Wide.Defs`, `Wide.Theorems`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs
+  (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`).
 -/
