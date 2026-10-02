@@ -17,7 +17,8 @@ gate. At [e2e-placed]'s places (`Placed.Sites.progPlaces_keyProg`):
 * `keyProg_copies`: Δ's copies (`copy_site` at each drawn unit's VU and block; each message column is in the block by
   the parse, `msgCol_lt_of_parse`);
 * `keyProg_bcPinned`: the rows' `b ‖ c` is the registration's, the population's public file (`bc_site`), at each drawn
-  unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions);
+  unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions; `bcSite_keyProg` gives the VU's bound
+  from the parse when the unit returns the outputs, `vu_lt_pow2`);
 * `keyProg_valPinned`: the single gates hold the registration's bits: 1 at the constant, 0 at the zero, and at the units'
   committed gates the registration's bit (`hout`, the returned outputs' pin), when every input a computed row reads has
   the zero or a row bit as its key (`KeysRow`).
@@ -116,6 +117,45 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
       have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
       omega
   exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
+
+private theorem ite_throw_ok {α β : Type} {c : Prop} [Decidable c] {e : String} {f : α → Except String β}
+    {g : Except String β} {v : β} (h : (if c then (throw e >>= f) else g) = .ok v) : ¬c ∧ g = .ok v := by
+  by_cases hc : c
+  · rw [ite_eq_left hc] at h; cases h
+  · rw [ite_eq_right hc] at h; exact ⟨hc, h⟩
+
+/-- `HmRow.check` takes the unit range's count to be a power of two when the unit returns the outputs. -/
+theorem unit_count_pow2 {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
+    (h : HmRow.check c tags ls = .ok ()) (ho : c.outNet = c.unitNet) :
+    isPow2 (c.ranges.filter (·.kind == Kind.net c.unitNet))[0]!.count = true := by
+  unfold HmRow.check at h
+  obtain ⟨spans, -, h⟩ := except_bind_ok h
+  obtain ⟨u, -, h⟩ := except_bind_ok h
+  obtain ⟨-, h⟩ := ite_throw_ok h
+  obtain ⟨-, h⟩ := ite_throw_ok h
+  obtain ⟨-, h⟩ := ite_throw_ok h
+  simp only [ht] at h
+  obtain ⟨hur, -⟩ := ite_throw_ok h
+  simp only [ho, beq_self_eq_true, Bool.true_and, Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true',
+    not_or, Bool.not_eq_false] at hur
+  exact hur.2
+
+/-- **Every VU is below `2^⌊log₂ c.g⌋`** in a circuit `HmRow.parse` accepted whose unit returns the outputs: there the
+unit range's `c.g · c.upv` slots are a power of two, so `c.g` is one. (A tail that returns the outputs has no such
+check.) -/
+theorem vu_lt_pow2 {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) (ho : c.outNet = c.unitNet) {g : ℕ} (hg : g < c.g) :
+    g < 2 ^ c.g.log2 := by
+  have P := parse_facts h
+  obtain ⟨ls, hls⟩ := P.check
+  have C := check_facts P.typed hls
+  have hp := unit_count_pow2 P.typed hls ho
+  rw [C.unit_range.2] at hp
+  simp only [isPow2, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hp
+  have hd : c.g ∣ 2 ^ (c.g * c.upv).log2 := by rw [hp.2]; exact Dvd.intro c.upv rfl
+  obtain ⟨i, -, hi⟩ := (Nat.dvd_prime_pow Nat.prime_two).1 hd
+  rw [hi, Nat.log2_two_pow, ← hi]
+  exact hg
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
@@ -388,6 +428,25 @@ theorem keyProg_bcPinned
   unfold keyBcAddr
   simp only [hu, ↓reduceDIte]
   exact this
+
+include hparse in
+/-- **`BcSite` at a site of `keyProg`'s places** in a circuit whose unit returns the outputs: the VU is below
+`2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), and the other conditions are `BcSite`'s. -/
+theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (h : u ∈ S)
+    {pop : Public} {d : Lean.Json} {D : Draw.UnitDraw} (hd : (si.acc S R u h).draw = some d)
+    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ v ∈ D.proved, v < D.population)
+    (hregs : ∀ r ∈ (si.acc S R u h).st.regions.toList,
+      Refine.regionOf (si.acc S R u h).st.c.kLog ((si.acc S R u h).st.m - (si.acc S R u h).st.c.kLog) r ∈
+        (si.acc S R u h).regs)
+    (hpop : HmRow.loadPublic (si.acc S R u h).tags (si.acc S R u h).st.c (si.acc S R u h).pf = .ok pop)
+    (hpt : pop.tables = none) (hu : D.proved[(si.o S R u h).val * c.g + si.vu S R u h]? = some u.val) :
+    BcSite (si.acc S R u h) pop (si.o S R u h) (si.vu S R u h) u.val := by
+  have hc := (si.acc S R u h).c_eq (hparse S R u h)
+  have hv := si.hvu S R u h
+  rw [hc] at hv
+  refine ⟨d, D, hd, hD, hlt, hregs, hpop, hpt, ?_, ?_⟩
+  · rw [hc]; exact vu_lt_pow2 (hparse S R u h) ho hv
+  · rw [hc]; exact hu
 
 theorem zeroG_ne_oneG : zeroG (c := c) (hU := hU) (n := n) ≠ oneG := fun h =>
   absurd (congrArg Fin.val h) (by simp [zeroG, oneG, Placed.zeroGate, Placed.oneGate])
