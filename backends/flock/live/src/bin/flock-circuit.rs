@@ -1407,6 +1407,10 @@ fn parse_items(b: &[u8]) -> Result<Vec<Item>, String> {
     Ok(out)
 }
 
+/// The classes of the inner proof's observes, in the order it absorbs them (`zk_veil::prove_inner`): `final_c'`, `[ρ, σ]`,
+/// then `Y`.
+const INNER_CLASSES: [&str; 3] = ["masked: final_c' (its pad h_fc)", "masked: inner rho, sigma (a fresh triple)", "masked: inner Y (the dot-product mask)"];
+
 /// Every item one rep's stream sent, attributed to a class. Returns the tally, the masked values (algebraic phase, in order)
 /// and each claim's `s_hat_v` (in opening order).
 fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128>, Vec<Vec<F128>>) {
@@ -1468,7 +1472,7 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                     Ph::Lig1 => add("masked: ligerito levels 1+ (functions of the uniform level-1 table)", n),
                     Ph::Inner(k) => {
                         *k += 1;
-                        add(if *k == 1 { "masked: inner rho, sigma (a fresh triple)" } else { "masked: inner Y (the dot-product mask)" }, n)
+                        add(INNER_CLASSES[(*k as usize).min(3) - 1], n)
                     }
                     _ => add("UNATTRIBUTED", n),
                 }
@@ -1554,7 +1558,6 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
         add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
         add("masked (proof): inner tau (<c, mu>, mu uniform) and its commitment's salt", 16 + inner.tau_salt.len());
-        add("masked (proof): final_c' (its pad h_fc; absorbed by the inner proof)", 16);
         let nonces_zero = pr.pcs_open.batching_nonces.iter().all(|x| *x == 0);
         add(if nonces_zero { "public (proof): the opening's batching nonces (live coins: always 0)" } else { "CLEAR (proof): nonzero batching nonces" },
             8 * pr.pcs_open.batching_nonces.len());
@@ -1573,6 +1576,38 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         "ligerito_values_differing_from_control": lig_differ.iter().map(|(k, (d, n))| (k.to_string(), json!({"differ": d, "of": n}))).collect::<serde_json::Map<_, _>>(),
         "attributed": all_differ && region_public && unattributed == 0 && clear.is_empty()});
     println!("ZKAUDIT\t{out}");
+}
+
+/// `zkaudit`'s inner-proof classes on one honest session: in each rep's stream, the observes after the inner proof's label are
+/// the masked zerocheck's `final_c'`, then the proof's `[ρ, σ]`, then its `Y`, and `classify` tallies each once, under
+/// [`INNER_CLASSES`] in that order.
+fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    let name = "zk_audit_attributes_the_inner_proof";
+    let s0 = Arc::new(Mutex::new(server(st, inst)));
+    let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+    let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+    let mut pass = v["accepted"] == true && proofs.len() == 2;
+    let mut reps = Vec::new();
+    for (rep, proof) in proofs.iter().enumerate() {
+        let stream = rep_stream(TABLE, rep);
+        let Some(s) = rec["streams"].as_array().and_then(|a| a.iter().find(|s| s["stream"] == stream)) else {
+            return json!({"case": name, "pass": false, "why": format!("no stream {stream}")});
+        };
+        let items: Vec<Item> = s["rounds"].as_array().unwrap().iter().flat_map(|r| parse_items(&hexb(r["msg"].as_str().unwrap_or("")).unwrap()).unwrap()).collect();
+        let at = items.iter().position(|it| matches!(it, Item::Label(l, _) if l.as_slice() == zkv::LABEL_INNER)).map_or(items.len(), |i| i + 1);
+        let obs: Vec<&Vec<F128>> = items[at..].iter().filter_map(|it| if let Item::Obs(o) = it { Some(o) } else { None }).collect();
+        let (_, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).unwrap();
+        let want = [vec![pr.zerocheck.final_c_eval], vec![inner.rho, inner.sigma], inner.y.clone()];
+        let (t, _, _) = classify(&items);
+        let tally: Vec<(usize, usize)> = INNER_CLASSES.iter().map(|c| t.get(c).copied().unwrap_or_default()).collect();
+        let values = obs.len() == want.len() && obs.iter().zip(&want).all(|(a, b)| *a == b);
+        let classes = tally.iter().zip(&want).all(|(&(n, b), w)| n == 1 && b == 16 * w.len());
+        pass &= values && classes;
+        reps.push(json!({"rep": rep, "observes_after_label": obs.iter().map(|o| o.len()).collect::<Vec<_>>(), "values_are_the_proofs": values,
+                         "classes": INNER_CLASSES.iter().zip(&tally).map(|(c, (n, b))| json!({"class": c, "items": n, "bytes": b})).collect::<Vec<_>>()}));
+    }
+    json!({"case": name, "expect": "the inner proof's observes are final_c', [rho, sigma] and Y, each tallied once under its class",
+           "accepted": v["accepted"], "reps": reps, "pass": pass})
 }
 
 /// M2's malicious verifiers V*: the honest coin server with its coins committed from a random tape, and a strategy that sees
@@ -2847,6 +2882,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_verifier_coin_off_its_commitment", false, false),
     ("zk_verifier_commits_beta_zero", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
+    ("zk_audit_attributes_the_inner_proof", true, false),
     ("zk_dummy_witness_passes_the_region_claims", false, true),
     ("tables_two_in_one_session", true, false),
     ("tables_proofs_before_the_last_coin_detected", true, false),
@@ -2969,6 +3005,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
+    }
+    if name == "zk_audit_attributes_the_inner_proof" {
+        return zk_audit_inner_case(st, inst, gpu);
     }
     if name == "gpu_proofs_match_cpu" {
         return gpu_cpu_case(st, inst);
