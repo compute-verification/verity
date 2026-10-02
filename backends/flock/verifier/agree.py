@@ -85,8 +85,9 @@ def lean_cmd(a, public):
 
 
 def modes(a):
-    """`--zk` and `--session-tables J`, which both verifiers read."""
-    return (["--zk"] if a.zk else []) + (["--session-tables", a.session_tables] if a.session_tables else [])
+    """`--zk` and `--session-tables J`, which both verifiers read (absent from check.py's preflight namespace)."""
+    tables = getattr(a, "session_tables", None)
+    return (["--zk"] if getattr(a, "zk", False) else []) + (["--session-tables", tables] if tables else [])
 
 
 def upstream_cmd(a, public, extra=()):
