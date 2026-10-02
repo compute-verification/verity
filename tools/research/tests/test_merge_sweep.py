@@ -76,6 +76,25 @@ def test_the_sweep_closes_what_landed_and_retargets_its_children(tmp_path):
                             ("pr", "close", "1", "--comment", note), ("pr", "close", "2", "--comment", note)]
     assert sorted(gh.open) == [3, 4, 5] and gh.open[5]["baseRefName"] == "main" and gh.open[4]["baseRefName"] == "C"
     assert any(f"close #1 (A): {note}" in line for line in lines)
+    assert _heads(repo) == {"main", "C", "D", "E"}                                # A and B landed, and no open PR uses them
+
+
+def _heads(repo: Path) -> set[str]:
+    return {line.split("refs/heads/")[1] for line in _git(repo, "ls-remote", "--heads", "origin").splitlines()}
+
+
+def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_path):
+    """A commit pushed to A after A landed isn't on main: A's PR closes, and the branch stays for its owner."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _git(repo, "checkout", "-q", "A")
+    (repo / "late.txt").write_text("late\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "late")
+    _git(repo, "push", "-q", "origin", "A")
+    _git(repo, "checkout", "-q", "main")
+    lines: list[str] = []
+    assert M.sweep(repo, gh=gh, log=lines.append) == ([1, 2], [5])
+    assert _heads(repo) == {"main", "A", "C", "D", "E"} and any(line.startswith("research merge: kept A") for line in lines)
 
 
 def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
@@ -83,6 +102,7 @@ def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
     lines: list[str] = []
     assert M.sweep(repo, dry_run=True, gh=gh, log=lines.append) == ([1, 2], [5])
     assert gh.mutations == [] and sorted(gh.open) == [1, 2, 3, 4, 5]
+    assert _heads(repo) == {"main", "A", "B", "C", "D", "E"} and any("would delete origin's branch A" in line for line in lines)
     assert "would retarget #5 from B" in lines[0] and "would close #1" in lines[1]
     M.sweep(repo, gh=gh, log=lambda *_: None)
     done = list(gh.mutations)
@@ -141,6 +161,47 @@ def test_a_merge_sweeps_after_it_lands_and_says_to_push_first(tmp_path, monkeypa
     assert M.main(["--sweep", "--dry-run"]) == 0 and sorted(gh.open) == [3, 4, 5]
     assert M.main(["--sweep"]) == 0
     assert sorted(gh.open) == [4, 5] and gh.open[4]["baseRefName"] == "main"
+
+
+def _checked_c(tmp_path, monkeypatch, gh, repo):
+    """C with main merged in, pushed, and a passing check of its tip; the checkout back on main."""
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    M.sweep(repo, gh=gh, log=lambda *_: None)
+    _git(repo, "checkout", "-q", "C")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "main into C", "main")
+    _git(repo, "push", "-q", "origin", "C")
+    gh.open[3]["headRefOid"] = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.chdir(repo)
+    assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
+                          "mytools.decl_check:T", "--cwd", "source", "--", "true"]) == 0
+    _git(repo, "checkout", "-q", "main")
+
+
+def test_a_merge_with_push_lands_on_the_remote_then_sweeps(tmp_path, monkeypatch, capsys):
+    """Trains landed through `research merge` and a push by hand, so the sweep ran before the push and closed nothing: with --push
+    the merge is on the remote before the sweep reads it."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    capsys.readouterr()
+    assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 0
+    out = capsys.readouterr().out
+    assert "pushed main to origin" in out and "push it, then" not in out
+    assert _git(repo, "rev-parse", "origin/main") == _git(repo, "rev-parse", "main")
+    assert sorted(gh.open) == [4, 5] and gh.open[4]["baseRefName"] == "main" and "C" not in _heads(repo)
+
+
+def test_a_refused_push_sweeps_nothing_and_fails(tmp_path, monkeypatch, capsys):
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    (other / "x.txt").write_text("x\n")
+    _git(other, "add", "-A")
+    _git(other, "commit", "-q", "-m", "someone else landed first")
+    _git(other, "push", "-q", "origin", "main")
+    assert M.main(["C", "--push"]) == 1
+    assert "push of main to origin refused, nothing swept" in capsys.readouterr().err
+    assert sorted(gh.open) == [3, 4, 5] and "C" in _heads(repo)
 
 
 def test_a_merge_without_the_remote_skips_the_sweep(tmp_path, monkeypatch, capsys):

@@ -129,7 +129,7 @@ if GROUP:
 if RH.ONLY:
     CASES = [c for c in CASES if RH.ONLY in c[0]]
 
-# DERIVE-2's reported digests (docs/vllm-poc/derive-hf5-report.md §5 / §6): the re-confirmation rows must reproduce them exactly
+# DERIVE-2's reported digests: the re-confirmation rows must reproduce them exactly
 EXPECT_DIGEST_PREFIX = {"llama-sdpa-f32-tie1-greedy": "538319a3770a", "qwen2-sdpa-f32-tie1-greedy": "e9d32625a99b",
                         "gpt2-sdpa-f32-tie1-greedy-gelu_pytorch_tanh": "03925eb18841", "qwen3-sdpa-f32-tie1-greedy": "46ed593f82a3"}
 

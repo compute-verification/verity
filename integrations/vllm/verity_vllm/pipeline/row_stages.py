@@ -18,7 +18,9 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
+``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
+it and writes ``config_record.json``.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
@@ -65,6 +67,7 @@ class SingleRow(Row):
         self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
         self.config_run = commit.config_run == "1"
+        self.replay_pending = False
 
     def run(self) -> int:
         try:
@@ -77,6 +80,9 @@ class SingleRow(Row):
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
+            if stage_on(self.stages, "replay"):
+                RC.replay(self)
+                self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
                 RC.config_record(self)
@@ -84,7 +90,9 @@ class SingleRow(Row):
         finally:
             if self.trap:
                 self.research_result()
-        if self.config_run:
+        if self.replay_pending:
+            self.log("config run PENDING: the C2 replay runs on CPU from the sealed bundle (`row stage replay`), which writes config_record.json")
+        elif self.config_run:
             RC.config_record(self)
         self.tl("row", "end", ("ok", "true"))
         self.timeline_report()
@@ -168,10 +176,10 @@ class SingleRow(Row):
         self.LP = self.cb.lp if self.cb.lp is not None else s["LP"]
         self.T = self.cb.t if self.cb.t is not None else s["T"]
         self.MML = self.I + self.O
-        self.tgt = R.declared_target(self.path(self.wl), self.protocols)
+        self.tgt = R.declared_target(self.path(self.wl), self.protocols, row=self.row)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
         # the attention implementation the row executes (declared, else the pinned vLLM's default for this device) selects the tap
-        _, fa = self.output(self.cli("row", "fa-version", self.wl), stderr=subprocess.DEVNULL)
+        _, fa = self.output(self.cli("row", "fa-version", self.wl, *self.tgt_args), stderr=subprocess.DEVNULL)
         if self.guarded_max():
             self.hidden_so = self.env.hidden_so or (self.env.hidden_so_fa3_guarded if fa.strip() == "3" else self.env.hidden_so_fa2_guarded)
         else:
@@ -260,13 +268,14 @@ class SingleRow(Row):
         return ["--launch-max-seqlen-q", *lc.split("\n")] if lc else []
 
     def derive_all(self, to: int) -> tuple[int, int]:
-        """The step, request and extra-shape derives, serially or ``--build-jobs`` wide -> (step rc, request rc)."""
+        """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
         cmd_s = self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "step", "--M", str(self.B), "--pos0", "8",
                          "--max-model-len", str(self.MML), "--workload", self.wl, "--out", f"{self.d}/build_step", *self.tgt_args)
         lctx = self.launch_args(self.LP, self.T)
         cmd_r = self.request_cmd(self.LP, self.T, f"{self.d}/build_request", lctx)
-        req = self.cb.build_jobs or "1"
-        jobs = str(R.build_jobs_auto()) if req == "auto" else req
+        req = self.cb.build_jobs or "auto"
+        shapes = [(self.LP, self.T), *R.extra_shapes(self.path(self.wl), self.LP, self.T)]
+        jobs = str(R.build_jobs_auto(shapes, R.model_layers(self.ck), budget_gb=self.cb.build_ram_budget_gb)) if req == "auto" else req
         jobs_n = int(jobs) if re.fullmatch(r"[0-9]+", jobs) else 1
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
@@ -326,22 +335,46 @@ class SingleRow(Row):
                 out += ["--derived", dd]
         return out
 
+    def follow_compose(self, to: int) -> tuple[Any, str, str]:
+        """B >= 2: the workload Program's compose starts beside the derives (`global-program --follow`) and loads each component as its
+        derive finishes -> (its future, the derives-done marker, the derives-failed marker)."""
+        done, stop = f"{self.d}/build_workload.derives_done", f"{self.d}/build_workload.derives_failed"
+        for f in (done, stop):
+            if os.path.exists(f):
+                os.remove(f)
+        dirs = [f"{self.d}/build_request", *(f"{self.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T))]
+        cmd = self.cli("global-program", "--workload", self.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{self.d}/build_workload",
+                       "--checkpoint-dir", self.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=self.py312)
+        pool = ThreadPoolExecutor(max_workers=1)
+        fut = pool.submit(self.run_tl, "build.global_program", to, f"{self.d}/build_workload.log", cmd)
+        pool.shutdown(wait=False)
+        return fut, done, stop
+
     def build(self) -> None:
         scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
         to = self.cb.build_timeout or min(CAP, 900 * scale)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
+        follow = self.follow_compose(to) if self.B > 1 else None
         rc1, rc2 = self.derive_all(to)
         wall = int(time.time()) - t0
         self.tl("build.summary", "start")
         ok = self.guarded("build summary", R.build_summary, self.d)
         wd = ""
         self.tl("build.summary", "end", ("ok", ok))
+        if follow is not None:
+            fut, done, stop = follow
+            open(done if ok == "PASS" else stop, "w").close()
+            rcw = fut.result()
+            for f in (done, stop):
+                if os.path.exists(f):
+                    os.remove(f)
         if ok == "PASS":
-            rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
-                              self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
-                                       "--checkpoint-dir", self.ck, py=self.py312))
+            if follow is None:
+                rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
+                                  self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
+                                           "--checkpoint-dir", self.ck, py=self.py312))
             wd = (R.load_json(f"{self.d}/build_workload/workload_program.json") or {}).get("workload_digest") or ""
             if not (rcw == 0 and wd):
                 ok = "FAIL"
@@ -535,6 +568,8 @@ class SingleRow(Row):
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
         if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
             cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
+            if ck.replay_deferred in ("1", "slim"):
+                cmd += ["--replay-deferred", *(["slim"] if ck.replay_deferred == "slim" else [])]
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
@@ -743,7 +778,7 @@ class SingleRow(Row):
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
         if self.config_run:
-            RC.commit_verdict(self, rck, wall)
+            self.replay_pending = RC.commit_verdict(self, rck, wall)
             return
         if rck == 0 and man:
             self.manifest_verify(man)

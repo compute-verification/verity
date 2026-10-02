@@ -11,7 +11,8 @@ the 65,536 bf16 words.  An instance with a non-finite operand or result word is 
 25-bit adder, exponent floor -132) in float64: a bf16 x bf16 product is exact there; a group's terms align as
 `floor(|t| / U)` with `U = 2^(max nominal exponent - 24)`; their sum is an exact integer below 2^31; the step's word is that sum times
 `U` truncated to 24 significant bits.  A coordinate whose chain meets a non-finite operand, an f32-subnormal or an overflowing step
-result is recomputed by `derived_rows.dot_bf16`, so every word equals the int64 twin's.  The W side (values and exponents, transposed)
+result is recomputed by `derived_rows.dot_bf16`, so every word equals the int64 twin's.  `gemm_row` is the same chain under any
+k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products, a 26-bit adder and floor -133, so `U = 2^(e - 25)`).  The W side (values and exponents, transposed)
 is prepared once per weight buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place), and
 coordinates are split over up to `MAX_THREADS` threads; the words do not depend on the split.
 """
@@ -33,7 +34,9 @@ DOMAIN = "instances whose operand and result words are all finite (the reference
 FAST_GEMM_WORDS = 1 << 24
 MAX_THREADS = 8
 _REDO_CHUNK = 4096                                  # coordinates per int64 recompute (memory-bounded, as `rows.GEMM_CHUNK`)
-_FLOOR = -132
+#: DOT primitive id -> its k16 step as (products per group, adder width, exponent floor), the parameters of `derived_rows.TC_DOT16_BY_PRIM`
+AMPERE = (8, D._TC_WIDTH, D._TC_FLOOR)
+STEPS = {"AmpereBF16TcDot16_v2": AMPERE, "HopperBF16WgmmaDot16_v1": (D._HOPPER_TC_GROUPS[0], D._HOPPER_TC_WIDTH, D._HOPPER_TC_FLOOR)}
 _TRUNC24 = np.int64(~((1 << 29) - 1))
 
 
@@ -189,23 +192,25 @@ def prepared(w: np.ndarray) -> _Prepared:
     return _PREPARED[0]
 
 
-def _chain(x: np.ndarray, p: _Prepared, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
-    """The k16 chain of coordinates lo..hi: (f32 words, coordinates the float64 path does not claim)."""
+def _chain(x: np.ndarray, p: _Prepared, lo: int, hi: int, step: tuple[int, int, int] = AMPERE) -> tuple[np.ndarray, np.ndarray]:
+    """The k16 chain of coordinates lo..hi under `step` = (products per group, adder width, exponent floor): (f32 words, coordinates
+    the float64 path does not claim)."""
     K = x.shape[0]
+    G, width, floor = step
     xf = _f32(_widen(x)).astype(np.float64)
     xe = np.maximum((x >> 7) & 0xFF, 1).astype(np.int16) - 254
     a = np.zeros(hi - lo)
     bad = np.zeros(hi - lo, dtype=bool)
     with np.errstate(invalid="ignore", over="ignore"):    # a non-finite or overflowing coordinate is handed back (`bad`)
-        for g in range(0, K, 8):                    # a k16 step is two groups of eight, each joined by the running accumulator
-            v = p.f[g:g + 8, lo:hi] * xf[g:g + 8, None]
-            pe = np.where(v != 0, p.e[g:g + 8, lo:hi] + xe[g:g + 8, None], np.int16(-30000)).max(axis=0)
+        for g in range(0, K, G):                    # each group of G products is joined by the running accumulator
+            v = p.f[g:g + G, lo:hi] * xf[g:g + G, None]
+            pe = np.where(v != 0, p.e[g:g + G, lo:hi] + xe[g:g + G, None], np.int16(-30000)).max(axis=0)
             ab = np.abs(a)
             a_exp = np.maximum(((ab.view(np.int64) >> 52) & 0x7FF) - 1023, -126)
-            me = np.maximum(np.maximum(pe, _FLOOR), np.where(a != 0, a_exp, -(1 << 20)))
-            inv = np.ldexp(1.0, (24 - me).astype(np.int32))
+            me = np.maximum(np.maximum(pe, floor), np.where(a != 0, a_exp, -(1 << 20)))
+            inv = np.ldexp(1.0, (width - 1 - me).astype(np.int32))
             tot = np.copysign(np.floor(np.abs(v) * inv), v).sum(axis=0) + np.copysign(np.floor(ab * inv), a)
-            y = np.abs(tot) * np.ldexp(1.0, (me - 24).astype(np.int32))
+            y = np.abs(tot) * np.ldexp(1.0, (me - width + 1).astype(np.int32))
             bad |= (y >= 2.0 ** 128) | ((y != 0) & (y < 2.0 ** -126))
             a = np.where(tot == 0, 0.0, np.copysign((y.view(np.int64) & _TRUNC24).view(np.float64), tot))
         return a.astype(np.float32).view(np.uint32), bad
@@ -218,6 +223,13 @@ def threads() -> int:
 def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """`DotBf16_v1{K}` of the row `x` (K,) against every row of `w` (N, K), bf16 words: (f32 words, non-finite coordinates), equal to
     `derived_rows.dot_bf16` word for word."""
+    return dot_chain(x, w, "AmpereBF16TcDot16_v2", n_threads)
+
+
+def dot_chain(x: np.ndarray, w: np.ndarray, dot_id: str, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """`DotBf16_v2{K, DOT=dot_id}` of the row `x` (K,) against every row of `w` (N, K), bf16 words: (f32 words, non-finite
+    coordinates), equal to `derived_rows.dot_bf16_for(dot_id)` word for word."""
+    step, redo_dot = STEPS[dot_id], D.dot_bf16_for(dot_id)
     x = np.asarray(x, dtype=np.uint16)
     if x.shape[0] % 16 or w.shape[1] != x.shape[0]:
         raise ValueError(f"a k16 chain needs K a multiple of 16 and W [N, K] (x {x.shape}, W {w.shape})")
@@ -226,26 +238,31 @@ def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tu
     out = np.empty(N, dtype=np.uint32)
     redo = p.bad | bool((((x >> 7) & 0xFF) == 0xFF).any())
     n = n_threads or threads()
-    step = -(-N // n)
+    span = -(-N // n)
 
     def job(lo: int) -> None:
-        hi = min(lo + step, N)
-        out[lo:hi], b = _chain(x, p, lo, hi)
+        hi = min(lo + span, N)
+        out[lo:hi], b = _chain(x, p, lo, hi, step)
         redo[lo:hi] |= b
 
     with ThreadPoolExecutor(n) as ex:
-        list(ex.map(job, range(0, N, step)))
+        list(ex.map(job, range(0, N, span)))
     nonfin = np.zeros(N, dtype=bool)
     idx = np.flatnonzero(redo)
     for i in range(0, idx.size, _REDO_CHUNK):
         at = idx[i:i + _REDO_CHUNK]
-        out[at], nonfin[at] = D.dot_bf16(x[None, :], w[at])
+        out[at], nonfin[at] = redo_dot(x[None, :], w[at])
     return out, nonfin
 
 
 def gemm_ampere_row(x: np.ndarray, w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """`Gemm_v1{K,N}` of one token row by the float64 chain: (bf16 words [N], non-finite coordinates)."""
-    acc, nonfin = dot_ampere(x, w)
+    return gemm_row(x, w, "AmpereBF16TcDot16_v2")
+
+
+def gemm_row(x: np.ndarray, w: np.ndarray, dot_id: str) -> tuple[np.ndarray, np.ndarray]:
+    """`Gemm_v2{K,N,DOT=dot_id}` of one token row by the float64 chain: (bf16 words [N], non-finite coordinates)."""
+    acc, nonfin = dot_chain(x, w, dot_id)
     return D.f2fp_bf16(acc).astype(np.uint16), nonfin
 
 
@@ -292,4 +309,5 @@ def _register() -> None:
 
 _register()
 
-__all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "dot_ampere", "gemm_ampere_row", "prepared", "threads"]
+__all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "STEPS", "dot_ampere", "dot_chain", "gemm_ampere_row", "gemm_row",
+           "prepared", "threads"]

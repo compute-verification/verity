@@ -941,6 +941,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     from verity_vllm.check.fold_compare import load_profile, summarize
     from verity_vllm.observe.events import Root, RunHeader
     from verity_vllm.observe.fold.fold import fold
+    from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.fold.patterns.sampling import with_sampler_construction
     from verity_vllm.observe.log import read_log
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -951,13 +952,12 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     if moe_construction not in (None, TargetProfile.DEFAULT_MOE_CONSTRUCTION):
         hook = getattr(prof_mod, "with_moe_construction", None)
         if hook is None:
-            raise SystemExit(f"workload declares moe_construction={moe_construction!r} but profile {profile_name} has no with_moe_construction hook: "
-                             f"it cannot fold that construction (refused by name; the MOE-01 fold is NOT a substitute)")
+            raise SystemExit(f"workload declares moe_construction={moe_construction!r} but profile {profile_name} has no with_moe_construction hook: it cannot fold that construction (refused by name; the MOE-01 fold is NOT a substitute)")
         profile = hook(profile, moe_construction)
     profile = with_sampler_construction(profile, sampler_construction)
     events = list(read_log(log_path))
     header = next((e for e in events if isinstance(e, RunHeader)), None)
-    result = fold(events, profile, strict=None, with_program=with_program)
+    result = fold(events, with_protocols(profile, header), strict=None, with_program=with_program)   # PoUW's calls: `patterns.pouw`
     summ = summarize(result)
     scope_pattern = next((type(pt).__name__ for pt in profile.patterns if type(pt).__name__.startswith("MoEFusedExperts")), None)
     # roots, classified as resolve_log does (the profile's `root_class`, else `weight_field`)

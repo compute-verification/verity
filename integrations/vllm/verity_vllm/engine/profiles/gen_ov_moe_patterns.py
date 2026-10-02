@@ -38,11 +38,12 @@ from typing import Any
 
 from verity.ir.defs import bind
 from verity_vllm.program.registry import moe as _MOE
+from verity_vllm.program.registry import targets as T
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, triton_name,
-                        unsupported)
+from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
+                        triton_name, unsupported)
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.engine.profiles.gen_llama_patterns import GemmLaunchTuned
@@ -267,13 +268,17 @@ class MoEFusedExperts:
         # 3. up/gate GEMM over pairs --------------------------------------------------------------------------------
         P = M * TOPK
         ids_flat = _flat(ids, P)
+        try:   # the record target's expert GEMM Definitions (`registry.targets.moe_expert_gemm_spec`): the same selection the builder makes
+            up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
+        except T.UnregisteredTarget as e:
+            return unsupported(node, f"target has no registered fused-MoE binding: {e}")
         r = self._fused(node, up, expect_weighted=False, expect_top_k=TOPK, E=E, K=H, N=2 * I, P=P)
         if isinstance(r, Unsupported):
             return r
         x_up, w13, c1 = r
         if x_up.alloc != hidden.alloc or x_up.shape != (M, H) or not is_row_major(x_up):
             return unsupported(node, "up-GEMM A operand is not the [M,H] hidden_states view", a=repr(x_up), hidden=repr(hidden))
-        up_c = Compute(bind(Q.MoeExpertGemm, E=E, K=H, N=2 * I), P,
+        up_c = Compute(up_spec, P,
                        (Gather(x_up, tuple(p // TOPK for p in range(P))), PerRow(ids_flat), Shared(w13)),
                        (PerRow(_as_rows(c1, P, 2 * I)),), (up.id,), hint=f"{hint}/{_root_name(ctx, w13, 'w13')}", kernels=(K_FUSED,), pattern=self.name)
         parts.append(up_c)
@@ -297,7 +302,7 @@ class MoEFusedExperts:
             return unsupported(node, "down-GEMM routed weights are not the router's topk_weights view", topk_weights_ptr=repr(wv), weights=repr(weights))
         if x_dn.shape != (P, I) or not is_row_major(x_dn):
             return unsupported(node, "down-GEMM A operand is not the [M*TOPK, I] silu output", a=repr(x_dn))
-        down_c = Compute(bind(Q.MoeExpertGemmW, E=E, K=I, N=H), P,
+        down_c = Compute(down_spec, P,
                          (PerRow(x_dn), PerRow(ids_flat), PerRow(_flat(weights, P)), Shared(w2)),
                          (PerRow(_as_rows(c3, P, H)),), (down.id,), hint=f"{hint}/{_root_name(ctx, w2, 'w2')}", kernels=(K_FUSED,), pattern=self.name)
         parts.append(down_c)
@@ -387,6 +392,9 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         r = super().match(node, ctx)
         if not isinstance(r, Group):
             return r      # None (not the scope) or the Unsupported the pairwise checks produced: identical refusals under both constructions
+        if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
+            return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
+                               "expert bodies run the Ampere one", dot=dot.id)
         from verity_vllm.program.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
