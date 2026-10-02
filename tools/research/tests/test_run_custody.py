@@ -214,6 +214,23 @@ def test_research_data_custody_publishes_a_local_run_and_verifies_it_elsewhere(t
     assert rep["preserved"] and "stdout.log" in rep["files"]
 
 
+def test_the_launchers_remote_json_does_not_cost_its_copy_custody(tmp_path, monkeypatch, capsys):
+    """A remote run's record is taken on its machine; the launching machine's copy also holds remote.json, which changes."""
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d = _fixture_run(tmp_path / "runs")
+    assert data_main(["custody", str(d), "--publish", "--keep-local"]) == 0
+    capsys.readouterr()
+    (d / CU.LAUNCHER_RECORD).write_text(json.dumps({"machine": "n1", "phase": "running"}))
+    rep = CU.verify(_other_machine(tmp_path, vault, monkeypatch), d, mark=False)
+    assert rep["preserved"], rep["error"]
+    assert CU.LAUNCHER_RECORD not in rep["files"], "eviction removes only what verify lists"
+    (d / CU.LAUNCHER_RECORD).write_text(json.dumps({"machine": "n1", "phase": "fetched"}))
+    assert CU.verify(_other_machine(tmp_path, vault, monkeypatch), d, mark=False)["preserved"]
+
+
 def test_an_attempt_published_without_a_run_record_is_not_run_custody(tmp_path, monkeypatch):
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
