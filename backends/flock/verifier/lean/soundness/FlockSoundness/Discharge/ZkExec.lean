@@ -5,3 +5,4 @@ import FlockSoundness.Discharge.ZkExec.Verify
 import FlockSoundness.Discharge.ZkExec.Inner
 import FlockSoundness.Discharge.ZkExec.Setup
 import FlockSoundness.Discharge.ZkExec.Refines
+import FlockSoundness.Discharge.ZkExec.Compiled
