@@ -26,8 +26,8 @@ open FlockSoundness.Discharge.Zero (ZeroIn)
 
 section copies
 
-variable {tags : Tags} {st : Stmt} (L : Layout st) (Lf : Layout (flat st))
-  (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (F : Aliased.UnitFacts tags (flat st))
+variable {tags : Tags} {st : Stmt} (L : Layout st) (Lf : Layout (Hidden.flatTwin st))
+  (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
   (hR : UnitRowsFlat st)
 
 /-- **A unit slot's forced-zero row carries 0** in the hidden statement, in every block of a satisfying witness. -/

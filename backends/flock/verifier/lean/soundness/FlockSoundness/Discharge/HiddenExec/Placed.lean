@@ -52,10 +52,10 @@ namespace AcceptedH
 variable {T : Model.Statement} (a : AcceptedH T)
 
 /-- The flat twin's layout (`flat_layout`). -/
-theorem flatLayout : Layout (flat a.st) := flat_layout a.ht a.h
+theorem flatLayout : Layout (Hidden.flatTwin a.st) := flat_layout a.ht a.h
 
 /-- The flat twin's unit facts (`flat_unitFacts`). -/
-theorem unitFacts : Aliased.UnitFacts a.tags (flat a.st) := flat_unitFacts a.ht a.h
+theorem unitFacts : Aliased.UnitFacts a.tags (Hidden.flatTwin a.st) := flat_unitFacts a.ht a.h
 
 /-- **The accepted statement's VU rows**: the unit net's rows, stacked `units_per_vu` times. -/
 noncomputable def rows : Rows := (unitRows a.st a.L.unit_built).stack a.st.c.upv
