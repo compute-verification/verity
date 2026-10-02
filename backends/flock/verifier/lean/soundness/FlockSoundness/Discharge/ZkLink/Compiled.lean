@@ -216,22 +216,31 @@ structure OutZC (F D Sl : Type) where
   pend : PendZ F D Sl × PendZ F D Sl
   opens : OpensZ F D Sl
 
+/-- **Rep `r` of a compiled `--zk` table at the link points `pts`** (`Refine.modelTable`'s `G`). -/
+noncomputable def repZCAt (A : Arith F K) (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D)
+    (Lp : Merkle.Leaf (F × F) Sl D H) (Lτ : Merkle.Leaf F Sl D H) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
+    (r : Fin 2) : Game (PendZ F D Sl) :=
+  repZC A H Ep Lp Lτ T r.val (extraClaims T.S T.ptLocal mPts pts)
+
 open Classical in
+/-- **A compiled `--zk` table's verdict and output** (`Refine.modelTable`'s `out`): accepted iff both reps' Ligerito
+verdicts accept on the opened rows, both inner checks hold, and every row path verifies (`OpensOKZ`). -/
+noncomputable def outZC (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (T : TabZK F mPts) (cap₀ : Cap D) (pend : PendZ F D Sl × PendZ F D Sl) (os : OpensZ F D Sl) : OutZC F D Sl :=
+  ⟨pend.1.lig.verdict os.rows && pend.2.lig.verdict os.rows &&
+      decide (pend.1.inner (os.inner 0) ∧ pend.2.inner (os.inner 1) ∧
+        OpensOKZ H E Lf (width₀ T) cap₀ 0 pend.1.lig os.rows os.salts ∧
+        OpensOKZ H E Lf (width₀ T) cap₀ 1 pend.2.lig os.rows os.salts),
+    cap₀, pend, os⟩
+
 /-- **A compiled `--zk` table after its witness cap `cap₀` and the link points `pts`**: both reps concurrently, then the
-openings; accepted iff both reps' Ligerito verdicts accept on the opened rows, both inner checks hold, and every row path
-verifies (`OpensOKZ`). -/
+openings, then the verdict (`outZC`). -/
 noncomputable def tabAfterZC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
     (Lτ : Merkle.Leaf F Sl D H) (T : TabZK F mPts) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) :
     Game (OutZC F D Sl) :=
-  (interleave (repZC A H Ep Lp Lτ T 0 (extraClaims T.S T.ptLocal mPts pts))
-    (repZC A H Ep Lp Lτ T 1 (extraClaims T.S T.ptLocal mPts pts))).bind fun pend =>
-    Game.send (OpensZ F D Sl) fun os => Game.ret
-      ⟨pend.1.lig.verdict os.rows && pend.2.lig.verdict os.rows &&
-        decide (pend.1.inner (os.inner 0) ∧ pend.2.inner (os.inner 1) ∧
-          OpensOKZ H E Lf (width₀ T) cap₀ 0 pend.1.lig os.rows os.salts ∧
-          OpensOKZ H E Lf (width₀ T) cap₀ 1 pend.2.lig os.rows os.salts),
-        cap₀, pend, os⟩
+  (interleave (repZCAt A H Ep Lp Lτ T pts 0) (repZCAt A H Ep Lp Lτ T pts 1)).bind fun pend =>
+    Game.send (OpensZ F D Sl) fun os => Game.ret (outZC H E Lf T cap₀ pend os)
 
 /-- A default output, for positions outside a batch. -/
 def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
