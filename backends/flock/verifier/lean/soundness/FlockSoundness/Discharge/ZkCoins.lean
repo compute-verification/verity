@@ -1,7 +1,12 @@
 import FlockSoundness.Discharge.ZkCoins.Basic
 import FlockSoundness.Discharge.ZkCoins.SessionDefs
 import FlockSoundness.Discharge.ZkCoins.Statements
+import FlockSoundness.Discharge.ZkCoins.Weights
+import FlockSoundness.Discharge.ZkCoins.Lazy
+import FlockSoundness.Discharge.ZkCoins.Leaf
 import FlockSoundness.Discharge.ZkCoins.Hybrid
+import FlockSoundness.Discharge.ZkCoins.Erase
+import FlockSoundness.Discharge.ZkCoins.Reads
 import FlockSoundness.Discharge.ZkCoins.Session
 
 /-!
