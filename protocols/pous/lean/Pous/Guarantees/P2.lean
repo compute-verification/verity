@@ -6,8 +6,8 @@ import Pous.Protocol.Model.M1p
 
 Six statements about the abstract model `m1p` (`Pous/Protocol/Model/M1p.lean`: independent uniform permutations of
 `[0, p)`, forward queries only), at the block counts, widths and primes P2 uses, that `grade.sh` grades against, in
-namespace `Pous.Pinned` with the rest. Their texts are those of the statement review named in each docstring, verbatim.
-The proofs are in `Pous/SecurityProofs/P2/` (`PousProofs.P2MeetsM1pB19Uncond` and the others in
+namespace `Pous.Guarantees` with the rest. Their texts are those of the statement review named in each docstring,
+verbatim. The proofs are in `Pous/SecurityProofs/P2/` (`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in
 `Pous/SecurityProofs.lean`); a docstring's `lean/submissions/efficient-crypto/…` path names the store draft each was
 graded from.
 
@@ -15,7 +15,7 @@ Each is a theorem about `m1p` only, not about the concrete P2: nothing here mode
 or time, so none of them says the deployed P2 is secure.
 -/
 
-namespace Pous.Pinned
+namespace Pous.Guarantees
 
 open scoped ENNReal
 
@@ -150,4 +150,4 @@ def P2ErrorSplitB19Uncond : Prop :=
       AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
         ((2⁻¹ : ENNReal) ^ 129)
 
-end Pous.Pinned
+end Pous.Guarantees

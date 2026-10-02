@@ -6,7 +6,7 @@ import Pous.SecurityProofs.TrackA.A3Prime
 
 `m1`'s correctness and sizes; `gammaA2`, A2's bound at a domain of `2^ℓ` points; the certificate `P2Row`, `A7Row`'s log
 form, which closes the history union at `λ' = 128` (`hist_gamma_le`); and `meets_m1_of_row`, `Meets` for `m1` given the
-open `Pous.Pinned.A2LemmaAM1` and a row. A3′ is `PousTrackA.a3_prime_lam`, the proof of `Pinned.A3PrimeLam`.
+open `Pous.Guarantees.A2LemmaAM1` and a row. A3′ is `PousTrackA.a3_prime_lam`, the proof of `Guarantees.A3PrimeLam`.
 `Pous/SecurityProofs/P2/Domain.lean` applies the same certificate on P2's exact domain, where Lemma A is proved, not
 assumed.
 
@@ -43,7 +43,7 @@ noncomputable def gammaA2 (B ℓ S Q g : ℕ) : ℝ≥0∞ :=
   2 ^ S * (B.choose g) * (∑ h ∈ Finset.range (g + 1), (((g + 1) * Q).choose h : ℝ≥0∞)) / 2 ^ (ℓ * g)
 
 /-- A2 is Lemma A for `m1` with the good event `True` (M1 has no coins, so the setup is the permutations alone). -/
-theorem lemmaA_of_A2 (hA2 : Pinned.A2LemmaAM1) (B ℓ S D Q g : ℕ) [NeZero B] :
+theorem lemmaA_of_A2 (hA2 : Guarantees.A2LemmaAM1) (B ℓ S D Q g : ℕ) [NeZero B] :
     LemmaA (m1 B ℓ) S D Q g (gammaA2 B ℓ S Q g) (fun _ _ => True) := by
   intro W A₁ A₂
   have h := hA2 B ℓ S D Q g W A₁ A₂
@@ -206,7 +206,7 @@ theorem pr_false {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
   rw [pr_def, Finset.filter_false, Finset.card_empty, Nat.cast_zero, ENNReal.zero_div]
 
 /-- **`m1` meets the requirement, given A2 and a certificate row at its state bound.** -/
-theorem meets_m1_of_row (hA2 : Pinned.A2LemmaAM1) (B ℓ Q k : ℕ) [NeZero B] (hk : 1 ≤ k)
+theorem meets_m1_of_row (hA2 : Guarantees.A2LemmaAM1) (B ℓ Q k : ℕ) [NeZero B] (hk : 1 ≤ k)
     (hrow : P2Row B ℓ ((m1 B ℓ).stateBound Params.ρ) Q k) (D : ℕ) :
     Meets (m1 B ℓ) .sequential D Q k Params.εMax := by
   obtain ⟨g, -, hgB, hpow, hlog⟩ := hrow

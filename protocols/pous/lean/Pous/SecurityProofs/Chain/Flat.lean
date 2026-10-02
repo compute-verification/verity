@@ -312,7 +312,7 @@ def SpongeHard (B s D k : ℕ) : Prop :=
 def nPos (B Q : ℕ) : ℕ := B * (Q + 1) + B * (B + 1) / 2
 
 /-- **Target: the ex post facto bound in the ideal-permutation model**, the analogue of
-`Pous.Pinned.B5ExPostFactoBounded`. If the state game is `(s, D, k)`-hard, then an `m`-bit preprocessor and
+`Pous.Guarantees.B5ExPostFactoBounded`. If the state game is `(s, D, k)`-hard, then an `m`-bit preprocessor and
 `(D, Q)`-bounded programs answer `k` blocks with probability at most
 `2^m · (nPos³ · 2 / 2^ℓ)^(s + 1) + nPos² / 2^(ℓ + c)`.
 - Each fresh item is a `Π`-answer whose rate part (at least) was predicted. It is named by three positions (the
@@ -547,7 +547,7 @@ def ChainHard (G : TopoDAG N) (VC : Finset (Fin N)) (c ℓ : ℕ) (s : ℚ) (D k
 
 end ChainGame
 
-/-- **Target: the ex post facto bound for the chain**, the analogue of `Pous.Pinned.B5ExPostFactoBounded`.
+/-- **Target: the ex post facto bound for the chain**, the analogue of `Pous.Guarantees.B5ExPostFactoBounded`.
 - If the chain game is `(s, D, k)`-hard, an `m`-bit preprocessor and `(D, Q)`-bounded programs answer `k` blocks
   with probability at most `2^m · 2 · (nPos² · B · 2)^(s+1) / 2^(ℓ·s)`, plus a collision term.
 - **Freshness is B5's.** A query shows its parent label and its chaining value in the clear, and an inverse query
@@ -1621,7 +1621,7 @@ set_option relaxedAutoImplicit false
 /-!
 # N10′ (proposed): the column-aware invertible-label bound
 
-N10 as pinned (`Pous.Pinned.InvExPostFactoTwoLayer`) is **false** — machine-checked in
+N10 as pinned (`Pous.Guarantees.InvExPostFactoTwoLayer`) is **false** — machine-checked in
 `lean/submissions/p3-forward/Refutation.lean` by two `q_inv = 0` attacks (the cryptanalyst's deterministic column
 hole and a guessing chain). Root cause: `c²_v = P(x²_v ⊕ k²_v)` reads only **column `v`** of the lower layer, so a
 lower label is worth `1/n` of a whole pebble to the adversary, which whole-label `WhiteGreenHard` cannot see.
@@ -4523,7 +4523,7 @@ theorem sampling_64 : ENNReal.ofReal (p₀ 113797920 109312673 220 (220 * 2384))
 
 /-- **P3 at 64 KB, one segment, at any timed depth `D`**, for any conversion `g` and any graph certified at game
 depth `d ≥ g D` with `X = 3`. `k` does not depend on `D`. -/
-theorem p3_meets_64_at (g : ℕ → ℕ) (h10 : N10primeAt g) (h1 : Pous.Pinned.Theorem1iiSeq) (D d : ℕ)
+theorem p3_meets_64_at (g : ℕ → ℕ) (h10 : N10primeAt g) (h1 : Pous.Guarantees.Theorem1iiSeq) (D d : ℕ)
     (hd : g D ≤ d) (hard : ColumnHard Gr d 220 3) :
     Meets (p3SchemeR 2384 Gr) .sequential D (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) := by
   refine ⟨le_rfl, p3SchemeR_correct _ _, p3SchemeR_codeHoldsW _ _, p3SchemeR_space _ _ (by norm_num), ?_⟩
@@ -4541,41 +4541,41 @@ theorem p3_meets_64_at (g : ℕ → ℕ) (h10 : N10primeAt g) (h1 : Pous.Pinned.
 
 /-- **Headline: `D = 10` at the conversion `g(D) = D`** (freshness prover): game depth 10, `B(220, 12)`
 (`band_twoWay_220_12`), `k = 117`. -/
-theorem p3_meets_64_D10 (h10 : N10primeAt fun D => D) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_64_D10 (h10 : N10primeAt fun D => D) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeR 2384 (bandGraph 220 12)) .sequential 10 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_at _ _ h10 h1 10 10 le_rfl band_twoWay_220_12
 
 /-- **Fallback: `D = 12` on `B(220, 16)`, if the conversion is `g(D) = D`**: game depth 12
 (`band_twoWay_220_16`), `k = 117`. -/
-theorem p3_meets_64_D12_band16 (h10 : N10primeAt fun D => D) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_64_D12_band16 (h10 : N10primeAt fun D => D) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeR 2384 (bandGraph 220 16)) .sequential 12 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_at _ _ h10 h1 12 12 le_rfl band_twoWay_220_16
 
 /-- **`D = 5`, if the conversion is `g(D) = 2D`**: game depth 10, `B(220, 12)`, `k = 117`. -/
-theorem p3_meets_64_D5 (h10 : N10primeAt fun D => 2 * D) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_64_D5 (h10 : N10primeAt fun D => 2 * D) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeR 2384 (bandGraph 220 12)) .sequential 5 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_at _ _ h10 h1 5 10 (by norm_num) band_twoWay_220_12
 
 /-- **From the landed `n10prime`, at any `D`**, through the draft's `PousTweaked.gameDepth`. When `gameDepth` is
 fixed, the re-run is `p3_meets_64_landed _ h10 h1 D 10 (by decide) band_twoWay_220_12`. -/
-theorem p3_meets_64_landed (h10 : PousTweaked.N10primeT) (h1 : Pous.Pinned.Theorem1iiSeq) (D d : ℕ)
+theorem p3_meets_64_landed (h10 : PousTweaked.N10primeT) (h1 : Pous.Guarantees.Theorem1iiSeq) (D d : ℕ)
     (hd : PousTweaked.gameDepth D ≤ d) (hard : ColumnHard Gr d 220 3) :
     Meets (p3SchemeR 2384 Gr) .sequential D (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_at Gr _ (n10primeAt_of_landed h10) h1 D d hd hard
 
 /-- **`D = 20` under the conversion `(D+1)/2`**, ruled unsound (§22). Superseded by `_D10` and `_D5`. -/
-theorem p3_meets_64_of (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Pinned.Theorem1iiSeq) (d : ℕ)
+theorem p3_meets_64_of (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Guarantees.Theorem1iiSeq) (d : ℕ)
     (hd : (20 + 1) / 2 ≤ d) (hard : ColumnHard Gr d 220 3) :
     Meets (p3SchemeR 2384 Gr) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_at Gr _ h10 h1 20 d hd hard
 
 /-- **P3 at 64 KB, one segment, `D = 20` under `(D+1)/2`** (ruled unsound; superseded). -/
-theorem p3_meets_64 (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_64 (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeR 2384 (bandGraph 220 12)) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_of _ h10 h1 10 le_rfl band_twoWay_220_12
 
 /-- **`D = 20` under `(D+1)/2`, on `B(220, 16)` certified at game depth 12** (ruled unsound; superseded). -/
-theorem p3_meets_64_band16 (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_64_band16 (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeR 2384 (bandGraph 220 16)) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_of _ h10 h1 12 (by norm_num) band_twoWay_220_16
 
@@ -4602,7 +4602,7 @@ theorem sampling_14GB_64 :
 
 /-- **P3 at 64 KB over 14 GB, at any timed depth `D`**, for any conversion `g` and any graph certified at game depth
 `d ≥ g D` with `X = 3`. -/
-theorem p3_meets_multi_64_at (g : ℕ → ℕ) (hM : N10primeMultiAt g) (h1 : Pous.Pinned.Theorem1iiSeq) (D d : ℕ)
+theorem p3_meets_multi_64_at (g : ℕ → ℕ) (hM : N10primeMultiAt g) (h1 : Pous.Guarantees.Theorem1iiSeq) (D d : ℕ)
     (hd : g D ≤ d) (hard : ColumnHard Gr d 220 3) :
     Meets (p3SchemeNR 2384 Gr 971) .sequential D (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) := by
   refine ⟨le_rfl, p3SchemeNR_correct _ _ _, p3SchemeNR_codeHoldsW _ _ _, p3SchemeNR_space _ _ _ (by norm_num), ?_⟩
@@ -4618,40 +4618,40 @@ theorem p3_meets_multi_64_at (g : ℕ → ℕ) (hM : N10primeMultiAt g) (h1 : Po
 
 /-- **Headline: 14 GB at `D = 10` at the conversion `g(D) = D`**: `N = 971`, `B(220, 12)` at game depth 10,
 `k = 117`. -/
-theorem p3_meets_multi_64_D10 (hM : N10primeMultiAt fun D => D) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_multi_64_D10 (hM : N10primeMultiAt fun D => D) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeNR 2384 (bandGraph 220 12) 971) .sequential 10 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_at _ _ hM h1 10 10 le_rfl band_twoWay_220_12
 
 /-- **Fallback: 14 GB at `D = 12` on `B(220, 16)`, if the conversion is `g(D) = D`**: `N = 971`, game depth 12,
 `k = 117`. -/
-theorem p3_meets_multi_64_D12_band16 (hM : N10primeMultiAt fun D => D) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_multi_64_D12_band16 (hM : N10primeMultiAt fun D => D) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeNR 2384 (bandGraph 220 16) 971) .sequential 12 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_at _ _ hM h1 12 12 le_rfl band_twoWay_220_16
 
 /-- **14 GB at `D = 5`, if the conversion is `g(D) = 2D`**: `N = 971`, `B(220, 12)` at game depth 10, `k = 117`. -/
-theorem p3_meets_multi_64_D5 (hM : N10primeMultiAt fun D => 2 * D) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_multi_64_D5 (hM : N10primeMultiAt fun D => 2 * D) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeNR 2384 (bandGraph 220 12) 971) .sequential 5 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_at _ _ hM h1 5 10 (by norm_num) band_twoWay_220_12
 
 /-- **From the landed `n10primeMulti`, at any `D`**, through `PousTweaked.gameDepth`. -/
-theorem p3_meets_multi_64_landed (hM : PousTweaked.N10primeMultiT) (h1 : Pous.Pinned.Theorem1iiSeq)
+theorem p3_meets_multi_64_landed (hM : PousTweaked.N10primeMultiT) (h1 : Pous.Guarantees.Theorem1iiSeq)
     (D d : ℕ) (hd : PousTweaked.gameDepth D ≤ d) (hard : ColumnHard Gr d 220 3) :
     Meets (p3SchemeNR 2384 Gr 971) .sequential D (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_at Gr _ (n10primeMultiAt_of_landed hM) h1 D d hd hard
 
 /-- **14 GB at `D = 20` under the conversion `(D+1)/2`**, ruled unsound (§22). Superseded by `_D10` and `_D5`. -/
-theorem p3_meets_multi_64_of (hM : N10primeMultiAt fun D => (D + 1) / 2) (h1 : Pous.Pinned.Theorem1iiSeq) (d : ℕ)
+theorem p3_meets_multi_64_of (hM : N10primeMultiAt fun D => (D + 1) / 2) (h1 : Pous.Guarantees.Theorem1iiSeq) (d : ℕ)
     (hd : (20 + 1) / 2 ≤ d) (hard : ColumnHard Gr d 220 3) :
     Meets (p3SchemeNR 2384 Gr 971) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_at Gr _ hM h1 20 d hd hard
 
 /-- **P3 at 64 KB over 14 GB, `D = 20` under `(D+1)/2`** (ruled unsound; superseded). -/
-theorem p3_meets_multi_64 (hM : N10primeMultiAt fun D => (D + 1) / 2) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_multi_64 (hM : N10primeMultiAt fun D => (D + 1) / 2) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeNR 2384 (bandGraph 220 12) 971) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_of _ hM h1 10 le_rfl band_twoWay_220_12
 
 /-- **14 GB at `D = 20` under `(D+1)/2`, on `B(220, 16)` certified at game depth 12** (ruled unsound; superseded). -/
-theorem p3_meets_multi_64_band16 (hM : N10primeMultiAt fun D => (D + 1) / 2) (h1 : Pous.Pinned.Theorem1iiSeq) :
+theorem p3_meets_multi_64_band16 (hM : N10primeMultiAt fun D => (D + 1) / 2) (h1 : Pous.Guarantees.Theorem1iiSeq) :
     Meets (p3SchemeNR 2384 (bandGraph 220 16) 971) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_multi_64_of _ hM h1 12 (by norm_num) band_twoWay_220_16
 
@@ -5502,7 +5502,7 @@ theorem sampling_C64 :
 
 /-- **P3 with concrete `H` at 64 KB, one segment (14.4 MB), at any timed depth `D`**, from `P3ChainEPF` and a chain
 certificate with `X = 1` at `D` rounds: `k = 106`. -/
-theorem p3_meets_concrete_64_at (hE : P3ChainEPF) (h1 : Pous.Pinned.Theorem1iiSeq) (D : ℕ)
+theorem p3_meets_concrete_64_at (hE : P3ChainEPF) (h1 : Pous.Guarantees.Theorem1iiSeq) (D : ℕ)
     (hard : P3ChainHard Gr 512 2384 D 220 1) :
     Meets (p3SchemeC 2384 Gr) .sequential D (2 ^ 20) 106 ((2⁻¹ : ℝ≥0∞) ^ 128) := by
   refine ⟨le_rfl, p3SchemeC_correct _ _, p3SchemeC_codeHoldsW _ _, p3SchemeC_space _ _ (by norm_num), ?_⟩
@@ -5650,7 +5650,7 @@ theorem sampling_C14GB :
 
 /-- **P3 with concrete `H` at 64 KB over 14 GB (`N = 971`), at any timed depth `D`**, from `P3ChainEPFMulti` and a
 chain certificate with `X = 1`: `k = 106`. -/
-theorem p3_meets_concrete_multi_64_at (hM : P3ChainEPFMulti) (h1 : Pous.Pinned.Theorem1iiSeq) (D : ℕ)
+theorem p3_meets_concrete_multi_64_at (hM : P3ChainEPFMulti) (h1 : Pous.Guarantees.Theorem1iiSeq) (D : ℕ)
     (hard : P3ChainHard Gr 512 2384 D 220 1) :
     Meets (p3SchemeNC 2384 Gr 971) .sequential D (2 ^ 20) 106 ((2⁻¹ : ℝ≥0∞) ^ 128) := by
   refine ⟨le_rfl, p3SchemeNC_correct _ _ _, p3SchemeNC_codeHoldsW _ _ _, p3SchemeNC_space _ _ _ (by norm_num), ?_⟩
@@ -34253,9 +34253,9 @@ statement are `DenseMeetsDraft.lean`'s, verbatim. The proof composes five pieces
 1. **Reach** (`card_reach_le`, `complete_hard`). Greedy pebbling of the complete DAG adds at most the least
    unpebbled node per round, so `B − D − 1` pebbles reach at most `B − 1` nodes in `D` rounds.
 2. **B5 gives `TimedINC`** (`dense_timedINC`). Rebuilding every block is "all `B` challenges right", so
-   `Pous.Pinned.B5ExPostFactoBounded` (the `PousB5Chain` proof below) bounds it by
+   `Pous.Guarantees.B5ExPostFactoBounded` (the `PousB5Chain` proof below) bounds it by
    `π = B·2^β·((B(Q + 1) + B)²/2^ℓ)^(B − D)`.
-3. **`Pous.Pinned.Theorem1iiSeq`** (the `thm1-family` proof, `PousTargetsDense.theorem1_ii_seq`) gives
+3. **`Pous.Guarantees.Theorem1iiSeq`** (the `thm1-family` proof, `PousTargetsDense.theorem1_ii_seq`) gives
    `Pr[pass] ≤ |Hist|·π + p₀^k`.
 4. **Rate 1** (`denseScheme_correct`, `CodeHoldsW`, `SpaceBound`).
 5. **The certificate at `β = 531499840`.** `|Hist|·π ≤ 2^-128` (`dense_union_term`, in exponents of 2), and
@@ -35381,8 +35381,8 @@ namespace PousB5Chain
 open Pous Pous.Labelling
 open scoped ENNReal
 
-/-- **B5, `(D, Q)` form** (`Pous.Pinned.B5ExPostFactoBounded`). -/
-theorem b5_ex_post_facto_bounded : Pous.Pinned.B5ExPostFactoBounded := by
+/-- **B5, `(D, Q)` form** (`Pous.Guarantees.B5ExPostFactoBounded`). -/
+theorem b5_ex_post_facto_bounded : Pous.Guarantees.B5ExPostFactoBounded := by
   intro N w m s D Q k G VC d hard A₁ A₂ hA₂
   classical
   -- `k ≥ 1`: from no pebbles, fewer than `k` challenges are pebbled
@@ -35457,8 +35457,8 @@ theorem b5_ex_post_facto_bounded : Pous.Pinned.B5ExPostFactoBounded := by
         rw [mul_assoc]
         exact le_mul_of_one_le_left' (by exact_mod_cast hN)
 
-/-- **B5, parallel-query form** (`Pous.Pinned.B5ExPostFacto`): `RoundBounded D q` gives work `≤ D·q`. -/
-theorem b5_ex_post_facto : Pous.Pinned.B5ExPostFacto := by
+/-- **B5, parallel-query form** (`Pous.Guarantees.B5ExPostFacto`): `RoundBounded D q` gives work `≤ D·q`. -/
+theorem b5_ex_post_facto : Pous.Guarantees.B5ExPostFacto := by
   intro N w m s D q k G VC d hard A₁ A₂ hA₂
   refine b5_ex_post_facto_bounded N w m s D (D * q) k G VC d hard A₁ A₂ fun σ c ω => ⟨(hA₂ σ c ω).1, ?_⟩
   exact (work_le_depth_mul_width _ _).trans (Nat.mul_le_mul (hA₂ σ c ω).1 (hA₂ σ c ω).2)
@@ -51859,7 +51859,7 @@ an explicit tag. `segDAG N B` is the disjoint union of `N` complete DAGs: a node
 own segment*. The pebbling lemma below (`seg_hard`) extends `complete_hard`: since each round advances at most one node per
 segment, `s` pebbles reach at most `s + N*D` nodes in `D` rounds, so the disjoint union is `(N*B − N*D − 1, D, N*B)`-hard.
 
-This is the model half a multi-segment `Meets` needs: it plugs into `Pous.Pinned.B5ExPostFactoBounded` (giving
+This is the model half a multi-segment `Meets` needs: it plugs into `Pous.Guarantees.B5ExPostFactoBounded` (giving
 `π = (N*B)·2^β·(((N*B)(Q+1)+(N*B))²/2^ℓ)^(N*B − N*D)`) exactly as `complete_hard` does for one segment, then
 `PousTargetsDense.theorem1_ii_seq` and a certificate. At 14 GB the instantiation is `N = 448`, `B = 2^9`, `ℓ = 524288`
 (each segment `2^28` bits = 32 MiB, `448·32 MiB = 14 GB`). Kept in the random-oracle model; the concrete overwrite-chain

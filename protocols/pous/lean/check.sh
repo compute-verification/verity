@@ -30,26 +30,26 @@ expect() { # file target exit substring
   echo "$out" | grep -Fq "$4" || fail "$1: output lacks '$4'"
 }
 
-expect submissions/reference.lean Pous.Pinned.KFloor 0 '"verdict":"PASS"'
+expect submissions/reference.lean Pous.Guarantees.KFloor 0 '"verdict":"PASS"'
 
 cat > "$tmp/sorry.lean" <<'EOF'
 import Pous.Guarantees
-theorem solution : Pous.Pinned.Theorem1ii := sorry
+theorem solution : Pous.Guarantees.Theorem1ii := sorry
 EOF
-expect "$tmp/sorry.lean" Pous.Pinned.Theorem1ii 1 'sorryAx'
+expect "$tmp/sorry.lean" Pous.Guarantees.Theorem1ii 1 'sorryAx'
 
 cat > "$tmp/rogue_axiom.lean" <<'EOF'
 import Pous.Guarantees
 axiom cheat : False
-theorem solution : Pous.Pinned.Theorem1ii := cheat.elim
+theorem solution : Pous.Guarantees.Theorem1ii := cheat.elim
 EOF
-expect "$tmp/rogue_axiom.lean" Pous.Pinned.Theorem1ii 1 'unregistered axioms: [cheat]'
+expect "$tmp/rogue_axiom.lean" Pous.Guarantees.Theorem1ii 1 'unregistered axioms: [cheat]'
 
 cat > "$tmp/wrong_statement.lean" <<'EOF'
 import Pous.Guarantees
 theorem solution : Pous.Params.ρ = 18 / 19 := rfl
 EOF
-expect "$tmp/wrong_statement.lean" Pous.Pinned.KFloor 1 'does not have the pinned type'
+expect "$tmp/wrong_statement.lean" Pous.Guarantees.KFloor 1 'does not have the pinned type'
 
 expect submissions/reference.lean Pous.Params.ρ 1 'is not a pinned statement'
 
@@ -58,25 +58,25 @@ expect submissions/reference.lean Pous.Params.ρ 1 'is not a pinned statement'
 # failure instead of a hang.
 cat > "$tmp/near_miss.lean" <<'EOF'
 import Pous.Guarantees
-theorem solution : Pous.Pinned.BandChainMeets64D12 := sorry
+theorem solution : Pous.Guarantees.BandChainMeets64D12 := sorry
 EOF
-POUS_GRADE_TIMEOUT=120 expect "$tmp/near_miss.lean" Pous.Pinned.BandChainMeets64D5 1 'does not have the pinned type'
+POUS_GRADE_TIMEOUT=120 expect "$tmp/near_miss.lean" Pous.Guarantees.BandChainMeets64D5 1 'does not have the pinned type'
 
 # `native_decide` rests on an auxiliary axiom per use (`solution._native.native_decide.ax_…`).
 cat > "$tmp/native.lean" <<'EOF'
 import Pous.Guarantees
-theorem solution : Pous.Pinned.Theorem1ii := by
+theorem solution : Pous.Guarantees.Theorem1ii := by
   have : (2 : ℕ) + 2 = 4 := by native_decide
   exact sorry
 EOF
-expect "$tmp/native.lean" Pous.Pinned.Theorem1ii 1 'native_decide.ax'
+expect "$tmp/native.lean" Pous.Guarantees.Theorem1ii 1 'native_decide.ax'
 
 cat > "$tmp/import.lean" <<'EOF'
 import Pous.Guarantees
 import Pous.SecurityProofs
-theorem solution : Pous.Pinned.Theorem1ii := PousProofs.Theorem1ii
+theorem solution : Pous.Guarantees.Theorem1ii := Pous.SecurityProofs.Theorem1ii
 EOF
-expect "$tmp/import.lean" Pous.Pinned.Theorem1ii 1 'may import only'
+expect "$tmp/import.lean" Pous.Guarantees.Theorem1ii 1 'may import only'
 
 # Adds `solution` without kernel checking; the option name is assembled so the textual filter misses it.
 cat > "$tmp/kernel_bypass.lean" <<'EOF'
@@ -85,10 +85,10 @@ open Lean Elab Command in
 run_cmd liftCoreM do
   let opt : Name := .str (.str .anonymous ("deb" ++ "ug")) ("skipKernel" ++ "TC")
   withOptions (·.setBool opt true) do
-    addDecl (.thmDecl { name := `solution, levelParams := [], type := .const ``Pous.Pinned.Theorem1ii [],
+    addDecl (.thmDecl { name := `solution, levelParams := [], type := .const ``Pous.Guarantees.Theorem1ii [],
                         value := .const ``True.intro [] })
 EOF
-expect "$tmp/kernel_bypass.lean" Pous.Pinned.Theorem1ii 1 'the kernel rejects the submission'
+expect "$tmp/kernel_bypass.lean" Pous.Guarantees.Theorem1ii 1 'the kernel rejects the submission'
 
 # The statement red team's F1 exploits: compile-time IO that widens the allowlist, or swaps the grader binary for one
 # that prints PASS, each with a background process that retries after the build. Errors are swallowed so the files
@@ -105,7 +105,7 @@ import Pous.Guarantees
   try IO.FS.writeFile "ROOT/AXIOMS" "propext\nClassical.choice\nQuot.sound\nsorryAx\n" catch _ => pure ()
   let _ ← IO.Process.spawn { cmd := "sh", args := #["-c",
     "(sleep 3; echo sorryAx >> ROOT/Grader/Registry.lean; touch ROOT/AXIOMS) > /dev/null 2>&1 &"] }
-theorem solution : Pous.Pinned.Theorem1ii := sorry
+theorem solution : Pous.Guarantees.Theorem1ii := sorry
 EOF
 cat > "$tmp/rt_grader_swap.lean" <<'EOF'
 import Pous.Guarantees
@@ -118,8 +118,8 @@ import Pous.Guarantees
 theorem solution : (1 : Nat) = 1 := rfl
 EOF
 sed -i "s#ROOT#$PWD#g" "$tmp/rt_registry_tamper.lean" "$tmp/rt_grader_swap.lean"
-expect "$tmp/rt_registry_tamper.lean" Pous.Pinned.Theorem1ii 1 'unregistered axioms: [sorryAx]'
-expect "$tmp/rt_grader_swap.lean" Pous.Pinned.Theorem1ii 1 'does not have the pinned type'
+expect "$tmp/rt_registry_tamper.lean" Pous.Guarantees.Theorem1ii 1 'unregistered axioms: [sorryAx]'
+expect "$tmp/rt_grader_swap.lean" Pous.Guarantees.Theorem1ii 1 'does not have the pinned type'
 sleep 4
 sha256sum --quiet -c TRUSTED.sha256 || fail "a control changed a trusted file"
 [ "$(sha256sum .lake/build/bin/pous-grader)" = "$grader_hash" ] || fail "a control changed the grader binary"
@@ -129,7 +129,7 @@ echo "   the trusted tree is unchanged"
 # A machine without unprivileged user namespaces is an environment error (exit 2), not a failed submission.
 fake=$(mktemp -d)
 printf '#!/bin/sh\nexit 1\n' > "$fake/unshare"; chmod +x "$fake/unshare"
-err=$(PATH="$fake:$PATH" bash grade.sh submissions/reference.lean Pous.Pinned.KFloor 2>&1 > /dev/null); code=$?
+err=$(PATH="$fake:$PATH" bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor 2>&1 > /dev/null); code=$?
 rm -rf "$fake"
 [ "$code" = 2 ] && echo "$err" | grep -q 'user namespaces are unavailable' \
   || fail "missing user namespaces gave exit $code, not the environment error"

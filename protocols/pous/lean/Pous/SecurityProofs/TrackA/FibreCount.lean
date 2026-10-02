@@ -41,7 +41,7 @@ open scoped ENNReal
 
 /-- Fibre counting (report Proposition 9(a), audit §5 item 1): untimed `INC(β, π)` for a correct scheme forces
 `(1 − π)·2^(n + β) ≤ 2^(t + B·ℓ)`. Within the space bound this is `β ≲ 0.05·n`, far below `ρ|C|`, so the untimed
-`INC` hypothesis of `Pinned.Theorem1ii` cannot hold at the operating point in this model. -/
+`INC` hypothesis of `Guarantees.Theorem1ii` cannot hold at the operating point in this model. -/
 theorem fibre_count {M : IdealModel} (sch : Scheme M) (hc : sch.Correct) (β : ℕ) (π : ℝ≥0∞) (h : INC sch β π) :
     (1 - π) * 2 ^ (sch.n + β) ≤ 2 ^ (sch.t + sch.B * sch.ℓ) := by
   classical

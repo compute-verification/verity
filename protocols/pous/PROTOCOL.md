@@ -4,7 +4,7 @@ A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` f
 certify that the GPU still holds more than a `ρ` fraction of `C`: answering a random block within the deadline requires
 the block itself, because rebuilding it from a smaller state takes more sequential oracle rounds than the deadline
 allows. This directory holds the reference implementation, `verity_pous` ("Codecs" through "Tests" below), and the Lean
-formalization, `lean/` (from "In Lean" on): the definitions, the pinned statements and the proofs so far.
+formalization, `lean/` (from "In Lean" on): the definitions, the guarantees and the proofs so far.
 
 ## Main caveat: H is a monolithic random oracle (narrow-state H)
 
@@ -66,8 +66,8 @@ The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Se
 
 `band.SECURE_FIRST` is `BandParams(512, 524288, d = 12)`: 512 blocks of 65,536 B per segment (32 MiB), audited with
 `k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs
-(`Pous.Pinned.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis). Segment `s` is
-exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
+(`Pous.SecurityProofs.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis). Segment `s`
+is exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
 below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, ..., C_{max(0, v-d)}` (Lean
 `parentsDesc (bandDAG B d) v`), then the pad.
 
@@ -93,7 +93,7 @@ overwrite chain a call boundary is a round boundary. A call in a chain costs 10 
 `dense.POINT_64K` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
 `k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs. The 111 is what
-`Pous.Pinned.ChainDenseMeets64` certifies for this overwrite-chain `H`, for one segment, with no hypothesis; a
+`Pous.SecurityProofs.ChainDenseMeets64` certifies for this overwrite-chain `H`, for one segment, with no hypothesis; a
 random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
 
@@ -131,7 +131,7 @@ independently.
 The operating point is `params.OPERATING_POINT`: `n = 220`, `k = 12`, `wc = 2384` bits, so `m = 65,560` B and a segment
 is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets` is about.
 
-P3 has no certificate. `Pous.Pinned.P3ConcreteMeets64` (one segment), `P3ConcreteMeets14GB` (971 segments) and
+P3 has no certificate. `Pous.SecurityProofs.P3ConcreteMeets64` (one segment), `P3ConcreteMeets14GB` (971 segments) and
 `P3ConcreteMeets64D12` (`B(220, 16)` at `D = 12`) are proved, with no hypothesis, for P3 over the overwrite chain in
 the ideal two-permutation model, at the operating point's parameters, `D = 10`, `Q = 2^20` and `k = 106`. But Lean's
 chain starts from `iv(domP3 tag L v)`: zeros, then `tag_s ‖ u256(2v + L)` in the 512-bit capacity part. The code's
@@ -162,8 +162,8 @@ about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 
    `chainScheme_encDec`, pending red-team §40). It also proves that the public game is equivalent to the private one
    for any scheme with that property (`pubAuditSecure_exact_iff`, `pubMeets_exact`), so the certificates carry over
    at `k = 111`:
-   - the band: `Pous.Pinned.BandPubMeets64`, `BandPubMeets14` and `BandPubMeets14Global`, for every `d ≥ 5`, with no
-     hypothesis, under the deployment conditions in their docstrings;
+   - the band: `Pous.SecurityProofs.BandPubMeets64`, `BandPubMeets14` and `BandPubMeets14Global`, for every `d ≥ 5`,
+     with no hypothesis, under the deployment conditions in their docstrings;
    - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
      chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/Pous/SecurityProofs/Chain/Flat.lean`;
      not pinned).
@@ -202,15 +202,16 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `theorem`, and its open `hypotheses`;
   - `claims`: ids in `verity.claims`' format.
 
-  Each `theorem` is the `Pous.Pinned` statement it rests on. At the frozen point, the band's certificate is
-  `Pous.Pinned.BandMultiMeetsFamily`, with no hypothesis: k 111, D 5, Q 2^20, 241.5 µs, cliff at `d`, for every segment
-  count N from 1 to `2^64` (all that `BandParams` allows), so no segment count is a gap. It is one `Meets` for the whole
+  Each `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
+  the frozen point, the band's certificate is `Pous.SecurityProofs.BandMultiMeetsFamily`, with no hypothesis: k 111,
+  D 5, Q 2^20, 241.5 µs, cliff at `d`, for every segment count N from 1 to `2^64` (all that `BandParams` allows), so no
+  segment count is a gap. It is one `Meets` for the whole
   store: challenges are uniform over all its blocks, the state bound is the whole store's, and one permutation serves
   every segment. A 70 GiB store, 2,240 segments, is certified whole. At one segment it is also `BandChainMeets64`, and
   at 448 (14 GB) `BandMultiMeets14`.
 
-  Dense is `Pous.Pinned.ChainDenseMeets64`, with no hypothesis and no cliff, for one segment; other segment counts are
-  gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
+  Dense is `Pous.SecurityProofs.ChainDenseMeets64`, with no hypothesis and no cliff, for one segment; other segment
+  counts are gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, and no hash call.
   - It follows the P2 spec (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, draft v0) except for its
     expander:
@@ -347,9 +348,10 @@ A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` 
 `(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the adversary's fastest oracle call, and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
 `CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
-`Pous.Pinned.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on `B(220, 16)`,
-both for Lean's `h_0`, not yet the code's ("P3 (research)"). The column-game certificate `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level
-(`Π₂` of the oldest parent, `Π₂` of the pad, `P`) reads as 28 rounds; no `Meets` statement covers that reading.
+`Pous.SecurityProofs.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on
+`B(220, 16)`, both for Lean's `h_0`, not yet the code's ("P3 (research)"). The column-game certificate
+`band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level (`Π₂` of the oldest
+parent, `Π₂` of the pad, `P`) reads as 28 rounds; no `Meets` statement covers that reading.
 
 `adversary.schedule` computes, for any holding, the fewest rounds after which each value is known. It covers keys
 (each query waits for the parent it absorbs), forward labels, promotion from held or revealed columns, and the
@@ -410,20 +412,21 @@ the timed audit and the simulator with the dense codec as default.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
 - **Proofs:** `Pous/SecurityProofs/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
-  `Pous/SecurityProofs.lean` proves `Pous.Pinned.X` as `PousProofs.X`.
-- **Untrusted submissions:** `grade.sh FILE Pous.Pinned.X` grades one file against one pinned statement (`lean/README.md`).
+  `Pous/SecurityProofs.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
+- **Untrusted submissions:** `grade.sh FILE Pous.Guarantees.X` grades one file against one guarantee (`lean/README.md`).
 
 ### The band
 
 `Pous.BandChain.chainBand B d ℓ c dom` (`Pous/Protocol/Model/BandChain.lean`) is the band over the overwrite chain on
 one ideal permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segments of it. The proofs are in this package
 (`Pous/SecurityProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
-`sponge-dense/`), with no hypothesis: `Pous.Pinned.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`, `D = 5`,
-`Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments (14 GiB), with
-per-segment and with global salts, `BandMultiMeets14K106` at `k = 106` per segment, and `BandMultiMeetsFamily` the
-`k = 111` row for every segment count `N` with `1 ≤ N ≤ 2^64` (`Pous/SecurityProofs/Chain/Family.lean`). `BandPubMeets*`
-are the same rows with an untrusted server encoding and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`),
-under the four deployment conditions in their docstrings. The band needs `d ≥ D`.
+`sponge-dense/`), with no hypothesis: `Pous.SecurityProofs.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`,
+`D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments
+(14 GiB), with per-segment and with global salts, `BandMultiMeets14K106` at `k = 106` per segment, and
+`BandMultiMeetsFamily` the `k = 111` row for every segment count `N` with `1 ≤ N ≤ 2^64`
+(`Pous/SecurityProofs/Chain/Family.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
+exact setup check (`Pous/Protocol/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings. The
+band needs `d ≥ D`.
 
 ### The dense scheme
 
@@ -442,7 +445,7 @@ sequential audit at `ε = 2^-128`, so an adversary holding `⌊ρ|C|⌋` bits pa
 | `PousDenseReCert.dense_meets_64` | one segment: 512 blocks of 64 KB (32 MiB) | 5, `2^20` | 106 |
 | `PousDenseReCert.seg_meets_14` | 448 such segments (14 GB) | 5, `2^20` | 106 |
 | `PousDenseReCert.segTag_meets_14` | the same 448 segments, keyed as the implementation keys them, for every salt | 5, `2^20` | 106 |
-| `PousProofs.DenseMeets` (`Pous.Pinned.DenseMeets`) | one segment: `2^16` blocks of 1 KB | 64, `2^20` | 107 |
+| `Pous.SecurityProofs.DenseMeets` (`Pous.Guarantees.DenseMeets`) | one segment: `2^16` blocks of 1 KB | 64, `2^20` | 107 |
 
 Each composes B5 (`dense_timedINC`, `seg_timedINC`, from the pebbling bounds `complete_hard` and `seg_hard`) with
 Theorem 1(ii) sequential. At the 64 KB point the sampling term is `p₀^106 ≈ 0.98%`, while `p₀^105 > 1%`, so `k = 106` is
@@ -454,10 +457,10 @@ same rounds, work and acceptance probability, and the restricted oracle is again
 `tag_injective_14` record the index-level fact: the tagged keying is the global one relabeled injectively.
 
 **Over the overwrite chain** (`Pous.Sponge.chainDense`, `H` the overwrite chain on an ideal permutation, proved with no
-hypothesis in `Pous/SecurityProofs/Chain/Flat.lean`): `Pous.Pinned.ChainDenseMeets64`, 512 blocks of 64 KiB at `D = 5`,
-`Q = 2^20`, `k = 111`; and the deployment point, `Pous.Pinned.ChainDenseMeets111`, `2^16` blocks of 1 KiB at `D = 64`,
-`Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does not reach; it is
-re-pinned at `k = 111`, four challenges more.
+hypothesis in `Pous/SecurityProofs/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
+`D = 5`, `Q = 2^20`, `k = 111`; and the deployment point, `Pous.SecurityProofs.ChainDenseMeets111`, `2^16` blocks of
+1 KiB at `D = 64`, `Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does
+not reach; it is re-pinned at `k = 111`, four challenges more.
 
 **Not proved here:**
 - a concrete permutation for `Π₂` (the main caveat);
@@ -465,7 +468,7 @@ re-pinned at `k = 111`, four challenges more.
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
 
-## Pinned statements (`lean/Pous/Guarantees.lean`)
+## Guarantees (`lean/Pous/Guarantees.lean`)
 
 | Statements | What | Status |
 |---|---|---|
@@ -488,7 +491,7 @@ re-pinned at `k = 111`, four challenges more.
 | `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 
-Also proved and pinned in `lean-audit.json`, with no `Pous.Pinned` statement: the one-way bound on Fisch's stacked
+Also proved and pinned in `lean-audit.json`, with no `Pous.Guarantees` statement: the one-way bound on Fisch's stacked
 graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the
 band graph `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels
 (`PousP3Column.band_twoWay_*`); and the dense scheme at the deployment point (`PousDenseReCert.dense_meets_64`,
@@ -527,7 +530,7 @@ Done, in this package: in the random-oracle model, the dense re-certificate at `
 multi-segment lemma (`seg_meets_14`, 14 GB) and its form for the code's per-segment `tag_s` domains
 (`segTag_meets_14`), in `lean/Pous/SecurityProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
 `ChainExPostFactoG` and `ChainExPostFacto` (`chainExPostFactoG_v6`, `chainExPostFacto_v6`), and from them the band,
-the dense chain scheme and P3 with the concrete `H` ("Pinned statements"), in
+the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 `lean/Pous/SecurityProofs/Chain/Flat.lean`. Pending:
 
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").

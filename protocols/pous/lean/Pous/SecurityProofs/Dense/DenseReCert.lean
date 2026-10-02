@@ -91,7 +91,7 @@ an explicit tag. `segDAG N B` is the disjoint union of `N` complete DAGs: a node
 own segment*. The pebbling lemma below (`seg_hard`) extends `complete_hard`: since each round advances at most one node per
 segment, `s` pebbles reach at most `s + N*D` nodes in `D` rounds, so the disjoint union is `(N*B − N*D − 1, D, N*B)`-hard.
 
-This is the model half a multi-segment `Meets` needs: it plugs into `Pous.Pinned.B5ExPostFactoBounded` (giving
+This is the model half a multi-segment `Meets` needs: it plugs into `Pous.Guarantees.B5ExPostFactoBounded` (giving
 `π = (N*B)·2^β·(((N*B)(Q+1)+(N*B))²/2^ℓ)^(N*B − N*D)`) exactly as `complete_hard` does for one segment, then
 `PousProofs.theorem1_ii_seq` and a certificate. At 14 GB the instantiation is `N = 448`, `B = 2^9`, `ℓ = 524288`
 (each segment `2^28` bits = 32 MiB, `448·32 MiB = 14 GB`). Kept in the random-oracle model; the concrete overwrite-chain

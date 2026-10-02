@@ -9,7 +9,7 @@ draft (`lean/submissions/pebbling/ColumnAwareDraft.lean`): its holdings, one rou
 base-path graphs, with the definitions verbatim and the docstrings shortened. The draft's model, bound and N10′
 statement are not part of the trusted layer yet.
 
-N10 (`Pous.Pinned.InvExPostFactoTwoLayer`) is false because top label `v` reads only column `v` of the lower layer,
+N10 (`Pous.Guarantees.InvExPostFactoTwoLayer`) is false because top label `v` reads only column `v` of the lower layer,
 so the adversary can hold a lower label one column at a time. Here a holding has whole lower labels (cost `n`),
 lower columns `(w, u)` (cost `1`) and whole top labels (cost `n`), and an inverse query is a move of the game, not a
 charge in the bound.

@@ -14,7 +14,7 @@ import Pous.SecurityProofs.Thm1.Theorem1iiSeq
 import Pous.SecurityProofs.Thm1.Theorem1iiiTimed
 
 /-!
-# A3′, the sequential audit from a per-run Lemma A (pinned as `Pous.Pinned.A3Prime` and `A3PrimeLam`)
+# A3′, the sequential audit from a per-run Lemma A (pinned as `Pous.Guarantees.A3Prime` and `A3PrimeLam`)
 
 The restatement of A3 in the sms5 ideal-model review (`docs/sms5-review-ideal.md`, Track A), for the target
 game's adversary class (b): the state is `S` bits at every challenge and each answer is `(D, Q)`-bounded, so the

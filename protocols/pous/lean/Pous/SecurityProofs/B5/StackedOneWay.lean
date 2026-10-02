@@ -25,15 +25,15 @@ Three parts, composed at the end:
 2. **B5**, `PousB5` (`Pous.SecurityProofs.B5.ExPostFacto`).
 3. **The bridge**, `BridgeB2B5Draft.lean` (`PousBridge.B2ToB5`, `b2ToB5_of_claim13`), unchanged.
 
-`b2ToB5` is the bridge with Claim 13 discharged. `b5_stacked` chains it with `Pous.Pinned.B5ExPostFactoBounded` at
+`b2ToB5` is the bridge with Claim 13 discharged. `b5_stacked` chains it with `Pous.Guarantees.B5ExPostFactoBounded` at
 `s = ⌊(1 − ε)n⌋`, `D = ⌊βn⌋ − 1`, `k = n − ⌈εn/2⌉ + 1`, with the `n` last-layer nodes as challenges.
 -/
 
 /-!
-# Bridge B2 → B5 (draft statement `B2ToB5`, proved from `Pous.Pinned.FischClaim13`)
+# Bridge B2 → B5 (draft statement `B2ToB5`, proved from `Pous.Guarantees.FischClaim13`)
 
-B5 (`Pous.Pinned.B5ExPostFacto(Bounded)`) needs a `TopoDAG` and greedy black pebbling hardness `PebblingHard`.
-Claims 12–14 (`Pous.Pinned.B2Stacking`, `FischClaim13`, `FischClaim14`) speak about Fisch's stacked graph `V` with
+B5 (`Pous.Guarantees.B5ExPostFacto(Bounded)`) needs a `TopoDAG` and greedy black pebbling hardness `PebblingHard`.
+Claims 12–14 (`Pous.Guarantees.B2Stacking`, `FischClaim13`, `FischClaim14`) speak about Fisch's stacked graph `V` with
 edges `StackedEdge`. `B2ToB5` is the bridge. A topological numbering `e : V ≃ Fin N` of the stacked graph, with
 `G.par` its edges, makes the last layer `V_t` an `(s, D, k)`-hard challenge set whenever `s ≤ (1 − ε)n`,
 `D + 1 ≤ βn` and `k > n − εn/2`.
@@ -89,7 +89,7 @@ def B2ToB5 : Prop :=
     PebblingHard G (Finset.univ.image fun b => e (node t b)) s D k
 
 /-- The bridge holds given Claim 13 (at `δ = 0`, no red pebbles). -/
-theorem b2ToB5_of_claim13 (h13 : Pous.Pinned.FischClaim13) : B2ToB5 := by
+theorem b2ToB5_of_claim13 (h13 : Pous.Guarantees.FischClaim13) : B2ToB5 := by
   intro ℓ n N V _ _ α β ε node level drg green hnode hlevel hdr hsc hn hε hℓ e G hG t ht s D k hs hD hk P₀ hP₀
   classical
   have hdag : ∃ r : V → ℕ, ∀ u v, StackedEdge node drg green u v → r u < r v :=
@@ -147,8 +147,8 @@ namespace PousBridge
 open Pous Pous.DRG Pous.Labelling
 open scoped ENNReal
 
-/-- Claim 13 (`Pous.Pinned.FischClaim13`), by the pebbling prover's proof copied verbatim above. -/
-theorem fischClaim13 : Pous.Pinned.FischClaim13 := @PousFisch.claim13
+/-- Claim 13 (`Pous.Guarantees.FischClaim13`), by the pebbling prover's proof copied verbatim above. -/
+theorem fischClaim13 : Pous.Guarantees.FischClaim13 := @PousFisch.claim13
 
 /-- **The bridge B2 → B5, unconditionally.** -/
 theorem b2ToB5 : B2ToB5 := b2ToB5_of_claim13 fischClaim13

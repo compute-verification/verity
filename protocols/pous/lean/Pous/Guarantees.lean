@@ -18,14 +18,14 @@ import Pous.Protocol.Model.SampledAudit
 import Pous.Guarantees.P2
 
 /-!
-# Pinned statements
+# Guarantees
 
 The statements `grade.sh` grades against. A submission proves exactly one of them, as
-`theorem solution : Pous.Pinned.<Name>`. Named assumptions (`Pous/Assumptions.lean`) appear as hypotheses of the
+`theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`Pous/Assumptions.lean`) appear as hypotheses of the
 pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 -/
 
-namespace Pous.Pinned
+namespace Pous.Guarantees
 
 open scoped ENNReal
 
@@ -90,7 +90,7 @@ def Theorem1iiiTimed : Prop :=
 
 Fibre counting (report Proposition 9(a), audit §5 item 1): untimed `INC(β, π)` for a correct scheme forces
 `(1 − π)·2^(n + β) ≤ 2^(t + B·ℓ)`. Within the space bound this is `β ≲ 0.05·n`, far below `ρ|C|`, so the untimed
-`INC` hypothesis of `Pinned.Theorem1ii` cannot hold at the operating point in this model. -/
+`INC` hypothesis of `Guarantees.Theorem1ii` cannot hold at the operating point in this model. -/
 def FibreCount : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (hc : sch.Correct) (β : ℕ) (π : ℝ≥0∞) (h : INC sch β π),
     (1 - π) * 2 ^ (sch.n + β) ≤ 2 ^ (sch.t + sch.B * sch.ℓ)
@@ -507,7 +507,7 @@ def DenseMeets : Prop :=
 
 /-! ### P3 with a concrete `H`: the overwrite chain on `Π₂` (`Pous.Protocol.Model.P3Chain`)
 
-Added on 28 Sep 2026. Accepted on 29 Sep 2026: red team GO; Daniel deferred review to the coordinator. The proofs are in this package (`PousProofs.P3Concrete*`, from
+Added on 28 Sep 2026. Accepted on 29 Sep 2026: red team GO; Daniel deferred review to the coordinator. The proofs are in this package (`Pous.SecurityProofs.P3Concrete*`, from
 `Pous/SecurityProofs/Chain/Flat.lean`).
 
 The model is `Pous.Sponge.p3ChainModel 220 2384`: a tweakable ideal permutation `P` of 64 KB labels (an independent
@@ -524,7 +524,7 @@ fresh setup. As for every `Meets` here, `W` is fixed before the primitives are d
 `p3SchemeC 2384 B(220, 12)` meets the requirement with sequential reveal, `D = 10` rounds, `Q = 2^20` queries per
 answer, `k = 106` challenges and `ε = 2^-128`: it is correct, `|C| ≥ |W|`, within the space bound, and every
 `⌊ρ|C|⌋`-bit adversary is accepted with probability at most `δ + 2^-128`. Pinned as drafted
-(`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`, `PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional`; here `PousProofs.P3ConcreteMeets64`).
+(`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`, `PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64`).
 It rests on `PousP3Concrete.p3SegCharges` (`lean/submissions/p3-concrete/P3ChainSegCharges.lean`) through the ex post
 facto target `P3ChainEPF`, and on the proved chain certificate `p3ChainCert` (`X = 1` at `D = 10`). Statement
 reviewer: the statement red team, `bc-22298e90-fd61-5062-a836-0b7a423cab8a` (GO, `docs/lean-trusted-layer-review.md`
@@ -538,7 +538,7 @@ def P3ConcreteMeets64 : Prop :=
 `ε = 2^-128`. Security is joint over all 971 segments: one advice string for the whole store, and segment-by-segment
 bounds do not combine to this (`not_jointClassWeight`). Pinned as drafted
 (`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`,
-`PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional`; here `PousProofs.P3ConcreteMeets14GB`). It rests on `p3SegCharges` through
+`PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets14GB`). It rests on `p3SegCharges` through
 `P3ChainEPFMulti` and the joint bridge (`PousP3ConcreteMulti.p3ChainEPFMulti_of_segCharges`), and on `p3ChainCert`.
 Statement reviewer: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header. -/
 def P3ConcreteMeets14GB : Prop :=
@@ -548,7 +548,7 @@ def P3ConcreteMeets14GB : Prop :=
 /-- **Unconditional (no hypothesis): the fallback, P3 with a concrete `H` at `D = 12` on `B(220, 16)`, one
 segment.** `p3SchemeC 2384 B(220, 16)` meets the requirement with sequential reveal, `D = 12`, `Q = 2^20`, `k = 106`
 and `ε = 2^-128`. Pinned as drafted (`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`,
-`PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional`; here `PousProofs.P3ConcreteMeets64D12`), from `P3ChainEPF` and the certificate
+`PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64D12`), from `P3ChainEPF` and the certificate
 `p3ChainCert_band16`. Statement reviewer: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header. -/
 def P3ConcreteMeets64D12 : Prop :=
   Meets (Pous.P3Concrete.p3SchemeC 2384 (Pous.P3Column.bandGraph 220 16)) .sequential 12 (2 ^ 20) 106
@@ -558,8 +558,8 @@ def P3ConcreteMeets64D12 : Prop :=
 
 Added on 29 Sep 2026. Statement reviewer: the statement red team (`bc-22298e90-fd61-5062-a836-0b7a423cab8a`), GO
 (`docs/lean-trusted-layer-review.md` §§52–57); Daniel deferred review to the coordinator (29 Sep 2026). The proofs
-are in this package (`PousProofs.Band*`, `PousProofs.ChainDense*`, from `Pous/SecurityProofs/Chain/Flat.lean`), and each
-was graded PASS (`lean/submissions/sponge-dense/grading/GRADE.txt`).
+are in this package (`Pous.SecurityProofs.Band*`, `Pous.SecurityProofs.ChainDense*`, from
+`Pous/SecurityProofs/Chain/Flat.lean`), and each was graded PASS (`lean/submissions/sponge-dense/grading/GRADE.txt`).
 
 The model is `Pous.Sponge.idealPerm (2·524288 + 512)`: one uniform permutation `Π₂` of `1049088` bits, queried both
 ways, so `D` and `Q` count `Π₂^{±1}` calls. `H` is the overwrite chain on `Π₂` (`Pous.Sponge.ovKey`), labels are 64 KiB
@@ -573,19 +573,19 @@ with `d + 1 ≤ D` it is broken (`BandGapAttack`, `lean/submissions/band-chain/B
 /-- **Unconditional: the band scheme at 64 KiB.** For every in-degree `d ≥ 5` and salt, `chainBand (2^9) d` (512
 blocks of 64 KiB labels) meets the requirement with sequential reveal, `D = 5` rounds, `Q = 2^20` queries per answer,
 `k = 111` challenges and `ε = 2^-128`. Proof: `lean/submissions/sponge-dense/ChainEPFV6FinalBand64.lean`,
-`PousBandChain.band_meets_64_final`; here `PousProofs.BandChainMeets64`. -/
+`PousBandChain.band_meets_64_final`; here `Pous.SecurityProofs.BandChainMeets64`. -/
 def BandChainMeets64 : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 256,
     Meets (Pous.BandChain.chainBand (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-- **Unconditional: the band at the deployment in-degree `d = 5`** (`band_meets_64_d5_final`; here `PousProofs.BandChainMeets64D5`). -/
+/-- **Unconditional: the band at the deployment in-degree `d = 5`** (`band_meets_64_d5_final`; here `Pous.SecurityProofs.BandChainMeets64D5`). -/
 def BandChainMeets64D5 : Prop :=
   ∀ salt : Bits 256,
     Meets (Pous.BandChain.chainBand (2 ^ 9) 5 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-- **Unconditional: the band at the recommended in-degree `d = 12`** (`band_meets_64_d12_final`; here `PousProofs.BandChainMeets64D12`). -/
+/-- **Unconditional: the band at the recommended in-degree `d = 12`** (`band_meets_64_d12_final`; here `Pous.SecurityProofs.BandChainMeets64D12`). -/
 def BandChainMeets64D12 : Prop :=
   ∀ salt : Bits 256,
     Meets (Pous.BandChain.chainBand (2 ^ 9) 12 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
@@ -595,7 +595,7 @@ def BandChainMeets64D12 : Prop :=
 (229,376 blocks of 64 KiB) meets the requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the
 implementation's per-segment tags (`segDom salt`, segment `s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one
 global salt and global indices (`dom salt`). One advice string covers the whole store. Proof:
-`ChainEPFV6FinalBand14.lean`, `PousBandMulti.band_meets_14_final`; here `PousProofs.BandMultiMeets14`. -/
+`ChainEPFV6FinalBand14.lean`, `PousBandMulti.band_meets_14_final`; here `Pous.SecurityProofs.BandMultiMeets14`. -/
 def BandMultiMeets14 : Prop :=
   ∀ d : ℕ, 5 ≤ d →
     (∀ salt : Bits 192,
@@ -605,7 +605,7 @@ def BandMultiMeets14 : Prop :=
       Meets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
         ((2⁻¹ : ℝ≥0∞) ^ 128))
 
-/-- **Unconditional: the band at 14 GiB with 106 challenges**, per-segment tags (`band_meets_14_k106_final`; here `PousProofs.BandMultiMeets14K106`). -/
+/-- **Unconditional: the band at 14 GiB with 106 challenges**, per-segment tags (`band_meets_14_k106_final`; here `Pous.SecurityProofs.BandMultiMeets14K106`). -/
 def BandMultiMeets14K106 : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 192,
     Meets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential 5
@@ -622,7 +622,7 @@ Statement reviewer: the statement red team (`bc-22298e90`), GO (the POUS store's
 §58), on a red-team read (`bc-9e381a9e`, for the band lane), GO (the POUS store's
 `internal/p3-instantiation/band-family-pin-redteam-verdict.md`). Proof: the POUS store's
 `lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final` (graded:
-`band-multi/family-pin/GRADE.txt`); here `PousProofs.BandMultiMeetsFamily`. -/
+`band-multi/family-pin/GRADE.txt`); here `Pous.SecurityProofs.BandMultiMeetsFamily`. -/
 def BandMultiMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
     (∀ salt : Bits 192,
@@ -635,7 +635,8 @@ def BandMultiMeetsFamily : Prop :=
 /-- **Unconditional: the overwrite-chain dense scheme at 64 KiB.** `chainDense (2^9)` (512 blocks of 64 KiB on the
 complete DAG) meets the requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`. Not `DenseMeets` (the dense
 scheme with `H` a random oracle), and not `SpongeDense`'s `ChainDenseMeetsPinned` (`2^16` blocks of 1 KiB, `D = 64`).
-Proof: `ChainEPFV6FinalDense.lean`, `PousSpongeChain.chain_meets_64_final`; here `PousProofs.ChainDenseMeets64`. -/
+Proof: `ChainEPFV6FinalDense.lean`, `PousSpongeChain.chain_meets_64_final`; here
+`Pous.SecurityProofs.ChainDenseMeets64`. -/
 def ChainDenseMeets64 : Prop :=
   ∀ salt : Bits 256,
     Meets (Pous.Sponge.chainDense (2 ^ 9) 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
@@ -646,7 +647,7 @@ def ChainDenseMeets64 : Prop :=
 Added on 29 Sep 2026, with the band pins. Statement reviewer: the statement red team (`bc-22298e90`), GO
 (`docs/lean-trusted-layer-review.md` §§53, 55); Daniel deferred review to the coordinator (29 Sep 2026). The codeword is
 produced by an untrusted server and accepted by the exact check. Each holds under the four deployment conditions of the
-review's §48, which are in its docstring. The proofs are in this package (`PousProofs.BandPub*`). -/
+review's §48, which are in its docstring. The proofs are in this package (`Pous.SecurityProofs.BandPub*`). -/
 
 /-- **Unconditional: the band at 64 KiB with a public encoder.** For every `d ≥ 5` and salt, `PubMeets` for
 `chainBand (2^9) d` with the exact check, at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`: an untrusted server that
@@ -655,7 +656,7 @@ encodes the data is exactly as secure as verifier-side encoding (`PubMeets ↔ M
 full-decode check (a sampled or spot check is not covered); (2) the salt is fixed by the verifier or the protocol, not
 the server; (3) `W` is fixed before setup, and `Π₂` is independent of `W` and the salt; (4) the commitment to `W` and
 the binding of `C*` are idealized. Proof: `ChainEPFV6FinalPub.lean`, `PousPub.band_pub_meets_64_final`; here
-`PousProofs.BandPubMeets64`. -/
+`Pous.SecurityProofs.BandPubMeets64`. -/
 def BandPubMeets64 : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 256,
     PubMeets (Pous.BandChain.chainBand (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _) .sequential 5
@@ -663,7 +664,7 @@ def BandPubMeets64 : Prop :=
 
 /-- **Unconditional: the band at 14 GiB with a public encoder, per-segment tags** (`PubMeets ↔ Meets`:
 `band_pub_iff_14`), under the same four deployment conditions (§48). Proof: `PousPub.band_pub_meets_14_final`; here
-`PousProofs.BandPubMeets14`. -/
+`Pous.SecurityProofs.BandPubMeets14`. -/
 def BandPubMeets14 : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 192,
     PubMeets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))
@@ -671,7 +672,7 @@ def BandPubMeets14 : Prop :=
 
 /-- **Unconditional: the band at 14 GiB with a public encoder, one global salt** (`PubMeets ↔ Meets`:
 `band_pub_iff_14_global`), under the same four deployment conditions (§48). Proof:
-`PousPub.band_pub_meets_14_global_final`; here `PousProofs.BandPubMeets14Global`. -/
+`PousPub.band_pub_meets_14_global_final`; here `Pous.SecurityProofs.BandPubMeets14Global`. -/
 def BandPubMeets14Global : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 256,
     PubMeets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _) .sequential
@@ -690,10 +691,10 @@ one ideal permutation) meets the requirement with sequential reveal, `D = 64` ro
 `k = 111` challenges and `ε = 2^-128`. It is strictly weaker than the `k = 107` target (`ChainDenseMeetsPinned`), which
 stays open: it costs four more challenges. Not `DenseMeets`, which is the dense scheme with `H` a random oracle at
 `k = 107`. Proof: `lean/submissions/sponge-dense/ChainEPFV6FinalDense111.lean`,
-`PousSpongeChain.chainDenseMeets111_final`; here `PousProofs.ChainDenseMeets111`. -/
+`PousSpongeChain.chainDenseMeets111_final`; here `Pous.SecurityProofs.ChainDenseMeets111`. -/
 def ChainDenseMeets111 : Prop :=
   ∀ salt : Bits 256,
     Meets (Pous.Sponge.chainDense (2 ^ 16) 8192 512 (Pous.Sponge.dom salt)) .sequential 64 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-end Pous.Pinned
+end Pous.Guarantees

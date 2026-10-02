@@ -12,7 +12,7 @@ import Pous.SecurityProofs.Accounting.Numbers
 One forward-only adversary against the two-layer chain on `Fin 8` (`wc = 64`, `m = 512`, `s = 1`, `D = 3`,
 `Q = 4`, `k = 2`, `W = 0`) answers two challenges with probability at least `2^-448` (`pr_attack`), while every
 statement below bounds it by `8·56⁴·2^-512 ≈ 2^-485.8` (`bound_lt`). Refuted: the pinned
-`Pous.Pinned.InvExPostFactoTwoLayer`, the `q_inv = 0` case of `pebbling/InvertibleExPostFactoDraft.lean`'s
+`Pous.Guarantees.InvExPostFactoTwoLayer`, the `q_inv = 0` case of `pebbling/InvertibleExPostFactoDraft.lean`'s
 `inv_ex_post_facto_bounded_inv` (`ForwardOnlyBound`), and that file's placeholder `ForwardBound`.
 -/
 
@@ -477,7 +477,7 @@ theorem bound_lt :
 /-! ### The refutations -/
 
 /-- **The pinned N10 is false.** -/
-theorem not_invExPostFactoTwoLayer : ¬ Pous.Pinned.InvExPostFactoTwoLayer := by
+theorem not_invExPostFactoTwoLayer : ¬ Pous.Guarantees.InvExPostFactoTwoLayer := by
   intro h
   have hb := h 8 64 512 1 3 4 2 chain8 W0 (by norm_num) hard A₁ A₂ A₂_bounded
   exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)

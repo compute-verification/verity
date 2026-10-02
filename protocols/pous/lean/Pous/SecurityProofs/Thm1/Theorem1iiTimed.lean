@@ -12,7 +12,7 @@ import Pous.SecurityProofs.Accounting.Numbers
 import Pous.SecurityProofs.Thm1.Theorem1ii
 
 /-!
-# Report Theorem 1(ii), timed: a proof of `Pous.Pinned.Theorem1iiTimed`
+# Report Theorem 1(ii), timed: a proof of `Pous.Guarantees.Theorem1iiTimed`
 
 The basic compression argument (report §3, proof of Theorem 1(ii)), with the per-block expander of `TimedINC`. Fix
 `W`, `A₁` and the `(D, Q)`-bounded product-form responder `A₂`. For a setup `a = (ω, r)` with `σ = A₁(W, pp, C, ω)`,
@@ -42,7 +42,7 @@ open scoped ENNReal
 end PousThm1ii
 
 open Pous PousThm1ii in
-theorem PousProofs.theorem1_ii_timed : Pous.Pinned.Theorem1iiTimed := by
+theorem PousProofs.theorem1_ii_timed : Pous.Guarantees.Theorem1iiTimed := by
   intro M sch D Q β S k π hinc W A₁ A₂
   obtain ⟨c, d, hcd⟩ := exists_code (fits S sch.B sch.ℓ β) β (card_fits_le S sch.B sch.ℓ β)
   let good : M.Ω × sch.Coins → Fin sch.B → Prop := fun a i =>

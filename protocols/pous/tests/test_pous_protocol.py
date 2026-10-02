@@ -236,14 +236,14 @@ def test_a_shared_domain_breaks_the_audit(name):
 
 
 def test_the_band_certificate_covers_every_segment_count():
-    """`Pous.Pinned.BandMultiMeetsFamily`: one `Meets` for the whole store at k = 111, for every segment count from 1 to
-    2^64 (`FAMILY_SEGMENTS`, all that `BandParams` allows), with no hypothesis.  The certificate used to be
+    """`Pous.SecurityProofs.BandMultiMeetsFamily`: one `Meets` for the whole store at k = 111, for every segment count
+    from 1 to 2^64 (`FAMILY_SEGMENTS`, all that `BandParams` allows), with no hypothesis.  The certificate used to be
     `band_meets_64` at one segment, `band_meets_14` at 448 and `band_meets_family` between, each given
     `ChainExPostFactoG`; `chainExPostFactoG_v6` proves that hypothesis, and the family pin covers every count."""
     for n in (1, 30, 448, 2240, 1 << 64):
         cert = schemes.Band(band.SECURE_FIRST.with_segments(n)).certificate
         assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == (
-            "Pous.Pinned.BandMultiMeetsFamily", n, 111, 5, ())
+            "Pous.SecurityProofs.BandMultiMeetsFamily", n, 111, 5, ())
     from verity_pous.schemes import band as band_scheme
     assert band_scheme.FAMILY_SEGMENTS == 1 << 64
 
@@ -266,17 +266,17 @@ def test_the_family_certificate_covers_a_70_gb_store():
     its 1,146,880 blocks."""
     sch = schemes.get(segments=2240)
     cert = sch.certificate
-    assert (cert.theorem, cert.segments, cert.k) == ("Pous.Pinned.BandMultiMeetsFamily", 2240, 111)
+    assert (cert.theorem, cert.segments, cert.k) == ("Pous.SecurityProofs.BandMultiMeetsFamily", 2240, 111)
     assert sch.params.blocks == 2240 * 512
 
 
 def test_certificates_at_their_points():
     b = schemes.get().certificate
     assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 241_500, 12, 1)
-    assert (b.theorem, b.hypotheses) == ("Pous.Pinned.BandMultiMeetsFamily", ())
+    assert (b.theorem, b.hypotheses) == ("Pous.SecurityProofs.BandMultiMeetsFamily", ())
     d = schemes.get("dense-chain/v1").certificate
-    assert (d.theorem, d.hypotheses, d.cliff, d.k, d.rounds, d.segments) == ("Pous.Pinned.ChainDenseMeets64", (), None,
-                                                                             111, 5, 1)
+    assert (d.theorem, d.hypotheses, d.cliff, d.k, d.rounds, d.segments) == (
+        "Pous.SecurityProofs.ChainDenseMeets64", (), None, 111, 5, 1)
     assert schemes.get("p3/v1").certificate is None
     assert schemes.Band(band.BandParams(512, 524_288, 4)).certificate is None      # the band pins need d ≥ 5
     assert schemes.Band(band.BandParams(512, 524_288, 5)).certificate.cliff == 5
@@ -288,8 +288,9 @@ def test_certificates_at_their_points():
 
 
 def test_certificates_name_proved_pins():
-    """A certificate's `theorem` is the `Pous.Pinned` statement it rests on (`lean/Pous/Guarantees.lean`), and its proof
-    `PousProofs.X` is pinned in `lean/lean-audit.json`.  Experimental schemes are exempt: P2's pin is proposed."""
+    """A certificate's `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on (in `lean/lean-audit.json`), of
+    the guarantee `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean`).  Experimental schemes are exempt: P2's pin is
+    proposed."""
     lean = Path(__file__).parents[1] / "lean"
     statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Guarantees.lean").read_text(), re.M))
     pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
@@ -298,14 +299,15 @@ def test_certificates_name_proved_pins():
         sch = schemes.get(name)
         if sch.certificate is None or sch.experimental:
             continue
-        x = sch.certificate.theorem.removeprefix("Pous.Pinned.")
-        assert sch.certificate.theorem == f"Pous.Pinned.{x}" and x in statements and f"PousProofs.{x}" in pins, name
+        x = sch.certificate.theorem.removeprefix("Pous.SecurityProofs.")
+        assert sch.certificate.theorem == f"Pous.SecurityProofs.{x}" and x in statements, name
+        assert sch.certificate.theorem in pins, name
         checked += 1
     assert checked == 2
 
 
 def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
-    """P3's operating point has the parameters of `Pous.Pinned.P3ConcreteMeets64` (`n = 220`, `wc = 2384`,
+    """P3's operating point has the parameters of `Pous.SecurityProofs.P3ConcreteMeets64` (`n = 220`, `wc = 2384`,
     `B(220, 12)`, one segment) but not its `H`.  Lean's overwrite chain starts from `iv(domP3 tag L v)`: zeros, then
     the tag and `2v + L` in the 512-bit capacity part.  The code's starts from the instantiation's header in the low
     bytes, with the capacity part zero.  So P3 has no certificate; when the two agree, this fails and one is due."""
@@ -393,7 +395,7 @@ def test_certified_profile_of_one_band12_segment():
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
     assert p.state_bound_bits == 254_307_274 == (512 * 524_288 * 18) // 19
-    assert "(Pous.Pinned.BandMultiMeetsFamily; under ideal-permutation, " in p.statement()
+    assert "(Pous.SecurityProofs.BandMultiMeetsFamily; under ideal-permutation, " in p.statement()
     assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
@@ -403,13 +405,13 @@ def test_certified_profile_of_one_band12_segment():
 
 def test_many_segments_are_a_gap_not_a_refusal():
     """A segment count its certificate doesn't state is a gap, not a refusal: `ChainDenseMeets64` is about one segment,
-    and no pinned statement covers the dense chain scheme at more.  The band's family pin covers every count, so two
+    and no guarantee covers the dense chain scheme at more.  The band's family pin covers every count, so two
     band segments have none."""
     band2 = schemes.get(segments=2)
     assert protocol.Verifier(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
     sch = schemes.get("dense-chain/v1", segments=2)
     v = protocol.Verifier(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
-    assert v.gaps == ("W has 2 segments; Pous.Pinned.ChainDenseMeets64 is about 1",)
+    assert v.gaps == ("W has 2 segments; Pous.SecurityProofs.ChainDenseMeets64 is about 1",)
 
 
 def test_claims_resolve_and_local_ones_are_not_in_core():

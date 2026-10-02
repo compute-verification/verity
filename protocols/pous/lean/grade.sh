@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Grade one submission against one pinned statement:
-#   bash grade.sh SUBMISSION.lean Pous.Pinned.NAME
-# The submission declares `theorem solution : Pous.Pinned.NAME`. One JSON line on stdout; exit 0 on PASS, 1 on FAIL,
+# Grade one submission against one guarantee:
+#   bash grade.sh SUBMISSION.lean Pous.Guarantees.NAME
+# The submission declares `theorem solution : Pous.Guarantees.NAME`. One JSON line on stdout; exit 0 on PASS, 1 on FAIL,
 # 2 if the trusted layer, the grader or the sandbox is broken or changed during grading, or the machine lacks
 # unprivileged user namespaces (`unshare --user`), which the sandbox needs.
 #   1. The trusted sources match TRUSTED.sha256, and the trusted layer and the grader build, before any submission code
@@ -15,7 +15,7 @@
 #      starts dies with the namespace.
 #   4. The recorded hashes and TRUSTED.sha256 are checked again. Then the grader, with its allowed axioms and pinned
 #      targets compiled in, loads the submission's `.olean` (data only, no code runs), replays it through the kernel,
-#      matches `solution` against the pinned statement and audits its axioms.
+#      matches `solution` against the guarantee and audits its axioms.
 # The compile and the grader each run under POUS_GRADE_TIMEOUT seconds (default 3600) and POUS_GRADE_MEMORY_MB
 # (default 16384): Lean's resident-memory limit, which the kernel and the interpreter check (`lean -M`), and twice that
 # in address space for everything else. Lean maps far more than it touches: the largest honest grades (P3) peak at
@@ -24,8 +24,8 @@ set -uo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
 cd "$root"
 export PATH="$HOME/.elan/bin:$PATH"
-file=${1:?usage: grade.sh SUBMISSION.lean Pous.Pinned.NAME}
-target=${2:?usage: grade.sh SUBMISSION.lean Pous.Pinned.NAME}
+file=${1:?usage: grade.sh SUBMISSION.lean Pous.Guarantees.NAME}
+target=${2:?usage: grade.sh SUBMISSION.lean Pous.Guarantees.NAME}
 fail() { printf '{"file":"%s","target":"%s","verdict":"FAIL","reason":"%s","axioms":[]}\n' "$file" "$target" "$1"; exit 1; }
 fatal() { echo "grade.sh: $1" >&2; exit 2; }
 [ -f "$file" ] || fail "file not found"

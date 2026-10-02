@@ -1,6 +1,6 @@
 # POUS Lean package
 
-Definitions, pinned statements and proofs for the timed POUS audit game with perfect isolation (`../PROTOCOL.md`).
+Definitions, guarantees and proofs for the timed POUS audit game with perfect isolation (`../PROTOCOL.md`).
 Conventions follow Flock's Lean packages (`backends/flock/verifier/lean/`): the same toolchain and Mathlib pin,
 `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a check file.
 
@@ -36,7 +36,7 @@ Pous/Guarantees.lean                trusted, the Guarantees layer: 48 statements
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
                                     which grade.sh also grades against; none is about the concrete P2
 Pous/SecurityProofs.lean            proved, the SecurityProofs layer: imports every proof module, and proves
-                                    PousProofs.X : Pous.Pinned.X for each proved pinned statement
+                                    Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Pous/SecurityProofs/{Sanity,Accounting/Numbers}.lean
                                     proved: the definitions are not vacuous; certified numbers
 Pous/SecurityProofs/                proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
@@ -59,7 +59,7 @@ lake exe cache get                  # Mathlib's prebuilt oleans; never build Mat
 lake build                          # Pous, the four layers (the default target)
 python3 ../../../tools/lean/audit.py --all --root . --fresh   # Verity's Lean audit
 lake env lean CheckAxioms.lean      # the headline theorems' axioms
-bash grade.sh submissions/reference.lean Pous.Pinned.KFloor   # one JSON line, exit 0 iff PASS
+bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor   # one JSON line, exit 0 iff PASS
 bash check.sh                       # the audit, the open targets, and the grader's controls
 ~~~
 
@@ -71,7 +71,7 @@ grader and its sandbox. Everything else is checked by machine. Docstring paths s
 **The audit.** `tools/lean/audit.py` audits every declaration under `Pous`: allowed axioms, named assumptions, escapes,
 orphan files, import layers (Protocol imports no assumption, guarantee or proof; Assumptions only Protocol; Guarantees
 no proof), a kernel replay, and the pinned theorems' records. `lean-audit.json` pins the sanity theorems, every
-`PousProofs.X`, the stacked one-way bound, the band certificate, and the dense scheme at the deployment point
+`Pous.SecurityProofs.X`, the stacked one-way bound, the band certificate, and the dense scheme at the deployment point
 (`dense_meets_64`, `seg_meets_14`, and `segTag_meets_14` for the implementation's tagged keying, with
 `segTag_auditSecure`) and its per-segment tags (`domainSep_equiv`, `tag_injective_14`), the raw-storage refutations the
 `m1p` pins cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the non-vacuity pins `complete`, `tight`
@@ -80,10 +80,10 @@ and `tight_p16448`, and the refutation `not_meetsOn_b19_k88`). A changed record 
 
 **Submissions** are one file that imports only the trusted layers (`Pous.Protocol`, `Pous.Assumptions`,
 `Pous.Guarantees`), the proved `Pous.SecurityProofs.Sanity` and `Pous.SecurityProofs.Accounting.Numbers`, and
-`Mathlib.*`, and declares `theorem solution : Pous.Pinned.<Name>`. `grade.sh` builds the trusted layer and the grader
-first and records their hashes; compiles the submission with `lean` in a scratch directory inside a user, mount, PID and
-network namespace where every other mount is read-only (so compile-time IO can change nothing, and its processes die
-with the build); checks the hashes again; then runs the grader. The grader loads the submission's `.olean` as data,
+`Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
+grader first and records their hashes; compiles the submission with `lean` in a scratch directory inside a user, mount,
+PID and network namespace where every other mount is read-only (so compile-time IO can change nothing, and its processes
+die with the build); checks the hashes again; then runs the grader. The grader loads the submission's `.olean` as data,
 replays every constant it adds through the kernel, requires `solution`'s type to be the pinned constant itself (a
 syntactic comparison, so a near-miss statement cannot keep the kernel unfolding), and requires its axioms to be in
 `allowedAxioms` (Lean's three, compiled in). The compile and the grader run under a time limit and a memory limit

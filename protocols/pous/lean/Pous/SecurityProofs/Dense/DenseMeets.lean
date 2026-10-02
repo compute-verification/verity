@@ -27,9 +27,9 @@ The proof composes five pieces:
 1. **Reach** (`card_reach_le`, `complete_hard`). Greedy pebbling of the complete DAG adds at most the least
    unpebbled node per round, so `B − D − 1` pebbles reach at most `B − 1` nodes in `D` rounds.
 2. **B5 gives `TimedINC`** (`dense_timedINC`). Rebuilding every block is "all `B` challenges right", so
-   `Pous.Pinned.B5ExPostFactoBounded` (`PousB5`) bounds it by
+   `Pous.Guarantees.B5ExPostFactoBounded` (`PousB5`) bounds it by
    `π = B·2^β·((B(Q + 1) + B)²/2^ℓ)^(B − D)`.
-3. **`Pous.Pinned.Theorem1iiSeq`** (the `thm1-family` proof, `PousProofs.theorem1_ii_seq`) gives
+3. **`Pous.Guarantees.Theorem1iiSeq`** (the `thm1-family` proof, `PousProofs.theorem1_ii_seq`) gives
    `Pr[pass] ≤ |Hist|·π + p₀^k`.
 4. **Rate 1** (`denseScheme_correct`, `CodeHoldsW`, `SpaceBound`).
 5. **The certificate at `β = 531499840`.** `|Hist|·π ≤ 2^-128` (`dense_union_term`, in exponents of 2), and

@@ -11,7 +11,7 @@ import Pous.SecurityProofs.Sanity
 import Pous.SecurityProofs.Accounting.Numbers
 
 /-!
-# Report Theorem 1(ii), untimed: a proof of `Pous.Pinned.Theorem1ii`
+# Report Theorem 1(ii), untimed: a proof of `Pous.Guarantees.Theorem1ii`
 
 The basic compression argument (report §3, proof of Theorem 1(ii)). Fix `W`, `A₁` and the product-form responder
 `A₂`. For a setup `a = (ω, r)` with `σ = A₁(W, pp, C, ω)`, block `i` is *good* if `A₂(W, pp, σ, ω, i) = C i`, and
@@ -238,7 +238,7 @@ theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits �
 end PousThm1ii
 
 open Pous PousThm1ii in
-theorem PousProofs.theorem1_ii : Pous.Pinned.Theorem1ii := by
+theorem PousProofs.theorem1_ii : Pous.Guarantees.Theorem1ii := by
   intro M sch β S k π hinc W A₁ A₂
   obtain ⟨c, d, hcd⟩ := exists_code (fits S sch.B sch.ℓ β) β (card_fits_le S sch.B sch.ℓ β)
   let good : M.Ω × sch.Coins → Fin sch.B → Prop := fun a i =>

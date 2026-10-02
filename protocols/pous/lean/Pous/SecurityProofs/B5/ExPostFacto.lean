@@ -11,7 +11,7 @@ import Pous.SecurityProofs.Sanity
 import Pous.SecurityProofs.Accounting.Numbers
 
 /-!
-# B5, Pietrzak's ex post facto reduction: a proof of `Pous.Pinned.B5ExPostFacto(Bounded)`
+# B5, Pietrzak's ex post facto reduction: a proof of `Pous.Guarantees.B5ExPostFacto(Bounded)`
 
 Pietrzak 2018/194, Theorem 10 with §8's data-carrying labels, for one-way labels (`Pous.Labelling`), as pinned.
 The proof follows the draft's plan, with the encoding done as a union bound over prediction patterns.
@@ -691,8 +691,8 @@ namespace PousB5
 open Pous Pous.Labelling
 open scoped ENNReal
 
-/-- **B5, `(D, Q)` form** (`Pous.Pinned.B5ExPostFactoBounded`). -/
-theorem b5_ex_post_facto_bounded : Pous.Pinned.B5ExPostFactoBounded := by
+/-- **B5, `(D, Q)` form** (`Pous.Guarantees.B5ExPostFactoBounded`). -/
+theorem b5_ex_post_facto_bounded : Pous.Guarantees.B5ExPostFactoBounded := by
   intro N w m s D Q k G VC d hard A₁ A₂ hA₂
   classical
   -- `k ≥ 1`: from no pebbles, fewer than `k` challenges are pebbled
@@ -767,8 +767,8 @@ theorem b5_ex_post_facto_bounded : Pous.Pinned.B5ExPostFactoBounded := by
         rw [mul_assoc]
         exact le_mul_of_one_le_left' (by exact_mod_cast hN)
 
-/-- **B5, parallel-query form** (`Pous.Pinned.B5ExPostFacto`): `RoundBounded D q` gives work `≤ D·q`. -/
-theorem b5_ex_post_facto : Pous.Pinned.B5ExPostFacto := by
+/-- **B5, parallel-query form** (`Pous.Guarantees.B5ExPostFacto`): `RoundBounded D q` gives work `≤ D·q`. -/
+theorem b5_ex_post_facto : Pous.Guarantees.B5ExPostFacto := by
   intro N w m s D q k G VC d hard A₁ A₂ hA₂
   refine b5_ex_post_facto_bounded N w m s D (D * q) k G VC d hard A₁ A₂ fun σ c ω => ⟨(hA₂ σ c ω).1, ?_⟩
   exact (work_le_depth_mul_width _ _).trans (Nat.mul_le_mul (hA₂ σ c ω).1 (hA₂ σ c ω).2)

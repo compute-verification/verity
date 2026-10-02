@@ -8,7 +8,7 @@ import Pous.Protocol.Model.Invertible
 /-!
 # P3 with a concrete `H`: the overwrite chain on `Π₂`
 
-The definitions the concrete-`H` P3 pins read (`Pous.Pinned.P3ConcreteMeets64`, `P3ConcreteMeets14GB`,
+The definitions the concrete-`H` P3 pins read (`Pous.Guarantees.P3ConcreteMeets64`, `P3ConcreteMeets14GB`,
 `P3ConcreteMeets64D12`), copied verbatim from the proofs' sources. Each source namespace `PousX` becomes `Pous.X` (the
 `Pous.Dense` precedent), so these copies never clash with the lanes' own files, and a graded submission, with the
 same renaming, states and proves the pins about these constants:
