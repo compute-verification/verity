@@ -83,8 +83,9 @@ pub fn take_vtime() -> Vec<(&'static str, f64)> {
     VTIME.with(|v| v.borrow_mut().take().unwrap_or_default())
 }
 
-/// How the verifier's replayed lincheck computes `comb_partial` (`FC_ZK_LINCHECK`, default `flat`): upstream's flat fold, from
-/// the block's structure after the rounds (`session_verify`'s `partial`), or both, rejecting when they differ.
+/// How the verifier's replayed lincheck computes `comb_partial` (`FC_ZK_LINCHECK`, default `partial`, as M0's verifier's
+/// `FC_LINCHECK`): upstream's flat fold, from the block's structure after the rounds (`session_verify`'s `partial`, under M0's
+/// predicate; the flat fold where it doesn't cover the structure), or both, rejecting when they differ.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZkLincheck {
     Flat,
@@ -100,8 +101,8 @@ impl ZkLincheck {
         let m = match ZK_LINCHECK.load(Ordering::Relaxed) {
             u8::MAX => {
                 let m = match std::env::var("FC_ZK_LINCHECK").as_deref() {
-                    Err(_) | Ok("flat") => 0,
-                    Ok("partial") => 1,
+                    Ok("flat") => 0,
+                    Err(_) | Ok("partial") => 1,
                     Ok("both") => 2,
                     Ok(x) => panic!("FC_ZK_LINCHECK={x}: flat, partial or both"),
                 };

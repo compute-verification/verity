@@ -131,7 +131,10 @@ reused. Nodes are `SHA-512(left ‖ right)`. The 64-byte root is the item after 
 The verifier re-runs upstream's zerocheck and lincheck verifiers on the masked proof (`zk_veil::replay`), drawing the
 same coins and absorbing the same items. Every message-dependent quantity is an affine form `c + Σ a_i h_i` (`Lin`; over
 F256, two of them, `Lin2`). Each check `lhs = rhs` becomes `lhs + rhs = 0`. The Lagrange weights come from upstream's
-`interpolate_at_z_on_lambda` and `interpolate_at_z_combined`, evaluated on unit vectors.
+`interpolate_at_z_on_lambda` and `interpolate_at_z_combined`, evaluated on unit vectors. The verifier's `comb` (the
+lincheck final's) is M0's verifier's: computed from the block's structure after the rounds (`session_verify`'s `partial`)
+where M0's predicate holds, else upstream's flat fold; `FC_ZK_LINCHECK=flat` folds flat throughout, and `both` folds both
+ways and refuses when they differ (the same value over GF(2^128): `comb` is never absorbed).
 
 | name | constraint (all `= 0`) |
 |---|---|
