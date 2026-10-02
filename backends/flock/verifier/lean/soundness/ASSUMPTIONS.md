@@ -53,17 +53,22 @@ hash, nor false of every hash.
   - `qF ≥ 2t′ + 2v`, for the rewinding finders (two runs after a cap, and the two conflicting openings verified);
   - `qS ≥ t′ + v`, for the self-clash finder (one run, one further verification);
   - `qT ≥ 2t′ + 2v`, for `tr`'s finder (`TreeRewind.finder`: two runs after the registration);
-  - `qR ≥ t′ + v`, for the registered-path finder (`Reads.pick`: one run, and the two openings' climbs).
+  - `qR ≥ t′ + v`, for the registered-path finder (`Reads.pick`: one run, and the two openings' climbs);
+  - `qG ≥ (1 + 5M)·t′ + 2k·v`, for zero knowledge's simulator finder (`ZK.GK.Model.finder`: the GK simulator with cap
+    `M`, at most `1 + 5M` runs of `V*` on every outcome by `sim_runs_le`, then T6's extraction, which re-verifies the
+    two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`).
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
-  is unsupported. Tying the four to one per-run count in the signatures would check this in Lean; it is a follow-up.
+  is unsupported. Tying the five to one per-run count in the signatures would check this in Lean; it is a follow-up.
 - **Where it is used.** The compiled term's rewinding finders (`Adv_{r,ℓ}`: two continuations after a rep's level-`ℓ`
   cap) and its self-clash finder (one run that opens a position two ways), the knowledge term's level-0 finder (`Adv₀`:
   two runs after the level-0 cap), the serving roots' Merkle binding (`δ_tree`: two continuations after the
   registration), and the registered reads' path binding (`δ_reg`: one run, whose registered read opens the held root at
   another leaf than the registrant's), at the budgets above. `FlockSoundness/StrictCR.lean` restates each term but
   `δ_reg` at those finders (What is restated over the two forms, below); `FlockSoundness/Registered/Binding.lean` states
-  `δ_reg` at its own (`Reads.prob_off_le`).
+  `δ_reg` at its own (`Reads.prob_off_le`). Zero knowledge's `⊥_bind` term takes it for the simulator finder at `qG`
+  (`ZK.GK.Model.gk_simulate`, `gk_simulate_hm96`, `gk_simulate_avg`): `V*` opening a coin of its committed tree two ways
+  is a SHA-512 collision, computed (`bindColl_isColl`, `bindCollKeyed_isColl`).
 
 **`SHA512CRExpected`. Expected-time collision resistance of SHA-512** (A2, `ecr/sha-512`; in CDGSY24's expected-time
 sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant corrected the same day).
@@ -109,9 +114,10 @@ coins.
   a byte source, which the model doesn't have.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
-- **Seed coins are outside it.** M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
+- **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.randomness.derive`). Those sessions also rest on `prf/sha-256` (A4's claim)
-  and on the seed commitment's hiding, and no headline covers them (The headline, its coins).
+  and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
+  coins as above (The headline, its coins).
 
 ## What is restated over the two forms
 
@@ -184,11 +190,17 @@ Once every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane pr
 Boolean-semantics lemma replaces the per-template `RowsCert`.
 
 **Its coins.** The statement is for live uniform OS coins drawn each round: the model's proof coins are uniform and
-drawn after the prover's message, as the coin server's `os` coins are under A6. M0 does not use them today: the non-ZK
-session derives every coin from one OS seed through a SHA-256 PRF (`live/src/bin/flock-circuit.rs`, `config_with` sets
-`cfg.coin_seed = true`; `live/src/coin_seed.rs`), which rests on `prf/sha-256` and the seed commitment's hiding, and the
-headline takes neither. Moving M0 to per-round OS coins is lane proofs-verify-overlap's. Until then the headline is cited
-only for runs that use per-round OS coins.
+drawn after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session draws them under
+`FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
+then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
+`PROTOCOL.md` §7.1). The benches run M0 so by default (`backends/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
+`61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
+from one OS seed through a SHA-256 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
+That rests on `prf/sha-256` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
+only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
+The identity and a bench point's `coins` say which mode ran. flock-verify replays the recorded coins, so that they were
+the verifier's own OS draws, each drawn after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
+A6, which no check of the record establishes.
 
 ## Other named assumptions
 
@@ -347,7 +359,7 @@ before the session's first coin, not bounds state by state.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
   come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit draw it is
   A3. The theorems, the headline among them, are for these coins.
-- **`seed` coins** (PR #83, `coin-commit/sha256/v1`; M0's non-ZK session today, `cfg.coin_seed`, `coin-commit/sha512`)
+- **`seed` coins** (PR #83, `coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins).
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
@@ -375,6 +387,11 @@ as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
 `expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
 and the certificate's `IsRowsUnit.computes_of_cert`.
+Zero knowledge's Theorem GK is pinned (`FlockSoundness/ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
+`Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
+`Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
+`rewindClose_hm96`, and T6's extraction (`coinColl_isColl`, `coinCollKeyed_isColl`, `bindColl_isColl`,
+`bindCollKeyed_isColl`, and its cost `coinPairs_length_le`).
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.

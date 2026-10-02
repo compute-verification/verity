@@ -637,7 +637,9 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
         "verity_vllm.query.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
-        "committed once at serving (the Call's inputs are committed; constants and wiring are structure, never committed); outputs of <= X "
+        "committed once at serving (the Call's inputs are committed; a program's values, its weights, constants and tables and a request's "
+        "data and parameters, are registered or run inputs, committed under hiding leaves; only an operation's own constant bits and "
+        "wiring are structure); outputs of <= X "
         "bits or one value of <= W bits; per group: per_call and row totals (units, gates, free gates, redundant gates: a value computed "
         "twice inside its own unit, committed interior words), classes (kind, head primitive @ activation, "
         "gates per unit, out bits, count per Call, the primitives of one unit), committed interior values; per row: taps, every committed "

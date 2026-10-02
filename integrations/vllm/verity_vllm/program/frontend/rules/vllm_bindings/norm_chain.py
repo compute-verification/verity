@@ -7,7 +7,7 @@ import torch
 from verity.ir.refs import Coll, runs
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, scalar_kind, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import MEAN_PINS
@@ -308,7 +308,7 @@ class AddScalarRule(OpRule):
         rows, lead = rows_of(ctx.coll(x))
         N = rows[0].type.n
         w = widened_bf16(ctx, x)
-        fn = ctx.kind("add_scalar_bf16" if w else "add_scalar_f32", node, N=N, C=c)
+        fn, value = scalar_kind(ctx, "add_scalar_bf16" if w else "add_scalar_f32", node, N, c)
         once = ctx.weight_of(x) is not None and active_target_profile().effective_weight_only_calls() == "once"
         key = (fn.id, tuple(tuple(r) for r in runs(ctx.coll(x).refs))) if once else None
         issued = ctx.state.setdefault("weight_only_calls", {}) if once else {}
@@ -317,7 +317,7 @@ class AddScalarRule(OpRule):
             ctx.record(self, node, {"N": N, "C": c, "rows": len(rows), "operand_widened_bf16": bool(w), "weight_only_calls": "once"},
                        emitted=f"{fn.id} x0 (reads {issued[key][1]})")
             return
-        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        outs = [ctx.call(fn, r, *value, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
         if once:
             issued[key] = (ctx.val(node), node.name)

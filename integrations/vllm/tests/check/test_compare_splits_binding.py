@@ -40,6 +40,7 @@ def _prog(label: str, *, splits_form: str, S: list[int], tok=0, seed=1, splits_n
     P.tok_node, P.seed_nodes, P.seed_index = tok, {seed}, {seed: 0}
     P.weight_fields = {weights: "model.lm_head.weight"}
     P.param_names, P.oracle_rows, P.n_nodes = [], None, 0
+    P.supplied_fields, P.supplied_owner = {}, {}
     inst, k = [], max(P.inputs) + 1
     prev_sel = None
     shared_k = None

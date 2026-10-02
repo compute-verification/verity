@@ -17,7 +17,7 @@ from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, tr
 from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup, _fmt, hint_of, unsupported
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.patterns.transparent import widened_source
-from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Supplied, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
 SCRATCH_TOKEN_SELECT = "token_select"  # ctx.scratch key: two-stage greedy sampler state (TokenSelectGumbelTwoStage)
@@ -529,9 +529,15 @@ class TokenSelectGumbelTopP:
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []
+        run = getattr(ctx.profile, "registered_values", False)
         for r, (rid, pos, seed, T, p) in enumerate(s2["specs"]):
-            operands = (PerRow(sub_rows(logits, r, r + 1)), Const(32, _f32_bits(p), "top_p"), Param("seed", (rid,)),
-                        Const(64, int(pos) & 0xFFFFFFFFFFFFFFFF, "pos"), Const(32, _f32_bits(T), "temperature"), Const(32, S, "splits"))
+            pos_bits = int(pos) & 0xFFFFFFFFFFFFFFFF
+            if run:     # the request's sampling values are inputs of its run, the Philox position one per sampled position
+                top_p, phi, temp = (Supplied("run", "top_p", 32, _f32_bits(p), rid), Supplied("run", f"pos_{int(pos)}", 64, pos_bits, rid),
+                                    Supplied("run", "temperature", 32, _f32_bits(T), rid))
+            else:
+                top_p, phi, temp = Const(32, _f32_bits(p), "top_p"), Const(64, pos_bits, "pos"), Const(32, _f32_bits(T), "temperature")
+            operands = (PerRow(sub_rows(logits, r, r + 1)), top_p, Param("seed", (rid,)), phi, temp, Const(32, S, "splits"))
             parts.append(Compute(spec, 1, operands, (PerRow(sub_rows(out, r, r + 1)),), (node.id,),
                                  hint=hint_of(node, f"gumbel_topp_token_select row {r}"), kernels=kernels if r == 0 else (),
                                  attribution=((rid, pos),), pattern=self.name))

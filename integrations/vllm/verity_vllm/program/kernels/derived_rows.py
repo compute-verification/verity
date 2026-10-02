@@ -792,9 +792,9 @@ def silu_mul_rows(gu: np.ndarray):
 BN = b1.BN  # `AttnBlock_v1`'s block (64).  [E7 D54] `attn_block` reads the block size from the K block it is given; `attention_head_states` takes ``BN``
 
 
-def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False):
+def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False, scale_bits: int | None = None):
     """`AttnBlock_v1{D, NVIS, FIRST}` vectorised over rows (`AttnBlock_v2{..., BN, DOT}` with ``dot16`` = the DOT step's twin,
-    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``).
+    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``; ``scale_bits`` the f32 word of `scale_log2` when the block reads it as an input (`AttnBlock_v10`/`_v11`), else `b1._scale_log2_bits(D)`).
 
     q (R, D), kb/vb (R, BN, D) bf16 words (rows past NVIS must be zero — `Clear_OOB_MN` padding);
     m_prev (R,), l_prev (R, 4), o_prev (R, D) f32 words (ignored when FIRST).
@@ -811,7 +811,7 @@ def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: b
         bmax = max_fmnmx(bmax, s[:, c])
     m_new = bmax if FIRST else max_fmnmx(m_prev, bmax)
     m_use = guard_neg_inf_zero(m_new) if check else m_new
-    scale = np.full(R, b1._scale_log2_bits(D), dtype=np.uint32)
+    scale = np.full(R, b1._scale_log2_bits(D) if scale_bits is None else int(scale_bits), dtype=np.uint32)
     if not FIRST:
         scores_scale = mufu_ex2_ftz(mul_ftz(sub_ftz(m_prev, m_use), scale))
     max_scaled = mul_ftz(guard_neg_inf_zero(m_new) if rescale_only else m_use, scale)
@@ -858,7 +858,7 @@ def fa3_inv_sum(s: np.ndarray) -> np.ndarray:
 INV_SUM_BY_PRIM = {"Fa2InvSum_v1": fa2_inv_sum, "Fa3InvSum_v1": fa3_inv_sum}
 
 
-def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int | None = None, *, dot16=None, inv=None, masked_from: int | None = None, rescale_only: bool = False):
+def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int | None = None, *, dot16=None, inv=None, masked_from: int | None = None, rescale_only: bool = False, scale_bits: int | None = None):
     """`AttentionHead_v1{T, D}` (``BN`` None / 64) or `AttentionHead_v3{T, D}` (``BN = b1.fa2_kblock_n(D)``) vectorised over rows,
     emitting every block state; `AttentionHead_v2{T, D, BN, DOT, INV}` with ``dot16`` = `TC_DOT16_BY_PRIM[DOT]` and ``inv`` =
     `INV_SUM_BY_PRIM[INV]` (defaults: the Ampere step, `Fa2InvSum_v1`); `AttentionHead_v4{..., MASKED_FROM}` with ``masked_from``, `_v5` also ``rescale_only``.
@@ -893,7 +893,7 @@ def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int |
                                 zero if first else m,
                                 np.zeros((R, 4), np.uint32) if first else l,
                                 np.zeros((R, D), np.uint32) if first else o,
-                                D=D, NVIS=nvis, FIRST=first, dot16=dot16, check=masked_from is None or b >= masked_from, rescale_only=rescale_only)
+                                D=D, NVIS=nvis, FIRST=first, dot16=dot16, check=masked_from is None or b >= masked_from, rescale_only=rescale_only, scale_bits=scale_bits)
         nf |= f
         ms.append(m)
         ls.append(l)
@@ -906,7 +906,7 @@ def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int |
 
 
 def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, dot_prim: str = "AmpereBF16TcDot16_v2",
-                   inv_prim: str = "Fa2InvSum_v1", masked_from: int | None = None, rescale_only: bool = False) -> tuple[np.ndarray, np.ndarray]:
+                   inv_prim: str = "Fa2InvSum_v1", masked_from: int | None = None, rescale_only: bool = False, scale_bits: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """[R17 dense, ruling R17-3 / BRIEF §4] one attention ROW of the Program -- `Attention_v3{T, NH, KVH, D, BN}` (FA2, the defaults) or
     `Attention_v2{T, NH, KVH, D, BN, DOT, INV}` (FA3 on sm_90: DOT = HopperBF16WgmmaDot16_v1, INV = Fa3InvSum_v1; `Attention_v4` adds ``masked_from``, `Attention_v5` ``rescale_only`` as well) -- exactly as the
     registered Definitions compose it: head h reads KV head h // (NH/KVH); one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks
@@ -932,7 +932,7 @@ def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, do
     kvh = np.arange(NH) // G                                                     # (NH,): the KV head of each query head
     k = np.ascontiguousarray(np.transpose(kc, (1, 0, 2))[kvh])                   # (NH, T, D) GQA-expanded views
     v = np.ascontiguousarray(np.transpose(vc, (1, 0, 2))[kvh])
-    st = attention_head_states(q, k, v, int(BN), dot16=TC_DOT16_BY_PRIM[dot_prim], inv=INV_SUM_BY_PRIM[inv_prim], masked_from=masked_from, rescale_only=rescale_only)
+    st = attention_head_states(q, k, v, int(BN), dot16=TC_DOT16_BY_PRIM[dot_prim], inv=INV_SUM_BY_PRIM[inv_prim], masked_from=masked_from, rescale_only=rescale_only, scale_bits=scale_bits)
     return st["out"], st["nonfinite"]
 
 
