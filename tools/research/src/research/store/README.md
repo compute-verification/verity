@@ -369,9 +369,9 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 - **Write-through.** With `[remote] write_through = true` in store.toml, or `RESEARCH_WRITE_THROUGH=1`, or (no store.toml, no
   `$RESEARCH_STORE_CONFIG`) `R2_ENDPOINT` + `R2_BUCKET` in the environment, `research data label` and `put` upload in the same
-  command. The local write stands whatever the upload does; the command says `on <remote>`, `NOT preserved (<why>)` or `local only
-  (write-through off)`, never nothing. Attempt publishing already uploads whenever a remote is usable. Off on the laptop until its
-  store.toml sets the flag.
+  command. The local write stands whatever the upload does; the command says `on <remote>`, `NOT preserved (<why>)` (then `label`
+  and `queue ready` exit 1) or `local only (write-through off)`, never nothing. Attempt publishing uploads whenever a remote is
+  usable. Off on the laptop until its store.toml sets it.
 - **Pending queue.** `research data pending` lists what this store holds that the remote lacks (one listing per prefix): artifacts
   with no verified remote replica whose manifest the remote lacks or whose blobs are all local, attempts, assertions. `push
   --pending` drains exactly that. An artifact pulled from the remote without its blobs is the remote's already and is not queued.
@@ -451,6 +451,7 @@ prints the table; the groups are:
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
+- **approach** — the registry's labels on `approach/v1` records (`research/approaches.py`; `tools/research/README.md`).
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
 `"true"` are one word and `"True"` is another. `research data label` writes the canonical spelling of an old key or value
@@ -536,8 +537,8 @@ the launcher mints an action-scoped temporary key
 (§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
-attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of every file in the run dir (stdout.log, stderr.log,
-launcher.log, job.json, status.json, outputs; markers excluded), pushes and verifies it (`preserved.check`, head; retried), deletes
+attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims
+(listed in `meta.trimmed`, no bytes; .agents/skills/writing-runs/SKILL.md), pushes and verifies it (`preserved.check`, head; retried), deletes
 the key, and writes `<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256).
 The marker is written only when every file now in the run dir is in the record by content; from the record on, the runner's own
 output goes to `<root>/requests/<run id>/custody/publish.log`, not launcher.log, so nothing it prints can make the run dir differ

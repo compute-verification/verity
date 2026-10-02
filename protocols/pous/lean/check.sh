@@ -53,6 +53,15 @@ expect "$tmp/wrong_statement.lean" Pous.Pinned.KFloor 1 'does not have the pinne
 
 expect submissions/reference.lean Pous.Params.ρ 1 'is not a pinned statement'
 
+# The d = 12 band pin submitted as the d = 5 one. The statements differ only in a literal, so deciding definitional
+# equality would keep the kernel unfolding; the grader compares syntactically. The timeout turns a regression into a
+# failure instead of a hang.
+cat > "$tmp/near_miss.lean" <<'EOF'
+import Pous
+theorem solution : Pous.Pinned.BandChainMeets64D12 := sorry
+EOF
+POUS_GRADE_TIMEOUT=120 expect "$tmp/near_miss.lean" Pous.Pinned.BandChainMeets64D5 1 'does not have the pinned type'
+
 # `native_decide` rests on an auxiliary axiom per use (`solution._native.native_decide.ax_…`).
 cat > "$tmp/native.lean" <<'EOF'
 import Pous

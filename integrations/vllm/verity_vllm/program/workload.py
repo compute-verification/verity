@@ -28,8 +28,9 @@ from typing import Any
 
 from verity.ir.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ir.defs import Body, CompositeDefinition, Node, SpecializedDefinition
-from verity.ir.program import Program
-from verity.ir.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat
+from verity.ir.constants import REGISTRATION
+from verity.ir.program import Program, is_input
+from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
 from verity.ir.types import Tuple as TupleT, Type
 from verity_vllm.program.sampling_event import is_sampling_event
 
@@ -37,11 +38,23 @@ SCHEMA = "verity/workload-program/v1"
 
 
 def _is_input_node(n: Node) -> bool:
-    return n.form == "batch" and (getattr(n.fn, "family", None) == "Input" or n.fn.id.startswith("Input"))
+    return n.form == "batch" and is_input(n.fn)
 
 
-def _remap(r: Refs, K: int) -> Refs:
-    """Root-body refs -> request-body refs: node k < K (an Input batch) becomes parameter k; node k >= K becomes node k-K."""
+def _remap(r: Refs, K: int, logs: dict[int, tuple[PartLog, PartLog]] | None = None) -> Refs:
+    """Root-body refs -> request-body refs: node k < K (an Input batch) becomes parameter k; node k >= K becomes node k-K.
+
+    `logs` (one per `K`) maps a `PartLog` a `Concat` was cut from to the log of its remapped parts, so a key/value sequence
+    one row longer than the call before remaps one part."""
+    if logs is not None and isinstance(r, Concat) and r.prefix is not None:
+        log, j = r.prefix
+        hit = logs.get(id(log))
+        if hit is None or hit[0] is not log:
+            hit = logs[id(log)] = (log, PartLog())
+        sub = hit[1]
+        for p in log.parts[len(sub):j]:
+            sub.append(_remap(p, K))
+        return sub.raw_cut(j, [_remap(p, K) for p in r.parts[j:]])
     if isinstance(r, Affine):
         if r.space != "n":
             raise ValueError(f"unexpected ref space {r.space!r} in a root body")
@@ -123,6 +136,7 @@ class RequestComponent:
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
+    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ir.constants`: registration or run)
 
     def to_json(self) -> dict:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
@@ -213,7 +227,7 @@ _REQUEST_CACHE: dict[tuple, SpecializedDefinition] = {}
 
 
 def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]] | None = None,
-                      canon: dict[str, tuple[Any, dict]] | None = None) -> RequestComponent:
+                      canon: dict[str, tuple[Any, dict]] | None = None, digest: str | None = None) -> RequestComponent:
     """Decode a request Program descriptor (derive_step `descriptor.json.gz`) into a callable specialization.
 
     The derived root is `[Input batch per prescribed leaf group..., body nodes...]` (program.py lowering): a scalar/array
@@ -221,8 +235,8 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     order. Component parameter j is the j-th Input batch (type `Array<n_j, Value<w_j>>`). `wrapper_params` = the request
     wrapper's own parameters `[(name, type repr)]` (derive_step `instances.json.gz` `params`): the Input batches are grouped
     back onto them by leaf count, so `groups[j]` names the wrapper parameter batch j belongs to (the shared one is `weights`).
-    Without it every batch is its own group (`p<j>`) and nothing can be shared."""
-    digest = program_digest(desc)
+    Without it every batch is its own group (`p<j>`) and nothing can be shared.  `digest`: `program_digest(desc)`, when the caller has it."""
+    digest = digest or program_digest(desc)
     key = (("program_digest", digest), ("program_fn", desc["program_fn"]))
     cached = _REQUEST_CACHE.get(key)
     dp = decode_program(desc, registry)
@@ -257,8 +271,9 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         names.append(g if groups.count(g) == 1 else f"{g}[{counts.get(g, 0)}]")
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
-    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs, name=n.name)
-             for n in body.nodes[K:]]
+    logs: dict = {}
+    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
+                  name=n.name) for n in body.nodes[K:]]
     offsets = [0]
     for n in nodes:
         offsets.append(offsets[-1] + n.gates)
@@ -283,7 +298,8 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         bounds.append((lo, len(nodes)))  # trailing instances after the last TokenSelect (none for the request wrapper; kept, never dropped)
     step_gates = tuple((offsets[a], offsets[b]) for a, b in bounds)
     return RequestComponent(sp, digest, desc["program_fn"], params, input_gates, offsets[-1], len(nodes),
-                            hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates)
+                            hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates,
+                            tuple(body.nodes[j].fn.binding for j in range(K)))
 
 
 @dataclass
@@ -405,8 +421,12 @@ class WorkloadProgram:
         ids = [r.request_id for r in requests]
         if len(set(ids)) != len(ids):
             raise ValueError(f"duplicate request_id in the workload: {ids}")
-        # the shared group (`weights`): the same Input batches — same count, names and types — in every request component
-        idx = [tuple(j for j, g in enumerate(r.component.groups) if g == shared) for r in requests]
+        # the shared groups: `weights`, and every group a component registers (its `values`, its tables: what the program brings, bound
+        # once at registration) -- the same Input batches, same count, names and types, in every request component
+        reg = [frozenset(g for g, b in zip(r.component.groups, r.component.bindings) if b == REGISTRATION) for r in requests]
+        if any(x != reg[0] for x in reg[1:]):
+            raise ValueError(f"the request components register different groups {sorted({tuple(sorted(x)) for x in reg})}: not one program; refused")
+        idx = [tuple(j for j, g in enumerate(r.component.groups) if g == shared or g in reg[0]) for r in requests]
         if not idx[0]:
             raise ValueError(f"no prescribed parameter group {shared!r} in the request components (groups: {sorted(set(requests[0].component.groups))})")
         sig = [tuple(r.component.params[j] for j in ix) for r, ix in zip(requests, idx)]
@@ -428,6 +448,8 @@ class WorkloadProgram:
                                  "cap, never from a served length")
         self.requests = list(requests)
         self.shared_group = shared
+        self.registered = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
+                                if requests[0].component.groups[j] in reg[0])   # the root parameters bound at registration
         self.shared = shared_idx                       # request 0's positions = the shared Input batches' order
         self.shared_by_request = tuple(idx)            # per request (== shared_idx everywhere in the uniform/TP1 case)
         self.shared_positions_uniform = uniform
@@ -438,7 +460,7 @@ class WorkloadProgram:
         # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` [R17-1] is the third static:
         # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag)
         self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
-        self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest})
+        self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered)
         self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
         self.digest = program_digest(self.descriptor)
         # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes
@@ -594,6 +616,7 @@ class WorkloadProgram:
                 "lag": self.lag, "lengths": served_lengths_rule(self.lag),
                 "input_gates": self.program.input_gates, "n_root_nodes": len(self.program.root.body.nodes), "manifest_digest": self.manifest_digest,
                 "shared": {"group": self.shared_group, "component_params": list(self.shared),
+                           **({"registered": list(self.registered)} if self.registered else {}),
                            **({} if self.shared_positions_uniform else {"component_params_by_request": [list(x) for x in self.shared_by_request]})},
                 "shared_param_index": list(self.shared),  # (compat: gmatch's from_gprog labels the shared parameter with it)
                 "shared_param_index_by_request": None if self.shared_positions_uniform else [list(x) for x in self.shared_by_request],

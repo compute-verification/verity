@@ -34,6 +34,8 @@ from .models import (
     AMPERE_BF16_M16N8K16,
     BLACKWELL_SM100_MXF4,
     BLACKWELL_SM100_NVF4,
+    BLACKWELL_SM120_E4M3_M16N8K32,
+    BLACKWELL_SM120_E5M2_M16N8K32,
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_NVF4,
     HOPPER_BF16_M16N8K16,
@@ -63,6 +65,9 @@ class Instruction:
     evidence: tuple[str, ...] = ()
     #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``tools/tc_probe/trust.py``).
     dossier: str | None = None
+    #: The device trust anchors this instruction on when no Target wraps it and it was measured on a device other than the
+    #: arch's default anchor (``trust.ANCHOR_SKU``); a Target's own ``anchor_device`` takes precedence.
+    anchor_device: str | None = None
 
     def __post_init__(self) -> None:
         if self.status == "pinned" and self.model is None:
@@ -198,6 +203,23 @@ _PIN_BF16 = (
     "at 2^-25 inside the pair's k-group of 8 and is never dropped in the other group on sm_80/sm_89 ((8,8), 25 bits), and survives at 2^-25 / is "
     "dropped at 2^-26 in every slot k=2..15 on sm_90/sm_120 ((16,), 26 bits)"
 )
+_PRO6000_FP8 = (
+    "lane vllm-sm120-tc-gemm (2026-09-30), tools/tc_probe as Kueue port-capture jobs on vy-nebius-1 (RTX PRO 6000 Blackwell Server "
+    "Edition, cc 12.0, driver 580.173.02, SM clock locked at 2,100 MHz, CUDA 13.0 V13.0.88, -arch=sm_120a; compile check "
+    "r20260930-063200-8640: one QMMA.16832 per tile kernel), one mma.sync per tile, seed 20260931, 14 families"
+)
+_PRO6000_E4M3 = (_PRO6000_FP8 + ": run r20260930-063457-5410 (GPU-83455c5b-f2a1-c810-0a97-a01ddf05c4ba, SASS QMMA.16832.F32.E4M3.E4M3), "
+                 "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E4M3_M16N8K32; Ada's pipeline misses 19,033,876 and the sm_90 "
+                 "two-HMMA lowering 3,049,017")
+_PRO6000_E5M2 = (_PRO6000_FP8 + ": run r20260930-063527-4d6b (GPU-6fbd6701-ccfb-e008-dc6e-986175046bc7, SASS QMMA.16832.F32.E5M2.E5M2), "
+                 "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E5M2_M16N8K32; Ada's pipeline with e5m2 products misses 15,747,373")
+_PRO6000_E5M2_SECOND = ("a second PRO 6000 die: run r20260930-073650-c9c5 (GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f), 6,440,960 elements, "
+                        "0 mismatches")
+_PRO6000_MXF4 = ("lane proofs-tc-defs (2026-10-01), tools/tc_probe_fp4 run r20261001-000520-2440, a Kueue prover-dev job on vy-nebius-1 "
+                 "(RTX PRO 6000 Blackwell Server Edition, GPU-a98a36f6-1393-7cad-32ea-e9f7ec25376a, driver 580.173.02, CUDA 13.0 V13.0.88 "
+                 "-arch=sm_120a, SASS one OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile kernel): 1,089,536 gated elements, 0 mismatches against "
+                 "BLACKWELL_SM120_MXF4; its 90,112 record-only elements (a 0xFF scale byte, sums leaving binary32, NaN and infinite "
+                 "accumulators: fixtures tc-sm120-mxf4-2026-10-01) are outside the model's domain")
 
 
 def _i(**kw) -> Instruction:
@@ -337,6 +359,33 @@ INSTRUCTIONS: dict[str, Instruction] = {
             evidence=(_RTX5090_BF16, _PIN_BF16),
         ),
         _i(
+            # Measured on the RTX PRO 6000, the conformance device of target FP8_SM120_MMA, whose anchor trust uses for this id;
+            # trust.py computed PINNED (P1-P5) on 2026-09-30 before this entry was added.
+            id="sm120.mma.m16n8k32.e4m3",
+            sm="sm_120",
+            ptx="mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32",
+            shape=(16, 8, 32),
+            a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
+            model=BLACKWELL_SM120_E4M3_M16N8K32,
+            status="pinned",
+            dossier="art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89",
+            evidence=(_PRO6000_E4M3,),
+        ),
+        _i(
+            # No target wraps this id; it was measured on the RTX PRO 6000 only, and anchors there like the e4m3 target does.
+            id="sm120.mma.m16n8k32.e5m2",
+            sm="sm_120",
+            ptx="mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e5m2.f32",
+            shape=(16, 8, 32),
+            a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
+            model=BLACKWELL_SM120_E5M2_M16N8K32,
+            status="pinned",
+            dossier="art:fc4bb8915dd22f22b3d0260a00a6d694750322852c5163ddb80a05948370a94f",
+            anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
+            evidence=(_PRO6000_E5M2, _PRO6000_E5M2_SECOND,
+                      "model = sm120.mma.m16n8k32.e4m3's pipeline (groups (32,), width 26, floor -133) with e5m2 products"),
+        ),
+        _i(
             id="sm120.mma.m16n8k64.e2m1.nvf4",
             sm="sm_120",
             ptx="mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3",
@@ -366,7 +415,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             # As nvf4: 0 mismatches over 7.39M words (fp4-re) + 9.66M (fp4-proof, _PIN_FP4); trust computed PINNED on 2026-09-23.
             status="pinned",
             dossier="art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92",
-            evidence=(_RTX5090_FP4_RE, _PIN_FP4,
+            evidence=(_RTX5090_FP4_RE, _PIN_FP4, _PRO6000_MXF4,
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
                       "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),

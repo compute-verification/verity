@@ -7,12 +7,12 @@
     "  Eq (FlockLevel3.F128.poly (instHAdd.hAdd a b)) (instHAdd.hAdd (FlockLevel3.F128.poly a) (FlockLevel3.F128.poly b))"
    ],
    "assumptions": [],
-   "type_hash": "000000000654ae58"
+   "type_hash": "78532b08c361f1b8a283aaca43b05d5208dedc1f84939a3410a4dae7b96e337f"
   },
   "FlockLevel3.F128.poly_injective": {
    "signature": ["FlockLevel3.F128.poly_injective : Function.Injective FlockLevel3.F128.poly"],
    "assumptions": [],
-   "type_hash": "00000000218a5380"
+   "type_hash": "0d2f9d7a1b4a3a5bc35c0906186f2eb474c0f897238244439f3301c65d66b8b6"
   },
   "FlockLevel3.F128.poly_mul": {
    "signature": [
@@ -21,7 +21,7 @@
     "    (Polynomial.modByMonic (instHMul.hMul (FlockLevel3.F128.poly a) (FlockLevel3.F128.poly b)) FlockLevel3.G)"
    ],
    "assumptions": [],
-   "type_hash": "000000000f638260"
+   "type_hash": "23d3074e5f4d989cc73900b341ae37294ee2bb33701d723c9beb0e17e4bc8622"
   },
   "FlockLevel3.GF128.add_eq": {
    "signature": [
@@ -29,7 +29,7 @@
     "  Eq (instHAdd.hAdd (FlockLevel3.GF128.of a) (FlockLevel3.GF128.of b)) (FlockLevel3.GF128.of (instHAdd.hAdd a b))"
    ],
    "assumptions": [],
-   "type_hash": "000000001d992e44"
+   "type_hash": "15c125fdfe033f417e851af918a8224edf4e9426ebf6377352a5aee8a794a258"
   },
   "FlockLevel3.GF128.inv_eq": {
    "signature": [
@@ -37,7 +37,7 @@
     "  Eq (DivisionMonoid.toDivInvOneMonoid.toInvOneClass.inv (FlockLevel3.GF128.of a)) (FlockLevel3.GF128.of a.inv)"
    ],
    "assumptions": [],
-   "type_hash": "00000000c98167aa"
+   "type_hash": "d08e4d62f868c55acb4b734a279d29eb337c0bbb2737c9e02aee3dc00405d5a2"
   },
   "FlockLevel3.GF128.mul_eq": {
    "signature": [
@@ -45,7 +45,7 @@
     "  Eq (instHMul.hMul (FlockLevel3.GF128.of a) (FlockLevel3.GF128.of b)) (FlockLevel3.GF128.of (instHMul.hMul a b))"
    ],
    "assumptions": [],
-   "type_hash": "00000000016419e9"
+   "type_hash": "0c52848db9548bf9cc0a47227058c385bf6be454a896742f3544000501014636"
   },
   "FlockLevel3.GF128.xinv_mul_x": {
    "signature": [
@@ -53,7 +53,7 @@
     "  Eq (instHMul.hMul (FlockLevel3.GF128.of Flock.F256.xinv) (FlockLevel3.GF128.of (Flock.F128.monomial 1))) 1"
    ],
    "assumptions": [],
-   "type_hash": "0000000069f5f9cf"
+   "type_hash": "0805a3ba76b568d1c36634e1bb728e1f9651f9b44cc3e71e6a6eb6f5b085786a"
   },
   "FlockLevel3.GF256.add_eq": {
    "signature": [
@@ -61,7 +61,7 @@
     "  Eq (instHAdd.hAdd (FlockLevel3.GF256.of a) (FlockLevel3.GF256.of b)) (FlockLevel3.GF256.of (instHAdd.hAdd a b))"
    ],
    "assumptions": [],
-   "type_hash": "0000000081132c78"
+   "type_hash": "2ed4db2f4f5872aeacadc77a1fa839a34d61997eced0785d3fa05bef3aa1754c"
   },
   "FlockLevel3.GF256.mul_eq": {
    "signature": [
@@ -69,22 +69,40 @@
     "  Eq (instHMul.hMul (FlockLevel3.GF256.of a) (FlockLevel3.GF256.of b)) (FlockLevel3.GF256.of (instHMul.hMul a b))"
    ],
    "assumptions": [],
-   "type_hash": "00000000d094bd8f"
+   "type_hash": "1a38ae44c027a1fa99ccd807a970e8d08273aa82ab0ba3f3ff14738b1f76aaa9"
   },
   "FlockLevel3.G_irreducible": {
    "signature": ["FlockLevel3.G_irreducible : Irreducible FlockLevel3.G"],
    "assumptions": [],
-   "type_hash": "0000000070df2569"
+   "type_hash": "c04b46cbbc8a37cf80fc4b3fc4436d53b846b58c3a2df2c9933659075227c128"
   },
   "FlockLevel3.Q_irreducible": {
    "signature": ["FlockLevel3.Q_irreducible : Irreducible FlockLevel3.Q"],
    "assumptions": [],
-   "type_hash": "000000009980026d"
+   "type_hash": "ee014b79708a48d123ada1fabd7045af3e7f99eceb015b486b49506b378311ab"
+  },
+  "FlockLevel3.RowV2.enc_inj": {
+   "signature": ["FlockLevel3.RowV2.enc_inj : Function.Injective fun r => FlockLevel3.RowV2.enc r.val"],
+   "assumptions": [],
+   "type_hash": "eb485a237d27b3e8fd83e415b6c5e255f449a0db43713a3100f5869ccf775455"
+  },
+  "FlockLevel3.RowV2.packBits_length": {
+   "signature": [
+    "FlockLevel3.RowV2.packBits_length (bs : List Bool) :",
+    "  Eq (Flock.HmRow.packBits bs).length (instHDiv.hDiv (instHAdd.hAdd bs.length 7) 8)"
+   ],
+   "assumptions": [],
+   "type_hash": "42235c01d6d3171dd03c6d6f625a8b54b12bae8a5373c70a0de0c6f65584f2cd"
+  },
+  "FlockLevel3.RowV2.prefix_size": {
+   "signature": ["FlockLevel3.RowV2.prefix_size (l : Nat) : Eq (Flock.HmRow.rowPrefixV2 l).size 128"],
+   "assumptions": [],
+   "type_hash": "1450d2499d3fca0680fdae44619236a165fd1ad601cd9eb2c5035c522b41502c"
   },
   "FlockLevel3.T_xK": {
    "signature": ["FlockLevel3.T_xK : Eq (FlockLevel3.T FlockLevel3.xK) 1"],
    "assumptions": [],
-   "type_hash": "000000007fb05456"
+   "type_hash": "a271381b335e91f2eda2ee2323fd6fe702e0d66b09c0d884a35136e6512b6a00"
   },
   "FlockLevel3.addDelta_get": {
    "signature": [
@@ -96,7 +114,7 @@
     "          (List.map (fun ic => ite (Eq ic.snd c) (FlockLevel3.GF128.of (w ic.fst)) 0) pairs).sum))"
    ],
    "assumptions": [],
-   "type_hash": "00000000ac3b7280"
+   "type_hash": "81be0a96857834878e5d9db5e625973973c3cd9e32c5aea888bfffdaabc7b008"
   },
   "FlockLevel3.baseOf_get": {
    "signature": [
@@ -110,7 +128,7 @@
     "      (FlockLevel3.lookupTerm eLo lk i'))"
    ],
    "assumptions": [],
-   "type_hash": "000000001175d961"
+   "type_hash": "f43a5e9ff9e1605b435f7d381c076711a0b3ab1179f274be7fa221eb9f2850f6"
   },
   "FlockLevel3.build_computes": {
    "signature": [
@@ -156,22 +174,22 @@
     "                                              1 0))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "00000000143c7adc"
+   "type_hash": "4fded1ec0fe44ec276dd7bc8703447a64f1bbd2a361515093e1bdcb072c3ed0f"
   },
   "FlockLevel3.card_F": {
    "signature": ["FlockLevel3.card_F : Eq (Fintype.card FlockLevel3.GF128) (instHPow.hPow 2 128)"],
    "assumptions": [],
-   "type_hash": "000000000742ca17"
+   "type_hash": "62e691abcdcb0809005c1e4d120038fc7b5a1e8e4b504ac6eac45ec1201676e0"
   },
   "FlockLevel3.card_K": {
    "signature": ["FlockLevel3.card_K : Eq (Fintype.card FlockLevel3.GF256) (instHPow.hPow 2 256)"],
    "assumptions": [],
-   "type_hash": "000000001928aa04"
+   "type_hash": "4c19db0cd1e637292353ac5b01551cec52725f0bbf7c9eec8b76baf4cf0924d4"
   },
   "FlockLevel3.charTwoK": {
    "signature": ["FlockLevel3.charTwoK : CharP FlockLevel3.GF256 2"],
    "assumptions": [],
-   "type_hash": "000000000bbbf379"
+   "type_hash": "fa32d51ae8692d4f9ef2d9186fb025f310b9a47ec4e0c7f8c08e6244f3a6c037"
   },
   "FlockLevel3.clmul_spec": {
    "signature": [
@@ -180,7 +198,7 @@
     "    (instHMul.hMul (FlockLevel3.poly64 a) (FlockLevel3.poly64 b))"
    ],
    "assumptions": [],
-   "type_hash": "00000000d5d486b2"
+   "type_hash": "602b57585be1b04d2b57bb68cb4ba4f283adb4b0a824e36ec1721951f84fbaee"
   },
   "FlockLevel3.eqAt_split": {
    "signature": [
@@ -190,7 +208,7 @@
     "      (FlockLevel3.eqAt (fun j => r (Fin.natAdd a j)) (instHDiv.hDiv u (instHPow.hPow 2 a))))"
    ],
    "assumptions": [],
-   "type_hash": "00000000d4f013c2"
+   "type_hash": "430d71c4a8adde85a6abcfa1f5f93320735f30110ec06f41a3b05cdd8f2f84db"
   },
   "FlockLevel3.eqTable_get": {
    "signature": [
@@ -199,12 +217,12 @@
     "    (Finset.univ.prod fun j => FlockLevel3.eqFactor (b.testBit j.val) (Fin.instGetElemFinVal.getElem r j ⋯))"
    ],
    "assumptions": [],
-   "type_hash": "000000001b354397"
+   "type_hash": "abe2371ceddfc667950bd78740a392670bc3729133be38a27eca09b96171e221"
   },
   "FlockLevel3.eqTable_size": {
    "signature": ["FlockLevel3.eqTable_size (r : Array Flock.F128) : Eq (Flock.eqTable r).size (instHPow.hPow 2 r.size)"],
    "assumptions": [],
-   "type_hash": "000000003c8d91e7"
+   "type_hash": "e1df451d3eae74609122e03560126e914e1c8e438906f03da790fe199a9e3c48"
   },
   "FlockLevel3.foldB_get": {
    "signature": [
@@ -219,7 +237,7 @@
     "            0))"
    ],
    "assumptions": [],
-   "type_hash": "000000004947aec2"
+   "type_hash": "5a85e430a23078bc0e8e76de7f4d58e16626ef34f097a2feb05667e88fe3e0e1"
   },
   "FlockLevel3.foldRanges_get": {
    "signature": [
@@ -235,7 +253,7 @@
     "              (FlockLevel3.rangesVal st alpha lw rho rs c (Array.instGetElem?NatLtSize.getElem! out c)))"
    ],
    "assumptions": [],
-   "type_hash": "00000000d6e68825"
+   "type_hash": "374830696dd03beb8a2e50d321a437cd01e43ea109badba5526d89fdf8932a1c"
   },
   "FlockLevel3.foldT_get": {
    "signature": [
@@ -246,7 +264,7 @@
     "        ite (Eq (m.col i t) c) (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! e i)) 0)"
    ],
    "assumptions": [],
-   "type_hash": "00000000d509668a"
+   "type_hash": "49d580153d5165463b7c1b4def4b93165fa3475acb0a2737e6f0502ab4f9b045"
   },
   "FlockLevel3.fold_get": {
    "signature": [
@@ -264,7 +282,30 @@
     "          st.db.toList).sum)"
    ],
    "assumptions": [],
-   "type_hash": "000000006f41e872"
+   "type_hash": "8b58c5299be820ea3ddaf1d0e1942d8d2bf24dcd647802218591faf101758a54"
+  },
+  "FlockLevel3.foldedPartial_eq": {
+   "signature": [
+    "FlockLevel3.foldedPartial_eq (st : Flock.Stmt) (alpha beta : Flock.F128) (lw rho ts w : Array Flock.F128)",
+    "  (hst : Eq st.structured Bool.true) (hts : Eq (instHAdd.hAdd ts.size 6) st.c.kLog)",
+    "  (h : Eq (st.foldedPartial alpha beta lw rho ts) (Except.ok w)) :",
+    "  Exists fun v =>",
+    "    And (Eq (st.fold alpha lw rho) (Except.ok v))",
+    "      (Eq w (Array.foldl (fun c t => Flock.halve t c) (v.modify st.pin fun x => instHAdd.hAdd x beta) ts))"
+   ],
+   "assumptions": [],
+   "type_hash": "e40c82ac41724a3d9dc08b019a1a56354cd0b0125ffe5667d66454f3269af627"
+  },
+  "FlockLevel3.folded_eq": {
+   "signature": [
+    "FlockLevel3.folded_eq (st : Flock.Stmt) (alpha beta : Flock.F128) (lw rho ts w : Array Flock.F128)",
+    "  (h : Eq (st.folded alpha beta lw rho ts) (Except.ok w)) :",
+    "  Exists fun v =>",
+    "    And (Eq (st.fold alpha lw rho) (Except.ok v))",
+    "      (Eq w (Array.foldl (fun c t => Flock.halve t c) (v.modify st.pin fun x => instHAdd.hAdd x beta) ts))"
+   ],
+   "assumptions": [],
+   "type_hash": "0c7977a1424158f6da1745deda3456352a45eaa7da29ca0570363dc8623fdf0c"
   },
   "FlockLevel3.lo_balanced": {
    "signature": [
@@ -276,7 +317,7 @@
     "          (instHDiv.hDiv (Fintype.card FlockLevel3.GF128) (instHPow.hPow 2 b))"
    ],
    "assumptions": [],
-   "type_hash": "00000000a0ad34a1"
+   "type_hash": "5c9130bdc67c092b2d91b3e1eaf359f60b4bfdffa5c7b1616a36abe0b725580a"
   },
   "FlockLevel3.mask_term": {
    "signature": [
@@ -297,7 +338,7 @@
     "    (instHMul.hMul (instHAdd.hAdd (FlockLevel3.GF128.of alpha) 1) (FlockLevel3.GF128.of (FlockLevel3.eIn lw rho c)))"
    ],
    "assumptions": [],
-   "type_hash": "000000006cbe3c7e"
+   "type_hash": "c8cf8ea3875fdcf1a5c9b16ff2885ccc2fb22aeac0955c83416c90577f669103"
   },
   "FlockLevel3.nodes": {
    "signature": [
@@ -327,7 +368,7 @@
     "                          (Polynomial.eval ζ p))))))"
    ],
    "assumptions": [],
-   "type_hash": "00000000de27dbdd"
+   "type_hash": "6e221c3b23c2f81b86d0222f3f4ff9c658d01b4a6bd1f0bceb50d7a8b16bafa3"
   },
   "FlockLevel3.ofLimbs": {
    "signature": [
@@ -337,7 +378,7 @@
     "      (instHMul.hMul (RingHom.instFunLike.coe FlockLevel3.embed (FlockLevel3.GF128.of c1)) FlockLevel3.u))"
    ],
    "assumptions": [],
-   "type_hash": "000000008b650bd6"
+   "type_hash": "0354af44c67b681897c761f9fad7bb0ae49e6c2eff5231e98f76a41b45499c29"
   },
   "FlockLevel3.ofLimbs_bijective": {
    "signature": [
@@ -347,7 +388,7 @@
     "      (instHMul.hMul (RingHom.instFunLike.coe FlockLevel3.embed w.snd) FlockLevel3.u)"
    ],
    "assumptions": [],
-   "type_hash": "000000006e72ac19"
+   "type_hash": "a561bd9f20be36bc6724bf67b8aa1c8e14ce71286e0d5ae673198b3a8dcc46a5"
   },
   "FlockLevel3.omega_injective": {
    "signature": [
@@ -355,22 +396,37 @@
     "  instLENat.le d 64 → Set.InjOn FlockLevel3.omega (Set.ofPred fun q => instLTNat.lt q (instHPow.hPow 2 d))"
    ],
    "assumptions": [],
-   "type_hash": "000000009d4b54de"
+   "type_hash": "880a755ed823a277877fa8e052860a258ae8cb1a20cec813a514ee36c9bfb764"
   },
   "FlockLevel3.pack_unpack": {
    "signature": ["FlockLevel3.pack_unpack (a : FlockLevel3.GF128) : Eq (FlockLevel3.pack (FlockLevel3.unpack a)) a"],
    "assumptions": [],
-   "type_hash": "000000008cf66ea8"
+   "type_hash": "2ebb989f5391c859d6cce017e11cf48386715e6073ba1b0eeb7ac4993dd280d0"
+  },
+  "FlockLevel3.partial_eq_halve_fold": {
+   "signature": [
+    "FlockLevel3.partial_eq_halve_fold (l : List Flock.F128) (v : Array Flock.F128) :",
+    "  Eq v.size (instHMul.hMul (instHPow.hPow 2 l.length) 64) →",
+    "    ∀ (s : Nat),",
+    "      instLTNat.lt s 64 →",
+    "        Eq (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (List.foldl (fun c t => Flock.halve t c) v l) s))",
+    "          ((Finset.range (instHPow.hPow 2 l.length)).sum fun u =>",
+    "            instHMul.hMul",
+    "              (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (Flock.eqTable l.reverse.toArray) u))",
+    "              (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! v (instHAdd.hAdd s (instHMul.hMul 64 u)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "46bc27d43242a4bd56fc4b74706d7163805906796d7134a8781797c84b51205a"
   },
   "FlockLevel3.phi_injective": {
    "signature": ["FlockLevel3.phi_injective : Function.Injective FlockLevel3.phi"],
    "assumptions": [],
-   "type_hash": "00000000387b7096"
+   "type_hash": "e4f152e84340c88efc5a4630ad7afda0d6580a0faddafda852e9471625c13117"
   },
   "FlockLevel3.phi_surjective": {
    "signature": ["FlockLevel3.phi_surjective : Function.Surjective FlockLevel3.phi"],
    "assumptions": [],
-   "type_hash": "000000000d959e04"
+   "type_hash": "baa1203c767872af9a63bc7ade323a4fd2d6676f076bb15562e8221e82e4daba"
   },
   "FlockLevel3.pinned_indep": {
    "signature": [
@@ -378,12 +434,12 @@
     "  Eq (Finset.univ.sum fun b => instHMul.hMul (c b).val.cast (FlockLevel3.eqAtPinned b.val)) 0 → Eq c 0"
    ],
    "assumptions": [],
-   "type_hash": "000000000165e8c4"
+   "type_hash": "0b958599aa21456454ea4af9023a917dd46607854a6942c1b73b0d34721b0934"
   },
   "FlockLevel3.pinned_ne_one": {
    "signature": ["FlockLevel3.pinned_ne_one (i : Fin 7) : Ne (FlockLevel3.pinnedF i) 1"],
    "assumptions": [],
-   "type_hash": "0000000013822833"
+   "type_hash": "d294ede866b86e33ae7c182278c27e695f8fe12552f7d82e0c19aef6b41ae317"
   },
   "FlockLevel3.placeRange_get": {
    "signature": [
@@ -399,7 +455,7 @@
     "        (Array.instGetElem?NatLtSize.getElem! out c))"
    ],
    "assumptions": [],
-   "type_hash": "0000000077f65c0f"
+   "type_hash": "af3b4736e0f287472429f769c6b66f0df43b8107457eb71e4af093694143ec41"
   },
   "FlockLevel3.placeSlot_get": {
    "signature": [
@@ -412,7 +468,7 @@
     "        (Array.instGetElem?NatLtSize.getElem! out c))"
    ],
    "assumptions": [],
-   "type_hash": "000000006e720b22"
+   "type_hash": "1def2999dcef9f02efb673f6d8ed542dded4903c8cc3077f5ce59d90c4380071"
   },
   "FlockLevel3.reduce_spec": {
    "signature": [
@@ -427,7 +483,7 @@
     "      FlockLevel3.G)"
    ],
    "assumptions": [],
-   "type_hash": "000000007e844f7d"
+   "type_hash": "6fa67f3c264d5fde8e59017ce3026d41f3e0c204db0c654ad14e05e288e5b2f3"
   },
   "FlockLevel3.slot_factor": {
    "signature": [
@@ -449,7 +505,7 @@
     "        (Array.instGetElem?NatLtSize.getElem! (Flock.eqTable (rho.extract (instHSub.hSub sl 6))) q)))"
    ],
    "assumptions": [],
-   "type_hash": "00000000ea67dedf"
+   "type_hash": "54ec5c0d17f2c5daeb6e6a5619ad41e45fe6521eab3e2dc74c0ccfb996ba15a6"
   },
   "FlockLevel3.slot_term": {
    "signature": [
@@ -482,7 +538,7 @@
     "          (instHMod.hMod c (instHPow.hPow 2 r.slotLog)))))"
    ],
    "assumptions": [],
-   "type_hash": "000000005a1070b4"
+   "type_hash": "f128d6a45015cd6b72e14363e1a4927ff8c5dd9050abdc263298ae83b5345e0e"
   },
   "FlockLevel3.sparseT_scale": {
    "signature": [
@@ -499,7 +555,7 @@
     "          (FlockLevel3.GF128.of (FlockLevel3.eIn lw rho (instHAdd.hAdd (instHMul.hMul q (instHPow.hPow 2 sl)) i))) 0)"
    ],
    "assumptions": [],
-   "type_hash": "0000000013267073"
+   "type_hash": "8340d525f52e07806c7d9efec647486cb56a986a9a5b3aa4ab75bf2088d32e4f"
   },
   "FlockLevel3.subsetTab_get": {
    "signature": [
@@ -508,17 +564,17 @@
     "    (FlockLevel3.byteSum f y)"
    ],
    "assumptions": [],
-   "type_hash": "000000003862b546"
+   "type_hash": "4324c2f6381f618781d41155bca35c520c408b091d2788f66add2492056c005f"
   },
   "FlockLevel3.toAdj_injective": {
    "signature": ["FlockLevel3.toAdj_injective : Function.Injective FlockLevel3.toAdj"],
    "assumptions": [],
-   "type_hash": "000000003dfe6361"
+   "type_hash": "2c4ff1817907979fd86176124dd388ca2577a69b628ed5730da9614a1c31d8e3"
   },
   "FlockLevel3.toAdj_surjective": {
    "signature": ["FlockLevel3.toAdj_surjective : Function.Surjective FlockLevel3.toAdj"],
    "assumptions": [],
-   "type_hash": "000000009b4f91b3"
+   "type_hash": "a3271bcf84e9654d864763a6194d0b654740565e0b101b5d301477afc3e9725c"
   },
   "FlockLevel3.u_root": {
    "signature": [
@@ -529,7 +585,7 @@
     "    0"
    ],
    "assumptions": [],
-   "type_hash": "0000000055beaafc"
+   "type_hash": "2d3e04a7159b35fdd1f7cb751395f0ec92739a7167a4c30ae86bc83db7729feb"
   },
   "FlockLevel3.unpack_add": {
    "signature": [
@@ -537,12 +593,12 @@
     "  Eq (FlockLevel3.unpack (instHAdd.hAdd a a')) (instHAdd.hAdd (FlockLevel3.unpack a) (FlockLevel3.unpack a'))"
    ],
    "assumptions": [],
-   "type_hash": "0000000064fd584b"
+   "type_hash": "902722fac8588c4f0ab78ed9d501beec339cd55ff2da73e89010c518b962a462"
   },
   "FlockLevel3.unpack_pack": {
    "signature": ["FlockLevel3.unpack_pack (b : Fin 128 → ZMod 2) : Eq (FlockLevel3.unpack (FlockLevel3.pack b)) b"],
    "assumptions": [],
-   "type_hash": "0000000044bc5b9f"
+   "type_hash": "722449f8924b9f6f30f0753582e741496711e61229cab82767aa3d03ea8e04a6"
   },
   "FlockLevel3.xhat_poly": {
    "signature": [
@@ -555,22 +611,22 @@
     "            Eq (FlockLevel3.Xhat c.val L ω) (Polynomial.eval ω (P c))))"
    ],
    "assumptions": [],
-   "type_hash": "000000002b2d0cdd"
+   "type_hash": "38e92be62b31bb77bb2007a369d5713f2a76bdbb275d53782d26eb77b03c1d7e"
   }
  },
  "reads": {
   "FlockLevel3.ArithFacts": {
-   "digest": "21c6513b342f9900aed953e7c8924246",
+   "digest": "714736237d02f50a25d12047ee95fa9ca4761968fb0fb05e89aceb5f6fcbd4af",
    "definitions": {
-    "FlockLevel3.f128Equiv": "f48157670cea76a1",
-    "FlockLevel3.f256Equiv": "4f6f392a988e7265",
-    "FlockLevel3.instFintypeGF128": "5e0597b5a6520825",
-    "FlockLevel3.instFintypeGF256": "acc2edcc67a69c44",
-    "FlockLevel3.lo": "f23cb7956686595d",
-    "FlockLevel3.omega": "f0a0ebe21809c229",
-    "FlockLevel3.pack": "103db3f01dac6068",
-    "FlockLevel3.pinnedF": "525ae5fe26806b25",
-    "FlockLevel3.unpack": "33c9bd21c8216137"
+    "FlockLevel3.f128Equiv": "4b8e4c144d7f5cbb25d4308362c29303aa83155f3882fc1bf463dfac4ec7f07c",
+    "FlockLevel3.f256Equiv": "8262b4944342abeeee9594437aae4c603058e7ca68b20a5bd997ca2bccba1c28",
+    "FlockLevel3.instFintypeGF128": "db0dd843caf1afb6a50318c3fbcfb45c447d7c195b9a494c65b9b84ff6ede3ea",
+    "FlockLevel3.instFintypeGF256": "ae9a3503c3b1a32ffed873358f30573c8ab80e3f16f9e4579357f96b29623fad",
+    "FlockLevel3.lo": "4c6adaa13710b64cda9bd1adc2eaf74b7eb5f1a1daaf8545445a2f2ec6443ba5",
+    "FlockLevel3.omega": "783abb2b9943705e9715d144f3c6106d5834716976e92290af5622dbb0c61e15",
+    "FlockLevel3.pack": "0e3b8d10a200ea35187afc5dadabe677eed58c65ee238ef182df8afadaa2173d",
+    "FlockLevel3.pinnedF": "9e833c054408246fcd68f64b34a2d32a77463da4d1ea6225b2cc5828e7f69b6b",
+    "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "pins": [
     "FlockLevel3.card_F",
@@ -585,17 +641,17 @@
    ]
   },
   "FlockLevel3.Assembly": {
-   "digest": "7b4826451e17ec2a4d4cff8c8b7a6b33",
+   "digest": "d17b1f544acea1705aaba9f2294e150cbe34bd79f3f843f607d2e50db890efa2",
    "definitions": {
-    "FlockLevel3.eqFactor": "7b4826451e17ec2a"
+    "FlockLevel3.eqFactor": "5323fcee63528c3660438f9fe55f96b740e5a17fbf7aac02e41acf4d7428e662"
    },
    "pins": ["FlockLevel3.eqTable_get"]
   },
   "FlockLevel3.Bits": {
-   "digest": "8874c37c6725189df9eccdb123c28376",
+   "digest": "7b4d6893f62ea734abcddd06ad660a32d568eaf7e81aa4335978a01fa56fc9f5",
    "definitions": {
-    "FlockLevel3.P": "49a6f8b34e73c88f",
-    "FlockLevel3.natPoly": "5162bcc1ce64f198"
+    "FlockLevel3.P": "4e5d0fcb10cd2f7e91614aedfbf6de7279727d394f57a0dc14a72412372d6cc1",
+    "FlockLevel3.natPoly": "111cbf4afcf70249625f67c95ea00b823b4afff592fc0274ac1047bfbf46c941"
    },
    "pins": [
     "FlockLevel3.F128.poly_add",
@@ -623,6 +679,7 @@
     "FlockLevel3.ofLimbs",
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -641,23 +698,23 @@
    ]
   },
   "FlockLevel3.Fold": {
-   "digest": "628767d5ff5a8bf98b6bcd083c5f320c",
+   "digest": "f78bbbea3cf7e4eaca5e005c480a47f7496f2ce11fd6d8bdfa8c22fe12170243",
    "definitions": {
-    "FlockLevel3.eqAt": "628767d5ff5a8bf9"
+    "FlockLevel3.eqAt": "ef6f8012ae6949dc15e63a24224ba32e2975b6ec56d69325d1e90deb76dfc40b"
    },
    "pins": ["FlockLevel3.eqAt_split"]
   },
   "FlockLevel3.FoldStmt": {
-   "digest": "009648fb507cec5f944c1bd68d0b6ae6",
+   "digest": "129edeffcaac09f2a58680d7601f18f4b7dcd58a61434760d690b1ac6fec33d1",
    "definitions": {
-    "FlockLevel3.baseFor": "fc4267887f6f0b08",
-    "FlockLevel3.covers": "59b910b51d2c0ff6",
-    "FlockLevel3.eHiFor": "7b03edca1df57a6a",
-    "FlockLevel3.eIn": "39d48380140bb487",
-    "FlockLevel3.instDecidableCovers": "e729a15297954cbb",
-    "FlockLevel3.lookupTerm": "f1af835150d6ebf8",
-    "FlockLevel3.rangesVal": "587a6978f34e5630",
-    "FlockLevel3.sparseT": "f8bf5e2dc92f27f8"
+    "FlockLevel3.baseFor": "240899a259a29128a30fbb7f0e8ff34f8eb3791c88dfb8e346d58738343f1da7",
+    "FlockLevel3.covers": "ca36c80c3ec5cbdc5391b969ff54235436c779917fe5d244e9e08c85e42bef2a",
+    "FlockLevel3.eHiFor": "02fa139692a3da3a8a846edda9625460321a9456ec8763abcb6f074701058d03",
+    "FlockLevel3.eIn": "50814f851fafa25780ab578cd6351ee95c37d4b03b024a09f2e684d4d9dede83",
+    "FlockLevel3.instDecidableCovers": "5a9f69494dfe77ded8a7b1614c8e4a6b26d647278efdaea0cf800996bc1fbeb8",
+    "FlockLevel3.lookupTerm": "2708ff46c81453f205e11a2cde5edc15d73c19dd6ee3507543f026c434fbd65b",
+    "FlockLevel3.rangesVal": "bffb5ba2e988a1b10b37caa93e6b4d4e63bc48e2d3d893b362e9978c5ed8a100",
+    "FlockLevel3.sparseT": "19ffccb2c40965ce056f59aa6f23b3f82d5e254e24ff132a8185c40b87916015"
    },
    "pins": [
     "FlockLevel3.baseOf_get",
@@ -669,13 +726,13 @@
    ]
   },
   "FlockLevel3.GF128": {
-   "digest": "db60788eaad90ae775887eca8816ce10",
+   "digest": "944b755049e580c96755351591765b2d8c7eed357d52f7539fb00af9ae869dfb",
    "definitions": {
-    "FlockLevel3.F128.poly": "e5b815e1c8d79831",
-    "FlockLevel3.G": "30f2d25924005de4",
-    "FlockLevel3.S": "5cb5323c43d66885",
-    "FlockLevel3.poly64": "97b02f9084e185d6",
-    "FlockLevel3.w128": "74a2d7f0bc29b87a"
+    "FlockLevel3.F128.poly": "195f03fa0f74277a3676ff458d99213d1f94e0ca2ff350814b925bc932286551",
+    "FlockLevel3.G": "6535881c32352c0e32d06a80719c1ac69f8c85d33c4e7d14c938ccc53d0252df",
+    "FlockLevel3.S": "7635b072eea9e445771e107ffa06f99fc2fd98c3347e9c27a94a4d1f32ab2c36",
+    "FlockLevel3.poly64": "d5bab619060c7479cfdfb3adfa23f0b0ea4d9856cb2ca49362c83718a3df20f5",
+    "FlockLevel3.w128": "d6a5772060eba5ae44a5e24a598bbaae27240b7e726634cbd499318fb5ddbfac"
    },
    "pins": [
     "FlockLevel3.F128.poly_add",
@@ -703,6 +760,7 @@
     "FlockLevel3.ofLimbs",
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -721,11 +779,11 @@
    ]
   },
   "FlockLevel3.GF128Field": {
-   "digest": "91ec5e88b728fc0ff5cc5d9fba715bd5",
+   "digest": "56ea824225b61172e040fdf98d9fa886314a177c1cf3c25099796c8e9183eae9",
    "definitions": {
-    "FlockLevel3.GF128": "911baf730c5426ae",
-    "FlockLevel3.GF128.of": "4eec3e0c489f05c5",
-    "FlockLevel3.instFieldGF128": "d78105b3c29f09dd"
+    "FlockLevel3.GF128": "c9e25ed65c418e06e5c2195937c59cd821d17680d7af3ff093e0afac7800b5e1",
+    "FlockLevel3.GF128.of": "5e652ac1ae72dddd973855a651731f6fff62cb0ea0a672dbe779583e0c9639f6",
+    "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "pins": [
     "FlockLevel3.GF128.add_eq",
@@ -752,6 +810,7 @@
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.omega_injective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -767,10 +826,10 @@
    ]
   },
   "FlockLevel3.GF128Ring": {
-   "digest": "db948c0e549630056b909131e7015803",
+   "digest": "57ff86ff44f82d2003a5caaab2e53d9e5aae1d705defae421b23f220ed32ef65",
    "definitions": {
-    "FlockLevel3.equivAdj": "f146b67b5e357019",
-    "FlockLevel3.toAdj": "dacfbc5be315f0f6"
+    "FlockLevel3.equivAdj": "05e2b16779c7ee3679d7328c2821ae8ff891885bdde087fd8bf652b46bacfab0",
+    "FlockLevel3.toAdj": "3d43ec40ffd40bb80c838bd961cfc60dfffd36a7c5c459a792fa49f89b21fb54"
    },
    "pins": [
     "FlockLevel3.GF128.add_eq",
@@ -793,6 +852,7 @@
     "FlockLevel3.ofLimbs",
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -810,17 +870,17 @@
    ]
   },
   "FlockLevel3.GF256": {
-   "digest": "86dd41499fa8fafbf0c755efd40ea0ba",
+   "digest": "545f3555b6340acd9ead3f2da119cf2a6fc4d30064080a31632db2ca77bb9bd0",
    "definitions": {
-    "FlockLevel3.GF256": "c8e8a4fb1cec02dc",
-    "FlockLevel3.GF256.of": "2b5b4f92d523f379",
-    "FlockLevel3.K": "a6ec9301900cfdd9",
-    "FlockLevel3.Q": "ce6cad32901f9d5a",
-    "FlockLevel3.T": "7b0a69c57753aa82",
-    "FlockLevel3.equivPhi": "a1be0d24ab3734d9",
-    "FlockLevel3.instFieldGF256": "85f536abf4fe4642",
-    "FlockLevel3.phi": "cb62e38219f40d68",
-    "FlockLevel3.xK": "3c5829f32f812106"
+    "FlockLevel3.GF256": "0b2c3882de3dec7f5fd11d2448bc76b957de6df0aaa25037d97b01deb6c55433",
+    "FlockLevel3.GF256.of": "6cf8ef32b2e1152f331c8ddff346a93f263bb1f1f1517163634dfcccf372f8a6",
+    "FlockLevel3.K": "9e78c6b64a6b0156408c6d543b5907749242068b79daf7452c5ea3945ad31745",
+    "FlockLevel3.Q": "b91b8b3e5c5d642f350febfcd2157e9601a9f4e5bdb63c5f07e89d6e3184a5e7",
+    "FlockLevel3.T": "6b53e3e2879872ebc47cc3cc743bdce1afdddfce03161f2764b4a18c85c7eeaa",
+    "FlockLevel3.equivPhi": "d139bce1c50e39c7ff15ac89b1c8b4b509e03c22f1fbe02d2ee0f9c9c231e324",
+    "FlockLevel3.instFieldGF256": "db84d04702977643726588b1368138f11806da16464e09fb12e8a115b3611faf",
+    "FlockLevel3.phi": "ae000f0337bdb2558e90c599b1cb6783b25f47dc84068dbd1417670c10c7af9c",
+    "FlockLevel3.xK": "917b2bcfdc9e2ff9eee754606678c46b5eb298a2aa0629f24942687a5cc045c2"
    },
    "pins": [
     "FlockLevel3.GF256.add_eq",
@@ -837,54 +897,61 @@
    ]
   },
   "FlockLevel3.LookupFold": {
-   "digest": "a9a608efee9ddede2d5dda6b3a7cde7a",
+   "digest": "c65361f2f0d79d55e988878a265003cca6a2558f5f3767a21fa9bed019104b63",
    "definitions": {
-    "FlockLevel3.byteSum": "1f8a06799f8b7b6c",
-    "FlockLevel3.wordSum": "454ddf0c1f1940b2"
+    "FlockLevel3.byteSum": "2ed1b6101867e287660add578bbed94fa5f5f9f65da9b6a9bea585bd3bb291c9",
+    "FlockLevel3.wordSum": "b7bb47c0a0ca2a21e427fc9074213f1c4492fd8fce9d1a5595ef9b2678494b29"
    },
    "pins": ["FlockLevel3.baseOf_get", "FlockLevel3.foldB_get", "FlockLevel3.slot_term", "FlockLevel3.subsetTab_get"]
   },
   "FlockLevel3.LookupRows": {
-   "digest": "9f1dbf118ac1eae59aa39ab938f517a0",
+   "digest": "98cb0c4f56b47ee1a07fc76ac55321604ffa7ce42542a91e4a95e0faf1f8274a",
    "definitions": {
-    "FlockLevel3.bitsVal": "0cf9e0e7f21aca40",
-    "FlockLevel3.rowSum": "7efa04f14ce4ab9a",
-    "FlockLevel3.tableB": "bf7fe87b36d9c85a"
+    "FlockLevel3.bitsVal": "46d3e1962d6acc5608afe589771381c3084139b901193ed6f3c9d559ed80607a",
+    "FlockLevel3.rowSum": "d96b138ec0fd87dfc4295820dc2335eddc5784ad98054bf7beae30058abf56d1",
+    "FlockLevel3.tableB": "2ce0428b25af6c582ec3d9d267e4de4ade6de2c44a47222cf995098dff734aa2"
    },
    "pins": ["FlockLevel3.build_computes"]
   },
   "FlockLevel3.Nodes": {
-   "digest": "c402244b2facacaff70397b10b28a915",
+   "digest": "1d4273a8873c43f74a52956bebb18650535671738702f9f86eaa59cb092f31cb",
    "definitions": {
-    "FlockLevel3.combW": "57117f53716a9af2",
-    "FlockLevel3.lagS": "35bbe65769dd5754",
-    "FlockLevel3.lagΛ": "4bc831a2c07c9734"
+    "FlockLevel3.combW": "c7ce6f97ccb8952343450e2cfa918c9e7f71795990918ec0871b33df2c7389e6",
+    "FlockLevel3.lagS": "53b24cf8e630e7ffdcac160cfa0521086a5a89b65b3e10ebc16c34651a2630fd",
+    "FlockLevel3.lagΛ": "09a906a6c22c0330f471dd9127b548111bd8adae56940c5354543f1a71b1ffce"
    },
    "pins": ["FlockLevel3.nodes"]
   },
   "FlockLevel3.NovelBasis": {
-   "digest": "e8e780b663c7cf46f4ef192c018bc39a",
+   "digest": "63765397defaae2fed0004f9f3fcd078f559b3d84867a0103a447aa503e2907e",
    "definitions": {
-    "FlockLevel3.What": "c16dbc626e7b283b",
-    "FlockLevel3.Xhat": "03754dca46370afc",
-    "FlockLevel3.beta": "2209b05114a65142",
-    "FlockLevel3.sPoly": "97b19d0ec8fd900f"
+    "FlockLevel3.What": "b5856646e5c62ea55d35f1ad6590868f03ed58a7324eb1b2170bc1dce377bd10",
+    "FlockLevel3.Xhat": "d82a6e021e265587e456cdeb51961bd87d62cbc359c16383bcf4a4679d7e9cdc",
+    "FlockLevel3.beta": "d3716d1d0f9b2185b9213250daea91e0e50fef7782b4c0a47af4624005f5666c",
+    "FlockLevel3.sPoly": "ec337ddf87e0323de610b88e2d958535657a6bf98deae09f0257051aa466ffda"
    },
    "pins": ["FlockLevel3.xhat_poly"]
   },
   "FlockLevel3.Pinned": {
-   "digest": "d7d9e7a22c94537145d876ed55b466d5",
+   "digest": "963b0faa7fcd8526eacbe06cd42d017498850a7d856c9a8c2dd317bb27a6e200",
    "definitions": {
-    "FlockLevel3.eqAtPinned": "d7d9e7a22c945371"
+    "FlockLevel3.eqAtPinned": "f2d1353f742bc78ebccce359b713fa4ebba650e3309ff23614fb29575952cff4"
    },
    "pins": ["FlockLevel3.pinned_indep"]
   },
-  "FlockLevel3.Seam": {
-   "digest": "ae5680e645a7a3c7ab37a7afa4a15183",
+  "FlockLevel3.RowV2": {
+   "digest": "833d0970d2d09ce12457506c3c063a7862eae4975d1346fa094c48204807f4ef",
    "definitions": {
-    "FlockLevel3.GF128.val": "5bc9fa4a312bbe3b",
-    "FlockLevel3.embed": "85ef9d4ba725b5b9",
-    "FlockLevel3.u": "2b76b486951e7592"
+    "FlockLevel3.RowV2.enc": "21f076dccb57bb3668c1758c8cdbbf66a023c49098d2849f05164bc05e5ef8b9"
+   },
+   "pins": ["FlockLevel3.RowV2.enc_inj"]
+  },
+  "FlockLevel3.Seam": {
+   "digest": "8b148ac1964b8642981b91d2696fb33aa0d43cd9fea308f21d563ed85a6d868f",
+   "definitions": {
+    "FlockLevel3.GF128.val": "d7e677914640f6328f079e321d9b85ffb76bf58acc2f6a6be6a1cac2c92de4fa",
+    "FlockLevel3.embed": "e4732133a4fdbfdcddee2bdce33490c35655efe60ff33b810dfd4233c50102b1",
+    "FlockLevel3.u": "9f0c9aed308bb84c708a957725a63f5d9be6219ba17e66216cc1f311c9249e2a"
    },
    "pins": [
     "FlockLevel3.card_F",

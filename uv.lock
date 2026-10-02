@@ -23,6 +23,7 @@ conflicts = [[
 
 [manifest]
 members = [
+    "cluster",
     "research",
     "verity",
     "verity-check",
@@ -33,14 +34,15 @@ members = [
     "verity-gkr",
     "verity-lean-audit",
     "verity-native-peak",
+    "verity-network-warden",
     "verity-numerical",
-    "verity-one-stage",
     "verity-pous",
     "verity-pouw",
     "verity-pouw-benchmarks",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-tc-probe",
+    "verity-tc-probe-fp4",
     "verity-vllm",
     "verity-workspace",
 ]
@@ -113,6 +115,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/e5/b44c230108745ff9c70c7bbafe22563772bc0c22322a8d15c10455f6ca02/blake3-1.0.9-cp314-cp314t-win32.whl", hash = "sha256:021309d760b390706fecf13498f9a25aa8f689bbb65a0896029b8fa223aae18b", size = 229481, upload-time = "2026-06-22T18:01:45.307Z" },
     { url = "https://files.pythonhosted.org/packages/ec/a6/ac03f37dc9aeebf398d42089720648b3bc8438e733d3e522196c5d12ab39/blake3-1.0.9-cp314-cp314t-win_amd64.whl", hash = "sha256:5ea0c60dd9c1e3d05610606579e4bf80f562854c46ed55f9ee8545e18987a480", size = 217979, upload-time = "2026-06-22T18:01:46.629Z" },
 ]
+
+[[package]]
+name = "cluster"
+version = "0.1.0"
+source = { editable = "tools/cluster" }
 
 [[package]]
 name = "colorama"
@@ -1372,6 +1379,7 @@ dependencies = [
     { name = "verity" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
+    { name = "verity-pouw" },
     { name = "verity-vllm" },
 ]
 
@@ -1381,6 +1389,7 @@ requires-dist = [
     { name = "verity", editable = "packages/verity" },
     { name = "verity-flock", editable = "backends/flock" },
     { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity-pouw", editable = "protocols/pouw" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
@@ -1518,6 +1527,17 @@ requires-dist = [
 provides-extras = ["torch"]
 
 [[package]]
+name = "verity-network-warden"
+version = "0.1.0"
+source = { editable = "protocols/network_warden" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
+
+[[package]]
 name = "verity-numerical"
 version = "0.1.0"
 source = { editable = "backends/numerical" }
@@ -1537,17 +1557,6 @@ requires-dist = [
     { name = "verity-vllm", editable = "integrations/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
-
-[[package]]
-name = "verity-one-stage"
-version = "0.1.0"
-source = { editable = "protocols/one_stage" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "packages/verity" }]
 
 [[package]]
 name = "verity-pous"
@@ -1576,16 +1585,20 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 source = { virtual = "benchmarks/pouw" }
 dependencies = [
+    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity-pouw" },
+    { name = "verity-vllm" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity-pouw", editable = "protocols/pouw" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
@@ -1630,10 +1643,28 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-tc-probe-fp4"
+version = "0.0.0"
+source = { virtual = "tools/tc_probe_fp4" }
+dependencies = [
+    { name = "numpy" },
+    { name = "research" },
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "research", editable = "tools/research" },
+    { name = "verity", editable = "packages/verity" },
+]
+
+[[package]]
 name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
+    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
@@ -1649,6 +1680,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
+    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
@@ -1664,12 +1696,13 @@ name = "verity-workspace"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "cluster" },
     { name = "research" },
     { name = "verity" },
     { name = "verity-circuit-check" },
     { name = "verity-flock" },
+    { name = "verity-network-warden" },
     { name = "verity-numerical" },
-    { name = "verity-one-stage" },
     { name = "verity-pous" },
     { name = "verity-pouw" },
     { name = "verity-sampled-proofs" },
@@ -1692,13 +1725,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cluster", editable = "tools/cluster" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch-cpu'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "verity-workspace", extra = "torch-cpu" } },
     { name = "verity", editable = "packages/verity" },
     { name = "verity-circuit-check", editable = "tools/circuit_check" },
     { name = "verity-flock", editable = "backends/flock" },
+    { name = "verity-network-warden", editable = "protocols/network_warden" },
     { name = "verity-numerical", editable = "backends/numerical" },
-    { name = "verity-one-stage", editable = "protocols/one_stage" },
     { name = "verity-pous", editable = "protocols/pous" },
     { name = "verity-pouw", editable = "protocols/pouw" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },

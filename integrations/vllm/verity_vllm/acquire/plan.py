@@ -159,17 +159,29 @@ class AcquisitionPlan:
     def values_at(self, site: Site) -> list[str]:
         return [v.value_id for v in self.values if v.chosen is not None and v.chosen.key() == site.key()]
 
+    def _values_by_site(self) -> dict[tuple[str, str, str], list[str]]:
+        """`values_at` for every chosen site in one pass (a call-boundary manifest has one site per Value: tens of thousands)."""
+        out: dict[tuple[str, str, str], list[str]] = {}
+        for v in self.values:
+            if v.chosen is not None:
+                out.setdefault(v.chosen.key(), []).append(v.value_id)
+        return out
+
     def body(self) -> dict[str, Any]:
-        by_kind = self.sites_by_kind()
+        sites, unsupported, at = self.chosen_sites(), self.unsupported, self._values_by_site()
+        hooks = [s for s in sites if s.kind in HOOK_KINDS]
+        by_kind: dict[str, int] = {}
+        for s in sites:
+            by_kind[s.kind] = by_kind.get(s.kind, 0) + 1
         return {"schema": SCHEMA, "program_digest": self.program_digest, "manifest_digest": self.manifest_digest, "runtime_source": self.runtime_source,
-                "correspondence": dict(self.correspondence), "policy": POLICY, "site_kinds": list(SITE_KINDS), "hook_kinds": list(HOOK_KINDS), "complete": self.complete,
-                "counts": {"values": len(self.values), "identities": sum(v.identities for v in self.values), "chosen": len(self.values) - len(self.unsupported),
-                           "unsupported": len(self.unsupported), "sites": len(self.chosen_sites()), "hooks": len(self.hooks()), "residuals": len(self.residuals),
-                           "sites_by_kind": {k: len(v) for k, v in sorted(by_kind.items())}},
-                "hooks": [{"module": s.module, "kind": s.kind, "slot": s.slot, "lifetime": s.lifetime, "values": self.values_at(s)} for s in self.hooks()],
-                "sites": [{"module": s.module, "kind": s.kind, "slot": s.slot, "lifetime": s.lifetime, "values": self.values_at(s)} for s in self.chosen_sites()],
+                "correspondence": dict(self.correspondence), "policy": POLICY, "site_kinds": list(SITE_KINDS), "hook_kinds": list(HOOK_KINDS), "complete": not unsupported,
+                "counts": {"values": len(self.values), "identities": sum(v.identities for v in self.values), "chosen": len(self.values) - len(unsupported),
+                           "unsupported": len(unsupported), "sites": len(sites), "hooks": len(hooks), "residuals": len(self.residuals),
+                           "sites_by_kind": dict(sorted(by_kind.items()))},
+                "hooks": [{"module": s.module, "kind": s.kind, "slot": s.slot, "lifetime": s.lifetime, "values": at[s.key()]} for s in hooks],
+                "sites": [{"module": s.module, "kind": s.kind, "slot": s.slot, "lifetime": s.lifetime, "values": at[s.key()]} for s in sites],
                 "values": [v.to_json() for v in self.values],
-                "unsupported": [{"value": v.value_id, "family": v.family, "identities": v.identities, "why": v.why, "rejected": v.rejected} for v in self.unsupported],
+                "unsupported": [{"value": v.value_id, "family": v.family, "identities": v.identities, "why": v.why, "rejected": v.rejected} for v in unsupported],
                 "residuals": [r.to_json() for r in self.residuals], "notes": list(self.notes)}
 
     def to_json(self) -> dict[str, Any]:

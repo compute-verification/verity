@@ -1,10 +1,15 @@
 """`p3/v1`, research: two layers over the band graph `B(n, k)` with a transpose and a tweakable `P` (Lean `p3Scheme`),
 encoded and decoded by the reference codec `verity_pous.scheme`.
 
-It has no certificate for the implemented `H`.  Lean proves `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final`
-(POUS `lean/submissions/p3-meets/P3MeetsFinal.lean`: `k = 117`, `D = 10`, one 64 KB segment and 971 of them) with `H`
-a random oracle and an ideal tweakable `P`.  The code's `H` is the overwrite chain over `Π₂`, and carrying those
-theorems to it is not done.
+It has no certificate.  Lean proves P3 with the overwrite-chain `H`, in the ideal two-permutation model, with no
+hypothesis: `Pous.Pinned.P3ConcreteMeets64` (`p3SchemeC 2384 B(220, 12)`, one segment, `D = 10`, `Q = 2^20`,
+`k = 106`), `P3ConcreteMeets14GB` (the same at 971 segments) and `P3ConcreteMeets64D12` (`D = 12` on `B(220, 16)`).
+`OPERATING_POINT` has their parameters (`n = 220`, `wc = 2384`, `B(220, 12)`, a 24-byte salt, `tag_s = salt ‖ u64 s`),
+but not their `H`: Lean's chain starts from `iv(domP3 tag L v)`, zeros and then `tag_s ‖ u256(2v + L)` in the 512-bit
+capacity part, and the code's from the instantiation's 48-byte header `"pous-p3-v1-H" ‖ tag_s ‖ u8(L) ‖ u16(v) ‖
+u8(npar)` in the low bytes, with the capacity part zero (`primitives.OverwriteChain.initial`).  The pins are about
+Lean's `H`, so P3 gets a certificate once the code starts from Lean's `h_0` (a new byte format) or Lean carries the
+pins to the header.
 """
 
 from __future__ import annotations

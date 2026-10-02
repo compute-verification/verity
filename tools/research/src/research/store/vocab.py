@@ -9,11 +9,13 @@ vocabulary has not learnt yet: bring the word here next.  Readers stay lenient (
 store keeps whatever older writers wrote).  `research data vocab` prints the table.  Consumers import the constants
 (`vocab.PROOF_CLASS`, never the string).
 
-Three groups, by asserter:
+Four groups, by asserter:
 
     result        the producing lane, about its own result / ledger row (`ledger_to_store`, or `research data label` by hand)
     verification  an independent verifier, never the producer (a table counts it only when `by` is not a producer)
     evidence      a probe or input-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
+    approach      the owning lane or its coordinator, about an `approach/v1` record (`research notes claim | approach`); `approach`
+                  itself goes on a run or artifact: the approach it belongs to
 
 Value forms: `enum` (one of `values`), `bool` (`true` | `false`), `int`, `number`, `text`, `list` (of strings).  Enum and bool
 values are compared as the catalog stores them (`index.scalar_text`: strings raw, everything else JSON), so `true` and `"true"`
@@ -27,8 +29,8 @@ from typing import Any
 
 from .index import scalar_text
 
-GROUP_RESULT, GROUP_VERIFICATION, GROUP_EVIDENCE = "result", "verification", "evidence"
-GROUPS = (GROUP_RESULT, GROUP_VERIFICATION, GROUP_EVIDENCE)
+GROUP_RESULT, GROUP_VERIFICATION, GROUP_EVIDENCE, GROUP_APPROACH = "result", "verification", "evidence", "approach"
+GROUPS = (GROUP_RESULT, GROUP_VERIFICATION, GROUP_EVIDENCE, GROUP_APPROACH)
 CURRENT, DEPRECATED, IGNORED = "current", "deprecated", "ignored"
 ENUM, BOOL, INT, NUMBER, TEXT, LIST = "enum", "bool", "int", "number", "text", "list"
 TRUE_FALSE = ("true", "false")
@@ -58,6 +60,7 @@ DOMAIN = "domain"
 DOMAINS = ("total", "finite-only")
 BREAKTHROUGH = "breakthrough"
 LANE = "lane"
+QUESTION = "question"
 ROW = "row"
 SWEEP = "sweep"
 ARM = "arm"
@@ -70,6 +73,9 @@ HASH = "hash"
 SHARING = "sharing"
 FOLD = "fold"
 PIPELINE = "pipeline"
+KERNEL_OUTCOME = "kernel_outcome"
+KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
+KERNEL_REASON = "kernel_reason"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -102,6 +108,18 @@ COMPONENT = "component"
 JOBS = "jobs"
 DTYPE = "dtype"
 
+# ---- approach labels: the registry (`research.approaches`), by the owning lane or its coordinator ------------------------------------
+
+APPROACH = "approach"
+TITLE = "title"
+HYPOTHESIS = "hypothesis"
+APPROACH_TYPE = "approach_type"
+ATTACKS = "attacks"
+OWNER = "owner"
+APPROACH_STATUS = "approach_status"
+REASON = "reason"
+CITES = "cites"
+
 # ---- closed value sets -------------------------------------------------------------------------------------------------------------------
 
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
@@ -123,6 +141,8 @@ BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `backends/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
+APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
+APPROACH_TYPES = ("scheme", "route", "attack")
 
 # ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
 
@@ -153,6 +173,8 @@ ANCHOR = "anchor"
 #: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
+#: The owner's word that a pull request is ready at one head (`research queue ready`); the merge queue admits nothing without it.
+READY = "ready"
 
 
 def canonical_key(name: str) -> str:
@@ -235,12 +257,14 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
                                    "hardware) or finite-only (non-finite operands asserted away; Daniel 2026-09-26: an explicit, named choice)", DOMAINS),
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
     _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
+    _k(QUESTION, GROUP_RESULT, TEXT, "the research question the job answers, as its lane's research owner named it (Daniel, 30 Sep: every job names one)"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
     _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
     _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spelling `milestone`"),
     _k(STAGE, GROUP_RESULT, TEXT, "the pipeline stage the result belongs to (build, match, commit)"),
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
-    _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store)"),
+    _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
+       "approach record, the <campaign>/<slug> that replaces it"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
@@ -249,6 +273,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SHARING, GROUP_RESULT, TEXT, "how operand rows are shared across VUs in-circuit: none, tile64x64"),
     _k(FOLD, GROUP_RESULT, INT, "columns folded per VU (the relation's -xN)"),
     _k(PIPELINE, GROUP_RESULT, INT, "prover pipeline depth (sub-batches in flight; 1 = sequential)"),
+    _k(KERNEL_OUTCOME, GROUP_RESULT, ENUM, "on a kernel-attempt/v1 record, by its lane: what became of the attempt (screened: recorded, "
+       "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
+       "superseded); the latest label wins", KERNEL_OUTCOMES),
+    _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
     # verification
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
        "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
@@ -265,6 +293,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
        GRANT_ROLES),
+    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it again"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -284,6 +313,17 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
     _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (tools/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
+    # approach
+    _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),
+    _k(TITLE, GROUP_APPROACH, TEXT, "an approach's title, one line"),
+    _k(HYPOTHESIS, GROUP_APPROACH, TEXT, "what would be true if the approach works, one line"),
+    _k(APPROACH_TYPE, GROUP_APPROACH, ENUM, "a construction, a way to prove, build or measure something, or an attempt to break a target", APPROACH_TYPES),
+    _k(ATTACKS, GROUP_APPROACH, TEXT, "an attack's target: the <campaign>/<slug> it tries to break"),
+    _k(OWNER, GROUP_APPROACH, TEXT, "the lane that owns the approach"),
+    _k(APPROACH_STATUS, GROUP_APPROACH, ENUM, "the approach's own line of work: worked on now, open to anyone, cannot work, replaced, done and adopted",
+       APPROACH_STATUSES),
+    _k(REASON, GROUP_APPROACH, TEXT, "why the approach's status changed, one line (required unless live)"),
+    _k(CITES, GROUP_APPROACH, TEXT, "one evidence token the approach cites: a run id, art:, note:, <repo>#<n>, <repo>@<sha>, store:<project>/<path>, https://..."),
 )}
 
 KEYS = tuple(VOCAB)
@@ -348,7 +388,8 @@ def render() -> str:
     """The vocabulary as `research data vocab` prints it: one block per group, one line per key: name, form, doc, enum values, status."""
     heads = {GROUP_RESULT: "result labels -- the producing lane, about its own result",
              GROUP_VERIFICATION: "verification labels -- an independent verifier, never the producer",
-             GROUP_EVIDENCE: "evidence labels -- probe captures and instance sets"}
+             GROUP_EVIDENCE: "evidence labels -- probe captures and instance sets",
+             GROUP_APPROACH: "approach labels -- the registry: the owning lane or its coordinator, about an approach/v1 record"}
     lines: list[str] = []
     for g, keys_ in by_group().items():
         lines.append(heads[g])

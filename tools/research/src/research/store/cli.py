@@ -23,6 +23,7 @@
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+                                                   first pulls TARGET's assertions the remote has and this store lacks (unreachable: a warning, the local ones);
                                                    --remote: each assertion marked both / LOCAL ONLY (not durable) / REMOTE ONLY; exit 1 if any local only
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
@@ -74,6 +75,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from ..secret_hint import lost
 from . import ids, vocab
 from .index import IGNORE_VERSION_ENV, CatalogVersionError, compact
 from .local import REFRESH_PAYLOAD_MAX, LocalStore, StoreError, store_root
@@ -171,7 +173,7 @@ def cmd_put(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
     art = st.put_artifact(ns.kind, _meta(ns.meta), _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
-    rep, why = None, None
+    rep, why, gone = None, None, ""
     if ns.preserve:
         rep = st.push(art, preserve=True)
     elif st.write_through:                                          # write-through (README §7.2): the local write stands whatever the upload does
@@ -180,7 +182,8 @@ def cmd_put(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001
             why = str(e)
     else:
-        why = "write-through off"
+        gone = lost("R2_ENDPOINT", "R2_BUCKET")
+        why = gone or "write-through off"
     if ns.json:
         _dump({"id": art, "preserve": rep, **({"pending": why} if why or (rep and not rep["preserved"]) else {})})
     else:
@@ -191,7 +194,7 @@ def cmd_put(argv: list[str]) -> int:
             why = why or "; ".join(rep["errors"])
             print(f"research data put: {'local only' if why == 'write-through off' else 'NOT preserved'} ({why}); pending: "
                   "`research data push --pending` uploads it", file=sys.stderr)
-    return 1 if ns.preserve and not rep["preserved"] else 0
+    return 1 if (ns.preserve and not rep["preserved"]) or gone else 0
 
 
 def cmd_show(argv: list[str]) -> int:
@@ -415,9 +418,10 @@ def _fmt_label_value(v) -> str:
 
 
 def cmd_labels(argv: list[str]) -> int:
-    """`--remote` is the durability view (`labels_sync.compare`): every assertion about TARGET on either side, marked `both`,
-    `LOCAL ONLY` (not durable: `research data push` repairs) or `REMOTE ONLY` (asserted elsewhere; `labels-sync` / `reindex --remote`
-    brings it here).  Exit 1 when any local assertion is not on the remote."""
+    """TARGET's assertions, after pulling the ones the remote has and this store lacks (`labels_sync.read_through`; unreachable:
+    a warning, and the local ones).  `--remote` is the durability view (`labels_sync.compare`): every assertion about TARGET on
+    either side, marked `both`, `LOCAL ONLY` (not durable: `research data push` repairs) or `REMOTE ONLY` (asserted elsewhere;
+    `labels-sync` / `reindex --remote` brings it here).  Exit 1 when any local assertion is not on the remote."""
     ap = _ap("labels")
     ap.add_argument("target")
     ap.add_argument("--history", action="store_true", help="every assertion in ts order (default: the latest per key and asserter)")
@@ -446,7 +450,11 @@ def cmd_labels(argv: list[str]) -> int:
             print(f"{ns.target}: {n['both']} on both, {n['local']} local only, {n['remote']} remote only ({st.remote.describe()})"
                   + ("  -- NOT durable: `research data push` repairs" if n["local"] else ""), file=sys.stderr)
         return 1 if n["local"] else 0
-    labs = LocalStore(ns.store).labels(ns.target, key=ns.key, by_glob=ns.by)
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    st = LocalStore(ns.store)
+    LS.read_through(st, [ns.target], lambda s: print(f"research data labels: {s}", file=sys.stderr))
+    labs = st.labels(ns.target, key=ns.key, by_glob=ns.by)
     if not ns.history:
         latest = {}
         for lab in labs:
@@ -488,25 +496,28 @@ def cmd_label(argv: list[str]) -> int:
         print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
     st = LocalStore(ns.store)
     print(st.add_label(ns.target, key, value, ns.by, ref=ns.ref))
-    print(f"research data label: {_label_write_through(st, ns.target)}", file=sys.stderr)
-    return 0
+    said, lost = _label_write_through(st, ns.target)
+    print(f"research data label: {said}", file=sys.stderr)
+    return 1 if lost else 0
 
 
-def _label_write_through(st: LocalStore, target: str) -> str:
+def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
     """Upload the target's assertions the remote lacks, in the command that wrote one (README §7.2); the local write stands either way,
-    and a write that stays local says so."""
+    and a write that stays local says so. Also whether write-through was on and the upload failed (the caller exits 1)."""
     from . import labels_sync as LS  # noqa: PLC0415
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
-        return f"local only (write-through off); {pending}"
+        if hint := lost("R2_ENDPOINT", "R2_BUCKET"):
+            return f"NOT preserved ({hint}); {pending}", True
+        return f"local only (write-through off); {pending}", False
     if st.remote is None:
-        return f"NOT preserved ({getattr(st, 'remote_error', None) or 'no remote configured'}); {pending}"
+        return f"NOT preserved ({getattr(st, 'remote_error', None) or 'no remote configured'}); {pending}", True
     try:
         failed = LS.push_targets(st, [target])["failed"]
     except Exception as e:  # noqa: BLE001
         failed = [f"{type(e).__name__}: {e}"]
-    return f"NOT preserved ({failed[0]}); {pending}" if failed else f"on {st.remote.describe()}"
+    return (f"NOT preserved ({failed[0]}); {pending}", True) if failed else (f"on {st.remote.describe()}", False)
 
 
 def cmd_vocab_check(argv: list[str]) -> int:

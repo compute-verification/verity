@@ -46,21 +46,29 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
 
 
-def declared_target(wl: str, protocols: tuple[str, ...] | None = None) -> str:
-    """The workload's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none;
-    ``protocols`` (the row's set, `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
-    t = json.load(open(wl)).get("target")
+def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str | None = None) -> str:
+    """The row's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none: the workload's, over
+    the device-class profile of ``row``'s id (`target_family.declared_profile`); ``protocols`` (the row's set,
+    `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
+    from verity_vllm.target_family import declared_profile
+    t = declared_profile(row, json.load(open(wl))) or None
     if protocols:
         t = {**(t or {}), "protocols": list(protocols)}
     return json.dumps(t, sort_keys=True) if t else ""
 
 
+def request_shapes(wl: str) -> set[tuple[int, int]]:
+    """Every distinct (prompt length, cap - 1) of the manifest's requests: the shapes the workload Program composes."""
+    s = json.load(open(wl))["sweep"]
+    return {(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])}
+
+
 def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, int]]:
     """The batch's other request shapes: every distinct (prompt length, cap - 1) of the manifest but the (LP, T) the
-    request wrapper was derived for."""
-    s = json.load(open(wl))["sweep"]
+    request wrapper was derived for, largest first (a derive's cost grows with LP + T, so parallel derives start with the
+    longest)."""
     main = (int(lp), int(t))
-    pairs = sorted({(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])})
+    pairs = sorted(request_shapes(wl), key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
     return [(p, c) for p, c in pairs if (p, c) != main]
 
 
@@ -72,9 +80,37 @@ def derived_ok(d: str) -> bool:
         return False
 
 
-def build_jobs_auto() -> int:
-    """``--build-jobs auto``: clamp(headroom / 20 GiB, 1, 8), headroom = cgroup memory.max - memory.current, else
-    MemAvailable (a derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong Program)."""
+#: a request derive's peak host memory: a base, a term per Call and attention's term per layer x tokens^2 (every attention Call
+#: lists each earlier key and value row), fit over the 89 request derives of the 2026-09-29 epoch's stored Builds (#11, #57, #67,
+#: #68, #74, #75: within 5% on the large ones), with Calls bounded by the most Calls per (token, layer) measured (54: Qwen3-4B-FP8,
+#: Qwen3-30B-A3B) and a 1.2 margin
+DERIVE_BASE_BYTES = 2000 << 20
+DERIVE_BYTES_PER_CALL = 6950
+DERIVE_BYTES_PER_LAYER_TOKEN2 = 362
+DERIVE_CALLS_PER_TOKEN_LAYER = 60
+DERIVE_MARGIN = 1.2
+
+
+def derive_bytes(lp: int, t: int, layers: int) -> int:
+    """The planned peak host memory of the request derive of shape (LP, T) for a model of `layers` decoder layers."""
+    tokens = int(lp) + int(t) + 1
+    calls = DERIVE_CALLS_PER_TOKEN_LAYER * layers * tokens
+    return int(DERIVE_MARGIN * (DERIVE_BASE_BYTES + DERIVE_BYTES_PER_CALL * calls + DERIVE_BYTES_PER_LAYER_TOKEN2 * layers * tokens * tokens))
+
+
+def model_layers(ck: str) -> int | None:
+    """The decoder layers of the checkpoint at `ck` (`num_hidden_layers` of its config.json, or of its `text_config`), None when
+    it does not say."""
+    cfg = load_json(os.path.join(ck, "config.json")) if ck else None
+    for c in (cfg, (cfg or {}).get("text_config")):
+        n = c.get("num_hidden_layers") if isinstance(c, dict) else None
+        if isinstance(n, int) and n > 0:
+            return n
+    return None
+
+
+def _memory_headroom() -> int:
+    """cgroup memory.max - memory.current, else MemAvailable."""
     def rd(p: str) -> int | None:
         try:
             v = open(p).read().strip(); return int(v) if v.isdigit() else None
@@ -84,10 +120,27 @@ def build_jobs_auto() -> int:
     cur = rd("/sys/fs/cgroup/memory.current") or rd("/sys/fs/cgroup/memory/memory.usage_in_bytes")
     if mx is None or mx >= (1 << 60) or cur is None:
         kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open("/proc/meminfo") if ln.split()[1].isdigit()}
-        head = kv.get("MemAvailable", 0)
-    else:
-        head = mx - cur
-    return max(1, min(8, head // (20 << 30)))
+        return kv.get("MemAvailable", 0)
+    return mx - cur
+
+
+def _cpus() -> int:
+    return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+
+
+def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, headroom: int | None = None,
+                    cpus: int | None = None, budget_gb: float | None = None) -> int:
+    """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)
+    holds at the largest shape's `derive_bytes`, at most one per CPU this process may use and one per derive (the step's and each
+    shape's).  Without the shapes or the model's layers: that memory / 20 GiB, 1..8.  A derive that dies of OOM is rc 137, a Build FAIL
+    by rc, never a wrong Program."""
+    head = _memory_headroom() if headroom is None else headroom
+    if budget_gb is not None:
+        head = min(head, int(budget_gb * (1 << 30)))
+    if not shapes or not layers:
+        return max(1, min(8, head // (20 << 30)))
+    per = max(derive_bytes(lp, t, layers) for lp, t in shapes)
+    return max(1, min(_cpus() if cpus is None else cpus, len(shapes) + 1, int(0.8 * head) // per))
 
 
 def build_summary(d: str) -> str:
@@ -503,13 +556,20 @@ def _field(path: str, fn: Any) -> str:
 
 
 def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
-    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir."""
+    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir.
+
+    ``MNBT`` is at most ``B * MML``: no step can schedule more tokens than ``max_num_seqs`` requests of ``max_model_len``, so the cap
+    changes no schedule, but vLLM's warm-up forward (`kernel_warmup.flashinfer_autotune`'s dummy run) packs the full budget into
+    ``max_num_seqs`` requests, longer than ``max_model_len``, and FlashAttention's varlen kernel then faults (an illegal memory access
+    on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
+    vLLM does the same, and passes at 288)."""
     w = json.load(open(wl)); s = w["sweep"]
     req = w.get("engine_args_required") or {}
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
-    return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]),
+    batch = int(s["batch"])
+    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
             "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
-            "MML": mml, "MNBT": req.get("max_num_batched_tokens") or int(mml),
+            "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
             "ck": checkpoint_dir(w["model"], w["tokenizer_revision"], hf_home, checkpoints) or ""}
 
 

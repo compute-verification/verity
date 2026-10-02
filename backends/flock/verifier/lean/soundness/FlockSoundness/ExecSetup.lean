@@ -8,13 +8,13 @@ namespace FlockSoundness
 
 /-- **What `Stmt.setupH` accepted** (an untyped `hm96-sha512/row/v1` statement, `tags.typed = false`, which `setupH`
 reads with `HmRow.parse` rather than `parseTyped`): the circuit `HmRow.parse` accepted, the pin
-`HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 26`. -/
+`HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/
 theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     HmRow.parse tags cf tables = .ok st.c ∧ HmRow.pin st.c = .ok st.pin ∧
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
-      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 26 := by
+      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 27 := by
   unfold Stmt.setupH at h
   simp (config := { zeta := false }) only [ht, Bool.false_eq_true, ↓reduceIte] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)
@@ -146,36 +146,60 @@ theorem portCols_single (g : Group) : (portCols #[g]).toList.map (·.2) = g.bits
     (fun w s => pure (ForInStep.yield (s.1.push (s.2, w), s.2 + w))) : Id _).1.toList.map (·.2)) = _
   rw [inner_snd]
   simp
-theorem rowSlots_spec (ports : Array Port) (hp : ∀ p ∈ ports.toList, 0 < p.chunks) :
-    (HmRow.rowSlots ports).2.size = ports.size ∧ ∀ w ∈ (HmRow.rowSlots ports).2.toList,
-      w[0]!.1 < (HmRow.rowSlots ports).1 ∧ w[0]!.2 < 3 := by
+theorem rowSlots_spec (ports : Array Port) : (HmRow.rowSlots ports).2.size = ports.size := by
   unfold HmRow.rowSlots
   simp only [HmRow.PER_SLOT]
   rw [← Array.forIn_toList]
   have := forIn_id_inv_tail (fun (L : List Port) (s : ℕ × Array (Array (ℕ × ℕ))) =>
-      (∀ p ∈ L, 0 < p.chunks) ∧ s.2.size + L.length = ports.size ∧
-        ∀ w ∈ s.2.toList, ∃ k, w[0]! = (k / 3, k % 3) ∧ k < s.1)
+      s.2.size + L.length = ports.size)
     (f := fun p s => pure (ForInStep.yield (s.1 + p.chunks,
       s.2.push (Array.map (fun k => ((s.1 + k) / 3, (s.1 + k) % 3)) (Array.range p.chunks)))))
-    (fun p L s hs => ⟨_, rfl, fun q hq => hs.1 q (List.mem_cons_of_mem _ hq), ?_, ?_⟩)
-    ports.toList (0, #[]) ⟨hp, by simp, by simp⟩
-  · obtain ⟨-, hsz, hw⟩ := this
-    refine ⟨hsz, fun w hw' => ?_⟩
-    obtain ⟨k, hk, hlt⟩ := hw w hw'
-    show w[0]!.1 < (_ + 3 - 1) / 3 ∧ w[0]!.2 < 3
-    rw [hk]
-    simp only
+    (fun p L s hs => ⟨_, rfl, ?_⟩) ports.toList (0, #[]) (by simp)
+  · exact this
+  · simp only [List.length_cons, Array.size_push] at hs ⊢; omega
+
+theorem rowSlots_all (ports : Array Port) :
+    ∀ w ∈ (HmRow.rowSlots ports).2.toList, ∀ e ∈ w.toList, e.1 < (HmRow.rowSlots ports).1 ∧ e.2 < 3 := by
+  unfold HmRow.rowSlots
+  simp only [HmRow.PER_SLOT]
+  rw [← Array.forIn_toList]
+  have := forIn_id_inv_tail (fun (_ : List Port) (s : ℕ × Array (Array (ℕ × ℕ))) =>
+      ∀ w ∈ s.2.toList, ∀ e ∈ w.toList, ∃ k, e = (k / 3, k % 3) ∧ k < s.1)
+    (f := fun p s => pure (ForInStep.yield (s.1 + p.chunks,
+      s.2.push (Array.map (fun k => ((s.1 + k) / 3, (s.1 + k) % 3)) (Array.range p.chunks)))))
+    (fun p L s hs => ⟨_, rfl, ?_⟩) ports.toList (0, #[]) (by simp)
+  · intro w hw e he
+    obtain ⟨k, rfl, hlt⟩ := this w hw e he
+    show k / 3 < (_ + 3 - 1) / 3 ∧ k % 3 < 3
     omega
-  · have := hs.2.1; simp only [List.length_cons, Array.size_push] at this ⊢; omega
-  · intro w hw
+  · intro w hw e he
     simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw
     rcases hw with hw | rfl
-    · obtain ⟨k, hk, hlt⟩ := hs.2.2 w hw
+    · obtain ⟨k, hk, hlt⟩ := hs w hw e he
       exact ⟨k, hk, by simp only; omega⟩
-    · have hc := hs.1 p List.mem_cons_self
-      refine ⟨s.1, ?_, by simp only; omega⟩
-      rw [getElem!_pos _ 0 (by simp; omega)]
-      simp
+    · simp only [Array.toList_map, Array.toList_range, List.mem_map, List.mem_range] at he
+      obtain ⟨k, hk, rfl⟩ := he
+      exact ⟨s.1 + k, rfl, by simp only; omega⟩
+
+/-- The width of a `sha512x3` slot's input `2 s + i` of a row's chain: its `cv`'s 512 bits, or its message's 1024. -/
+theorem sha_width (s i : ℕ) (hi : i < 2) :
+    (if (2 * s + i) % 2 == 0 then 512 else 1024) = 512 * (i + 1) := by
+  rcases (by omega : i = 0 ∨ i = 1) with rfl | rfl
+  · simp
+  · have : (2 * s + 1) % 2 = 1 := by omega
+    simp [this]
+
+/-- The width of an hm96 slot's input `i` of a row: its `cv`'s 512 bits, or its `pad`'s 1024. -/
+theorem hm_width {gs : Array Group} (h : (portCols gs).map (·.2) = #[512, 1024, 8 * HmRow.SALT_BYTES]) {i : ℕ}
+    (hi : i < 2) : i < (portCols gs).size ∧ ((portCols gs)[i]!).2 = 512 * (i + 1) := by
+  have hl : (portCols gs).toList.map (·.2) = [512, 1024, 8 * HmRow.SALT_BYTES] := by rw [← Array.toList_map, h]
+  have hsz : (portCols gs).size = 3 := by have := congrArg List.length hl; simpa using this
+  refine ⟨by omega, ?_⟩
+  rw [getElem!_pos _ i (by omega)]
+  have := congrArg (fun l : List ℕ => l[i]?) hl
+  simp only [List.getElem?_map, Array.getElem?_toList] at this
+  rw [Array.getElem?_eq_getElem (by omega)] at this
+  rcases (by omega : i = 0 ∨ i = 1) with rfl | rfl <;> simpa using this
 
 
 theorem inner_append : ∀ (L : List ℕ) (out : Array (ℕ × ℕ)) (a : ℕ),
@@ -236,10 +260,10 @@ def NetOK (net : Net) : Prop :=
   net.constPos < 2 ^ net.unitLog ∧ net.inWords * WORD ≤ 2 ^ net.unitLog ∧
     ∀ q ∈ (portCols net.inGroups).toList, q.1 + q.2 ≤ net.inWords * WORD
 
-theorem netOK_parsed {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
+theorem netOK_built {net : Net} (h : Built net) :
     NetOK net ∧ 7 ≤ net.unitLog ∧ (net.unitLog ≤ 32 → ConstRow net) :=
-  let ⟨h1, h2, h3⟩ := parse_fit h
-  ⟨⟨h1, h2, parse_ports h⟩, h3, parse_constRow h⟩
+  let ⟨h1, h2, h3⟩ := built_fit h
+  ⟨⟨h1, h2, built_ports h⟩, h3, built_constRow h⟩
 
 theorem netOK_lookup {nm : String} {tb : ByteArray} {n lo bits : ℕ} {net : Net}
     (h : Lookup.build nm tb n lo bits = .ok net) :
@@ -269,8 +293,8 @@ theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
   · have hmem : c.nets.getD i default ∈ c.nets.toList := by
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
       exact Array.mem_def.1 (Array.getElem_mem hi)
-    rcases P.nets _ hmem with ⟨_, hp⟩ | ⟨_, _, _, _, _, hb⟩
-    · exact ⟨(netOK_parsed hp).1, fun _ => (netOK_parsed hp).2⟩
+    rcases P.nets _ hmem with hp | ⟨_, _, _, _, _, hb⟩
+    · exact ⟨(netOK_built hp).1, fun _ => (netOK_built hp).2⟩
     · exact ⟨(netOK_lookup hb).1, fun _ => (netOK_lookup hb).2⟩
   · have hd : (c.nets.getD i default).2 = default := by
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]
@@ -281,10 +305,9 @@ theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
     rw [this] at hq
     cases hq
 
-/-- **The unit is a text net**: `HmRow.parse`'s nets are text nets and lookup slots, and `HmRow.check` refuses a lookup
-slot as the unit. -/
-theorem unit_parsed {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) :
-    ∃ lines, Net.parse lines = .ok c.unit := by
+/-- **The unit is a built net**: `HmRow.parse`'s nets are nets `Net.ofRows` built and lookup slots, and `HmRow.check`
+refuses a lookup slot as the unit. -/
+theorem unit_built {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) : Built c.unit := by
   have hmem : c.nets.getD c.unitNet default ∈ c.nets.toList := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem P.unitNet, Option.getD_some]
     exact Array.mem_def.1 (Array.getElem_mem P.unitNet)
@@ -322,7 +345,8 @@ theorem deltaIn_inBit {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : C
     intro n hn
     obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range n hn)
     exact ⟨hm, hk, C.count _ hm _ hk⟩
-  obtain ⟨hws, hw0⟩ := rowSlots_spec c.ports P.ports
+  have hws := rowSlots_spec c.ports
+  have hall := rowSlots_all c.ports
   have hbit : ∀ n < c.nets.size, ∀ g < c.g, ∀ i < c.perVu.getD n 0,
       ∀ q ∈ (portCols (c.nets.getD n default).2.inGroups).toList, ∀ t < q.2,
       InBit c (c.slotCol n g i + q.1 + t) := by
@@ -331,28 +355,18 @@ theorem deltaIn_inBit {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : C
     refine ⟨n, g * c.perVu.getD n 0 + i, q.1 + t, hm, hk, ?_, ?_, by unfold Circuit.slotCol; omega⟩
     · rw [hc]; exact Rows.mul_add_lt hg hi
     · have := hports n q hq; omega
-  rcases hx with ⟨g, hg, p, hp, t, ht, rfl⟩ | ⟨g, hg, p, hp, t, ht, rfl⟩ | ⟨k, hk, j, hj, t, ht, rfl⟩ |
-    ⟨g, hg, e, he, t, ht, rfl⟩ | ⟨g, hg, w, hw, t, ht, rfl⟩
-  · -- a row's first cv bit
-    obtain ⟨h1, h2⟩ := hw0 _ (getElem_mem_toList' hp)
+  rcases hx with ⟨g, hg, p, hp, k, hk, i, hi, t, ht, rfl⟩ | ⟨g, hg, p, hp, i, hi, t, ht, rfl⟩ |
+    ⟨k, hk, j, hj, t, ht, rfl⟩ | ⟨g, hg, e, he, t, ht, rfl⟩ | ⟨g, hg, w, hw, t, ht, rfl⟩
+  · -- a bit of a row's chain
+    obtain ⟨h1, h2⟩ := hall _ (getElem_mem_toList' hp) _ (getElem_mem_toList' hk)
     have hsz := C.sha_in.1
-    have hidx : 2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2 < 6 := by omega
+    have hidx : 2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i < 6 := by omega
     refine hbit _ P.shaNet g hg _ (by rw [C.perVu_sha]; exact h1) _ (getElem_mem_toList' (by rw [hsz]; exact hidx)) t ?_
-    rw [C.sha_in.2 _ hidx, ite_eq_left (by simp)]
+    rw [C.sha_in.2 _ hidx, sha_width _ _ hi]
     exact ht
-  · -- an hm96 slot's pad bit
-    have hl : (portCols (c.nets.getD c.hmNet default).2.inGroups).toList.map (·.2) =
-        [512, 1024, 8 * HmRow.SALT_BYTES] := by
-      rw [← Array.toList_map, C.hm_in]
-    have hsz : (portCols (c.nets.getD c.hmNet default).2.inGroups).size = 3 := by
-      have := congrArg List.length hl; simpa using this
-    have hw : (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.2 = 1024 := by
-      rw [getElem!_pos _ 1 (by rw [hsz]; omega)]
-      have := congrArg (fun l : List ℕ => l[1]?) hl
-      simp only [List.getElem?_map, Array.getElem?_toList] at this
-      rw [Array.getElem?_eq_getElem (by rw [hsz]; omega)] at this
-      simpa using this
-    refine hbit _ P.hmNet g hg p ?_ _ (getElem_mem_toList' (by rw [hsz]; omega)) t (by rw [hw]; exact ht)
+  · -- a bit of a row's hm96 slot
+    obtain ⟨hil, hw⟩ := hm_width C.hm_in hi
+    refine hbit _ P.hmNet g hg p ?_ _ (getElem_mem_toList' hil) t (by rw [hw]; exact ht)
     rw [C.perVu_hm, ← hws]
     exact lt_of_lt_of_le hp (le_nextPow2 _)
   · -- a unit's leaf bit
@@ -413,20 +427,17 @@ theorem slotLog_le {c : Circuit} (C : CheckFacts c) {r : Range} (hr : r ∈ c.ra
   have : 2 ^ r.slotLog ≤ 2 ^ c.kLog := by omega
   exact (Nat.pow_le_pow_iff_right (by norm_num)).1 this
 
-variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-  {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-
-/-- **The untyped statement `Stmt.setupH` accepted has the layout the placement reads** (`Layout`): from `HmRow.parse`'s nets,
-`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`. -/
-theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
-    Layout st := by
-  obtain ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
-  have P := parse_facts hp
+/-- **A statement with the circuit `HmRow.parse` accepted has the layout the placement reads** (`Layout`): from its nets,
+`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`, for any circuit `HmRow.parse` accepted without a typed template
+(an untyped statement's, or a typed flat class's). -/
+theorem layout_of {tags : Tags} {st : Stmt} (P : ParseFacts tags st.c) (hpin : HmRow.pin st.c = .ok st.pin)
+    (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
+    (hm : st.m = st.c.kLog + st.nbl) (hk : st.c.kLog ≤ 27) : Layout st := by
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
-  obtain ⟨lines, hU⟩ := unit_parsed P C
-  obtain ⟨hUlk, -, -, hUin, -⟩ := parse_spec hU
+  have hU := unit_built P C
+  obtain ⟨hUlk, -, -, hUin, -⟩ := built_spec hU
   obtain ⟨rp, hrp, ip, hkp, hcp, hpv⟩ := pin_spec hpin
   have hip : ip < st.c.nets.size := P.kinds rp hrp ip hkp
   have hsl := slotLog_le C hrp hcp
@@ -440,10 +451,10 @@ theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coin
     unit_mem := hum
     unit_kind := huk
     unit_count := huc
-    unit_parsed := ⟨lines, hU⟩
+    unit_built := hU
     unit_lookup := hUlk
     unit_in := hUin
-    unit_const := parse_constRow hU
+    unit_const := built_constRow hU
     pin := ⟨rp, hrp, ip, hkp, hcp, hpv, hcr (by omega)⟩
     delta_b := by rw [hdb, hda, delta_snd _ _ P.typed]
     delta := by
@@ -453,14 +464,24 @@ theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coin
     kLog6 := by omega
     m := hm }
 
+variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+  {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+
+/-- **The untyped statement `Stmt.setupH` accepted has the layout the placement reads** (`Layout`): from `HmRow.parse`'s nets,
+`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`. -/
+theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    Layout st :=
+  let ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
+  layout_of (parse_facts hp) hpin hda hdb hm hk
+
 /-- **The lowering's placement, from the executable's accept step.** When `Stmt.setupH` accepts a statement, every VU
 `g` has its `units_per_vu` unit slots' rows (the unit net's rows stacked, `Rows.stack`) placed at `ur.slot (g·upv + u)`,
 the shared constant at the pin, in the model statement of the level-0 matrices the verifier folds (`placedA`,
 `placedB`). -/
 theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
-    Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_parsed).stack st.c.upv)
-      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_parsed) st.c.upv
+    Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
+      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
   (setupH_layout ht h).placement regs hg
 
@@ -471,7 +492,7 @@ noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
-    (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_parsed).stack st.c.upv))
+    (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)
     (hal : (setupH_layout ht h).Aliased regs inst o hg) :
     UnitPlace P ((setupH_layout ht h).model regs) u :=

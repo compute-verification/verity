@@ -127,6 +127,7 @@ def test_conditions_every_key_present_scalar(tmp_path):
     ("NVIDIA A100-SXM4-80GB", 1, "a100"), ("NVIDIA A100 80GB PCIe", 1, "a100"),
     ("NVIDIA L40S", 4, "l40s"), ("NVIDIA L40", 1, "l40"),
     ("NVIDIA GeForce RTX 4090", 1, "rtx4090"), ("NVIDIA GeForce RTX 5090", 1, "rtx5090"),
+    ("NVIDIA RTX PRO 6000 Blackwell Server Edition", 4, "rtxpro6000"),
     ("NVIDIA B200", 8, "b200"), ("NVIDIA A10G", 1, "a10"), ("NVIDIA A10", 1, "a10"), ("Tesla T4", 1, "t4"),
     (None, 0, "cpu"), ("Some Future GPU 9000", 1, "unknown"), (None, None, None), (None, 1, None),
 ])

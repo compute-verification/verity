@@ -12,8 +12,8 @@ Second family (XFER's choice, disjoint from DERIVE's Qwen2/Llama-style developme
     carried as values (`torch.cat`, no host cache).
   * A non-decoder residual MLP with a shared block applied three times and one parameter used in two roles.
 
-Results are written as JSON lines to `$XFER_OUT` (default `/tmp/xfer/transfer-<importer>.jsonl`) for the report
-`docs/vllm-poc/derive-transfer-report.md`. Needs torch; runs on the pod (§37).
+Results are written as JSON lines to `$XFER_OUT` (default `/tmp/xfer/transfer-<importer>.jsonl`) for the transfer
+report. Needs torch; runs on the pod (§37).
 """
 
 from __future__ import annotations

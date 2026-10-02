@@ -60,7 +60,8 @@ proof-unit policy, model-name tables (`registry/quarantine/` is the by-name resi
 per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut
-into proof units of bounded committed width, on core's `verity.ir.cut`; `verity/partition/v1` names the partition), `module_body.py`
+into proof units of bounded committed width, on core's `verity.ir.cut`; `verity/partition/v1` names the partition; its unit rules are
+shared across processes and runs through `manifest build --unit-rule-cache DIR`, env `VERITY_UNIT_RULE_CACHE`), `module_body.py`
 (Q_module_body_v1, for A/B), `cross_call.py` (the opt-in cross-Call recompute check, `manifest build --cross-call-check`),
 `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
@@ -229,7 +230,8 @@ released: `protocol_options.weights_view`).  Adapters install innermost first (P
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
-bit-identical decode; an executor with its Definition, `traced_as`), so its verdict is of record as usual and carries the set
+bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
+`traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `beacon` (hex, at least 32 bytes),
 `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so

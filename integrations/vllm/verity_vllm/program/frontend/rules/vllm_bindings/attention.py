@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll, array_of, concat
+from verity.ir.refs import Coll, array_of
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
                                                                            active_target_profile, attn_kind_for, attn_lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
@@ -166,6 +166,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         for i in range(T):
             krow_list.append(krows[i])
             vrow_list.append(vrows[i])
+        klog, vlog = kv_logs(ctx, layer_name, krow_list, vrow_list)
         ctx.check_dim("T", T, node)
         ctx.check_dim("CONTEXT", P0 + T, node)
         outs = []
@@ -206,13 +207,21 @@ class UnifiedAttentionWithOutputRule(StateRule):
             refuse("numerics_unregistered", node, mp, f"layer {layer_name!r} request step {req_step}: invalid declared launch context -- {e}",
                    launch_context="invalid", request_step=req_step, own_rows=own_rows)
         if not accepted:
-            if role != "attention":
+            if role != "attention" and not (role == "attention_softcap" and TG.fa2_check_inf(tp)):
                 refuse("numerics_unregistered", node, mp, f"layer {layer_name!r}: kind {role!r} has no target-keyed variant on {tp.tensor_core_family} "
-                       f"(FA{tp.effective_flash_attn_version()}); only the plain causal GQA chain is registered off the accepted target")
+                       f"(FA{tp.effective_flash_attn_version()}); off the accepted target only the plain causal GQA chain is registered, "
+                       f"and the softcapped one under FA2's per-iteration Check_inf")
             geom = TG.attention_geometry(tp, D, launch_sq, NH, KVH)
         # FA3's per-iteration Check_inf chain (`fa3_construction = check-inf-per-iteration`): each row's tile decides which of its key blocks
         # the kernel guards -- the row's index among this request's query rows at the step (i on the prefill, 0 on a decode step)
         check_inf = geom is not None and TG.fa3_check_inf(tp)
+        # FA2's (`targets.fa2_check_inf`): the row's tile and the launch's causality decide it, from the same row index and own rows
+        check_inf2 = geom is not None and TG.fa2_check_inf(tp)
+        # under registered_values the chain's twin that reads the scale (a softcapped chain: its two words) as inputs, with no CAP
+        scale = attention_scale(ctx, D, node, cap=extra.get("CAP"))
+        dot_kind = ("attention_dot" if not scale else "attention_softcap_dot_value" if extra else "attention_dot_value" if check_inf2
+                    else "attention_dot_fa3_value" if check_inf else "attention_dot_plain_value")
+        statics = {} if scale else extra
         for i in range(T):
             P = P0 + i + 1
             if window is not None and P > window:
@@ -220,13 +229,15 @@ class UnifiedAttentionWithOutputRule(StateRule):
                        f"has {P} keys in its history: the window is active and no windowed attention kind is registered "
                        f"(positions < {window} are exact under the unwindowed kind)")
             if geom is None:
-                fn = ctx.kind(role, node, T=P, NH=NH, KVH=KVH, D=D, **extra)
+                fn = ctx.kind(f"{role}_value" if scale else role, node, T=P, NH=NH, KVH=KVH, D=D, **statics)
             else:
-                fn = ctx.kind("attention_dot", node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
-                              **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}))
-            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in krow_list[:P]]))
-            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in vrow_list[:P]]))
-            outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
+                fn = ctx.kind(dot_kind, node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
+                              **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}),
+                              **({"FA2_MASKED_FROM": TG.fa2_masked_from(tp, P, D, launch_sq, i if P0 == 0 else 0, own_rows)} if check_inf2 else {}),
+                              **statics)
+            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
+            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))
+            outs.append(ctx.call(fn, qrows[i], kcat, vcat, *scale, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
         ctx.rebind(out, array_of(outs).reshape(_tensor_type(qs, 16)), self, what="output")
         obs = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
         ctx.record(self, node, {"layer_name": layer_name, "positions": [P0, P0 + T - 1], "NH": NH, "KVH": KVH, "D": D, "history_rows_after": P0 + T,

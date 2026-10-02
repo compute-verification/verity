@@ -3,8 +3,9 @@ import FlockSoundness.ExecPlacement
 /-!
 # What the parsers accepted, and Δ's first loop
 
-- `parse_spec`: a net `Net.parse` accepted has its constant the last useful row, reading itself in `A` and in `B`, its
-  input rows before the constant, and port groups inside its input rows (`portCols_le`).
+- `built_spec`: a net `Net.ofRows` built (`Built`: `Net.parse`'s text nets, or a typed class's `Typed.netOfD`) has its
+  constant the last useful row, reading itself in `A` and in `B`, its input rows before the constant, and port groups
+  inside its input rows (`portCols_le`).
 - `delta_split`: `HmRow.delta`'s first loop writes exactly `constPairs` (every net slot's constant other than the pin,
   `(k, k)` and `(k, pin)`), and every later pair's row has one of the input-bit forms (`DeltaIn`).
 -/
@@ -67,61 +68,52 @@ theorem portCols_le (gs : Array Group) :
     · exact ⟨g, hg, by have := hr.2; simp only [List.sum_cons] at this; simp only; omega⟩
   · have := hr.2; simp only [List.sum_cons] at this; simp only; omega
 
-/-! ## What `Net.parse` accepted -/
+/-! ## What `Net.ofRows` built -/
 
-set_option maxHeartbeats 1000000 in
-/-- **What `Net.parse` accepted**: a text net (no lookup table), its constant the last useful row, its slot `2^unitLog`
-rows, its input rows before the constant and its input groups inside them, and its constant row `[constPos]` in the
-rows it stored as `A` and `B`. -/
-theorem parse_spec {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
+/-- `Net.ofRows`' checks on its size and input groups: the constant is the last useful row, and each input group's ports
+fit its words, inside the input rows. -/
+theorem ofRows_groups {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)} {n : Net}
+    (h : Net.ofRows name useful constPos ig og ra rb = .ok n) :
+    constPos + 1 = useful ∧ ∀ g ∈ ig.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ n.inWords := by
+  have hiw := (Net.ofRows_ok h).2.2.2.2.2.2.2.2.2.2.2.2.2
+  unfold Net.ofRows at h
+  simp only at h
+  replace h := ite_throw_ok (ite_throw_ok h)
+  obtain ⟨h4, h⟩ := ite_throw_ok' h
+  obtain ⟨h5, -⟩ := ite_throw_ok' h
+  simp only [Bool.or_eq_true, Array.any_eq_true, not_or, not_exists, decide_eq_true_eq] at h5
+  refine ⟨by simpa using h4, fun g hg => ?_⟩
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_def.2 hg)
+  have := h5.1 i hi
+  rw [hiw]
+  omega
+
+/-- **What `Net.ofRows` built** (`Built`: a text net, or a typed class's derived net): no lookup table, its constant the
+last useful row, its slot `2^unitLog` rows, its input rows before the constant and its input groups inside them, and its
+constant row `[constPos]` in the rows it stored as `A` and `B`. -/
+theorem built_spec {net : Net} (h : Built net) :
     net.lookup = none ∧ net.useful = net.constPos + 1 ∧ net.unitLog = max 7 (log2ceil net.useful) ∧
       net.inWords * WORD ≤ net.constPos ∧
       (∀ g ∈ net.inGroups.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ net.inWords) ∧
       ∃ ra rb : Array (Array ℕ), ra.getD net.constPos #[] = #[net.constPos] ∧
         rb.getD net.constPos #[] = #[net.constPos] ∧
         Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
-  unfold Net.parse at h
-  simp only at h
-  replace h := ite_throw_ok h
-  obtain ⟨useful, -, h⟩ := except_bind_ok h
-  obtain ⟨constPos, -, h⟩ := except_bind_ok h
-  obtain ⟨ig, -, h⟩ := except_bind_ok h
-  obtain ⟨og, -, h⟩ := except_bind_ok h
-  replace h := ite_throw_ok (ite_throw_ok h)
-  obtain ⟨h4, h⟩ := ite_throw_ok' h
-  obtain ⟨h5, h⟩ := ite_throw_ok' h
-  obtain ⟨h6, h⟩ := ite_throw_ok' h
-  obtain ⟨s, -, h⟩ := except_bind_ok h
-  simp only [Bool.or_eq_true, Array.any_eq_true, not_or, not_exists, decide_eq_true_eq] at h5
-  -- the rows' checks and the construction are `Net.ofRows`', after the trailing lines
-  have ho : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net := by
-    by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
-    · rw [ite_eq_left hL] at h
-      rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
-      · rw [hj] at h; exact absurd h throw_bind_ne
-      · rw [hj] at h; exact ite_throw_ok (ite_throw_ok h)
-    · rw [ite_eq_right hL] at h; exact ite_throw_ok (ite_throw_ok h)
-  obtain ⟨hul, ha, hb, huse, hc, hig, -, hle, hca, hcb, -, -, hlk, hiw⟩ := Net.ofRows_ok ho
-  refine ⟨hlk, ?_, by rw [hul, huse], by rw [hc]; exact hle, ?_, s.1, s.2, by rw [hc]; exact hca, by rw [hc]; exact hcb,
-    ha, hb⟩
-  · rw [huse, hc]; exact (by simpa using h4 : constPos + 1 = useful).symm
-  · intro g hg
-    rw [hig] at hg
-    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_def.2 hg)
-    have := h5.1 i hi
-    rw [hiw]
-    omega
+  obtain ⟨_, useful, constPos, ig, og, ra, rb, ho⟩ := h
+  obtain ⟨hul, ha, hb, huse, hc, hig, -, hle, hca, hcb, -, -, hlk, -⟩ := Net.ofRows_ok ho
+  obtain ⟨hcu, hgr⟩ := ofRows_groups ho
+  exact ⟨hlk, by rw [huse, hc]; exact hcu.symm, by rw [hul, huse], by rw [hc]; exact hle, by rw [hig]; exact hgr,
+    ra, rb, by rw [hc]; exact hca, by rw [hc]; exact hcb, ha, hb⟩
 
-/-! ## Text nets -/
+/-! ## Built nets -/
 
 theorem le_two_pow_log2ceil (n : ℕ) : n ≤ 2 ^ log2ceil n := le_nextPow2 n
 
-variable {lines : Array String} {net : Net}
+variable {net : Net}
 
-/-- A parsed net's constant and input rows fit its `2^unitLog`-row slot, which is at least a word. -/
-theorem parse_fit (h : Net.parse lines = .ok net) :
+/-- A built net's constant and input rows fit its `2^unitLog`-row slot, which is at least a word. -/
+theorem built_fit (h : Built net) :
     net.constPos < 2 ^ net.unitLog ∧ net.inWords * WORD ≤ 2 ^ net.unitLog ∧ 7 ≤ net.unitLog := by
-  obtain ⟨-, hu, hl, hin, -⟩ := parse_spec h
+  obtain ⟨-, hu, hl, hin, -⟩ := built_spec h
   have h1 : 2 ^ log2ceil net.useful ≤ 2 ^ net.unitLog :=
     Nat.pow_le_pow_right (by norm_num) (by rw [hl]; exact le_max_right _ _)
   have := le_two_pow_log2ceil net.useful
@@ -132,10 +124,10 @@ theorem foldl_add_eq_sum (l : List ℕ) (a : ℕ) : l.foldl (· + ·) a = a + l.
   | nil => simp
   | cons x l ih => rw [List.foldl_cons, ih, List.sum_cons]; omega
 
-/-- A parsed net's input ports lie inside its input rows. -/
-theorem parse_ports (h : Net.parse lines = .ok net) :
+/-- A built net's input ports lie inside its input rows. -/
+theorem built_ports (h : Built net) :
     ∀ q ∈ (portCols net.inGroups).toList, q.1 + q.2 ≤ net.inWords * WORD := by
-  obtain ⟨-, -, -, -, hg, -⟩ := parse_spec h
+  obtain ⟨-, -, -, -, hg, -⟩ := built_spec h
   intro q hq
   obtain ⟨g, hgm, hle⟩ := portCols_le _ q hq
   obtain ⟨h1, h2⟩ := hg g hgm
@@ -144,9 +136,9 @@ theorem parse_ports (h : Net.parse lines = .ok net) :
   rw [add_mul] at this
   omega
 
-/-- **A parsed net's constant row reads itself**, and its input rows end before it. -/
-theorem parse_constRow (h : Net.parse lines = .ok net) (hu : net.unitLog ≤ 32) : ConstRow net := by
-  obtain ⟨hlk, -, -, hin, -, ra, rb, hra, hrb, ha, hb⟩ := parse_spec h
+/-- **A built net's constant row reads itself**, and its input rows end before it. -/
+theorem built_constRow (h : Built net) (hu : net.unitLog ≤ 32) : ConstRow net := by
+  obtain ⟨hlk, -, -, hin, -, ra, rb, hra, hrb, ha, hb⟩ := built_spec h
   have hw : 2 ^ net.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) hu
   refine ⟨hin, fun j => ?_, fun j => ?_⟩
   · rw [sparseEntry_ofRows ha, ofRows_row ha hw, hra]
@@ -180,14 +172,10 @@ theorem run_bind_fst {P Q : Array (ℕ × ℕ) → Prop} {m : Id (Array (ℕ × 
     {k : Array (ℕ × ℕ) → Id (Array (ℕ × ℕ) × Array (ℕ × ℕ))} (hm : P (Id.run m))
     (hk : ∀ d, P d → Q (Id.run (k d)).1) : Q (Id.run (m >>= k)).1 := hk _ hm
 
-/-- **The rows Δ writes after its first loop** (`DeltaRow`'s other forms): a row slot's first `cv` bit, an hm96 slot's
-`pad` bit, a unit's leaf bit, a unit's leaf-cut bit, or a wire's destination bit. -/
+/-- **The rows Δ writes after its first loop** (`DeltaRow`'s other forms): a bit of a row's chain, a bit of a row's hm96
+slot, a unit's leaf bit, a unit's leaf-cut bit, or a wire's destination bit. -/
 def DeltaIn (c : Circuit) (x : ℕ) : Prop :=
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 512,
-      x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[0]!.1 +
-        (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2]!.1 + t) ∨
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 1024,
-      x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1 + t) ∨
+  ShaRowBit c x ∨ HmRowBit c x ∨
   (∃ k < c.unitRange.count, ∃ j < (c.leavesIn.getD (k % c.upv) #[]).size, ∃ t < 16,
       x = c.unitRange.slot k + ((portCols #[c.unit.inGroups.getD 0 default]).map (·.1)).getD j 0 + t) ∨
   (∃ g < c.g, ∃ e ∈ c.leafCuts.toList, ∃ t < (portCols c.unit.inGroups)[e.2.1]!.2,
@@ -228,13 +216,21 @@ theorem delta_split (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
         · simp
   intro d hd
   have h0 : ExtL (constPairs c pin) (DeltaIn c) d := ⟨[], by simp [hd], by simp⟩
-  -- the rows' cv and pad bits
+  -- the rows' constant bits
   refine run_bind_fst (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_range _ (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) h0) ?_
-  · refine forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩)
-      (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd)
-    · exact Or.inr (Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩)
-    · exact Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩
+  · refine forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩)
+      (forIn_id_inv_range _ (fun t _ ht d hd => ?_)
+        (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd))
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩))⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
+      · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩)
   intro d hd
   -- the units' leaf bits
   refine run_bind_fst (forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl,

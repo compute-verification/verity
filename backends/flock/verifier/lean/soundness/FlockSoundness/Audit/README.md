@@ -55,6 +55,16 @@ draw**: `Flock.Draw.drawOS`, which is `drawWith` on `IO.getRandomBytes` (`drawOS
 and rerunning, misses $B$ with probability at most the same escapes, on a byte source that A3 makes uniform
 (`Assumptions.UniformRandomBytes`); `execOS_escape_le` and `execOS_subset_escape_le` state it for the live draw as a law
 (`execOS`).
+`subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`), **the PoUW circuit's keyed
+draws**. `Key.subset`, which draws each swap from its own `verity.randomness` stream, escapes no more often than the
+uniform $k$-subset. The window's per-call draws under one key form one `Law.stratified` over its (call, template)
+strata. So the live window draw (`keyedWindow`) escapes $B$ with at most `Law.stratified`'s escape plus the $\eta$ of A4
+(`Assumptions.KeyedStreamsUniform`), on a uniform window secret (A5). `keyedWindow_audit_of_record` and
+`keyedWindow_extraction_audit_of_record` put it through the window pins (`audit_window_split_of_record_of_le_slack`, and
+at the compiled layer `extraction_audit_window_split_of_record_of_le_slack`): the 0.1% event has probability at most
+$2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's draw
+depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
+fixed-law game at its registration, which `keyedWindowReg_extraction_audit_of_record` reads.
 
 **Theorems, the stratified law** (`Audit/Stratified.lean`, the default draw law; `docs/sampling-strategies.md` §4):
 `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$;
@@ -114,8 +124,10 @@ $K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work wh
 `extraction_audit_window`: $\Pr[\text{accept} \wedge (\mathrm{unsoundWork}_w \ge T \vee \mathrm{unsoundWork}_v \ge T_y)]$ is
 at most the larger of the two bounds plus the per-unit terms, not their sum, since both bound the one committed wrong set.
 `audit_window_of_le`: the same for any law whose escapes are at most the product law's, such as an executable draw;
-`audit_window_of_le_slack`: for a law within $\eta$ of it, with $\eta$ added to the bound, as a keyed draw needs, and
-`audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit terms.
+`audit_window_of_le_slack` and, at the compiled layer, `extraction_audit_window_of_le_slack`: for a law within
+$\eta$ of it, with $\eta$ added to the bound, as a keyed draw needs, and
+`audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit terms, with
+`extraction_audit_window_split_of_record_of_le_slack` at the compiled layer.
 `audit_window_of_record`: $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`:
 the same for the per-call split with y's floors, the law #364 runs. The product law assumes each call's draw is under a
 distinct context.
@@ -162,7 +174,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
-  `verity_one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+  `verity_sampled_proofs.one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different transcripts that both have a wrong unit, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
@@ -229,8 +241,9 @@ The hypotheses are the lowerings.
 
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
-computed row. "Each template's rows compute its gates" in the program's Boolean circuit is L1 (`../../ASSUMPTIONS.md`), named and
-tested. The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
+computed row. No hypothesis relates those rows to another circuit (Daniel, Sep 30: the circuit is chosen on the untrusted side,
+and the lowering does no optimizing); what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
+`../Certificate.lean`; `../../ASSUMPTIONS.md`). The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
 The compiled layer's named hypotheses are stated there too.

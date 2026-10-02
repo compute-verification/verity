@@ -26,6 +26,8 @@ import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.kernel_registry import Declined, register
+from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
+from verity_vllm.program.kernels import value_rows as VR
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
 EVALUATORS = {
@@ -69,12 +71,18 @@ EVALUATORS = {
     "Attention_v4": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
                     "with block b guarding a running max of -inf only when b >= MASKED_FROM -- FA3's per-iteration Check_inf, "
                     "registry.fa3_check_inf; TargetProfile.fa3_construction)",
+    "Attention_v5": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v5{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
+                    "with block b guarding the rescale's running max of -inf only when b >= MASKED_FROM, max * scale in every block -- FA2's "
+                    "per-iteration Check_inf, registry.fa2_check_inf; targets.fa2_check_inf)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
+    **VR.EVALUATORS,
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
     "GemmBias_v1": "Gemm_v1's row (dot_bf16 + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate (GemmBiasCoordinate_v1)",
+    "GemmBias_v2": "Gemm_v2's row (the DOT static's k16 chain + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate "
+                   "(GemmBiasCoordinate_v2)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
@@ -106,6 +114,12 @@ EVALUATORS = {
                         "router_ids word + f2fp_bf16 (MoeExpertCoordinate_v1: the w13 launch, MUL_ROUTED_WEIGHT=False) -> up",
     "MoeExpertGemmW_v1": "dot_bf16 over W2[e] gathered by the committed router_ids word, the committed routed weight multiplied into the f32 "
                          "accumulator (one F32Mul) before the single f2fp_bf16 (MoeExpertCoordinateW_v1: the w2 launch, MUL_ROUTED_WEIGHT=True) -> down",
+    # the same rows with the k16 step read from the DOT static (registry.moe MoeExpertGemm_v2 / MoeExpertGemmW_v2: a target whose
+    # fused_moe_kernel tl.dot is not the Ampere/Ada step, registry.targets.moe_expert_dot); an unregistered DOT is declined by name
+    "MoeExpertGemm_v2": "derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}) over W13[e] gathered by the committed router_ids word + f2fp_bf16 "
+                        "(MoeExpertCoordinate_v2) -> up",
+    "MoeExpertGemmW_v2": "derived_rows.dot_bf16_for(DOT) over W2[e], the committed routed weight into the f32 accumulator (one F32Mul), then "
+                         "f2fp_bf16 (MoeExpertCoordinateW_v2) -> down",
     # [reqval 287783ec6 / 9f7a75f6b; moe MOE-PAD-SPEC route A (3)] the PADDED fixed-slot block, one row per token (verity_vllm/program/registry/moe_pad.py
     # `_fixed_core`, node for node): MoeRouterTopK on the row's logits input (MoeFfnFixed_v1: on f2fp(dot_bf16(x, wg)) first); per slot e the
     # routed weight g_e = alpha_j where ids[j] == e else 0.0f (SelectF32 chain); EVERY slot body on its own fixed weights -- up = f2fp(dot_bf16(x,
@@ -266,7 +280,11 @@ def gemm_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np
         dot = D.dot_bf16_for(dot_id)
     except KeyError:
         raise Declined(f"no registered evaluator for Gemm_v2 with DOT={dot_id} (k16 step twins: {sorted(D.TC_DOT16_BY_PRIM)})") from None
-    out, nonfin = _gemm(dot, statics, ops)
+    K, N = int(statics["K"]), int(statics["N"])
+    if K * N >= dense_rows.FAST_GEMM_WORDS and dot_id in dense_rows.STEPS:
+        out, nonfin = dense_rows.gemm_row(np.asarray(ops[0], dtype=np.uint16).reshape(K), np.asarray(ops[1], dtype=np.uint16).reshape(N, K), dot_id)
+    else:
+        out, nonfin = _gemm(dot, statics, ops)
     if nonfin.any():
         # the vectorised twins flag a non-finite operand / accumulator lane instead of modelling the total semantics (tc_dot16 docstring):
         # such a coordinate is outside the twin's domain -> unresolved by name (the ScaledMmFp8Block convention), never a silent word
@@ -299,13 +317,15 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     # The AttnBlock INTERIORS inside the row (Q_fine_v1 units) live in the M1 export stream, which the replay does not read -- the
     # report names that mechanism with the row count (ATTENTION_INTERIOR_MECHANISM).
     T, NH, KVH, Dh, BN = (int(statics[k]) for k in ("T", "NH", "KVH", "D", "BN"))
-    if len(ops) != 3:                                                        # [R17-14] the Definition's arity (q, kc, vc): a row wiring another is by name
-        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes 3 (q, K history, V history)")
-    if family in ("Attention_v2", "Attention_v4"):
+    arity = 4 if family in VR.SCALE_INPUT else 3
+    if len(ops) != arity:                                                    # [R17-14] the Definition's arity (q, kc, vc[, scale_log2]): a row wiring another is by name
+        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes {arity} (q, K history, V history{', scale_log2' * (arity == 4)})")
+    if family in ("Attention_v2", "Attention_v4", "Attention_v5", "Attention_v11"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
         dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
-    masked_from = int(statics["MASKED_FROM"]) if family == "Attention_v4" else None
+    masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5", "Attention_v11") else None
+    scale_bits = VR.word32(ops[3], family, "scale_log2") if arity == 4 else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
                        f"(twins: {sorted(D.TC_DOT16_BY_PRIM)} x {sorted(D.INV_SUM_BY_PRIM)})")
@@ -316,27 +336,26 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
         raise Declined(f"{family}: K history {kc.size} / V history {vc.size} words != T*KVH*D = {T}*{KVH}*{Dh}")
     try:
         out, nonfin = D.attention_rows(q, kc.reshape(T, KVH, Dh), vc.reshape(T, KVH, Dh), BN, dot_prim=dot_id, inv_prim=inv_id,
-                                       masked_from=masked_from)
+                                       masked_from=masked_from, rescale_only=family in ("Attention_v5", "Attention_v11"), scale_bits=scale_bits)
     except ValueError as e:                                                  # a geometry outside the registered relation: by name
         raise Declined(f"{family}: {e}") from None
     if nonfin.any():
         raise Declined(f"{family}: {int(nonfin.sum())} heads have a non-finite operand / accumulator (outside the vectorised twins' domain)")
-    out = np.asarray(out, dtype=np.uint16).reshape(NH * Dh)
-    return {"out": out}
+    return {"out": np.asarray(out, dtype=np.uint16).reshape(NH * Dh)}
 
 
-def rmsnorm_triton(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+def rmsnorm_triton(statics: dict[str, Any], ops: Sequence[np.ndarray], family: str = "RMSNormTriton_v1") -> dict[str, np.ndarray]:
     from verity_vllm.program.kernels import derived_rows as D
     N = int(statics["N"])
-    r = D.rmsnorm_triton_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(N), _eps(statics))
+    r = D.rmsnorm_triton_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(N), _eps(statics) if "EPS" in statics else VR.eps(ops, 2, family))
     return {"out": np.asarray(r["out"], dtype=np.uint16).reshape(N)}
 
 
-def rmsnorm_fused(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+def rmsnorm_fused(statics: dict[str, Any], ops: Sequence[np.ndarray], family: str = "RMSNormFusedCuda_v2") -> dict[str, np.ndarray]:
     from verity_vllm.program.kernels import derived_rows as D
     N = int(statics["N"])
     r = D.rmsnorm_fused_v2_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(1, N),
-                                np.asarray(ops[2], dtype=np.uint16).reshape(1, N), _eps(statics))
+                                np.asarray(ops[2], dtype=np.uint16).reshape(1, N), _eps(statics) if "EPS" in statics else VR.eps(ops, 3, family))
     return {"0": np.asarray(r["normed"], dtype=np.uint16).reshape(N), "1": np.asarray(r["resid"], dtype=np.uint16).reshape(N)}
 
 
@@ -369,7 +388,15 @@ def gemm_bias(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, n
     """`GemmBias_v1{K,N}(x, W, b)`: `Gemm_v1`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
     if len(ops) != 3:
         raise ValueError(f"GemmBias_v1 takes 3 operands (x, W, b), the row wires {len(ops)}")
-    y = gemm(statics, ops[:2])["0"]
+    y = gemm(statics, (ops[0], ops[1]))["0"]                                  # the replay's operands index, they don't slice
+    return bias_add({"N": statics["N"]}, (y, ops[2]))
+
+
+def gemm_bias_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`GemmBias_v2{K,N,DOT}(x, W, b)`: `Gemm_v2`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
+    if len(ops) != 3:
+        raise ValueError(f"GemmBias_v2 takes 3 operands (x, W, b), the row wires {len(ops)}")
+    y = gemm_dot(statics, (ops[0], ops[1]))["0"]
     return bias_add({"N": statics["N"]}, (y, ops[2]))
 
 
@@ -441,10 +468,19 @@ def moe_router(statics: dict[str, Any], ops: Sequence[np.ndarray], *, renormaliz
     return {"router_w": w, "router_ids": ids}
 
 
-def moe_expert_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray], *, routed: bool) -> dict[str, np.ndarray]:
+def moe_expert_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray], *, routed: bool, dotted: bool = False) -> dict[str, np.ndarray]:
     """`MoeExpertGemm_v1(x, e, W13)` (up) and, `routed`, `MoeExpertGemmW_v1(x, e, g, W2)` (down): dot_bf16 over the expert row gathered
-    by the committed router_ids word, the routed weight multiplied into the f32 accumulator before the one bf16 conversion."""
+    by the committed router_ids word, the routed weight multiplied into the f32 accumulator before the one bf16 conversion.  `dotted`:
+    the `_v2{E,K,N,DOT}` rows, the chain of the DOT static's step; an unregistered DOT and a non-finite lane are declined by name."""
     from verity_vllm.program.kernels import derived_rows as D
+    dot = D.dot_bf16
+    if dotted:
+        fam = "MoeExpertGemmW_v2" if routed else "MoeExpertGemm_v2"
+        dot_id = prim_static(statics, "DOT", fam)
+        try:
+            dot = D.dot_bf16_for(dot_id)
+        except KeyError:
+            raise Declined(f"no registered evaluator for {fam} with DOT={dot_id} (k16 step twins: {sorted(D.TC_DOT16_BY_PRIM)})") from None
     E, K, N = int(statics["E"]), int(statics["K"]), int(statics["N"])
     x = np.asarray(ops[0], dtype=np.uint16).reshape(K)
     e = int(np.asarray(ops[1]).reshape(-1)[0])
@@ -458,7 +494,10 @@ def moe_expert_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray], *, route
     gw = np.asarray(ops[2]).reshape(-1)[0] if routed else None
     out = np.empty(N, dtype=np.uint16)
     for n0 in range(0, N, GEMM_CHUNK):
-        acc, _nf = D.dot_bf16(x[None, :], w[n0:n0 + GEMM_CHUNK])
+        acc, nf = dot(x[None, :], w[n0:n0 + GEMM_CHUNK])
+        if dotted and nf.any():
+            raise Declined(f"{fam}: {int(nf.sum())} output coordinates have a non-finite bf16 operand or accumulator "
+                           "(outside the vectorised k16 twin's domain)")
         if gw is not None:                                                    # routed weight into the f32 accumulator BEFORE the one bf16 conversion
             acc = D.mul_rn(acc, np.full(acc.shape, int(gw) & 0xFFFFFFFF, dtype=np.uint32))
         out[n0:n0 + GEMM_CHUNK] = D.f2fp_bf16(acc).astype(np.uint16)
@@ -561,73 +600,6 @@ def padded_moe_block(statics: dict[str, Any], args: list[np.ndarray], *, router_
     return res
 
 
-def moe_router_topk(logits: np.ndarray, *, E: int, TOPK: int, VPT: int, renormalize: bool = False) -> tuple[np.ndarray, np.ndarray]:
-    """`MoeRouterTopK_v1{E,TOPK,VPT}` (`_moe_C.topk_softmax`, one token row) evaluated with the registry's scalar primitives, statement for
-    statement the body of `verity_vllm.program.registry.moe.MoeRouterTopK`: E bf16 logits -> f32 (Bf16ToF32); thread t of E/VPT holds columns
-    t*VPT .. t*VPT+VPT-1: thread max (F32Max, ascending), warp butterfly xor T/2 .. 1 (lane 0); `ex_i = NvExpf(x_i - max)` (F32Sub, the
-    CUDA math-library expf sequence, MUFU.EX2 from the measured table); thread sum from 0.f (F32Add, ascending), butterfly; `rcp = 1.f / sum`
-    (F32Div, IEEE); `p_i = ex_i * rcp` (F32Mul), non-finite -> +0; TOPK rounds: lowest-index strict argmax (F32GtStrict scan from p[0]),
-    the winner masked to -10000.f.  `renormalize` (MoeRouterTopKNorm_v1, MOE-04): selected sum ascending from 0.f, denom = sum > 0 ? sum :
-    1.f, scale = 1.f / denom (F32Div), w_k = w_k * scale (F32Mul).  Returns (router_w f32 words [TOPK] u32, router_ids i32 words [TOPK] u32)."""
-    from verity_vllm.program.registry import moe as RMOE
-    from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import ref_prims as R
-
-    if E % VPT:
-        raise ValueError(f"E = {E} is not a multiple of VPT = {VPT}")
-    T = E // VPT
-    x = [P.Bf16ToF32.evaluate(int(v)) for v in np.asarray(logits, dtype=np.uint16).reshape(E)]
-
-    def butterfly(op, vals: list[int]) -> int:
-        mask = len(vals) // 2
-        while mask >= 1:
-            vals = [op(vals[t], vals[t ^ mask]) for t in range(len(vals))]
-            mask //= 2
-        return vals[0]
-
-    tmax = []
-    for t in range(T):
-        m = x[t * VPT]
-        for j in range(1, VPT):
-            m = P.F32Max.evaluate(m, x[t * VPT + j])
-        tmax.append(m)
-    rmax = butterfly(P.F32Max.evaluate, tmax)
-    ex = [RMOE.nv_expf_bits(R.F32Sub.evaluate(x[i], rmax)) for i in range(E)]
-    tsum = []
-    for t in range(T):
-        s = 0
-        for j in range(VPT):
-            s = P.F32Add.evaluate(s, ex[t * VPT + j])
-        tsum.append(s)
-    rsum = butterfly(P.F32Add.evaluate, tsum)
-    one = 0x3F800000
-    rcp = P.F32Div.evaluate(one, rsum)
-    p = []
-    for i in range(E):
-        q = P.F32Mul.evaluate(ex[i], rcp)
-        p.append(q if RMOE.F32IsFinite.evaluate(q) else 0)
-    neg_big = 0xC61C4000                                                          # -10000.f
-    weights, ids = [], []
-    for _ in range(TOPK):
-        best, best_i = p[0], 0
-        for i in range(1, E):
-            if R.F32GtStrict.evaluate(p[i], best):
-                best, best_i = p[i], i
-        weights.append(best)
-        ids.append(best_i)
-        p = [neg_big if i == best_i else p[i] for i in range(E)]
-    if renormalize:
-        acc = 0
-        for k in range(TOPK):
-            acc = P.F32Add.evaluate(acc, weights[k])
-        denom = acc if R.F32GtStrict.evaluate(acc, 0) else one
-        scale = P.F32Div.evaluate(one, denom)
-        weights = [P.F32Mul.evaluate(w, scale) for w in weights]
-    return (np.asarray([w & 0xFFFFFFFF for w in weights], dtype=np.uint32), np.asarray([i & 0xFFFFFFFF for i in ids], dtype=np.uint32))
-
-
-# ---------------------------------------------------------------------------------------------------------------- registration
-
 @dataclass(frozen=True)
 class RowKernel:
     family: str
@@ -715,7 +687,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
+    from verity_vllm.program.registry import b1, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -729,12 +701,17 @@ def _check_targets() -> dict[str, list]:
         "Attention_v2": [bind(b1.AttentionV2, **attn, **fa2), bind(b1.AttentionV2, **attn, **fa3)],
         # T = 40, BN = 16: three blocks; MASKED_FROM 2 leaves blocks 1 and 0 unguarded, 0 guards every block (= Attention_v2)
         "Attention_v4": [bind(fa3_check_inf.AttentionV4, **dict(attn, T=40), **fa3, MASKED_FROM=m) for m in (2, 0)],
+        "Attention_v5": [bind(fa2_check_inf.AttentionV5, **dict(attn, T=40), DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=m)
+                         for m in (2, 0)],
         "RMSNormTriton_v1": [bind(b1.RMSNormTriton, N=16, EPS=1e-6)],
         "RMSNormFusedCuda_v2": [bind(b1.RMSNormFusedCuda, N=16, EPS=1e-6)],
+        **VR.check_targets(),
         "SiluMul_v1": [bind(b1.SiluMul, I=8)],
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
         "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
+        "GemmBias_v2": [bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=P.AmpereBF16TcDot16),
+                        bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
@@ -749,6 +726,8 @@ def _check_targets() -> dict[str, list]:
         "MoeRouterTopKOrderedNorm_v1": [bind(moe.MoeRouterTopKOrderedNorm, **router)],
         "MoeExpertGemm_v1": [bind(moe.MoeExpertGemm, E=2, K=32, N=3)],
         "MoeExpertGemmW_v1": [bind(moe.MoeExpertGemmW, E=2, K=32, N=3)],
+        "MoeExpertGemm_v2": [bind(moe.MoeExpertGemmV2, E=2, K=32, N=3, DOT=d) for d in (P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)],
+        "MoeExpertGemmW_v2": [bind(moe.MoeExpertGemmWV2, E=2, K=32, N=3, DOT=d) for d in (P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)],
         "MoeFfnFixedL_v1": [bind(moe_pad.MoeFfnFixedL, **router, H=16, I=16)],
         "MoeFfnFixed_v1": [bind(moe_pad.MoeFfnFixed, **router, H=16, I=16)],
         "MoeSum_v1": [bind(moe.MoeSum, TOPK=2, H=8)],
@@ -767,12 +746,18 @@ _row("RoPE_v1", rope, ("0",))
 _row("Attention_v3", partial(attention, "Attention_v3"), ("out",))
 _row("Attention_v2", partial(attention, "Attention_v2"), ("out",))
 _row("Attention_v4", partial(attention, "Attention_v4"), ("out",))
+_row("Attention_v5", partial(attention, "Attention_v5"), ("out",))
 _row("RMSNormTriton_v1", rmsnorm_triton, ("out",))
 _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))
+_row("Attention_v10", partial(attention, "Attention_v10"), ("out",), VR.sample_value(_sample(), VR.scale_words))
+_row("Attention_v11", partial(attention, "Attention_v11"), ("out",), VR.sample_value(_sample(), VR.scale_words))
+_row("RMSNormTriton_v3", partial(rmsnorm_triton, family="RMSNormTriton_v3"), ("out",), VR.sample_value(_sample(), VR.eps_words))
+_row("RMSNormFusedCuda_v4", partial(rmsnorm_fused, family="RMSNormFusedCuda_v4"), ("0", "1"), VR.sample_value(_sample(), VR.eps_words))
 _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))
 _row("GemmBias_v1", gemm_bias, ("0",))
+_row("GemmBias_v2", gemm_bias_dot, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
@@ -787,8 +772,29 @@ _row("MoeRouterTopKOrdered_v1", partial(moe_router, renormalize=False), ("router
 _row("MoeRouterTopKOrderedNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
 _row("MoeExpertGemm_v1", partial(moe_expert_gemm, routed=False), ("up",), _sample({1: "E"}))
 _row("MoeExpertGemmW_v1", partial(moe_expert_gemm, routed=True), ("down",), _sample({1: "E"}))
+_row("MoeExpertGemm_v2", partial(moe_expert_gemm, routed=False, dotted=True), ("up",), _sample({1: "E"}))
+_row("MoeExpertGemmW_v2", partial(moe_expert_gemm, routed=True, dotted=True), ("down",), _sample({1: "E"}))
 _row("MoeFfnFixedL_v1", partial(moe_ffn_fixed, router_gemm=False), ("out",))
 _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+from verity_vllm.program.kernels import softcap_rows  # noqa: E402  -- AttentionSoftcap_v2's head twin
+
+
+def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    from verity_vllm.program.kernels.ir_rows import f64_statics
+    f = softcap_rows.FAMILY
+    return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
+
+
+EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
+_k = ROWS[softcap_rows.FAMILY] = RowKernel(softcap_rows.FAMILY, attention_softcap, ("out",))
+register(softcap_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=softcap_rows.check_targets)
+
+from verity_vllm.program.kernels import ir_rows  # noqa: E402
+
+for _f in ir_rows.FAMILIES:
+    EVALUATORS[_f] = ir_rows.EVALUATOR
+    _k = ROWS[_f] = RowKernel(_f, partial(ir_rows.ir_row, _f), ("out",))
+    register(_f, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=lambda rng, f=_f: ir_rows.check_targets(f))

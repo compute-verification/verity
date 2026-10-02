@@ -2,17 +2,23 @@
 
     python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
     python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
+    python tools/check/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
 - the same for each package it requires by path (`audit.path_deps`);
-- `tools/lean/` (the auditor and its controls), this file and `check.py`, which it imports;
+- `tools/lean/` (the auditor and its controls), this file and `common.py`, the helpers it imports: not `check.py`, which only
+  launches it, so an edit to `check.py` alone keeps every package's verdict;
 - the package's `lean-toolchain` and `lake-manifest.json`, which pin the toolchain and the fetched dependencies.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
-(the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, the controls first. Each pass is
-stored under its key, and a failure is never stored.
+(the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, without the controls: they test
+the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
+stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
+in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
+it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
+generator still writes that data.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
@@ -59,7 +65,8 @@ def _module(path: Path, name: str):
     return m
 
 
-CHECK = _module(ROOT / "tools" / "check" / "check.py", "check_for_lean_audit")
+#: every file this step loads is in `inputs`: this module, `common.py` and `tools/lean/` (`test_lean_audit.py` holds it)
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 
 
 def _sha(p: Path) -> str:
@@ -90,19 +97,69 @@ def path_deps(pkg: str) -> list[str]:
     return sorted(set(out))
 
 
+#: How the audit runs, and so part of every key
+FLAGS = ["--all", "--no-controls", "--build"]
+
+
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
     own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
     tool = [f for f in files if f.startswith(LEAN_TOOL)]
-    return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/check.py"})
+    return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/common.py"})
+
+
+def components(pkg: str, files: list[str], flags: list[str]) -> dict:
+    """What a package's key hashes: the schema, the package, the audit's flags, and each input's sha256 ("-" when absent). A pass
+    keeps them beside it, so `--explain` can say what a miss changed."""
+    return {"schema": SCHEMA, "package": pkg, "flags": flags,
+            "files": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in inputs(pkg, files)}}
+
+
+def key_of(c: dict) -> str:
+    h = hashlib.sha256(json.dumps([c["schema"], c["package"], c["flags"]]).encode())
+    for f, d in sorted(c["files"].items()):
+        h.update(f.encode() + b"\0" + d.encode() + b"\0")
+    return h.hexdigest()
 
 
 def key(pkg: str, files: list[str], flags: list[str]) -> str:
-    h = hashlib.sha256(json.dumps([SCHEMA, pkg, flags]).encode())
-    for f in inputs(pkg, files):
-        p = ROOT / f
-        h.update(f.encode() + b"\0" + (_sha(p).encode() if p.is_file() else b"-") + b"\0")
-    return h.hexdigest()
+    return key_of(components(pkg, files, flags))
+
+
+def explain(name: str, cache: Path) -> tuple[int, list[str]]:
+    """(exit status, lines): whether package ``name`` (its path, or a unique part of one) would reuse a pass, and if not, which of
+    its inputs differ from the nearest pass kept in ``cache`` (fewest differing files)."""
+    files = COMMON.tracked_files(ROOT) or []
+    pkgs = packages(files)
+    match = [p for p in pkgs if p == name.rstrip("/")] or [p for p in pkgs if name in p]
+    if len(match) != 1:
+        return 2, [f"lean_audit: {name!r} matches {len(match)} packages: {', '.join(match) or ', '.join(pkgs)}"]
+    pkg = match[0]
+    now = components(pkg, files, FLAGS)
+    k = key_of(now)
+    if (cache / f"{k}.json").is_file():
+        return 0, [f"{pkg}: PASS reused ({k[:12]}): every file its audit reads is unchanged"]
+    kept = []
+    for f in cache.glob("*.json") if cache.is_dir() else ():
+        try:
+            e = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if e.get("package") == pkg and e.get("components"):
+            kept.append(e)
+    if not kept:
+        return 0, [f"{pkg}: missed ({k[:12]}); no pass of it kept in {cache} records its inputs (passes kept before `--explain` don't)"]
+
+    def diff(was: dict) -> list[str]:
+        a, b = was.get("files", {}), now["files"]
+        out = [f"{'changed' if f in a and f in b else 'new' if f in b else 'no longer an input'}: {f}"
+               for f in sorted(set(a) | set(b)) if a.get(f) != b.get(f)]
+        return out + [f"{x}: {was.get(x)} -> {now[x]}" for x in ("schema", "flags") if was.get(x) != now[x]]
+
+    best = min(kept, key=lambda e: len(diff(e["components"])))
+    lines = diff(best["components"])
+    return 0, [f"{pkg}: missed ({k[:12]}); the nearest pass kept here ({best['key'][:12]}) differs in {len(lines)} input(s):",
+               *(f"  {line}" for line in lines)]
 
 
 def deps_key(pkg: Path) -> str | None:
@@ -147,7 +204,7 @@ def bundle(src: Path, dst: Path) -> dict:
         for name in sorted(os.listdir(src)):
             t.add(src / name, arcname=name, filter=keep)
     os.replace(tmp, dst)
-    return {"sha256": CHECK._sha256(dst), "bytes": dst.stat().st_size}
+    return {"sha256": COMMON.sha256(dst), "bytes": dst.stat().st_size}
 
 
 def restore(store: Path, k: str, url: str, pin: dict, name: str, log=print) -> bool:
@@ -198,20 +255,29 @@ class WarmDeps:
         return f
 
     def take(self, pkg: Path, log=print) -> None:
+        """Move ``pkg``'s kept dependencies in; when another package of this run with the same manifest and toolchain holds
+        them, copy its tree (taken before either builds), never shared: each build may write in its own."""
         if (k := deps_key(pkg)) is None:
             return
         dst = pkg / ".lake" / "packages"
         with self._lock(k):
             src = self.store / k
-            if not src.is_dir() and not dst.exists() and k in self.urls and (pin := pins().get(k)):
+            twin = next((p for p, h in list(self.held.items()) if h.name == k and (p / ".lake" / "packages").is_dir()), None)
+            if not src.is_dir() and not dst.exists() and twin is None and k in self.urls and (pin := pins().get(k)):
                 restore(self.store, k, self.urls[k], pin, pkg.name, log)
             if src.is_dir() and not dst.exists():
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 _move(src, dst)
                 log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]})")
+            elif twin is not None and not dst.exists():
+                t0 = time.monotonic()
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(twin / ".lake" / "packages", dst, symlinks=True)
+                log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]}), copied from {twin.name}'s in "
+                    f"{time.monotonic() - t0:.0f} s")
             else:
                 log(f"lean-audit: {pkg.name}: dependencies cold ({k[:12]})")
-        self.held[pkg] = self.store / k
+            self.held[pkg] = self.store / k
 
     def give_back(self, passed: set[Path]) -> None:
         """Keep the dependencies of the packages in ``passed`` (an audit that passed, whose imported `.olean` files matched
@@ -272,11 +338,13 @@ def transient(rep: dict) -> bool:
 
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
-           log, urls: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
+           log, urls: dict[str, str] | None = None, comps: dict | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent))    # beside the dependencies: moves, not copies
+    # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
+    # cache reached through a symlink would otherwise match no report to its package
+    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     passed: set[Path] = set()
     audited: list[str] = []
@@ -287,30 +355,29 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         audited = packages(union)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
             list(ex.map(lambda p: warm.take(work / p, log), audited))
-        env = {**os.environ, "LEAN_NUM_THREADS": str(CHECK.cores())}
+        env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
-        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(work),
-                            "--out", str(out)], cwd=work, env=env)
+        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, "--root", str(work),
+                            "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
-        controls_ok = not [f for f in failed if f.startswith("controls")]
         for rep in doc.get("packages", []):
             p = os.path.relpath(rep["package"], work)
             rep["package"] = p
             reports[p] = rep
-            if controls_ok and not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
+            if not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
-                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep}))
+                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
+                                           "components": (comps or {}).get(p)}))
                 os.replace(tmp, cache / f"{keys[p]}.json")
         if r.returncode not in (0, 1) and not failed:
             failed = [f"audit.py exit {r.returncode}"]
         # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
         # the revision the manifest pins, before it compiles anything): keeping those, a retry fetches only what is missing
-        passed = {work / p for p in audited if p in reports and ((controls_ok and not reports[p].get("failures"))
-                                                                 or transient(reports[p]))}
+        passed = {work / p for p in audited if p in reports and (not reports[p].get("failures") or transient(reports[p]))}
     finally:
         warm.give_back(passed)
         shutil.rmtree(work, ignore_errors=True)
@@ -319,13 +386,14 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
 
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
         export: Path | None = None) -> int:
-    files = CHECK.tracked_files(ROOT)
+    files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
         fresh = True
         files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".lake" not in p.parts]
     pkgs = packages(files)
-    keys = {p: key(p, files, ["--all", "--build"]) for p in pkgs}
+    comps = {p: components(p, files, FLAGS) for p in pkgs}
+    keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
     reports, cached = {}, {}
     for p, k in keys.items():
@@ -338,7 +406,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -362,7 +430,7 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
     from research.store.local import object_key
     from research.store.remote import ConfigError, load_remote
 
-    want = {deps_key(ROOT / p) for p in packages(CHECK.tracked_files(ROOT) or [])}
+    want = {deps_key(ROOT / p) for p in packages(COMMON.tracked_files(ROOT) or [])}
     pinned = {k: v for k, v in pins().items() if k in want}
     try:
         r = load_remote() if pinned else None
@@ -402,7 +470,7 @@ def pin(run_id: str) -> int:
     with tempfile.TemporaryDirectory() as d:
         got = json.loads((st.fetch(rr, Path(d), paths=[listing]) / listing).read_text())["deps"]
     base = listing[: -len("lean-deps.json")]
-    current = {deps_key(ROOT / p) for p in packages(CHECK.tracked_files(ROOT) or [])}
+    current = {deps_key(ROOT / p) for p in packages(COMMON.tracked_files(ROOT) or [])}
     deps = {k: v for k, v in pins().items() if k in current}                  # a bumped manifest's bundle is no one's any more
     for k, v in sorted(got.items()):
         f = files.get(f"{base}{k}.tar.gz")
@@ -422,10 +490,15 @@ def pin(run_id: str) -> int:
 def main(argv: list[str]) -> int:
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
+    if argv[:1] == ["--explain"] and len(argv) in (2, 4):
+        cache = Path(argv[3]) if len(argv) == 4 and argv[2] == "--cache" else COMMON.cache_dir() / "lean-audit"
+        rc, lines = explain(argv[1], cache)
+        print("\n".join(lines), file=sys.stderr if rc == 2 else sys.stdout)
+        return rc
     ap = argparse.ArgumentParser(prog="lean_audit.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--cache", type=Path, default=CHECK.cache_dir() / "lean-audit")
-    ap.add_argument("--deps", type=Path, default=CHECK.cache_dir() / "lean-deps")
+    ap.add_argument("--cache", type=Path, default=COMMON.cache_dir() / "lean-audit")
+    ap.add_argument("--deps", type=Path, default=COMMON.cache_dir() / "lean-deps")
     ap.add_argument("--fresh", action="store_true", help="audit every package and store nothing")
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")

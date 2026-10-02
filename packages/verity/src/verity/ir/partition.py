@@ -1086,28 +1086,37 @@ class CutVerdict:
 INPUT_UNIT = "input"
 
 
+#: what `validate_unit_cut` does with a value computed in two units: refuse it (`gate-recomputed`, `Q_word` v1 and every caller's
+#: default) or report it (`detail["recomputed_across"]`, `Q_word` v2 only)
+RECOMPUTE_RULES = ("refuse", "report")
+
+
 def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads: Any, outputs: Any, committed: Any,
-                      input_gates: Any = (), recomputed: Any = ()) -> CutVerdict:
+                      input_gates: Any = (), recomputed: Any = (), recompute: str = "refuse") -> CutVerdict:
     """The partition invariant on one circuit: every gate, input gates included, is certified by exactly one unit.  Input gates form
     the input unit (`INPUT_UNIT`); every computed gate is computed in exactly one computing unit, whose proof being valid implies the
     gate is the correct function of the committed values the unit reads.
 
-    `owner[g]` is the unit of gate `g`: `INPUT_UNIT` for an input gate, a computing unit index >= 0 otherwise.  Constants and wiring are
-    circuit structure -- hardwired into each unit's statement, never committed, not gates: `structure_gates` of the circuit's
-    `total_gates` (input gates included) are such.  `reads` are (producer, consumer) pairs of gates, `outputs` the returned gates,
+    `owner[g]` is the unit of gate `g`: `INPUT_UNIT` for an input gate, a computing unit index >= 0 otherwise.  Structure is an
+    operation's own constant bits and wiring: gates any unit may read, bound outside the partition and outside the committed set,
+    computed in no unit: `structure_gates` of the circuit's `total_gates` (input gates included) are such.  A program's data is no
+    structure: it enters as input gates, registered (bound at registration) or run (bound per request), in the input unit.  `reads` are (producer, consumer) pairs of gates, `outputs` the returned gates,
     `committed` the gates whose values are committed once and reused by every reader (the input gates' values under their roots),
     `recomputed` the (gate, earlier gate) pairs that compute the same function of the same values (a second computation of one value).
     A value computed again in the unit that already computes it crosses no boundary: it is a redundant gate of that unit's statement
-    (`detail["redundant_gates"]`), not a recompute.
+    (`detail["redundant_gates"]`), not a recompute.  With `recompute="report"` a value computed in two units is no failure: each copy
+    is still its own gate, certified once, and the pairs are reported (`detail["recomputed_across"]`, its count and first pairs).
 
     * every input gate is in the input unit                                          -> "input-outside-input-unit"  (gate ids)
     * every computed gate is computed in exactly one computing unit                  -> "gate-not-certified-once"   (gate ids)
-    * every value is computed in exactly one unit (no recompute)                     -> "gate-recomputed"          ((gate, earlier))
+    * every value is computed in exactly one unit (no recompute; "refuse" only)      -> "gate-recomputed"          ((gate, earlier))
     * the units' gates and the structure sum to the circuit                          -> "gate-count"
     * a cross-unit read goes only through a committed value                           -> "read-uncommitted"          ((producer, consumer))
     * a returned value is committed                                                   -> "output-uncommitted"        (gate ids)
     * a committed value is one a unit certifies and another unit reads, or returned   -> "committed-unread"          (gate ids)
     """
+    if recompute not in RECOMPUTE_RULES:
+        raise ValueError(f"recompute is one of {RECOMPUTE_RULES}, not {recompute!r}")
     owner = list(owner)
     ins = set(input_gates)
     c = set(committed)
@@ -1121,7 +1130,7 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     again = [(int(a), int(b)) for a, b in recomputed]
     across = sorted((a, b) for a, b in again if not (0 <= a < n and 0 <= b < n) or owner[a] != owner[b])
     problems = {"input-outside-input-unit": outside, "gate-not-certified-once": uncertified,
-                "gate-recomputed": across,
+                "gate-recomputed": across if recompute == "refuse" else [],
                 "gate-count": [] if certified + len(ins) + int(structure_gates) == int(total_gates) else [certified],
                 "read-uncommitted": [(p, q) for p, q in crossing if p not in c], "output-uncommitted": sorted(outs - c),
                 "committed-unread": sorted(g for g in c if g not in boundary or not 0 <= g < n)}
@@ -1129,6 +1138,8 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
                     "total_gates": int(total_gates), "committed": len(c), "cross_unit_reads": len(crossing),
                     "computing_units": len({u for u in owner if isinstance(u, int) and u >= 0}),
                     "redundant_gates": len(again) - len(across)}
+    if recompute == "report":
+        detail["recomputed_across"] = {"n": len(across), "gates": [list(x) for x in across[:_MAX_LISTED]]}
     codes = tuple(k for k, v in problems.items() if v)
     for k in codes:
         detail[k] = {"n": len(problems[k]), "gates": [list(x) if isinstance(x, tuple) else x for x in problems[k][:_MAX_LISTED]]}
@@ -1165,5 +1176,5 @@ def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdi
 
 __all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "VuVerdict",
            "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "vu_status",
-           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "validate_unit_cut",
+           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "RECOMPUTE_RULES", "validate_unit_cut",
            "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]

@@ -1,7 +1,7 @@
 """`research` Tool declarations for the vLLM integration sweep stages.
 
-Three Tools — ``vllm.build``, ``vllm.match``, ``vllm.commit`` — one per stage
-of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
+Five Tools — ``vllm.build``, ``vllm.plan`` (the Commit's plan, on CPU, before the GPU), ``vllm.match``,
+``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
 -- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
 (``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
 consumes).
@@ -71,6 +71,7 @@ ROW_KEY_PARAMS = [
 # so an absent flag hashes identically to its explicit default).
 STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
     "build": {},
+    "plan": {},
     "match": {
         "snapshot_steps": "row-default",  # the row's default: "0,1" greedy / "all" stochastic
         "snapshot_max_bytes": None,
@@ -83,6 +84,12 @@ STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
         "extra_engine_args": None,
         "commit_args": None,
     },
+    "replay": {},
+}
+
+# Output-changing flags keyed only when set (off, they leave the derivation of every run without them as it was).
+KEY_FLAGS_WHEN_SET: dict[str, tuple[str, ...]] = {
+    "commit": ("replay_deferred",),   # the Commit seals a replay bundle and leaves its verdict pending
 }
 
 # Recorded but NOT key: footprint / schedule / implementation knobs.
@@ -104,8 +111,10 @@ NON_KEY_FLAGS = (
 
 PRODUCES: dict[str, list[str]] = {
     "build": ["vllm-build/v1", "execution-evidence/v1", "run-files/v1"],
+    "plan": ["vllm-commit-plan/v1", "execution-evidence/v1", "run-files/v1"],
     "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
     "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
+    "replay": ["vllm-verdict/v1", "vllm-replay-slim/v1", "execution-evidence/v1", "run-files/v1"],
 }
 
 
@@ -221,6 +230,10 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
     out["t"] = flags.pop("t", None)
     for k, default in STAGE_KEY_FLAGS.get(stage, {}).items():
         out[k] = flags.pop(k, default)
+    for k in KEY_FLAGS_WHEN_SET.get(stage, ()):
+        v = flags.pop(k, None)
+        if v not in (None, "0", False):
+            out[k] = v
     for k in NON_KEY_FLAGS:
         if k in flags:
             out[k] = flags.pop(k)
@@ -265,7 +278,7 @@ def _tool(stage: str) -> Tool:
         version="1",
         command=[*COMMAND, stage],
         closure=CLOSURE,
-        key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys()],
+        key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys(), *KEY_FLAGS_WHEN_SET.get(stage, ())],
         key_conditions=["hw.family", f"tool.{name}.torch", f"tool.{name}.vllm"],
         param_artifacts=[],
         produces=PRODUCES[stage],
@@ -275,10 +288,12 @@ def _tool(stage: str) -> Tool:
 
 
 VLLM_BUILD = _tool("build")
+VLLM_PLAN = _tool("plan")
 VLLM_MATCH = _tool("match")
 VLLM_COMMIT = _tool("commit")
+VLLM_REPLAY = _tool("replay")
 
-TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT)}
+TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_PLAN, VLLM_MATCH, VLLM_COMMIT, VLLM_REPLAY)}
 
 __all__ = [
     "CLOSURE",
@@ -286,11 +301,14 @@ __all__ = [
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
     "STAGE_KEY_FLAGS",
+    "KEY_FLAGS_WHEN_SET",
     "NON_KEY_FLAGS",
     "PRODUCES",
     "VLLM_BUILD",
+    "VLLM_PLAN",
     "VLLM_MATCH",
     "VLLM_COMMIT",
+    "VLLM_REPLAY",
     "TOOLS",
     "parse",
     "row_config",

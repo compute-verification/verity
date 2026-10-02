@@ -37,8 +37,6 @@ from __future__ import annotations
 import ctypes
 import glob
 import json
-import os
-import subprocess
 import sys
 import time
 import zlib
@@ -114,41 +112,14 @@ _TC_LIB: ctypes.CDLL | None = None
 LIBRARIES: dict[str, Any] = {}
 
 
-def _cxx_has_openmp() -> bool:
-    if "openmp" in LIBRARIES:
-        return LIBRARIES["openmp"]
-    import tempfile
-    cxx = os.environ.get("CXX", "g++")
-    with tempfile.TemporaryDirectory() as d:
-        src = Path(d) / "omp.cpp"
-        src.write_text("int main(){\n#pragma omp parallel\n{}\nreturn 0;}\n")
-        r = subprocess.run([cxx, "-fopenmp", "-o", str(Path(d) / "omp"), str(src)], capture_output=True)
-    LIBRARIES["openmp"] = r.returncode == 0
-    return LIBRARIES["openmp"]
-
-
 def _tc_lib() -> ctypes.CDLL:
-    """`tc_model.cpp` (`gemm_model`): `cpu_model.build` hard-codes `-fopenmp`; build the same source without it when the
-    compiler lacks OpenMP (the model is integer arithmetic on exact terms: exact either way, only slower)."""
+    """`tc_model.cpp` (`gemm_model`), built by `cpu_model.build` (`_jit.cxx_compile`: OpenMP when the compiler has it; the model
+    is integer arithmetic on exact terms, so exact either way, only slower without)."""
     global _TC_LIB
     if _TC_LIB is None:
         from verity_vllm.program.kernels import cpu_model
-        src, lib = Path(cpu_model.CPP_SRC), Path(cpu_model.LIB)
-        if not lib.exists() or lib.stat().st_mtime < src.stat().st_mtime:
-            from verity_vllm.program.kernels import _jit                       # atomic publish + builder lock (no half-written .so)
-            cxx = os.environ.get("CXX", "g++")
-            omp = _cxx_has_openmp()
-
-            def _compile(out: Path) -> None:
-                base = [cxx, "-O2", "-std=c++17", "-fPIC", "-shared", "-ffp-contract=off", "-o", str(out), str(src)]
-                if omp:
-                    subprocess.run(base[:1] + ["-fopenmp"] + base[1:], check=True, capture_output=True)
-                else:
-                    subprocess.run(base + ["-Wno-unknown-pragmas"], check=True, capture_output=True)
-
-            _jit.atomic_build(lib, [src], _compile)
         _TC_LIB = cpu_model.lib()
-        LIBRARIES["tc_model"] = str(lib)
+        LIBRARIES["tc_model"] = str(cpu_model.LIB)
     return _TC_LIB
 
 

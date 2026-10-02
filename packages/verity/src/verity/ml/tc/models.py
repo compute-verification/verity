@@ -60,6 +60,9 @@ __all__ = [
     "ADA_E4M3_M16N8K32",
     "ADA_E5M2_M16N8K32",
     "AMPERE_BF16_M16N8K16",
+    "BLACKWELL_SM120_E2M1_M16N8K32",
+    "BLACKWELL_SM120_E4M3_M16N8K32",
+    "BLACKWELL_SM120_E5M2_M16N8K32",
     "BLACKWELL_SM120_MXF4",
     "BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED",
     "BLACKWELL_SM120_NVF4",
@@ -301,7 +304,7 @@ HAWKEYE_AMPERE_GROUPSUM_E4M3_V0 = GroupSum(
     groups=(8, 8),
     width=25,
     zero_exponent=-132,
-    validated="synthetic; see docs/hardware-semantics.md for the Ada comparison",
+    validated="synthetic; the measured Ada E4M3 model is ADA_E4M3_M16N8K32",
 )
 
 # Ada Lovelace (RTX 4090, sm_89) as measured in this repository with one
@@ -366,6 +369,43 @@ HOPPER_E5M2_K32 = GroupSum(
     validated="H100 (sm_90a), lane tc-probe-fp8 run r20260922-183837-940b: wgmma m64n8k32 e5m2, 25,554,432 elements, 0 mismatches (HOPPER_E4M3_K32's pipeline with e5m2 products)",
 )
 
+# Blackwell consumer (sm_120) FP8 mma.sync (SASS QMMA.16832): one group of all 32 products plus the accumulator in the 26-bit adder of
+# its BF16 pipeline, so unlike Ada's and Hopper's 14-bit FP8 adders the accumulator is not truncated.  No FP8 product is below 2^-32,
+# so the floor is unobservable anywhere in [-150, -124]; -133 is the BF16 pipeline's.
+BLACKWELL_SM120_E4M3_M16N8K32 = GroupSum(
+    name="blackwell_sm120_e4m3_m16n8k32",
+    arch="sm_120",
+    dtype="e4m3",
+    operand_bits=8,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        "RTX PRO 6000 Blackwell Server Edition (sm_120, driver 595.91.07, nvcc 12.8), lane vllm-sm120-tc-gemm: tc_probe run "
+        "r20260930-030915-23f3 fitted by r20260930-031244-ecbc, 6,434,816 finite elements in 13 families, 0 mismatches; Ada's (16,16)/14, "
+        "Hopper wgmma's (32,)/14 and the sm_90 two-HMMA lowering are refuted (4.91M / 4.81M / 0.76M mismatches); the fresh-seed capture "
+        "r20260930-041757-0bde (25,040,128 elements, 14 families) evaluated under total semantics by r20260930-052000-e32d: 0 mismatches, "
+        "the specials family included; the fresh-seed sweep r20260930-063457-5410 (driver 580.173.02, CUDA 13.0, SM clock locked at "
+        "2,100 MHz, seed 20260931): 25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline: 19,033,876)"
+    ),
+)
+
+BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
+    name="blackwell_sm120_e5m2_m16n8k32",
+    arch="sm_120",
+    dtype="e5m2",
+    operand_bits=8,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        "RTX PRO 6000 Blackwell Server Edition (sm_120), lane vllm-sm120-tc-gemm: tc_probe and fit run r20260930-031447-a5ad, "
+        "6,434,816 finite elements in 13 families, 0 mismatches (BLACKWELL_SM120_E4M3_M16N8K32's pipeline with e5m2 products); the "
+        "fresh-seed sweep r20260930-063527-4d6b (driver 580.173.02, CUDA 13.0, SM clock locked at 2,100 MHz, seed 20260931): "
+        "25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline with e5m2 products: 15,747,373)"
+    ),
+)
+
 PIPELINES: dict[str, GroupSum] = {
     pipeline.name: pipeline
     for pipeline in (
@@ -415,9 +455,11 @@ def _scale_dyadic(scale: str, code: int) -> tuple[int, int]:
             raise InvalidArtifact("UE8M0 NaN scale")
         return 8, code - 130                        # 2^(code-127) written with a 4-bit mantissa like UE4M3's
     if scale == "ue4m3":
-        if code & 0x80:
-            raise InvalidArtifact("UE4M3 scale with the padding bit set (PTX ISA: invalid)")
-        e, m = (code >> 3) & 0xF, code & 7
+        # sm_120 reads a UE4M3 scale from its low 7 bits and ignores bit 7 (all 256 bytes, r20260930-093120-b2f2; the
+        # 17 bit-7 vectors of the Lean scale-decode review replayed on the RTX PRO 6000, r20260930-161935-83a8), so
+        # 0x80 is a zero scale like 0x00 and 0xFF is NaN like 0x7F
+        code &= 0x7F
+        e, m = code >> 3, code & 7
         if e == 15 and m == 7:
             raise InvalidArtifact("UE4M3 NaN scale")
         return (m, -9) if e == 0 else (8 + m, e - 10)
@@ -589,17 +631,28 @@ class BlockScaledAlignAdd:
 
         return self._transducer(c_word, self.group_terms(a_codes, b_codes, a_scales, b_scales))
 
+    def align_add(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
+        """One firing on its `group_terms`: ``step_scaled(c, a, b, sa, sb) == align_add(c, group_terms(a, b, sa, sb))``."""
+
+        return self._transducer(c_word, terms)
+
+    def grid(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int | None:
+        """The exponent ``lsb`` of one firing's common grid ``2^lsb`` (the class docstring), or None when nothing
+        participates and the accumulator is zero (the firing is then ``+0``)."""
+
+        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
+        if _fp32_dyadic(c_word)[0]:
+            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
+            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
+        return max(*anchors, self.grid_floor) if anchors else None
+
     def _transducer(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
         """The five-way align-add on the common grid and the RZ normalisation."""
 
         acc_m, acc_e = _fp32_dyadic(c_word)
-        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
-        if acc_m:
-            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
-            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
-        if not anchors:
+        lsb = self.grid(c_word, terms)
+        if lsb is None:
             return 0                                        # nothing participates: +0 (a -0 accumulator included)
-        lsb = max(*anchors, self.grid_floor)
         total = sum(_trunc_rz_to_grid(m, unit, lsb) for m, unit, _ in terms if m)
         if acc_m:
             total += _trunc_rz_to_grid(acc_m, acc_e, lsb)
@@ -802,6 +855,34 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
     ),
 )
 
+# The K=32 E2M1 row of Blackwell consumer (sm_120), ``kind::f8f6f4`` (SASS QMMA.16832): Hopper's BF16 adder (26 bits, floor
+# 2^-133) over one group of all 32 exact E2M1 products, not the block-scaled adder of the K=64 rows (OMMA) -- the instruction
+# fixes the arithmetic, not the element format.  autoproof's 1,400 RTX 5090 vectors of this instruction (zero accumulators)
+# do not tell the two apart; the RTX PRO 6000 capture does (tests/ml/test_models.py).  Also measured with 0 mismatches, and
+# outside this object because a GroupSum has one dtype and no scales: e2m1 x e4m3 and e4m3 x e2m1, and kind::mxf8f6f4
+# .scale_vec::1X (QMMA.SF, UE8M0 entering as an exponent shift of each product).
+BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
+    name="blackwell_sm120_e2m1_m16n8k32",
+    arch="sm_120",
+    dtype="e2m1",
+    operand_bits=4,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        "NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120a, cc 12.0, driver 580.173.02, nvcc 13.0.88) "
+        "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32, one SASS QMMA.16832.F32.E2M1.E2M1 per tile, "
+        "tools/tc_probe_fp4 (k32.py) sweeps with arbitrary finite FP32 accumulators: run r20260930-071201-d356 "
+        "(GPU-5f1149a4, seed 20260930) 1,671,168 gated elements, 0 mismatches, while two groups of 16 miss 88,660, the "
+        "unscaled block-scaled adder (group 16 / 32) 193,027 / 192,566 and autoproof's model5 268,267; fresh-seed "
+        "confirmation r20260930-073334-fdac (seed 20261003, gated on this model) 3,309,568 gated elements, 0 mismatches "
+        "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU-5f1149a4; a 1024-step register chain (K = 32,768) "
+        "on a second die, r20260930-073445-e2b6 (GPU-2b59d5fe, seed 20261004, gated on this model), 1,408 end words, "
+        "0 mismatches. "
+        "NaN/inf accumulators are outside the model (record-only). Capture sample: tests/ml/fixtures/tc-sm120-k32-e2m1-2026-09-30"
+    ),
+)
+
 #: Every model instance by name -- the grouped-sum pipelines and the block-scaled hypotheses alike.
 MODELS: dict[str, Model] = {
     m.name: m
@@ -810,10 +891,13 @@ MODELS: dict[str, Model] = {
         HOPPER_BF16_WGMMA_K16,
         ADA_E5M2_M16N8K32,
         HOPPER_E5M2_K32,
+        BLACKWELL_SM120_E4M3_M16N8K32,
+        BLACKWELL_SM120_E5M2_M16N8K32,
         BLACKWELL_SM120_NVF4,
         BLACKWELL_SM120_MXF4,
         BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
         BLACKWELL_SM100_NVF4,
         BLACKWELL_SM100_MXF4,
+        BLACKWELL_SM120_E2M1_M16N8K32,
     )
 }

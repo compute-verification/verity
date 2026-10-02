@@ -204,6 +204,8 @@ def test_strict_class_is_generated_not_authored_and_originals_untouched():
     # an Input is the Program's boundary, produced by no body: it owns no enable and lifts as before
     from verity.ir.program import input_prim
     assert L.lifted_prim(input_prim(32)) is input_prim(33) and not L.has_enable(L.lifted_prim(input_prim(32)))
+    # a registered input lifts to a registered input: widening keeps its binding time
+    assert L.lifted_prim(input_prim(32, "registration")) is input_prim(33, "registration")
     # a specified lifted-v1 member is not lifted AGAIN by the v1 factory; the v2 factory gives it its enabled form (v0.6 B7: a select or a
     # ⊥ constant INSIDE a disabled body is ⊥ -- `Lifted[LBot32_v1]_v2(enable)`), which is itself final
     with pytest.raises(TypeError):
@@ -1092,3 +1094,11 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     dec2 = decode_program(encode_program(Program(bind(outer2, N=2))), REGISTRY)
     with pytest.raises(TypeError, match="not the twin's lifted interface"):
         L.lift_def(dec2.root)  # the root's replay reaches the decoded twin2 callee and refuses there
+
+
+def test_every_lift_of_a_primitive_declares_its_tables():
+    """The data guard sees a table only through its primitive's declaration, and a lift runs its base's evaluator."""
+    from verity.ml.mufu import MufuEx2Ftz
+    lp = L.lifted_prim(MufuEx2Ftz)
+    assert MufuEx2Ftz.tables == (("ex2", "library"),)
+    assert L.lifted_prim_v1(MufuEx2Ftz).tables == lp.tables == L.with_ordinary(lp, 1).tables == MufuEx2Ftz.tables

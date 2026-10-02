@@ -3,6 +3,7 @@ report's engine-start / reuse accounting.  Torch-free (the worker itself is exer
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import subprocess
@@ -209,6 +210,8 @@ def test_collect_folds_timelines_and_derives_envelopes_from_stages_txt(tmp_path)
     (["--out", "o"], False),
     (["--out", "o", "--arms", "a,b"], True),
     (["--out", "o", "--only-arm", "control"], True),
+    (["--out", "o", "--only-arm", "instrumented", "--compiled-taps", "kernels"], True),
+    (["--out", "o", "--only-arm", "instrumented", "--bounded-staging", "--replay-k", "460", "--replay-deferred"], False),   # a deferred config-run Commit
     (["--out", "o", "--compiled-taps", "on"], True),
     (["--out", "o", "--late-read", "qkv_proj"], True),
     (["--out", "o", "--value-check"], True),
@@ -225,6 +228,24 @@ def test_hot_unsafe_flags_are_refused_by_commit_delta(argv, unsafe, monkeypatch)
     assert bool(hc.unsafe_hints(argv, {})) is unsafe          # the client pre-check agrees with the worker's rule on every case
     monkeypatch.setenv("VERITY_FAULT", "skip_copy:1")
     assert cd.hot_unsafe_reasons(cli.parse("commit", ["--out", "o"], {}))
+
+
+def test_the_commit_takes_hash_threads_from_the_job_s_environment():
+    """HASH_THREADS sets the Commit's hash pool (only the work is parallel: the leaves and the root are the same); on a hot worker it is
+    the job's, not the environment the worker was started with."""
+    pytest.importorskip("torch")
+    assert cli.parse("commit", ["--out", "o"], {}).hash_threads == 2
+    assert cli.parse("commit", ["--out", "o"], {"HASH_THREADS": "12"}).hash_threads == 12
+    assert cli.parse("commit", ["--out", "o", "--hash-threads", "4"], {"HASH_THREADS": "12"}).hash_threads == 4
+    assert "HASH_THREADS" in hc.ENV_PER_JOB
+
+
+def test_a_later_job_on_the_reused_engine_has_what_the_engines_build_wrote_into_the_environment():
+    """vLLM sets cuBLAS' batch-invariance switches in the process as it builds the engine; a job after the first, whose environment
+    the worker resets, records them (the engine facts of record) only if the worker puts them back."""
+    src = inspect.getsource(hc.serve)
+    assert 'cli.set_environment({**env0, **(job.get("env") or {}), **(getattr(cd._HOT.get("eng"), "environ", None) or {})})' in src
+    assert "os.environ.clear()" not in src
 
 
 @pytest.mark.parametrize("argv,env,unsafe", [

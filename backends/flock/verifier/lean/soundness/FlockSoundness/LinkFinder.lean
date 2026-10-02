@@ -18,7 +18,7 @@ With `p v` the probability that a trial reads exactly `v`, `s` that it reads two
 
 Its cost stops at the first further trial that reads anything, so it is at most twice a trial's in
 expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). Under expected-time collision
-resistance for the finder (`Assumptions.SHA512ExpectedTimeCR`), and when every success outputs a
+resistance for the finder (`Assumptions.SHA512CRExpected`), and when every success outputs a
 collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
 -/
 
@@ -309,7 +309,7 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     (out : τ × List τ → Option (List UInt8 × List UInt8)) (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e)
     (M : ℕ) (hM : 1 ≤ M)
     (hout : ∀ x, Succ rd x → ∃ a b, out x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b)
-    (hCR : Assumptions.SHA512ExpectedTimeCR Hc (finderG T M) (finderStrat T sT M) out
+    (hCR : Assumptions.SHA512CRExpected Hc (finderG T M) (finderStrat T sT M) out
       (finderCost rd c))
     {Xv : Val} (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd Xv) :
     sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) ≤
@@ -321,7 +321,7 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     rw [prob_toReal]
     exact expect_mono (ind_mono hout) _ _
   have h3 := hCR
-  unfold Assumptions.SHA512ExpectedTimeCR at h3
+  unfold Assumptions.SHA512CRExpected at h3
   have h4 := expect_finderCost_le T sT rd c hc M
   have h5 : expect (finderCost rd c) (finderG T M) (finderStrat T sT M) / 2 ^ (256 : ℝ) ≤
       2 * expect c T sT / 2 ^ (256 : ℝ) :=

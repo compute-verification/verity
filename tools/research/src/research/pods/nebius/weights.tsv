@@ -1,0 +1,26 @@
+# The Nebius server's weight cache: what prefetch.sh downloads into $HF_HOME/hub (HF_HOME=/workspace/hf, the integration's default).
+# group        repo                                  revision                                  format  GB (safetensors, HF API 2026-09-30)  role
+# bf16-sweep: the 16 BF16 models of the sm_120 sweep (docs: vllm-config-sweep-plan), revisions pinned by integrations/vllm/manifests/checkpoints.json
+bf16-sweep	HuggingFaceTB/SmolLM2-135M	93efa2f097d58c2a74874c7e644dbc9b0cee75a2	bf16	0.3	B0
+bf16-sweep	HuggingFaceTB/SmolLM2-360M	f8027fd0eaeea54caa13c31d31b9fdc459c38b49	bf16	0.7	SMOL360
+bf16-sweep	EleutherAI/pythia-160m	50f5173d932e8e61f858120bcb800b97af589f46	bf16	0.8	PYTHIA160M
+bf16-sweep	Qwen/Qwen2.5-0.5B	060db6499f32faf8b98477b0a26969ef7d8b9987	bf16	1.0	QWEN05
+bf16-sweep	TinyLlama/TinyLlama-1.1B-Chat-v1.0	fe8a4ea1ffedaf415f4da2f062534de366a451e6	bf16	2.2	TINYLLAMA
+bf16-sweep	unsloth/Llama-3.2-1B	9535bd9b1d1dea6acafbdc4813b728796aeb28da	bf16	2.5	LLAMA32_1B
+bf16-sweep	Qwen/Qwen2.5-1.5B	8faed761d45a263340a0528343f099c05c9a4323	bf16	3.1	B1
+bf16-sweep	unsloth/gemma-2-2b	25319945f7fd83b8b903e12081777b7eef2ba993	bf16	5.3	GEMMA2_2B
+bf16-sweep	microsoft/phi-2	810d367871c1d460086d9f82db8696f2e0a0fcd0	bf16	5.6	B5
+bf16-sweep	microsoft/Phi-3-mini-4k-instruct	f39ac1d28e925b323eae81227eaba4464caced4e	bf16	7.6	PHI3_MINI
+bf16-sweep	Qwen/Qwen3-4B-Instruct-2507	cdbee75f17c01a7cc42f958dc650907174af0554	bf16	8.1	QWEN3_4B
+bf16-sweep	allenai/OLMoE-1B-7B-0924	6d84c48581ece794365f2b8e9cfb043c68ade9c5	bf16	13.8	OLMOE
+bf16-sweep	unsloth/mistral-7b-v0.3	9ea1b83f5ced5663c5fa89c300fe59f9bdcd2b10	bf16	14.5	MISTRAL7B
+bf16-sweep	Qwen/Qwen2.5-7B	d149729398750b98c0af14eb82c78cfe92750796	bf16	15.2	B7
+bf16-sweep	Qwen/Qwen1.5-MoE-A2.7B-Chat	ec052fda178e241c7c443468d2fa1db6618996be	bf16	28.6	M1
+bf16-sweep	Qwen/Qwen3-30B-A3B	ad44e777bcd18fa416d9da3bd8f70d33ebb85d39	bf16	61.1	QWEN3_30B_A3B
+# fp8-port: the sm_120 FP8 port's checkpoint
+fp8-port	Qwen/Qwen3-4B-Instruct-2507-FP8	8591804019c8b22094c3b5b4454e0edc05dffc98	fp8	5.2	QWEN3_4B_FP8
+# frontier: DeepSeek-V3 and Kimi K2 in FP8 (their native block-FP8) and FP4 (NVIDIA's NVFP4 exports; K2's is of K2-Thinking, the only K2 NVFP4 published)
+frontier	deepseek-ai/DeepSeek-V3-0324	e9b33add76883f293d6bf61f6bd89b497e80e335	fp8	688.6	DSV3_FP8
+frontier	nvidia/DeepSeek-V3-0324-NVFP4	d03662cdc34b56eab1315d4557e395e6b4944782	nvfp4	423.6	DSV3_FP4
+frontier	moonshotai/Kimi-K2-Instruct-0905	ac6c49f04883bd0a0598b790693a72061c676629	fp8	1029.2	K2_FP8
+frontier	nvidia/Kimi-K2-Thinking-NVFP4	fdb56e078abe797d1710b102d0acf62bb8aee90b	nvfp4	594.2	K2_FP4

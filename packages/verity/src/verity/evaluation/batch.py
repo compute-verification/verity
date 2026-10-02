@@ -20,9 +20,12 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
+from verity.ir.boolean import is_boolean
+from verity.ir.defs import SpecializedDefinition
 from verity.ir.types import Array, Type, Value
 
-from .reference import ScalarReference, Target, evaluate, key_of, resolve, signature_of, statics_of
+from .bits import evaluate_bits
+from .reference import ScalarReference, Target, evaluate, key_of, refuse_registered_tables, resolve, signature_of, statics_of
 
 __all__ = [
     "Kernel",
@@ -156,9 +159,11 @@ def _store(out: np.ndarray, i: int, leaves: tuple[int, ...]) -> None:
 def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.ndarray:
     """Evaluate ``N`` instances of ``target``: one array per parameter with a leading batch axis, the output likewise.
     ``kernel="auto"`` uses the ``numpy`` kernel when one is registered, ``"reference"`` forces the plain-integer
-    reference, any other name selects that kernel.  Instances a kernel declines are computed by the reference, whose
-    exceptions (inputs outside the function's domain) propagate."""
+    reference, any other name selects that kernel; with ``"auto"`` a Boolean composite without a kernel is evaluated
+    bit-sliced (`bits.evaluate_bits`).  Instances a kernel declines are computed by the reference, whose exceptions (inputs
+    outside the function's domain) propagate.  A `RegisteredTable` input is refused by name."""
     t = resolve(target)
+    refuse_registered_tables(t.id, inputs, "evaluate_batch")
     params, ret = signature_of(t)
     if len(inputs) != len(params):
         raise TypeError(f"{t.id}: expected {len(params)} input arrays, got {len(inputs)}")
@@ -171,6 +176,8 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
     out = np.zeros((n, *type_shape(ret)), dtype=type_dtype(ret))
     todo = np.ones(n, dtype=bool)
     k = _pick(t, kernel)
+    if k is None and kernel == "auto" and n and isinstance(t, SpecializedDefinition) and is_boolean(t):
+        return evaluate_bits(t, *arrays).astype(out.dtype, copy=False)
     if k is not None and n:
         res = k.fn(*arrays, **statics_of(t))
         if res is not NotImplemented:
@@ -238,6 +245,7 @@ def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: in
     statics = statics_of(t)
     if inputs is None:
         inputs = (k.sample or sample_uniform)(np.random.default_rng(seed), n, params, **statics)
+    refuse_registered_tables(t.id, inputs, "self_check")
     arrays = [_as_batch(a, pt, f"{t.id} argument {j}", None) for j, (a, pt) in enumerate(zip(inputs, params))]
     n = arrays[0].shape[0] if arrays else 0
     res = k.fn(*arrays, **statics)

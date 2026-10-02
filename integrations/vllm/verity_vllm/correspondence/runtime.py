@@ -216,9 +216,17 @@ class RuntimeCorrespondence:
     # -- construction -----------------------------------------------------------------------------------------------------
     @classmethod
     def from_json(cls, doc: dict) -> "RuntimeCorrespondence":
+        t = cls(doc)
+        for k, rec in enumerate(cls.records(doc)):
+            t._calls[k] = rec
+            t._by_module.setdefault(rec.module, []).append(k)
+        return t
+
+    @staticmethod
+    def records(doc: dict) -> Iterator[CallCorrespondence]:
+        """The document's Call records in Call order, each built when it is reached (`from_json` holds them all)."""
         if doc.get("schema") != SCHEMA:
             raise ValueError(f"not a {SCHEMA} document (schema={doc.get('schema')!r})")
-        t = cls(doc)
         rank = RankOccurrence(int(doc["rank"]["world"]), int(doc["rank"]["rank"])) if doc.get("rank") else None
         occs = doc["occurrences"]
         for k, c in enumerate(doc["calls"]):
@@ -253,12 +261,9 @@ class RuntimeCorrespondence:
                 cj = o["collective"]
                 coll = CollectiveOccurrence(cj["kind"], int(cj["occurrence"]), tuple(int(x) for x in cj["operand_ranks"]),
                                             cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"))
-            rec = CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
+            yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
                                      (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), rets, tuple(args),
                                      dict((o or {}).get("lifetime") or {}), rank, coll)
-            t._calls[k] = rec
-            t._by_module.setdefault(rec.module, []).append(k)
-        return t
 
     # -- lookups ----------------------------------------------------------------------------------------------------------
     def __len__(self) -> int:
@@ -487,7 +492,14 @@ def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", 
     `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
     a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is
     loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).  The ONE loader
-    every consumer (acquire, query, verdict) reads a Build's correspondence through."""
+    every consumer (acquire, query, verdict) reads a Build's correspondence through; `read_program_document` is its document, for a
+    reader that holds no table (`RuntimeCorrespondence.records`)."""
+    doc, digest, problem = read_program_document(program_dir)
+    return (RuntimeCorrespondence.from_json(doc) if doc is not None else None), digest, problem
+
+
+def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, str | None]:
+    """`read_program_dir`'s (document, digest, problem): the record's document, not its table."""
     import os
     d = str(program_dir)
     res_p = os.path.join(d, "result.json")
@@ -510,7 +522,7 @@ def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", 
         return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
     digest = correspondence_digest(doc)
     problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {digest[:16]} != result.json's {str(recorded)[:16]}"
-    return RuntimeCorrespondence.from_json(doc), digest, problem
+    return doc, digest, problem
 
 
 def validate_document(doc: dict) -> list[str]:
@@ -550,5 +562,5 @@ def validate_document(doc: dict) -> list[str]:
 
 
 __all__ = ["SCHEMA", "NAMESPACE", "JSON_SCHEMA", "TensorView", "ReturnSlot", "ArgSlot", "ArgSpan", "RankOccurrence", "CollectiveOccurrence",
-           "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "read_descriptor_annotation",
-           "validate_document", "canonical_json"]
+           "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "read_program_document",
+           "read_descriptor_annotation", "validate_document", "canonical_json"]

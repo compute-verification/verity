@@ -2,18 +2,26 @@
 order they were admitted; `main` fast-forwards to the newest commit on `next` that `research merge`'s gate accepts: a passing
 `check` attempt of that exact commit.
 
-    research queue status [--all] [--json]         each open PR: its place in `next`, what it waits for, or why it was refused
+    research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
+    research queue ready PR [--by LANE]            the owner's word that the PR is ready at its current head (a new push needs it again),
+                                                   once the quick tier passes there (`QuickTier`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
-Admission.  A PR is admitted while it is open against `main`, isn't a draft, has an owner, carries no hold label, and has every grant
-its change needs.  The owner is the lane its body names on a `Lane {name}` line, else the Cursor agent id its body carries.  The
-rules file (`ci/queue.toml` on `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change
-needs: a role for changed files under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed
-sections of any `lean-audit.json` (`pins`, `reads`).  A grant is a store label `grant = {role}` on the
-target `pr:{number}@{head sha}`, so a new push needs new grants.
+Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
+has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
+writes, so a new push needs a new one, and only after the quick tier passes at that head: `suites.py --quick` on the suites the PR
+changes, from a clean checkout (`QuickTier`); a failure refuses and names the tests.  Once the queue lands trains it replaces the
+merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
+the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
+on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
+`main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
+under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
+(`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
+grants.  Grants and ready are read after pulling the target's labels from the store's remote; when that pull fails the local
+labels decide, so a grant only the remote has keeps the PR waiting.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
@@ -40,9 +48,11 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -199,15 +209,17 @@ class StoreGrants:
         self.store, self.log = store, log
 
     def __call__(self, pr: int, head: str) -> set[str]:
+        return {str(lab.value) for lab in self._labels(pr, head, vocab.GRANT)}
+
+    def ready(self, pr: int, head: str) -> bool:
+        return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
+
+    def _labels(self, pr: int, head: str, key: str) -> list:
         from .store import labels_sync
 
         target = grant_target(pr, head)
-        if self.store.remote is not None:
-            try:
-                labels_sync.pull_targets(self.store, [target])
-            except Exception as e:  # noqa: BLE001  (the local labels still answer; say they may be behind)
-                self.log(f"research queue: pulling the grants of {target} failed ({type(e).__name__}: {e}); using the local labels")
-        return {str(lab.value) for lab in self.store.labels(target, key=vocab.GRANT)}
+        labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"))
+        return self.store.labels(target, key=key)
 
 
 # ---- the queue ----------------------------------------------------------------------------------------------------------------------
@@ -225,7 +237,7 @@ class Member:
 class Entry:
     """One open PR's standing in a sync."""
     pr: PR
-    state: str = "ready"                  # ready | queued | waiting | refused | draft
+    state: str = "ready"                  # ready | queued | waiting | refused
     why: str = ""
     after: tuple[int, ...] = ()           # open PRs whose heads its head contains
     position: int | None = None           # 1-based, on `next`
@@ -237,9 +249,9 @@ def _message(pr: PR) -> str:
 
 
 class Queue:
-    def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], store=None,
-                 shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print):
-        self.workdir, self.remote, self.github, self.grants, self.store = Path(workdir), remote, github, grants, store
+    def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], ready: Callable[[int, str], bool],
+                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print):
+        self.workdir, self.remote, self.github, self.grants, self.ready, self.store = Path(workdir), remote, github, grants, ready, store
         self.shadow, self.log, self._rules = shadow, log, rules
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
@@ -251,6 +263,8 @@ class Queue:
         if not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
             _git(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
+        # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
+        _git(self.workdir, "remote", "set-url", "origin", self.remote)
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")
@@ -312,19 +326,18 @@ class Queue:
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
-            if p.draft:
-                e.state, e.why = "draft", "a draft"
-            elif rules.hold_label in p.labels:
+            if rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
             elif ejected and ejected["head"] == p.head:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
+            elif not self.ready(p.number, p.head):
+                e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number}`"
             elif missing := rules.needs(self.workdir, "origin/main", p.head) - self.grants(p.number, p.head):
                 e.state, e.why = "waiting", f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}"
-            if e.state != "draft":
-                below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
-                e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
+            below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
+            e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
@@ -502,7 +515,7 @@ class Queue:
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready":
-                e.why = "admitted: merges at the next sync"
+                e.why = "admitted: ready for a train (the queue does not land trains yet)"
         return entries
 
 
@@ -529,10 +542,9 @@ def _lock(workdir: Path):
     return f
 
 
-def _render(entries: dict[int, Entry], all_prs: bool) -> str:
-    rank = {"queued": 0, "ready": 1, "waiting": 2, "refused": 3, "draft": 4}
-    rows = sorted((e for e in entries.values() if all_prs or e.state != "draft"),
-                  key=lambda e: (rank[e.state], e.position or 0, e.pr.number))
+def _render(entries: dict[int, Entry]) -> str:
+    rank = {"queued": 0, "ready": 1, "waiting": 2, "refused": 3}
+    rows = sorted(entries.values(), key=lambda e: (rank[e.state], e.position or 0, e.pr.number))
     lines = []
     for e in rows:
         where = f"{e.position:>3}" if e.position else "  -"
@@ -540,12 +552,97 @@ def _render(entries: dict[int, Entry], all_prs: bool) -> str:
     return "\n".join(lines) or "no open PRs"
 
 
+#: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
+SUITES = "tools/check/suites.py"
+QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
+#: variables that would point the quick tier's Python at the caller's tree or environment instead of the checkout's own
+CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
+
+
+class QuickTier:
+    """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout: one worktree of the caller's
+    repository per machine under `root`, checked out at the head and cleaned of everything but its `.venv` for each PR (one PR at a
+    time: `{name}.lock`), so its environment syncs only what moved.  Passes are cached by input (`suites.py`), so a re-run after a
+    failure runs only what failed."""
+
+    def __init__(self, repo: Path, remote: str, root: Path | None = None):
+        self.repo, self.remote = Path(repo), remote
+        self.root = Path(root or Path.home() / ".research" / "queue" / "ready")
+
+    def __call__(self, pr: PR) -> str | None:
+        """None when the tier passes at ``pr``'s head; else what failed, for the refusal."""
+        common = Path(_out(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+        wt = self.root / hashlib.sha256(str(common).encode()).hexdigest()[:12]
+        self.root.mkdir(parents=True, exist_ok=True)
+        lock = open(self.root / f"{wt.name}.lock", "w")  # noqa: SIM115  (held until this returns)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            _git(self.repo, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/ready/main",
+                 f"+refs/pull/{pr.number}/head:refs/queue/ready/pr")
+            if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
+                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
+            _git(self.repo, "worktree", "prune")
+            if not (wt / ".git").exists():
+                shutil.rmtree(wt, ignore_errors=True)
+                _git(self.repo, "worktree", "add", "-q", "--detach", "--force", str(wt), pr.head)
+            else:
+                _git(wt, "checkout", "-q", "--detach", "--force", pr.head)
+            _git(wt, "clean", "-qffdx", "-e", "/.venv")
+            base = _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
+            report, logs = self.root / f"{wt.name}.json", self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
+            report.unlink(missing_ok=True)
+            env = {k: v for k, v in os.environ.items() if k not in CALLER_ENV}
+            runner = wt / SUITES
+            changed = ["--changed", base]
+            if runner.is_file() and '"--changed"' not in runner.read_text():
+                print(f"research queue: {pr.head[:12]}'s suites.py predates --changed, so every suite runs (merge main into the branch "
+                      f"to run only the ones it changes)", flush=True)
+                changed = []
+            try:
+                rc = subprocess.run([*QUICK_TIER, *changed, "--json", str(report), "--logs", str(logs)], cwd=wt, env=env).returncode
+            except FileNotFoundError as e:
+                return f"can't run it here ({e})"
+            if rc == 0:
+                return None
+            try:
+                rows = json.loads(report.read_text())
+            except (OSError, ValueError):
+                return f"`suites.py` exited {rc} before it reported (its output is above)"
+            failed = [r for r in rows if r.get("status") == "failed"]
+            if not failed:
+                return f"`suites.py` exited {rc}: the tests changed files in the checkout (its output is above)"
+            return "; ".join(f"{r['name']}: {', '.join(r.get('failed_tests') or []) or 'see ' + str(r.get('log') or logs)}" for r in failed)
+        finally:
+            lock.close()
+
+
+def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
+    """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `QuickTier`), and once it passes write
+    `ready = true` on `pr:{n}@{that head}` and push it to the store's remote."""
+    from .store.cli import _label_write_through
+
+    pr = next((p for p in github.open_prs() if p.number == number), None) if number is not None else None
+    if pr is None:
+        print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
+        return 2
+    print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
+    if (failed := tier(pr)) is not None:
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier failed: {failed}. Push a fix, "
+              f"or run `research queue ready {pr.number}` again: what passed is reused, so a re-run runs only what failed", file=sys.stderr)
+        return 1
+    target = grant_target(pr.number, pr.head)
+    store.add_label(target, vocab.READY, True, by)
+    said, lost = _label_write_through(store, target)
+    print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {said}")
+    return 1 if lost else 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject"])
-    ap.add_argument("pr", nargs="?", type=int, help="eject: the PR number")
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready"])
+    ap.add_argument("pr", nargs="?", type=int, help="eject, ready: the PR number")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
-    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or "merge-queue", help="eject: who ejects it")
+    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or "merge-queue", help="eject, ready: who ejects it or says it's ready")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
     ap.add_argument("--dry-run", action="store_true", help="sync/land: decide and report, push nothing, tell no one")
     ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
@@ -553,7 +650,6 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
     ap.add_argument("--rules", type=Path, default=None, help=f"the admission rules (default: {RULES} on `main`)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
-    ap.add_argument("--all", action="store_true", help="status: drafts too")
     ap.add_argument("--json", action="store_true", help="status: as JSON")
     a = ap.parse_args(argv)
     from .store.local import LocalStore
@@ -564,18 +660,20 @@ def main(argv: list[str]) -> int:
         if not repo:
             raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
         store = LocalStore(a.store)
-        q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=StoreGrants(store), store=store, shadow=a.shadow,
+        if a.command == "ready":
+            return ready(GitHub(repo), store, a.pr, a.by, QuickTier(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), remote))
+        labels = StoreGrants(store)
+        q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None)
         lock = _lock(a.workdir)  # noqa: F841
         if a.command == "status":
             entries = q.status()
             if a.json:
-                print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "state": e.state, "why": e.why,
-                                   "position": e.position, "commit": e.commit, "after": list(e.after)}
-                                  for e in sorted(entries.values(), key=lambda e: e.pr.number) if a.all or e.state != "draft"],
-                                 indent=1))
+                print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
+                                   "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after)}
+                                  for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
             else:
-                print(_render(entries, a.all))
+                print(_render(entries))
             return 0
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)

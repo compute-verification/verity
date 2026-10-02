@@ -1,9 +1,10 @@
-"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the fold worker and the Match checkers.
+"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
+checkers and the manifest build.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
 (1) the env contract in fresh interpreters, (2) that "default" leaves the interpreter alone, (3) that the fold's
-digest, instances, steps and report are identical under the interpreter defaults and the tuned thresholds, and
-(4) that the three entry points call it.
+digest, instances, steps and report are identical under the interpreter defaults and the tuned thresholds,
+(4) that the entry points call it, and (5) that a tuned process's heap is frozen at exit, once, and "default"'s is not.
 """
 from __future__ import annotations
 
@@ -51,6 +52,41 @@ def test_env_contract_in_a_fresh_interpreter(value, expect):
         assert r["ret"] == expect and r["after"] == expect
 
 
+EXIT_PROBE = ("import atexit, gc\n"
+              "from verity_vllm.pipeline.gc_tuning import tune\n"
+              "n0 = gc.get_freeze_count()\n"
+              "atexit.register(lambda: print('frozen' if gc.get_freeze_count() > n0 else 'unfrozen', flush=True))\n"
+              "tune(); tune()\n")
+
+
+@pytest.mark.parametrize("value,expect", [(None, "frozen"), ("50000,20,100", "frozen"), ("default", "unfrozen")])
+def test_a_tuned_process_freezes_its_heap_at_exit(value, expect):
+    """atexit runs its hooks last-registered first, so a hook registered before `tune` sees the heap as the shutdown collections will."""
+    env = dict(os.environ)
+    env.pop(gc_tuning.ENV, None)
+    if value is not None:
+        env[gc_tuning.ENV] = value
+    out = subprocess.run([sys.executable, "-c", EXIT_PROBE], env=env, capture_output=True, text=True, check=True).stdout
+    assert out.split() == [expect]
+
+
+def test_the_exit_freeze_is_registered_once(monkeypatch):
+    hooks = []
+    monkeypatch.setattr(gc_tuning.atexit, "register", hooks.append)
+    monkeypatch.setattr(gc_tuning, "_freeze_registered", False)
+    saved = gc.get_threshold()
+    try:
+        monkeypatch.setenv(gc_tuning.ENV, "default")
+        gc_tuning.tune()
+        assert hooks == []
+        monkeypatch.setenv(gc_tuning.ENV, "")
+        gc_tuning.tune()
+        gc_tuning.tune()
+    finally:
+        gc.set_threshold(*saved)
+    assert hooks == [gc.freeze]
+
+
 @pytest.mark.parametrize("bad", ["1,2", "a,b,c", "1,2,3,4", "-1,2,3"])
 def test_malformed_values_are_refused_loudly(bad, monkeypatch):
     monkeypatch.setenv(gc_tuning.ENV, bad)
@@ -83,11 +119,16 @@ def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, mo
     assert len(r_default.body.nodes) == len(r_tuned.body.nodes)
 
 
-def test_the_three_entry_points_call_tune():
+def test_the_entry_points_call_tune():
     import inspect
+    from verity_vllm.pipeline import manifest
     from verity_vllm.pipeline import match as run_config
     from verity_vllm.check.match import batch_decomp
     from verity_vllm.check.match import global_match
+    from verity_vllm.pipeline import build, global_program
+    assert "gc_tuning import tune" in inspect.getsource(build.main)
+    assert "gc_tuning import tune" in inspect.getsource(global_program.main)
     assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)
     assert "gc_tuning import tune" in inspect.getsource(global_match.main)
     assert "gc_tuning import tune" in inspect.getsource(batch_decomp.main)
+    assert "gc_tuning import tune" in inspect.getsource(manifest.main)

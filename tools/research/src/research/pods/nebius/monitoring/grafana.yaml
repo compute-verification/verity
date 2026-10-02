@@ -1,0 +1,74 @@
+# Grafana on vy-nebius-1, applied by grafana_up.sh (which also creates the admin Secret and the dashboards ConfigMap).
+# It listens on the host's 127.0.0.1:3000 only (hostNetwork, GF_SERVER_HTTP_ADDR), never on the public IP: open it through ssh,
+#   ssh -N -L 3000:127.0.0.1:3000 research@81.85.2.165      then http://127.0.0.1:3000
+# Its data source is SkyPilot's Prometheus (namespace skypilot: DCGM, node-exporter and kube-state-metrics, 1,000 days / 43 GB).
+# Outside Kueue (no queue label), like SkyPilot's own monitoring pods.
+apiVersion: v1
+kind: Namespace
+metadata: {name: monitoring}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: grafana-provisioning, namespace: monitoring}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      uid: prometheus
+      type: prometheus
+      access: proxy
+      url: http://skypilot-prometheus-server.skypilot.svc.cluster.local
+      isDefault: true
+      jsonData: {timeInterval: 60s}
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: nebius
+      folder: Nebius
+      type: file
+      allowUiUpdates: false
+      options: {path: /etc/grafana/dashboards}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: grafana, namespace: monitoring}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}          # two pods can't both bind 127.0.0.1:3000
+  selector: {matchLabels: {app: grafana}}
+  template:
+    metadata: {labels: {app: grafana}}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: grafana
+        image: grafana/grafana:12.4.12
+        env:
+        - {name: GF_SERVER_HTTP_ADDR, value: "127.0.0.1"}
+        - {name: GF_SERVER_HTTP_PORT, value: "3000"}
+        - {name: GF_SECURITY_ADMIN_USER, value: admin}
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom: {secretKeyRef: {name: grafana-admin, key: password}}
+        - {name: GF_USERS_ALLOW_SIGN_UP, value: "false"}
+        - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
+        - {name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false"}
+        - {name: GF_NEWS_NEWS_FEED_ENABLED, value: "false"}
+        readinessProbe:
+          httpGet: {host: 127.0.0.1, path: /api/health, port: 3000}
+          periodSeconds: 10
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {memory: 1Gi}
+        volumeMounts:
+        - {name: data, mountPath: /var/lib/grafana}
+        - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasources.yaml, subPath: datasources.yaml}
+        - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml}
+        - {name: dashboards, mountPath: /etc/grafana/dashboards, readOnly: true}
+        - {name: alerting, mountPath: /etc/grafana/provisioning/alerting, readOnly: true}
+      volumes:
+      - {name: data, hostPath: {path: /workspace/monitoring/grafana, type: Directory}}
+      - {name: provisioning, configMap: {name: grafana-provisioning}}
+      - {name: dashboards, configMap: {name: grafana-dashboards}}
+      - {name: alerting, configMap: {name: grafana-alerting}}      # alerting.yaml: the idle-GPU rules and their markdown contact point

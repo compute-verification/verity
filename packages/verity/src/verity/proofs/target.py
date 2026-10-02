@@ -116,6 +116,11 @@ much hardware stands behind the model the target computes with.
 * :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: veritor RTX 4090, 24,898,304 elements), model
   :data:`verity.ml.tc.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same program,
   same domain, same absent epilogue; a different grouping and so a different function.
+* :data:`FP8_SM120_MMA` (lane vllm-sm120-tc-gemm, 2026-09-30) -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its
+  conformance device, 25,041,024 elements / 0 mismatches; one QMMA.16832 per tile), model
+  :data:`verity.ml.tc.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in
+  the 26-bit adder of the sm_120 BF16 pipeline, so the accumulator is not truncated.  Same program, domain and absent
+  epilogue as the other two; the registry's ``sm120.mma.m16n8k32.e4m3`` is this pipeline, and trust anchors it here.
 * The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity.proofs.families.make_tensor_core_gate_set`
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
   bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
@@ -158,7 +163,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from verity.ml.tc.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, BlockScaledAlignAdd
+from verity.ml.tc.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16,
+                                  HOPPER_E4M3_K32, BlockScaledAlignAdd)
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
 from .families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
@@ -170,6 +176,9 @@ __all__ = [
     "FAMILY_DIGEST",
     "FIRST",
     "FP8_ADA_MMA",
+    "FP8_SM120_FAMILY",
+    "FP8_SM120_FAMILY_DIGEST",
+    "FP8_SM120_MMA",
     "FP8_HOPPER_WGMMA",
     "HAWKEYE_PIN",
     "K16_VECTOR",
@@ -206,6 +215,9 @@ BF16_HOPPER_FAMILY_DIGEST = "1dba640b0e83ba6dc0d8f692ac0089032cc98bfd39b1a210dba
 #: The NVFP4 draft family: ``tc_dot64`` / ``tc_dot64_0`` over one operand = 64 E2M1 codes + 4 UE4M3 scale bytes.
 NVFP4_FAMILY = "veritor.tensor-core.blackwell_sm120_nvf4_m16n8k64@2"
 NVFP4_FAMILY_DIGEST = "3a928dc85d5c6515b49cf53472844e34412708ebc9404efe086de253e7cbc271"
+#: ``veritor.tensor-core.blackwell_sm120_e4m3_m16n8k32@2``: the sm_120 FP8 draft family (``make_tensor_core_gate_set``).
+FP8_SM120_FAMILY = "veritor.tensor-core.blackwell_sm120_e4m3_m16n8k32@2"
+FP8_SM120_FAMILY_DIGEST = "1b1554efe28ae26cc1fd2177d4ab2f8aa8f0185afc31d43885e5caf23560a93c"
 
 Status = Literal["frozen", "draft"]
 
@@ -360,5 +372,27 @@ NVFP4_SM120 = Target(
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
 )
 
+# The conformance device is the RTX PRO 6000, where the step was measured, not the arch's default anchor (the RTX 5090): the
+# vLLM sm_120 target runs on the PRO 6000, and no FP8 capture exists on the 5090.
+FP8_SM120_MMA = Target(
+    name="fp8-sm120-mma-draft/2026-09-30",
+    family=FP8_SM120_FAMILY,
+    family_digest=FP8_SM120_FAMILY_DIGEST,
+    pipeline=BLACKWELL_SM120_E4M3_M16N8K32,
+    program="GemmAccumulator<K> (K a multiple of 32): tc_dot32_0, then (K/32 - 1) x tc_dot32 chained in ascending k; no cast",
+    transition_unit=(
+        "tc_dot32(c, a[0:32], b[0:32]) with any finite FP32 c: one group of 32 (c joins it), the 26-bit adder of the sm_120 BF16 "
+        "pipeline (the accumulator is not truncated), floor -133 (unobservable with FP8 operands)"
+    ),
+    statement_format=2,
+    domain=_FP8_DOMAIN,
+    epilogue=_FP8_EPILOGUE,
+    reference_vectors=("fp8-sm120-mma-k32", "fp8-sm120-mma-k1536"),
+    anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    status="draft",
+    instruction="sm120.mma.m16n8k32.e4m3",
+    dossier="art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89",
+)
+
 #: Every target by name; ``fixtures/discrepancy_log.json`` entries name one of these (or an instruction id).
-TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, BF16_HOPPER, FP8_HOPPER_WGMMA, FP8_ADA_MMA, NVFP4_SM120)}
+TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, BF16_HOPPER, FP8_HOPPER_WGMMA, FP8_ADA_MMA, NVFP4_SM120, FP8_SM120_MMA)}

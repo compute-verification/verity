@@ -1,24 +1,59 @@
 """Every test gets its own evidence store: `research run` publishes an attempt at the end, and that must never land in the
-developer's ~/.research/store."""
+developer's ~/.research/store.  And every test starts without credentials or a recording run's variables: tests start runs of
+their own, which would inherit them."""
 from __future__ import annotations
 
+import os
+import re
+import signal
+from pathlib import Path
+
 import pytest
+
+#: a cloud VM's Cursor secrets stand in for the laptop's config files (pods/runpod.py, store/remote.py), a recorded check's step
+#: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
+#: (nor extend or read a real machine's lease: a Nebius host exports LEASE_DIR; nor post to the real Slack workspace; nor, with those
+#: cleared, read as a cloud VM's shell that lost its injected secrets: secret_hint.py)
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_", "SLACK_", "CLOUD_AGENT_")
 
 
 @pytest.fixture(autouse=True)
 def _isolated_store(monkeypatch, tmp_path_factory):
+    for k in list(os.environ):
+        if k.startswith(CLEARED):
+            monkeypatch.delenv(k)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path_factory.mktemp("store")))
-    monkeypatch.delenv("RESEARCH_WRITE_THROUGH", raising=False)         # write-through is each test's explicit choice
     # ... and never the developer's ~/.research/store.toml remote (an S3 config without credentials in the test env would otherwise
     # be what every test sees).  Tests that want a remote point RESEARCH_STORE_CONFIG at their own file.
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path_factory.mktemp("cfg") / "absent-store.toml"))
-    monkeypatch.delenv("RESEARCH_CAMPAIGN", raising=False)
     monkeypatch.setenv("RESEARCH_MACHINES_D", "none")      # the pod registry (pods/registry.py) is each test's explicit choice
-    # a cloud VM's Cursor secrets stand in for the laptop's config files (pods/runpod.py, store/remote.py); no test may reach the
-    # real account or bucket through them
-    for k in ("RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCOUNT_ID"):
-        monkeypatch.delenv(k, raising=False)
-    # ... nor the public export (an empty URL is no public source; unset would mean fetchset.PUBLIC_URL) or an export bucket
+    # ... nor the public export: an empty URL is no public source (unset, as the clear above leaves it, would mean fetchset.PUBLIC_URL)
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
-    for k in ("RESEARCH_EXPORT_DIR", "RESEARCH_EXPORT_BUCKET"):
-        monkeypatch.delenv(k, raising=False)
+    # ... nor the machine's hard deadline: lease.sh defaults to /etc/research/deadline, which a Nebius host has
+    monkeypatch.setenv("LEASE_DEADLINE_FILE", str(tmp_path_factory.mktemp("lease") / "absent-deadline"))
+    # ... nor its GPU split: gpu-lease and the runner read /etc/vy/direct-gpus, which says `none` on a cut-over Nebius host
+    monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(tmp_path_factory.mktemp("gpu-lease") / "absent-direct-gpus"))
+    monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
+    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
+
+
+@pytest.fixture
+def reap(tmp_path):
+    """However the test ends, SIGTERM the process group of every process whose argv names its tmp_path: the detached processes
+    it starts (n1_lease's fences, a lease loop, a pod guard) lead their own sessions, with their `sleep` children in the group.
+    A process that exits meanwhile is skipped (a check runs other suites' processes beside these), and pytest's own group is
+    never signalled. On vy-nebius-1 the old per-lock scan raised on such a race and left fences holding /workspace for hours."""
+    yield
+    own = os.getpgrp()
+    named = re.compile(re.escape(os.fsencode(tmp_path)) + rb"(/|\0|$)")    # not a sibling test's .../test_x10 for .../test_x1
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            if named.search((proc / "cmdline").read_bytes()):
+                pgid = os.getpgid(int(proc.name))
+                if pgid != own:
+                    os.killpg(pgid, signal.SIGTERM)
+        except OSError:
+            continue

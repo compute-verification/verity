@@ -15,6 +15,13 @@ packages = ["verity_pouw"]
 [tool.uv.sources]
 verity = { workspace = true }
 
+[tool.verity.tests]
+# Test-only: the Lean package's FP8 vector generator (lean/scripts/fp8atom_vectors.py, which test_lean_package.py runs)
+# reads the HOPPER wgmma model replays and the RTX 4090 captures.
+inputs = ["fixtures/tc/vectors/fp8-hopper-wgmma-k1536.json", "fixtures/tc/vectors/fp8-hopper-wgmma-k32.json",
+          "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json"]
+parallel = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

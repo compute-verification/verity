@@ -102,21 +102,32 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
-    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none) : V Stmt :=
-  if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
-  else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
+    (registered : Option (Array Registered.Port) := none) : V Stmt :=
+  if tags.hm96Rows then do
+    let st ← Stmt.setupH tags circuitB pubB coins tables draw partition program
+    Registered.check st.c st.pub registered (Registered.derived st.partition)
+    return st
+  else do
+    if registered.isSome then throw s!"{tags.name}: registered reads are an hm96-sha512 row statement's"
+    Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
 verifier's own `K` and work table, which a work draw's law is held to, `stratified` its own `K` for a stratified draw,
-and `closure` its closure map. -/
+and `closure` its closure map. `registered` is the verifier's own registered reads, which every table's statement is held
+to (`Registered.check`). -/
 def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
     (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none)
-    (closure : Option (Std.HashMap Nat (Array Nat)) := none) : V (SessionSpec × Array Stmt) :=
-  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
+    (closure : Option (Std.HashMap Nat (Array Nat)) := none) (registered : Option (Array Registered.Port) := none) :
+    V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then do
+    let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
+    for st in sts do Registered.check st.c st.pub registered (Registered.derived st.partition)
+    return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
-    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
+    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program registered
     return (st.spec, #[st])
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
@@ -172,6 +183,22 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
       | .ok j => return (Draw.closureMapOfJson j).map some
       | .error e => return .error s!"closure map: not JSON: {e}"
 
+/-- `--registered F`: the verifier's own registered reads (`Registered.ofJson`: per registered port, the value, its
+registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
+SHA-512. -/
+def registeredInput (args : List String) : IO (Except String (Option (Array Registered.Port))) := do
+  let some f := argOf args "--registered" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"registered reads: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "registered reads: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j => return (Registered.ofJson j).map some
+      | .error e => return .error s!"registered reads: not JSON: {e}"
+
 /-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
@@ -222,11 +249,12 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
-`--stratified K`, `--program` and `--partition`, and a closure draw its own `--closure F`. Each DIR holds `session.json`
+`--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, and a statement that reads registered
+values its own `--registered F` (`Registered.check`). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--coins seed|os] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -234,6 +262,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
@@ -255,6 +284,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
+  let registered ← match ← registeredInput args with
+    | .ok r => pure r
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -264,7 +296,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
   let setupOf := fun (draw : Option Lean.Json) =>
-    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure with
+    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered with
     | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -310,7 +342,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
     let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
-      (if part.isNull then [] else [("partition", part)]))
+      (if part.isNull then [] else [("partition", part)]) ++
+      (match registered with | some r => [("registered", Registered.finding r)] | none => []))
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
@@ -318,11 +351,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--registered F] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
@@ -332,7 +366,10 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  match buildStmt tags circuitB pubB compB coins tables none partition program with
+  let registered ← match ← registeredInput args with
+    | .ok r => pure r
+    | .error e => IO.eprintln e; return 2
+  match buildStmt tags circuitB pubB compB coins tables none partition program registered with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
@@ -342,7 +379,8 @@ def statementCmd (args : List String) : IO UInt32 := do
       ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2)),
       ("class_sha512", Lean.Json.str (hexOf st.c.classSha)),
       ("program_sha512", (st.c.metaJ.getObjVal? "program_sha512").toOption.getD Lean.Json.null),
-      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null), ("partition_check", st.partition)]
+      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null), ("partition_check", st.partition),
+      ("registered", (registered.map Registered.finding).getD Lean.Json.null)]
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
@@ -432,7 +470,8 @@ def netCheckCmd (paths : List String) : IO UInt32 := do
     IO.println s!"NETCHECK {(Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool ok), ("error", Lean.Json.str err)]).compress}"
   return (if all then 0 else 1)
 
-/-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file. -/
+/-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file; a cut with
+`"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
@@ -444,8 +483,9 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
             ("error", Lean.Json.str e)])
         | .ok c =>
           let cs := Partition.validate c
-          pure (Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
-            ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str))])
+          pure (Lean.Json.mkObj ([("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+            ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str))] ++
+            if c.reportRecompute then [("recomputed_across", Lean.toJson c.recomputedAcross.size)] else []))
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
@@ -629,20 +669,21 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
   return 0
 
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
-`CUTCHECK` line per file. -/
+`CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
     let res := match Lean.Json.parse (← IO.FS.readFile path) with
       | .error e => Except.error s!"not JSON: {e}"
-      | .ok j => Partition.checkCutOfJson j
+      | .ok j => do return (← Partition.checkCutOfJson j, ← Partition.reportOfJson j)
     let line := match res with
       | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
-      | .ok (g, owner, committed, limits) =>
-        let (cs, wide) := Partition.checkCut g owner committed limits
-        Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+      | .ok ((g, owner, committed, limits), report) =>
+        let (cs, wide) := Partition.checkCut g owner committed limits report
+        Lean.Json.mkObj ([("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
           ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str)),
-          ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))]
+          ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))] ++
+          if report && owner.size == g.n then [("recomputed_across", Lean.toJson (g.cut owner committed true).recomputedAcross.size)] else [])
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUTCHECK {line.compress}"
   return (if all then 0 else 1)
@@ -703,10 +744,11 @@ def graphJson (gr : Extract.Graph) : Lean.Json :=
 
 private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
-/-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts]`: `Q_word` v1 on the program (`Flock.Program`, `Flock.Extract`, `Flock.Qword`):
-the program's SHA-512, the population and per Call its units. In full: per Call its owners, derived committed set and graph,
-and every unit's `locate`. With `--digests`: per Definition a Call names, its units and the SHA-512 of its owners, and of
-its graph for a flat cut. One `QWORDPROGRAM` line. -/
+/-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts] [--query-version N]`: `Q_word` v1 (or vN, 1 or 2) on the program
+(`Flock.Program`, `Flock.Extract`, `Flock.Qword`): the program's SHA-512, the population and per Call its units. In full: per
+Call its owners, derived committed set and graph, and every unit's `locate`. With `--digests`: per Definition a Call names, its
+units and the SHA-512 of its owners, and of its graph for a flat cut. v2's units are v1's; with `--cuts` it checks each cut by
+v2's rule and gives each Definition's `recomputed_across`. One `QWORDPROGRAM` line. -/
 def qwordProgramCmd (args : List String) : IO UInt32 := do
   let path := args.headD ""
   let nums := ((args.drop 1).takeWhile (·.all Char.isDigit)).filterMap String.toNat?
@@ -714,8 +756,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
   let W := (nums.drop 1).headD 32
   let digests := args.contains "--digests"
   let cuts := args.contains "--cuts"
+  let version := ((argOf args "--query-version").bind String.toNat?).getD 1
   let bytes ← try IO.FS.readBinFile path catch _ => pure ByteArray.empty
   let res : V Lean.Json := do
+    if !HmRow.EVALUABLE.contains ("Q_word", version) then throw s!"query-unknown: Q_word v{version}"
     let P ← Program.decode bytes
     if let some v := P.orderViolation then
       return Lean.Json.mkObj [("inapplicable", v), ("error", Lean.Json.str (match Extract.evaluate P X with
@@ -734,8 +778,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
         Lean.toJson c.units]))]
     -- `--cuts`: every Definition's cut checked on its Call's whole graph (`partition_object.verify`'s `cut`)
     let cutJson : List (String × Lean.Json) ← if !cuts then pure [] else do
-      let checked ← Extract.checkCalls P calls X W
-      pure [("cuts", Lean.Json.mkObj (checked.toList.map fun (d, r) => ((P.defs[d]!).key, r.toJson))),
+      let checked ← Extract.checkCalls P calls X W (report := version == 2)
+      let entry := fun (r : Extract.CutCheck) =>
+        if version == 2 then r.toJson.setObjVal! "recomputed_across" (Lean.toJson r.across) else r.toJson
+      pure [("cuts", Lean.Json.mkObj (checked.toList.map fun (d, r) => ((P.defs[d]!).key, entry r))),
         ("cut", Lean.Json.arr ((Extract.cutFailures calls checked).map fun (k, r) =>
           Lean.Json.arr #[Lean.toJson k, Lean.toJson r.codes.toArray]))]
     let base := base ++ cutJson
@@ -783,6 +829,8 @@ def main (args : List String) : IO UInt32 := do
   | "cut-check" :: paths => cutCheckCmd paths
   | "evaluate" :: paths => evaluateCmd paths
   | "qword-program" :: rest => qwordProgramCmd rest
+  | "qcall-program" :: rest => Qcall.cmd rest
+  | "input-ids" :: ids => Qcall.inputIdsCmd ids
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths

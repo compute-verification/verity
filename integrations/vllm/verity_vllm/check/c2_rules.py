@@ -574,6 +574,10 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     cov = _d(_d(commit.get("binding")).get("coverage"))
     epr = cov.get("executed_prefix_of_record")
     link = cov.get("match_account_link")
+    clink = cov.get("commit_account_link")
+    # no Match record beside the Commit (a config run): the Commit's token record is the account; with both, both hold where it places a prefix
+    by_commit = isinstance(clink, dict) and isinstance(link, dict) and not link.get("match_dir")
+    with_commit = isinstance(clink, dict) and (by_commit or bool(clink.get("required")))
     past = cov.get("rows_past_the_stop")
     sr = _replay_of(commit) or {}
     facts = _d(_d(sr.get("executed_prefix_of_record")).get("facts_of_record"))
@@ -581,8 +585,10 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
              "Each request's executed prefix is the cap on a length stop, or served + the Program's declared LAG on an EOS stop whose last served token is a declared EOS id; never defaulted.",
              ["binding.coverage.executed_prefix_of_record", "sampled_replay.executed_prefix_of_record", "executed_prefix_facts", "coverage.executed_prefix_of_record"])
     C_LINK = ("execution_extent/match_account_link", "COORD R17-27 (a)(b)",
-              "The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt, and the LAG is attested on every leg.",
-              ["binding.coverage.match_account_link", "executed_prefix_facts.linked", "executed_prefix_facts.lag_attested", "account_missing"])
+              "The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt -- or, with no Match stage, every served "
+              "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested on every leg.",
+              ["binding.coverage.match_account_link", "binding.coverage.commit_account_link", "executed_prefix_facts.linked", "executed_prefix_facts.lag_attested",
+               "account_missing"])
     C_PAST = ("execution_extent/rows_past_the_stop", "COORD R17-27 (c)",
               "No committed row lies at a position >= a request's executed prefix (execution past the stop).",
               ["binding.coverage.rows_past_the_stop", "executed_prefix_facts.rows_past_stop"])
@@ -593,6 +599,9 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         inputs_extra["tokens_json_sha256"] = tj.get("sha256")
     if g6.get("sha256"):
         inputs_extra["global_match_sha256"] = g6.get("sha256")
+    tr = _d(_d(clink).get("record"))
+    if with_commit and tr.get("sha256"):
+        inputs_extra["commit_tokens_sha256"] = tr.get("sha256")
     if not isinstance(epr, dict):
         out.append(_mk(*C_EPR, commit, ctx, outcome=NOT_RUN))
     else:
@@ -606,18 +615,22 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             out.append(_mk(*C_EPR, commit, ctx, outcome=FAIL, scope=scope, differences=[{"name": "executed_prefix_problems", "n": len(probs), "first": probs[:4]}],
                            reason=f"executed prefix of record: {probs[0] if probs else 'not ok'}"))
     account_missing = sorted({leg for f in facts.values() if isinstance(f, dict) for leg in (f.get("account_missing") or [])})
-    if not account_missing and isinstance(link, dict):
+    if not account_missing and isinstance(link, dict) and not by_commit:
         account_missing = [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
     # v1 gated the link THROUGH the replay's not-executed class: it faults (-> population_scope FAIL) only when applied, i.e. when a request's
     # prefix is reduced from its cap (`link.required`) or the class names the fault.  Outside that the link is recorded, not gating.
-    gating = bool(_d(link).get("required")) or any(f.get("account_missing") or f.get("linked") is not True for f in _faulted_prefix_facts(sr))
+    gating = bool(_d(clink if by_commit else link).get("required")) or any(f.get("account_missing") or f.get("linked") is not True for f in _faulted_prefix_facts(sr))
     if not isinstance(link, dict):
         out.append(_mk(*C_LINK, commit, ctx, outcome=NOT_RUN))
     else:
         scope = {"required": link.get("required"), "gating": gating, "lag_attested": link.get("lag_attested"), "tokens_json": tj.get("path"), "global_match_verdict": g6.get("verdict"),
                  "g6_status": g6.get("g6_status"), "requests_linked": len(g6.get("requests_linked") or []) or None,
                  "facts_linked": {r: f.get("linked") for r, f in facts.items() if isinstance(f, dict)} or None, "account_missing": account_missing or None}
-        probs = list(link.get("problems") or [])
+        if with_commit:
+            scope |= {"account": "commit token record" if by_commit else "Match record + commit token record", "commit_tokens": tr.get("path"),
+                      "commit_required": _d(clink).get("required"), "commit_lag_attested": _d(clink).get("lag_attested")}
+        probs = ([] if by_commit else list(link.get("problems") or [])) + (list(_d(clink).get("problems") or []) if with_commit else [])
+        linked = (by_commit or link.get("ok") is True) and (not with_commit or _d(clink).get("ok") is True)
         if account_missing and gating:
             out.append(_mk(*C_LINK, commit, ctx, outcome=INSUFFICIENT, scope=scope, inputs=inputs_extra,
                            differences=[{"name": "account_missing", "legs": account_missing}],
@@ -625,11 +638,12 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         elif account_missing:
             out.append(_mk(*C_LINK, commit, ctx, outcome=PASS, scope=scope, inputs=inputs_extra,
                            notes=[f"Match account leg(s) not beside the Commit: {', '.join(account_missing)}; not gating (no request stopped before its cap)"]))
-        elif link.get("ok") is True:
+        elif linked:
             out.append(_mk(*C_LINK, commit, ctx, outcome=PASS, scope=scope, inputs=inputs_extra))
         elif gating:
             out.append(_mk(*C_LINK, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs_extra,
-                           differences=[{"name": "account_not_linked", "n": len(probs), "first": probs[:4]}], reason=f"Match account link: {probs[0] if probs else 'not ok'}"))
+                           differences=[{"name": "account_not_linked", "n": len(probs), "first": probs[:4]}],
+                           reason=f"{'commit token record' if by_commit else 'Match account'} link: {probs[0] if probs else 'not ok'}"))
         else:
             out.append(_mk(*C_LINK, commit, ctx, outcome=PASS, scope=scope, inputs=inputs_extra,
                            notes=[f"link problems recorded, not gating (no request stopped before its cap): {'; '.join(p[:120] for p in probs[:3])}"]))

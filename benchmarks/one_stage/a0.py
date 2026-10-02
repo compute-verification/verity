@@ -1,7 +1,7 @@
 """One-stage audit, run A0: a template's captured served values through registration, the verifier's draw, M0's prover and
 verifier, the Lean verifier's draw checks, and the audit record with its integrity profile; then the negatives.
 
-    PYTHONPATH=<tree>/packages/verity/src:<tree>/backends/numerical/python:<tree>/integrations/vllm:<tree>/protocols/one_stage \\
+    PYTHONPATH=<tree>/packages/verity/src:<tree>/backends/numerical/python:<tree>/integrations/vllm:<tree>/protocols/sampled_proofs \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
@@ -30,7 +30,7 @@ from verity.commitments.merkle import CommitmentDomain
 from verity.ir.codec import canonical_json, encode_program, program_digest
 from verity.ir.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity_one_stage import audit, draw as D, partition as P, registration as R
+from verity_sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -168,7 +168,8 @@ def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[d
 
 def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
-    held by content (`--archive`, SHA-512 keys)."""
+    held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
+    `registered.reads_file`) when the statement reads registered values."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -176,18 +177,20 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
     tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     part = [str(st["partition_file"])] if st.get("partition_file") else []
     prog = [str(st["program_file"])] if st.get("program_file") else []
-    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part, *prog],
-            out / "archive-put.log")
+    reads = [str(st["registered_file"])] if st.get("registered_file") else []
+    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part, *prog,
+             *reads], out / "archive-put.log")
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
+    bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, "--session", str(sessions[-1].parent)], out / "lean-verify.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
-            "partition": v.get("partition"),
+            "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
@@ -219,16 +222,19 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
     sessions = [sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))]
     return audit.audit_record(rec, receipt, draw, law, proved_units(header, live or {}), (live or {}).get("instances", -1),
-                              statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
+                              statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {},
+                              session_registered=audit.session_registered(verdicts))
 
 
 def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier of record
-    not run or absent, a session root that isn't the registered one, and, when the sessions were handed the verifier's
-    draw (`served`), a served share that isn't it."""
+    not run or absent, a session root that isn't the registered one, a registered value's reads opened against another
+    root than its registered one, and, when the sessions were handed the verifier's draw (`served`), a served share that
+    isn't it."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
-                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots,
+                session_registered=audit.session_registered(result["verdicts"]))
 
     def decide(**change) -> dict:
         r = audit.audit_record(**{**base, **change})
@@ -240,6 +246,9 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
                                                                    for k, v in vs.items()}),
            "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),
            "session-root-not-registered": decide(session_roots={**session_roots, port: "00" * 64})}
+    if base["session_registered"]:
+        value = next(iter(base["session_registered"]))
+        neg["registered-read-opened-against-another-root"] = decide(session_registered={**base["session_registered"], value: "00" * 64})
     if served is not None:
         drawn = set(served)
         other = next(u for u in range(result["registration"]["population"]) if u not in drawn)

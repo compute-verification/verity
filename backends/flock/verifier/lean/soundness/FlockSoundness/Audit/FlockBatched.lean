@@ -24,8 +24,7 @@ everything after `Commit`:
 
 `cover` is `one_le_fail_add_B'`: by **the lowering** (`LoweringSoundB`, named, per table), a
 committed table gives the link event for a wrong unit. `loweringSoundB_of_place` discharges it from
-each drawn unit's place in its table (`UnitPlace`), with `C` the rows the verifier parses and L1
-(each template's rows compute its gates) named in ASSUMPTIONS.md.
+each drawn unit's place in its table (`UnitPlace`), with `C` the rows the verifier parses.
 
 **The discharge** (`flock_batched_knowledgeSound`): per draw, the unit's table's
 `ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_B'`, from `session_knowledge_sound`),

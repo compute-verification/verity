@@ -21,9 +21,11 @@ from verity.ml.tc.models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
+    BLACKWELL_SM120_E2M1_M16N8K32,
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     BLACKWELL_SM120_NVF4,
+    HOPPER_BF16_M16N8K16,
     HOPPER_E4M3_K32,
     HOPPER_E5M2_K32,
     MODELS,
@@ -39,6 +41,7 @@ from verity.ml.tc.term import Term, e2m1_product, e5m2_product
 
 ROOT = Path(__file__).resolve().parents[4]
 VECTORS = ROOT / "fixtures" / "tc" / "autoproof-probe-vectors.json"
+K32_E2M1_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm120-k32-e2m1-2026-09-30" / "records.json"
 
 
 def _f32(word: int) -> float:
@@ -172,6 +175,35 @@ def test_nvfp4_step_accepts_codes_then_scales_as_one_operand_vector(vectors: dic
         m.step(0, [0] * 64, [0] * 64)  # scale bytes missing
 
 
+def test_fp4_align_add_and_grid_are_the_step_on_its_group_terms(vectors: dict) -> None:
+    """`align_add` on `group_terms` is `step_scaled`; every group term strictly below `grid`'s 2^lsb adds exactly 0."""
+    for m in (BLACKWELL_SM120_NVF4, BLACKWELL_SM120_MXF4):
+        for c in vectors["nvfp4_m16n8k64"]["cases"][:200]:
+            a, b = _nibbles(c["a"]), _nibbles(c["b"])
+            sa, sb = _bytes(c["sa"]), _bytes(c["sb"])
+            ns = m.scales_per_step
+            if m is BLACKWELL_SM120_MXF4:
+                sa, sb = [x % 64 + 100 for x in sa[::2]], [x % 64 + 100 for x in sb[::2]]
+            acc = 0
+            for s in range(len(a) // 64):
+                args = (a[s * 64:(s + 1) * 64], b[s * 64:(s + 1) * 64], sa[s * ns:(s + 1) * ns], sb[s * ns:(s + 1) * ns])
+                terms = m.group_terms(*args)
+                lsb = m.grid(acc, terms)
+                assert lsb is not None or (acc & 0x7FFFFFFF == 0 and not any(p for _, _, p in terms))
+                nxt = m.align_add(acc, terms)
+                for g, (mant, unit, part) in enumerate(terms):
+                    if mant and abs(mant) * 2.0 ** unit < 2.0 ** lsb:
+                        assert m.align_add(acc, terms[:g] + [(0, unit, part)] + terms[g + 1:]) == nxt
+                assert nxt == m.step_scaled(acc, *args)
+                acc = nxt
+    m, one = BLACKWELL_SM120_NVF4, [7] * 16 + [0] * 48
+    big = 0x53800000                                            # 2^40: the accumulator's window ends at 2^5
+    small = m.group_terms(one, one, [0x01] * 4, [0x01] * 4)
+    assert m.grid(big, small) == 40 - 35 and 0 < small[0][0] * 2.0 ** small[0][1] < 2.0 ** 5
+    assert m.align_add(big, small) == big == m.step_scaled(big, one, one, [0x01] * 4, [0x01] * 4)
+    assert m.grid(0, [(0, -2, False)] * 4) is None
+
+
 def _bsaa(**kw) -> BlockScaledAlignAdd:
     base = dict(arch="sm_120", dtype="e2m1", operand_bits=4, scale="ue4m3", k_per_instruction=64, group=16,
                 frac_bits=27, acc_window=36, grid_floor=-174, underflow_zero="positive", validated="test only")
@@ -187,6 +219,31 @@ def test_unscaled_fp4_vectors_replay_under_the_same_transducer(vectors: dict) ->
     for c in cases:
         a, b = _nibbles(c["a"]), _nibbles(c["b"])
         assert unscaled.chain(0, a, b) == int(c["d"], 16), c
+
+
+def test_sm120_k32_e2m1_is_a_group_sum_on_the_rtx_pro_6000(vectors: dict) -> None:
+    m = BLACKWELL_SM120_E2M1_M16N8K32
+    assert MODELS[m.name] is m and m.groups == (32,)
+    assert (m.width, m.zero_exponent) == (HOPPER_BF16_M16N8K16.width, HOPPER_BF16_M16N8K16.zero_exponent)
+    doc = json.loads(K32_E2M1_CAPTURE.read_text())
+    assert doc["instruction"] == "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32"
+    alternatives = {
+        "two groups of 16": GroupSum(name="t_gs16x2", arch="sm_120", dtype="e2m1", operand_bits=4, groups=(16, 16),
+                                     width=26, zero_exponent=-133, validated="test only"),
+        "block-scaled g16": _bsaa(name="t_bsaa_g16", scale=None, k_per_instruction=32),
+        "block-scaled g32": _bsaa(name="t_bsaa_g32", scale=None, k_per_instruction=32, group=32),
+    }
+    misses = dict.fromkeys(alternatives, 0)
+    for r in doc["records"]:
+        c, a, b, d = int(r["c"], 16), _nibbles(r["a"]), _nibbles(r["b"]), int(r["d"], 16)
+        assert m.step(c, a, b) == d, r
+        for name, alt in alternatives.items():
+            misses[name] += alt.step(c, a, b) != d
+    assert len(doc["records"]) == 260 and all(misses.values()), misses
+    # The RTX 5090's zero-accumulator vectors of the same instruction fit the pinned GroupSum and the refuted
+    # block-scaled adder alike: they are consistent with this capture but do not discriminate.
+    for c in vectors["fp4_unscaled_m16n8k32"]["cases"]:
+        assert tc_dot_chain(m, 0, _nibbles(c["a"]), _nibbles(c["b"])) == int(c["d"], 16), c
 
 
 def test_single_window_w26_hypothesis_is_refuted_by_the_fixture(vectors: dict) -> None:
@@ -413,7 +470,10 @@ def test_block_scaled_domain_errors() -> None:
     with pytest.raises(InvalidArtifact):
         m.step_scaled(0, [0] * 64, [0] * 64, [0x7F] * 4, [ONE] * 4)  # UE4M3 NaN scale
     with pytest.raises(InvalidArtifact):
-        m.step_scaled(0, [0] * 64, [0] * 64, [0x80] * 4, [ONE] * 4)  # UE4M3 padding bit
+        m.step_scaled(0, [0] * 64, [0] * 64, [0xFF] * 4, [ONE] * 4)  # UE4M3 NaN scale with bit 7 set
+    # bit 7 is ignored (sm_120 reads the low 7 bits): 0x80 is a zero scale, and 0x80 | s reads as s
+    assert m.step_scaled(0, [0x2] * 64, [0x2] * 64, [0x80] * 4, [ONE] * 4) == 0
+    assert m.step_scaled(0, [0x2] * 64, [0x2] * 64, [0x80 | ONE] * 4, [ONE] * 4) == m.step_scaled(0, [0x2] * 64, [0x2] * 64, [ONE] * 4, [ONE] * 4)
     with pytest.raises(InvalidArtifact):
         BLACKWELL_SM120_MXF4.step_scaled(0, [0] * 64, [0] * 64, [0xFF] * 2, [127] * 2)  # UE8M0 NaN scale
     with pytest.raises(InvalidArtifact):
@@ -428,3 +488,83 @@ def test_block_scaled_domain_errors() -> None:
     with pytest.raises(InvalidArtifact):
         BLACKWELL_SM120_MXF4.step_scaled(0x7F00_0000, [0x7] + [0] * 63, [0x7] + [0] * 63, [254, 127], [127, 127])
     assert m.product(0x7, 0x7) == e2m1_product(0x7, 0x7)
+
+
+#: GPU 4's replay of the Lean scale-decode review's 17 bit-7 vectors on the RTX PRO 6000 (run r20260930-161935-83a8,
+#: `OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X`; research store internal/pouw/rtx-pro/handoffs/scale-dyadic-bit7-words.json):
+#: (name, firings, C word, A codes, B codes, A scale bytes, B scale bytes, D word on the card), codes and bytes packed
+#: little-endian (4 and 8 bits).  Every vector sets bit 7 on at least one scale byte; a chain feeds each D back as C.
+SCALE_BIT7_CARD = (
+    ("nvf4P7[31]", 1, 0xeba44603, 0x2dd376fff4e5b15b26e0f50132e775b6d044de8c52611714f4ac17d8c4e694d6,
+     0x1d6ec6b4333b24f807fb5c90fa9cb87eb81ab311aeec437f916219e662b86e38,
+     0x455a6d8b, 0x16632c55, 0xeba44603),
+    ("nvf4P7[34]", 1, 0xfd73790d, 0x85a62d13bfa2cd6fef9a7daf841abc55c671bc72537f9d81da836546fc4eb558,
+     0x3282bae094e244841ff515ee4cb483301e4118e0e1e1da1e595f25b8c7e69db4,
+     0x43136838, 0x606ba03e, 0xfd73790d),
+    ("nvf4P7[36]", 1, 0xb0ed246e, 0x3fc10aee29829b3e9eb01682ddd1c3559446821bf1fd1e83b4723ce9f67d84c4,
+     0x7b63efe3a3af8469be9b21fd823bbb236e9bb141630b7f52b5c23dff2162258d,
+     0x152e1657, 0x477a48e8, 0x4742ef26),
+    ("nvf4P7[42]", 1, 0xddfa9804, 0x328e2ca5fcec2524210d168454495896ca8335af99650bf02943e8e51d3a7212,
+     0xb0d0a0a420605853c3165a3f1e9848da4f82cb21a652fe6350c2800692c5f8fa,
+     0x64a9062a, 0x39257454, 0xddfa9804),
+    ("nvf4P7[44]", 1, 0xec7f3766, 0xdecf6337fcd15600d32c18655eebcf749074164af1d39eef33636087c733753d,
+     0x5499efc4bcbd30b2290fd0399bdfb873de3576002956a24fe467ae03f7a9377e,
+     0x9b0a482c, 0x6f7d5964, 0xec7f3766),
+    ("nvf4P7[50]", 1, 0xccf53d68, 0xe2cee2926ff1ea5e516720cffd51bc3f0d2843bdc375cdf6a47224692fa5933,
+     0x90a27a6795f828e9357f1c2176f60192da20eae2942e97b44ad6fb53551c92a0,
+     0x31546720, 0x5925f659, 0xccf64712),
+    ("nvf4P7[52]", 1, 0x89caa760, 0x262e24a2f656e6cca69ec97c00375dfd4b1ab6ef70810a1eabf2cd7e9d7dd639,
+     0xe37e9e0f34ce149fd3d841188944fee1ca6b6c7c9d3b5eb01179d2ada994fda3,
+     0x42323660, 0x99337111, 0xc549e860),
+    ("nvf4P7[54]", 1, 0xd2f6e1ea, 0x7a83917461e73a2febcd3566c9040f503806e7eb1e87a8ff0b0f879299a20e9a,
+     0x354ebb667c8bc888bb0e6c83248b952bfdc4ca1b4613382e8581a41c47b9e922,
+     0x507c214c, 0x42a6d83, 0xd2f6e1e9),
+    ("nvf4P7[59]", 1, 0xe79c1784, 0xf308d39eb47b7706956f78ed0ed660e0032c9318aeabb66793b3f60327421a46,
+     0x47690d8cd42263842e936214138756dd18a9517d7df29b2282e89b77284e0f6e,
+     0x4db7606f, 0x31477527, 0xe79c1784),
+    ("nvf4P7[65]", 1, 0xb729aea5, 0x6f9f408d094b448961962cf1237ed86b2ac33205b23225fd17dd22bec9955535,
+     0x9fba2d9994d80bbafe6328760c0aea9dc6f5f83d862aac5e4dca9cb8717282e4,
+     0x1030476e, 0x16fa6b4a, 0xc6a72fe1),
+    ("nvf4P7[66]", 1, 0x8696f0c6, 0x32ce206b908d4f819ba4e87c8a1b2d66d77eb2919931fca1ca4658f8f560933a,
+     0x94f749fd5c482b526ca301655be52800279e0fd337516b06c7aca6be118109cd,
+     0xee675467, 0x325c2011, 0x46cbeaf2),
+    ("nvf4Chains[9]", 4, 0x00000000, 0xfa9246e983c87cd031c47b6ada03463fa0fdba21e42156dd22ce8200feeafb382c55112fa1fb2b1d477c07800f6584d778a39e223021404b944ba9e27bb9e2b74cb0b93ba4a83ee95200c0a83c34b9a5bfdf6f739748cfedd063ca5d03e9375e1f78c38fd26141568defb390c16aa8744df84cd782d19ddfd1ac039ef7399971,
+     0x5b399ab711c1d847adade4d8636626e7b537622f490e1b27644a093bc40948a97e83d12dc4548f4ef02bfe9dca78f1751ecbc84366cf70219608a29b663f61b1a3c9b9ee5d5a60dd6035f694bba233eb4c127d76304d93863da6cf9b928845ecb7a7e940ecab4f336ca3c3154dd55fb057f701f76f24782df81cb67a62bc0a17,
+     0x9c756054763b0b2730676a1834701b39, 0x42205864092f651a717b7352071e327d, 0x49ab8bfb),
+    ("nvf4Chains[19]", 4, 0x00000000, 0x30bb0000f8000b0a000758fe000e3008d0c0a0aa704a702070074001fa0d0d0001100f080706b0c0d005931b405904b1df010000c00dd00060eb50068c07000003f0e7e0040802600000000a020800000ffb300a801a850b9000000000e07d90b8e008e9600300020a9000006080e400060307060800004020000007039000,
+     0x1dd0c63163ded72d219883c5ed5e8dc313613144bfbfd442bf6421e0046c4dbcdf6284b3e7d2b895aff71513631ad2e90faa369d8e63e91b37bfb50baf0f11ca6ee51eb545496ce00f0b68df5df9fcee9ccc5a582a07a431b9a5b326a50cde81ffebe5fe6624ac97a9f3f5b513a2b998d0ad724e3fc29faf87c58260754a7640,
+     0xf628783f127663741a615419340f7e5e, 0x2d6c35480d6673726f14070c75136b5e, 0xca1532c7),
+    ("nvf4Specials[12]", 1, 0xffacb8ff, 0xd012b2233dc6403271c58ac78dff95b32950da366b5b32a97d33b2dece69a903,
+     0x932e07ab6589bd2774dc10686f6f47c3f71883659810a8deea135e394a8ba32e,
+     0x28db5712, 0x4f2c4d74, 0x7FFFFFFF),
+    ("nvf4Specials[19]", 1, 0x7f8163ac, 0x8c723eee523093daf5f775033aa7d281b9fb908bbbe1ef1f462490252d508333,
+     0x357a39b4614523259fafd800a9d93aba65e1e668f3dd38a4ad9d9e120fca114e,
+     0x384e2e0f, 0x578e342b, 0x7FFFFFFF),
+    ("nvf4Specials[21]", 1, 0xff9f8cae, 0x4bc3e89fb7e108a21c2ddf27d95a2f8f9792ec8e966ffc2cd96adeda5aaf81d9,
+     0xfc1d14f7d95984bad926475be192f56e9577d5a73a914ee07411125b44c4ec14,
+     0x3551142b, 0x74e13924, 0x7FFFFFFF),
+    ("nvf4Specials[23]", 1, 0x7ffeaa77, 0xc1e2f0693f03c513b5fca39b949062349e45a9e1fc2ea0e0e25e1d9f6d905825,
+     0x2311785e72c70f5c98d86f50b5cb5856f42807a0191c155683d3abafe7f2c6f4,
+     0x5cf25b71, 0x3b501375, 0x7FFFFFFF),
+)
+
+
+@pytest.mark.parametrize("vec", SCALE_BIT7_CARD, ids=lambda v: v[0])
+def test_ue4m3_scale_decode_ignores_bit_7_as_the_card_does(vec) -> None:
+    """The pinned decode reads the low 7 bits: on each vector the model equals the card's word, and the four NaN
+    accumulators (nvf4Specials 12, 19, 21, 23) are outside the model, where the card writes 0x7FFFFFFF."""
+    name, firings, acc, a, b, sa, sb, word = vec
+    m = BLACKWELL_SM120_NVF4
+    codes = lambda x, n: [(x >> 4 * i) & 15 for i in range(n)]  # noqa: E731
+    scales = lambda x, n: [(x >> 8 * i) & 255 for i in range(n)]  # noqa: E731
+    a, b, sa, sb = codes(a, 64 * firings), codes(b, 64 * firings), scales(sa, 4 * firings), scales(sb, 4 * firings)
+    assert any(s & 0x80 for s in sa + sb)
+    low = lambda s: [x & 0x7F for x in s]  # noqa: E731
+    if (acc >> 23) & 0xFF == 0xFF:
+        assert word == 0x7FFFFFFF and m.group_terms(a[:64], b[:64], sa[:4], sb[:4]) == m.group_terms(a[:64], b[:64], low(sa[:4]), low(sb[:4]))
+        with pytest.raises(InvalidArtifact):
+            m.step_scaled(acc, a, b, sa, sb)
+        return
+    for j in range(firings):
+        acc = m.step_scaled(acc, a[64 * j:64 * j + 64], b[64 * j:64 * j + 64], sa[4 * j:4 * j + 4], sb[4 * j:4 * j + 4])
+    assert acc == word

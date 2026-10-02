@@ -39,7 +39,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 # ---- Tool declarations -------------------------------------------------------------------------------------------------------------------------
 
 def test_vllm_tools_are_registered_and_loadable_by_name():
-    for stage in ("build", "match", "commit"):
+    for stage in ("build", "plan", "match", "commit", "replay"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
@@ -49,8 +49,10 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
     assert tools_registry.load("vllm.build", REPO).produces[0] == "vllm-build/v1"
+    assert tools_registry.load("vllm.plan", REPO).produces[0] == "vllm-commit-plan/v1"
     assert tools_registry.load("vllm.match", REPO).produces[0] == "vllm-match-record/v1"
     assert tools_registry.load("vllm.commit", REPO).produces[0] == "vllm-verdict/v1"
+    assert tools_registry.load("vllm.replay", REPO).produces[0] == "vllm-verdict/v1"
 
 
 def test_row_configuration_is_the_key_and_retain_is_not():
@@ -89,9 +91,16 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
     assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--pairs", "3", "--retain", "host", "--window-mb", "2048"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--pairs", "5"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--extra-engine-args", "max_num_batched_tokens=512"))
+    assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--replay-deferred", "1")), "a deferred Commit's outputs differ"
+    assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--replay-deferred", "0"))
+    assert "replay_deferred" not in c.resolve_params(_argv("commit"))[1], "off, it leaves the derivation of every earlier Commit as it was"
     build_art = "art:" + "1" * 64
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit"), inputs={"build": build_art}), "the consumed Build is part of the derivation"
     assert _drv(m, _argv("match")) != _drv(c, _argv("commit")), "different tools, different derivations"
+    r = tools_registry.load("vllm.replay", REPO)
+    commit_art = "art:" + "2" * 64
+    assert _drv(r, _argv("replay"), inputs={"build": build_art, "commit": commit_art}) != \
+        _drv(r, _argv("replay"), inputs={"build": build_art, "commit": "art:" + "3" * 64}), "the replayed Commit is part of the derivation"
 
 
 def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs():
@@ -270,7 +279,26 @@ def no_dirty_digest(monkeypatch):
     monkeypatch.setattr(E, "_dirty_digest", lambda root: None)
 
 
-@pytest.mark.usefixtures("no_dirty_digest")
+PINNED = {"hw.family": "l40s", "torch": "2.9.0", "vllm": "0.11.0"}
+
+
+@pytest.fixture
+def pinned_probes(monkeypatch):
+    """The probes behind the key conditions answer as an L40S host with the workload interpreter's torch and vllm: `hw.family`
+    (nvidia-smi) and the vLLM Tools' own `tool.vllm.<stage>.torch|vllm` (a `$PY` subprocess). Each probe gives None when it
+    times out, so on a loaded machine one of two identical requests could see None and get another derivation (train T640's
+    `check` on vy-nebius-1, 1 Oct 2026). Pinned to values, not None, so a caller that skips a probe gets another derivation."""
+    from research import env as E
+    monkeypatch.setattr(E, "_nvidia_smi", lambda: {"hw.sku": "NVIDIA L40S", "hw.count": 1, "hw.vram_mb": 46068, "rt.driver": None, "rt.cuda": None})
+    for stage in ("build", "match", "commit", "replay"):
+        monkeypatch.setattr(tools_registry.load(f"vllm.{stage}", REPO), "conditions", lambda env: {"torch": PINNED["torch"], "vllm": PINNED["vllm"]})
+
+
+def _pinned(stage: str) -> dict:
+    return {"hw.family": PINNED["hw.family"], f"tool.vllm.{stage}.torch": PINNED["torch"], f"tool.vllm.{stage}.vllm": PINNED["vllm"]}
+
+
+@pytest.mark.usefixtures("no_dirty_digest", "pinned_probes")
 def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     """`research run --tool vllm.match --input build=art:...`: a store id names the input directly; it lands in `inputs`
     (hence the derivation), not as a hashed path."""
@@ -286,6 +314,7 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     prep = RC._prepare_store(ns, a, cmd, "r20260922-000000-0001", tmp_path / "run")
     sec = prep["section"]
     assert "error" not in sec, sec
+    assert {k: sec["conditions"][k] for k in sec["key_conditions"]} == _pinned("match")
     assert sec["inputs"] == {"build": art} and "input.build" not in sec["key_params_resolved"]
     other = RC._prepare_store(ns, a, cmd, "r20260922-000000-0002", tmp_path / "run2")["section"]
     assert other["derivation"] == sec["derivation"], "same tool, params, inputs, conditions: same derivation"
@@ -296,7 +325,7 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     assert ref["artifact"] == art and ref["sha256"] is None and "store id" in ref["sha256_reason"]
 
 
-@pytest.mark.usefixtures("no_dirty_digest")
+@pytest.mark.usefixtures("no_dirty_digest", "pinned_probes")
 def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch, capsys):
     """`research data lookup --tool vllm.build -- ARGV` fills the Tool's own key conditions (`tool.vllm.build.torch|vllm`, its probe) the
     way `research run --tool` records them, so the derivation it looks up is the one an attempt was published under."""
@@ -314,6 +343,7 @@ def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch
     assert rc == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["derivation"] == sec["derivation"], (doc["key_conditions"], {k: sec["conditions"].get(k) for k in doc["key_conditions"]})
+    assert doc["key_conditions"] == _pinned("build"), "lookup fills hw.family and the Tool's own probe"
     assert doc["attempts"] == [] and doc["key_params"]["row"] == ROW
 
 

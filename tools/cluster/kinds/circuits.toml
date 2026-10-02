@@ -1,0 +1,34 @@
+# circuits' key families on node 1's dispatcher (dispatch.py's `place`): the first kind one of whose `keys` globs matches an
+# item id gives its question; an item's own `question` field overrides it. The grid-models and epoch-run lanes own the wording.
+
+[kinds.goldens]
+keys = ["*-plan", "*-plan[0-9]*", "*-pk"]
+phase = "gpu1"
+max_wall_min = 30
+question = "Does this golden twin, an already-run row resubmitted on the plan tree, reproduce its original's Commit and replay verdict?"
+outputs = ["the twin's Commit and replay attempts in the store"]
+restart = "requeue"
+
+[kinds.grid-models]
+keys = ["cov-gm*"]
+phase = "gpu1"
+max_wall_min = 30
+question = "Does this grid-models row Build, Commit and replay on node 1 with every sampled unit equal?"
+outputs = ["the row's Build, Commit and replay attempts in the store"]
+restart = "requeue"
+
+[kinds.gemma2-epoch]
+keys = ["cov-cg*", "cov-n*"]
+phase = "gpu1"
+max_wall_min = 30
+question = "Does this Gemma-2 or epoch row Build, Commit and replay on node 1 with every sampled unit equal?"
+outputs = ["the row's Build, Commit and replay attempts in the store"]
+restart = "requeue"
+
+[kinds.kept-leaves]
+keys = ["cov-k*"]
+phase = "gpu1"
+max_wall_min = 30
+question = "Do this row's kept leaves and Boolean re-checks pass on its Commit's sampled units?"
+outputs = ["the row's Commit and replay attempts in the store"]
+restart = "requeue"

@@ -39,25 +39,8 @@ for _e in _load_registry()[1]:
     print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
 
 from verity_vllm.check.match.batch_decomp import derived_shape
-
-
-def load_desc(d: str) -> dict:
-    with gzip.open(os.path.join(d, "descriptor.json.gz"), "rb") as f:
-        return json.loads(f.read())
-
-
-def wrapper_params(d: str) -> list[tuple[str, str]]:
-    """The request wrapper's own parameters [(name, type repr)] (derive_step instances.json.gz `params`): needed to group the
-    Input batches (one per weight field) back onto `weights` so it can be shared."""
-    p = os.path.join(d, "instances.json.gz")
-    if not os.path.exists(p):
-        raise ValueError(f"{d}: no instances.json.gz (the wrapper parameters are needed to identify the shared weights)")
-    with gzip.open(p, "rt") as f:
-        head = json.load(f)
-    ps = head.get("params")
-    if not ps:
-        raise ValueError(f"{d}: instances.json.gz has no params")
-    return [(n, t) for n, t in ps]
+from verity_vllm.pipeline.components import (component_of, component_provenance, follow_components, load_component, load_desc,  # noqa: F401
+                                             recorded_component_digest, registration_refusal, wrapper_params)
 
 
 def request_id_of(index: int) -> str:
@@ -216,8 +199,8 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
 
 
 #: [R17-42] the Definition ids (name prefixes of `spec_histogram` keys) that identify each construction's binding of the fused-MoE block
-_MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
-                           "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
+_MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeExpertGemm_v2", "MoeExpertGemmW_v2", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
+                           "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeExpertGemm_v2", "MoeExpertGemmW_v2", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
                            "padded": ("MoeFfnFixedL_v1",)}
 
 
@@ -350,39 +333,6 @@ def component_applicability(d: str) -> dict:
             if a:
                 return a
     return {}
-
-
-def recorded_component_digest(d: str) -> str | None:
-    """The program digest derive_step RECORDED for the component dir (result.json `program.digest`, else artifact.json `program_digest`)."""
-    p = os.path.join(d, "result.json")
-    if os.path.exists(p):
-        r = json.load(open(p))
-        dg = (r.get("program") or {}).get("digest")
-        if dg:
-            return str(dg)
-    p = os.path.join(d, "artifact.json")
-    if os.path.exists(p):
-        dg = json.load(open(p)).get("program_digest")
-        if dg:
-            return str(dg)
-    return None
-
-
-def component_provenance(d: str, desc: dict) -> dict:
-    """[rev-pm M-0123 E] the component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
-    result.json/artifact.json's program_digest.  `refusal` names the mismatch (fail closed); a component dir with no recorded digest is
-    refused too (a descriptor without provenance is not a Build artifact)."""
-    from verity.ir.codec import program_digest
-    recomputed = program_digest(desc)
-    recorded = recorded_component_digest(d)
-    refusal = None
-    if recorded is None:
-        refusal = f"{d}: no recorded program digest (result.json program.digest / artifact.json program_digest): the component has no provenance"
-    elif recorded != recomputed:
-        refusal = (f"{d}: descriptor digest {recomputed[:16]} != the digest the derive recorded {recorded[:16]}: the component descriptor is not "
-                   f"the Program derive_step built")
-    return {"dir": d, "descriptor_digest": recomputed, "recorded_digest": recorded,
-            "descriptor_sha256": hashlib.sha256(canonical_json(desc)).hexdigest(), "refusal": refusal}
 
 
 def workload_applicability(m: dict, comps: dict) -> dict:
@@ -640,10 +590,15 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
                      f"{len(per) - len(have)} of {len(per)} components carry no weights_of_record.json: the row's Commit fails 'weights unpinned' (MAN-09)")}
 
 
+def _refused(out: str, res: dict) -> dict:
+    json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
+    return res
+
+
 def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir: str | None = None, eos_token_ids: list[int] | None = None,
-          artifact_root: str | None = None) -> dict:
+          artifact_root: str | None = None, early: dict[str, dict] | None = None, canon: dict | None = None) -> dict:
     """`artifact_root`: the dir the `vllm-build/v1` tree is rooted at (default: the parent of `out`); the `layout` block's relative paths
-    are taken from it (module docstring)."""
+    are taken from it (module docstring).  `early`, `canon`: components `follow_components` already loaded, and their definition set."""
     t0 = time.time()
     artifact_root = os.path.abspath(artifact_root) if artifact_root else os.path.dirname(os.path.abspath(out))
     raw = open(workload_path, "rb").read()
@@ -665,15 +620,13 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     if missing:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "missing_derived", "missing_derived": missing,
                "hint": "derive_step --wrapper request --LP <lp> --T <t> --workload <manifest> for each"}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     # [COORD M-0063 (1)] the Program declares the execution profile + engine conditions it models and REFUSES a row it does not model
     app = workload_applicability(m, {s: component_applicability(shapes[s]) for s in need})
     if app["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "applicability", "message": app["refusal"], "applicability": app,
                "manifest_sha256": mdigest}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     # [rev-pm M-0560 (1)] a component carrying a per-request S-schedule (stochastic top-p, DECISION M-0529 (A)) binds only to the
     # request whose declared arrival it was computed for; a shape shared by two arrivals does not compose with one component
     sched = sampler_schedule_binding(reqs, {s: shapes[s] for s in need})
@@ -688,8 +641,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     if sched["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "sampler_schedule", "message": sched["refusal"], "sampler_schedule": sched,
                "manifest_sha256": mdigest}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     # [R17-1 / DP-pad-02 (b)] LAG: the REQUIRED specialization parameter, declared from the row's target (the resolved async-scheduling
     # configuration of the serving profile, implementation pinned) BEFORE the Program is composed -- it is a static of Workload_v1 and
     # enters the digest; the components' derive-time targets must resolve to the same value (fail closed, named)
@@ -697,8 +649,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     if lag.get("refusal") or lag.get("value") not in W.LAG_VALUES:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "lag", "message": lag.get("refusal") or f"lag {lag.get('value')!r} not in {W.LAG_VALUES}",
                "lag": lag, "manifest_sha256": mdigest}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     app["engine"] = {**app["engine"], "async_scheduling": bool(lag["async_scheduling"])}   # G1 compares it with the record's resolved read-back
     # [R17-42 route A (3)] the fused-MoE CONSTRUCTION: declared by the row's target, bound by the components (their Definitions), coupled here
     # (one construction per workload Program, fail closed, named); a header block, NOT an applicability.engine key -- never attested
@@ -706,24 +657,21 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     if moec.get("refusal"):
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "moe_construction", "message": moec["refusal"], "moe_construction": moec,
                "manifest_sha256": mdigest}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     comps: dict[tuple[int, int], W.RequestComponent] = {}
     comp_secs = {}
     comp_provenance = {}
-    canon: dict = {}   # [rev-pm M-0123 F(1)] this compose's shared-definition set, never another compose's in the same process
+    canon = {} if canon is None else canon   # [rev-pm M-0123 F(1)] this compose's shared-definition set, never another compose's in the same process
     for s in need:
-        t1 = time.time()
         d = shapes[s]
-        desc = load_desc(d)
+        pre = (early or {}).get(d) or load_component(d, canon)
         # [rev-pm M-0123 E] the component descriptor is checked against the digest the derive RECORDED for it (result.json program.digest /
         # artifact.json program_digest): a descriptor edited after the derive composes to another workload digest silently otherwise
-        prov = component_provenance(d, desc)
+        prov = pre["prov"]
         if prov["refusal"]:
             res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "component_provenance", "message": prov["refusal"], "component": d,
                    "manifest_sha256": mdigest}
-            json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-            return res
+            return _refused(out, res)
         # [hopper HOP-03 M-0276] a component derived with a declared LAUNCH CONTEXT (FA3 tile = launch property) carries it in its
         # applicability (`launch_context`, present only when declared): recorded per component here -- it is the component's own
         # (each shape has its own per-step launch max), so it is NOT an agreed workload_applicability key
@@ -731,8 +679,11 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         if lc is not None:
             prov["launch_context"] = lc
         comp_provenance[f"{s[0]},{s[1]}"] = prov
-        comps[s] = W.request_component(desc, REGISTRY, wrapper_params(d), canon=canon)
-        comp_secs[f"{s[0]},{s[1]}"] = round(time.time() - t1, 2)
+        comps[s] = component_of(pre)
+        comp_secs[f"{s[0]},{s[1]}"] = pre["secs"]
+    if why := registration_refusal([shapes[s_] for s_ in need]):   # the requests share one registration (`shared.values`, the tables)
+        res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "registration", "message": why, "manifest_sha256": mdigest}
+        return _refused(out, res)
     wreqs = [W.WorkloadRequest(r["request_id"], r["index"], r["prompt_len"], r["cap"], r["arrive_step"], comps[(r["prompt_len"], r["cap"] - 1)],
                                T=r["cap"] - 1) for r in reqs]
     t2 = time.time()
@@ -756,15 +707,13 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     if wor["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "weights_of_record", "message": wor["refusal"], "weights_of_record": wor,
                "manifest_sha256": mdigest}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     art["weights_of_record"] = wor
     art["stop_rule"] = stop_rule(checkpoint_dir, eos_token_ids, m)   # [F-pm-24] the declared EOS set GM-01 verifies early stops against
     if art["stop_rule"].get("refusal"):
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "stop_rule", "message": art["stop_rule"]["refusal"], "stop_rule": art["stop_rule"],
                "manifest_sha256": mdigest}
-        json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-        return res
+        return _refused(out, res)
     # [R17-1 / DP-pad-02 (b)] the rows the declared scheduler computes AFTER an EOS stop are the Program's `lag` static (above); the stop
     # rule carries the same value under both names (eos_lag_rows: the ruling-21 reader's key; lag: R17-1's) -- one source, and GM-01 G6
     # consumes THIS declaration (never the record's attestation as the rule; G1 checks the record attests the same resolved value)
@@ -781,12 +730,11 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         if sgeo.get("refusal"):
             res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "sampler_geometry", "message": sgeo["refusal"], "sampler_geometry": sgeo,
                    "manifest_sha256": mdigest}
-            json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-            return res
+            return _refused(out, res)
     desc = wl.descriptor
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
-        f.write(canonical_json(desc))
-    art["descriptor"] = {"bytes": descriptor_size(desc), "sha256": hashlib.sha256(canonical_json(desc)).hexdigest(),
+        f.write(cj := canonical_json(desc))
+    art["descriptor"] = {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha256": hashlib.sha256(cj).hexdigest(),
                          "n_definitions": len(desc["definitions"])}
     art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {f"{k[0]},{k[1]}": v for k, v in shapes.items() if k in comps},
                      # per component: the descriptor's recomputed digest == the derive's recorded program_digest (checked above), descriptor sha
@@ -811,11 +759,25 @@ class Options:
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id " "become the Program's declared stop rule (F-pm-24)")
     eos_token_ids: str | None = option("--eos-token-ids", default=None, help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
     artifact_root: str | None = option("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the " "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
+    follow: float | None = option("--follow", type=float, default=None,
+                                  help="started beside the derives: load each component as its derive finishes, waiting up to this many seconds")
+    follow_done: str | None = option("--follow-done", default=None, help="with --follow: a file whose existence means every derive has ended")
+    follow_stop: str | None = option("--follow-stop", default=None, help="with --follow: a file whose existence means the Build failed: compose nothing")
 
 
 def main(a: Options) -> int:
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    _gc_tune()
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
-    res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root)
+    early, canon = None, {}
+    if a.follow:
+        reqs = manifest_requests(json.load(open(a.workload)))
+        early = follow_components(a.derived, {(r["prompt_len"], r["cap"] - 1) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
+                                  stop=a.follow_stop)
+        if early is None:
+            return 5
+    res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root, early=early,
+                canon=canon)
     if not res.get("ok"):
         print(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
         return 4

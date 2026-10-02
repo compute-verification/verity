@@ -1,8 +1,9 @@
 """The backend sweep's work lists, and a row's whole-row figure from `class_statement`'s per-shape records.
 
     python -m verity_flock.class_sweep plan GRAPH_DIR OUT [--full-row 101] [--per-doubling 24] [--pods l40s=3,h100=1]
-    python -m verity_flock.class_sweep rollup RESULTS.jsonl... --total-ands N [--total-units N] [--native-tensor S]
-                                              [--native-memory S] [--row R] [--digest D] [--json]
+    python -m verity_flock.class_sweep rollup RESULTS.jsonl... --total-ands N [--counts COUNTS.json...] [--total-units N]
+                                              [--native-tensor S] [--native-memory S] [--row R] [--digest D] [--json]
+    python -m verity_flock.class_sweep regroup NEW.program.json COUNTS.json... --out NEW.counts.json
 
 ``plan`` reads served rows' program graphs (``vllm-program-graph/v1``). Per served hardware it lists every Call Definition of the
 rows outside the token-select Calls, with attention's key counts subsampled per head configuration (`grid`), deduplicated across
@@ -14,7 +15,11 @@ Definitions and its heads' key counts are left out of the lists.
 ``rollup``: per proved shape, P = B / its median timed prove, its row units (``row_units``) and ceil(row units / B) statements to
 cover them. Per row: proving seconds = sum of row units / P; proof bytes and verifier seconds = statements x one statement's;
 coverage = the proved shapes' ANDs (row units x the unit's ANDs) over the row's total; overhead = proving seconds over the row's
-native seconds times coverage, on each basis given. Every shape not proved is listed with the reason.
+native seconds times coverage, on each basis given. Every shape not proved is listed with the reason; with the row's counts
+(`class_statement --counts-only`) every shape of the row is listed, run or not.
+
+``regroup`` re-aggregates for a new program digest: a Call Definition whose id didn't move carries its per-Call shape counts
+over, and only the new ones need cutting (a shape's results carry over by its digest).
 """
 from __future__ import annotations
 
@@ -122,16 +127,28 @@ def plan(rows: dict[str, dict], full_rows: set[str], per_doubling: int, pods: di
     return out
 
 
-def rollup(records, total_ands: float, total_units: float | None = None, natives: dict[str, float] | None = None) -> dict:
-    """The whole-row figure from per-shape records (the last record of a shape wins)."""
-    recs = {r["shape"]: r for r in records}
+def rollup(records, total_ands: float, total_units: float | None = None, natives: dict[str, float] | None = None,
+           counts: dict[str, dict] | None = None) -> dict:
+    """The whole-row figure from per-shape records, over any number of runs: per shape, an accepted record over a rejected or
+    broken one over a skipped one, the later at equal rank. ``counts`` ({shape: {"row_units", ...}}, the row's `class_statement
+    --counts-only`) gives every shape's row units, and a shape of the row without a record is listed as not run."""
+    def rank(r):
+        return 3 if (r.get("live") or {}).get("accepted") else 0 if r.get("not_run") else 1 if r.get("skipped") else 2
+    recs: dict = {}
+    for r in records:
+        if r["shape"] not in recs or rank(r) >= rank(recs[r["shape"]]):
+            recs[r["shape"]] = r
+    if counts is not None:
+        recs = {s: dict(recs[s], row_units=c["row_units"]) if s in recs else
+                {"shape": s, "definition": c.get("definition"), "units": c.get("units"), "row_units": c["row_units"],
+                 "not_run": True} for s, c in counts.items() if c.get("row_units")}
     proved, not_proved = [], []
     for r in recs.values():
         lv = r.get("live") or {}
         if lv.get("accepted"):
             proved.append(r)
         else:
-            why = ("rejected: " + str(lv.get("why", ""))[:200] if lv else f"skipped: {r['skipped']}" if r.get("skipped")
+            why = ("rejected: " + str(lv.get("why", ""))[:200] if lv else "not run" if r.get("not_run") else f"skipped: {r['skipped']}" if r.get("skipped")
                    else "broke at {at}: {why}".format(**r["broke"]) if r.get("broke") else "no record")
             not_proved.append({"shape": r["shape"], "definition": r.get("definition"), "row_units": r.get("row_units"),
                                "ands": r.get("ands"), "why": why})
@@ -165,6 +182,35 @@ def rollup(records, total_ands: float, total_units: float | None = None, natives
     return out
 
 
+def merge_counts(docs: list[dict]) -> dict:
+    """`class_statement --counts-only` files over disjoint Call Definitions (chunks of one row) as one."""
+    out: dict = {"calls": {}, "per_definition": {}, "shapes": {}}
+    for d in docs:
+        out["calls"].update(d.get("calls") or {})
+        out["per_definition"].update(d.get("per_definition") or {})
+        for s, c in d["shapes"].items():
+            got = out["shapes"].setdefault(s, dict(c, row_units=0))
+            got["row_units"] += c.get("row_units") or 0
+    return out
+
+
+def regroup(calls: dict[str, int], known: dict) -> tuple[dict, list[str]]:
+    """A row's counts from its Call counts (`graph_calls` of a new program graph) and the per-Definition shape counts already cut
+    (``known``: merged counts): (counts {"shapes": {shape: {"row_units"}}}, the Call Definitions not cut yet). A Definition whose id
+    is unchanged carries its shapes over; the ones listed need `class_statement --definitions ... --counts-only`."""
+    shapes: dict[str, dict] = {}
+    missing = []
+    for fid, n in calls.items():
+        per = known["per_definition"].get(fid)
+        if per is None:
+            missing.append(fid)
+            continue
+        for s, c in per.items():
+            got = shapes.setdefault(s, {k: v for k, v in known["shapes"].get(s, {}).items() if k != "row_units"} | {"row_units": 0})
+            got["row_units"] += c * n
+    return {"calls": calls, "shapes": shapes}, missing
+
+
 def _load_rows(gdir: Path) -> dict[str, dict]:
     rows = {}
     for f in sorted(gdir.glob("*.program.json")):
@@ -192,8 +238,20 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--native-memory", type=float, default=None)
     r.add_argument("--row", default=None)
     r.add_argument("--digest", default=None)
+    r.add_argument("--counts", nargs="*", default=None, help="the row's counts.json files (class_statement --counts-only, or regroup)")
     r.add_argument("--json", action="store_true")
+    g = sub.add_parser("regroup", help="a new program graph's counts from Definitions already cut; lists the ones to cut")
+    g.add_argument("graph")
+    g.add_argument("counts", nargs="+")
+    g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "regroup":
+        got, missing = regroup(graph_calls(json.loads(Path(a.graph).read_text())), merge_counts([json.loads(Path(f).read_text()) for f in a.counts]))
+        Path(a.out).write_text(json.dumps(got, sort_keys=True))
+        Path(a.out).with_suffix(".missing.json").write_text(json.dumps({f: got["calls"][f] for f in missing}, indent=0, sort_keys=True))
+        print(f"{len(got['shapes'])} shapes from {len(got['calls']) - len(missing)} known Definitions; {len(missing)} to cut "
+              f"({Path(a.out).with_suffix('.missing.json')})")
+        return 0
     if a.cmd == "plan":
         rows = _load_rows(Path(a.graphs))
         pods = {k: int(v) for k, v in (kv.split("=") for kv in a.pods.split(","))}
@@ -210,7 +268,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{name}: {len(d)} Definitions, about {res['est_hours'][name]} h")
         return 0
     recs = [json.loads(ln) for f in a.results for ln in open(f) if ln.strip()]
-    res = rollup(recs, a.total_ands, a.total_units, {"tensor_peak": a.native_tensor, "memory_bound": a.native_memory})
+    counts = merge_counts([json.loads(Path(f).read_text()) for f in a.counts])["shapes"] if a.counts else None
+    res = rollup(recs, a.total_ands, a.total_units, {"tensor_peak": a.native_tensor, "memory_bound": a.native_memory}, counts)
     res.update(row=a.row, program_digest=a.digest)
     if a.json:
         print(json.dumps(res, indent=1))

@@ -1,0 +1,310 @@
+{
+  "schema": "verity/job-service-train-vectors/v1",
+  "about": "Stage 1.5 of the Job queue (trains the service builds, checks and lands) as request/response cases. research.jobs.trains runs them (tools/research/tests/test_jobs_vectors.py); the site's TypeScript runs the same file. Everything in vectors.json's `about` holds here too, and each case also starts from `setup.github` in a fake GitHub and an empty fake store. The fake GitHub: `commits` by id, each with `parents` and `files` (the paths it sets against its first parent; null deletes one); a commit's tree is its first-parent chain's files applied in order. `merge(ref, head)` (the Merges API): 204 when head is already an ancestor of the ref's tip; 409 when a path changed on both sides since their merge base has different contents; else 201 and a new commit named `{tip}+{head}` with parents [tip, head], and the ref moves to it. `update_ref(ref, sha)` with force false: 422 unless the old tip is an ancestor of sha; on success every open PR based on that ref whose head is now an ancestor becomes `merged`. The fake store holds `attempts` by run id and `manifests` by art id. Further step forms: `store` adds attempts and manifests (replacing one of the same id, which the real store never does, to keep the cases short); `github_push` puts someone else's commit on a ref (moving it without the fast-forward rule); `github_label` adds a label to a PR; `reconcile: true` runs the reconcile cron, whose `expect.moved` lists the train ids it moved; `expect_github` compares refs (null: the ref must be absent), PRs (a subset of each), the comments posted, in order, and `trees`: files at a commit (a subset). Lean records: when a merge step's two sides both changed a `lean-audit.json` whose contents differ, the service merges the three records (merge base, train, PR) with tools/lean/merge.py's `merge()` and writes the result with audit.py's `text()`. The result goes onto the train as a commit named `{tip}.rec` and onto the PR's head as `{head}.rec`. When `merge()` refuses, only `{head}.rec` is written, with the train's record, and the package (the record's directory) is regenerated: a `lean-regen` job on the tip, whose run's `records/{package}/lean-audit.json` (from its run record: `outputs.run_record`, then that manifest's `payload.files`, then `objects`) becomes the commit `{tip}.regen` before the merge check. `store` also takes `objects`.",
+  "epoch": "2026-09-29T00:00:00Z",
+  "setup": {
+    "tokens": [
+      {"secret": "tok-coordinator", "name": "coordinator", "scopes": ["jobs:enqueue", "events:read", "trains:write"]},
+      {"secret": "tok-lane", "name": "lane-x", "scopes": ["jobs:enqueue"]},
+      {"secret": "tok-reader", "name": "root", "scopes": ["events:read"]},
+      {"secret": "tok-dispatch", "name": "dispatch-rc", "scopes": ["jobs:work"]}
+    ],
+    "workers": [
+      {"id": "dispatch:rc", "kind": "dispatcher", "token": "dispatch-rc", "kinds": ["merge-check", "lean-regen", "audit-main"]}
+    ],
+    "github": {
+      "commits": {
+        "m0": {"parents": [], "files": {"README.md": "verity", "tools/check/tool.py": "CHECK = Tool(name=\"check\", version=\"1\",\n             merge_requires={\"lean-agreement\": [\"backends/flock/\", \"!README.md\", \"!PROTOCOL.md\"]})\n", "lean/lean-audit.json": "{\n \"pins\": {}\n}\n"}},
+        "a1": {"parents": ["m0"], "files": {"a.txt": "a"}},
+        "b1": {"parents": ["m0"], "files": {"b.txt": "b"}},
+        "c1": {"parents": ["a1"], "files": {"c.txt": "c"}},
+        "d1": {"parents": ["a1"], "files": {"d.txt": "d"}},
+        "x1": {"parents": ["m0"], "files": {"a.txt": "x"}},
+        "f1": {"parents": ["m0"], "files": {"backends/flock/src.rs": "fn main() {}"}},
+        "r1": {"parents": ["m0"], "files": {"backends/flock/README.md": "flock"}},
+        "h1": {"parents": ["m0"], "files": {"h.txt": "h"}},
+        "k1": {"parents": ["m0"], "files": {"k.txt": "k"}},
+        "p1": {"parents": ["m0"], "files": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"1\"\n }\n}\n", "lean/T1.lean": "t1"}},
+        "p2": {"parents": ["m0"], "files": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t2\": \"1\"\n }\n}\n", "lean/T2.lean": "t2"}},
+        "p3": {"parents": ["m0"], "files": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"2\"\n }\n}\n", "lean/T1b.lean": "t1b"}}
+      },
+      "refs": {"main": "m0", "pr-a": "a1", "pr-b": "b1", "pr-c": "c1", "pr-d": "d1", "pr-x": "x1", "pr-f": "f1", "pr-r": "r1", "pr-h": "h1", "pr-k": "k1", "pr-p1": "p1", "pr-p2": "p2", "pr-p3": "p3"},
+      "prs": [
+        {"number": 1, "head": "a1", "head_ref": "pr-a", "base": "main", "labels": [], "state": "open"},
+        {"number": 2, "head": "b1", "head_ref": "pr-b", "base": "main", "labels": [], "state": "open"},
+        {"number": 3, "head": "c1", "head_ref": "pr-c", "base": "pr-a", "labels": [], "state": "open"},
+        {"number": 4, "head": "d1", "head_ref": "pr-d", "base": "pr-a", "labels": [], "state": "open"},
+        {"number": 5, "head": "x1", "head_ref": "pr-x", "base": "main", "labels": [], "state": "open"},
+        {"number": 6, "head": "f1", "head_ref": "pr-f", "base": "main", "labels": [], "state": "open"},
+        {"number": 7, "head": "r1", "head_ref": "pr-r", "base": "main", "labels": [], "state": "open"},
+        {"number": 8, "head": "h1", "head_ref": "pr-h", "base": "main", "labels": ["hold"], "state": "open"},
+        {"number": 9, "head": "k1", "head_ref": "pr-k", "base": "main", "labels": [], "state": "closed"},
+        {"number": 10, "head": "p1", "head_ref": "pr-p1", "base": "main", "labels": [], "state": "open"},
+        {"number": 11, "head": "p2", "head_ref": "pr-p2", "base": "main", "labels": [], "state": "open"},
+        {"number": 12, "head": "p3", "head_ref": "pr-p3", "base": "main", "labels": [], "state": "open"}
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "a train merges each PR's head onto train/{id} in order and adds one merge-check of its tip",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 2]},
+         "expect": {"status": 201, "body": {"id": 1, "state": "checking", "prs": [{"number": 1, "head": "a1"}, {"number": 2, "head": "b1"}], "base": "m0",
+                                            "tip": "m0+a1+b1", "job": 1, "branch": "train/1", "land": true, "by": "coordinator", "why": null}}},
+        {"at": 0, "expect_github": {"refs": {"main": "m0", "train/1": "m0+a1+b1"}}},
+        {"at": 1, "req": ["GET", "/api/jobs/1"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"kind": "merge-check", "state": "queued", "dedupe_key": "merge-check:m0+a1+b1", "enqueued_by": "coordinator",
+                                            "payload": {"repo": "danielreuter/verity", "commit": "m0+a1+b1", "base": "m0", "train": 1, "verdict_pack": null, "timeout_s": 7200},
+                                            "requirements": {"min_lease_s": 8100}}}},
+        {"at": 2, "req": ["GET", "/api/events?kind=train.built"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "actor": "coordinator", "payload": {"prs": [1, 2], "tip": "m0+a1+b1", "job": 1}}]}}},
+        {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [7], "requirements": {"avx512": true}, "line": "vy-coord-"},
+         "expect": {"status": 201, "body": {"id": 2, "tip": "m0+r1", "job": 2}}},
+        {"at": 4, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"requirements": {"min_lease_s": 8100, "avx512": true}, "line": "vy-coord-"}}},
+        {"at": 4, "req": ["GET", "/api/jobs/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"line": null}}},
+        {"at": 5, "req": ["GET", "/api/trains"], "token": "tok-lane", "expect": {"status": 200, "body": {"trains": [{"id": 2}, {"id": 1}]}}}
+      ]
+    },
+    {
+      "name": "a held, closed, unknown or conflicting PR makes no train, and only trains:write names one",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 8]}, "expect": {"status": 409}},
+        {"at": 1, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [9]}, "expect": {"status": 409}},
+        {"at": 2, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [99]}, "expect": {"status": 409}},
+        {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": []}, "expect": {"status": 400}},
+        {"at": 4, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 1]}, "expect": {"status": 400}},
+        {"at": 5, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1], "land": "yes"}, "expect": {"status": 400}},
+        {"at": 5, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1], "line": "coord"}, "expect": {"status": 400}},
+        {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-lane", "body": {"prs": [1]}, "expect": {"status": 403}},
+        {"at": 7, "expect_github": {"refs": {"main": "m0", "train/1": null}}},
+        {"at": 8, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 5]}, "expect": {"status": 409}},
+        {"at": 9, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "refused", "why": "#5 doesn't merge onto the train"}}},
+        {"at": 10, "expect_github": {"refs": {"train/1": null}}},
+        {"at": 11, "req": ["GET", "/api/jobs"], "token": "tok-reader", "expect": {"status": 200, "body": {"jobs": []}}},
+        {"at": 12, "req": ["GET", "/api/events?kind=train.refused"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "payload": {"conflict": 5}}]}}},
+        {"at": 13, "req": ["GET", "/api/trains/7"], "token": "tok-reader", "expect": {"status": 404}}
+      ]
+    },
+    {
+      "name": "a passing check lands the train by fast-forward, and the sweep closes stacked PRs and retargets their children",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 3]}, "expect": {"status": 201, "body": {"tip": "m0+a1+c1", "job": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1", "capabilities": {"lease_s": 36000}},
+         "expect": {"status": 200, "body": {"job": {"id": 1}}}, "save": {"L1": "lease_token"}},
+        {"at": 2, "reconcile": true, "expect": {"moved": []}},
+        {"at": 3, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r1"}, "expect": {"status": 200, "body": {"state": "done"}}},
+        {"at": 4, "store": {"attempts": {"r1": {"id": "r1", "tool": {"name": "check"}, "source": {"commit": "m0+a1+c1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res1"}}},
+                           "manifests": {"art:res1": {"meta": {"steps": [{"step": "suites", "status": "passed"}]}}}}},
+        {"at": 5, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 6, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "landed", "run_id": "r1", "landed_at": "2026-09-29T00:00:05Z", "why": null}}},
+        {"at": 6, "expect_github": {"refs": {"main": "m0+a1+c1", "train/1": null},
+                                    "prs": {"1": {"state": "merged", "base": "main"}, "3": {"state": "closed", "base": "pr-a"}, "4": {"state": "open", "base": "main"}, "2": {"state": "open", "base": "main"}},
+                                    "comments": [{"pr": 3, "body": "Merged into main at m0+a1+c1 (train 1)."}]}},
+        {"at": 7, "req": ["GET", "/api/events?after=0&kind=train.landed"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "actor": "cron", "payload": {"tip": "m0+a1+c1", "prs": [1, 3], "run_id": "r1"}}]}}},
+        {"at": 8, "req": ["GET", "/api/events?kind=pr.retargeted"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "pr:4", "payload": {"from": "pr-a", "train": 1}}]}}},
+        {"at": 9, "req": ["GET", "/api/events?kind=pr.landed"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "pr:1"}, {"subject": "pr:3"}]}}},
+        {"at": 10, "reconcile": true, "expect": {"moved": []}}
+      ]
+    },
+    {
+      "name": "the gate reads the Attempt in the store, never the worker's report, and a re-named train reuses the check of its tip",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 1, "tip": "m0+b1", "job": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r2"}, "expect": {"status": 200}},
+        {"at": 3, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 4, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "no Attempt attempts/r2.json in the store"}}},
+        {"at": 5, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 2, "tip": "m0+b1", "job": 1}}},
+        {"at": 7, "reconcile": true, "expect": {"moved": [2]}},
+        {"at": 8, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2 checked m0, not the train's tip m0+b1"}}},
+        {"at": 9, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": true}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 10, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 3}}},
+        {"at": 11, "reconcile": true, "expect": {"moved": [3]}},
+        {"at": 12, "req": ["GET", "/api/trains/3"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2 checked a dirty or unknown tree"}}},
+        {"at": 13, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "failed", "rc": 1}, "outputs": {"result": null}}}}},
+        {"at": 14, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 4}}},
+        {"at": 15, "reconcile": true, "expect": {"moved": [4]}},
+        {"at": 16, "req": ["GET", "/api/trains/4"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2 is failed rc=1"}}},
+        {"at": 17, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "circuit-check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 18, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 5}}},
+        {"at": 19, "reconcile": true, "expect": {"moved": [5]}},
+        {"at": 20, "req": ["GET", "/api/trains/5"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2 is not a `check`"}}},
+        {"at": 21, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 22, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 6}}},
+        {"at": 23, "reconcile": true, "expect": {"moved": [6]}},
+        {"at": 24, "req": ["GET", "/api/trains/6"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "landed"}}},
+        {"at": 24, "expect_github": {"refs": {"main": "m0+b1"}, "prs": {"2": {"state": "merged"}}}}
+      ]
+    },
+    {
+      "name": "a change the target's merge_requires names lands only with that step passed",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"tip": "m0+f1"}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r6"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"r6": {"id": "r6", "tool": {"name": "check"}, "source": {"commit": "m0+f1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res6"}}},
+                           "manifests": {"art:res6": {"meta": {"steps": [{"step": "suites", "status": "passed"}, {"step": "lean-agreement", "status": "skipped"}]}}}}},
+        {"at": 4, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 5, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "the change needs lean-agreement skipped to have passed in run r6"}}},
+        {"at": 6, "expect_github": {"refs": {"main": "m0"}}},
+        {"at": 7, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [7]}, "expect": {"status": 201, "body": {"id": 2, "tip": "m0+r1", "job": 2}}},
+        {"at": 8, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L2": "lease_token"}},
+        {"at": 9, "req": ["POST", "/api/jobs/2/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed", "run_id": "r7"}, "expect": {"status": 200}},
+        {"at": 10, "store": {"attempts": {"r7": {"id": "r7", "tool": {"name": "check"}, "source": {"commit": "m0+r1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res7"}}},
+                            "manifests": {"art:res7": {"meta": {"steps": [{"step": "suites", "status": "passed"}]}}}}},
+        {"at": 11, "reconcile": true, "expect": {"moved": [2]}},
+        {"at": 12, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "landed"}}},
+        {"at": 13, "github_label": {"pr": 6, "add": "hold"}},
+        {"at": 14, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 409}}
+      ]
+    },
+    {
+      "name": "a change under backends/flock/ with lean-agreement passed lands",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"tip": "m0+f1"}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r6"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"r6": {"id": "r6", "tool": {"name": "check"}, "source": {"commit": "m0+f1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res6"}}},
+                           "manifests": {"art:res6": {"meta": {"steps": [{"step": "suites", "status": "passed"}, {"step": "lean-agreement", "status": "passed"}]}}}}},
+        {"at": 4, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 5, "expect_github": {"refs": {"main": "m0+f1"}, "prs": {"6": {"state": "merged"}}}}
+      ]
+    },
+    {
+      "name": "when main moves under a checked train, it's rebuilt on the new main from the same heads and checked again",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"tip": "m0+b1", "job": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r1"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"r1": {"id": "r1", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 4, "github_push": {"ref": "main", "sha": "m1", "parents": ["m0"], "files": {"z.txt": "z"}}},
+        {"at": 5, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 6, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "checking", "base": "m1", "tip": "m1+b1", "job": 2, "rebuilds": 1, "run_id": null}}},
+        {"at": 6, "expect_github": {"refs": {"main": "m1", "train/1": "m1+b1"}}},
+        {"at": 7, "req": ["GET", "/api/events?kind=train.rebuilt"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "payload": {"base": "m1", "tip": "m1+b1", "job": 2}}]}}},
+        {"at": 8, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"job": {"id": 2, "payload": {"commit": "m1+b1", "base": "m1"}}}}, "save": {"L2": "lease_token"}},
+        {"at": 9, "req": ["POST", "/api/jobs/2/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed", "run_id": "r2"}, "expect": {"status": 200}},
+        {"at": 10, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m1+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 11, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 12, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "landed", "run_id": "r2"}}},
+        {"at": 12, "expect_github": {"refs": {"main": "m1+b1", "train/1": null}, "prs": {"2": {"state": "merged"}}}}
+      ]
+    },
+    {
+      "name": "a failed check fails the train and leaves main alone, and an error waits for the retry",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "error", "summary": "the pod failed check's preflight"}, "expect": {"status": 200, "body": {"state": "queued"}}},
+        {"at": 3, "reconcile": true, "expect": {"moved": []}},
+        {"at": 4, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
+        {"at": 5, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "failed", "run_id": "r9"}, "expect": {"status": 200, "body": {"state": "failed"}}},
+        {"at": 6, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 7, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "failed", "why": "the check of m0+b1 failed (run r9)", "run_id": "r9"}}},
+        {"at": 7, "expect_github": {"refs": {"main": "m0", "train/1": null}, "prs": {"2": {"state": "open"}}}},
+        {"at": 8, "req": ["GET", "/api/events?kind=train.failed"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "payload": {"tip": "m0+b1", "prs": [2], "run_id": "r9", "why": "the check of m0+b1 failed (run r9)"}}]}}}
+      ]
+    },
+    {
+      "name": "land false stops at would-land, and a cancelled train cancels its check",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2], "land": false}, "expect": {"status": 201, "body": {"land": false}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r1"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"r1": {"id": "r1", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 4, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 5, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "would-land"}}},
+        {"at": 5, "expect_github": {"refs": {"main": "m0", "train/1": null}, "prs": {"2": {"state": "open"}}}},
+        {"at": 6, "req": ["GET", "/api/events?kind=train.would_land"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1"}]}}},
+        {"at": 7, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1]}, "expect": {"status": 201, "body": {"id": 2, "job": 2}}},
+        {"at": 8, "req": ["POST", "/api/trains/2/cancel"], "token": "tok-lane", "expect": {"status": 403}},
+        {"at": 9, "req": ["POST", "/api/trains/2/cancel"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "cancelled"}}},
+        {"at": 10, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "cancelled"}}},
+        {"at": 10, "expect_github": {"refs": {"train/2": null}}},
+        {"at": 11, "req": ["POST", "/api/trains/2/cancel"], "token": "tok-coordinator", "expect": {"status": 409}},
+        {"at": 12, "req": ["GET", "/api/trains?state=cancelled"], "token": "tok-reader", "expect": {"status": 200, "body": {"trains": [{"id": 2}]}}}
+      ]
+    },
+    {
+      "name": "two PRs that change one package's record: merge()'s record goes on both sides, and the Merges API merges the rest",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [10, 11]},
+         "expect": {"status": 201, "body": {"state": "checking", "tip": "m0+p1.rec+p2.rec", "job": 1, "regen": []}}},
+        {"at": 0, "expect_github": {"refs": {"train/1": "m0+p1.rec+p2.rec", "main": "m0"},
+                                    "trees": {"m0+p1.rec+p2.rec": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"1\",\n  \"t2\": \"1\"\n }\n}\n", "lean/T1.lean": "t1", "lean/T2.lean": "t2"},
+                                              "m0+p1.rec": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"1\",\n  \"t2\": \"1\"\n }\n}\n", "lean/T1.lean": "t1"},
+                                              "p2.rec": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"1\",\n  \"t2\": \"1\"\n }\n}\n", "lean/T2.lean": "t2"}}}},
+        {"at": 1, "req": ["GET", "/api/jobs/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"kind": "merge-check", "payload": {"commit": "m0+p1.rec+p2.rec", "base": "m0"}}}},
+        {"at": 2, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"job": {"id": 1}}}, "save": {"L1": "lease_token"}},
+        {"at": 3, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r1"}, "expect": {"status": 200}},
+        {"at": 4, "store": {"attempts": {"r1": {"id": "r1", "tool": {"name": "check"}, "source": {"commit": "m0+p1.rec+p2.rec", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 5, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 6, "expect_github": {"refs": {"main": "m0+p1.rec+p2.rec", "train/1": null}, "prs": {"10": {"state": "merged"}, "11": {"state": "merged"}}}}
+      ]
+    },
+    {
+      "name": "a record merge that merge() refuses falls back to lean-regen on the train's tip, whose record is committed before the check",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [10, 12], "line": "vy-coord-"},
+         "expect": {"status": 201, "body": {"state": "regenerating", "tip": "m0+p1+p3.rec", "job": 1, "regen": ["lean"]}}},
+        {"at": 0, "expect_github": {"refs": {"train/1": "m0+p1+p3.rec"},
+                                    "trees": {"p3.rec": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"1\"\n }\n}\n", "lean/T1b.lean": "t1b"},
+                                              "m0+p1+p3.rec": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"1\"\n }\n}\n", "lean/T1.lean": "t1", "lean/T1b.lean": "t1b"}}}},
+        {"at": 1, "req": ["GET", "/api/jobs/1"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"kind": "lean-regen", "dedupe_key": "lean-regen:m0+p1+p3.rec", "line": "vy-coord-",
+                                            "payload": {"repo": "danielreuter/verity", "commit": "m0+p1+p3.rec", "packages": ["lean"], "train": 1, "timeout_s": 7200},
+                                            "requirements": {"min_lease_s": 8100}}}},
+        {"at": 1, "req": ["GET", "/api/events?kind=train.built"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"payload": {"tip": "m0+p1+p3.rec", "job": 1, "regen": ["lean"]}}]}}},
+        {"at": 2, "reconcile": true, "expect": {"moved": []}},
+        {"at": 3, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"job": {"id": 1, "kind": "lean-regen"}}}, "save": {"L1": "lease_token"}},
+        {"at": 4, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "rg1"}, "expect": {"status": 200}},
+        {"at": 5, "store": {"attempts": {"rg1": {"id": "rg1", "tool": {"name": null}, "source": {"commit": "m0+p1+p3.rec", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null, "run_record": "art:rr1"}}},
+                           "manifests": {"art:rr1": {"payload": {"type": "tree", "files": [{"path": "records/lean/lean-audit.json", "sha256": "h-regen", "bytes": 42}, {"path": "stdout.log", "sha256": "h-log", "bytes": 3}]}}},
+                           "objects": {"h-regen": "{\n \"pins\": {\n  \"t1\": \"2\"\n },\n \"reads\": {}\n}\n", "h-log": "ok\n"}}},
+        {"at": 6, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 7, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "checking", "tip": "m0+p1+p3.rec.regen", "job": 2, "regen": [], "run_id": null}}},
+        {"at": 7, "expect_github": {"refs": {"train/1": "m0+p1+p3.rec.regen"}, "trees": {"m0+p1+p3.rec.regen": {"lean/lean-audit.json": "{\n \"pins\": {\n  \"t1\": \"2\"\n },\n \"reads\": {}\n}\n"}}}},
+        {"at": 8, "req": ["GET", "/api/events?kind=train.regenerated"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "payload": {"tip": "m0+p1+p3.rec.regen", "job": 2, "records": ["lean/lean-audit.json"]}}]}}},
+        {"at": 9, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"kind": "merge-check", "line": "vy-coord-", "payload": {"commit": "m0+p1+p3.rec.regen", "base": "m0"}}}},
+        {"at": 10, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"job": {"id": 2}}}, "save": {"L2": "lease_token"}},
+        {"at": 11, "req": ["POST", "/api/jobs/2/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed", "run_id": "r2"}, "expect": {"status": 200}},
+        {"at": 12, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+p1+p3.rec.regen", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
+        {"at": 13, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 14, "expect_github": {"refs": {"main": "m0+p1+p3.rec.regen", "train/1": null}, "prs": {"10": {"state": "merged"}, "12": {"state": "merged"}}}}
+      ]
+    },
+    {
+      "name": "a regeneration that fails fails the train, and a train named again onto the same tip reuses that verdict",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [10, 12]}, "expect": {"status": 201, "body": {"state": "regenerating", "job": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "failed", "run_id": "rg1"}, "expect": {"status": 200}},
+        {"at": 3, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 4, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "failed", "why": "the regeneration of lean failed (run rg1)"}}},
+        {"at": 4, "expect_github": {"refs": {"main": "m0", "train/1": null}}},
+        {"at": 5, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [10, 12]}, "expect": {"status": 201, "body": {"id": 2, "state": "regenerating", "job": 1}}},
+        {"at": 6, "reconcile": true, "expect": {"moved": [2]}},
+        {"at": 7, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "failed"}}}
+      ]
+    },
+    {
+      "name": "a regeneration that leaves no record is stuck, and a regenerating train can be cancelled",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [10, 12]}, "expect": {"status": 201, "body": {"job": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "rg1"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"rg1": {"id": "rg1", "tool": {"name": null}, "source": {"commit": "m0+p1+p3.rec", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"run_record": "art:rr1"}}},
+                           "manifests": {"art:rr1": {"payload": {"type": "tree", "files": [{"path": "stdout.log", "sha256": "h-log", "bytes": 3}]}}},
+                           "objects": {"h-log": "ok\n"}}},
+        {"at": 4, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 5, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run rg1 has no records/lean/lean-audit.json"}}},
+        {"at": 6, "github_push": {"ref": "main", "sha": "m1", "parents": ["m0"], "files": {"z.txt": "z"}}},
+        {"at": 7, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [10, 12]}, "expect": {"status": 201, "body": {"id": 2, "state": "regenerating", "tip": "m1+p1+p3.rec", "job": 2}}},
+        {"at": 8, "req": ["POST", "/api/trains/2/cancel"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "cancelled"}}},
+        {"at": 9, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"kind": "lean-regen", "state": "cancelled"}}}
+      ]
+    }
+  ]
+}

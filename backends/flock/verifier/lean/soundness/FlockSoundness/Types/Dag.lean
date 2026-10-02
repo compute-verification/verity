@@ -1632,7 +1632,7 @@ theorem lt_of_type {ls : Array Layout} {types : String → Option CircuitType} {
   rw [this] at ht
   cases ht
 
-/-- **The unit's derived rows compute its type** (L1 over the type DAG). If `deriveChecked` accepts the layouts, column
+/-- **The unit's derived rows compute its type**, over the type DAG. If `deriveChecked` accepts the layouts, column
 values that satisfy the unit's rows as the block holds them (Δ applied), with the block's constant `one` at 1, carry on
 each output column the unit type's output on its input columns. -/
 theorem unit_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}

@@ -23,7 +23,8 @@ probability space `Ω`, uniform by assumption A3 (`Assumptions.UniformRandomByte
   probability at most the model's escape, `Law.subset`'s or `Law.stratified`'s, for every number of bytes `L` read,
   through `subset_exec_escape_le` and `stratified_exec_escape_le`.
 * `execOS`: the live draw as a law, a run that would read past the source's bytes drawing every unit.
-  `execOS_escape_le` and `execOS_subset_escape_le` bound its escape, and `execOS_miss_le` its count curve.
+  `execOS_escape_le`, `execOS_work_escape_le` and `execOS_subset_escape_le` bound its escape, and `execOS_miss_le` its
+  count curve.
 
 The live verifier reads as many bytes as its reruns need, with no bound. On a run that reads at most `L i` bytes of each
 stream it returns what `runOS` does on those bytes, and these runs exhaust every run as `L` grows, so its escape is the
@@ -527,6 +528,16 @@ theorem execOS_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s,
     (execOS (n := n) t (.stratified K (Array.ofFn S)) pop).escape B ≤ (stratified σ k hk).escape B :=
   execOS_escape_le_of t _ pop B _ (fun h => by rw [h, stratified_escape_empty])
     (drawOS_stratified_escape_le σ k hk S hS K pop L t ht B)
+
+/-- **The live work draw, as a law, escapes no more often than `Law.stratified`**, on a uniform byte source (A3): the work
+law's strata as the stratified law's. -/
+theorem execOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+    (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) (W : Array Flock.Draw.WorkStratum)
+    (hW : W.map (·.toStratum) = Array.ofFn S) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin m → ℕ)
+    (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
+    (execOS (n := n) t (.work K W) pop).escape B ≤ (stratified σ k hk).escape B :=
+  execOS_escape_le_of t _ pop B _ (fun h => by rw [h, stratified_escape_empty])
+    (drawOS_work_escape_le σ k hk S hS K pop W hW L t ht B)
 
 /-- **The live subset draw, as a law, escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem execOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin 1 → ℕ)

@@ -16,6 +16,7 @@ REGISTRY: dict[str, str] = {
     "tc_probe": "tools.tc_probe.tool:TC_PROBE",
     "instances_hw": "tools.tc_probe.tool:INSTANCES_HW",
     "tc_probe_fp4": "tools.tc_probe_fp4.tool:TC_PROBE_FP4",
+    "tc_price_fp4": "tools.tc_probe_fp4.tool:TC_PRICE_FP4",
     "bench_vu": "backends.direct.ligero.tool:BENCH_VU",
     "ligero_verify_batch": "backends.direct.ligero.tool:LIGERO_VERIFY_BATCH",
     "a_gpu_prove": "backends.gkr.gpu.tool:A_GPU_PROVE",
@@ -38,17 +39,21 @@ REGISTRY: dict[str, str] = {
     "lean_upstream": "tools.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
+    "vllm.plan": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
     "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
     "vllm.commit": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
+    "vllm.replay": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",
 }
 
 
 def _from_file(module: str, attr: str, source_root: Path):
-    """Execute `<source_root>/<module path>.py` under a name unique to that file: no sys.path edits, no cross-root module caching."""
+    """Execute `<source_root>/<module path>.py` under a name unique to that file and its content: no sys.path edits, no
+    cross-root module caching, and a declaration that changed on disk (the target branch gained a commit) is read anew."""
     rel = Path(*module.split("."))
     for cand in (source_root / rel.with_suffix(".py"), source_root / rel / "__init__.py"):
         if cand.is_file():
-            name = f"_research_tool_{hashlib.sha256(str(cand.resolve()).encode()).hexdigest()[:16]}"
+            name = (f"_research_tool_{hashlib.sha256(str(cand.resolve()).encode()).hexdigest()[:16]}"
+                    f"_{hashlib.sha256(cand.read_bytes()).hexdigest()[:16]}")
             mod = sys.modules.get(name)
             if mod is None:
                 spec = importlib.util.spec_from_file_location(name, cand)

@@ -35,6 +35,9 @@ import sys
 import time
 from pathlib import Path
 
+from verity.ml.boolean import scalar as SC
+from verity.ml.boolean import softmax as SM
+
 from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from . import circuit_types as CT
 from . import type_trace as TT
@@ -117,13 +120,13 @@ def _patch():
     if _PATCHED:
         return
     originals = {}
-    for mod in (gf2, fp, U, TP, TW):
+    for mod in (gf2, fp, SM, SC, U, TP, TW):
         for name in DISPLAY:
             f = getattr(mod, name, None)
             if callable(f) and not isinstance(f, type):
                 originals[id(f)] = (name, f)
     wrapped = {k: _wrap(n, f) for k, (n, f) in originals.items()}
-    for mod in (gf2, fp, U, IL, TP, TW):
+    for mod in (gf2, fp, SM, SC, U, IL, TP, TW):
         for name in dir(mod):
             f = getattr(mod, name)
             if callable(f) and id(f) in wrapped:

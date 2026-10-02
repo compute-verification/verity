@@ -1,0 +1,77 @@
+# A timed prover run (a bench cell) on the Nebius cluster: queue provers, priority prover-bench.
+#
+#   sky jobs launch -n bench-<cell> tools/research/src/research/pods/nebius/sky/jobs/prover-bench.yaml \
+#     --env CMD='...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Benches run alongside Builds, so each is labelled ov.noisy=true (pod label, and OV_NOISY in the run's environment for its
+# record). The quiet hour, 12:30-13:30Z, admits no config run (quiet_hour.sh): a bench re-measured then is submitted with
+#   sed 's/ov.noisy: "true"/ov.noisy: "false"/; s/OV_NOISY: "true"/OV_NOISY: "false"/' prover-bench.yaml > /tmp/quiet-bench.yaml
+# Record the clocks with every timed result.
+# Resources: 18 vCPU, so the M0 prover's 17-core bursts aren't throttled mid-measurement; its RAM peak of 2-17 GiB.
+# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
+#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+name: prover-bench
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 18
+  labels:
+    budget-line: nebius-prover-bench
+  memory: 24
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "18"     # SkyPilot's runner sets 1; match resources.cpus (--cpus overrides need --env OMP_NUM_THREADS too)
+  CMD: null
+  CAMPAIGN: nebius-bench
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+  CARGO_TARGET_DIR: /workspace/jobs/cache/cargo-target
+  OV_NOISY: "true"
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the job runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
+  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
+  JOB_SRC=/workspace/jobs/src/$(hostname)
+  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+
+run: |
+  set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
+  export SRC=/workspace/jobs/src/$(hostname)
+  cd "$SRC"
+  nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm --format=csv > clocks-before.csv || true
+  rc=0
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- bash -c "cd \"$SRC\" && $CMD" || rc=$?
+  # the pod's copy goes once research run has exited (it imports from this tree while it publishes), never from a trap; a
+  # preempted pod's copy is left to node 1's jobs/src sweep
+  cd / && rm -rf "$SRC"
+  exit "$rc"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: provers
+          kueue.x-k8s.io/priority-class: prover-bench
+          ov.noisy: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

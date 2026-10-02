@@ -100,7 +100,7 @@ def run_ncp(ext, t: int) -> dict:
     out = {}
     for label, corrupt in (("honest", 0.0), ("corrupt-50%", 0.5)):
         prover = Prover(s, weights, ncp_gpu_kernel(ext, corrupt, seed=3))
-        epoch = Epoch.start(work, prover.weight_roots, b"beacon round 2026-09-28")
+        epoch = Epoch.unverified(work, prover.weight_roots, b"beacon round 2026-09-28")
         t0 = time.perf_counter()
         tr = prover.prove(epoch, acts)
         t_prove = time.perf_counter() - t0
@@ -126,7 +126,7 @@ def run_pearl(ext, t: int) -> dict:
     work = Workload((Matmul(7, Shape(m, k, n), 3),))
     weights, acts = {3: rows(n)}, {7: rows(m)}
     prover = Prover(s, weights, pearl_gpu_kernel(ext))
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon round 2026-09-28")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon round 2026-09-28")
     t0 = time.perf_counter()
     tr = prover.prove(epoch, acts)
     t_prove = time.perf_counter() - t0

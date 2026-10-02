@@ -235,13 +235,14 @@ def _line_key(seed: bytes) -> bytes:
     return subkey("noise-line", seed)
 
 
-def sample_line(seed: bytes, side: int, factor: int, line: int) -> list[int]:
-    """One rank-32 noise line: FP8 codes.  r = 32 bytes is exactly BLAKE3's digest, the XOF's first block."""
+def sample_line(seed: bytes, side: int, factor: int, line: int, norm: float = NOISE_NORM) -> list[int]:
+    """One rank-32 noise line: FP8 codes.  r = 32 bytes is exactly BLAKE3's digest, the XOF's first block.  `norm` is the
+    line's L2 norm, Pearl's 256 unless a scheme pins another (Pearl-C v1's F lines: 16)."""
     material = (bytes([side, factor]) + line.to_bytes(4, "little")).ljust(64, b"\0")
     raw = keyed(_line_key(seed), material)[:R]
     xs = [(-1 if b >> 7 else 1) * ((b & 0x7F) + 1) for b in raw]
     norm_scaled = math.isqrt(sum(x * x for x in xs) * 32 * 32)
-    scale = bf16_div(f32_to_bf16(NOISE_NORM * 32), f32_to_bf16(float(norm_scaled)))
+    scale = bf16_div(f32_to_bf16(norm * 32), f32_to_bf16(float(norm_scaled)))
     return [f32_to_fp8(bf16_to_f32(bf16_mul(f32_to_bf16(float(x)), scale))) for x in xs]
 
 
@@ -624,7 +625,7 @@ class PearlKW:
             omega=Fraction(1),
             claims=("pearl-quantized-subspace-hardness", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
                     "beacon-unpredictability"),
-            theorems=("Pouw.Proofs.workWeightedSampling",),
+            theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=("Pearl's Assumption 1 with its jackpot policy (informal: no γ_0, no constant, no joint form)",
                         f"the {self.device.name} device's FP8 accumulation is reproduced exactly"),
             allowances=("up to ⌊k·h·w/20⌋ skippable summands per tile (5%)", "up to 1/64 dead entries per side",

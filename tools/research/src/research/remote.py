@@ -7,6 +7,11 @@
                         project  = "verity"            # or projects = ["verity", "other"]
                         root     = "/workspace/research"
                         python   = "python3"
+                    or to a host reached over plain ssh (a cloud VM with a static address; nothing is looked up, nothing provisioned):
+                        provider = "ssh"
+                        host     = "203.0.113.7"       # port = 22, user = "root" by default
+                        user     = "research"
+                        rate_usd_per_hour = 14.40      # the attempt's cost rate (a runpod pod reports its own)
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
                     which snapshot ran.  No pip, no editable install, no credentials on the machine.
@@ -18,6 +23,8 @@
                     the launcher says so (remote.json tool_checked=false).  job.json run.remote.tool_running = what ran.
     source          --source <git dir> ships `git archive HEAD` of a CLEAN checkout to <root>/src/<identity>/ (the run's cwd, tree_sha);
                     the identity is the commit sha.  A dirty tree is refused rather than mislabeled.  Untracked inputs go with --send.
+                    Shipped as git objects (`ship_source`), the tree is a checkout: a clone of <root>/git/verity.git sharing its objects,
+                    detached at the commit, so what asks git there gets a checkout's answers.  The archive stream ships no .git.
                     The ship is VERIFIED before it may execute (r20 incident: a stalled transfer left a half-tree that later runs used):
                     the archive lands in <root>/src/<identity>.partial-<nonce>/, is sha256'd on the machine and compared with the
                     launcher's, its extracted file set is compared with the archive's manifest, and only then is the directory
@@ -47,9 +54,19 @@
                     (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
                     else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
                     reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+    preflight       a `--tool` whose declaration in the shipped tree names a preflight (`Tool.preflight`: a Python script there and its
+                    args) has it run by launch-request, in the tree, before anything else is admitted: exit 0 admits the run, anything
+                    else refuses it (PreflightFailed, refused.json; nothing started, no attempt, so never a verdict), with the script's
+                    stderr as the reason.  It gets the runner's environment plus RESEARCH_PREFLIGHT_INPUTS (the run's --send files) and,
+                    with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
+                    `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
+                    pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
+    adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine (a pod belongs to the VM that made it), writes the
+                    remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
                     verified_from = the machine's clock before hashing, file count, bytes, manifest sha256), which the guard requires.
@@ -107,9 +124,14 @@ FETCHED_SCHEMA = "research/fetched/v0.1"
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
+DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
+DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
+                                              # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
+PREFLIGHT_TIMEOUT_S = 180
+PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
 
 
 class Refused(Exception):
@@ -128,6 +150,14 @@ class ResearchVersionMismatch(Refused):
 
 class MemoryNotAvailable(Refused):
     """`--mem-gb N` did not fit: limit - in use - live reservations < N on the machine (research.mem).  Nothing started."""
+
+
+class PreflightFailed(Refused):
+    """The tool's preflight (`Tool.preflight`) found the machine unprepared for the run, or could not run.  Nothing started."""
+
+    def __init__(self, reason: str, report: dict[str, Any] | None = None):
+        super().__init__(reason)
+        self.report = report
 
 
 # ---- machines ---------------------------------------------------------------------------------------------------------------------------
@@ -184,10 +214,26 @@ def guard_idle_min(machine: dict[str, Any]) -> float | None:
 
 # ---- transport --------------------------------------------------------------------------------------------------------------------------
 
+def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
+    """host/port/user/rate for a `provider = "ssh"` machine, as its entry lists them."""
+    who = f"machine {machine.get('name') or '?'}"
+    host, port, user = machine.get("host"), machine.get("port", 22), machine.get("user", "root")
+    if not isinstance(host, str) or not host:
+        raise Refused(f"{who}: provider ssh needs host = \"...\"")
+    if not isinstance(port, int) or not 0 < port < 65536:
+        raise Refused(f"{who}: port {port!r} is not a TCP port")
+    if not isinstance(user, str) or not user:
+        raise Refused(f"{who}: user {user!r} is not a user name")
+    return {"host": host, "port": port, "user": user, "pod_name": machine.get("name"), "cost_per_hr": machine.get("rate_usd_per_hour"),
+            "rate_observed_utc": utc_now_ms(), "gpu": machine.get("gpu")}
+
+
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
-    """host/port/rate for a runpod machine (read-only API call).  Not RUNNING -> refused."""
+    """host/port/user/rate for a runpod machine (read-only API call; not RUNNING -> refused) or an ssh one (`ssh_host_target`)."""
+    if machine.get("provider") == "ssh":
+        return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
-        raise Refused(f"provider {machine.get('provider')!r} not supported (runpod only for now)")
+        raise Refused(f"provider {machine.get('provider')!r} not supported (runpod or ssh)")
     from .pods import runpod
 
     who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
@@ -211,14 +257,14 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
-    return {"host": tgt[0], "port": tgt[1], "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
+    return {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
             "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
 
 
-def ssh_argv(host: str, port: int, *, connect_timeout: int = 15) -> list[str]:
+def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int = 15) -> list[str]:
     from .pods import runpod
 
-    base = runpod.ssh_command(host, port)
+    base = runpod.ssh_command(host, port, user=user)
     return [*base[:-1], "-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}", base[-1]]
 
 
@@ -353,6 +399,55 @@ def knows_custody(pkg: Path | None) -> bool:
     return (Path(pkg) / "store" / "custody.py").is_file() and "CUSTODY_DIR" in (Path(pkg) / "remote.py").read_text()
 
 
+def knows_queue(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine runs its runner under a queue's wrapper (`--queue`)."""
+    if pkg is None:
+        return True
+    try:
+        return "QUEUE_WORKLOAD_WRAP" in (Path(pkg) / "remote.py").read_text() and (Path(pkg) / "disk.py").is_file()
+    except OSError:
+        return False
+
+
+QUEUE_WRAP = "wrap"                       # the runner's, custody included: the job's CPU allocation
+QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
+
+
+def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
+    description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
+    src = Path(source) / "tools" / "cluster" if source is not None else None
+    if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
+        raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
+            "--now", str(int(time.time()))]
+    for k, v in spec.items():
+        if v is True:
+            argv.append(f"--{k}")
+        elif v not in (None, False):
+            argv += [f"--{k}", str(v)]
+    r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
+    try:
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise Refused(f"--queue: `cluster submit` failed (exit {r.returncode}): {r.stderr.strip()[-400:]}") from None
+    if "refused" in out:
+        raise Refused(f"the queue refuses the job: {out['refused']}")
+    return out
+
+
+def knows_preflight(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine runs `--preflight TOOL` (one that predates it would ignore it)."""
+    if pkg is None:
+        return True
+    try:
+        return "preflight_tool" in (Path(pkg) / "remote.py").read_text()
+    except OSError:
+        return False
+
+
 def check_tool(expected: str | None) -> dict[str, str]:
     """The running package's identity and path; ResearchVersionMismatch when `expected` is given and differs."""
     here = str(Path(__file__).resolve().parent)
@@ -373,7 +468,7 @@ def launch_request_failure(rc: int, stdout: bytes, stderr: bytes) -> Refused:
         except ValueError:
             continue
         if isinstance(doc, dict) and doc.get("refused"):
-            cls = {"ResearchVersionMismatch": ResearchVersionMismatch}.get(str(doc.get("fault")), Refused)
+            cls = {"ResearchVersionMismatch": ResearchVersionMismatch, "PreflightFailed": PreflightFailed}.get(str(doc.get("fault")), Refused)
             return cls(str(doc["refused"]))
     if rc == 2 and "--expect-tool" in err:
         return ResearchVersionMismatch("the research package that answered `launch-request` on the machine predates the version check, so it "
@@ -598,21 +693,25 @@ def _stale_partials_sweep(root: str) -> str:
 
 
 def _git_ship_script(root: str, repo: str, partial: str, sha: str) -> str:
-    """The machine side of a git ship: the pushed commit's tree must be the launcher's ($1), then `git archive` of it is extracted
-    (`tar -m`, extraction mtimes) into the partial directory and every extracted file's sha256 is listed back.  The partial removes
-    itself on any exit until the listing starts."""
+    """The machine side of a git ship: the pushed commit's tree must be the launcher's ($1), then the partial directory becomes a
+    checkout of it, a clone of the bare repository that borrows its objects (`clone --shared`: nothing is copied, and a clone,
+    unlike a worktree, survives the rename into place), detached at the commit, with READY.json excluded from git's view.  Files
+    get checkout-time mtimes, not the commit time.  Listed back: the sha256 of the machine's `git archive` of the commit, then
+    every checked-out file's sha256, `.git` left out.  The partial removes itself on any exit until the listing starts."""
     q, g = shlex.quote(partial), shlex.quote(repo)
     return (_stale_partials_sweep(root) +
             f"trap 'rm -rf {q}' EXIT; trap 'exit 1' HUP INT TERM PIPE; set -e; "
             f"t=$(git --git-dir={g} rev-parse --verify -q {sha}^{{tree}}) || exit {_RC_TREE}; [ \"$t\" = \"$1\" ] || exit {_RC_TREE}; "
-            f"mkdir -p {q}; git --git-dir={g} archive --format=tar {sha} > {q}/.archive.tar; "
-            f"sha256sum {q}/.archive.tar | cut -d' ' -f1; tar -xmf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; "
-            f"trap - EXIT HUP INT TERM PIPE; cd {q} && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
+            f"git clone -q --shared --no-checkout {g} {q}; git -C {q} -c advice.detachedHead=false checkout -q --detach {sha}; "
+            f"mkdir -p {q}/.git/info; echo /{READY_FILE} >> {q}/.git/info/exclude; "
+            f"git --git-dir={g} archive --format=tar {sha} > {q}/.git/ship.tar; sha256sum {q}/.git/ship.tar | cut -d' ' -f1; "
+            f"rm -f {q}/.git/ship.tar; trap - EXIT HUP INT TERM PIPE; "
+            f"cd {q} && find . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
 
 
 def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
     """Ship commit `sha` as git objects: `git push` into <root>/git/verity.git over `ssh` (only the objects the machine lacks travel),
-    then extract and verify on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
+    then check it out and verify it on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
     (partial dir ready to be marked, None) or (None, why the archive stream must ship instead).  Never raises for the transport:
     every failure falls back, and nothing is marked READY by a failed git ship."""
     repo = f"{root}/{POD_GIT_REPO}"
@@ -679,10 +778,12 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
       2. git first (`_ship_git`): `git push` of the commit into the machine's bare repo <root>/git/verity.git over the same ssh
-         (only the objects it lacks travel; no credential anywhere), then on the machine the commit's tree hash must be HEAD's,
-         `git archive` of it is extracted and every file's sha256 must equal the launcher's archive manifest (`verified:
-         git-push+tree+file-sha256`, `transport: git`).  A machine without git, or any failure of that path, prints one line and
-         falls through to the archive stream below; `RESEARCH_SHIP=stream` goes straight there;
+         (only the objects it lacks travel; no credential anywhere), then on the machine the commit's tree hash must be HEAD's, the
+         tree becomes a checkout of it (`_git_ship_script`: a shared clone of the bare repo, detached, READY.json excluded), so code
+         there asks git what it asks in the launcher's checkout, and every file's sha256 must equal the launcher's archive manifest
+         (`verified: git-push+tree+file-sha256`, `transport: git`, `checkout: true`).  A machine without git, or any failure of that
+         path, prints one line and falls through to the archive stream below, a tree without .git; `RESEARCH_SHIP=stream` goes
+         straight there.  A READY tree shipped before checkouts is reused as it is;
       2'. the archive stream into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
          extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
          archive's manifest.  The launcher streams it (`archive_manifest_git`, then `_archive_feed` through `ssh_stream`): its memory
@@ -720,7 +821,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     if os.environ.get(SHIP_ENV, "").strip().lower() != "stream":
         gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
-            doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git",
+            doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git", "checkout": True,
                    "pod_archive_sha256": man.get("pod_archive_sha256")}
             return sha, dest, _mark_ready(ssh, gpartial, dest, sha, doc)
         print(f"research: git ship to {dest} not used ({why}); shipping the archive stream", file=sys.stderr)
@@ -962,6 +1063,56 @@ def ensure_guard(root: Path, idle_min: float, *, pod_id: str | None = None, envi
     return {"installed": True, "started": pid == proc.pid, "pid": pid, **base}
 
 
+def tool_preflight(harness_args: list[str], tree: Path | str | None, asked: str | None = None) -> list[str] | None:
+    """The preflight to run on `tree` before the run: the one `--preflight TOOL` (`asked`) names, else the one the run's `--tool`
+    declares (`Tool.preflight`), else None (no --tool, no tree, or a --tool the tree does not declare or that names none).
+    PreflightFailed when a declaration is there but cannot be read (it may name a preflight), or when `asked` has none to run."""
+    spec = asked or flag_value(harness_args, "--tool")
+    flag = "--preflight" if asked else "--tool"
+    if not spec or tree is None:
+        if asked:
+            raise PreflightFailed(f"--preflight {asked}: the run ships no tree to run it from; nothing started")
+        return None
+    from .store import tools_registry
+
+    module, _, attr = tools_registry.REGISTRY.get(spec, spec).rpartition(":")
+    rel = Path(*module.split(".")) if module else None
+    if rel is None or not any((Path(tree) / c).is_file() for c in (rel.with_suffix(".py"), rel / "__init__.py")):
+        if asked:
+            raise PreflightFailed(f"--preflight {asked}: {tree} does not declare that tool; nothing started")
+        return None
+    try:
+        decl = tools_registry._from_file(module, attr, Path(tree))
+    except Exception as e:  # noqa: BLE001
+        raise PreflightFailed(f"{flag} {spec}: its declaration in {tree} cannot be read ({type(e).__name__}: {e}), so its preflight is "
+                              f"unknown; nothing started") from None
+    argv = list(getattr(decl, "preflight", None) or [])
+    if not argv and asked:
+        raise PreflightFailed(f"--preflight {asked}: its declaration in {tree} names no preflight; nothing started")
+    return argv or None
+
+
+def _tail(text: str) -> list[str]:
+    return [ln for ln in text.splitlines() if ln.strip()][-PREFLIGHT_TAIL:]
+
+
+def run_preflight(argv: list[str], tree: Path | str, env: dict[str, str]) -> dict[str, Any]:
+    """Run a `Tool.preflight` (a Python script in `tree`, and its args) by this interpreter, in `tree`; its report when it exits 0,
+    else PreflightFailed naming its stderr (its stdout when stderr is empty)."""
+    cmd = [sys.executable, *argv]
+    t0 = time.monotonic()
+    try:
+        r = subprocess.run(cmd, cwd=str(tree), env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=PREFLIGHT_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise PreflightFailed(f"preflight {shlex.join(argv)} did not finish in {PREFLIGHT_TIMEOUT_S} s; nothing started",
+                              {"argv": argv, "rc": None, "seconds": PREFLIGHT_TIMEOUT_S}) from None
+    rep = {"argv": argv, "rc": r.returncode, "seconds": round(time.monotonic() - t0, 1), "stdout": _tail(r.stdout), "stderr": _tail(r.stderr)}
+    if r.returncode:
+        why = "; ".join(rep["stderr"] or rep["stdout"][-5:]) or "no output"
+        raise PreflightFailed(f"the machine failed the preflight {shlex.join(argv)} (exit {r.returncode}): {why}", rep)
+    return rep
+
+
 def launch_request(request_path: Path) -> dict[str, Any]:
     """Claim the run directory and start the detached runner (idempotent per run id); with the request's `guard`, make sure the pod's
     guard daemon runs (ensure_guard; its answer is the result's `guard`, and a guard that cannot start never fails the launch)."""
@@ -1002,20 +1153,28 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         st = _read_json(run_dir / "status.json") or {}
         refused = _read_json(run_dir / "refused.json")
         return {"claimed": False, "run_id": run_id, "run_dir": str(run_dir), "existing": True, "state": st.get("state"),
-                "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason")}
+                "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason"), "fault": (refused or {}).get("fault")}
     concurrent = active_runs(runs_root, exclude=run_id)
     src_dir = None
     mem_rec: dict[str, Any] | None = None
+    preflight: dict[str, Any] | None = None
+    remote = dict(req.get("remote") or {})
+    remote["request"] = str(request_path)
     try:
-        remote_sec = req.get("remote") or {}
-        if remote_sec.get("source_sha"):          # a shipped tree executes only from a directory verified READY for the requested identity
-            src_dir = remote_sec.get("source_dir") or str(runs_root.parent / "src" / str(remote_sec["source_sha"]))
-            require_ready_source(src_dir, str(remote_sec["source_sha"]))
+        if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
+            src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
+            require_ready_source(src_dir, str(remote["source_sha"]))
+        env = _runner_env(req, runs_root, src_dir, remote)
         if req.get("custody") and not (request_path.parent / CUSTODY_DIR / "cred.json").is_file():
             raise Refused(f"--custody-r2: no staged key under {request_path.parent / CUSTODY_DIR}; the run could not publish its custody")
         holder = exclusive_holder(runs_root)
         if holder and holder != run_id:
             raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
+        if pf_argv := tool_preflight(req.get("harness_args") or [], src_dir, req.get("preflight_tool")):
+            pf_env = {**env, "RESEARCH_PREFLIGHT_INPUTS": str(request_path.parent / "inputs")}
+            if req.get("custody"):
+                pf_env["RESEARCH_PREFLIGHT_CUSTODY"] = str(request_path.parent / CUSTODY_DIR)
+            remote["preflight"] = preflight = run_preflight(pf_argv, src_dir, pf_env)
         if req.get("mem_gb"):
             from . import mem as M
 
@@ -1031,24 +1190,57 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             M.release(mem_rec["reservation"], run_id)
         if req.get("custody"):                    # nothing will publish: the key goes now, not at its expiry
             (request_path.parent / CUSTODY_DIR / "cred.json").unlink(missing_ok=True)
-        write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms()})
-        return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__}
+        pf = {"preflight": e.report} if isinstance(e, PreflightFailed) and e.report else {}
+        write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms(), **pf})
+        return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__, **pf}
     staged_inputs = request_path.parent / "inputs"
     if staged_inputs.is_dir():
         os.replace(staged_inputs, run_dir / "inputs")
     cost = dict(req.get("cost") or {})
     cost["shared"] = bool(concurrent)
     cost["concurrent_runs_at_launch"] = concurrent
-    remote = dict(req.get("remote") or {})
-    remote["request"] = str(request_path)
-    env = dict(os.environ)
-    env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
+    cpus = direct_cpus()
+    if cpus:
+        remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
+    argv = [req.get("python") or sys.executable, "-m", "research", "run", "--runs-dir", str(runs_root), "--id", run_id, "--claimed",
+            "--cost-json", json.dumps(cost), "--remote-json", json.dumps(remote)]
+    if req.get("exclusive"):
+        argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
+    if req.get("custody"):
+        argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
+    argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *req["command"]]
+    if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
+        argv = [*req[QUEUE_WRAP], *argv]
+    if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
+        argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
+                "--path", str(runs_root), "--", *argv]
+    log = open(run_dir / "launcher.log", "ab")
+    try:
+        proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True,
+                                preexec_fn=(lambda: os.sched_setaffinity(0, cpus)) if cpus else None)
+    except OSError:
+        if mem_rec:
+            M.release(mem_rec["reservation"], run_id)
+        raise
+    if mem_rec:
+        M.set_pid(mem_rec["reservation"], proc.pid)
+    write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
+                                                "cwd": req.get("cwd"), "request": str(request_path), "hostname": os.uname().nodename})
+    return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, "runner_pid": proc.pid,
+            **({"preflight": preflight} if preflight else {})}
+
+
+def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remote: dict[str, Any]) -> dict[str, str]:
+    """The runner's environment, which a preflight also runs in: the workload's --env, and with a shipped tree its PYTHONPATH behind
+    the tool snapshot (recorded in `remote`)."""
+    env = dict(os.environ)
+    env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
     if remote.get("source_sha"):
-        # [R19 tele] the shipped tree (<root>/src/<sha>/, a git archive) has no .git: the workload's source-identity precheck reads the
-        # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
+        # [R19 tele] a tree the archive stream shipped has no .git: the workload's source-identity precheck reads the tree's sha from
+        # here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
         env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
         env.setdefault("PYTHONPYCACHEPREFIX", str(runs_root.parent / "cache" / "pycache"))   # imports from the shared tree do not write into it
         from .pythonpath import import_roots_dir, pythonpath
@@ -1060,25 +1252,46 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
-    argv = [req.get("python") or sys.executable, "-m", "research", "run", "--runs-dir", str(runs_root), "--id", run_id, "--claimed",
-            "--cost-json", json.dumps(cost), "--remote-json", json.dumps(remote)]
-    if req.get("exclusive"):
-        argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
-    if req.get("custody"):
-        argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
-    argv += [*(req.get("harness_args") or []), "--", *req["command"]]
-    log = open(run_dir / "launcher.log", "ab")
+    if _kueue_owns_every_gpu():
+        # a direct run must not open CUDA beside the queue's pods, whatever its --env says: GPU work goes through Kueue
+        env["CUDA_VISIBLE_DEVICES"] = ""
+        remote["gpus"] = f"none: {DIRECT_GPUS_FILE} says every GPU is Kueue's (CUDA_VISIBLE_DEVICES='')"
+    return env
+
+
+def direct_cpus() -> set[int]:
+    """The CPUs a direct run starts on, from DIRECT_CPUS_FILE (tests: $DIRECT_CPUS_FILE), intersected with this process's own; empty
+    when the file is absent or names none of them."""
     try:
-        proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+        text = Path(os.environ.get("DIRECT_CPUS_FILE") or DIRECT_CPUS_FILE).read_text()
     except OSError:
-        if mem_rec:
-            M.release(mem_rec["reservation"], run_id)
-        raise
-    if mem_rec:
-        M.set_pid(mem_rec["reservation"], proc.pid)
-    write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
-                                                "cwd": req.get("cwd"), "request": str(request_path), "hostname": os.uname().nodename})
-    return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, "runner_pid": proc.pid}
+        return set()
+    want: set[int] = set()
+    for part in text.replace("\n", ",").split(","):
+        lo, _, hi = part.strip().partition("-")
+        if lo.isdigit() and (not hi or hi.isdigit()):
+            want |= set(range(int(lo), int(hi or lo) + 1))
+    return want & os.sched_getaffinity(0)
+
+
+def format_cpus(cpus: set[int]) -> str:
+    """`0-31,64-95` for a CPU set."""
+    out, run = [], []
+    for c in sorted(cpus):
+        if run and c != run[-1] + 1:
+            out.append(f"{run[0]}-{run[-1]}" if len(run) > 1 else str(run[0]))
+            run = []
+        run.append(c)
+    if run:
+        out.append(f"{run[0]}-{run[-1]}" if len(run) > 1 else str(run[0]))
+    return ",".join(out)
+
+
+def _kueue_owns_every_gpu() -> bool:
+    try:   # GPU_LEASE_ALLOWED_FILE: the same override gpu-lease reads (tests point it away from the host's file)
+        return Path(os.environ.get("GPU_LEASE_ALLOWED_FILE") or DIRECT_GPUS_FILE).read_text().strip() == "none"
+    except OSError:
+        return False
 
 
 # ---- the control side --------------------------------------------------------------------------------------------------------------------
@@ -1099,11 +1312,21 @@ def lease_extend_s(harness_args: list[str]) -> float | None:
     (research.pods.lease.RUN_MARGIN_S); None without a --timeout."""
     from .pods.lease import RUN_MARGIN_S
 
-    try:
-        t = float(flag_value(harness_args, "--timeout") or "")
-    except ValueError:
+    t = timeout_seconds(flag_value(harness_args, "--timeout"))
+    return t + RUN_MARGIN_S if t and t > 0 else None
+
+
+def timeout_seconds(text: str | None) -> float | None:
+    """A --timeout (`1.5`, `900`, `40m`, `6h`, `7d`: seconds or credentials.parse_ttl's grammar) in seconds; None when absent.
+    ValueError when malformed."""
+    from .store.credentials import parse_ttl
+
+    if text is None:
         return None
-    return t + RUN_MARGIN_S if t > 0 else None
+    try:
+        return float(text)
+    except ValueError:
+        return float(parse_ttl(text))
 
 
 def lease_line(lz: dict[str, Any] | None, asked: float | None, machine: str) -> str:
@@ -1137,11 +1360,16 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
 
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
-           mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None) -> dict[str, Any]:
-    """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody)."""
+           mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
+           preflight_tool: str | None = None, queue: dict[str, Any] | None = None) -> dict[str, Any]:
+    """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
+    `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
+    is held until the runner, custody included, exits."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
-                           "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args}
+                           "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
+                           **({"queue": queue} if queue else {})}
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
@@ -1162,13 +1390,20 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                               f"~/.config/verity/r2.env; --no-custody-r2 launches without run custody)") from None
             rec["custody"] = custody_pub
         tgt = pod_target(m)
-        ssh = ssh_argv(tgt["host"], tgt["port"])
-        rec.update(pod_id=m["pod_id"], host=tgt["host"], port=tgt["port"], root=m["root"], phase="shipping")
+        user = tgt.get("user", "root")
+        ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
+        rec.update(pod_id=m.get("pod_id"), host=tgt["host"], port=tgt["port"], user=user, root=m["root"], phase="shipping")
         write_json_atomic(local_dir / "remote.json", rec)
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
+        if preflight_tool and not knows_preflight(tool_pkg):
+            raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
+                          f"a tree that has it, or drop --preflight")
+        if queue and not knows_queue(tool_pkg):
+            raise Refused(f"--queue: the research package in {source} predates it, so the machine would run the job outside its "
+                          f"allocation.  Commit a tree that has it")
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
@@ -1194,9 +1429,11 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
-                   "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
+                   **({"preflight_tool": preflight_tool} if preflight_tool else {}),
+                   **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
+                   "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
-                   "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
+                   "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
                               "root": m["root"], "tool": tool_dir, "tool_identity": rec["tool_identity"] if rec["tool_checked"] else None,
                               "source_sha": tree_sha, "source_dir": src_dir,
                               "source_archive_sha256": ready.get("archive_sha256"), "source_files": ready.get("files"),
@@ -1210,7 +1447,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         expect = ["--expect-tool", rec["tool_identity"]] if rec["tool_checked"] else []
         for attempt in range(3):
             r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", *expect, req_path],
-                        timeout=120 + (mem_wait_s or 0))
+                        timeout=120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0))
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
                 break
@@ -1223,6 +1460,12 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             write_json_atomic(local_dir / "remote.json", rec)
             raise Refused(rec["note"])
         rec.update(phase="refused" if out.get("refused") else "launched", launch=out, observed_utc=utc_now_ms())
+        if pf := out.get("preflight"):
+            rec["preflight"] = pf
+            print(f"research: preflight {shlex.join(pf['argv'])} on {machine_name}: {'FAILED' if out.get('refused') else 'passed'} "
+                  f"in {pf.get('seconds')} s", file=sys.stderr)
+            for line in pf.get("stdout") or []:
+                print(f"research: preflight: {line}", file=sys.stderr)
         if guard_min:
             g = out.get("guard") or {"installed": False, "reason": "the machine's research package predates the guard (no `guard` in its answer)"}
             rec["guard"] = g
@@ -1243,12 +1486,56 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         raise
 
 
+def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None) -> Path:
+    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
+    the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
+    machine holds it (each machine's answer in the reason), or when the local dir already exists."""
+    from .store import ids
+
+    if not ids.is_run_id(run_id):
+        raise Refused(f"{run_id!r} is not a full run id (rYYYYMMDD-HHMMSS-xxxx), so it is not looked up on the machines")
+    local = runs_root / run_id
+    if local.exists():
+        raise Refused(f"{local} exists already")
+    ms = load_machines() if machines is None else machines
+    names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
+    answers = []
+    for name in names:
+        m = ms.get(name)
+        if m is None:
+            raise Refused(f"machine {name!r} is not registered")
+        try:
+            tgt = pod_target(m)
+        except Refused as e:
+            answers.append(f"{name}: {e}")
+            continue
+        rd = f"{m['root']}/runs/{run_id}"
+        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
+        try:
+            r = ssh_run(ssh, ["test", "-d", rd], timeout=60)
+        except subprocess.TimeoutExpired:
+            answers.append(f"{name}: no answer in 60 s")
+            continue
+        if r.returncode != 0:
+            answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
+            continue
+        local.mkdir(parents=True, exist_ok=False)
+        write_json_atomic(local / "remote.json", {
+            "schema": "research/remote/v0.1", "run_id": run_id, "machine": name, "project": m.get("project"), "phase": "adopted",
+            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": None, "launch_args": [],
+            "pod_id": m.get("pod_id"), "host": tgt["host"], "port": tgt["port"], "user": tgt.get("user", "root"), "root": m["root"],
+            "remote_run_dir": rd})
+        fetch(local)
+        return local
+    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
+
+
 def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir.  Unreachable -> observed_utc unchanged, reason recorded."""
     rec = _read_json(local_dir / "remote.json")
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
-    ssh = ssh_argv(rec["host"], rec["port"])
+    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
     if everything:
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
@@ -1276,6 +1563,15 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     st = _read_json(local_dir / "status.json") or {}
     rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
+    rec.pop("launcher_exited", None)
+    pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
+    if not st and isinstance(pid, int):
+        # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
+        probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
+                                          f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=120)
+        lines = probe.stdout.decode(errors="replace").splitlines() if probe.returncode == 0 else []
+        if lines and lines[0] == "exited":
+            rec["launcher_exited"] = {"at_utc": rec["observed_utc"], "runner_pid": pid, "last_line": (lines[1] if len(lines) > 1 else "")[-300:]}
     if everything:
         manifest = _verify_and_manifest(ssh, rd, local_dir, rec)
         rec["preserved"] = manifest is not None
@@ -1283,6 +1579,37 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
             rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
+
+
+def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
+    """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
+    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
+    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody."""
+    rec = fetch(local_dir)
+    if err := rec.get("last_fetch_error"):
+        raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
+    st = _read_json(local_dir / "status.json") or {}
+    if st.get("state") != "running":
+        raise Refused(f"{local_dir.name} is {st.get('state') or 'not running yet'}, so there is nothing to cancel")
+    pgid = st.get("pgid")
+    if not isinstance(pgid, int) or pgid <= 1:
+        raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
+    if not rec.get("tool"):
+        raise Refused(f"{local_dir.name}'s remote.json names no shipped tool to record the cancel with")
+    rd = rec["remote_run_dir"]
+    tele = ["env", f"PYTHONPATH={rec['tool']}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
+            "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-nonempty", "--attempt-dir", rd,
+            "--deliver"]
+    script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"
+    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+    try:
+        res = json.loads(r.stdout.decode(errors="replace").splitlines()[-1])
+    except (IndexError, ValueError):
+        res = {}
+    if res.get("kind") != "cancel_result":
+        raise Refused(f"the cancel did not run on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
+            "why": res.get("reason")}
 
 
 def _file_sha256(p: Path) -> str:

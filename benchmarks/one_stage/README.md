@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`protocols/one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity_sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
 draw, C-Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 

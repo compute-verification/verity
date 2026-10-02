@@ -69,7 +69,7 @@ def hopper_wgmma_dot16_total(acc_bits: int, a, b) -> int:
     return tc_dot_total(HOPPER_BF16_WGMMA_K16, acc_bits, a, b)
 
 
-@primitive("Fa3InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested")
+@primitive("Fa3InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested", tables=(("rcp", "library"),))
 def Fa3InvSum(s: int) -> int:
     """FA3 `Softmax::finalize` (hopper/softmax.h): `inv_sum = (sum == 0.f || sum != sum) ? 0.f : 1.f / sum` under
     `--use_fast_math` (`1.f / sum` -> `rcp.approx.ftz.f32`, MUFU.RCP), then `scores_scale = inv_sum * 1.f`.  Tested on
@@ -159,6 +159,10 @@ HOPPER_PRIMITIVES = [HopperBF16WgmmaDot16, Fa3InvSum]
 # FA3's per-iteration Check_inf chain (`Attention_v4`, `TargetProfile.fa3_construction`) registers with the Hopper bindings, so every process
 # that decodes a Hopper Program can decode one built under that construction
 from verity_vllm.program.registry import fa3_check_inf  # noqa: E402, F401
+# FA2's (`Attention_v5`, the Hopper k16 step's FA2 on cc 12.0) likewise
+from verity_vllm.program.registry import fa2_check_inf  # noqa: E402, F401
+# and FA2's softcapped chain under it (`AttentionSoftcap_v2`)
+from verity_vllm.program.registry import fa2_softcap  # noqa: E402, F401
 
 # --- CF1 (composition.md §2): the Hopper eager profile as a binding record of b1's factored `Serve_v2` -----------
 # The environment substitution above (`_BoundPrims._over`, `ENV["BN"]`) written as the statics it always was: the same

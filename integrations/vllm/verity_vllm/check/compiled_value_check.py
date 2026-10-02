@@ -17,6 +17,8 @@ from typing import Any
 
 import torch
 
+from verity_vllm.program.kernels.compiled_relations import warm_vml
+
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
        "uint8": torch.uint8, "int8": torch.int8, "float8_e4m3fn": torch.float8_e4m3fn}
 
@@ -31,6 +33,7 @@ _LINEAR_INPUT = {
 
 class CompiledValueCheck:
     def __init__(self, committer: Any, model: torch.nn.Module, runner: Any, sampling: dict | None = None) -> None:
+        warm_vml()
         self.c = committer
         self.model = model
         self.runner = runner

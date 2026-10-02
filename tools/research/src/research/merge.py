@@ -1,26 +1,38 @@
-"""`research merge REF [--into BRANCH] [--tool check] [-m MESSAGE] [--dry-run]`: the merge gate.
-`research merge --train A B C [--on MACHINE --project P] [--command CMD]`: several refs as one checked candidate (`train`).
-`research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed (`sweep`).
+"""`research merge REF [--into BRANCH] [--tool check] [-m MESSAGE] [--push] [--dry-run]`: the merge gate.
+`research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]`: several refs as one checked candidate (`train`).
+`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
+`research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
+(`sweep`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
 a usable remote the catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
-target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip must be an
-ancestor of REF), since then the merged tree is not the one that was checked; merge the target into the branch and check the new
-tip.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with --dry-run), 1 refused, 2 usage.
+target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
+ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
+train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
+merge the target into the branch and check the new tip.  The steps a change requires are read from the target's declaration and
+the diff from its tip either way.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with
+--dry-run), 1 refused, 2 usage.
 
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
 
 After a merge lands, and on its own with --sweep, every open pull request whose head is on the remote's copy of BRANCH is closed
 with a comment naming the commit it landed in, and every open pull request whose base branch is on it is retargeted onto BRANCH.
-The remote's branch, fetched first, is the truth, never the checkout: `research merge` does not push, so what a merge lands is
-closed by the sweep after the push.
+A closed pull request's head branch is deleted from the remote unless an open pull request still uses it, or it moved past the
+head that landed (GitHub's "delete head branch" fires only on merges made on GitHub, and trains merge locally).
+The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
+(never forced) and then swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
+`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
+
+A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
+from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -57,6 +69,14 @@ def passing(store, commit: str, tool: str = "check", *, tree: str | None = None,
     return ids
 
 
+def tree_identical(repo: Path, commit: str) -> bool:
+    """Whether merging ``commit`` into the checkout's HEAD, which it does not contain, gives ``commit``'s own tree: HEAD's
+    changes are all in ``commit`` already (a train checked on the train ahead of it, which landed as a merge commit of the same
+    tree), so the tree that would land is the one that was checked."""
+    r = _git(repo, "merge-tree", "--write-tree", "HEAD", commit, check=False)
+    return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
+
+
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print) -> tuple[str, str]:
     """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
@@ -65,7 +85,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
         raise Refused(f"the checkout is on {head or 'a detached HEAD'}, not {into}")
     if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the {into} checkout has uncommitted changes")
-    if _git(repo, "merge-base", "--is-ancestor", "HEAD", commit, check=False).returncode:
+    if _git(repo, "merge-base", "--is-ancestor", "HEAD", commit, check=False).returncode and not tree_identical(repo, commit):
         raise Refused(f"{into} has moved past {commit[:12]}: merge {into} into the branch, then record `{tool}` on its new tip")
     if store.remote is not None:
         try:
@@ -97,6 +117,51 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
     raise Refused(f"{commit[:12]} changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must have run "
                   f"{', '.join(need)}; no attempt did ({'; '.join(why)}). Record it with what those steps need (for `check`: "
                   f"`uv run python tools/check/check.py --record --on MACHINE` sends the agreement inputs)")
+
+
+ZERO = "0" * 40
+HOOK = """#!/bin/sh
+# installed by `research merge`: a push that moves {into} needs a passing `{tool}` attempt of the tree it lands; other pushes pass
+lines=$(cat)
+printf '%s\\n' "$lines" | awk '$3 == "refs/heads/{into}" {{ f = 1 }} END {{ exit !f }}' || exit 0
+if [ ! -x {python} ] || [ ! -d {src} ]; then
+  echo "research merge: push guard: {python} or {src} is gone; refusing the push to {into} (re-run research merge to reinstall)" >&2
+  exit 1
+fi
+printf '%s\\n' "$lines" | PYTHONPATH={src} exec {python} -m research merge --guard-push --into {into} --tool {tool}
+"""
+
+
+def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", tool: str = "check") -> list[str]:
+    """The tips a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would move ``into`` to without a
+    passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
+    `research merge` commit has, its merged parent's when the two trees are equal."""
+    bad = []
+    for line in lines:
+        f = line.split()
+        if len(f) != 4 or f[2] != f"refs/heads/{into}" or f[1] == ZERO:
+            continue
+        tip = f[1]
+        tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
+        parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
+        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, tree=tree)
+                   for x in [tip, *parents[1:]]):
+            bad.append(tip)
+    return bad
+
+
+def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> Path | None:
+    """The pre-push hook (`--guard-push`) in ``repo``'s hooks directory, unless one is there already; its path when written."""
+    hooks = Path(_git(repo, "rev-parse", "--git-path", "hooks").stdout.strip())
+    hook = hooks if hooks.is_absolute() else repo / hooks
+    hook = hook / "pre-push"
+    if hook.exists():
+        return None
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    src = Path(__file__).resolve().parents[1]
+    hook.write_text(HOOK.format(into=into, tool=tool, python=shlex.quote(sys.executable), src=shlex.quote(str(src))))
+    hook.chmod(0o755)
+    return hook
 
 
 def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
@@ -176,8 +241,69 @@ def _record(tree: Path, tool: str, command: list[str], on: str | None, project: 
 POLL_S = 20
 
 
+#: a pinned train ref: pull request N or a branch of the remote, at the head that was reviewed
+PIN = re.compile(r"#?([\w./-]+)@([0-9a-f]{7,40})")
+
+
+def pinned(repo: Path, ref: str, remote: str) -> tuple[str, str]:
+    """(how the train's merge message names ``ref``, the commit it merges).  ``N@SHA`` (pull request N) and ``BRANCH@SHA`` are
+    fetched from ``remote`` and refused unless the head there is still SHA; any other ref is the commit it names here."""
+    m = PIN.fullmatch(ref)
+    if not m:
+        return ref, _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
+    name, want = m.groups()
+    label, src = (f"#{name}", f"pull/{name}/head") if name.isdigit() else (name, name)
+    _git(repo, "fetch", "-q", remote, src)
+    head = _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
+    if not head.startswith(want):
+        raise Refused(f"{label} has moved: its head on {remote} is {head[:12]}, not {want}; review the new head and name it")
+    return label, head
+
+
+def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
+    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each; the chain's commits, which
+    are the train's prefixes.  Refused at the first that doesn't merge."""
+    chain = []
+    for label, sha in pins:
+        r = _git(tree, "merge", "--no-ff", "-m", f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}", sha, check=False)
+        if r.returncode:
+            _git(tree, "merge", "--abort", check=False)
+            raise Refused(f"{label} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
+        chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
+    return chain
+
+
+#: what `prepare` runs on a train before pushing it, under this interpreter: check's preflight (`uv.lock`, the repository's lints)
+PREFLIGHT = ["tools/check/check.py", "--preflight"]
+
+
+def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str]) -> tuple[str, str]:
+    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`) merged in order onto ``onto`` as
+    ``remote`` has it (the target, or the prep branch of a train ahead, to stack on it) in a scratch worktree, refused at the first
+    that doesn't merge; ``lint`` run on the result there; its tip pushed to ``remote`` as ``branch``, never forced, and read back.
+    Every step names the scratch worktree or ``repo``'s object store, never its checkout.  Returns (the tip, its tree)."""
+    r = _git(repo, "fetch", "-q", remote, onto, check=False)
+    base = _git(repo, "rev-parse", "--verify", f"{'FETCH_HEAD' if r.returncode == 0 else onto}^{{commit}}").stdout.strip()
+    pins = [pinned(repo, ref, remote) for ref in refs]
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    tree = Path(tempfile.mkdtemp(prefix="research-train-"))
+    _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
+    try:
+        tip = _chain(tree, pins, stamp)[-1]
+        if subprocess.run(lint, cwd=tree).returncode:
+            raise Refused(f"`{shlex.join(lint)}` failed on the train ({tip[:12]}); nothing was pushed")
+        _git(repo, "push", "-q", remote, f"{tip}:refs/heads/{branch}")
+        got = (_git(repo, "ls-remote", remote, f"refs/heads/{branch}").stdout.split() or ["nothing"])[0]
+        if got != tip:
+            raise Refused(f"{remote}'s {branch} is {got[:12]} after the push, not the train {tip[:12]}")
+        return tip, _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
+    finally:
+        _git(repo, "worktree", "remove", "--force", str(tree), check=False)
+
+
 def train(repo: Path, refs: list[str], into: str, store, tool: str, command: list[str], on: str | None = None,
-          project: str | None = None, log=print, spec: str | None = None, sends: list[str] = ()) -> tuple[str | None, str | None]:
+          project: str | None = None, log=print, spec: str | None = None, sends: list[str] = (),
+          remote: str = "origin") -> tuple[str | None, str | None]:
     """Merge ``refs`` in order onto ``into``'s tip as one candidate (a chain of `--no-ff` merges in a scratch worktree), record
     `tool` on it once and fast-forward ``into`` to it when it passes: the tree that lands is the one checked.  When it fails,
     bisect the chain's prefixes (each an exact commit, checked the same way) to the first ref whose merge makes it fail, and
@@ -186,19 +312,13 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into or _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the checkout must be a clean {into}")
+    pins = [pinned(repo, ref, remote) for ref in refs]
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     branch = f"research-train/{stamp}"
     _git(repo, "worktree", "add", "-q", "-b", branch, str(tree), "HEAD")
     try:
-        chain = []
-        for ref in refs:
-            sha = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
-            r = _git(tree, "merge", "--no-ff", "-m", f"Merge {ref} ({sha[:8]})\n\nTrain: {stamp}", sha, check=False)
-            if r.returncode:
-                _git(tree, "merge", "--abort", check=False)
-                raise Refused(f"{ref} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
-            chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
+        chain = _chain(tree, pins, stamp)
         need = required_steps(repo, "HEAD", chain[-1], tool)
         if need and on and not sends:
             raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
@@ -254,8 +374,9 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
 
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
     """Close every open pull request whose head is on ``remote``'s ``into`` (with a comment naming the commit it landed in) and
-    retarget onto ``into`` every open pull request whose base branch's tip is on it.  Idempotent: what it closed is no longer
-    open, and what it retargeted is based on ``into``.  Returns (closed, retargeted) PR numbers, ascending."""
+    retarget onto ``into`` every open pull request whose base branch's tip is on it, deleting each closed one's head branch that no
+    open pull request uses.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
+    (closed, retargeted) PR numbers, ascending."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     _git(repo, "fetch", "-q", remote, f"+refs/heads/{into}:refs/remotes/{remote}/{into}")
     tip = _git(repo, "rev-parse", f"refs/remotes/{remote}/{into}").stdout.strip()
@@ -281,6 +402,8 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         log(f"research merge: {verb}retarget #{p['number']} from {p['baseRefName']} (on {remote}/{into}) onto {into}")
         if not dry_run:
             gh("pr", "edit", str(p["number"]), "--base", into)
+    # a closed PR's head branch goes too, unless an open PR still uses it (as its head, or as a base the retargets left)
+    used = {p["headRefName"] for p in rest} | {p["baseRefName"] for p in rest if p not in moved}
     for p in done:
         landed = landed_in(repo, p["headRefOid"], tip)
         subject = _git(repo, "log", "-1", "--format=%s", landed).stdout.strip()
@@ -288,6 +411,16 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         log(f"research merge: {verb}close #{p['number']} ({p['headRefName']}): {note}")
         if not dry_run:
             gh("pr", "close", str(p["number"]), "--comment", note)
+        head = p["headRefName"]
+        if head in used:
+            continue
+        log(f"research merge: {verb}delete {remote}'s branch {head} (#{p['number']}'s head, on {into})")
+        if not dry_run:
+            # the lease keeps a branch that moved past the PR's landed head: a commit pushed after the landing isn't on `into`
+            r = _git(repo, "push", "-q", f"--force-with-lease=refs/heads/{head}:{p['headRefOid']}", remote, f":refs/heads/{head}",
+                     check=False)
+            if r.returncode:
+                log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
     if not done and not moved:
         log(f"research merge: no open pull request is on {remote}/{into} ({tip[:12]}) or based on a branch that is")
     return [p["number"] for p in done], [p["number"] for p in moved]
@@ -305,27 +438,61 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
+def _push_and_sweep(repo: Path, into: str, remote: str, push: bool) -> int:
+    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced) and sweep, since the sweep closes
+    only what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge
+    landed, says so, and `research merge --sweep` after the push does it."""
+    if push:
+        r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
+        if r.returncode:
+            print(f"research merge: push of {into} to {remote} refused, nothing swept: {(r.stderr or r.stdout).strip()[-300:]}",
+                  file=sys.stderr)
+            return 1
+        print(f"research merge: pushed {into} to {remote}")
+    _sweep_after(repo, into, remote)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research merge", description=__doc__.split("\n\n")[1])
     ap.add_argument("ref", nargs="*", help="the commit to merge (a branch, tag or sha); with --train, several, in merge order")
     ap.add_argument("--sweep", action="store_true", help="merge nothing: close the open pull requests on the remote's --into and "
                     "retarget the ones based on a branch that is (with --dry-run: say what it would do)")
-    ap.add_argument("--remote", default="origin", help="the remote whose --into branch the sweep reads (default origin)")
+    ap.add_argument("--remote", default="origin", help="the remote whose --into branch the sweep reads, that pinned train refs are "
+                    "fetched from and --prepare pushes to (default origin)")
     ap.add_argument("--train", action="store_true", help="merge the refs as one candidate, record the tool on it, fast-forward on "
                     "a pass, bisect to the offending ref on a failure")
     ap.add_argument("--on", default=None, metavar="MACHINE", help="--train: record the tool on this machine (research run --on)")
     ap.add_argument("--project", default=None, help="--train: the project the run belongs to (required with --on)")
     ap.add_argument("--command", default=None, help="--train: the workload command (default the tool declaration's)")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="--train --on: ship this file with every run (research run --send)")
+    ap.add_argument("--prepare", default=None, metavar="BRANCH", help="--train: record and land nothing; build the train, run --lint "
+                    "on it and push it to --remote as BRANCH (never forced), for `tools/check/train.sh BRANCH MACHINE`")
+    ap.add_argument("--onto", default=None, metavar="BASE", help="--prepare: the branch on --remote (or commit) the train starts "
+                    "from (default --into; a train ahead's prep branch stacks this one on it)")
+    ap.add_argument("--lint", default=None, metavar="CMD", help="--prepare: what must pass on the train before it's pushed "
+                    "(default `python tools/check/check.py --preflight` under this interpreter)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
+    ap.add_argument("--push", action="store_true", help="once the merge lands, push --into to --remote (never forced), then sweep; "
+                    "without it the sweep runs before the push and can close nothing the merge landed")
     ap.add_argument("--tool", default="check", help="the tool whose passing attempt the merge requires (default check)")
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
     ap.add_argument("--dry-run", action="store_true", help="check the gate, merge nothing")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
+    ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
+                    "lines on stdin and refuse a push that adds to --into a commit with no passing --tool attempt of its tree")
     a = ap.parse_args(argv)
     from .store.local import LocalStore
 
     repo = Path.cwd()
+    if a.guard_push:
+        bad = unchecked_pushes(repo, sys.stdin.read().splitlines(), LocalStore(a.store), a.into, a.tool)
+        for c in bad:
+            print(f"research merge: refused push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; "
+                  "land it with `research merge` (the hook fails closed: `git push --no-verify` only with root's yes)", file=sys.stderr)
+        return 1 if bad else 0
+    if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
+        print(f"research merge: installed the push guard {hook}", file=sys.stderr)
     if a.sweep:
         if a.ref or a.train:
             ap.error("--sweep takes no refs")
@@ -337,21 +504,34 @@ def main(argv: list[str]) -> int:
         return 0
     if not a.ref:
         ap.error("a ref to merge is required (or --sweep)")
+    if a.prepare:
+        if not a.train:
+            ap.error("--prepare needs --train")
+        onto = a.onto or a.into
+        lint = shlex.split(a.lint) if a.lint else [sys.executable, *PREFLIGHT]
+        try:
+            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint)
+        except Refused as e:
+            print(f"research merge: refused: {e}", file=sys.stderr)
+            return 1
+        print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
+              f"check it with `tools/check/train.sh {a.prepare} MACHINE`, land it with `research merge {a.prepare}`")
+        return 0
     if a.train:
         from .store import tools_registry
 
         decl = tools_registry.load(a.tool, repo)
         command = shlex.split(a.command) if a.command else list(decl.command)
         try:
-            land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send)
+            land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send,
+                              remote=a.remote)
         except Refused as e:
             print(f"research merge: refused: {e}", file=sys.stderr)
             return 1
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
         print(f"research merge: train {' '.join(a.ref)}: " + (f"`{decl.name}` passed; {moved}" if bad is None else f"{bad} breaks it; {moved}"))
-        if land:
-            _sweep_after(repo, a.into, a.remote)
-        return 0 if bad is None else 1
+        pushed = _push_and_sweep(repo, a.into, a.remote, a.push) if land else 0
+        return 0 if bad is None and not pushed else 1
     if len(a.ref) != 1:
         ap.error("several refs need --train")
     a.ref = a.ref[0]
@@ -370,9 +550,11 @@ def main(argv: list[str]) -> int:
         return 1
     same = _git(repo, "rev-parse", "HEAD^{tree}").stdout == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout
     print(f"research merge: merged {a.ref} ({commit[:12]}) into {a.into}; `{a.tool}` passed in {attempt}"
-          + ("" if same else "; the merged tree differs from the checked one"))
-    _sweep_after(repo, a.into, a.remote)
-    return 0 if same else 1
+          + ("" if same else "; the merged tree differs from the checked one" + (", so it isn't pushed" if a.push else "")))
+    if not same:
+        _sweep_after(repo, a.into, a.remote)
+        return 1
+    return _push_and_sweep(repo, a.into, a.remote, a.push)
 
 
 if __name__ == "__main__":

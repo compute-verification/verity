@@ -8,23 +8,27 @@
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
 #      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})
 #      ZK=1 (selftest: M1's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
-#      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)
+#      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)  FC_COINS=os (bench: m0's sessions on per-round OS
+#      coins, no seed and no PRF; seed: the binary's default; a selftest build always seeds)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=/workspace/flock-circuit; mkdir -p $O $W
+export FC_COINS=${FC_COINS:-os}
+REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
 MODE=${MODE:-selftest}; G=${GPU:-1}; Z=; [ "${ZK:-0}" = 1 ] && Z=--zk
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-90}
 MODE=build GPU=$G SM=$SM bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER_=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000); }
 TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( (Q + PER_ - 1) / PER_ )) ); export RAYON_NUM_THREADS=$TH
-F=/workspace/flock-gpu-link/flock; FEAT="--features sha512 --features glue"
+F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --features glue"
 # SHA-512 Merkle trees, leaves and nodes, every Ligerito level (64-byte digests): the Rust side on every build, the device side
 # after the circuit prover is generated (it widens both provers' trees)
 (cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/backends/flock/flock-sha512-b684b12.patch \
   && git apply $REPO/backends/flock/flock-glue-b684b12.patch) || exit 1
 # M1 (lane flock-zk): Ligerito level 0's hiding (flock-circuit --zk)
 (cd $F && git apply $REPO/backends/flock/flock-zk-b684b12.patch) || exit 1
+# the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
+(cd $F && git apply $REPO/backends/flock/flock-vtime-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/backends/flock/cuda_circuit_patch.py && python3 $REPO/backends/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"

@@ -207,3 +207,16 @@ def test_a_model_without_linears_is_refused_at_install_and_leaves_nothing(toy, m
     with pytest.raises(ValueError, match="no Apply layer"):
         PO.install(types.SimpleNamespace(named_modules=lambda: iter([("", object())])), _ctx(f"pous:{BAND}"))
     assert hooks.live() == before
+
+
+def test_a_quantized_linear_is_refused_at_install_and_leaves_nothing(toy):
+    """An FP8 (or any quantized) linear's weight is codes beside a scale that ``C`` doesn't encode, in a layout the
+    restored tensor doesn't keep: POUS refuses the model rather than serve a misread weight, and changes nothing."""
+    toy.layers["k"].weight_scale = b"\x01"
+    before = hooks.live()
+    with pytest.raises(ValueError, match=r"refuses quantized linears.*k: a quantized linear \(weight_scale\)"):
+        PO.install(toy, _ctx(f"pous:{BAND}"))
+    assert hooks.live() == before and toy.layers["k"].weight.raw == toy.plain["k"]
+    fp8 = types.SimpleNamespace(weight=types.SimpleNamespace(dtype=types.SimpleNamespace(is_floating_point=True, itemsize=1)))
+    assert "FP8 or integer codes" in pous.quantized(fp8)
+    assert pous.quantized(toy.layers["q"]) is None

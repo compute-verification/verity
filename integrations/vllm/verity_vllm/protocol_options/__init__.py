@@ -22,8 +22,8 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
-not wired); two executors at one site; beside sampled proofs, an executor whose computation the Program has no
-Definition for (``traced_as``: PoUW until the int7 linear is registered, and Pearl's noise-dependent output for good);
+not wired); two executors at one site; beside sampled proofs, an executor whose protocol package has no circuit for its
+scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``, and Pearl's noise-dependent output for good);
 with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
 whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
 
@@ -35,8 +35,13 @@ whatever an adapter refuses for its context (sampled proofs outside the Commit s
 protocol, its entry and what it commits to, with the SHA-256 of its canonical JSON.  It is a placeholder: each protocol's
 verifier checks its own claims, and nothing checks the links between them yet.  A Commit's verdict carries the set and the
 record's digest (`Composition.verdict`); it is of record like any other, because every option a Commit admits is one the
-Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until it
-names its Definition (``traced_as``).
+Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until its
+protocol package has a circuit for its scheme (``traced_as``).
+
+**Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
+`verity_pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
+executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
+gives the Commit the circuit of each executed call.
 """
 from __future__ import annotations
 
@@ -53,8 +58,8 @@ from verity_vllm.engine import hooks
 from verity_vllm.protocol_options.interface import Context, Installed, Option, Target
 
 __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
-           "WeightsView", "at_commit", "at_row", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
-           "parse", "refusals", "register_weights", "undeclared", "weights_view"]
+           "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
+           "parse", "refusals", "register_weights", "undeclared", "weights_view", "CIRCUITS", "circuit_registry", "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
@@ -63,6 +68,9 @@ ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
+#: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
+#: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
+CIRCUITS = {"pouw": "verity_pouw.circuit"}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
 parse = config.parse_protocols
@@ -100,6 +108,35 @@ def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dic
     return {str(k): dict(v) for k, v in doc.items()}
 
 
+def circuit_registry(name: str) -> ModuleType | None:
+    """Protocol ``name``'s circuit registry (`CIRCUITS`), None when it declares none; `Refused` when it is not installed."""
+    module = CIRCUITS.get(name)
+    if module is None:
+        return None
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError as e:
+        raise Refused([f"{name}: its circuit registry {module} is not installed ({e.name})"]) from e
+
+
+def traced_as(entry: str, m: int, k: int, n: int) -> Any:
+    """The circuit sampled proofs traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
+    Definition, partition query, served outputs and draw layout.  None when the scheme has no circuit; a shape outside the
+    circuit raises the protocol package's ``DomainError``."""
+    name, _, scheme = entry.partition(":")
+    reg = circuit_registry(name)
+    return None if reg is None else reg.traced_as(scheme, m, k, n)
+
+
+def _has_circuit(name: str, scheme: str, out: list[str]) -> bool:
+    try:
+        reg = circuit_registry(name)
+    except Refused as r:
+        out.extend(r.reasons)
+        return False
+    return reg is not None and scheme in reg.SCHEMES
+
+
 def refusals(ctx: Context) -> tuple[str, ...]:
     """Every reason the run described by ``ctx`` cannot enable ``ctx.enabled`` (empty: it can)."""
     out: list[str] = []
@@ -127,7 +164,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and ctx.scheme("sampled-proofs") is not None and not getattr(mod, "traced_as", lambda s, c: None)(scheme, ctx):
+        if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
                        f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
@@ -329,6 +366,32 @@ def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: b
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None
     return profile
+
+
+def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
+    """A Match capture's composition context: the declared target's executors and wrappers without sampled proofs, which
+    commits only in the Commit, so the captured run executes what the Commit serves. None when the target declares no
+    other protocol. `Refused` names every refusal."""
+    enabled = tuple(e for e in (getattr(profile, "protocols", None) or ()) if e.partition(":")[0] != "sampled-proofs")
+    if not enabled:
+        return None
+    ctx = Context(stage="capture", enabled=enabled, enforce_eager=getattr(profile, "compilation", None) is None,
+                  settings={k: v for k, v in load_settings(settings).items() if k != "sampled-proofs"})
+    bad = refusals(ctx)
+    if bad:
+        raise Refused(bad)
+    return ctx
+
+
+def at_capture(profile: Any, model: Any, settings: Any = None) -> Composition | None:
+    """Install a Match capture's composition (`capture_context`) on its engine's model: PoUW's executor there serves each call
+    and records it as one op (`pouw.ncp_linear_op`), committing nothing. None when the target declares no such protocol."""
+    ctx = capture_context(profile, settings=settings)
+    if ctx is None:
+        return None
+    comp = install(model, ctx)
+    print(f"[m1] protocol options installed for the capture: {list(comp.entries)}", flush=True)
+    return comp
 
 
 def at_commit(profile: Any, model: Any, versions: dict[str, Any], settings: Any = None) -> Composition | None:

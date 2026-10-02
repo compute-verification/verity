@@ -16,7 +16,7 @@ from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, o
 from verity_vllm.observe.fold.patterns.resolutions import _group_compute, hint_of, unsupported
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, GatherMany, Resolution, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import Compute, GatherMany, Resolution, StepContext, Supplied, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
 FA2_OP_NAMES = frozenset({"varlen_fwd", "flash_attn_varlen_func", "fwd"})
@@ -157,18 +157,23 @@ class AttentionScope:
         # under FA3's per-iteration Check_inf chain (`fa3_construction`) a row's tile is part of its Definition: rows group by (T, the row's
         # index among its request's rows in this step); otherwise by T alone
         check_inf = fa_v == 3 and _targets().fa3_check_inf(tp)
+        # FA2's per-iteration Check_inf chain also reads how many query rows the row's request has in this step
+        check_inf2 = fa_v == 2 and _targets().fa2_check_inf(tp)
         first_pos: dict = {}
         for req, position in ctx.start.rows:
             first_pos[req] = min(int(position), first_pos.get(req, int(position)))
-        groups: dict[tuple[int, int | None], list[int]] = {}
+        own = collections.Counter(req for req, _ in ctx.start.rows)
+        groups: dict[tuple[int, int | None, int | None], list[int]] = {}
         for i, (req, position) in enumerate(ctx.start.rows):
             T = int(position) + 1
             seq = ctx.start.seq_lens.get(req)
             if seq is not None and T > seq:
                 return unsupported(node, "row position exceeds the request's KV length", row=i, request=req, T=T, seq_len=seq)
-            groups.setdefault((T, int(position) - first_pos[req] if check_inf else None), []).append(i)
+            groups.setdefault((T, int(position) - first_pos[req] if check_inf or check_inf2 else None, own[req] if check_inf2 else None),
+                              []).append(i)
         computes: list[Compute] = []
-        for (T, row_in_request), rows in groups.items():
+        registered = getattr(ctx.profile, "registered_values", False)
+        for (T, row_in_request, own_rows), rows in groups.items():
             try:
                 slots = tuple(kv_slots(ctx, ctx.start.rows[i][0], T, layer=layer_s) for i in rows)
             except GeometryError as e:
@@ -177,12 +182,14 @@ class AttentionScope:
                 return unsupported(node, "a KV slot is outside the cache", T=T, cache_slots=kcs.shape[0])
             try:
                 # the launch's `max_seqlen_q` (FA3's tile rule reads it): the most query rows any ONE request has in this step
-                max_seqlen_q = max(collections.Counter(req for req, _ in ctx.start.rows).values())
-                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request)
+                max_seqlen_q = max(own.values())
+                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request, own_rows=own_rows,
+                                                 scale_input=registered)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
+            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1._scale_log2_bits(D)),) if registered else ()
             computes.append(Compute(spec, len(rows),
-                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)),
+                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale,
                                     (rows_operand(out, rows),), (), hint=hint_of(node, str(layer) if isinstance(layer, str) else "attn"),
                                     kernels=(kernel_name,), attribution=tuple(ctx.start.rows[i] for i in rows),
                                     pattern=pattern_name))

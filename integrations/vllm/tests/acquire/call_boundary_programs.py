@@ -41,13 +41,13 @@ DENSE = [(f"{EMB}.weight", V * H, 16, f"Array<{V},Array<{H},Value<16>>>"), (f"{P
          (f"{IL}.weight", H, 16, f"Array<{H},Value<16>>")]
 
 
-def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
+def dense_program(embed=EMB, lp=LP, t=T, eps=EPS, weight_add_once=False):
     """Per step (the prompt's `lp` rows, then one, `t` times): embed -> a post-feedforward norm chain (one input) -> an input-layernorm
     chain (x + residual, widened; `eps` its epsilon) -> the soft-capped logits of the last row -> TokenSelect; node-major rows, as the Build
-    writes a prefill, each norm's `weight + 1` one Call of the step that every row reads.  `embed` = the module the embedding rows are named
-    under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
+    writes a prefill, each norm's `weight + 1` one Call of the step that every row reads (`weight_add_once`: one Call of step 0 that every later step reads
+    too, as the Build writes Gemma-2's).  `embed` = the module the embedding rows are named under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
     b, at = Rows(DENSE), {}
-    sel = None
+    sel, a0, b0 = None, None, None
     for s in range(1 + t):
         ks = range(lp) if s == 0 else range(1)
 
@@ -56,7 +56,8 @@ def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
 
         e = [b.add(s, f"Embedding_v1{{V={V},H={H}}}", f"{embed}/embedding_{s}[{k}]", [["p", 0, k, k + 1]] if s == 0 else [["n", sel, 0, 1]],
                    b.W(f"{EMB}.weight")) for k in ks]
-        a0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{PF}/add_{s}[0]", b.W(f"{PF}.weight")), 0, H]]
+        if not (weight_add_once and s):
+            a0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{PF}/add_{s}[0]", b.W(f"{PF}.weight")), 0, H]]
         sq = each(f"SquareBf16_v1{{N={H}}}", f"{PF}/pow_{s}", (e, H))
         mu = each(f"MeanTriton_v1{{N={H}}}", f"{PF}/mean_{s}", (sq, H))
         ve = each(f"AddScalarF32_v1{{N=1,C={EPS}}}", f"{PF}/add_1_{s}", (mu, 1))
@@ -64,7 +65,8 @@ def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
         sc = each(f"ScaleRowBf16_v1{{N={H}}}", f"{PF}/mul_{s}", (e, H), (rs, 1))
         mv = each(f"MulVecF32_v1{{N={H}}}", f"{PF}/mul_1_{s}", (sc, H), a0)
         x = each(f"NarrowF32ToBf16_v1{{N={H}}}", f"{PF}/to_{s}/out", (mv, H))
-        b0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{IL}/add_{s}[0]", b.W(f"{IL}.weight")), 0, H]]
+        if not (weight_add_once and s):
+            b0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{IL}/add_{s}[0]", b.W(f"{IL}.weight")), 0, H]]
         ad = each(f"AddWidenedBf16_v1{{N={H}}}", f"{IL}/add_1_{s}", (x, H), (e, H))
         sq = each(f"SquareF32_v1{{N={H}}}", f"{IL}/pow_{s}", (ad, H))
         mu = each(f"MeanTriton_v1{{N={H}}}", f"{IL}/mean_{s}", (sq, H))
@@ -82,8 +84,10 @@ def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
     return b, at
 
 
-def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", request_id="r0"):
-    """A Build dir holding `doc`, and the manifest of its one request (the implementation paths observed = `observed`)."""
+def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", request_id="r0", norm_scales=False):
+    """A Build dir holding `doc`, and the manifest of its one request (the implementation paths observed = `observed`; `norm_scales`: built
+    under the norm-scale policy, as a Commit with the norm tap builds it)."""
+    from verity_vllm.query import norm_scales as NS
     res = {"program": {"digest": digest, "function": "f"}, "attention_impls_observed": {p: {} for p in observed},
            "target": {"declared": {"compute_capability": [8, 9]}}}
     d = tmp_path / name
@@ -92,4 +96,5 @@ def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", req
         json.dump(doc, f)
     (d / "result.json").write_text(json.dumps(res))
     P = from_instances(str(d / "instances.json.gz"))
-    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id=request_id).manifest
+    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id=request_id,
+                                    norm_scales=NS.POLICY if norm_scales else None).manifest

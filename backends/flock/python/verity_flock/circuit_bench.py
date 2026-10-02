@@ -201,7 +201,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
                   "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8, "commitments": "one root per proof, bound by both reps (R1)",
-                  "coins": "live verifier (flock-live R1-R8)"},
+                  "coins": FC.coins(p["live"])},
         hardware=contract.probe_hardware(),
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
                               "statement": a.meta["statement"], "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,

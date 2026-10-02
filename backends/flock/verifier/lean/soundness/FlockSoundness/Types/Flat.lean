@@ -8,7 +8,7 @@ import FlockSoundness.Audit.Circuit
 `verified-lowering-design.md` §1.2). For every flat type it accepts (AND items over linear forms):
 
 * **`compose_sound`**: column values that satisfy the derived rows, with the constant at 1, carry on each output's column
-  the type's output (`eval`) on the inputs' columns. This is L1 for the type's rows.
+  the type's output (`eval`) on the inputs' columns.
 * **`compose_complete`**: on every input, the honest column values (`honest`) satisfy the derived rows, with the
   constant at 1, and carry the inputs and the outputs on their columns. There are no assertion rows, so the rows ask
   nothing an honest evaluation doesn't meet.

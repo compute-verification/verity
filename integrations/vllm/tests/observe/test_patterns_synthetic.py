@@ -11,6 +11,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
 from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
 from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)
 from verity_vllm.observe.fold.tree import step_events
@@ -373,13 +374,14 @@ def test_gemm_constexpr_mismatch_is_unsupported():
     assert len(uns) == 1 and "pinned" in uns[0].reason and uns[0].detail["mismatches"]["BLOCK_SIZE_K"] == {"observed": 32, "pinned": 64}
 
 
-def _context_on_host(start, sample, sms):
+def _context_on_host(start, sample, sms, cc=(8, 9)):
     """A StepContext whose run header carries the capture host's GPU document (`profile.gpu.multi_processor_count`), as
     `verity_vllm.engine.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
     ctx = context(start, sample)
     prof = dict(ctx.header.profile)
     if sms is not None:
-        prof["gpu"] = {"name": "NVIDIA L40S", "compute_capability": [8, 9], "multi_processor_count": sms}
+        prof["gpu"] = {"name": "NVIDIA L40S" if tuple(cc) == (8, 9) else f"cc {cc[0]}.{cc[1]}", "compute_capability": list(cc),
+                       "multi_processor_count": sms}
     hdr = RunHeader(ctx.header.schema, ctx.header.created_utc, ctx.header.profile_id, prof, ctx.header.model, ctx.header.workload, ctx.header.notes)
     return StepContext(hdr, ctx.start, ctx.sample, ctx.links, ctx.roots, ctx.config, ctx.profile)
 
@@ -455,6 +457,21 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
         {s: len(v) for s, v in unbiased.items() if s.startswith("Gemm_v1") and s != f"Gemm_v1{{K={H},N={QKV}}}"}
 
 
+@pytest.mark.parametrize("cc,sms", [((12, 0), 188), ((9, 0), 132)])
+def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
+    """The same pair on a `Gemm_v2` target (cc 12.0, cc 9.0): one `GemmBias_v2{K,N,DOT}` at the add, the record target's one-Call
+    Definition (`registry.targets.gemm_bias_spec`), the frontend's choice."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.registry import targets as TG
+    events, start = decode_step(qkv_bias="add", num_sms=sms)
+    se = step_events(events)
+    specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))
+    tp = TargetProfile(compute_capability=cc, num_sms=sms)
+    gemm, fused = TG.gemm_spec(tp, H, QKV).id, TG.gemm_bias_spec(tp, H, QKV)
+    assert fused is not None and fused.id.startswith("GemmBias_v2{") and len(specs[fused.id]) == 1, sorted(specs)
+    assert gemm not in specs and not any(s.startswith("BiasAdd_v1") for s in specs), sorted(specs)
+
+
 def test_a_biased_linear_whose_pre_bias_output_is_read_again_keeps_gemm_and_bias_add():
     events, start = decode_step(qkv_bias="reread")
     se = step_events(events)
@@ -482,6 +499,50 @@ def test_rmsnorm_and_fused_norm():
     assert f1.outputs == (PerRow(bf(305, (1, H))), PerRow(bf(301, (1, H))))
     assert f2.operands[2] == Shared(bf(A_NORM, (H,)))
     assert f1.kernels == ("fused_add_rms_norm_kernel",)
+
+
+def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs():
+    """The accepted profile under `registered_values`: the norms are `RMSNormTriton_v3` / `RMSNormFusedCuda_v4` and attention is
+    `Attention_v10`, each with its value as a last `Supplied` operand of the registered `values`; operands before it are unchanged."""
+    import dataclasses
+
+    import numpy as np
+
+    from verity_vllm.observe.fold.resolver import Supplied
+    from verity_vllm.program.registry import b1
+    from verity_vllm.program.registry import prims as P
+
+    events, start = decode_step()
+    se = step_events(events)
+    base = context(start, se.sample)
+    ctx = dataclasses.replace(base, profile=dataclasses.replace(base.profile, registered_values=True))
+    specs = by_spec(resolve_step(se, ctx))
+    eps = Supplied("registration", "eps", 32, int(P.bits_of(np.float32(C["EPS"]))))
+    t = specs["RMSNormTriton_v3{N=576}"][0]
+    assert t.operands == (PerRow(bf(301, (1, H))), Shared(bf(A_LN1, (H,))), eps)
+    f1, _f2 = specs["RMSNormFusedCuda_v4{N=576}"]
+    assert f1.operands == (PerRow(bf(305, (1, H))), PerRow(bf(301, (1, H))), Shared(bf(A_LN2, (H,))), eps)
+    (a,) = specs["Attention_v10{T=33,NH=9,KVH=3,D=64,BN=128}"]
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3"))]
+
+
+def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_the_scale_an_input():
+    """The same step on the RTX PRO 6000 host (cc 12.0, FA2's per-iteration Check_inf): attention is `Attention_v11`, the frontend's
+    choice there (`targets.attention_spec(..., scale_input=True)`), with the scale its last `Supplied` operand; the norms as above."""
+    import dataclasses
+
+    from verity_vllm.observe.fold.resolver import Supplied
+    from verity_vllm.program.registry import b1
+
+    events, start = decode_step(num_sms=188)
+    se = step_events(events)
+    base = _context_on_host(start, se.sample, 188, (12, 0))
+    specs = by_spec(resolve_step(se, dataclasses.replace(base, profile=dataclasses.replace(base.profile, registered_values=True))))
+    (a,) = [r for k, v in specs.items() if k.startswith("Attention_v11{T=33,NH=9,KVH=3,D=64,") for r in v]
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert "RMSNormTriton_v3{N=576}" in specs and "RMSNormFusedCuda_v4{N=576}" in specs
+    assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3", "Attention_v5"))]
 
 
 def test_rope_group_q_and_k():
@@ -662,11 +723,18 @@ def test_gumbel_two_stage_sampler_is_one_token_select():
     assert isinstance(by_op["aten.gather.default"], Compute)
     stages = [r for r in res if getattr(r, "pattern", None) == "sample.gumbel_two_stage"]
     assert len(stages) == 3
-    # a non-greedy header makes the sampler Unsupported (the kernel's temperature branch is a workload fact)
-    res2 = resolve_step(step_events(events), context(start, None, sampling={"greedy": False, "temperature": 0.7}))
+    # a non-greedy header makes the sampler Unsupported (the kernel's temperature branch is a workload fact).  The stochastic pattern owns
+    # the kernel under it (the profile lists it first) and refuses the greedy chain's bf16 logits, which no float32 widening precedes; the
+    # greedy pattern refuses the header by itself
+    stochastic = {"greedy": False, "temperature": 0.7}
+    se2 = step_events(events)
+    res2 = resolve_step(se2, context(start, None, sampling=stochastic))
     uns = [r for r in res2 if isinstance(r, Unsupported)]
-    assert uns and uns[0].op.endswith("_gumbel_sample_kernel") and "greedy" in uns[0].reason
+    assert uns and uns[0].op.endswith("_gumbel_sample_kernel") and uns[0].reason == "sampler logits are not a row-contiguous float32 [R,V] view"
     assert "TokenSelect_v1{V=49152}" not in by_spec(res2)
+    kernel = next(n for n in se2.roots if n.op.endswith("_gumbel_sample_kernel"))
+    alone = TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, context(start, None, sampling=stochastic))
+    assert isinstance(alone, Unsupported) and "outside greedy sampling" in alone.reason
 
 
 def test_integer_metadata_triton_kernel_is_noop():

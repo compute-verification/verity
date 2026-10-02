@@ -23,8 +23,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: tests import B-Ligero (through verity_numerical) and circuit-check's targets, read the census, and check the Lean
-# verifier's stratified draw against the one-stage protocol's.
-inputs = ["backends/direct", "census", "protocols/one_stage", "tools/circuit_check"]
+# verifier's stratified draw against the one-stage protocol's, and the Lean spec of verity.randomness against its pinned vectors.
+inputs = ["backends/direct", "census", "packages/verity/tests/randomness", "protocols/sampled_proofs", "tools/circuit_check"]
 parallel = true
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["backends/flock/verifier/lean/.lake/build/bin/flock-verify",

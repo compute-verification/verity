@@ -36,7 +36,6 @@ KNOWN = {
     ("backends/flock/python/verity_flock/ir_sampling.py", "verity_vllm.program.registry"),
     ("backends/flock/python/verity_flock/partition_units.py", "verity_vllm.program.registry"),
     ("backends/flock/python/verity_flock/tail.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/tail_pieces.py", "verity_vllm.program.kernels"),
     ("backends/flock/python/verity_flock/tail_pieces.py", "verity_vllm.program.registry"),
     ("backends/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_keep_builder"),
     ("backends/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_word_gates"),

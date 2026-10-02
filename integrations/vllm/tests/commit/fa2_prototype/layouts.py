@@ -23,7 +23,7 @@ One logical value, many physical computations
     A value that the kernel computes more than once (a split-KV partial recomputed by another CTA, a rescaled accumulator
     re-derived in the combine step, the bf16 word derived from a committed fp32 P) has ONE identity here and ONE position.
     Readers rank the identity; a second physical copy is never a separate leaf, so it cannot carry an independently chosen
-    value (`docs/PROTOCOL.md` "Every shared gate has one value").  Derived words open through :mod:`derived`.
+    value (every shared gate has one value).  Derived words open through :mod:`derived`.
 """
 
 from __future__ import annotations

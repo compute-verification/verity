@@ -1,20 +1,17 @@
 import FlockSoundness.Refine.Regions
 import FlockSoundness.Refine.Walk
 import Flock.HmRow
-import Flock.Blake3Row
 
 /-!
-# The statement decoding, part 3: the setups' statements are well formed (PROTOCOL.md §16.1, §16.2)
+# The statement decoding, part 3: the setup's statements are well formed (PROTOCOL.md §16.1, §16.2)
 
-`StmtWF` and `RegionsWF` are the facts `ofCircuit_fold` and `ofCircuit_extra` take. Both setups establish them:
-`setup_wf` for `Stmt.setup` with the Blake3 row leaf, and `setupH_wf` for `Stmt.setupH`.
-* **The slots.** `Circuit.parse` ends with `checkLayout`, which refuses sub-word slots and ranges past the block
-  (`checkLayout_slots`). `HmRow.parse` ends with `HmRow.check`, which refuses a `slot_log` outside 7..k_log
-  (`hm_check_slots`).
-* **The pin.** Both `pin` functions refuse a column outside the block (`pin_ok`, `hm_pin_ok`).
+`StmtWF` and `RegionsWF` are the facts `ofCircuit_fold` and `ofCircuit_extra` take. `setupH_wf` establishes them for
+`Stmt.setupH`.
+* **The slots.** `HmRow.parse` ends with `HmRow.check`, which refuses a `slot_log` outside 7..k_log (`hm_check_slots`).
+* **The pin.** `HmRow.pin` refuses a column outside the block (`hm_pin_ok`).
 * **The regions.** Every region is `mkRegion`'s, and `mkRegion_ok` gives distinct free bits below `k_log`, at most
-  `PT_LOCAL` of them (`blake3_regions_wf`, `hm_regions_wf`, `outRegion_wf`).
-* `m = k_log + nbl` and `m_pts = PT_LOCAL + nbl` are the setups' own.
+  `PT_LOCAL` of them (`hm_regions_wf`, `outRegion_wf`).
+* `m = k_log + nbl` and `m_pts = PT_LOCAL + nbl` are the setup's own.
 
 `stmtOf_linkLayout` gives `stmtOf st`'s `LinkLayout`, which the table-soundness theorems take.
 -/
@@ -97,23 +94,6 @@ theorem outRegion_wf {c : Circuit} {pub : Public} {r : Region} (h : c.outRegion 
 
 /-! ### The pin -/
 
-theorem pin_ok {c : Circuit} {leaf : RowLeaf} {p : ℕ} (h : c.pin leaf = .ok p) :
-    p < 2 ^ c.kLog ∧ ∃ r ∈ c.ranges.toList, r.kind ≠ Kind.mask := by
-  unfold Circuit.pin at h
-  dsimp only at h
-  split at h
-  · rename_i r hr
-    have hmem : r ∈ c.ranges.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hr)
-    have hk : r.kind ≠ Kind.mask := by
-      intro hk; have := Array.find?_some hr; rw [hk] at this; exact absurd this (by decide)
-    repeat' (first | (obtain ⟨_, hx, h⟩ := ebind_ok h; try (cases hx; done)) | (split at h))
-    all_goals
-      simp only [pure, Except.pure, Except.ok.injEq] at h
-      subst h
-      exact ⟨by omega, r, hmem, hk⟩
-  · obtain ⟨_, hx, _⟩ := ebind_ok h
-    exact absurd hx (throw_ne_ok _ _)
-
 theorem hm_pin_ok {c : Circuit} {p : ℕ} (h : HmRow.pin c = .ok p) :
     p < 2 ^ c.kLog ∧ ∃ r ∈ c.ranges.toList, r.kind ≠ Kind.mask := by
   unfold HmRow.pin at h
@@ -133,33 +113,6 @@ theorem hm_pin_ok {c : Circuit} {p : ℕ} (h : HmRow.pin c = .ok p) :
 
 /-! ### The slots -/
 
-theorem slot_le {x y z w : ℕ} (h : x + nextPow2 y * 2 ^ z ≤ 2 ^ w) : z ≤ w := by
-  have h1 : 1 ≤ nextPow2 y := Nat.one_le_two_pow
-  have h2 : 2 ^ z ≤ 2 ^ w :=
-    calc 2 ^ z ≤ nextPow2 y * 2 ^ z := Nat.le_mul_of_pos_left _ h1
-      _ ≤ x + nextPow2 y * 2 ^ z := Nat.le_add_left _ _
-      _ ≤ 2 ^ w := h
-  exact (Nat.pow_le_pow_iff_right (by norm_num)).1 h2
-
-theorem checkLayout_slots {c : Circuit} (h : c.checkLayout = .ok ()) :
-    ∀ r ∈ c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ c.kLog := by
-  unfold Circuit.checkLayout at h
-  dsimp only at h
-  obtain ⟨_, hloop, -⟩ := ebind_ok h
-  clear h
-  rw [← Array.forIn_toList] at hloop
-  refine list_forIn_each _ (fun r => 7 ≤ r.slotLog ∧ r.slotLog ≤ c.kLog) ?_ _ _ _ hloop
-  clear hloop
-  intro r s y hy
-  repeat' (first | (obtain ⟨_, hx, hy⟩ := ebind_ok hy; try (cases hx; done)) | (split at hy))
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at hy
-    subst hy
-    refine ⟨?_, _, rfl⟩
-    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq, not_or, not_not, not_lt] at *
-    exact ⟨by omega, slot_le (And.right (by assumption))⟩
-
-
 theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
     ∀ r ∈ c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ c.kLog := by
   unfold HmRow.check at h
@@ -177,18 +130,6 @@ theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
     refine ⟨?_, _, rfl⟩
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at *
     omega
-
-set_option maxHeartbeats 2000000 in
-theorem parse_checkLayout {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (h : Circuit.parse tags bytes tables = .ok c) : c.checkLayout = .ok () := by
-  unfold Circuit.parse at h
-  dsimp only at h
-  simp only [throw_bind', pure_bind] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    assumption
 
 set_option maxHeartbeats 4000000 in
 /-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
@@ -247,25 +188,7 @@ theorem hm_parseTyped_check {tags : Tags} {bytes : ByteArray} {tables : List (St
       obtain ⟨ls, hls⟩ := hm_parse_check_none hc'
       exact ⟨ls, (check_cls c' tags ls _).trans hls⟩
 
-/-! ### The regions a setup builds -/
-
-set_option maxHeartbeats 2000000 in
-theorem blake3_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : Blake3Row.regions c pub = .ok regs) :
-    ∀ x ∈ regs.toList, RegionWF c.kLog x := by
-  unfold Blake3Row.regions at h
-  dsimp only at h
-  obtain ⟨out, hloop, h⟩ := ebind_ok h
-  simp only [pure, Except.pure, Except.ok.injEq] at h
-  subst h
-  refine forIn_range_inv _ _ (fun out => ∀ x ∈ out.toList, RegionWF c.kLog x) ?_ #[] _ (by simp) hloop
-  clear hloop
-  intro ri out y hI h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    show ∀ x ∈ _, _
-    repeat (first | refine allWF_push ?_ ?_ | exact hI | exact mkRegion_wf (by assumption))
+/-! ### The regions the setup builds -/
 
 set_option maxHeartbeats 2000000 in
 theorem hm_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs) :
@@ -291,7 +214,7 @@ theorem hm_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : Hm
     subst h
     repeat (first | refine allWF_push ?_ ?_ | exact hI | exact mkRegion_wf (by assumption))
 
-/-! ### The setups -/
+/-! ### The setup -/
 
 theorem wf_of_facts {st : Stmt} (hslots : ∀ r ∈ st.c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ st.c.kLog)
     (hpin : st.pin < 2 ^ st.c.kLog ∧ ∃ r ∈ st.c.ranges.toList, r.kind ≠ Kind.mask) (hm : st.m = st.c.kLog + st.nbl) :
@@ -299,23 +222,6 @@ theorem wf_of_facts {st : Stmt} (hslots : ∀ r ∈ st.c.ranges.toList, 7 ≤ r.
   obtain ⟨hp, r, hr, -⟩ := hpin
   have := hslots r hr
   exact ⟨by omega, by omega, hp, fun r hr => ⟨by have := hslots r hr; omega, (hslots r hr).2⟩⟩
-
-set_option maxHeartbeats 2000000 in
-/-- **The Blake3 path's statements are well formed** (§16.1, §16.2). `Stmt.setup` with the Blake3 row leaf returns only
-statements whose layout and regions are the ones `stmtOf` and `regionsOf` read. -/
-theorem setup_wf {tags : Tags} {comp : Comp} {circuitFile publicFile : ByteArray} {coins : Coins}
-    {tables : List (String × ByteArray)} {st : Stmt}
-    (h : Stmt.setup tags (Blake3Row.leaf comp) circuitFile publicFile coins tables = .ok st) :
-    StmtWF st ∧ RegionsWF st := by
-  unfold Stmt.setup at h
-  dsimp only at h
-  simp only [throw_bind'] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact ⟨wf_of_facts (checkLayout_slots (parse_checkLayout (by assumption))) (pin_ok (by assumption)) rfl,
-      rfl, rfl, allWF_push (blake3_regions_wf (by assumption)) (outRegion_wf (by assumption))⟩
 
 set_option maxHeartbeats 2000000 in
 /-- **The hm96 path's statements are well formed** (§16.1, §16.2). `Stmt.setupH` returns only statements whose layout and

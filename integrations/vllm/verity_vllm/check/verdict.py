@@ -77,8 +77,8 @@ GROUPS: dict[str, dict[str, Any]] = {
         "compat": ["weights_pin"]},
     "execution_extent": {
         "claim": ("Each request's executed prefix of record (served length; the cap on a length stop, served + LAG on an EOS stop) is "
-                  "derived from the declared stop rule, linked to the Match account of the same attempt, and no committed row lies past it."),
-        "compat": ["executed_prefix", "executed_prefix_of_record", "executed_prefix_facts", "match_account_link", "rows_past_the_stop", "account_missing"]},
+                  "derived from the declared stop rule, linked to the Match account of the same attempt (with no Match stage, to the Commit's token record bound to the commitment), and no committed row lies past it."),
+        "compat": ["executed_prefix", "executed_prefix_of_record", "executed_prefix_facts", "match_account_link", "commit_account_link", "rows_past_the_stop", "account_missing"]},
     "required_value_coverage": {
         "claim": ("Every identity of the required-value manifest Q(P) has exactly one committed binding, every required value class was "
                   "acquired, and the manifest used is the one rebuilt from this attempt's Program x workload."),

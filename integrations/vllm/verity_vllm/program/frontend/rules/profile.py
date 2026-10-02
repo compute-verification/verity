@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll, array_of, concat
+from verity.ir.refs import Coll, array_of
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import attention_scale, dtype_is, from_rows, kv_logs, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
@@ -260,8 +260,8 @@ class RmsNormRule(InPlaceRule):
         xc, wc = ctx.coll(x), ctx.coll(w)
         rows, lead = rows_of(xc)
         N = rows[0].type.n
-        fn = ctx.kind("rmsnorm", node, N=N, EPS=eps)
-        outs = [ctx.call(fn, r, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps)
+        outs = [ctx.call(fn, r, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)
         ctx.record(self, node, {"N": N, "EPS": eps, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
@@ -299,10 +299,10 @@ class FusedAddRmsNormRule(InPlaceRule):
         rr, _ = rows_of(ctx.coll(res))
         wc = ctx.coll(w)
         N = xr[0].type.n
-        fn = ctx.kind("rmsnorm_fused", node, N=N, EPS=eps)
+        fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps)
         ns, rs = [], []
         for i, (a, b) in enumerate(zip(xr, rr)):
-            o = ctx.call(fn, a, b, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")
+            o = ctx.call(fn, a, b, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")
             ns.append(o[0])
             rs.append(o[1])
         ctx.rebind(x, from_rows(ns, lead), self, what="x")
@@ -484,16 +484,18 @@ class UnifiedAttentionRule(StateRule):
         for i in range(T):
             krow_list.append(krows[i])
             vrow_list.append(vrows[i])
+        klog, vlog = kv_logs(ctx, layer_name, krow_list, vrow_list)
         # `allowed_dims`: the request's row count of this call (prefill T / decode 1) and the context length it reaches
         ctx.check_dim("T", T, node)
         ctx.check_dim("CONTEXT", P0 + T, node)
         outs = []
+        scale = attention_scale(ctx, D, node)
         for i in range(T):
             P = P0 + i + 1
-            fn = ctx.kind("attention", node, T=P, NH=NH, KVH=KVH, D=D)
-            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in krow_list[:P]]))
-            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in vrow_list[:P]]))
-            outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
+            fn = ctx.kind("attention_value" if scale else "attention", node, T=P, NH=NH, KVH=KVH, D=D)
+            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
+            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))
+            outs.append(ctx.call(fn, qrows[i], kcat, vcat, *scale, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
         ctx.define(node, array_of(outs).reshape(_tensor_type(qs, 16)))
         ctx.record(self, node, {"layer_name": layer_name, "positions": [P0, P0 + T - 1], "NH": NH, "KVH": KVH, "D": D, "history_rows_after": P0 + T,
                                 "kv_rows_from_this_request": True, "assumed_causal": True}, emitted=f"Attention_v1 x{T} (T={P0 + 1}..{P0 + T})")

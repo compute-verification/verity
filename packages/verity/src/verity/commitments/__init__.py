@@ -12,7 +12,9 @@ leaves of ``rowleaf``) and ``vllm_v1``, the framing vLLM's serving Commit path e
 leaves, node/lift trees, raw-SHA root bindings).  ``CommitmentScheme.leaf_layout`` is what a backend proves: every
 leaf digest is ``H(prefix || value || suffix)`` with H SHA-256 or BLAKE3 (``blake3`` is a plain-Python reference);
 verifiers check the trees natively.  Both schemes have an opt-in SHA-512 variant, ``frame-v3-sha512`` and ``vllm-v1-sha512``
-(the same framing through SHA-512: a ``hash="sha512"`` domain; each spec's last section).  ``hm96`` is the hiding leaf rule over
+(the same framing through SHA-512: a ``hash="sha512"`` domain; each spec's last section).  A ``hash="blake3"`` domain is
+``frame-b3``, a tree mode for latency whose leaves and nodes are BLAKE3 keyed by the domain id (``merkle``'s docstring); the
+SP1 kernel does not mirror it.  ``hm96`` is the hiding leaf rule over
 a SHA-256 or SHA-512 leaf digest (``hm96-sha256/v1``, ``hm96-sha512/v1``: Halevi–Micali, a stored salt per leaf;
 statistically hiding given uniform salts, with the pinned key except for a 2^-64 fraction of keys; binding under the hash's
 collision resistance), configured over ``vllm_v1`` by ``hm96.Hm96Sha256`` and ``hm96.Hm96Sha512``.

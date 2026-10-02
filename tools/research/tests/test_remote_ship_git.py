@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,7 @@ import pytest
 from research import remote
 
 LOCAL = ["sh", "-c"]
+REPLICA_TEST = Path(__file__).resolve().parent / "test_repo_replicas.py"
 
 
 def _git(repo: Path, *args: str, **env: str) -> str:
@@ -43,7 +46,7 @@ def repo(tmp_path) -> Path:
 def _tree(d: Path) -> dict[str, str]:
     import hashlib
     return {p.relative_to(d).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(d.rglob("*"))
-            if p.is_file() and p.name != remote.READY_FILE}
+            if p.is_file() and p.name != remote.READY_FILE and p.relative_to(d).parts[0] != ".git"}
 
 
 def _no_git_machine(tmp_path: Path) -> list[str]:
@@ -69,6 +72,9 @@ def test_first_and_delta_ships_go_as_git_objects_and_verify_per_file(repo, tmp_p
     assert _git(bare, "rev-parse", f"refs/research/src/{sha}") == sha
     assert [p.name for p in (root / "src").iterdir()] == [sha] and "archive stream" not in capsys.readouterr().err
     assert remote.require_ready_source(dest, sha) == doc
+    assert doc["checkout"] is True and _git(Path(dest), "rev-parse", "HEAD") == sha and _git(Path(dest), "status", "--porcelain") == ""
+    assert _git(Path(dest), "ls-files", "-co", "--exclude-standard") == _git(repo, "ls-files"), "what `check.tracked_files` lists"
+    assert (Path(dest) / ".git" / "objects" / "info" / "alternates").read_text().strip() == str(bare / "objects"), "no object copied"
     (repo / "pkg" / "b.py").write_text("B = 3\n")
     _git(repo, "commit", "-qam", "two")
     sha2, dest2, doc2 = remote.ship_source(LOCAL, str(root), repo)
@@ -84,6 +90,7 @@ def test_a_machine_without_git_gets_the_archive_stream_with_one_line(repo, tmp_p
     err = capsys.readouterr().err
     assert "git ship to" in err and "(the machine has no git); shipping the archive stream" in err
     assert _tree(Path(dest)) == remote.archive_manifest_git(repo)["files"] and not (root / remote.POD_GIT_REPO).exists()
+    assert not (Path(dest) / ".git").exists() and "checkout" not in doc
 
 
 def test_a_tampered_extraction_is_never_marked_ready_and_the_stream_ships_instead(repo, tmp_path, monkeypatch, capsys):
@@ -105,10 +112,52 @@ def test_stream_opt_out_and_the_push_url_carries_no_credential(repo, tmp_path, m
     assert url == "ext::ssh -i /k/my% key -p 2222 root@1.2.3.4 git% receive-pack% /workspace/research/git/verity.git"
 
 
+def _replica_repo(tmp_path: Path) -> Path:
+    """A repository whose replica map registers a tracked fixture and a fetched one (gitignored, so no commit holds it), with this
+    suite's own replica test at its usual path."""
+    from research.store.fixtures import fixture_id
+
+    d = tmp_path / "replicas"
+    (d / "fixtures").mkdir(parents=True)
+    (d / "tools" / "research" / "tests").mkdir(parents=True)
+    shutil.copy(REPLICA_TEST, d / "tools" / "research" / "tests" / REPLICA_TEST.name)
+    (d / "fixtures" / "small.bin").write_bytes(b"tracked\n")
+    (d / ".gitignore").write_text("/fixtures/big.bin\n")
+    reg = {fixture_id(d / "fixtures" / "small.bin"): "fixtures/small.bin", "art:" + "b" * 64: "fixtures/big.bin"}
+    (d / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    _git(d, "init", "-q")
+    _git(d, "add", ".")
+    _git(d, "commit", "-q", "-m", "replicas")
+    return d
+
+
+def _replica_test_in(tree: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(tree / "tools" / "research" / "tests" / REPLICA_TEST.name)],
+                          cwd=tree, capture_output=True, text=True)
+
+
+def test_a_shipped_tree_answers_git_as_the_launchers_checkout_does(tmp_path, monkeypatch):
+    """#371: the replica test skips a fetched fixture only where `git ls-files` answers.  A shipped `git archive` had no .git, so in a
+    recorded check every migrated fixture read as missing.  Shipped over git, the tree is a checkout, and the same test passes there."""
+    repo = _replica_repo(tmp_path)
+    _, dest, _ = remote.ship_source(LOCAL, str(tmp_path / "git-root"), repo)
+    p = _replica_test_in(Path(dest))
+    assert p.returncode == 0 and "3 passed" in p.stdout, p.stdout + p.stderr
+    assert _git(Path(dest), "check-ignore", "fixtures/big.bin") == "fixtures/big.bin"
+    monkeypatch.setenv(remote.SHIP_ENV, "stream")
+    _, bare_tree, _ = remote.ship_source(LOCAL, str(tmp_path / "stream-root"), repo)
+    p = _replica_test_in(Path(bare_tree))
+    assert p.returncode == 1 and "fixtures/big.bin is not in the working tree" in p.stdout, "without .git, #371's failure: " + p.stdout
+
+
 def test_nothing_credential_like_is_left_on_the_machine(repo, tmp_path):
     root = tmp_path / "root"
     remote.ship_source(LOCAL, str(root), repo)
     bare = root / remote.POD_GIT_REPO
     cfg = (bare / "config").read_text()
     assert "url" not in cfg and "credential" not in cfg and "extraheader" not in cfg.lower()
-    assert json.loads((root / "src" / _git(repo, "rev-parse", "HEAD") / remote.READY_FILE).read_text())["transport"] == "git"
+    tree = root / "src" / _git(repo, "rev-parse", "HEAD")
+    assert json.loads((tree / remote.READY_FILE).read_text())["transport"] == "git"
+    keys = [line.split("=", 1)[0] for line in _git(tree, "config", "--local", "--list").splitlines()]
+    assert _git(tree, "remote", "get-url", "origin") == str(bare), "the checkout's one remote is the machine's own bare repository"
+    assert not [k for k in keys if k.startswith("credential") or "extraheader" in k], keys

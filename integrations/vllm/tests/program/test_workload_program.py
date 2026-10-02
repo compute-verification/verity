@@ -4,7 +4,7 @@ lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
 import pytest
 
-from verity.ir.codec import encode_program, program_digest
+from verity.ir.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ir.program import Program
 from verity.ir.refs import coll_concat
@@ -116,6 +116,48 @@ def test_refusals():
         W.request_component(_desc(3, 2), REGISTRY, [("prompt", "Array<2,Value<16>>"), ("weights", "Array<5,Value<16>>")])
 
 
+def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_log(monkeypatch):
+    """Call i reads the rows of calls 0..i (the decoder's alias chain, one log): the component's arguments remapped through the
+    log are the parts the plain remap gives, and its body encodes to the same descriptor entry."""
+    def sum_sig(S):
+        return ((("xs", Array(S.P, Value(16))),), Value(16))
+
+    def sum_body(B, S, xs):
+        acc = xs[0]
+        for p in range(1, S.P):
+            acc = B.call(_ADD, acc, xs[p])
+        return acc
+
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", Array(4, Value(16)))), Array(S.LP, Value(16)))
+
+    def body(B, S, prompt, weights):
+        rows, outs = [], []
+        for i in range(S.LP):
+            rows.append(B.call(_ADD, prompt[i], weights[i % 4]))
+            outs.append(B.call(prefix_sum.bind(P=i + 1), coll_concat(Array(i + 1, Value(16)), rows)))
+        return coll_concat(Array(S.LP, Value(16)), outs)
+
+    prefix_sum = REGISTRY["GpTestPrefixSum_v1"] if "GpTestPrefixSum_v1" in REGISTRY else CompositeDefinition(
+        "GpTestPrefixSum", 1, ("P",), sum_sig, sum_body)
+    req = REGISTRY["ToyKvRequest_v1"] if "ToyKvRequest_v1" in REGISTRY else CompositeDefinition("ToyKvRequest", 1, ("LP",), sig, body)
+    desc = encode_program(Program(req.bind(LP=12)))
+
+    def component():
+        monkeypatch.setattr(W, "_REQUEST_CACHE", {})
+        body = W.request_component(desc, REGISTRY, _WP(12)).fn.body
+        return body, _encode_body(body, SCHEMA_V1, _Tables())
+
+    body, enc = component()
+    shared = [a.refs for n in body.nodes for a in n.args if getattr(a.refs, "prefix", None) is not None]
+    assert len(shared) >= 10 and len({id(r.prefix[0]) for r in shared}) == 1
+    plain = W._remap
+    monkeypatch.setattr(W, "_remap", lambda r, K, logs=None: plain(r, K))
+    body0, enc0 = component()
+    assert [[a.refs.to_json() for a in n.args] for n in body.nodes] == [[a.refs.to_json() for a in n.args] for n in body0.nodes]
+    assert enc == enc0
+
+
 def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
     """The real wrapper's `weights` is a mixed-width Record (bf16 tensors + an f32 rotary table), which lowers to one Input
     batch per field (a homogeneous record would be one batch): the group is shared as a whole either way."""
@@ -138,6 +180,49 @@ def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
     assert am["shared"] == {"group": "weights", "root_nodes": [0, 2], "gates": [0, 5], "n_batches": 2}
     assert [i["owner"] for i in am["inputs"]] == ["shared", "shared", "a", "b"]
     assert am["requests"][0]["inputs"][2]["gates"] == am["requests"][1]["inputs"][2]["gates"] == [2, 5]
+
+
+def _toy_registered_request(LP: int, values_n: int = 2):
+    """A registered_values derive's wrapper shape: `(prompt, values, weights)` with `values` bound at registration."""
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("values", Array(S.V, Value(16))), ("weights", Array(4, Value(16)))),
+                Array(1, Value(16)))
+
+    def body(B, S, prompt, values, weights):
+        return coll_concat(Array(1, Value(16)), [B.call(_ADD, B.call(_ADD, prompt[0], values[0]), weights[0])])
+
+    d = REGISTRY["ToyRegReq_v1"] if "ToyRegReq_v1" in REGISTRY else CompositeDefinition("ToyRegReq", 1, ("LP", "V"), sig, body)
+    return d.bind(LP=LP, V=values_n)
+
+
+def _registered_component(LP: int, values_n: int = 2, registered=("values",)):
+    wp = [("prompt", f"Array<{LP},Value<16>>"), ("values", f"Array<{values_n},Value<16>>"), ("weights", "Array<4,Value<16>>")]
+    return W.request_component(encode_program(Program(_toy_registered_request(LP, values_n), registered=registered)), REGISTRY, wp)
+
+
+def test_registered_values_are_shared_once_and_registered_at_the_root():
+    """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
+    Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
+    from verity.ir.constants import REGISTRATION, RUN, inputs
+    ca, cb = _registered_component(2), _registered_component(5)
+    assert ca.bindings == (RUN, REGISTRATION, RUN)
+    wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
+    assert wl.registered == ("shared.values",) and wl.shared == (1, 2)
+    assert wl.program.input_gates == 2 + 4 + 2 + 5
+    names = [n for n, _ in wl.fn.signature()[0]]
+    assert dict(zip(names, wl.program.bindings)) == {"shared.values": REGISTRATION, "shared.weights": RUN, names[2]: RUN, names[3]: RUN}
+    assert len(inputs(wl.program.circuit)[REGISTRATION]) == 2 and len(inputs(wl.program.circuit)[RUN]) == 4 + 2 + 5
+    assert wl.artifact()["shared"]["registered"] == ["shared.values"]
+    # the components agree on what they register, or the workload is not one program
+    with pytest.raises(ValueError, match="register different groups"):
+        W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca),
+                           W.WorkloadRequest("b", 1, 5, 1, 0, _registered_component(5, registered=()))], lag=0)
+
+
+def test_a_workload_without_registered_values_keeps_its_digest():
+    wl = _wl([(3, 2), (5, 0)])
+    assert wl.registered == () and "registered" not in wl.artifact()["shared"]
+    assert wl.digest == "c7b27da04c555a2a56c06126ba6d3eb28b6fef06fdb2ffe449be43a4cb18c5e4"
 
 
 def _toy_rank_request(LP: int, T: int):

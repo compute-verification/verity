@@ -1,6 +1,7 @@
 """The pod registry every machine can update: one file per machine under `machines.d/` (cloud migration step g).
 
     research pods register NAME --pod-id ID --project P [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
+    research pods register NAME --host ADDR --project P [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--replace]
     research pods unregister NAME
     research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
     research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
@@ -13,15 +14,17 @@ agents registering two pods write two files, so nothing is ever hand-merged; in 
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
 Where it is read (`registry_dir`): `$RESEARCH_MACHINES_D` when set (`none` turns it off), else `<notes>/machines.d` on a machine
-that has no machines.toml (a cloud VM), else nowhere -- the laptop reads machines.toml alone until the switch-over sets the
+that has no machines.toml (a cloud VM; with RESEARCH_NOTES_TOKEN set, a missing notes clone is cloned first:
+`notes_sync.ensure_clone`), else nowhere -- the laptop reads machines.toml alone until the switch-over sets the
 variable.  Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
-machine, or lacks provider / pod_id / project is dropped the same way.
+machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
 
 `register` refuses before writing anything when: the name is not a plain name; the pod id is unknown to the RunPod account (a
 404, or any API failure: G2); the pod's name (campaign suffix stripped) is not NAME (`--any-name` allows it: a pod created before
 the convention); machines.toml or the registry already binds NAME to another pod (`--replace` for the registry file only).  The
-file is written atomically, and with `RESEARCH_NOTES_SYNC=1` synced to the notes remote at once.
+`register --host` (an ssh machine, such as a cloud VM with a static address) refuses unless `hostname` answers over ssh with the
+research key.  The file is written atomically, and with `RESEARCH_NOTES_SYNC=1` synced to the notes remote at once.
 """
 from __future__ import annotations
 
@@ -30,6 +33,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -41,7 +45,8 @@ REGISTRY_ENV = "RESEARCH_MACHINES_D"
 FAMILIES_FILE = "_families.toml"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
-KNOWN_KEYS = ("provider", "pod_id", "project", "projects", "root", "python", "guard", "ramlock")
+KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock")
+HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
 
 problems: dict[str, str] = {}   # name -> why the last merge dropped it (read by remote.resolve_machine's refusal)
@@ -72,14 +77,30 @@ def validate(name: str, entry: Any) -> str | None:
         return f"{name!r} is not a machine name ({NAME_RE.pattern}, not starting with _)"
     if not isinstance(entry, dict):
         return "not a table"
-    if entry.get("provider") != "runpod":
-        return f"provider {entry.get('provider')!r} (runpod only)"
-    if not isinstance(entry.get("pod_id"), str) or not POD_ID_RE.fullmatch(entry["pod_id"]):
+    if entry.get("provider") == "ssh":
+        if not isinstance(entry.get("host"), str) or not HOST_RE.fullmatch(entry["host"]):
+            return f"host {entry.get('host')!r} is not a host name or address"
+        if "port" in entry and not (isinstance(entry["port"], int) and 0 < entry["port"] < 65536):
+            return f"port {entry['port']!r} is not a TCP port"
+        if "user" in entry and not (isinstance(entry["user"], str) and NAME_RE.fullmatch(entry["user"])):
+            return f"user {entry['user']!r} is not a user name"
+    elif entry.get("provider") != "runpod":
+        return f"provider {entry.get('provider')!r} (runpod or ssh)"
+    elif not isinstance(entry.get("pod_id"), str) or not POD_ID_RE.fullmatch(entry["pod_id"]):
         return f"pod_id {entry.get('pod_id')!r} is not a pod id"
     projects = entry.get("projects") or ([entry["project"]] if entry.get("project") else [])
     if not projects or not all(isinstance(p, str) and p for p in projects):
         return "no project (project = \"...\" or projects = [...])"
     return None
+
+
+def binding(entry: dict) -> str | None:
+    """What a name is bound to: a runpod pod id, or an ssh machine's host."""
+    return entry.get("pod_id") or entry.get("host")
+
+
+def _bound(entry: dict) -> str:
+    return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry.get('host')}"
 
 
 def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
@@ -110,6 +131,11 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
     d = registry_dir(machines_toml, environ)
     if d is None:
         return toml_machines
+    if REGISTRY_ENV not in (os.environ if environ is None else environ):
+        from ..notes_sync import ensure_clone  # noqa: PLC0415
+
+        if line := ensure_clone(notes_root(environ)):
+            print(line, file=sys.stderr)
     entries, bad = load_dir(d)
     out = dict(toml_machines)
     for name, why in bad.items():
@@ -117,9 +143,9 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
             problems[name] = why
     for name, e in entries.items():
         t = toml_machines.get(name)
-        if t is not None and t.get("pod_id") != e.get("pod_id"):
+        if t is not None and binding(t) != binding(e):
             out.pop(name, None)
-            problems[name] = (f"machines.toml binds it to pod {t.get('pod_id')} and {d / (name + '.toml')} to pod {e.get('pod_id')}; "
+            problems[name] = (f"machines.toml binds it to {_bound(t)} and {d / (name + '.toml')} to {_bound(e)}; "
                               "refused until one of them is removed")
         elif t is None:
             out[name] = e
@@ -213,14 +239,20 @@ def register(name: str, pod_id: str, project: str, *, root: str | None = None, p
     if pod_name != name and not any_name:
         raise remote.Refused(f"register {name}: pod {pod_id} is named {pod.get('name')!r}, not {name!r} (plus a campaign suffix); "
                              "register it under its own name, or --any-name")
+    return _write_checked(name, entry, mt, replace=replace, environ=environ, now=now)
+
+
+def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool, environ: dict | None, now: dt.datetime | None) -> tuple[Path, str]:
+    from .. import remote
+
     toml_machines = tomllib.loads(mt.read_text()).get("machines", {}) if mt.exists() else {}
-    if (t := toml_machines.get(name)) is not None and t.get("pod_id") != pod_id:
-        raise remote.Refused(f"register {name}: {mt} binds {name} to pod {t.get('pod_id')}; pick another name")
+    if (t := toml_machines.get(name)) is not None and binding(t) != binding(entry):
+        raise remote.Refused(f"register {name}: {mt} binds {name} to {_bound(t)}; pick another name")
     d = write_dir(mt, environ)
     p = d / f"{name}.toml"
     old = load_dir(d)[0].get(name) if p.exists() else None
-    if old is not None and old.get("pod_id") != pod_id and not replace:
-        raise remote.Refused(f"register {name}: {p} binds it to pod {old.get('pod_id')}; --replace rebinds the name")
+    if old is not None and binding(old) != binding(entry) and not replace:
+        raise remote.Refused(f"register {name}: {p} binds it to {_bound(old)}; --replace rebinds the name")
     same = old is not None and all(old.get(k) == entry.get(k) for k in KNOWN_KEYS)
     if same:
         return p, "unchanged"
@@ -229,6 +261,36 @@ def register(name: str, pod_id: str, project: str, *, root: str | None = None, p
     entry["registered_at"] = f"{now:%Y-%m-%dT%H:%MZ}"
     write_entry(d, name, entry)
     return p, "updated" if old is not None else "registered"
+
+
+def _probe_ssh(entry: dict[str, Any]) -> str | None:
+    """Why `entry`'s host cannot be reached over the research key (`hostname` over ssh), or None."""
+    from .. import remote
+
+    tgt = remote.ssh_host_target(entry)
+    try:
+        r = remote.ssh_run(remote.ssh_argv(tgt["host"], tgt["port"], user=tgt["user"]), ["hostname"], timeout=60)
+    except subprocess.TimeoutExpired:
+        return "ssh timed out"
+    return None if r.returncode == 0 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}"
+
+
+def register_ssh(name: str, host: str, project: str, *, port: int | None = None, user: str | None = None, rate: float | None = None,
+                 root: str | None = None, python: str | None = None, replace: bool = False, machines_toml: Path | None = None,
+                 environ: dict | None = None, probe: Callable[[dict], str | None] = _probe_ssh,
+                 now: dt.datetime | None = None) -> tuple[Path, str]:
+    """`register` for a `provider = "ssh"` machine: refused unless `hostname` answers over ssh with the research key."""
+    from .. import remote
+
+    mt = machines_toml or remote.machines_path()
+    entry: dict[str, Any] = {"provider": "ssh", "host": host, "port": port, "user": user, "rate_usd_per_hour": rate, "project": project,
+                             "root": root, "python": python}
+    entry = {k: v for k, v in entry.items() if v is not None}
+    if why := validate(name, entry):
+        raise remote.Refused(f"register {name}: {why}")
+    if why := probe({**entry, "name": name}):
+        raise remote.Refused(f"register {name}: {host} does not answer over ssh ({why}); only reachable machines may be registered")
+    return _write_checked(name, entry, mt, replace=replace, environ=environ, now=now)
 
 
 def unregister(name: str, machines_toml: Path | None = None, environ: dict | None = None) -> Path:
@@ -282,7 +344,7 @@ def rows(machines_toml: Path, environ: dict | None = None) -> list[dict]:
         e = all_.get(name) or {}
         src = "refused" if name in problems else "both" if name in toml_machines and name in reg else \
             "machines.toml" if name in toml_machines else "machines.d"
-        out.append({"name": name, "source": src, "pod_id": e.get("pod_id"), "projects": e.get("projects") or [e.get("project")],
+        out.append({"name": name, "source": src, "pod_id": binding(e), "projects": e.get("projects") or [e.get("project")],
                     "guard": e.get("guard"), "problem": problems.get(name)})
     return out
 
@@ -296,7 +358,12 @@ def main(argv: list[str]) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     rg = sub.add_parser("register", help="bind a machine name to an existing pod: one file in the registry, no shared file to merge")
     rg.add_argument("name")
-    rg.add_argument("--pod-id", required=True)
+    who = rg.add_mutually_exclusive_group(required=True)
+    who.add_argument("--pod-id", help="a RunPod pod")
+    who.add_argument("--host", help="an ssh machine (provider = \"ssh\"): its address; --port, --user, --rate go with it")
+    rg.add_argument("--port", type=int, default=None, help="--host: ssh port (default 22)")
+    rg.add_argument("--user", default=None, help="--host: ssh user (default root)")
+    rg.add_argument("--rate", type=float, default=None, metavar="USD_PER_HOUR", help="--host: the machine's hourly rate, for the attempts' cost")
     rg.add_argument("--project", required=True)
     rg.add_argument("--root", default=None, help="the machine's research root (default /workspace/research)")
     rg.add_argument("--python", default=None, help="default python3")
@@ -313,7 +380,12 @@ def main(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     mt = remote.machines_path()
     try:
-        if ns.cmd == "register":
+        if ns.cmd == "register" and ns.host:
+            p, what = register_ssh(ns.name, ns.host, ns.project, port=ns.port, user=ns.user, rate=ns.rate, root=ns.root, python=ns.python,
+                                   replace=ns.replace)
+            print(f"{what.upper()} {ns.name} -> host {ns.host} ({p})")
+            written = [p] if what != "unchanged" else []
+        elif ns.cmd == "register":
             p, what = register(ns.name, ns.pod_id, ns.project, root=ns.root, python=ns.python, guard=ns.guard, replace=ns.replace,
                                any_name=ns.any_name)
             print(f"{what.upper()} {ns.name} -> pod {ns.pod_id} ({p})")

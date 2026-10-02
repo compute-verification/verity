@@ -183,10 +183,10 @@ def _butterfly(B, vals: list[Coll], masks: tuple[int, ...], add) -> Coll:
 
 @composite("RMSNormTriton", 1, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
            conformance="exact-model-tested")
-def RMSNormTriton(B, S, x, w):
+def RMSNormTriton(B, S, x, w, eps=None):
     """`out_j = bf16_rne((inv * x_j) * w_j)`, `inv = div.full(1, sqrt.approx.ftz(fma(rcp(n), sum, eps)))`, `sum` =
     chunks of 1024 columns, 128 threads x 8 columns (`acc = x1*x1; fma(x0,x0,acc); fma(x2..x7)`), warp
-    butterfly xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)`, chunks added in order from +0."""
+    butterfly xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)`, chunks added in order from +0.  `eps`: `RMSNormTriton_v3`'s input."""
     N = S.N
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
     chunk_sums = []
@@ -212,7 +212,7 @@ def RMSNormTriton(B, S, x, w):
     for cs in chunk_sums:
         total = B.call(P.F32Add, total, cs)
     rcp_n = B.call(P.DivFullRcp, B.call(f32c(float(N))))
-    mean_eps = B.call(P.F32Fma, rcp_n, total, B.call(f32c(S.EPS)))
+    mean_eps = B.call(P.F32Fma, rcp_n, total, B.call(f32c(S.EPS)) if eps is None else eps)
     rms = B.call(P.MufuSqrtFtz, mean_eps)
     inv = B.call(P.F32Mul, B.call(P.DivFullScaleA, B.call(f32c(1.0)), rms), B.call(P.DivFullRcp, rms))
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
@@ -241,13 +241,13 @@ def _cub_block_reduce_sum(B, partials: list[Coll]) -> Coll:
     return var
 
 
-def _fused_rms_epilogue(B, S, r, rf, var, w):
+def _fused_rms_epilogue(B, S, r, rf, var, w, eps=None):
     """`s_variance = rsqrtf(variance / hidden_size + epsilon)` (IEEE div, IEEE add, MUFU.RSQ via
     `rsqrt.approx.f32` range scaling); `out_j = (bf16)((float)res'_j * s * (float)w_j)` — two f32 products
-    left to right, `__float2bfloat16` (RNE, canonical NaN 0x7FFF)."""
+    left to right, `__float2bfloat16` (RNE, canonical NaN 0x7FFF).  `eps`: None for `EPS`."""
     N = S.N
     mean = B.call(P.F32Div, var, B.call(f32c(float(N))))
-    arg = B.call(P.F32Add, mean, B.call(f32c(S.EPS)))
+    arg = B.call(P.F32Add, mean, B.call(f32c(S.EPS)) if eps is None else eps)
     sc = B.call(P.RsqrtApprox, arg)
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
     y = B.batch(P.F32Mul, B.batch(P.F32Mul, rf, sc, axes=(0, None)), wf, axes=(0, 0))
@@ -295,7 +295,7 @@ FUSED_RMS_BLOCK = 1024  # `max_block_size = batch_invariant_launch ? 1024 : ...`
                        "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity_vllm.program.registry.rmsnorm_fused_sweep`) "
                        "and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed 2026-09-08: "
                        "`results/TA1-typed-b1-20260907/corr-B1-L27t1-rmsv2.json`, 14/14 exact)")
-def RMSNormFusedCuda(B, S, x, res, w):
+def RMSNormFusedCuda(B, S, x, res, w, eps=None):
     """vLLM `d9105ea80` `csrc/layernorm_kernels.cu` **generic** `fused_add_rms_norm_kernel<c10::BFloat16, 0, true>` —
     the kernel `fused_add_rms_norm` launches when `vllm_is_batch_invariant()` (the width-8 `_f16Vec` kernel is
     guarded by `!batch_invariant_launch`): `block = min(N, 1024)` threads; thread t owns elements
@@ -305,7 +305,7 @@ def RMSNormFusedCuda(B, S, x, res, w):
     `z[t]^2`; N=576 -> 576 threads x one square); `cub::BlockReduce<float, 1024>` over
     the launched threads (`_cub_block_reduce_sum`: per-warp shfl_down tree 1,2,4,8,16; warp aggregates added
     sequentially from warp 0 — 32 warps for N=1536, 18 for N=576); `s = rsqrtf(var / N + eps)`;
-    `out_j = bf16((res'_j * s) * w_j)`. Returns (normed, res')."""
+    `out_j = bf16((res'_j * s) * w_j)`. Returns (normed, res').  `eps` as `RMSNormTriton_v1`'s."""
     N = S.N
     r = B.batch(P.Bf16AddF2fp, x, res, axes=(0, 0))
     rf = B.batch(P.Bf16ToF32, r, axes=(0,))
@@ -317,7 +317,7 @@ def RMSNormFusedCuda(B, S, x, res, w):
             acc = B.call(P.F32Fma, rf[j], rf[j], acc)
         partials.append(acc)
     var = _cub_block_reduce_sum(B, partials)
-    return _fused_rms_epilogue(B, S, r, rf, var, w)
+    return _fused_rms_epilogue(B, S, r, rf, var, w, eps)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -731,13 +731,13 @@ def Serve(B, S, prompt, weights):
                         ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
            conformance="exact-model-tested")
-def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev):
+def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
     """`AttnBlock_v1`'s body with the key-block size as the DECLARED static ``BN`` (the kernel's kBlockN, carried by the
     program identity -- D57): one BN-key block of the FA2 online softmax for one query row.  `NVIS` = visible (unmasked)
     columns (BN except the last-visited block); masked columns contribute P = 0 exactly (skipped).  Returns (m_new, lane
     sums l[4], o[D]); with `FIRST` the state arguments are ignored (kernel `Is_first`).  `BN = 64` is `AttnBlock_v1` gate for
     gate.  Conformance: `test_derived_rows` gate-by-gate at D = 64 / BN = 128; the 128×64 SmolLM2-135M record's two-block rows
-    (D54 acceptance, pending)."""
+    (D54 acceptance, pending).  `scale_log2`: the scale input (`value_inputs.AttnBlockV10`), or None for the constant."""
     D, NVIS, FIRST, BN = S.D, S.NVIS, S.FIRST, S.BN
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"AttnBlock_v3: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
@@ -748,7 +748,7 @@ def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    scale_log2 = B.call(const(32, _scale_log2_bits(D))) if scale_log2 is None else scale_log2
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -788,10 +788,10 @@ def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev):
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
                       Array(S.D, BF16)),
            conformance="exact-model-tested")
-def AttentionHeadV3(B, S, q, k, v):
+def AttentionHeadV3(B, S, q, k, v, *extra, block=AttnBlockV3):
     """`AttentionHead_v1`'s body over `AttnBlock_v3{..., BN}`: causal attention of one query at position T-1 over keys 0..T-1,
     ceil(T / BN) blocks visited last -> first; epilogue `sum = (l0 + l2) + (l1 + l3)`, `inv = (sum == 0 || NaN) ? 1 : rcp(sum)`,
-    `out = bf16(o * inv)`.  ``BN`` = the kernel's kBlockN, a declared static (D57)."""
+    `out = bf16(o * inv)`.  ``BN`` = the kernel's kBlockN, a declared static (D57).  `extra` / `block`: `AttentionHead_v10`'s."""
     T, D, BN = S.T, S.D, S.BN
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -807,15 +807,15 @@ def AttentionHeadV3(B, S, q, k, v):
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = bind(AttnBlockV3, D=D, NVIS=nvis, FIRST=first, BN=BN)
+        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN)
         if first:
             z = B.call(ZERO32)
             m0 = z
             l0 = _Coll(Array(4, F32), concat([z.refs] * 4))
             o0 = _Coll(Array(D, F32), concat([z.refs] * D))
-            st = B.call(blk, q, kb, vb, m0, l0, o0)
+            st = B.call(blk, q, kb, vb, m0, l0, o0, *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(P.Fa2InvSum, total)
@@ -829,7 +829,7 @@ def AttentionHeadV3(B, S, q, k, v):
                        ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
                       Array(S.NH, Array(S.D, BF16))),
            conformance="exact-model-tested")
-def AttentionV3(B, S, q, kc, vc):
+def AttentionV3(B, S, q, kc, vc, *extra, head=AttentionHeadV3):
     """`Attention_v1`'s body over `AttentionHead_v3{T, D, BN}` (GQA: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]`)."""
     T, NH, KVH, D, BN = S.T, S.NH, S.KVH, S.D, S.BN
     G = NH // KVH
@@ -837,7 +837,7 @@ def AttentionV3(B, S, q, kc, vc):
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
         vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(bind(AttentionHeadV3, T=T, D=D, BN=BN), q[g * G:(g + 1) * G], kg, vg, axes=(0, None, None)))
+        outs.append(B.batch(bind(head, T=T, D=D, BN=BN), q[g * G:(g + 1) * G], kg, vg, *extra, axes=(0, None, None) + (None,) * len(extra)))
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 
@@ -964,7 +964,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 
 
 # ---------------------------------------------------------------------------------------------------------
-# CF1 (docs/vllm-poc/composition.md §2): the same bodies with the accidental constants and the hard-coded
+# CF1: the same bodies with the accidental constants and the hard-coded
 # callees as explicit statics — one `Serve_v2`, two binding records (Ampere: SERVE_AMPERE below; Hopper:
 # `hopper.SERVE_HOPPER`)
 # ---------------------------------------------------------------------------------------------------------
@@ -998,9 +998,9 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
                         ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
            conformance="exact-model-tested")
-def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev):
-    """`AttnBlock_v1` with kBlockN (`BN`) and the tensor-core step (`DOT`) as statics: one BN-key block of the
-    flash online softmax for one query row (FA2 with BN=64/mma.sync; FA3 with BN=128/wgmma: hopper-profile.md §4)."""
+def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
+    """`AttnBlock_v1` with kBlockN (`BN`) and the tensor-core step (`DOT`) as statics: one BN-key block of the flash online softmax
+    for one query row (FA2 with BN=64/mma.sync; FA3 with BN=128/wgmma: hopper-profile.md §4).  `scale_log2`: `AttnBlock_v12`'s input."""
     D, NVIS, FIRST, BN, DOT = S.D, S.NVIS, S.FIRST, S.BN, S.DOT
     dot = bind(DotBf16V2, K=D, DOT=DOT)
     s = [B.call(dot, q, k[c]) for c in range(NVIS)]  # A: S = Q K^T, chained k-steps, acc 0 per block
@@ -1009,7 +1009,7 @@ def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    scale_log2 = B.call(const(32, _scale_log2_bits(D))) if scale_log2 is None else scale_log2
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -1050,10 +1050,10 @@ def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev):
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
                       Array(S.D, BF16)),
            conformance="exact-model-tested")
-def AttentionHeadV2(B, S, q, k, v):
+def AttentionHeadV2(B, S, q, k, v, *extra, block=AttnBlockV2):
     """`AttentionHead_v1` with kBlockN, the tensor-core step and the epilogue inverse sum as statics: causal attention
     of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited last -> first; epilogue
-    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`."""
+    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`.  `extra` / `block`: `AttentionHead_v12`'s."""
     T, D, BN, DOT, INV = S.T, S.D, S.BN, S.DOT, S.INV
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -1069,15 +1069,15 @@ def AttentionHeadV2(B, S, q, k, v):
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = bind(AttnBlockV2, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT)
+        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT)
         if first:
             z = B.call(ZERO32)
             m0 = z
             l0 = _Coll(Array(4, F32), concat([z.refs] * 4))
             o0 = _Coll(Array(D, F32), concat([z.refs] * D))
-            st = B.call(blk, q, kb, vb, m0, l0, o0)
+            st = B.call(blk, q, kb, vb, m0, l0, o0, *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(INV, total)
@@ -1091,16 +1091,16 @@ def AttentionHeadV2(B, S, q, k, v):
                        ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
                       Array(S.NH, Array(S.D, BF16))),
            conformance="exact-model-tested")
-def AttentionV2(B, S, q, kc, vc):
-    """`Attention_v1` over `AttentionHead_v2{T, D, BN, DOT, INV}`: GQA, head h reads KV head h // (NH/KVH)."""
+def AttentionV2(B, S, q, kc, vc, *extra, head=AttentionHeadV2):
+    """`Attention_v1` over `AttentionHead_v2{T, D, BN, DOT, INV}`: GQA, head h reads KV head h // (NH/KVH).  `extra`: `Attention_v12`'s."""
     T, NH, KVH, D = S.T, S.NH, S.KVH, S.D
     G = NH // KVH
     outs = []
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
         vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(bind(AttentionHeadV2, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV), q[g * G:(g + 1) * G], kg, vg,
-                            axes=(0, None, None)))
+        outs.append(B.batch(bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV), q[g * G:(g + 1) * G], kg, vg, *extra,
+                            axes=(0, None, None) + (None,) * len(extra)))
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 

@@ -31,7 +31,10 @@ What a record says
 Registered: `ada` (cc 8.9, vLLM family "ada": the tuned sm_89 table — R10/R11 Tier A on the RTX 4090 / L40S captures),
 `ampere` (cc 8.0, vLLM family None: default tiling for every shape — R13 correspondence on the A100) and `hopper` (cc 9.0, vLLM
 family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmma`, a DIFFERENT k16 step (`HopperBF16WgmmaDot16`),
-so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper).  Anything else (Blackwell; cc 8.6/8.7 with no run yet) is
+so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
+Triton launch takes the default tiling; vLLM's linear layers run that launch at every M (`linear_batch_invariant`), while other bf16
+matmuls stay on cuBLASLt with split-K disabled; the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
+Anything else (datacenter Blackwell cc 10.x; cc 8.6/8.7 and 12.1 with no run yet) is
 `UnregisteredGemmTarget`: construction refuses (`numerics_unregistered`), the resolver answers Unsupported, and the
 applicability check fails — a launch that happens to show a registered tiling on an unregistered target is still refused.
 """
@@ -112,6 +115,14 @@ class GemmTarget:
     tuned_table: Mapping[tuple[int, int], dict[str, Any]] = field(default_factory=dict)
     evidence: tuple[str, ...] = ()
     kind: str = "Gemm_v1{K,N}"
+    #: the per-tensor FP8 linear (`_C.cutlass_scaled_mm`), as measured (`evidence`): `fp8_dot` names its e4m3 k32 step (`targets.FP8_DOTS`)
+    #: and `fp8_scale_order` its epilogue, "no_swap" = bf16(s_x * (s_w * acc)) with ScaleA = s_x.  None = not a target fact: cc 9.0's
+    #: batch-invariant dispatch swaps (ScaleA = s_w) for the B1 shapes, and its FP8 program binds ScaledMmFp8_v1 in its own composites.
+    fp8_dot: str | None = None
+    fp8_scale_order: str | None = None
+    #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
+    #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
+    fp4_dot: str | None = None
 
     def launch_config(self, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int, str]:
         """vLLM `_get_matmul_config(M, N, K, bf16, default)` on this target: `(constexprs, num_warps, num_stages, source)`;
@@ -149,7 +160,7 @@ REGISTERED: dict[str, GemmTarget] = {
         key="ada", compute_capabilities=((8, 9),), vllm_arch_family="ada", dot="AmpereBF16TcDot16", tuned_table=ADA_TUNED_GEMM,
         evidence=("R10/R11 Tier A: LLAMA32_1B / SMOLLM2 / QWEN05 eager captures on the RTX 4090 and L40S (sm_89), every GEMM launch "
                   "(default tiling and the (2048,2048) table buckets M<=1 / M<=32) bit-exact against Gemm_v1{K,N} — tests/observe/test_gen_llama.py, "
-                  "docs/vllm-poc/numerics.md (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, docs/hardware-semantics.md)",
+                  "the numerics lane (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.ml.tc.models.ADA_BF16_M16N8K16)",
                   # [R15 moe GEMM-ADA-TABLE] the four Qwen3-class rows of the table were registered without their own launches until R15
                   "R15 lane moe: verity_vllm/program/kernels/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
                   "vLLM d9105ea80 family 'ada'): ALL five tuned (N,K) rows x M in {1,2,4,5,8,9,16,17,32,33,64,65,256,257,512,513,1024,1033,2048,2049} "
@@ -173,6 +184,37 @@ REGISTERED: dict[str, GemmTarget] = {
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "
                   "out/gen/sweep/evidence/hopper/gemm_target_h100.json; row llama32-1b__bf16__h100__…__bi-eager-fa2 Match replay (o_proj M=1 tuned row + "
                   "the default-tiled GEMMs bit-exact against Gemm_v2{K,N,DOT=Hopper})",)),
+    # The pinned vLLM installs the aten override on cc 8.x only, but its linear layers call `linear_batch_invariant` (the Triton
+    # `matmul_kernel_persistent`, then `output + bias` in bf16) on every CUDA target; the other bf16 matmuls stay on cuBLASLt with
+    # split-K disabled (VLLM_BATCH_INVARIANT=1).  Both equal the ascending chain of the target's k16 step without a bias.  sm_120
+    # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity.ml.tc.instructions`, measured on an RTX
+    # 5090) is HOPPER_BF16_M16N8K16, not the Ampere/Ada pipeline.  `HopperBF16WgmmaDot16_v1` evaluates HOPPER_BF16_WGMMA_K16, the same
+    # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
+    "blackwell_consumer": GemmTarget(
+        key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_dot="BlackwellE4m3QmmaDot32", fp8_scale_order="no_swap",
+        fp4_dot="BlackwellNvf4OmmaDot64",
+        evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
+                  "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
+                  "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
+                  "the cc 12.0 port's GEMM lane: verity_vllm/program/kernels/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
+                  "595.91.07, torch 2.13.0+cu129, vLLM d9105ea80 under VLLM_BATCH_INVARIANT=1: cuBLASLt with split-K disabled), run "
+                  "r20260930-031354-3b6d: every linear (K, N) of the 14 bf16 HF configs of engine/profiles/hf_configs at TP1 and TP2 x M in "
+                  "{1..8,12,13,16,17,31,32,33,64,65,127,128,129,255,256,257,512,515,1024,1033,2048,2049,4096,8192} (+ four stress families at M "
+                  "1/7/129/1033): 4,794 cases over about 30 cuBLASLt kernels (CUTLASS s16816 and wmma s161616 tilings, chosen by M). Every linear "
+                  "without a bias is bit-exact against the ascending HopperBF16WgmmaDot16_v1 chain (181M sampled coordinates, both tile tails kept; "
+                  "the step cross-checked against the registered primitive on 1.2M), and every GPU rerun is bit-identical. A linear with a bias is "
+                  "bit-exact at M >= 2 with the bias added in FP32 before the rounding (cuBLASLt's epilogue, not GemmBias_v1's bf16 add after it); "
+                  "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)",
+                  "the per-tensor FP8 linear: vLLM's cc 12.0 CUTLASS FP8 dispatch (d9105ea80) has no swap_ab, so ScaleA = the activation "
+                  "scale: bf16(s_x * (s_w * acc)) over the ascending BlackwellE4m3QmmaDot32_v1 chain, 15,728,640 coordinates exact on an "
+                  "RTX PRO 6000 without a bias (run r20260930-041842-76a2); with a bias bf16(fma(s_x, s_w * acc, b)) (ScaledEpilogueBias), "
+                  "786,432 coordinates exact (run r20260930-090150-a42a); "
+                  "the swapped order misses 89 of its 125 discriminating coordinates (red team fp8-per-tensor-scale-order, reproducer "
+                  "r20260930-081238-476e); the step is pinned (trust dossier "
+                  "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)",
+                  "the NVFP4 linear: both checkpoint formats run CutlassNvFp4LinearKernel, whose only MMA is OMMA.SF.16864.F32.E2M1.E2M1."
+                  "UE4M3.4X, the pinned block-scaled step (attention lane, art:3bc1b2c4)")),
 }
 
 

@@ -117,10 +117,13 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert checks["torch_cpu"]["value"]["cuda_available"] == rec["cuda_available"]
     assert not {"torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"} & set(checks), "GPU checks must not appear in cpu mode"
     for name in ("python_3_12", "vllm_import", "vllm_commit_d9105ea80", "verity_from_tree", "verity_vllm_from_tree",
-                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "numpy_import", "no_old_tree_on_path"):
+                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "protocols_from_tree", "numpy_import",
+                 "no_old_tree_on_path"):
         assert name in checks, name
-    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import"):
+    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "protocols_from_tree",
+                 "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
+    assert set(checks["protocols_from_tree"]["value"]) == {"network_warden", "pous", "pouw", "sampled_proofs"}
     assert rec["ok"] == all(c["ok"] for c in checks.values())
     assert (r.returncode == 0) == rec["ok"]
     meas = rec["measurements"]
@@ -163,6 +166,23 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
     (site / "verity-sampled-proofs.pth").unlink()
     bad = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env)
     assert bad.returncode != 0 and "without protocols/sampled_proofs on PYTHONPATH" in bad.stderr
+
+
+def test_bootstrap_writes_a_pth_for_every_other_protocol(tmp_path: Path) -> None:
+    """A row's stages set PYTHONPATH to the tree, the core and research, so a protocol option's own package (pouw's circuit,
+    `protocol_options.CIRCUITS`) reaches them through a .pth: the bootstrap's loop writes one per protocol beside sampled proofs."""
+    text = SCRIPT.read_text()
+    start = text.index('for P in "$ROOT"/../../protocols/*/pyproject.toml; do')
+    loop = text[start:text.index("\ndone\n", start) + len("\ndone")]
+    assert start < text.index("# ---- 5. readiness")
+    sampled = (TREE / "protocols" / "sampled_proofs").resolve()
+    script = f'fail() {{ echo "FAIL $*"; exit 3; }}\nROOT={VLLM.resolve()}; SAMPLED={sampled}; SITE={tmp_path}\n{loop}\n'
+    r = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    protocols = (TREE / "protocols").resolve()
+    assert {p.name: p.read_text() for p in tmp_path.glob("*.pth")} == {
+        "verity-pous.pth": f"{protocols / 'pous'}\n", "verity-pouw.pth": f"{protocols / 'pouw'}\n",
+        "verity-network-warden.pth": f"{protocols / 'network_warden'}\n"}
 
 
 def test_gpu_mode_record_shape_is_unchanged() -> None:

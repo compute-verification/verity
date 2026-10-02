@@ -8,11 +8,15 @@ import PousProofs.Pebbling.B3Chain
 import PousProofs.Dense.DenseMeets
 import PousProofs.P3.InvertibleCore
 import PousProofs.P3.Refutation
+import PousProofs.Chain.Flat
+import PousProofs.Chain.Family
+import PousProofs.P2.Margin
 
 /-!
 # The proved pinned statements
 
-`PousProofs.X : Pous.Pinned.X` for every statement of `Pous/Pinned.lean` that has a proof. `lean-audit.json` pins
+`PousProofs.X : Pous.Pinned.X` for every statement of `Pous/Pinned.lean` and `Pous/P2/Pinned.lean` that has a proof.
+`lean-audit.json` pins
 these theorems, so a change to a pinned statement, or to a definition it reads, changes their records. The open
 statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
 
@@ -86,5 +90,51 @@ theorem SampledAuditSim : Pous.Pinned.SampledAuditSim := @PousAudit.sampled_audi
 theorem StackedAuditSeq : Pous.Pinned.StackedAuditSeq := @PousAudit.stacked_audit_seq
 theorem StackedAuditOnePercent : Pous.Pinned.StackedAuditOnePercent := @PousAudit.stacked_audit_one_percent
 theorem DenseMeets : Pous.Pinned.DenseMeets := PousDense.dense_meets
+
+/-! ## The overwrite chain (`PousProofs/Chain/Flat.lean`, and `Family.lean` for `BandMultiMeetsFamily`)
+
+P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
+(`Pous/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`, `Pous/Accounting/PubMeets.lean`). -/
+
+theorem P3ConcreteMeets64 : Pous.Pinned.P3ConcreteMeets64 :=
+  PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional
+theorem P3ConcreteMeets14GB : Pous.Pinned.P3ConcreteMeets14GB :=
+  PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional
+theorem P3ConcreteMeets64D12 : Pous.Pinned.P3ConcreteMeets64D12 :=
+  PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional
+theorem BandChainMeets64 : Pous.Pinned.BandChainMeets64 := Pous.BandChain.band_meets_64_final
+theorem BandChainMeets64D5 : Pous.Pinned.BandChainMeets64D5 := Pous.BandChain.band_meets_64_d5_final
+theorem BandChainMeets64D12 : Pous.Pinned.BandChainMeets64D12 := Pous.BandChain.band_meets_64_d12_final
+theorem BandMultiMeets14 : Pous.Pinned.BandMultiMeets14 := Pous.BandMulti.band_meets_14_final
+theorem BandMultiMeets14K106 : Pous.Pinned.BandMultiMeets14K106 := Pous.BandMulti.band_meets_14_k106_final
+theorem BandMultiMeetsFamily : Pous.Pinned.BandMultiMeetsFamily := Pous.BandMulti.band_meets_family_final
+theorem ChainDenseMeets64 : Pous.Pinned.ChainDenseMeets64 := PousSpongeChain.chain_meets_64_final
+theorem BandPubMeets64 : Pous.Pinned.BandPubMeets64 := PousPub.band_pub_meets_64_final
+theorem BandPubMeets14 : Pous.Pinned.BandPubMeets14 := PousPub.band_pub_meets_14_final
+theorem BandPubMeets14Global : Pous.Pinned.BandPubMeets14Global := PousPub.band_pub_meets_14_global_final
+theorem ChainDenseMeets111 : Pous.Pinned.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
+
+theorem P2MeetsM1pB19Uncond : Pous.Pinned.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
+theorem P2MeetsM1pFamilyUncond : Pous.Pinned.P2MeetsM1pFamilyUncond := PousP2p.family
+theorem P2MeetsM1pW8192Uncond : Pous.Pinned.P2MeetsM1pW8192Uncond := PousP2p.p2_meets_m1p_8192
+
+theorem P2SlackB19Uncond : Pous.Pinned.P2SlackB19Uncond := by
+  intro b hsp hb D
+  obtain ⟨-, h1, h2, h3, h64⟩ := PousMargin.b19_64 b hsp hb D
+  exact ⟨h1, h2, h3, h64, (PousMargin.b19_128 b hsp hb D).2.2.2.2, (PousMargin.b19_256 b hsp hb D).2.2.2.2⟩
+
+theorem P2SlackFamilyUncond : Pous.Pinned.P2SlackFamilyUncond := by
+  intro B _ h0 h1 b hsp hb D
+  obtain ⟨-, c1, c2, c3, a64⟩ := PousMargin.fam_64_96 B h0 h1 b hsp hb D
+  exact ⟨c1, c2, c3, a64, (PousMargin.fam_128_105 B h0 h1 b hsp hb D).2.2.2.2,
+    (PousMargin.fam_256_128 B h0 h1 b hsp hb D).2.2.2.2,
+    fun h9 => (PousMargin.fam_128 B h9 h1 b hsp hb D).2.2.2.2,
+    fun h10 => ⟨(PousMargin.fam_64 B h10 h1 b hsp hb D).2.2.2.2, (PousMargin.fam_256 B h10 h1 b hsp hb D).2.2.2.2⟩⟩
+
+theorem P2ErrorSplitB19Uncond : Pous.Pinned.P2ErrorSplitB19Uncond := by
+  intro b hsp hb D
+  obtain ⟨-, h1, h2, h3, h0⟩ := PousMargin.b19_meets_129 b hsp hb D
+  exact ⟨h1, h2, h3, h0, (PousMargin.b19_64_129 b hsp hb D).2.2.2.2, (PousMargin.b19_128_129 b hsp hb D).2.2.2.2,
+    (PousMargin.b19_256_129 b hsp hb D).2.2.2.2⟩
 
 end PousProofs

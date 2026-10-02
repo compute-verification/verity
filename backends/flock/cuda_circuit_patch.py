@@ -46,8 +46,8 @@ body = cut(body, "    if (pure ? ((C->host_z", "{ printf(\"FFI chunk: bad shape\
            "    if (fc_bad_shape(P, N)) { printf(\"FFI circuit: bad shape\\n\"); return 201; }", keep_b=False)
 body = cut(body, "    if (pure && C->host_z) {", "    CKI(phase(0));",
            "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b, d_zlin));\n")
-body = cut(body, "        build_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip);", "        if (C->n_delta_a) chunk_delta_scatter",
-           "        build_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip);\n        CK(cudaGetLastError());\n"
+body = cut(body, "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));", "        if (C->n_delta_a) chunk_delta_scatter",
+           "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));\n        CK(cudaGetLastError());\n"
            "        CKI(fc_fold(P, N, d_eq_inner, alpha, k_log, d_comb));\n")
 # M1: level 0's commitment with its hiding, lincheck's folded comb, the ladder's zk argument, the zk section
 body = put(body, "    std::vector<MHash> l0_cap;\n    {\n        int k_code = (log_n - P->initial_k) + P->log_inv_rates[0];",
@@ -68,7 +68,7 @@ body = put(body, "    CKI(phase(6));\n", "    if (N->zk_on) fc_write_zk(W, fc_zk
 # rep 1 from rep 0's witness and level-0 commitment (FlockCircuitParams.rep_reuse), not under M1 (its level 0 and lane phase
 # are its own): keeping holds z, a and b to the end of rep 0 and gives its Ligerito a copy of z (the folds overwrite it), three
 # more witness-sized arena buffers; rep 1 transposes z for the lincheck again
-W3 = "3 * packed_witness_bytes"
+W3 = "fc_keep_extra(packed_witness_bytes)"
 body = put(body, "    CK(device_arena.begin(arena_bytes));\n",
            "    const bool take = N->rep_reuse == 2 && !N->zk_on && g_fc_kept.live && g_fc_kept.tag == N->reuse_tag;\n"
            "    if (take && (g_fc_kept.m != m || g_fc_kept.k_log != k_log)) { printf(\"FFI circuit: the kept witness is another shape's\\n\"); return 207; }\n"
@@ -86,7 +86,7 @@ body = put(body, alloc + wit,
            "    std::vector<F128> fc_zk_comb(64);\n"
            "    if (take) {\n        df = g_fc_kept.df; d_a = g_fc_kept.d_a; d_b = g_fc_kept.d_b;\n"
            "        CK(ffi_malloc(&d_zlin, (size_t)len * 16));\n"
-           "        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n        CK(cudaGetLastError());\n"
+           "        fc_zlin_transpose(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n        CK(cudaGetLastError());\n"
            "    } else {\n" + "".join("    " + x for x in (alloc + wit.split("\n", 1)[1]).splitlines(True)) + "    }\n")
 body = put(body, "    if (N->zk_on) {\n        CKI(fc_commit_l0_zk(",
            "    if (take) {\n"
@@ -144,3 +144,102 @@ if '#include "prove_circuit.cuh"' not in s:
     s = s.replace('#include "prove_chunk.cuh"', '#include "prove_chunk.cuh"\n#include "prove_circuit.cuh"', 1)
     ffi.write_text(s)
 print("prove_circuit.cuh installed:", len(text.splitlines()), "lines")
+
+# Ligerito level 0's OOD samples: the eq table of each sample as its halves, eq[x] = lo[x mod 2^k] hi[x >> k] (the same elements as
+# build_eq_device's 2^log_n table), which the basis message and the glue form as they read it: no 2^log_n table is built or read
+# back (FC_LIG_EQ_FULL=1: the full table)
+ig = g / "introduce_glue.cuh"
+t = ig.read_text()
+if "igl_eq_split" not in t:
+    t += '''
+// basis_message_evaluation_partial and combine_basis_polynomials with B an eq table's halves (build_eq_device over the first k
+// challenges and the rest): B[x] = lo[x mod 2^k] hi[x >> k], the same elements as the full table's
+__device__ __forceinline__ F128 igl_eq_split(const F128* __restrict__ lo, const F128* __restrict__ hi, int k, long long x) {
+    return ghash_mul_karatsuba(lo[x & ((1LL << k) - 1)], hi[x >> k]);
+}
+
+__global__ void basis_message_evaluation_partial_split(const F128* __restrict__ F, const F128* __restrict__ lo,
+                                                       const F128* __restrict__ hi, int k, long long half, F128* p0, F128* p2,
+                                                       F128* podd) {
+    __shared__ F128 s0[IGL_TPB], s2[IGL_TPB], sodd[IGL_TPB];
+    long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    long long stride = (long long)gridDim.x * blockDim.x;
+    F128 e0{0, 0}, e2{0, 0}, eodd{0, 0};
+    for (long long j = t; j < half; j += stride) {
+        F128 f0 = F[2 * j], f1 = F[2 * j + 1];
+        F128 b0 = igl_eq_split(lo, hi, k, 2 * j), b1 = igl_eq_split(lo, hi, k, 2 * j + 1);
+        e0 = f128_add(e0, ghash_mul_karatsuba(f0, b0));
+        e2 = f128_add(e2, ghash_mul_karatsuba(f128_add(f0, f1), f128_add(b0, b1)));
+        eodd = f128_add(eodd, ghash_mul_karatsuba(f1, b1));
+    }
+    int x = threadIdx.x;
+    s0[x] = e0; s2[x] = e2; sodd[x] = eodd;
+    __syncthreads();
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (x < s) { s0[x] = f128_add(s0[x], s0[x + s]); s2[x] = f128_add(s2[x], s2[x + s]); sodd[x] = f128_add(sodd[x], sodd[x + s]); }
+        __syncthreads();
+    }
+    if (x == 0) { p0[blockIdx.x] = s0[0]; p2[blockIdx.x] = s2[0]; podd[blockIdx.x] = sodd[0]; }
+}
+
+__global__ void combine_basis_polynomials_split(F128* __restrict__ cb, const F128* __restrict__ lo, const F128* __restrict__ hi, int k,
+                                                F128 beta, long long n) {
+    long long j = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= n) return;
+    cb[j] = f128_add(cb[j], ghash_mul_karatsuba(beta, igl_eq_split(lo, hi, k, j)));
+}
+
+inline void launch_basis_message_evaluation_split(const F128* dF, const F128* lo, const F128* hi, int k, long long half, F128* d_p0,
+                                                  F128* d_p2, F128* d_podd, F128* d_u0, F128* d_u2, F128* d_hnew) {
+    int blocks = igl_blocks(half);
+    basis_message_evaluation_partial_split<<<blocks, IGL_TPB>>>(dF, lo, hi, k, half, d_p0, d_p2, d_podd);
+    combine_basis_message_evaluation<<<1, IGL_TPB>>>(d_p0, d_p2, d_podd, blocks, d_u0, d_u2, d_hnew);
+}
+
+inline void launch_glue_split(F128* d_cb, const F128* lo, const F128* hi, int k, F128 beta, long long n, int tpb = IGL_TPB) {
+    long long blocks = (n + tpb - 1) / tpb;
+    combine_basis_polynomials_split<<<(unsigned)blocks, tpb>>>(d_cb, lo, hi, k, beta, n);
+}
+
+static inline bool igl_eq_full() {
+    static const bool v = [] { const char* e = std::getenv("FC_LIG_EQ_FULL"); return e && e[0] == '1'; }();
+    return v;
+}
+'''
+    ig.write_text(t)
+lg = g / "ligerito_f256.cuh"
+t = lg.read_text()
+if "launch_glue_split" not in t:
+    t = put(t, """        F128* d_eq;
+        LFCK(A.alloc((void**)&d_eq, (size_t)len * sizeof(F128)));
+        for (int o = 0; o < C.ood_samples[0]; o++) {""",
+            """        F128 *d_eq = nullptr, *d_eq_lo = nullptr, *d_eq_hi = nullptr;
+        const int eq_k = log_n / 2;
+        if (igl_eq_full()) {
+            LFCK(A.alloc((void**)&d_eq, (size_t)len * sizeof(F128)));
+        } else {
+            LFCK(A.alloc((void**)&d_eq_lo, ((size_t)1 << eq_k) * sizeof(F128)));
+            LFCK(A.alloc((void**)&d_eq_hi, ((size_t)1 << (log_n - eq_k)) * sizeof(F128)));
+        }
+        for (int o = 0; o < C.ood_samples[0]; o++) {""")
+    t = put(t, """            build_eq_device(d_eq, zf.data(), log_n);
+            launch_basis_message_evaluation(d_f, d_eq, len / 2, d_p0, d_p2, d_podd, d_u0, d_u2, d_hnew);""",
+            """            if (d_eq) {
+                build_eq_device(d_eq, zf.data(), log_n);
+                launch_basis_message_evaluation(d_f, d_eq, len / 2, d_p0, d_p2, d_podd, d_u0, d_u2, d_hnew);
+            } else {
+                build_eq_device(d_eq_lo, zf.data(), eq_k);
+                build_eq_device(d_eq_hi, zf.data() + eq_k, log_n - eq_k);
+                launch_basis_message_evaluation_split(d_f, d_eq_lo, d_eq_hi, eq_k, len / 2, d_p0, d_p2, d_podd, d_u0, d_u2, d_hnew);
+            }""")
+    t = put(t, """            launch_glue(d_b, d_eq, beta, len);
+            LFCK(cudaGetLastError());
+        }
+        LFCK(A.release(d_eq));""",
+            """            if (d_eq) launch_glue(d_b, d_eq, beta, len);
+            else launch_glue_split(d_b, d_eq_lo, d_eq_hi, eq_k, beta, len);
+            LFCK(cudaGetLastError());
+        }
+        for (F128* q : {d_eq, d_eq_hi, d_eq_lo})
+            if (q) LFCK(A.release(q));""")
+    lg.write_text(t)

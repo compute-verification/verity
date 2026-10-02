@@ -1,0 +1,256 @@
+{
+ "seed": 2026092819,
+ "total": 10549,
+ "chunks": 2,
+ "ada_captures": 360,
+ "families": {
+  "random": {
+   "steps": 1500,
+   "outputs": {
+    "normal": 1500
+   },
+   "nonzero_acc": 0,
+   "nan_operand": 0
+  },
+  "mixed": {
+   "steps": 1000,
+   "outputs": {
+    "normal": 1000
+   },
+   "nonzero_acc": 0,
+   "nan_operand": 0
+  },
+  "accumulator": {
+   "steps": 2000,
+   "outputs": {
+    "normal": 2000
+   },
+   "nonzero_acc": 2000,
+   "nan_operand": 0
+  },
+  "special": {
+   "steps": 1500,
+   "outputs": {
+    "normal": 542,
+    "nan": 591,
+    "+0": 223,
+    "+inf": 74,
+    "-inf": 70
+   },
+   "nonzero_acc": 980,
+   "nan_operand": 455
+  },
+  "subnormal": {
+   "steps": 1500,
+   "outputs": {
+    "normal": 1093,
+    "subnormal": 401,
+    "+0": 6
+   },
+   "nonzero_acc": 1138,
+   "nan_operand": 0
+  },
+  "saturation": {
+   "steps": 1000,
+   "outputs": {
+    "normal": 1000
+   },
+   "nonzero_acc": 1000,
+   "nan_operand": 0
+  },
+  "cancellation": {
+   "steps": 1500,
+   "outputs": {
+    "+0": 876,
+    "normal": 624
+   },
+   "nonzero_acc": 658,
+   "nan_operand": 0
+  },
+  "wide": {
+   "steps": 500,
+   "outputs": {
+    "normal": 500
+   },
+   "nonzero_acc": 242,
+   "nan_operand": 0
+  },
+  "ref:fp8-hopper-wgmma-k32": {
+   "steps": 1,
+   "outputs": {
+    "normal": 1
+   },
+   "nonzero_acc": 0,
+   "nan_operand": 0
+  },
+  "ref:fp8-hopper-wgmma-k1536": {
+   "steps": 48,
+   "outputs": {
+    "normal": 48
+   },
+   "nonzero_acc": 47,
+   "nan_operand": 0
+  }
+ },
+ "outputs": {
+  "normal": 8308,
+  "nan": 591,
+  "+0": 1105,
+  "+inf": 74,
+  "-inf": 70,
+  "subnormal": 401
+ },
+ "add": {
+  "total": 5000,
+  "families": {
+   "add_random": {
+    "absorbed": 792,
+    "rounded": 182,
+    "tie": 9,
+    "exact": 17
+   },
+   "add_close": {
+    "rounded": 315,
+    "exact": 312,
+    "tie": 173
+   },
+   "add_cancel": {
+    "exact": 469,
+    "zero": 131
+   },
+   "add_tie": {
+    "rounded": 335,
+    "absorbed": 60,
+    "tie": 204,
+    "exact": 1
+   },
+   "add_absorb": {
+    "absorbed": 529,
+    "rounded": 71
+   },
+   "add_zero": {
+    "exact": 300
+   },
+   "add_subnormal_in": {
+    "absorbed": 75,
+    "rounded": 197,
+    "tie": 6,
+    "exact": 22
+   },
+   "add_big": {
+    "rounded": 143,
+    "absorbed": 131,
+    "exact": 20,
+    "tie": 6
+   },
+   "add_binade": {
+    "absorbed": 172,
+    "rounded": 328
+   }
+  },
+  "outputs": {
+   "absorbed": 1759,
+   "rounded": 1571,
+   "tie": 398,
+   "exact": 1141,
+   "zero": 131
+  }
+ },
+ "pinned": {
+  "steps": 631,
+  "reference_steps": 49,
+  "covers": {
+   "r1": 450,
+   "fine": 147
+  },
+  "families": {
+   "random": 92,
+   "mixed": 3,
+   "accumulator": 146,
+   "special": 268,
+   "subnormal": 67,
+   "cancellation": 4,
+   "wide": 2,
+   "ref:fp8-hopper-wgmma-k32": 1,
+   "ref:fp8-hopper-wgmma-k1536": 48
+  },
+  "outputs": {
+   "normal": 373,
+   "nan": 100,
+   "+0": 100,
+   "+inf": 5,
+   "-inf": 1,
+   "subnormal": 52
+  },
+  "adds": 1090,
+  "add_outputs": {
+   "absorbed": 251,
+   "tie": 141,
+   "rounded": 201,
+   "exact": 422,
+   "zero": 75
+  }
+ },
+ "bulk": {
+  "steps": 176549,
+  "adds": 5000,
+  "r1_families": {
+   "r1_acc_edge": {
+    "steps": 40000,
+    "outputs": {
+     "normal": 39999,
+     "+0": 1
+    }
+   },
+   "r1_signmix": {
+    "steps": 30000,
+    "outputs": {
+     "normal": 30000
+    }
+   },
+   "r1_carry": {
+    "steps": 10000,
+    "outputs": {
+     "normal": 10000
+    }
+   },
+   "r1_acc_only": {
+    "steps": 20000,
+    "outputs": {
+     "normal": 10592,
+     "+0": 2480,
+     "subnormal": 6928
+    }
+   },
+   "r1_h1like": {
+    "steps": 40000,
+    "outputs": {
+     "normal": 40000
+    }
+   },
+   "r1_small": {
+    "steps": 20000,
+    "outputs": {
+     "normal": 19954,
+     "+0": 46
+    }
+   },
+   "r1_huge_acc": {
+    "steps": 5000,
+    "outputs": {
+     "normal": 5000
+    }
+   },
+   "r1_nan_payload": {
+    "steps": 1000,
+    "outputs": {
+     "nan": 1000
+    }
+   }
+  },
+  "sha256": {
+   "steps.txt": "2d3c5317e24727543da4e12da608f9d8a1650538b4a6d4e65abf1047f58d9ce8",
+   "adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b"
+  }
+ }
+}

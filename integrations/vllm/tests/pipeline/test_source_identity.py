@@ -1,9 +1,9 @@
 """[R18 infra, R19 tele] F-r17-tp-06 fixed by construction: source identity manifest + PRECHECK_FAIL_SOURCE_IDENTITY (torch-free).
 
-The finding (tp M-1830): a Commit under --gpu-tree without VERITOR_REPO imported the core package from the pod's DEFAULT tree (another
+The finding (tp M-1830): a Commit under --gpu-tree without the tree variable (now VERITY_TREE) imported the core package from the pod's DEFAULT tree (another
 release) while `verity_vllm` ran the release tree and versions.json named the release.  These tests reproduce the leak -- a SECOND
 tree on sys.path ahead of the tree of record -- and require the precheck to fail BY NAME, plus the positive (one tree), the shipped-tree
-sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITOR_REPO).
+sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITY_TREE).
 
 Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from packages/verity/src, `verity_vllm` from integrations/vllm,
 `research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
@@ -36,7 +36,7 @@ PP = os.pathsep.join([str(INTEGRATION), str(REPO / "packages" / "verity" / "src"
 
 
 def _env(**extra: str) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k not in ("VERITOR_REPO", "PYTHONPATH", "RESEARCH_SOURCE_SHA")}
+    env = {k: v for k, v in os.environ.items() if k not in ("VERITY_TREE", "PYTHONPATH", "RESEARCH_SOURCE_SHA")}
     env.update(extra)
     return env
 
@@ -94,10 +94,10 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
 
 
 @pytest.mark.parametrize("env_form", ["repo", "integration"])
-def test_precheck_passes_with_matching_veritor_repo_and_sha(env_form):
+def test_precheck_passes_with_matching_verity_tree_and_sha(env_form):
     sha = gsid.tree_identity(str(REPO))["git_sha"]
     assert sha
-    r = _run("--sha", sha, VERITOR_REPO=str(REPO if env_form == "repo" else INTEGRATION))
+    r = _run("--sha", sha, VERITY_TREE=str(REPO if env_form == "repo" else INTEGRATION))
     assert r.returncode == 0, r.stderr
 
 
@@ -105,7 +105,7 @@ def test_precheck_passes_with_matching_veritor_repo_and_sha(env_form):
 
 def test_negative_second_tree_on_sys_path_fails_by_name(tmp_path):
     """tp's vector: `sys.path.insert(0, <default tree>)` while the release tree's verity_vllm runs.  Here the second tree is sys.path[0]
-    (the interpreter's cwd under -m, exactly where hidden_gpu.py used to insert VERITOR_REPO-or-default) and the tree of record follows on
+    (the interpreter's cwd under -m, exactly where hidden_gpu.py used to insert the tree variable or its default) and the tree of record follows on
     PYTHONPATH -> `verity` resolves from the second tree, verity_vllm from the tree of record: PRECHECK_FAIL_SOURCE_IDENTITY naming verity."""
     other = _other_tree(tmp_path)
     out = tmp_path / "source_identity.json"
@@ -167,10 +167,10 @@ def test_negative_requested_sha_mismatch_fails_by_name():
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "git_sha != requested" in r.stderr
 
 
-def test_negative_veritor_repo_naming_another_tree_is_refused(tmp_path):
+def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
     other = _other_tree(tmp_path)
-    r = _run(VERITOR_REPO=str(other))
-    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "VERITOR_REPO" in r.stderr, r.stderr
+    r = _run(VERITY_TREE=str(other))
+    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "VERITY_TREE" in r.stderr, r.stderr
 
 
 def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
@@ -183,9 +183,29 @@ def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
 
+def _from_harness_tool(rec: dict) -> bool:
+    """`research` resolved from the harness's own snapshot (`research run` puts `<root>/tool/<RESEARCH_TOOL_SNAPSHOT>` first on
+    PYTHONPATH), not from the tree under test."""
+    snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
+    path = rec.get("resolved_path")
+    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
+
+
+def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):
+    shipped = {"resolved_path": "/workspace/research/tool/ab12/research/__init__.py"}
+    monkeypatch.delenv("RESEARCH_TOOL_SNAPSHOT", raising=False)
+    assert not _from_harness_tool(shipped)
+    monkeypatch.setenv("RESEARCH_TOOL_SNAPSHOT", "ab12")
+    assert _from_harness_tool(shipped)
+    assert not _from_harness_tool({"resolved_path": "/elsewhere/ab12/research/__init__.py"})
+    assert not _from_harness_tool({"resolved_path": str(REPO / "tools" / "research" / "src" / "research" / "__init__.py")})
+    assert not _from_harness_tool({"resolved_path": None})
+
+
 def test_in_process_check_and_loaded_module_guard(tmp_path):
     other = _other_tree(tmp_path)
     ids = sid.resolve(str(REPO))
+    ids = {k: v for k, v in ids.items() if not (k == "research" and _from_harness_tool(v))}
     assert gsid.check(ids, str(REPO)) == []
     leaked = dict(ids["verity"], resolved_path=str(other / "verity" / "__init__.py"), repo_root=str(other), git_sha="deadbeef")
     mm = gsid.check({**ids, "verity": leaked}, str(REPO))
@@ -306,12 +326,12 @@ def _fake_tree_with_hidden_gpu(tmp_path: Path, name: str) -> Path:
 @pytest.mark.parametrize("copy", ["verity_vllm/commit/committer/hidden_gpu_src", "out/gen/r9/cmt-hidden/src"])
 def test_hidden_gpu_resolves_repo_from_its_own_file_not_the_environment(tmp_path, copy):
     """Both copies (the shipped one, and the r9 path native_host inserts) find the SAME tree by walking up from __file__; a foreign
-    $VERITOR_REPO is refused BEFORE torch/numpy load (so this runs torch-free); an agreeing one gets past the identity step."""
+    $VERITY_TREE is refused BEFORE torch/numpy load (so this runs torch-free); an agreeing one gets past the identity step."""
     a = _fake_tree_with_hidden_gpu(tmp_path, "treeA")
     b = _fake_tree_with_hidden_gpu(tmp_path, "treeB")
     probe = f"import sys; sys.path.insert(0, {str(a / copy)!r}); import hidden_gpu"
     # the leak vector of F-r17-tp-06: hidden_gpu from tree A while the environment names tree B -> refused by name
-    r = subprocess.run([PY, "-c", probe], env=_env(VERITOR_REPO=str(b)), capture_output=True, text=True, cwd=tmp_path)
+    r = subprocess.run([PY, "-c", probe], env=_env(VERITY_TREE=str(b)), capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode != 0 and "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(a.resolve()) in r.stderr, r.stderr
     # no environment at all: REPO = tree A (the file's tree); the import proceeds past identity (fails later only on torch/numpy/hs here)
     r = subprocess.run([PY, "-c", probe + "; print('REPO', hidden_gpu.REPO)"], env=_env(), capture_output=True, text=True, cwd=tmp_path)
@@ -322,7 +342,7 @@ def test_hidden_gpu_resolves_repo_from_its_own_file_not_the_environment(tmp_path
         # torch-free laptop: the identity step passed, the heavy imports did not (the fake tree's verity_vllm.commit is a bare namespace)
         assert "No module named" in r.stderr or "cannot import name 'hidden_stream'" in r.stderr, r.stderr
     # the environment agreeing with the file's tree is fine
-    r = subprocess.run([PY, "-c", probe], env=_env(VERITOR_REPO=str(a)), capture_output=True, text=True, cwd=tmp_path)
+    r = subprocess.run([PY, "-c", probe], env=_env(VERITY_TREE=str(a)), capture_output=True, text=True, cwd=tmp_path)
     assert "PRECHECK_FAIL_SOURCE_IDENTITY" not in r.stderr
 
 
@@ -345,20 +365,24 @@ def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
     assert code == b"REPO = _repo_of_this_file()"                                             # the F-r17-tp-06 line is gone from both copies
 
 
-# ---- runners set VERITOR_REPO from their own tree -------------------------------------------------------------------------------------------------
+# ---- runners set VERITY_TREE from their own tree ---------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("argv", [[PY, "-m", "verity_vllm.pipeline.cli", "row", "run", "some-row", "ROLE", "org/repo", "rev"],
-                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"]])
-def test_runners_refuse_a_foreign_veritor_repo_before_doing_anything(tmp_path, argv):
+                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"],
+                                  ["bash", "verity_vllm/ops/compiled_commit.sh", "some-row", "ROLE"],
+                                  ["bash", "verity_vllm/ops/stoch_negatives.sh", "some-row", "ROLE", "unused-out"],
+                                  ["bash", "verity_vllm/ops/stoch_negative_n3.sh", "some-row", "ROLE", "org/repo", "rev", "unused-out"]])
+def test_runners_refuse_a_foreign_verity_tree_before_doing_anything(tmp_path, argv):
     other = tmp_path / "other"
     other.mkdir()
-    r = subprocess.run(argv, cwd=INTEGRATION, env=_env(VERITOR_REPO=str(other), PATH=os.environ.get("PATH", ""), PYTHONPATH=PP),
+    r = subprocess.run(argv, cwd=INTEGRATION, env=_env(VERITY_TREE=str(other), PATH=os.environ.get("PATH", ""), PYTHONPATH=PP),
                        capture_output=True, text=True)
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(other) in r.stderr
     assert not list(tmp_path.glob("**/stages.txt"))
 
 
-def test_canary_exports_veritor_repo_from_its_own_tree_and_ignores_the_default_path():
-    can = (INTEGRATION / "verity_vllm" / "ops" / "canary.sh").read_text()
-    assert 'cd "${VERITOR_REPO:-/workspace/cp/veritor}"' not in can and 'export VERITOR_REPO=$TREE_SELF' in can
+@pytest.mark.parametrize("script", ["canary.sh", "compiled_commit.sh", "stoch_negatives.sh", "stoch_negative_n3.sh"])
+def test_runner_scripts_export_verity_tree_from_their_own_tree_and_have_no_default_path(script):
+    text = (INTEGRATION / "verity_vllm" / "ops" / script).read_text()
+    assert 'cd "${VERITY_TREE:-' not in text and 'export VERITY_TREE=$TREE_SELF' in text

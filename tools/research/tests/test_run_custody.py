@@ -85,14 +85,15 @@ def _fixture_run(runs: Path, run_id: str = FIXTURE_RID) -> Path:
 
 def test_the_machine_publishes_every_run_file_and_any_machine_sees_custody(tmp_path, monkeypatch):
     vault = tmp_path / "vault"
-    cmd = [PY, "-c", "import os; print('hello from the workload'); print('token seen:', 'AWS_SESSION_TOKEN' in os.environ)"]
+    cmd = [PY, "-c", "import os; print('hello from the workload'); print('token seen:', 'AWS_SESSION_TOKEN' in os.environ); "
+                     "print('run dir:', os.environ['RESEARCH_RUN_DIR'] == os.getcwd())"]
     req, runs = _request(tmp_path, RID, cmd, vault)
     out = remote.launch_request(req)
     assert out["started"], out
     d = runs / RID
     marker = _wait_marker(d)
     assert marker["preserved"] is True, marker
-    assert (d / "stdout.log").read_text().splitlines() == ["hello from the workload", "token seen: False"], "the key is never the workload's"
+    assert (d / "stdout.log").read_text().splitlines() == ["hello from the workload", "token seen: False", "run dir: True"], "the key is never the workload's"
     assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists(), "the key is deleted once used"
     assert SECRET not in (d / "launcher.log").read_text() + (d / "job.json").read_text() + req.read_text() + json.dumps(marker)
     assert {"stdout.log", "stderr.log", "launcher.log", "job.json", "status.json"} <= set(marker["files"])
@@ -404,3 +405,83 @@ def test_custody_warns_before_pushing_a_run_bigger_than_the_warn_size(tmp_path, 
     assert CU.size_warning(tmp_path) is None
     monkeypatch.setattr(CU, "SIZE_WARN_BYTES", 1024)
     assert "no resume" in CU.size_warning(tmp_path)
+
+
+# ---- declared outputs: custody uploads what the run declares, and lists the rest ---------------------------------------------------------
+
+def _declare(d: Path, globs: list[str]) -> None:
+    job = json.loads((d / "job.json").read_text())
+    job.setdefault("execution", {})["declared_outputs"] = globs
+    (d / "job.json").write_text(json.dumps(job))
+
+
+def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_the_cap(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    shutil.rmtree(d / "out")
+    (d / "res").mkdir()
+    (d / "res" / "result.json").write_text("{}")
+    (d / "res" / "deep").mkdir()
+    (d / "res" / "deep" / "big.bin").write_bytes(b"x" * 100)
+    (d / "a-small.txt").write_bytes(b"y" * 10)
+    (d / "z-junk.bin").write_bytes(b"z" * 100)
+    _declare(d, ["res/*"])
+    kept, trimmed = CU.select(d, cap=50)
+    assert {"stdout.log", "job.json", "res/result.json", "res/deep/big.bin", "a-small.txt"} <= set(kept)
+    assert [t["path"] for t in trimmed] == ["z-junk.bin"] and trimmed[0]["bytes"] == 100 and len(trimmed[0]["sha256"]) == 64
+    assert [t["path"] for t in CU.select(d, cap=0)[1]] == ["a-small.txt", "z-junk.bin"], "cap 0: never upload undeclared"
+    _declare(d, ["*"])
+    assert CU.select(d, cap=0)[1] == [], "`*` keeps everything"
+    w = CU.trim_warning(trimmed)
+    assert "--declared-output" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
+
+
+def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    (d / "res").mkdir()
+    (d / "res" / "result.json").write_text('{"ok": true}')
+    (d / "junk.bin").write_bytes(b"j" * 1000)
+    _declare(d, ["res/*"])
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
+    assert "custody trimmed 3 undeclared file(s)" in capsys.readouterr().err   # junk.bin and the fixture's out/
+    assert CU.has_custody(d) == (True, "on the remote (.custody)")
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    m = st2.get_manifest(st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"])
+    paths = {f.path for f in m.payload.files}
+    assert "res/result.json" in paths and "junk.bin" not in paths
+    assert [t["path"] for t in m.meta["trimmed"]] == ["junk.bin", "out/proof.bin", "out/verify.jsonl"]
+    assert CU.verify(st2, d, mark=False)["preserved"]
+    (d / "junk.bin").write_bytes(b"k" * 1000)
+    assert "changed" in CU.verify(st2, d, mark=False)["error"], "a trimmed file is still pinned by its hash"
+
+
+def test_a_trimmed_listing_too_big_for_the_manifest_goes_in_the_record_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
+    """A check run lists thousands of undeclared files; inline in meta that broke the 256 KiB manifest cap and the attempt never
+    published (r20261001-091202-7aa6)."""
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    (d / "suites").mkdir()
+    for i in range(3000):
+        (d / "suites" / f"t{i:04d}.log").write_text(str(i))
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish", "--keep-local"]) == 0
+    capsys.readouterr()
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    rr = st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"]
+    m = st2.get_manifest(rr)
+    assert "trimmed" not in m.meta and m.meta["trimmed_listing"] == CU.TRIMMED_LISTING and m.meta["trimmed_files"] == 3002
+    assert {f.path for f in m.payload.files} & {CU.TRIMMED_LISTING, "stdout.log"} == {CU.TRIMMED_LISTING, "stdout.log"}
+    assert len(CU.trimmed_of(st2, rr)) == 3002
+    rep = CU.verify(st2, d, mark=False)
+    assert rep["preserved"] and CU.TRIMMED_LISTING not in rep["gone"]
+    (d / "suites" / "t2999.log").write_text("changed")
+    assert "changed" in CU.verify(st2, d, mark=False)["error"]

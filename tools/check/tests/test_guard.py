@@ -59,6 +59,33 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", [], [], 4), r.log.read_text()
 
 
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("required", [False, True])
+def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, monkeypatch, workers, required):
+    """A recorded check's Lean tests passed without running: their fixture skipped because the store was out of reach (#757's
+    red team). Under VERITY_STORE_REQUIRED=1 that skip, from a fixture or a test, fails; any other skip stays a skip."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    monkeypatch.delenv("VERITY_SUITE_REPORT", raising=False)   # load it inert: no second audit hook in this process
+    G = _load(monkeypatch, "guard_under_test", HERE / "guard" / "verity_suite_guard.py")
+    (tmp_path / "pkg" / "tests" / "test_store.py").write_text(
+        "import pytest\n\n@pytest.fixture\ndef fixture():\n    pytest.skip(f'" + G.STORE_UNREACHABLE + ": no remote')\n\n"
+        "def test_in_a_fixture(fixture):\n    pass\n\n"
+        "def test_in_the_test():\n    pytest.skip('" + G.STORE_UNREACHABLE + " here')\n\n"
+        "def test_without_a_gpu():\n    pytest.skip('no GPU')\n")
+    if required:
+        monkeypatch.setenv("VERITY_STORE_REQUIRED", "1")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    log = r.log.read_text()
+    assert r.counts["passed"] == 4, log
+    if required:
+        assert (r.status, r.counts["failed"], r.counts["error"], r.counts["skipped"]) == ("failed", 1, 1, 1), log
+        assert "VERITY_STORE_REQUIRED=1 (a recorded check)" in log
+    else:
+        assert (r.status, r.counts["failed"], r.counts["error"], r.counts["skipped"]) == ("passed", 0, 0, 3), log
+
+
 def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     r = S.run(suite, ["pkg"], ["-p", "no:verity_suite_guard"], tmp_path / "logs")

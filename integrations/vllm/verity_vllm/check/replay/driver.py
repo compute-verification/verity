@@ -49,8 +49,10 @@ through this module: the names in `__all__` are its interface.
 """
 from __future__ import annotations
 
+import multiprocessing
 import os
 import re
+import sys
 import time
 from collections import Counter
 from typing import Any, Callable
@@ -64,8 +66,9 @@ from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, 
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
+from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, replay_vu
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
@@ -145,10 +148,12 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "BiasAdd_v1": (),
                 "Embedding_v1": (), "TokenSelect_v1": (), "GumbelTopPTokenSelect_v1": (),
                 # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
-                "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",),
+                "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",),
+                "AttentionSoftcap_v2": ("fa2",),
                 # [MAN-06f v3 unit 2] the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
                 "MoeRouterTopK_v1": ("fa2",), "MoeRouterTopKNorm_v1": ("fa2",),
-                "MoeRouterTopKOrdered_v1": ("fa2",), "MoeRouterTopKOrderedNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeSum_v1": ()}
+                "MoeRouterTopKOrdered_v1": ("fa2",), "MoeRouterTopKOrderedNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeExpertGemm_v2": (),
+                "MoeExpertGemmW_v2": (), "MoeSum_v1": ()}
 
 
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
@@ -160,6 +165,8 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}
     need = {lib for f in fams for lib in _FAMILY_LIBS.get(f, ())}
     out: dict[str, str] = {}
+    for ev in ROW_EVALUATORS[-1:]:                                  # an evaluator on another IR compiles what the sample reaches
+        out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
             from verity_vllm.program.registry import prims as _prims
@@ -183,6 +190,97 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
 #: collection freed, `gc_freeze` = the policy (env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out for a measurement, never for a record).
 _FORK_STATS: dict[str, Any] = {}
 FORK_GC_FREEZE = os.environ.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no")
+#: seconds between the pool's checks for a dead worker: a worker that dies mid-task (an OOM kill) loses its task, and the pool would
+#: otherwise wait out its whole timeout
+POOL_POLL_S = 10.0
+CGROUP_MEMORY_EVENTS = "/sys/fs/cgroup/memory.events"
+CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
+
+
+class WorkerDied(RuntimeError):
+    """A forked replay worker exited mid-task, by name: OOM-killed when the cgroup's `memory.events` counted an OOM kill meanwhile."""
+
+
+class PoolDoesNotFit(RuntimeError):
+    """The largest pick does not fit in the cgroup's memory.max less what the parent holds after the prewarm: no worker, and no serial
+    replay in the parent, could evaluate it.  Raised before the fork, by name, never left to the OOM killer."""
+
+
+def _cgroup_memory() -> tuple[int, int] | None:
+    read = []
+    try:
+        for p in CGROUP_MEMORY:
+            with open(p) as f:
+                read.append(f.read().strip())
+    except OSError:
+        return None
+    lim, cur = read
+    return (int(lim), int(cur)) if lim.isdigit() and cur.isdigit() else None
+
+
+def _malloc_trim() -> bool:
+    try:
+        import ctypes
+        return bool(ctypes.CDLL("libc.so.6").malloc_trim(0))
+    except (OSError, AttributeError):
+        return False
+
+
+def fit_pool(want: int, picked: list[dict], worker_peak: int) -> tuple[int, dict[str, Any] | None]:
+    """How many forked workers fit, measured after the prewarm, and the fit's record (None without a cgroup limit).  The room is the
+    cgroup's memory.max less its use once the parent's free heap is returned (`malloc_trim`); a pick's peak is ``worker_peak`` plus what
+    the row evaluator states its evaluation allocates (``peak_bytes(vu)``, `evaluate.ROW_EVALUATORS`), and ``want`` workers are cut to
+    the most whose largest picks fit side by side.  PoolDoesNotFit when the largest pick alone does not."""
+    before = _cgroup_memory()
+    trimmed = _malloc_trim()
+    mem = _cgroup_memory()
+    if mem is None:
+        return want, None
+    lim, cur = mem
+    room = lim - cur
+    stated = getattr(ROW_EVALUATORS[-1], "peak_bytes", None) if ROW_EVALUATORS else None
+    peaks = sorted(((worker_peak + (int(stated(vu)) if stated else 0), str(vu.get("spec"))) for vu in picked), reverse=True)
+    peaks += [(worker_peak, "an idle worker")] * (want - len(peaks))
+    n, total = 0, 0
+    for p, _ in peaks[:want]:
+        if total + p > room:
+            break
+        n, total = n + 1, total + p
+    big, spec = peaks[0]
+    if n == 0:
+        raise PoolDoesNotFit(f"the largest pick {spec} needs {_gib(big)} GiB, more than the cgroup's memory.max {_gib(lim)} GiB less the "
+                             f"{_gib(cur)} GiB in use after the prewarm ({_gib(room)} GiB): the job needs at least {_gib(cur + big)} GiB")
+    note = (f"{want} requested, {f'fitted to {n}' if n < want else 'all fit'} after the prewarm: {n} workers at the largest picks' peaks "
+            f"({_gib(total)} GiB, the largest {_gib(big)} GiB for {spec}) in memory.max {_gib(lim)} GiB less the {_gib(cur)} GiB in use")
+    return n, {"memory_max": lim, "in_use": cur, "in_use_before_trim": before[1] if before else None, "malloc_trim": trimmed, "room": room,
+               "worker_peak": worker_peak, "peaks_stated_by": type(ROW_EVALUATORS[-1]).__name__ if stated else None,
+               "largest": {"spec": spec, "bytes": big}, "workers_requested": want, "workers_fitted": n, "fitted_bytes": total, "note": note}
+
+
+def _gib(b: int) -> str:
+    return f"{b / 2**30:.1f}"
+
+
+def _oom_kills() -> int | None:
+    try:
+        with open(CGROUP_MEMORY_EVENTS) as f:
+            return next(int(ln.split()[1]) for ln in f if ln.split()[:1] == ["oom_kill"])
+    except (OSError, StopIteration, ValueError, IndexError):
+        return None
+
+
+def _dead_worker(pool: Any, pids: set[int], oom0: int | None, workers: int) -> str | None:
+    """Why the pool lost a worker since it started (`pids`), or None while every worker it forked is alive."""
+    procs = list(pool._pool)
+    gone = sorted(pids - {p.pid for p in procs} | {p.pid for p in procs if p.exitcode not in (None, 0)})
+    oom = _oom_kills()
+    killed = oom is not None and oom0 is not None and oom > oom0
+    if not gone and not killed:
+        return None
+    if killed:
+        return (f"a forked replay worker was OOM-KILLED (cgroup memory.events oom_kill {oom0} -> {oom}; {workers} workers, pids exited "
+                f"{gone}): the pool does not fit the cgroup's memory.max; pass fewer --replay-workers")
+    return f"forked replay worker(s) {gone} exited mid-task ({workers} workers): their tasks are lost"
 
 
 def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: list[dict], workers: int) -> list[tuple[dict, dict, float]]:
@@ -216,9 +314,20 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         print(f"[replay] fork gc.freeze={'on' if frozen else 'OFF'}: {workers} workers over {len(picked)} VUs"
               + (f", {_FORK_STATS['gc_frozen_objects']} objects frozen ({_FORK_STATS['gc_collected']} collected) before the fork" if frozen else
                  " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
+        oom0 = _oom_kills()
         with fork_pool(workers) as pool:
+            pids = {p.pid for p in pool._pool}
             res = pool.map_async(_fork_worker, range(len(picked)), chunksize=max(1, len(picked) // (workers * 8)))
-            out = res.get(timeout=max(300.0, 3.0 * len(picked)))
+            per_vu = max([3.0] + [float(getattr(ev, "seconds_per_vu", 3.0)) for ev in ROW_EVALUATORS[-1:]])
+            deadline = time.monotonic() + max(300.0, per_vu * len(picked))
+            while not res.ready():
+                if (why := _dead_worker(pool, pids, oom0, workers)) is not None:
+                    print(f"[replay] {why}", file=sys.stderr, flush=True)
+                    raise WorkerDied(why)
+                if time.monotonic() > deadline:
+                    raise multiprocessing.TimeoutError
+                res.wait(POOL_POLL_S)
+            out = res.get()
         return out
     finally:
         if frozen:
@@ -300,13 +409,103 @@ def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     return q if q in QUERIES else None
 
 
+DRAWS = ("family", "uniform")
+
+
+def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: str = "family") -> tuple[list[dict], int]:
+    """With `k` (the config run), every VU re-keyed to one stratum per `draw` (the key's fields kept) and `k` picks per stratum.
+    `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform draw without replacement from every unit.
+    `family`: one stratum per family (`family|all|all|all|all|all`); with the cap at `k`, the round-robin order of `sample` then takes
+    k units in all, one per family first, a small family used up before the others, the rest split evenly.  Without `k`, the VUs and
+    `per_stratum` as given.  Any other `draw` is refused by name."""
+    if draw not in DRAWS:
+        raise ValueError(f"replay draw {draw!r} is not one of {DRAWS}")
+    if not k:
+        return vus, per_stratum
+    return [dict(v, stratum=f"{'all' if draw == 'uniform' else v['family']}|all|all|all|all|all") for v in vus], int(k)
+
+
+def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: dict[str, int], executed_prefix: dict[str, dict] | None,
+             ring_slots: int | None, *, attention_paths: list[str] | None, tp: dict[str, Any] | None, program_dirs: dict[str, str] | None,
+             manifest: dict[str, Any] | None, memo: dict | None = None) -> tuple:
+    """`sampled_replay`'s enumeration: every Program's index and its request's population, with the not-evaluable counts, their codes,
+    the manifest addresses, the `last` anchors and the address correspondence.  ``memo`` keeps the indices and the populations across calls
+    on the same Programs objects (the slim planner fills it before the run's seed exists)."""
+    memo = {} if memo is None else memo
+    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
+    addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
+    anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
+    addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
+    rank = ranks[0] if len(ranks) == 1 else 0
+    for rid, inst in programs.items():
+        pi = indices.get(id(inst)) or memo.get(("index", id(inst)))
+        if pi is None:
+            pi = memo[("index", id(inst))] = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid),
+                                                         query=manifest_query(manifest), norm_scales=norm_scales.policy_of(manifest))
+        indices[id(inst)] = pi
+        addr_rec["correspondence"][str(rid)] = pi.correspondence
+        # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
+        # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
+        # [revb F-r17b-39] the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
+        # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
+        anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
+        key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]))
+        if key not in memo:                                                       # a request's addresses are its own (keyed by it)
+            got_a: dict[tuple, dict] = {}
+            got_c: dict[str, dict] = {}
+            memo[key] = (*population(pi, rid, rank=rank, arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots, addresses=got_a,
+                                     last_step=int(anchors[rid]["last_step"]), codes=got_c), got_a, got_c)
+        vus, ne, nef, got_a, got_c = memo[key]
+        all_vus.extend(vus)
+        not_ev.update(ne)
+        not_ev_fam.update(nef)
+        addresses.update(got_a)
+        codes.update(got_c)
+        indices[rid] = pi
+    return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
+
+
+def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
+    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size, its
+    picks ([request, request-relative step, Program row, op_path] in draw order) and the VUs whose inputs did not resolve."""
+    unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
+    return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
+            "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
+
+
+def _evaluated(one: Callable[[dict], tuple[dict, dict, float]], picked: list[dict], indices: dict, weights: Callable, workers: int,
+               worker_peak: int | None) -> tuple[list[tuple[dict, dict, float]], int, str | None, dict[str, str], dict[str, Any] | None]:
+    """`one` over the picked VUs, in picked order: a forked pool after the prewarm, fitted to the cgroup's memory when ``worker_peak``
+    is given (`fit_pool`), else serial in the parent; a prewarm or pool failure falls back to serial.  Returns the results, the
+    workers that ran them, the pool's note, the prewarmed libraries and the fit's record."""
+    note, prewarmed, memory = None, {}, None
+    if workers > 1 and len(picked) > 1:
+        try:
+            _prewarm_weights(indices, picked, weights)
+            prewarmed = _prewarm_evaluators(picked)
+        except Exception as e:  # noqa: BLE001
+            note, workers = f"parallel evaluator unavailable ({type(e).__name__}: {str(e)[:120]}); serial fallback", 1
+    if workers > 1 and len(picked) > 1 and worker_peak is not None:
+        fitted, memory = fit_pool(workers, picked, int(worker_peak))
+        if memory is not None:
+            print(f"[replay] WORKERS: {memory['note']}", flush=True)
+        if fitted < workers:
+            note, workers = memory["note"], fitted
+    if workers > 1 and len(picked) > 1:
+        try:
+            return _parallel_replay(one, picked, workers), workers, note, prewarmed, memory
+        except Exception as e:  # noqa: BLE001
+            note = f"parallel evaluator unavailable ({type(e).__name__}: {str(e)[:120]}); serial fallback"
+    return [one(vu) for vu in picked], 1, note, prewarmed, memory
+
+
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
                    weights: Callable[[str, int, int], np.ndarray | None], *, arrivals: dict[str, int] | None = None, per_stratum: int = 2,
                    seed: int, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                   weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
+                   weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None, worker_peak: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None) -> dict[str, Any]:
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -315,48 +514,32 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...}; rev-cb
     M-0411 O5) -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
-    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap).
+    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, drawn by `replay_draw` (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
-    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS)."""
+    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS).  `plan`: the same draw, read only (`planned`).
+    `worker_peak` (bytes): the forked pool is fitted after the prewarm to the cgroup's memory (`fit_pool`, recorded as
+    `evaluator.memory`), and a pick too large for it is refused (PoolDoesNotFit); None forks the workers asked for."""
     t_start = time.perf_counter()
     store = CommittedStore.of_record(bmap, committed, manifest)                 # [rel M-0367] reads through the manifest's alias table
     arrivals = arrivals or {}
     ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
-    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
-    addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
-    anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
-    addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
-    for rid, inst in programs.items():
-        pi = indices.get(id(inst))
-        if pi is None:
-            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid), query=manifest_query(manifest))
-            indices[id(inst)] = pi
-        addr_rec["correspondence"][str(rid)] = pi.correspondence
-        # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
-        # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
-        # [revb F-r17b-39] the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
-        # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
-        anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
-        vus, ne, nef = population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots,
-                                  addresses=addresses, last_step=int(anchors[rid]["last_step"]), codes=codes)
-        all_vus.extend(vus)
-        not_ev.update(ne)
-        not_ev_fam.update(nef)
-        indices[rid] = pi
+    all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
+        programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo)
     pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
-    picked_all, strata, tgt = sample(pool_vus, per_stratum, seed, targets=targets, key=challenge_key)
+    picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum, replay_draw), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
-    cap = max(int(max_evaluate), len(strata))                                     # never below one VU per stratum
+    cap = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap
+    if plan:
+        return planned(picked, indices, store, arrivals, t_start)
     if len(ranks) > 1:                                                            # TP: the map carries rank-local partials this version does not replay
         not_ev[f"multi-rank map (ranks {ranks}): rank-local partials / collectives not replayed at v1 (rank 0 module outputs only)"] += 0
     evaluated, equal, mism, not_evald = 0, 0, [], []
     strata_eval: Counter = Counter()
     strata_mism: Counter = Counter()
-    fam_time: Counter = Counter()
-    fam_n: Counter = Counter()
+    fam_time, fam_n = Counter(), Counter()
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
         t0 = time.perf_counter()
@@ -367,8 +550,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # process pool shares the committed store + the weights cache copy-on-write and returns small records.  The children never touch CUDA
     # (weights are pre-read into the cache in the parent, the committed reader slices host tensors); a pool failure / timeout falls back
     # to the serial path.  Results are folded in the picked order below, so the record is independent of the schedule.
-    if workers is None:
-        workers = max(1, min(32, (os.cpu_count() or 2) // 2))
+    workers = max(1, min(32, (os.cpu_count() or 2) // 2)) if workers is None else workers
     workers_requested = int(workers)
     pool_note = None
     # [rev-cb F-cb-44] a DEVICE-retained committed store (`--retain device`) cannot be read by forked children (CUDA after fork ->
@@ -377,19 +559,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     if retention == "device" and int(workers) > 1:
         pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)"
         workers = 1
-    results = None
-    prewarmed: dict[str, str] = {}
-    if int(workers) > 1 and len(picked) > 1:
-        try:
-            _prewarm_weights(indices, picked, weights)
-            prewarmed = _prewarm_evaluators(picked)
-            results = _parallel_replay(_one, picked, int(workers))
-        except Exception as e:  # noqa: BLE001
-            pool_note = f"parallel evaluator unavailable ({type(e).__name__}: {str(e)[:120]}); serial fallback"
-            results = None
-    if results is None:
-        workers = 1
-        results = [_one(vu) for vu in picked]
+    results, workers, note, prewarmed, memory = _evaluated(_one, picked, indices, weights, int(workers), worker_peak)
+    pool_note = note or pool_note
     unev_by_stratum: dict[str, dict] = {}
     child_reads = opened_in_children(results, forked=int(workers) > 1)
     for vu, rec, dt in results:
@@ -478,12 +649,12 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
             "addresses": addr_rec,
-            "sample": {"per_stratum": int(per_stratum), "seed": int(seed), "seed_source": seed_source,
+            "sample": {"per_stratum": int(replay_k or per_stratum), "seed": int(seed), "seed_source": seed_source, "strata_by": replay_draw if replay_k else "unit", **({"k": int(replay_k)} if replay_k else {}),
                        # [R16 rev M-0600 / F-r16-23] under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),
                        "picked": len(picked), "evaluated": evaluated, "equal": equal,
-                       "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(max_evaluate), "cap_effective": int(cap),
+                       "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(cap),
                        "stratified_picked": min(cap, n_strat), "targeted": targeted, "targeted_n": n_targeted,
                        "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the cap",
                        "picks_by_request_step": picks_by_request_step,      # [revb n-pad-c-1] {request: {step: [picked, evaluated, mismatch]}}
@@ -499,7 +670,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                           "prewarmed_libraries": prewarmed,               # [MAN-06g] twin .so's dlopen'ed in the parent before the fork
                           # [R19 admit, F-r18-admit-1 (c)] gc.freeze before the fork: the children's collections never traverse the
                           # inherited C2 heap (the 72 GB-per-child COW of R17 #23); {} when no pool was forked
-                          "fork": dict(_FORK_STATS) if int(workers) > 1 else {}},
+                          "fork": dict(_FORK_STATS) if int(workers) > 1 else {}, **({"memory": memory} if memory else {})},
             "strata": strata, "strata_unevaluated": strata_unevaluated, **({"value_reads_in_children": child_reads} if child_reads else {}),
             # [rev-cb M-0740 G1] EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
             "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],

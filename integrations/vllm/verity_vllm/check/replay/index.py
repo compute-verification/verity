@@ -20,6 +20,8 @@ from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
 SEED_PARAM = "seed"                     # the stochastic Program's seed input (Param name; committed as runner.sampler/seed per (step, request))
+VALUES_PARAM = "values"                 # a `registered_values` Program's registered values (the norms' eps, the attention scale)
+_RUN_PARAM = re.compile(r"^run(_\d+)?$")  # its run values, one parameter per request (the sampler's temperature and top_p, a Philox position)
 
 _CONST_ROW = re.compile(r"^Const(32|64)\[0x([0-9a-fA-F]+)\]_v\d+$")
 
@@ -88,7 +90,7 @@ class ProgramIndex:
     counts), read with the correspondence of its Build dir (`program_dir`; without one, the rows' recorded names)."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 program_dir: str | None = None, query: str | None = None):
+                 program_dir: str | None = None, query: str | None = None, norm_scales: bool = False):
         self.rows: list[dict] = list(inst["rows"])
         # [tp TP-08d] a RANK Program (derive_step --tp W --rank r; result.json `tp` = {"world": W, "rank": r}): its population carries the
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
@@ -97,11 +99,15 @@ class ProgramIndex:
         # [v2 flip, P2] Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
         # (`Population.program_path`: its owning module, a collective site's site path)
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
+        self._v2_ports: dict[int, dict[str, str]] = {}
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
         from verity_vllm.correspondence.reader_for_query import Correspondence
         from verity_vllm.query.program_view import from_instances
+        from verity_vllm.query import norm_scales as NS
         from verity_vllm.query.required import population
+        # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
+        population = NS.population if norm_scales else population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
         pop = population(P, corr, tp=self.tp, **({"query": q} if (q := query or DEFAULT_QUERY) else {}))
@@ -109,6 +115,7 @@ class ProgramIndex:
             mem = pop.members_of(cid)
             if mem:
                 self._v2[cid] = [(m.member, m.width, m.dtype) for m in mem]
+                self._v2_ports[cid] = dict(reversed([(m.port, m.member) for m in mem]))      # a port's own member, before a partial on it
                 self._v2_module[cid] = pop.program_path(cid)
         self.correspondence: dict[str, Any] | None = corr.provenance()
         del P, corr, pop
@@ -118,6 +125,19 @@ class ProgramIndex:
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}
         self.pnames = [p[0] for p in self.params]
+        # the supplied inputs' layout as the build states it (instances header `supplied`): parameter index -> (binding, {leaf offset: field})
+        self.supplied: dict[int, tuple[str, dict[int, dict]]] = {}
+        sup = inst.get("supplied") or {}
+        for binding, ents in (("registration", [sup["registration"]] if sup.get("registration") else []), ("run", sup.get("run") or [])):
+            for ent in ents:
+                a = int(ent["param"])
+                if a >= len(self.pnames) or self.pnames[a] != ent["name"]:
+                    raise ValueError(f"supplied {binding} parameter {ent['name']!r} at index {a} is not the Program's parameter "
+                                     f"{self.pnames[a] if a < len(self.pnames) else None!r}")
+                self.supplied[a] = (binding, {int(f["offset"]): dict(f, bits=int(f["bits"], 16)) for f in ent.get("fields") or []})
+        for a, n in enumerate(self.pnames):
+            if (n == VALUES_PARAM or _RUN_PARAM.match(n)) and a not in self.supplied:
+                raise ValueError(f"parameter {n!r} is a supplied input but the instances header states no layout for it")
         self.fields: list[tuple[str, int, list[int], int]] = []
         self.foff: list[int] = []
         wt = next((p[1] for p in self.params if p[0] == "weights"), None)
@@ -167,10 +187,10 @@ class ProgramIndex:
         return len(self.segs)
 
     def ids_params(self) -> set[int]:
-        """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record and not a
-        sampler input (`seed`, `splits`) -- the same reading `_gather_inputs` resolves a `['p', a, k, k+1]` slice by (the committed
-        `input_token_ids` row k of the arrival step)."""
-        return {a for a, n in enumerate(self.pnames) if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM)}
+        """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record, not a
+        sampler input (`seed`, `splits`) and not a supplied input (`values`, `run_<i>`) -- the same reading `_gather_inputs` resolves a
+        `['p', a, k, k+1]` slice by (the committed `input_token_ids` row k of the arrival step)."""
+        return {a for a, n in enumerate(self.pnames) if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM) and a not in self.supplied}
 
     def embed_op_path(self) -> str | None:
         """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`): the first row whose
@@ -188,6 +208,10 @@ class ProgramIndex:
 
     def step_of(self, i: int) -> int:
         return max(0, bisect.bisect_right(self._seg_lo, int(i)) - 1)
+
+    def member_of_port(self, i: int) -> dict[str, str]:
+        """Row i's output port -> the member it is committed as (`CallMember.port`); {} for a row whose outputs are interior."""
+        return dict(self._v2_ports.get(int(i), {}))
 
     def describe(self, r: dict) -> dict | None:
         """Family, statics, module -> op_path, members (name, width, dtype) and request-local row of a Program row; None if unmodelled."""

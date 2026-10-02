@@ -77,3 +77,34 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 -- the 14 GB theorem for the implementation's tagged keying, and the oracle-game transfer it rests on
 #print axioms PousDenseReCert.segTag_meets_14
 #print axioms PousDenseReCert.segTag_auditSecure
+-- the overwrite chain: P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, no hypothesis
+#print axioms PousProofs.P3ConcreteMeets64
+#print axioms PousProofs.P3ConcreteMeets14GB
+#print axioms PousProofs.P3ConcreteMeets64D12
+#print axioms PousProofs.BandChainMeets64
+#print axioms PousProofs.BandChainMeets64D5
+#print axioms PousProofs.BandChainMeets64D12
+#print axioms PousProofs.BandMultiMeets14
+#print axioms PousProofs.BandMultiMeets14K106
+#print axioms PousProofs.BandMultiMeetsFamily
+#print axioms PousProofs.ChainDenseMeets64
+#print axioms PousProofs.BandPubMeets64
+#print axioms PousProofs.BandPubMeets14
+#print axioms PousProofs.BandPubMeets14Global
+#print axioms PousProofs.ChainDenseMeets111
+-- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
+#print axioms PousProofs.P2MeetsM1pB19Uncond
+#print axioms PousProofs.P2MeetsM1pFamilyUncond
+#print axioms PousProofs.P2MeetsM1pW8192Uncond
+#print axioms PousProofs.P2SlackB19Uncond
+#print axioms PousProofs.P2SlackFamilyUncond
+#print axioms PousProofs.P2ErrorSplitB19Uncond
+#print axioms PousP2p.not_meets_m1p_b19_k85
+#print axioms PousMargin.not_slack_raw
+-- P2 in the ring cost model (`Pous/P2/Cost.lean`): `MeetsOn` at `L = Q` gives `Meets`, the non-vacuity pins
+-- (honest storage is accepted; recomputing the roots breaks `MeetsOn`), and dropping low bits breaks `k = 88`
+#print axioms PousP2Ring.meets_of_meetsOn
+#print axioms PousP2Ring.complete
+#print axioms PousP2Ring.tight
+#print axioms PousP2Ring.tight_p16448
+#print axioms PousP2Ring.not_meetsOn_b19_k88

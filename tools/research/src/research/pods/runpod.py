@@ -12,15 +12,15 @@ environment stands in, and a file that exists always wins:
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``), with its
 known_hosts beside it.  Neither value is ever printed.
 
-    python zk/campaign/runpod.py balance
-    python zk/campaign/runpod.py gpus                      # price/stock for the SKUs we care about
-    python zk/campaign/runpod.py create --name veritor-4090 --gpu "NVIDIA GeForce RTX 4090" --disk 100
-    python zk/campaign/runpod.py list
-    python zk/campaign/runpod.py get POD_ID
-    python zk/campaign/runpod.py ssh POD_ID                # prints the ssh command once port 22 is mapped
-    python zk/campaign/runpod.py wait-ssh POD_ID           # blocks until sshd answers
-    python zk/campaign/runpod.py terminate POD_ID
-    python zk/campaign/runpod.py watchdog POD_ID --hours 9 # detached: terminate after N hours
+    python -m research.pods.runpod balance
+    python -m research.pods.runpod gpus                      # price/stock for the SKUs we care about
+    python -m research.pods.runpod create --name vy-4090 --gpu "NVIDIA GeForce RTX 4090" --disk 100
+    python -m research.pods.runpod list
+    python -m research.pods.runpod get POD_ID
+    python -m research.pods.runpod ssh POD_ID                # prints the ssh command once port 22 is mapped
+    python -m research.pods.runpod wait-ssh POD_ID           # blocks until sshd answers
+    python -m research.pods.runpod terminate POD_ID
+    python -m research.pods.runpod watchdog POD_ID --hours 9 # detached: terminate after N hours
 
 Every pod this script creates carries the label ``veritor-campaign`` in its
 name so a stray pod is recognisable from the console.
@@ -79,8 +79,11 @@ def _env_dir() -> Path:
 
 def ssh_key() -> Path:
     """The private key file: `SSH_KEY` when it exists, else `RUNPOD_SSH_KEY_B64` written once (mode 600, named by its content
-    hash so a rotated secret gets a new file).  Neither set: `SSH_KEY`, so ssh names the missing file as before."""
+    hash so a rotated secret gets a new file).  Neither set: `SSH_KEY`, so ssh names the missing file as before, except on a Cursor
+    VM that injects the secret this shell lost (`research.secret_hint`, spelled out: this file runs standalone on a pod)."""
     b64 = os.environ.get("RUNPOD_SSH_KEY_B64")
+    if not SSH_KEY.is_file() and not b64 and "RUNPOD_SSH_KEY_B64" in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(","):
+        raise PodError("RUNPOD_SSH_KEY_B64 not in this shell though this VM injects it: rerun from a fresh tmux login shell")
     if SSH_KEY.is_file() or not b64:
         return SSH_KEY
     try:
@@ -277,7 +280,7 @@ def ssh_target(pod: dict[str, Any]) -> tuple[str, int] | None:
     return None
 
 
-def ssh_command(host: str, port: int) -> list[str]:
+def ssh_command(host: str, port: int, *, user: str = "root") -> list[str]:
     return [
         "ssh",
         "-i",
@@ -290,7 +293,7 @@ def ssh_command(host: str, port: int) -> list[str]:
         f"UserKnownHostsFile={known_hosts()}",
         "-o",
         "ServerAliveInterval=30",
-        f"root@{host}",
+        f"{user}@{host}",
     ]
 
 

@@ -8,7 +8,8 @@ before any engine, and fails by name `PRECHECK_FAIL_TARGET_FAMILY`.
 
 Family = compute capability (major, minor), the same reading the finalizer applies (report M-0016: l40s 8.9 / a100 8.0 / h100 9.0 /
 b200 10.0).  Three facts are compared with the row's family:
-  declared  -- the manifest's `target.compute_capability` when the workload declares one (Build gets it as --target)
+  declared  -- the manifest's `target.compute_capability` when the workload declares one, else the row's device class when its SM
+               count is fixed (`declared_profile`; Build gets it as --target, and a Build-only stage then needs no device)
   device    -- the pod GPU's compute capability (nvidia-smi compute_cap; torch as fallback) when a GPU stage runs here or the Build
                target is the device (no declared target)
   built     -- build_summary.json step.target.compute_capability, checked again AFTER Build (--build-summary)
@@ -28,7 +29,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import TARGETS, option
+from verity_vllm.config import TARGET_NUM_SMS, TARGETS, option
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
@@ -69,9 +70,19 @@ def _cc(v: Any) -> tuple[int, int] | None:
         return None
 
 
-def declared_target(workload: dict) -> tuple[int, int] | None:
-    t = workload.get("target") or {}
-    return _cc(t.get("compute_capability"))
+def declared_profile(row_id: str | None, workload: dict) -> dict:
+    """The Build's declared TargetProfile block: the workload's `target`, laid over the row's device-class profile (capability +
+    `config.TARGET_NUM_SMS`) when the workload names no capability and the class's SM count is fixed; {} when neither declares one."""
+    t = dict(workload.get("target") or {})
+    tok, fam = row_family(row_id) if row_id else (None, None)
+    if _cc(t.get("compute_capability")) is None and fam and tok in TARGET_NUM_SMS:
+        t.pop("compute_capability", None)
+        t = {"compute_capability": list(fam), "num_sms": TARGET_NUM_SMS[tok], **t}
+    return t
+
+
+def declared_target(workload: dict, row_id: str | None = None) -> tuple[int, int] | None:
+    return _cc(declared_profile(row_id, workload).get("compute_capability"))
 
 
 def device_cc() -> tuple[tuple[int, int] | None, str]:
@@ -124,12 +135,12 @@ def check(row_id: str, workload: dict | None, stages: list[str], *, want_device:
     if fam is None:
         rec["mismatches"].append({"fact": "row", "value": tok, "why": f"unknown device class {tok!r} in the row id (known: {sorted(DEVICE_FAMILY)})"})
     if workload is not None:
-        d = declared_target(workload)
+        d = declared_target(workload, row_id)
         rec["declared"] = list(d) if d else None
         if d and fam and d != fam:
             rec["mismatches"].append({"fact": "declared", "value": fmt(d), "why": f"manifest target.compute_capability {fmt(d)} != row family {fmt(fam)}"})
     gpu_stage = any(s in ("match", "commit", "bench") for s in stages)
-    build_on_device = "build" in stages and (workload is None or declared_target(workload) is None)
+    build_on_device = "build" in stages and (workload is None or declared_target(workload, row_id) is None)
     if want_device and (gpu_stage or build_on_device):
         dc, src = device_cc()
         rec["device"] = list(dc) if dc else None

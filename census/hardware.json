@@ -92,6 +92,90 @@
     "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
   },
   {
+    "id": "rtx-pro-6000-server/bf16",
+    "name": "RTX PRO 6000",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "dtype": "bf16",
+    "rate": "bf16 dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 500e12,
+    "accumulate": "fp32",
+    "memory_bytes": 103079215104,
+    "sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: 'FP16 | BF16 Tensor Core 1 PFLOP', 'FP8 Tensor Core 2 PFLOPS', 'FP4 Tensor Core 4 PFLOPS', 'TF32 Tensor Core 234 TFLOPS', 96 GB GDDR7 (the table states neither sparsity nor the accumulate width)",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      },
+      {
+        "label": "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4 (the Workstation Edition, the same 188-SM GB202 at a 2617 MHz boost clock): 'Peak BF16 Tensor TFLOPS with FP32 Accumulate' 503.8 dense / 1007.6 with the sparsity feature (footnote 2), equal to the FP16-accumulate row and half the FP8 row (1007.6 / 2015.2); 'Peak TF32 Tensor TFLOPS' 251.9 / 503.8",
+        "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
+      }
+    ],
+    "methodology": "datasheet peak, dense, FP32 accumulate; not measured on our cards. An FMA counts as two FLOP; sparsity figures never used. The server page's 1 PFLOP FP16 | BF16 is the sparse figure (in the whitepaper's sparse ratio to its 2 PFLOPS FP8 and 4 PFLOPS FP4, as for rtx-pro-6000-server/e4m3), so the dense peak is 0.5 PFLOPS, and BF16 with FP32 accumulate runs at the FP16-accumulate rate on this professional part (whitepaper Table 4). The page's figures are rounded and its boost clock unstated: its TF32 234 TFLOPS is the whitepaper's dense 251.9 at 2431 MHz, and at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1, the whitepaper's per-clock rate gives 467.8 TFLOPS. To be confirmed by a native-peak/v1 measurement",
+    "memory_bytes_per_second": 1597e9,
+    "memory_sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: Memory Bandwidth 1597 GB/s, 512-bit GDDR7",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      }
+    ]
+  },
+  {
+    "id": "rtx-pro-6000-server/e4m3",
+    "name": "RTX PRO 6000",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "dtype": "e4m3",
+    "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 1000e12,
+    "accumulate": "fp32",
+    "memory_bytes": 103079215104,
+    "sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: 'FP8 Tensor Core 2 PFLOPS', 'FP4 Tensor Core 4 PFLOPS', 96 GB GDDR7 (the table states neither sparsity nor the accumulate width)",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      },
+      {
+        "label": "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4 (the Workstation Edition, the same 188-SM GB202 at a 2617 MHz boost clock): 'Peak FP8 Tensor TFLOPS with FP32 Accumulate' 1007.6 dense / 2015.2 with the sparsity feature (footnote 2), equal to the FP16-accumulate row, and FP4 2015.2 / 4030.4",
+        "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
+      }
+    ],
+    "methodology": "datasheet peak, dense, FP32 accumulate; not measured on our cards. An FMA counts as two FLOP; sparsity figures never used. The server page's 2 PFLOPS FP8 is the sparse figure (its 4 PFLOPS FP4 matches the whitepaper's sparse 4030.4), so the dense peak is 1 PFLOPS, and FP32 accumulate runs at the FP16-accumulate rate on this professional part (whitepaper Table 4). The page's figures are rounded and its boost clock unstated: at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1, the whitepaper's per-clock rate gives 935.6 TFLOPS. To be confirmed by a native-peak/v1 measurement",
+    "memory_bytes_per_second": 1597e9,
+    "memory_sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: Memory Bandwidth 1597 GB/s, 512-bit GDDR7",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      }
+    ]
+  },
+  {
+    "id": "rtx-pro-6000-server/e2m1",
+    "name": "RTX PRO 6000",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "dtype": "e2m1",
+    "rate": "fp4 (e2m1, block-scaled) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 2000e12,
+    "accumulate": "fp32",
+    "memory_bytes": 103079215104,
+    "sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: FP4 Tensor Core 4 PFLOPS; datasheet (Apr 2025): Peak FP4 AI PFLOPS 4 PFLOPS. Both are the 2:4-sparse figure (4 x the sparse FP16 | BF16 1 PFLOP), so the dense peak is 4 PFLOPS / 2",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      },
+      {
+        "label": "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4, row 'Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)': 2015.2 dense / 4030.4 sparse on the Workstation Edition at its 2617 MHz boost, 1755.7 / 3511.4 on Max-Q; 4 x dense BF16",
+        "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used. Dense = the datasheet's sparse FP4 AI PFLOPS / 2. 4 x rtx-pro-6000-server/bf16, and rounded the same way (1872 TFLOPS at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1)",
+    "memory_bytes_per_second": 1597e9,
+    "memory_sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition datasheet (Apr 2025), Technical Specifications: memory bandwidth 1597 GB/s, 96 GB GDDR7 with ECC",
+        "href": "https://www.pny.com/file%20library/company/support/product%20brochures/nvidia%20data%20center%20gpus/english/rtx-pro-6000-blackwell-server-edition-data-sheet.pdf"
+      }
+    ]
+  },
+  {
     "id": "l40s-48gb/bf16",
     "name": "L40S",
     "device": "NVIDIA L40S 48GB",

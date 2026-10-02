@@ -87,7 +87,7 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
     assert "seed_challenge" in inspect.signature(SR.sampled_replay).parameters
     src_txt = inspect.getsource(SR.sampled_replay)
     assert '**({"challenge": str(seed_challenge)} if seed_challenge is not None else {})' in src_txt
-    cd = open(__file__.rsplit("/tests/", 1)[0] + "/verity_vllm/pipeline/commit.py").read()
+    cd = "".join(open(__file__.rsplit("/tests/", 1)[0] + f"/verity_vllm/pipeline/{m}.py").read() for m in ("commit", "c2_replay"))
     assert "_seed_chal = str(args.replay_challenge)" in cd and "seed_challenge=_seed_chal" in cd
     ok, why = _replay_seed_of_record(_sr(7, "--replay-seed (targeted)"), RUN_ROOT)
     assert ok is False and "prover-chosen" in why and "not a C2 of record" in why

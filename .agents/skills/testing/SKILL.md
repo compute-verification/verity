@@ -35,6 +35,15 @@ the paths it declares, the workspace's metadata (every `pyproject.toml` and `uv.
 the platform, whether `lake`, `cargo` and `nvidia-smi` are on the PATH, and every `VERITY_*` and `FLOCK_*` variable.
 Uncommitted edits count. Only passes are cached, in `~/.cache/verity/tests`.
 
+In a `parallel = true` suite each passing test is also cached on its own, even when the suite failed, under its module's key:
+the suite's key less the sibling test modules it can't reach (by import, or by name in a string). A run after a fix to one test
+module re-runs that module and whatever reaches it, and counts the rest as `reused`. So a test depends on another test module
+only by importing or naming it, never through what that module does at import (a top-level call puts it in every key). `--fresh`
+reuses nothing; the nightly `audit-main` job runs `check.py --no-cache` on `main` and names any cached pass it contradicts.
+`uv run tools/check/suites.py --explain SUITE` says why a suite would run (the input, dependency or variable that moved since the
+nearest pass), and `lean_audit.py --explain PKG` the same for a Lean package. A test that passed and failed under one key is
+reported `nondeterministic`.
+
 ## Where a test goes
 
 - **In the tests/ of the package it tests**, mirroring the package's modules (`packages/verity/tests/ir/` tests `verity.ir`).
@@ -68,6 +77,10 @@ a `sys.path` entry another test file added: every suite runs alone.
   reason how long it takes.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
+- **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is not
+  reachable`. Under a recorded `check` (`VERITY_STORE_REQUIRED=1`) the guard fails that skip instead, so `check` never passes
+  without it. Inside `check` the store is reachable only through the run's custody key (`$CHECK_STORE_CUSTODY`), so fetch
+  through a helper that hands it to the store CLI: integrations/vllm's `store_io`, or C-Flock's `verifier/ci.py` `fetch`.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
   every `--jobs` slot with pytest-xdist (`--dist worksteal`), and runs parallel suites first, one at a time. C-Flock does

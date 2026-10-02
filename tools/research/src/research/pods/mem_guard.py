@@ -11,7 +11,7 @@ and other applications (24 GB machine). Cursor, browsers and other user apps are
 touched. Every action is appended to the log with the full command line so the owning lane
 can be told what happened and why.
 
-Run:  .venv/bin/python zk/campaign/mem_guard.py --per-proc 3.5 --min-free 2.0
+Run:  python -m research.pods.mem_guard --per-proc 3.5 --min-free 2.0
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-LANE_DIRS = ("/private/tmp/ctr-", "/private/tmp/lane-", "/Users/danielreuter/projects/veritor", "/Users/danielreuter/projects/verity")
+LANE_DIRS = ("/private/tmp/ctr-", "/private/tmp/lane-", os.path.expanduser("~/projects/veritor"), os.path.expanduser("~/projects/verity"))
 LANE_CMDS = ("python", "pytest", "cargo", "rustc", "veritor-zk-host", "node")
 PROTECT = ("budget_cap.py", "mem_guard.py", "runpod.py", "caffeinate", "lane_run.py")
 

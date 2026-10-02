@@ -2471,7 +2471,7 @@
     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "query": {
      "name": "Q_word",
-     "version": 2,
+     "version": 3,
      "params": {
       "X": 16,
       "W": 32
@@ -7468,5 +7468,2536 @@
     ]
    }
   }
- ]
+ ],
+ "v2": {
+  "evaluations": [
+   [
+    "narrow",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "0bbba48b76f6893f4dd2f81d8c167ab088d54b0440709bd8652124ee81ec081d770b56b08147f73e7d537cfe94ecf290daaae2aef224e3284b61139efc617ee9",
+      "population": 5,
+      "owners_digest": "ae04f2c010f24761506b2d7dc0f7a3b3ffc463d925183ae511406c74c08c21d9f9dcb95f9c0f178d6121dad838c7f43edc3a7d32ae8ea23096831f4092be4099",
+      "calls": [
+       {
+        "call": 2,
+        "definition": "QNarrow_v1",
+        "graph": {
+         "total": 17,
+         "structure": 6,
+         "n": 11,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          10,
+          11,
+          14,
+          15,
+          16
+         ],
+         "width": [
+          1,
+          1,
+          1,
+          1,
+          32,
+          16,
+          32,
+          16,
+          32,
+          16,
+          1
+         ],
+         "prim": [
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "BitAnd_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "src": [
+          4,
+          6,
+          8,
+          0
+         ],
+         "dst": [
+          5,
+          7,
+          9,
+          10
+         ],
+         "input_ids": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          3,
+          7
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           3
+          ],
+          [
+           7,
+           3
+          ],
+          [
+           0,
+           4
+          ],
+          [
+           1,
+           4
+          ],
+          [
+           2,
+           6
+          ],
+          [
+           3,
+           6
+          ],
+          [
+           4,
+           8
+          ]
+         ],
+         "outputs": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0,
+         1,
+         1,
+         2,
+         2,
+         3,
+         3,
+         4
+        ],
+        "units": 5,
+        "committed": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output",
+         "output",
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         2,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         2,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         0,
+         2,
+         2
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         0,
+         2,
+         3
+        ],
+        []
+       ],
+       [
+        4,
+        [
+         0,
+         2,
+         4
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     },
+     {
+      "X": 32,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 32,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "8d1ec85910995091ae3d4db54fbf71b6ff67f9b5a36b6de5579bd909d543199f73aa5f2fba3c6dc1a463eb27ef2064094efa06277d401c725c5f9f424980f893",
+      "population": 3,
+      "owners_digest": "8f0f3ba8eb1026396fc09fe6cff4944bede2cb1142036005951b28faa02025a7c0b767d59720c5a2bdf3b971e1114ec410a82b1b6ed0159b1fdcd57d6f2e56da",
+      "calls": [
+       {
+        "call": 2,
+        "definition": "QNarrow_v1",
+        "graph": {
+         "total": 17,
+         "structure": 6,
+         "n": 11,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          10,
+          11,
+          14,
+          15,
+          16
+         ],
+         "width": [
+          1,
+          1,
+          1,
+          1,
+          32,
+          16,
+          32,
+          16,
+          32,
+          16,
+          1
+         ],
+         "prim": [
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "BitAnd_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "src": [
+          4,
+          6,
+          8,
+          0
+         ],
+         "dst": [
+          5,
+          7,
+          9,
+          10
+         ],
+         "input_ids": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          3,
+          7
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           3
+          ],
+          [
+           7,
+           3
+          ],
+          [
+           0,
+           4
+          ],
+          [
+           1,
+           4
+          ],
+          [
+           2,
+           6
+          ],
+          [
+           3,
+           6
+          ],
+          [
+           4,
+           8
+          ]
+         ],
+         "outputs": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         1,
+         1,
+         1,
+         1,
+         2
+        ],
+        "units": 3,
+        "committed": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         2,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         2,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         0,
+         2,
+         2
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     },
+     {
+      "X": 64,
+      "W": 64,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 64,
+         "W": 64
+        }
+       }
+      },
+      "object_digest": "c66333d0fdfb5393f069c1287c4cec33712a345d2dbd7662d4f1f63c42791413c3f753c1cf11c44820eb8c974679cb28c2b34968f26a17e2face3bfbf5f82494",
+      "population": 1,
+      "owners_digest": "e618d6b35024130fe2251fa1a4ba515ebacdd9f22e48c52cdd45174437797f0d00d8d6afcd68bdb406405251df2dc0ab43bc78892a8f1253585d7054c2d875a4",
+      "calls": [
+       {
+        "call": 2,
+        "definition": "QNarrow_v1",
+        "graph": {
+         "total": 17,
+         "structure": 6,
+         "n": 11,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          10,
+          11,
+          14,
+          15,
+          16
+         ],
+         "width": [
+          1,
+          1,
+          1,
+          1,
+          32,
+          16,
+          32,
+          16,
+          32,
+          16,
+          1
+         ],
+         "prim": [
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "BitAnd_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "src": [
+          4,
+          6,
+          8,
+          0
+         ],
+         "dst": [
+          5,
+          7,
+          9,
+          10
+         ],
+         "input_ids": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          3,
+          7
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           3
+          ],
+          [
+           7,
+           3
+          ],
+          [
+           0,
+           4
+          ],
+          [
+           1,
+           4
+          ],
+          [
+           2,
+           6
+          ],
+          [
+           3,
+           6
+          ],
+          [
+           4,
+           8
+          ]
+         ],
+         "outputs": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0
+        ],
+        "units": 1,
+        "committed": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "kinds": [
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         2,
+         0
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "wiring-and-dead",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "2e11019881584107bdd267a01032bf2d5af8c668d2c7d47c90d876797777752ff2f32e38b953d065b57dfd38b1cc0db54e0e818cb85b992f3918679ce2cf509f",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "220b423c79605d310a878f6c8a6597867441e4b052587088fffd3538a7368b720f8ddcca3fa66d39d72a893a2399c32e3d2d069c38dd98a0cf8a7a835da82693",
+      "population": 7,
+      "owners_digest": "f2034b3e78fba4becb0f866e6995db598e395572929240699627a3dbfe56024b99fe31418251a172fa659873cbca48990a05e4729972f519711e430c470887aa",
+      "calls": [
+       {
+        "call": 3,
+        "definition": "QWiring_v1",
+        "graph": {
+         "total": 8,
+         "structure": 6,
+         "n": 2,
+         "keep": [
+          5,
+          6
+         ],
+         "width": [
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          0,
+          1
+         ],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0,
+          3,
+          1,
+          2
+         ],
+         "input_reads": [
+          [
+           3,
+           0
+          ],
+          [
+           0,
+           1
+          ],
+          [
+           2,
+           1
+          ]
+         ],
+         "outputs": [
+          0,
+          1
+         ],
+         "returned_inputs": [
+          0,
+          1,
+          2
+         ],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         1
+        ],
+        "units": 2,
+        "committed": [
+         0,
+         1
+        ],
+        "kinds": [
+         "output",
+         "output"
+        ]
+       },
+       {
+        "call": 4,
+        "definition": "QDead_v1",
+        "graph": {
+         "total": 5,
+         "structure": 0,
+         "n": 5,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          4
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          0,
+          1,
+          1
+         ],
+         "src": [
+          0,
+          1,
+          0,
+          1
+         ],
+         "dst": [
+          2,
+          2,
+          3,
+          4
+         ],
+         "input_ids": [
+          0,
+          1,
+          2,
+          3
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           0,
+           3
+          ],
+          [
+           2,
+           4
+          ]
+         ],
+         "outputs": [
+          3,
+          4
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         2,
+         3,
+         4,
+         0,
+         1
+        ],
+        "units": 5,
+        "committed": [
+         0,
+         1,
+         3,
+         4
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "committed",
+         "committed",
+         "dead"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         3,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         3,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         1,
+         4,
+         0
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         1,
+         4,
+         1
+        ],
+        []
+       ],
+       [
+        4,
+        [
+         1,
+         4,
+         2
+        ],
+        []
+       ],
+       [
+        5,
+        [
+         1,
+         4,
+         3
+        ],
+        []
+       ],
+       [
+        6,
+        [
+         1,
+         4,
+         4
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "wide",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "4b5d81f2616731da0a0c85ea3d4207eb3d88c832215b4b93be42bdd76527e9874afef81ceb4811e7c77947a6b7618dbf6ac71aa1c962e66d0c193a41e996c70a",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "146990d1a19a497336f3fbf7caec6514d0bc18d3f55cade5651b674344f53fe96da3fae3dd3597f6b860eef21da101612f794997ac3e729164e7f0eddf65411f",
+      "population": 2,
+      "owners_digest": "5493debf844e45338aae076b6b7f36f98cc13749a5edea9a7bda213b9f5bba500b6d18963575d07d29a8a73344b83e3776eb789b417c292cd65fec197e5c4484",
+      "calls": [
+       {
+        "call": 4,
+        "definition": "QTWideTwice_v1",
+        "graph": {
+         "total": 4,
+         "structure": 0,
+         "n": 4,
+         "keep": [
+          0,
+          1,
+          2,
+          3
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          0,
+          1,
+          2
+         ],
+         "dst": [
+          1,
+          2,
+          3,
+          3
+         ],
+         "input_ids": [
+          4096
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ]
+         ],
+         "outputs": [
+          3
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0
+        ],
+        "units": 1,
+        "committed": [
+         3
+        ],
+        "kinds": [
+         "output"
+        ]
+       },
+       {
+        "call": 5,
+        "definition": "QTNarrowTwice_v1",
+        "graph": {
+         "total": 4,
+         "structure": 0,
+         "n": 4,
+         "keep": [
+          0,
+          1,
+          2,
+          3
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "TNarrow_v1",
+          "TNarrow_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          0,
+          1,
+          2
+         ],
+         "dst": [
+          1,
+          2,
+          3,
+          3
+         ],
+         "input_ids": [
+          4,
+          0,
+          1,
+          2,
+          3
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           1
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           1
+          ],
+          [
+           1,
+           2
+          ],
+          [
+           2,
+           2
+          ],
+          [
+           3,
+           2
+          ],
+          [
+           4,
+           2
+          ]
+         ],
+         "outputs": [
+          3
+         ],
+         "returned_inputs": [],
+         "recomputed": [
+          [
+           2,
+           1
+          ]
+         ]
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0
+        ],
+        "units": 1,
+        "committed": [
+         3
+        ],
+        "kinds": [
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         4,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         1,
+         5,
+         0
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "separable",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "99ca1635ea6de4c2e6da602583d520f19e229afbe8fd3b8faf9d91ece4a53ceda038c3f4d3ae34e16af9a4b78e5dd25ee9100e459708ee0bd23c1da3097919d4",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "4e929731108c60cb6348e599af8f4967c76304559aa1c09e48d7c90b94244f082a865ee679b57c0acaec1c1b7fd3bdc77e68d2f401d65a4dc6345208d32f3a17",
+      "population": 8,
+      "owners_digest": "36365c1c793fed52015fe8f2db3fa13f292f166037c692b027261aa164fd43a9bc6e3da74597e16bf7c8f89bc1d7aa0dc946fc73c64d84bdd5b2a7029fea0daa",
+      "calls": [
+       {
+        "call": 5,
+        "definition": "QSepMixed_v1",
+        "graph": {
+         "total": 8,
+         "structure": 4,
+         "n": 4,
+         "keep": [
+          2,
+          4,
+          5,
+          7
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1"
+         ],
+         "external": [
+          1,
+          0,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          2
+         ],
+         "dst": [
+          1,
+          3
+         ],
+         "input_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+         ],
+         "input_reads": [
+          [
+           2,
+           0
+          ],
+          [
+           3,
+           0
+          ],
+          [
+           4,
+           1
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           2
+          ],
+          [
+           7,
+           3
+          ]
+         ],
+         "outputs": [
+          1,
+          3
+         ],
+         "returned_inputs": [
+          0,
+          1
+         ],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         1,
+         1
+        ],
+        "units": 2,
+        "committed": [
+         1,
+         3
+        ]
+       },
+       {
+        "call": 6,
+        "definition": "QSepScan_v1",
+        "graph": {
+         "total": 3,
+         "structure": 0,
+         "n": 3,
+         "keep": [
+          0,
+          1,
+          2
+         ],
+         "width": [
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1
+         ],
+         "src": [
+          0,
+          1
+         ],
+         "dst": [
+          1,
+          2
+         ],
+         "input_ids": [
+          3,
+          0,
+          1,
+          2
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           2
+          ]
+         ],
+         "outputs": [
+          2,
+          0,
+          1,
+          2
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         1,
+         2,
+         0
+        ],
+        "units": 3,
+        "committed": [
+         0,
+         1,
+         2
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output"
+        ]
+       },
+       {
+        "call": 7,
+        "definition": "QSepPartial_v1",
+        "graph": {
+         "total": 6,
+         "structure": 2,
+         "n": 4,
+         "keep": [
+          0,
+          2,
+          3,
+          5
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1"
+         ],
+         "external": [
+          1,
+          0,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          2
+         ],
+         "dst": [
+          1,
+          3
+         ],
+         "input_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           2
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           3
+          ]
+         ],
+         "outputs": [
+          1
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         1,
+         2
+        ],
+        "units": 3,
+        "committed": [
+         1,
+         2
+        ],
+        "kinds": [
+         "output",
+         "committed",
+         "dead"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         5,
+         0
+        ],
+        [
+         [
+          1,
+          0,
+          0
+         ]
+        ]
+       ],
+       [
+        1,
+        [
+         0,
+         5,
+         1
+        ],
+        [
+         [
+          1,
+          1,
+          0
+         ]
+        ]
+       ],
+       [
+        2,
+        [
+         1,
+         6,
+         0
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         1,
+         6,
+         1
+        ],
+        []
+       ],
+       [
+        4,
+        [
+         1,
+         6,
+         2
+        ],
+        []
+       ],
+       [
+        5,
+        [
+         2,
+         7,
+         0
+        ],
+        []
+       ],
+       [
+        6,
+        [
+         2,
+         7,
+         1
+        ],
+        []
+       ],
+       [
+        7,
+        [
+         2,
+         7,
+         2
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "primitive-calls",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "6f420e127fe2478ca02ca4fda4588eef43487a4ded11bd41f340933b876e6ee363d517602a5aa6857dcd627b65adf4e1d5241d3e6cb642d04c078733de7446b5",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "c00ca453ffe89a88488502759fdd0b340f4b2d9850a421ae51c54527f56b07be3eb74f23e057229ede891dcdc76025027a5413c48b796ac24883682d342b7353",
+      "population": 1,
+      "owners_digest": "2a86604d5b62068d4d4b43dfbe6d8f715c27b673efc198283ba082df1f3aa34f317bb8636edd0b2bdd8b9fca5793212e911e19fe053f636049b82cf4424a50cc",
+      "calls": [
+       {
+        "call": 1,
+        "definition": "I32Add_v1",
+        "graph": {
+         "total": 1,
+         "structure": 0,
+         "n": 1,
+         "keep": [
+          0
+         ],
+         "width": [
+          32
+         ],
+         "prim": [
+          "I32Add_v1"
+         ],
+         "external": [
+          1
+         ],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0,
+          1
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ]
+         ],
+         "outputs": [
+          0
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0
+        ],
+        "units": 1,
+        "committed": [
+         0
+        ],
+        "kinds": [
+         "output"
+        ]
+       },
+       {
+        "call": 2,
+        "definition": "F32Fabs_v1",
+        "graph": {
+         "total": 1,
+         "structure": 1,
+         "n": 0,
+         "keep": [],
+         "width": [],
+         "prim": [],
+         "external": [],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0
+         ],
+         "input_reads": [],
+         "outputs": [],
+         "returned_inputs": [
+          0
+         ],
+         "recomputed": []
+        },
+        "owner": [],
+        "units": 0,
+        "committed": [],
+        "kinds": []
+       },
+       {
+        "call": 3,
+        "definition": "Const32[0x00000007]_v1",
+        "graph": {
+         "total": 1,
+         "structure": 1,
+         "n": 0,
+         "keep": [],
+         "width": [],
+         "prim": [],
+         "external": [],
+         "src": [],
+         "dst": [],
+         "input_ids": [],
+         "input_reads": [],
+         "outputs": [],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [],
+        "units": 0,
+        "committed": [],
+        "kinds": []
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         1,
+         0
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "wide-batched",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "0f6e73749585b4c407b22c8adfc7de2b8b63342c226e3e13e986692b9952d93fc0e44e23db4b219e17caaf5cbb077033e551ab524355d23ce73eac4150a4e837",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "2003b3455f3b44d0030dd1d1d77ee55fc1e4f60d8063407dfa3137152e9578dbfc9f3387d2adcba3c484684e9339064807b3d04fcfe69006e33f00bfcc20eae5",
+      "population": 4,
+      "owners_digest": "614a77d17bf44e4783a2b81ee0a339eeff5e260f8373d7475d9561b61c8df657802eebe04ad05200bd6c1d56955b0958ef28c02d68bb59da39ab161d630ab628",
+      "calls": [
+       {
+        "call": 3,
+        "definition": "QWideRows_v1",
+        "graph": {
+         "total": 6,
+         "structure": 0,
+         "n": 6,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          4
+         ],
+         "dst": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          5
+         ],
+         "input_ids": [
+          16384
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ]
+         ],
+         "outputs": [
+          5,
+          2,
+          3
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         3,
+         0,
+         1,
+         2,
+         0,
+         0
+        ],
+        "units": 4,
+        "committed": [
+         0,
+         2,
+         3,
+         5
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output",
+         "committed"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         3,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         3,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         0,
+         3,
+         2
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         0,
+         3,
+         3
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "recompute",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "dd1ffc28c0b130a7ca556eb7c07bc895c1e08e5bcd702989cd761d3d154a207485a394fdd57320fe9f6daf7e7ed4de95428d194f20992a779cdf669db9aba42e",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "cd9b3f74765c491423dccea32be9bb3edf99a7d97ff1f2df6919fb7695c8e4f8e3a8feacc19483b260223b53de85e9ff477e8d44a5ec7aef27902d07a6d1099e",
+      "population": 2,
+      "owners_digest": "33c40fdf8e27737ae5830cb85a9383fbf55d14c91e456e0d21a1b6839c515b3cf3059b6f9cd13d8034a809dc3b678d960ce8c69306a7d19258f26c32183d1da3",
+      "calls": [
+       {
+        "call": 1,
+        "definition": "QTwiceSep_v1",
+        "graph": {
+         "total": 2,
+         "structure": 0,
+         "n": 2,
+         "keep": [
+          0,
+          1
+         ],
+         "width": [
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1
+         ],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0,
+          1
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           0,
+           1
+          ],
+          [
+           1,
+           1
+          ]
+         ],
+         "outputs": [
+          0,
+          1
+         ],
+         "returned_inputs": [],
+         "recomputed": [
+          [
+           1,
+           0
+          ]
+         ]
+        },
+        "owner": [
+         0,
+         1
+        ],
+        "units": 2,
+        "committed": [
+         0,
+         1
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         1,
+         0
+        ],
+        [
+         [
+          0,
+          0,
+          0
+         ]
+        ]
+       ],
+       [
+        1,
+        [
+         0,
+         1,
+         1
+        ],
+        [
+         [
+          1,
+          0,
+          0
+         ]
+        ]
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 1,
+        "gates": [
+         {
+          "call": 1,
+          "n": 1,
+          "gates": [
+           [
+            1,
+            0
+           ]
+          ]
+         }
+        ]
+       }
+      }
+     }
+    ]
+   ]
+  ],
+  "verify_refusals": [
+   [
+    "a value two units compute",
+    "recompute",
+    16,
+    32,
+    {
+     "ok": true,
+     "codes": [],
+     "cut": [],
+     "recomputed_across": {
+      "n": 1,
+      "gates": [
+       {
+        "call": 1,
+        "n": 1,
+        "gates": [
+         [
+          1,
+          0
+         ]
+        ]
+       }
+      ]
+     }
+    }
+   ],
+   [
+    "a 64-bit output at W = 32",
+    "too-wide",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       1,
+       [
+        "unit-too-wide"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "32-bit outputs at W = 16",
+    "wiring-and-dead",
+    16,
+    16,
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       3,
+       [
+        "unit-too-wide"
+       ]
+      ],
+      [
+       4,
+       [
+        "unit-too-wide"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a root batch",
+    "root-batch",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "query-inapplicable"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a root scan",
+    "root-scan",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "query-inapplicable"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "another program",
+    "narrow",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "program"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ]
+  ],
+  "served": [
+   [
+    "the derived sets",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "ok": true,
+     "codes": [],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "nothing",
+    {},
+    {
+     "ok": false,
+     "codes": [
+      "served-missing"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a gate that is not an integer",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      "0",
+      "1",
+      "3",
+      "4"
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-malformed"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a gate listed twice",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3,
+      4,
+      0
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-malformed"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "one Call left out",
+    {
+     "3": [
+      0,
+      1
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-missing"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a key that is no Call",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3,
+      4
+     ],
+     "999": [
+      0
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-unknown"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a committed value left out",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       4,
+       [
+        "read-uncommitted"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "an output left out",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       4,
+       [
+        "output-uncommitted"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a dead gate served",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       4,
+       [
+        "committed-unread"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ]
+  ],
+  "object_refusals": [
+   [
+    "v2 without W",
+    {
+     "format": "verity/partition/v1",
+     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "query": {
+      "name": "Q_word",
+      "version": 2,
+      "params": {
+       "X": 16
+      }
+     }
+    },
+    [
+     "query-params"
+    ]
+   ],
+   [
+    "v2 with X = 0",
+    {
+     "format": "verity/partition/v1",
+     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "query": {
+      "name": "Q_word",
+      "version": 2,
+      "params": {
+       "X": 0,
+       "W": 32
+      }
+     }
+    },
+    [
+     "query-params"
+    ]
+   ],
+   [
+    "v2 with an EXTRAS",
+    {
+     "format": "verity/partition/v1",
+     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "query": {
+      "name": "Q_word",
+      "version": 2,
+      "params": {
+       "X": 16,
+       "W": 32,
+       "EXTRAS": 0
+      }
+     }
+    },
+    [
+     "query-params"
+    ]
+   ]
+  ]
+ }
 }

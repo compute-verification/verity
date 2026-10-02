@@ -100,3 +100,48 @@ def test_split_count_of_one_step_is_the_agreed_kernel_s_or_nothing():
     # a non-power-of-two S is not a split geometry the Program can take
     S, why = NC.split_count_of_launches([("_topp_sb_mask_kernel", 3, 3), ("_topp_sb_stats_kernel", 3, 3)], 1)
     assert S is None and "power of two" in why
+
+
+
+def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
+    """TinyLlama Gumbel (top_p 1) B8 on sm_120 (g211, r20260930-192928-96f5): the derived-S Program requires `runner.sampler/splits` per
+    request per step, but vLLM runs no split kernel when every row has top_p 1 (`get_top_k_top_p` -> top_p None), so 118/118 were unbound.
+    The prescribed S = SplitsFor_v1(rows, num_SMs) is bound instead -- only for a derived-S Program and only when EVERY row has top_p 1."""
+    np = pytest.importorskip("numpy")
+    from verity_vllm.commit.committer import topp_splits as TS
+    from verity_vllm.program.registry.topp_split import splits_for_v1
+    ones, sm = (lambda: np.ones(8, dtype=np.float32)), (lambda: 188)
+    assert TS.step_splits([], 8, splits_for_v1, ones, sm) == (16, None, "splits_prescribed_steps")
+    assert TS.step_splits([], 1, splits_for_v1, lambda: [1.0], sm) == (32, None, "splits_prescribed_steps")
+    # not a derived-S Program (B1 constant S, greedy): nothing bound, nothing said -- the pre-fix behaviour
+    assert TS.step_splits([], 8, None, ones, sm) == (None, None, "")
+    # a launch wins over the prescription: the kernel's S is the value of record
+    assert TS.step_splits(_step(8, 8), 8, splits_for_v1, ones, sm) == (8, None, "splits_bound_steps")
+    S, why, _ = TS.step_splits([], 8, splits_for_v1, lambda: np.array([1.0] * 7 + [0.95], dtype=np.float32), sm)
+    assert S is None and "top_p < 1" in why
+    S, why, _ = TS.step_splits([], 8, splits_for_v1, lambda: None, sm)
+    assert S is None and "no per-row top_p" in why
+    S, why, _ = TS.step_splits([], 8, splits_for_v1, lambda: [1.0] * 7, sm)
+    assert S is None and "rows" in why
+
+
+def test_the_served_batch_top_p_is_read_from_the_sampling_states():
+    np = pytest.importorskip("numpy")
+    from types import SimpleNamespace as NS
+    from verity_vllm.commit.committer import topp_splits as TS
+    runner = NS(sampler=NS(sampling_states=NS(top_p=NS(np=np.array([0.5, 1.0, 1.0, 0.9], dtype=np.float32)))))
+    ib = NS(idx_mapping_np=np.array([2, 1]))
+    assert list(TS.batch_top_p(runner, ("logits", ib), {})) == [1.0, 1.0]
+    assert list(TS.batch_top_p(runner, (), {"input_batch": ib})) == [1.0, 1.0]
+    assert TS.batch_top_p(NS(), ("logits", ib), {}) is None
+
+
+def test_the_select_ignores_s_at_top_p_one():
+    """What makes the prescribed S exact: at p >= 1 the S-split top-p mask returns early and keeps every lane, for every S -- the served
+    no-top-p logits row."""
+    np = pytest.importorskip("numpy")
+    from verity_vllm.program.registry.topp_split import topp_split_row
+    x = np.random.default_rng(0).standard_normal(32000).astype(np.float32) * 4
+    for S in (1, 2, 4, 8, 16, 32):
+        out, _stats, _parts, trace = topp_split_row(x, 1.0, S)
+        assert trace["keep"].all() and np.array_equal(out, x)

@@ -1,8 +1,9 @@
 """`verity-vllm manifest` -- the required-value manifest under the query of record (`Q_word_v1`), beside v1's `required_manifest`.
 
-    build         --program <derive dir> [--workload wl.json] [--request-id r0] --out manifest.json
-    build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD] --out manifest.json
+    build         --program <derive dir> [--workload wl.json] [--request-id r0] [--jobs N] --out manifest.json
+    build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD | -] [--jobs N] --out manifest.json
                   TP row: --programs-root <rank r dir> --rank r [--workload-digest WD_r], once per rank, --ranks W
+                  `-`: WD is read from stdin once the components are built, so they build while the workload Program composes
     compare       --v1 manifest.json --v2 manifest.json [--out report.json]
 
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
@@ -27,8 +28,9 @@ import json
 import os
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from verity_vllm.config import option
 from verity_vllm.query.compare import compare, summarize
@@ -44,7 +46,11 @@ from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query import word as word_query
 
-__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "build", "build_global", "build_global_ranks", "cross_call_check", "main"]
+__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
+           "build_global_ranks", "cross_call_check", "main"]
+
+#: `--jobs`'s variable
+JOBS_ENV = "VERITY_MANIFEST_JOBS"
 
 #: the tap policies whose identities are Call-interior values, by name (`request_manifest(taps=...)`)
 TAPS = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
@@ -117,7 +123,9 @@ def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
           profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False, guarded_max: bool = False,
           taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD, word_max_gates: str | None = None,
-          log=None) -> dict[str, Any]:
+          jobs: int = 1, log=None) -> dict[str, Any]:
+    """The manifest of one request Program; `jobs` > 1 cuts the word check's Definitions in that many processes first."""
+    prefetch_word_rules([program_dir], word, word_max_gates=word_max_gates, jobs=jobs, log=log)
     t0 = time.time()
     P = from_instances(os.path.join(program_dir, "instances.json.gz"))
     res = _load_json(os.path.join(program_dir, "result.json"))
@@ -145,6 +153,192 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     return r.manifest
 
 
+def cpus() -> int:
+    """The CPUs this process may use: its affinity and its cgroup's quota (a pod's `os.cpu_count()` is the host's)."""
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    try:
+        with open("/sys/fs/cgroup/cpu.max") as f:
+            quota, period = f.read().split()[:2]
+        if quota != "max":
+            n = min(n, max(1, int(quota) // int(period)))
+    except (OSError, ValueError):
+        pass
+    return n
+
+
+def _headroom() -> int | None:
+    """The bytes this process's memory limit leaves (the cgroup's limit less its usage, v2 then v1), else MemAvailable; None when
+    neither is readable."""
+    for lim_f, cur_f in (("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
+                         ("/sys/fs/cgroup/memory/memory.limit_in_bytes", "/sys/fs/cgroup/memory/memory.usage_in_bytes")):
+        try:
+            with open(lim_f) as a, open(cur_f) as b:
+                lim, cur = a.read().strip(), int(b.read().strip())
+        except (OSError, ValueError):
+            continue
+        if lim.isdigit() and int(lim) < (1 << 60):
+            return max(0, int(lim) - cur)
+    try:
+        with open("/proc/meminfo") as f:
+            return next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemAvailable")
+    except (OSError, StopIteration, ValueError, IndexError):
+        return None
+
+
+#: a component build's peak memory, from its Call count (`spec_histogram`): the TP2 MoE rows' builds peak at 2.6 KB per Call (2.0 GB
+#: at 659K Calls) to 3.0 KB (9.0 GB at 2.99M), over a 0.3 GB interpreter; with headroom
+PEAK_PER_CALL = 4 << 10
+PEAK_BASE = 512 << 20
+#: the share of the headroom the component builds may take together
+HEADROOM_SHARE = 0.8
+
+
+def _peak(program_dir: str) -> int | None:
+    from verity_vllm.pipeline.global_program import component_spec_histogram
+    h = component_spec_histogram(program_dir)
+    return PEAK_BASE + PEAK_PER_CALL * sum(int(v) for v in h.values()) if h else None
+
+
+def prefetch_word_rules(program_dirs: list[str], word: str | None, *, word_max_gates: str | None = None, jobs: int = 1, log=None) -> None:
+    """The word check's unit rules for every Definition the Builds under `program_dirs` call (`spec_histogram`), `jobs` processes at a
+    time, before their manifests are built (`word.prefetch`); nothing for a Build without the histogram, which checks as it did."""
+    if not word or word == "off" or jobs <= 1:
+        return
+    from verity_vllm.pipeline.global_program import component_spec_histogram
+    X, W, extras = word_query.parse(word)
+    t0 = time.time()
+    specs = [s for d in program_dirs for s in (component_spec_histogram(d) or {})]
+    n = word_query.prefetch(specs, X, W, extras, max_gates=word_max_gates, jobs=jobs)
+    if log:
+        log(f"  word check: {n} unit rules of {len(set(specs))} Definitions cut by {jobs} processes in {time.time() - t0:.1f}s")
+
+
+def _send(conn: Any, program_dir: str, kw: dict[str, Any]) -> None:
+    try:
+        out: tuple[str, Any] = ("ok", build(program_dir, **kw))
+    except BaseException as e:  # noqa: BLE001  -- re-raised by the parent, in declaration order
+        out = ("error", e)
+    try:
+        conn.send(out)
+    except Exception as e:  # noqa: BLE001  -- an exception that does not pickle
+        conn.send(("error", RuntimeError(f"{os.path.basename(program_dir)}: {type(out[1]).__name__}: {out[1]}")) if out[0] == "error"
+                  else ("error", RuntimeError(f"{os.path.basename(program_dir)}: the manifest did not pickle: {e}")))
+    conn.close()
+
+
+def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, after: Callable[[int, dict[str, Any]], None] | None = None,
+                     budget_gb: float | None = None, log=None) -> list[dict[str, Any]]:
+    """`build(program_dir, **kw)` of every `(program_dir, kw)`, each followed by `after(i, manifest)`, in order.  With `jobs` > 1 (and
+    `fork`, and a readable memory headroom) each build runs in a process of its own, largest first, while their estimated peaks
+    (`_peak`) fit `HEADROOM_SHARE` of the headroom; a Build without a histogram runs alone.  A build is a function of its Build dir, so
+    the manifests are those one process builds, and the first build or `after` to fail in `tasks` order raises, as one after another."""
+    import multiprocessing
+    after = after or (lambda _i, _m: None)
+    if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
+        return _build_in_turn(tasks, after)
+    own = _own_budget(budget_gb)
+    if own is not None:
+        return _build_forked(tasks, jobs, after, own, log)
+    t0 = time.time()
+    with _pool_lock():
+        if log and time.time() - t0 >= 1:
+            log(f"  components: waited {time.time() - t0:.1f}s for the machine's component pool lock")
+        head = _headroom()
+        if head is None:
+            return _build_in_turn(tasks, after)
+        return _build_forked(tasks, jobs, after, head, log)
+
+
+CGROUP_MEMORY_MAX = "/sys/fs/cgroup/memory.max"
+MEMINFO = "/proc/meminfo"
+
+
+def _own_budget(budget_gb: float | None = None) -> int | None:
+    """The memory this process's builds may budget without the machine's pool lock: `budget_gb` (capped by the headroom), else the
+    headroom of a cgroup whose `memory.max` is below the host's RAM; None when the headroom is the host's, shared."""
+    head = _headroom()
+    if budget_gb:
+        b = int(budget_gb * 2**30)
+        return b if head is None else min(b, head)
+    try:
+        with open(CGROUP_MEMORY_MAX) as f:
+            lim = f.read().strip()
+        with open(MEMINFO) as f:
+            total = next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemTotal")
+    except (OSError, StopIteration, ValueError, IndexError):
+        return None
+    return head if lim.isdigit() and int(lim) < total else None
+
+
+def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
+    out = []
+    for i, (d, kw) in enumerate(tasks):
+        out.append(build(d, **kw))
+        after(i, out[-1])
+    return out
+
+
+@contextmanager
+def _pool_lock():
+    """One process pool of component builds per machine at a time (two budgeting one headroom would take it twice: the vLLM suite's
+    xdist workers run both stored TP2 rows at once)."""
+    import fcntl
+    import tempfile
+    with open(os.path.join(tempfile.gettempdir(), "verity-manifest-build-components.lock"), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Callable[[int, dict[str, Any]], None], head: int,
+                  log) -> list[dict[str, Any]]:
+    import multiprocessing
+    from multiprocessing.connection import wait
+    ctx = multiprocessing.get_context("fork")
+    budget = int(head * HEADROOM_SHARE)
+    need = [e if (e := _peak(d)) is not None else budget + 1 for d, _kw in tasks]
+    pending = sorted(range(len(tasks)), key=lambda i: (-need[i], i))
+    results: dict[int, tuple[str, Any]] = {}
+    running: dict[Any, tuple[int, Any]] = {}
+    used, first_bad = 0, len(tasks)
+    if log:
+        log(f"  components: {len(tasks)} builds, {jobs} processes, memory budget {budget / 2**30:.1f} GiB")
+    while pending or running:
+        while pending and len(running) < jobs:
+            i = next((i for i in pending if used + need[i] <= budget), None if running else pending[0])
+            if i is None:
+                break
+            pending.remove(i)
+            recv, send = ctx.Pipe(duplex=False)
+            p = ctx.Process(target=_send, args=(send, *tasks[i]), daemon=True)
+            p.start()
+            send.close()
+            running[recv] = (i, p)
+            used += need[i]
+        for conn in wait(list(running)):
+            i, p = running.pop(conn)
+            try:
+                results[i] = conn.recv()
+            except EOFError:
+                results[i] = ("error", RuntimeError(f"{os.path.basename(tasks[i][0])}: the build process died"))
+            conn.close()
+            p.join()
+            if p.exitcode not in (0, None) and results[i][0] == "ok":
+                results[i] = ("error", RuntimeError(f"{os.path.basename(tasks[i][0])}: the build process exited {p.exitcode}"))
+            used -= need[i]
+            if results[i][0] == "error" and i < first_bad:
+                first_bad = i
+                pending = [j for j in pending if j < i]
+    for i in range(len(tasks)):
+        kind, value = results[i]
+        if kind == "error":
+            raise value
+        after(i, value)
+    return [results[i][1] for i in range(len(tasks))]
+
+
 def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     """v1's lookup (`required_manifest._program_dirs_for`): `*LP<prompt_len>_T<max_tokens-1>` under the root, else a `build_request*`
     whose result.json declares exactly (LP, T)."""
@@ -169,49 +363,80 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     return progs
 
 
-def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
-                 profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                 guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
-                 word_max_gates: str | None = None,
-                 log=None) -> dict[str, Any]:
+def _declared(fixture: dict[str, Any]) -> list[dict[str, Any]]:
+    """The declared requests in (arrive_step, index) order, each labelled `r<index>`."""
     declared = [dict(r, index=int(r.get("index", i))) for i, r in enumerate(fixture["requests"])]
     if len({r["index"] for r in declared}) != len(declared):
         raise ValueError("workload declaration: duplicate request index")
-    reqs = []
-    for r in sorted(declared, key=lambda r: (int(r.get("arrive_step", 0)), r["index"])):
-        reqs.append(dict(r, workload_request_id=r.get("request_id"), request_id=f"r{r['index']}"))
-    dirs = _program_dirs_for(fixture, programs_root)
+    return [dict(r, workload_request_id=r.get("request_id"), request_id=f"r{r['index']}")
+            for r in sorted(declared, key=lambda r: (int(r.get("arrive_step", 0)), r["index"]))]
+
+
+def stdin_digest() -> str:
+    """`--workload-digest -`: the next line of stdin.  An empty line or none (the workload Program was not composed) fails the manifest."""
+    wd = sys.stdin.readline().strip()
+    if not wd:
+        raise SystemExit("build-global --workload-digest -: no workload digest on stdin (the workload Program was not composed)")
+    return wd
+
+
+def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, wds: list[str | None], *, guarded_max: bool, jobs: int,
+            log, budget_gb: float | None = None, **kw: Any) -> list[dict[str, Any]]:
+    """The global manifest of each rank's Program set (`roots[i]` is rank `ranks[i]`'s): every component built by `build_components`,
+    checked and composed in declaration order."""
+    reqs = _declared(fixture)
+    wl = [{"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}} for r in reqs]
+    tasks = []
+    for root, rank in zip(roots, ranks):
+        dirs = _program_dirs_for(fixture, root)
+        tasks += [(dirs[str(r["workload_request_id"])], dict(kw, workload=w, request_id=r["request_id"], rank=rank, ranks=world,
+                                                             guarded_max=guarded_max, log=log)) for r, w in zip(reqs, wl)]
+    prefetch_word_rules([d for d, _kw in tasks], kw.get("word"), word_max_gates=kw.get("word_max_gates"), jobs=jobs, log=log)
     parts: dict[str, dict[str, Any]] = {}
-    for r in reqs:
-        rid = r["request_id"]
-        d = dirs[str(r["workload_request_id"])]
-        wl = {"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}}
-        parts[rid] = build(d, workload=wl, request_id=rid, rank=rank, ranks=ranks, profile=profile, return_slots=return_slots, word=word,
-                           norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query,
-                           word_max_gates=word_max_gates, log=log)
-        if len(parts[rid]["steps"]) != int(r["max_tokens"]):
-            raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
-    man = compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
-    if guarded_max:
-        man = GM.with_ms(dict(man, query=GM.merged(man["query"], [p["query"] for p in parts.values()])))
-    return man
+    out: list[dict[str, Any]] = []
+
+    def after(i: int, man: dict[str, Any]) -> None:
+        k, r = divmod(i, len(reqs))
+        rid = reqs[r]["request_id"]
+        if len(man["steps"]) != int(reqs[r]["max_tokens"]):
+            raise ValueError(f"request {rid}: Program has {len(man['steps'])} steps, the declaration caps {reqs[r]['max_tokens']} tokens: wrong component")
+        parts[rid] = man
+        if r == len(reqs) - 1:
+            g = compose_global(fixture, parts, reqs, workload_digest=stdin_digest() if wds[k] == "-" else wds[k], rank=ranks[k], ranks=world)
+            if guarded_max:
+                g = GM.with_ms(dict(g, query=GM.merged(g["query"], [p["query"] for p in parts.values()])))
+            out.append(g)
+            parts.clear()
+
+    build_components(tasks, jobs=jobs, after=after, budget_gb=budget_gb, log=log)
+    return out
+
+
+def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
+                 profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
+                 guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
+                 word_max_gates: str | None = None, jobs: int = 1,
+                 log=None) -> dict[str, Any]:
+    return _global(fixture, [programs_root], [rank], ranks, [workload_digest], profile=profile, return_slots=return_slots, word=word,
+                   norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query,
+                   word_max_gates=word_max_gates, jobs=jobs, log=log)[0]
 
 
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
                        profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
                        guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
-                       word_max_gates: str | None = None,
+                       word_max_gates: str | None = None, jobs: int = 1, budget_gb: float | None = None,
                        log=None) -> dict[str, Any]:
-    """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP."""
+    """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP; `jobs`
+    processes build the components (`build_components`)."""
     wds = list(workload_digests or [None] * len(roots))
     if len(ranks) != len(roots) or len(wds) != len(roots):
         raise ValueError(f"build-global: {len(roots)} --programs-root, {len(ranks)} --rank, {len(wds)} --workload-digest: give one per rank")
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
-    parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, word=word,
-                          norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query,
-                          word_max_gates=word_max_gates, log=log)
-             for root, r, wd in zip(roots, ranks, wds)]
+    parts = _global(fixture, roots, ranks, world, wds, profile=profile, return_slots=return_slots, word=word, norm_scales=norm_scales,
+                    guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs,
+                    budget_gb=budget_gb, log=log)
     return merge_ranks(parts) if world > 1 else parts[0]
 
 
@@ -286,6 +511,10 @@ WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
                     "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
                     "scale; the Commit then needs the guarded-max tap build")
+UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "
+                        "a rule read there is the one the check computes")
+JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components, within "
+             "the memory headroom); the manifest is the same under any.  0 (the default): the CPUs this process may use; 1: one process")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -299,12 +528,14 @@ class BuildOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str = option("--word-check", env="VERITY_WORD_CHECK", default="16/32", help=WORD_CHECK_HELP)
     word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None, help=WORD_MAX_GATES_HELP)
+    unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
     router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional", help=ROUTER_SOFTMAX_HELP)
     vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
+    jobs: int = option("--jobs", type=int, env=JOBS_ENV, default=0, help=JOBS_HELP)
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
 
@@ -315,7 +546,8 @@ class BuildGlobalOptions:
     programs_root: list[str] = option("--programs-root", action="append",
                                       help="TP row: repeat per rank, with --rank r at the same position")
     workload_digest: list[str] | None = option("--workload-digest", action="append", default=None,
-                                               help="TP row: repeat per rank")
+                                               help="TP row: repeat per rank; `-`: read from stdin, one line per such rank in --programs-root "
+                                                    "order, once that rank's components are built")
     profile: str | None = option("--profile", default=None)
     rank: list[int] | None = option("--rank", type=int, action="append", default=None,
                                     help="the TP rank of the --programs-root at the same position (default 0)")
@@ -323,12 +555,17 @@ class BuildGlobalOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str = option("--word-check", env="VERITY_WORD_CHECK", default="16/32", help=WORD_CHECK_HELP)
     word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None, help=WORD_MAX_GATES_HELP)
+    unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
     router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional", help=ROUTER_SOFTMAX_HELP)
     vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
+    jobs: int = option("--jobs", type=int, env=JOBS_ENV, default=0, help=JOBS_HELP)
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="the component builds' own memory budget (capped by the headroom): set, they size "
+                                                    "their pool from it without the machine's component pool lock")
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
 
@@ -378,11 +615,15 @@ def main(a: Any) -> int:
         print(json.dumps({kk: r.get(kk) for kk in ("wrapper", "calls", "source", "applicable", "module_diffs_n", "name_diffs_n", "partition_equal", "boundary_values", "identical", "correspondence_digest")}
                          | {"manifest_digest_equal": (r.get("manifest") or {}).get("digest_equal"), "manifest_digests": [(r.get("manifest") or {}).get(s, {}).get("digest") for s in ("record", "v1_annotations")]}))
         return 0 if (r.get("identical") or not r.get("applicable")) else 1
+    if a.cmd in ("build", "build-global"):
+        from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+        _gc_tune()
+        word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,
                     word=a.word_check, norm_scales=a.norm_scales, guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
-                    cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, log=log)
+                    cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(), log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
         return incomplete_rc(man)
@@ -391,7 +632,8 @@ def main(a: Any) -> int:
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
                                  profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales,
                                  guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
-                                 cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, log=log)
+                                 cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(),
+                                 budget_gb=a.build_ram_budget_gb, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],

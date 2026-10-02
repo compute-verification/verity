@@ -5,6 +5,13 @@ the prefix's midstate) and closed by an `hm96` slot (the padding compression, th
 slot circuits are sections of the circuit file. Every identity and binding digest is SHA-512: the circuit pin, the public
 digest, the statement digest (Flock's own 32-byte slot is its first half), Σ and the record's digests.
 
+A port's rows are `sha512/row/v1` rows of whole SHA-512 blocks or, when META names each port's `row_schemas`, core's bit
+rows `sha512/row/v2` (`hm96-sha512/row/v2` leaves) of any u64 length `l` in bits: their `ceil(l / 16)` u16 leaves hold the
+row's bits low first, and the digest hashes `P(l)` and the row's `ceil(l / 8)` bytes. From `l` alone the verifier derives
+the prefix, its midstate, the message's blocks and every message bit at or past `l` (the last byte's fill bits, zero, and
+SHA-512's padding, in a block with row bytes or in its own), which Δ pins as constants; a unit's leaf bit past `l` reads
+its slot's forced-zero row.
+
 The verifier evaluates no part of the computation: it recomputes the rows' constants, the wiring and Δ from the pinned
 circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and the pinned dummy `b ‖ c` from the zero row.
 -/
@@ -12,6 +19,7 @@ import Flock.Statement
 import Flock.TemplateQuery
 import Flock.Typed
 import Flock.Extract
+import Flock.Qcall
 
 namespace Flock
 
@@ -23,7 +31,10 @@ def SHA_NET : String := "sha512x3"
 def HM_NET : String := "hm96"
 def SCHEME : String := "frame-v3-sha512/hm96-sha512"
 def ROW_SCHEMA : String := "hm96-sha512/row/v1"
+def ROW_SCHEMA_V2 : String := "hm96-sha512/row/v2"
 def PER_SLOT : Nat := 3
+/-- A bit row's compressions at most: one 1024-bit block per compression, within the largest block a proof covers (2^26). -/
+def MAX_COMPS : Nat := 2 ^ 16
 /-- META's bindings (what the statement binds about the circuit): a class leaves them out. -/
 def BINDING_KEYS : List String := ["partition", "program_sha512", "program_digests"]
 def PARTITION_V1 : String := "verity/partition/v1"
@@ -60,6 +71,49 @@ def wordsBE (b : ByteArray) (n : Nat) : Array UInt64 :=
 def midstate (words : Nat) : Array UInt64 := Sha512.compress Sha512.iv (rowPrefix words) 0
 def padWords (words : Nat) : Array UInt64 := wordsBE (padBlock (128 + 2 * words)) 16
 
+/-- `sha512/row/v2`'s first block `P(l)` for a row of `l` bits: `"verity/sha512-row/v2\0"`, then `l` as a u64 big-endian,
+zero-padded to 128 bytes (`verity.commitments.rowleaf.sha512_row_v2_prefix`). -/
+def rowPrefixV2 (l : Nat) : ByteArray :=
+  Hm96.pad ("verity/sha512-row/v2".toUTF8.push 0 ++ ByteArray.mk ((Array.range 8).map fun i => (l / 256 ^ (7 - i) % 256).toUInt8)) 128
+
+/-- Bits as a number, the first least significant. -/
+def bitsVal : List Bool → Nat
+  | [] => 0
+  | b :: bs => (if b then 1 else 0) + 2 * bitsVal bs
+
+/-- A bit row's bytes (`sha512/row/v2`): bit `i` is bit `i % 8` of byte `i / 8`, the last byte zero-filled. -/
+def packBits (bs : List Bool) : List UInt8 :=
+  (List.range ((bs.length + 7) / 8)).map fun j => (bitsVal ((bs.drop (8 * j)).take 8)).toUInt8
+
+/-- SHA-512's padding after a message of `total` bytes: `0x80`, zeros to 112 mod 128, the 128-bit bit length (a multiple
+of 128: `padBlock`). -/
+def padTail (total : Nat) : ByteArray := Id.run do
+  let mut b := (ByteArray.mk #[0x80]) ++ ByteArray.mk (Array.replicate ((239 - total % 128) % 128) 0)
+  let bits := 8 * total
+  for i in [0:16] do b := b.push ((bits >>> (8 * (15 - i))) % 256).toUInt8
+  return b
+
+/-- A row's first block: `sha512/row/v1`'s prefix for its words, or a bit row's `P(bits)`. -/
+def prefixOf (p : Port) : ByteArray := if p.v2 then rowPrefixV2 p.bits else rowPrefix p.words
+
+/-- The chaining value after a row's first block. -/
+def midstateOf (p : Port) : Array UInt64 := Sha512.compress Sha512.iv (prefixOf p) 0
+
+/-- A row's padding after its bytes (`padTail`; a `sha512/row/v1` row's is a whole block). -/
+def tailOf (p : Port) : ByteArray := padTail (128 + p.bytes)
+
+/-- Column `t` of a message block's 1024 (word `t / 64`, its bit `t % 64`; the block's bytes big-endian per word) as the
+block's byte and the byte's bit. -/
+def blockBit (t : Nat) : Nat × Nat := (8 * (t / 64) + 7 - t % 64 / 8, t % 8)
+
+/-- Bit `t` (a block column) of block `k` of row `p`'s message after the prefix: `none` for a row bit (`8 j + b < bits`), else
+the constant there (a fill bit of the last row byte, zero, or SHA-512's padding `tl`). -/
+def constBit (p : Port) (tl : ByteArray) (k t : Nat) : Option Bool :=
+  let j := 128 * k + (blockBit t).1
+  let b := (blockBit t).2
+  if 8 * j + b < p.bits then none
+  else some (decide (p.bytes ≤ j) && ((tl.get! (j - p.bytes)).toNat >>> b) % 2 == 1)
+
 def hex16 (w : UInt64) : String :=
   let s := hexOf ((List.range 8).foldl (fun b j => b.push ((w >>> (8 * (7 - j)).toUInt64) &&& 0xff).toUInt8) ByteArray.empty)
   s
@@ -84,13 +138,16 @@ def rowWires (ports : Array Port) (sha hm : Nat) : Array Wire := Id.run do
     let w := where_[p]!
     for k in [1:w.size] do
       out := out.push ⟨(sha, w[k]!.1, 2 * w[k]!.2), (sha, w[k - 1]!.1, w[k - 1]!.2)⟩
-    let last := w[w.size - 1]!
-    out := out.push ⟨(hm, p, 0), (sha, last.1, last.2)⟩
+    -- a row of no compression gives its hm96 slot the midstate, a Δ constant
+    if 0 < w.size then
+      let last := w[w.size - 1]!
+      out := out.push ⟨(hm, p, 0), (sha, last.1, last.2)⟩
   return out
 
-/-- The zero row's `b ‖ c` under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix ‖ 0^192)`. -/
-def zeroRowBc (words : Nat) : ByteArray :=
-  Sha512.hash (rowPrefix words ++ ByteArray.mk (Array.replicate (2 * words) 0)) ++
+/-- The zero row's `b ‖ c` under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix ‖ 0^192)`;
+`x` is the port's row digest of the zero row (`sha512/row/v1` of its words, or a bit row of its length). -/
+def zeroRowBc (p : Port) : ByteArray :=
+  Sha512.hash (prefixOf p ++ ByteArray.mk (Array.replicate p.bytes 0)) ++
     Sha512.hash (Hm96.Default512.saltPrefix ++ ByteArray.mk (Array.replicate SALT_BYTES 0))
 
 private def ctx := "circuit META"
@@ -295,6 +352,56 @@ theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj 
 def TEMPLATE_DERIVED : List String :=
   ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"]
 
+/-- META's row ports: one `sha512/row/v1` schema for every port, each row whole SHA-512 blocks, or (`row_schemas`) each
+port's bit row of a u64 length in bits, its leaves and compressions derived from the length (a typed statement's rows are
+`sha512/row/v1`'s); every row's constants recomputed from its schema and length, never taken from META. -/
+def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
+  let v2 := J.has mj "row_schemas"
+  let one := (mj.getObjValAs? String "row_schema").toOption
+  if (← J.str mj "scheme" ctx) != SCHEME || v2 == J.has mj "row_schema" || (!v2 && one != some ROW_SCHEMA) then
+    throw s!"META: rows are not {SCHEME} ({ROW_SCHEMA}, or {ROW_SCHEMA_V2} per port) leaves"
+  if v2 && typed then throw s!"META: a typed statement's rows are {ROW_SCHEMA} leaves"
+  let listedPorts ← J.arr mj "ports" ctx
+  let lengths : Array (Option Nat) ← if v2 then do
+      let s ← J.arr mj "row_schemas" ctx
+      if s.size != listedPorts.size then throw "META: row_schemas is not one [schema, bits] per port"
+      s.mapM fun x => do
+        let a ← J.asArr x "row_schemas"
+        if a.size != 2 || (a[0]!.getStr?).toOption != some ROW_SCHEMA_V2 then
+          throw s!"META: row_schemas: each port's is [{ROW_SCHEMA_V2}, bits]"
+        let l ← J.asNat a[1]! "a bit row's length"
+        if l ≥ 2 ^ 64 then throw "META: a bit row's length is not a u64"
+        pure (some l)
+    else pure (Array.replicate listedPorts.size none)
+  let ports ← (Array.range listedPorts.size).mapM fun i => do
+    let a ← J.asArr listedPorts[i]! s!"{ctx}: a port"
+    if a.size != 3 then throw s!"{ctx}: a port is not [name, words, comps]"
+    let name ← J.asStr a[0]! "port name"
+    let words ← J.asNat a[1]! "port words"
+    let comps ← J.asNat a[2]! "port comps"
+    match lengths[i]! with
+    | none =>
+      if words == 0 || (2 * words) % 128 != 0 || comps != 2 * words / 128 then throw s!"port {name}: not whole SHA-512 blocks"
+      pure ({ name, words, chunks := comps, nb := 0 } : Port)
+    | some l =>
+      -- every count derived from the length: its leaves, and its message's blocks after the prefix but the last
+      let want := ((l + 15) / 16, ((l + 7) / 8 + 17 + 127) / 128 - 1)
+      if want.2 > MAX_COMPS || (words, comps) != want then
+        throw s!"port {name}: a row of {l} bits is {want.1} u16 leaves and {want.2} compressions, not META's {words} and {comps}"
+      pure ({ name, words, chunks := comps, nb := 0, bits := l, v2 := true } : Port)
+  let listed ← J.arr mj "rows" ctx
+  let bad := s!"META: a row's constants are not {if v2 then "sha512/row/v2" else "sha512/row/v1"}'s"
+  if listed.size != ports.size then throw bad
+  for i in [0:ports.size] do
+    let p := ports[i]!
+    let m := listed[i]!
+    let ms ← (← J.arr m "midstate" ctx).mapM (J.asStr · "midstate")
+    if (← J.str m "prefix" ctx) != hexOf (prefixOf p) || ms != (midstateOf p).map hex16 || (← J.str m "pad" ctx) != hexOf (tailOf p) then
+      throw bad
+  if v2 && ports.all (·.chunks == 0) then
+    throw s!"META: no row has a compression before its last block (the {SHA_NET} range, the pin's, holds no slot)"
+  return ports
+
 /-- Parse the circuit file (upstream's `Composite::parse`) and check its layout. A typed template's block (`tmpl`, item 1e)
 brings its root and placed layouts' circuits; its wiring is derived. -/
 def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
@@ -359,25 +466,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     let some (_, words) := tables.find? (·.1 == lname) | throw s!"the circuit has a lookup of {lname}: its table is not given"
     if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {lname}: not the pinned table"
     nets := nets.push (s!"lookup:{lname}", ← Lookup.build s!"lookup:{lname}" words n lo 31)
-  if (← J.str mj "scheme" ctx) != SCHEME || (← J.str mj "row_schema" ctx) != ROW_SCHEMA then
-    throw s!"META: rows are not {SCHEME} ({ROW_SCHEMA}) leaves"
-  let ports ← (← J.arr mj "ports" ctx).mapM fun p => do
-    let a ← J.asArr p s!"{ctx}: a port"
-    if a.size != 3 then throw s!"{ctx}: a port is not [name, words, comps]"
-    pure ({ name := ← J.asStr a[0]! "port name", words := ← J.asNat a[1]! "port words", chunks := ← J.asNat a[2]! "port comps",
-            nb := 0 } : Port)
-  for p in ports do
-    if p.words == 0 || (2 * p.words) % 128 != 0 || p.chunks != 2 * p.words / 128 then
-      throw s!"port {p.name}: not whole SHA-512 blocks"
-  -- each row's constants, recomputed from the scheme (never taken from META)
-  let listed ← J.arr mj "rows" ctx
-  if listed.size != ports.size then throw "META: a row's constants are not sha512/row/v1's"
-  for i in [0:ports.size] do
-    let w := ports[i]!.words
-    let m := listed[i]!
-    let ms ← (← J.arr m "midstate" ctx).mapM (J.asStr · "midstate")
-    if (← J.str m "prefix" ctx) != hexOf (rowPrefix w) || ms != (midstate w).map hex16 || (← J.str m "pad" ctx) != hexOf (bytesBE (padWords w)) then
-      throw "META: a row's constants are not sha512/row/v1's"
+  let ports ← rowPorts mj tags.typed
   if (← J.str mj "row_key_sha512" ctx) != hexOf (Sha512.hash Hm96.Default512.key) then
     throw "META: the rows' hm96 key is not hm96-sha512/v1's default key"
   let g ← J.nat mj "vus_per_block" ctx
@@ -480,9 +569,10 @@ def pin (c : Circuit) : V Nat := do
   return p
 
 /-- Δ (A and B, upstream's `delta`): every slot's constant from the pin; the rows' constants (each row's first `cv` the
-prefix's midstate, its hm96 slot's `pad` the padding block: bit 1 from the pin, bit 0 from the unit range's first slot's
-forced-zero row); every unit's leaf bits copied from the message bits that hash them (a zero leaf from its own forced-zero
-row); every wire, the rows' chains first. -/
+prefix's midstate, in its first compression or, for a row of none, its hm96 slot; every message bit at or past the row's
+length, in its hm96 slot's `pad` and in the compressions before it: bit 1 from the pin, bit 0 from the unit range's first
+slot's forced-zero row); every unit's leaf bits copied from the message bits that hash them (a zero leaf, or a leaf bit
+past the row's length, from its own forced-zero row); every wire, the rows' chains first. -/
 def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) := Id.run do
   let mut d : Array (Nat × Nat) := #[]
   for r in c.ranges do
@@ -499,20 +589,30 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
   for g in [0:c.g] do
     for p in [0:where_.size] do
       let w := where_[p]!
-      let ms := midstate c.ports[p]!.words
-      let pw := padWords c.ports[p]!.words
-      let cv := c.slotCol c.shaNet g w[0]!.1 + sin[2 * w[0]!.2]!.1
+      let port := c.ports[p]!
+      let ms := midstateOf port
+      let tl := tailOf port
+      let cv := if 0 < w.size then c.slotCol c.shaNet g w[0]!.1 + sin[2 * w[0]!.2]!.1 else c.slotCol c.hmNet g p + hin[0]!.1
       for t in [0:512] do
         let src := if (ms[t / 64]! >>> (t % 64).toUInt64) &&& 1 == 1 then pin else zero
         d := d.push (cv + t, cv + t) |>.push (cv + t, src)
+      -- the last block's constant bits (a sha512/row/v1 row's: all of it), then those of the blocks before it from the
+      -- first that holds a bit at or past the row's length
       let pad := c.slotCol c.hmNet g p + hin[1]!.1
       for t in [0:1024] do
-        let src := if (pw[t / 64]! >>> (t % 64).toUInt64) &&& 1 == 1 then pin else zero
-        d := d.push (pad + t, pad + t) |>.push (pad + t, src)
+        if let some v := constBit port tl w.size t then
+          d := d.push (pad + t, pad + t) |>.push (pad + t, if v then pin else zero)
+      for k in [port.bits / 1024:w.size] do
+        let msg := c.slotCol c.shaNet g w[k]!.1 + sin[2 * w[k]!.2 + 1]!.1
+        for t in [0:1024] do
+          if let some v := constBit port tl k t then
+            d := d.push (msg + t, msg + t) |>.push (msg + t, if v then pin else zero)
   let msgCol := fun (g p byte t : Nat) =>
     let (k, o) := (byte / 128, byte % 128)
-    let (slot, sub) := where_[p]![k]!
-    c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+    if k < where_[p]!.size then
+      let (slot, sub) := where_[p]![k]!
+      c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+    else c.slotCol c.hmNet g p + hin[1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
   let leafCols := (portCols #[unit.inGroups.getD 0 default]).map (·.1)
   let starts := (c.ports.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
   for k in [0:ur.count] do
@@ -522,10 +622,12 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
     for j in [0:li.size] do
       let lf := li[j]!
       for t in [0:16] do
+        -- a zero leaf, or a bit row's leaf bit past its length: the slot's forced-zero row
         let src := if lf < 0 then base + unit.useful else
           let x := lf.toNat
           let p := ((List.range starts.size).reverse.find? (fun q => starts[q]! ≤ x)).getD 0
-          msgCol g p (2 * (x - starts[p]!) + t / 8) (t % 8)
+          if 16 * (x - starts[p]!) + t < c.ports[p]!.bits then msgCol g p (2 * (x - starts[p]!) + t / 8) (t % 8)
+          else base + unit.useful
         let i := base + leafCols.getD j 0 + t
         d := d.push (i, i) |>.push (i, src)
   let pc := portCols unit.inGroups
@@ -534,7 +636,8 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
       let p := ((List.range starts.size).reverse.find? (fun q => starts[q]! ≤ leaf)).getD 0
       let dst := c.slotCol c.unitNet g u + pc[j]!.1
       for t in [0:pc[j]!.2] do
-        let src := if t < 16 then msgCol g p (2 * (leaf - starts[p]!) + t / 8) (t % 8) else zero
+        let src := if t < 16 && 16 * (leaf - starts[p]!) + t < c.ports[p]!.bits then
+          msgCol g p (2 * (leaf - starts[p]!) + t / 8) (t % 8) else zero
         d := d.push (dst + t, dst + t) |>.push (dst + t, src)
   for g in [0:c.g] do
     for w in c.wires do
@@ -583,12 +686,15 @@ def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
     else base ++ [("classes", Json.arr (Array.replicate indices.size (Json.str (hexOf c.classSha))))])
 
 /-- The queries the verifier can evaluate itself (`Flock.Qword`), given the program's Call graphs. -/
-def EVALUABLE : List (String × Nat) := [("Q_word", 1)]
+def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
+
+/-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
+def Q_CALL : String × Nat := ("Q_call", 1)
 
 /-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
-query the verifier evaluates, its parameters too (`Q_word` v1: exactly `X`, `W`, positive integers). The query's name and
-version. -/
+query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
+`X`, an integer in 1..2^16). The query's name and version. -/
 def checkPartitionObject (obj : Json) : V (String × Nat) := do
   let keys := fun (j : Json) => match j with
     | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
@@ -607,12 +713,19 @@ def checkPartitionObject (obj : Json) : V (String × Nat) := do
   match ps with
   | .obj _ => pure ()
   | _ => throw "partition: the query's params are not an object"
-  if (name, version) == ("Q_word", 1) then
-    if keys ps != #["W", "X"] then throw "partition: Q_word v1's parameters are not X, W"
+  if EVALUABLE.contains (name, version) then
+    if keys ps != #["W", "X"] then throw s!"partition: Q_word v{version}'s parameters are not X, W"
     for k in ["X", "W"] do
       match (ps.getObjVal? k).toOption with
       | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
       | _ => throw s!"partition: {k} is not a positive integer"
+  if (name, version) == Q_CALL then
+    if keys ps != #["X"] then throw "partition: Q_call v1's parameters are not X"
+    match (ps.getObjVal? "X").toOption with
+    | some (.num n) =>
+      if !(n.exponent == 0 && n.mantissa > 0 && n.mantissa ≤ Qcall.PARAM_MAX) then
+        throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
+    | _ => throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
   if let some ts := TemplateQuery.templatesOf name version ps then discard ts
   return (name, version)
 
@@ -664,12 +777,14 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
-/-- `Q_word` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
-(`Flock.Extract`, `Flock.Qword`), and every unit the statement claims (`indices`) is one whole activation of the circuit's
-template; and every Call's cut holds the partition invariant and the width rule on its whole graph (`Extract.checkCalls`, as
-`partition_object.verify` checks them). -/
+/-- `Q_word` v1's or v2's units, derived from the verifier's own program: the program is the object's, the query evaluates on
+it (`Flock.Extract`, `Flock.Qword`; v2's units are v1's), and every unit the statement claims (`indices`) is one whole
+activation of the circuit's template; and every Call's cut holds the partition invariant and the width rule on its whole graph
+(`Extract.checkCalls`, as `partition_object.verify` checks them), under v2 with a value computed in two units reported, not
+refused. -/
 def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let version := (q.getObjValAs? Nat "version").toOption.getD 0
   let ps := (q.getObjVal? "params").toOption.getD Json.null
   let X := (ps.getObjValAs? Nat "X").toOption.getD 0
   let W := (ps.getObjValAs? Nat "W").toOption.getD 0
@@ -680,21 +795,54 @@ def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices :
     | .ok cs => pure cs
     | .error e => throw s!"partition: {e}"
   let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
-  let checked ← Extract.checkCalls P calls X W
+  let checked ← Extract.checkCalls P calls X W (report := version == 2)
   if let some (k, r) := (Extract.cutFailures calls checked)[0]? then
     throw s!"partition: cut: Call {k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}"
+  let across := if version == 2 then
+      s!"; values computed in two units, reported, not refused: {checked.foldl (fun n (_, r) => n + r.across) 0} pair(s) over its Definitions"
+    else ""
   match Extract.claimedUnits P calls t indices with
-  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule"
+  | .ok note => return s!"units derived: Q_word v{version} {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule{across}"
   | .error e => throw s!"partition: {e}"
 
-/-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's units
-derived (`deriveQwordUnits`), any other query's finding as it stands. -/
+/-- `Q_call` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
+(`Flock.Qcall`), every unit the statement claims (`indices`) is one whole activation of the circuit's template, and every Call's
+cut holds the partition invariant and at most X bits out of every unit, a value computed in two units reported, not refused
+(as `partition_object.verify` checks them). -/
+def deriveQcallUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let X := ((q.getObjVal? "params").toOption.getD Json.null |>.getObjValAs? Nat "X").toOption.getD 0
+  let P ← Program.decode program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let calls ← match Qcall.evaluate P X with
+    | .ok cs => pure cs
+    | .error e => throw s!"partition: {e}"
+  let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  let mut across := 0
+  let mut seen : Array Nat := #[]
+  for x in calls do
+    let r := Qcall.check x.c X
+    if !r.codes.isEmpty then
+      throw s!"partition: cut: Call {x.k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits): {(r.wide.extract 0 4).toList})"}"
+    if !seen.contains x.d then
+      seen := seen.push x.d
+      across := across + r.across.size
+  match Qcall.claimedUnits P calls t indices with
+  | .ok note => return s!"units derived: Q_call v1 {"{"}X: {X}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule; values computed in two units, reported, not refused: {across} pair(s) over its Definitions"
+  | .error e => throw s!"partition: {e}"
+
+/-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's or v2's
+units derived (`deriveQwordUnits`), `Q_call` v1's (`deriveQcallUnits`), any other query's finding as it stands. -/
 def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
     V (Option PartitionFinding) := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
-  if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == ("Q_word", 1) then
+  if EVALUABLE.contains ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) then
     let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
     pure (some { f with derived := true, note := ← deriveQwordUnits c obj program indices })
+  else if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == Q_CALL then
+    let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+    pure (some { f with derived := true, note := ← deriveQcallUnits c obj program indices })
   else pure (some f)
 
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
@@ -715,7 +863,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
       throw "partition: the partition object is over another program than META's program_sha512"
     let note := if (TemplateQuery.templatesOf name version Json.null).isSome then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
-      else if EVALUABLE.contains (name, version) then
+      else if EVALUABLE.contains (name, version) || (name, version) == Q_CALL then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
     return { rule, query := s!"{name} v{version}", digest, derived := false, note }
@@ -861,15 +1009,16 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
   for p in [0:np] do
     let port := c.ports[p]!
     let dom ← pub.fv3Bytes "domain_ids" port.name
-    if (← J.str (← J.get fv "schemas" "public file") port.name "public file") != ROW_SCHEMA then
-      throw s!"input port {port.name}: schema is not {ROW_SCHEMA}"
+    let schema := if port.v2 then ROW_SCHEMA_V2 else ROW_SCHEMA
+    if (← J.str (← J.get fv "schemas" "public file") port.name "public file") != schema then
+      throw s!"input port {port.name}: schema is not {schema}"
     let (count, row) : Nat × (Nat → Nat) := match pub.tables with
       | some t => (t.counts[p]!, fun r => t.starts[p]! + r)
       | none => (n, fun i => i * np + p)
-    let leaves := (Array.range count).map fun r => FV3.leaf dom r ROW_SCHEMA (Hm96.Default512.treeLeaf (bcs.getD (row r) ByteArray.empty)) H
+    let leaves := (Array.range count).map fun r => FV3.leaf dom r schema (Hm96.Default512.treeLeaf (bcs.getD (row r) ByteArray.empty)) H
     if FV3.root dom leaves H != (← pub.fv3Bytes "roots" port.name) then
       throw s!"input port {port.name}: the rows' b || c do not hash to the header's frame-v3-sha512 root"
-    if zeroRowBc port.words != c.dummyDigests.getD p ByteArray.empty then
+    if zeroRowBc port != c.dummyDigests.getD p ByteArray.empty then
       throw s!"the pinned dummy b || c of port {port.name} is not the zero row's"
   let nOut := c.outWords
   let mut at_ := 0
@@ -991,13 +1140,14 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
   let m := c.kLog + nbl
-  if c.kLog > 26 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 26)"
+  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
   let pin ← HmRow.pin c
   let (da, db) := HmRow.delta c pin
   let regions ← HmRow.regions c pub
   HmRow.checkRegionWords c da db regions
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon tags.identity).toUTF8
+  let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size

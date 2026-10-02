@@ -2,19 +2,33 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
+  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
+                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
-               [--custody-ttl 6h | --no-custody-r2] [...] -- CMD...   # run custody on the store's remote is the default with --on
-  research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
-  research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
-  research inspect <run-id|prefix|path> [--runs-dir D] [--json]
+               [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+                                                 # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
+  research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
+  research cancel <run-id> --reason TEXT [--by WHO]   # SIGTERM to the run's workload process group, recorded as a manual cancel;
+                                                 # never the runner, never SIGKILL, so it still records the exit and publishes custody
+  research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
+  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
+                                                 # a full run id another VM launched (no local dir): found on --on NAME, else on
+                                                 # each ssh machine, and its records fetched here (remote.adopt)
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
+  research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
+  research keep show PATH                        # a node path's retention record (research/retention/v0, a sidecar), explicit or implicit
+  research retention report [--root R] [--depth N] [--json]   # every recorded path and every unowned area, unowned and expired first
+  research retention gc [--root R] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+                                                 # policy default: delete only what a record allows; a dry run unless --apply (research/retention.py)
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject [--shadow] [--dry-run]          # the merge queue: ready PRs on `next`, `main` fast-forwarded to
+  research queue status|sync|land|eject|ready [--shadow] [--dry-run]    # the merge queue: ready PRs on `next`, `main` fast-forwarded to
                                                  # the newest commit on it with a passing check (research/queue.py)
+  research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
+  research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
                                                  # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
@@ -36,6 +50,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
+  research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
+                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -56,6 +72,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -63,6 +80,7 @@ from pathlib import Path
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
+from .timefmt import both
 
 EX_DATAERR = 65
 
@@ -132,6 +150,31 @@ def cmd_run(argv: list[str]) -> int:
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem)")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
+    ap.add_argument("--preflight", default=None, metavar="TOOL",
+                    help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
+                         "run does, and refuse the run when it fails")
+    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (tools/cluster) places and runs the job; "
+                                   "--on then pins its node, and --mem-gb is its memory")
+    q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
+    q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
+    q.add_argument("--gpus", type=int, default=None, metavar="N", help="default: its kind's (else 0)")
+    q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
+    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1)")
+    q.add_argument("--max-min", type=int, default=None, metavar="M",
+                   help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
+                        "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
+    q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K",
+                   help="what the job is: a kind in tools/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
+    q.add_argument("--question", default=None, metavar="Q", help="the research question it answers, recorded (default: its kind's)")
+    q.add_argument("--disk-gb", type=float, default=None, metavar="N",
+                   help="the disk it will write: held on the machine while N more GB would fill the disk past 80%% (released at "
+                        "75%%); default its kind's disk_gb, else 20")
+    q.add_argument("--phase", dest="queue_phase", choices=("cpu", "gpu"), default=None,
+                   help="the phase this run is (default: gpu with --gpus, else cpu); a GPU is booked only for a gpu phase, and only "
+                        "around the workload, so the runner's custody runs in the CPU allocation")
+    q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
+    q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
+    q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -160,8 +203,29 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if ns.queue:
+        try:
+            harness_opts = _normalize_timeout(harness_opts)
+        except ValueError as e:
+            print(f"research run: --timeout: {e}", file=sys.stderr)
+            return 2
+        return _run_queued(ns, harness_opts, command)
+    queue_only = [flag for flag, given in (("--gpus", ns.gpus is not None), ("--cpus", ns.cpus is not None),
+                                           ("--gpu-model", ns.gpu_model), ("--max-min", ns.max_min is not None),
+                                           ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
+                                           ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
+                                           ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids),
+                                           ("--disk-gb", ns.disk_gb is not None))
+                  if given]
+    if queue_only:
+        print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue", file=sys.stderr)
+        return 2
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
+        return 2
+    if ns.preflight and not (ns.on and ns.source):
+        print("research run: --preflight runs a tool's preflight on the machine, from the tree --source ships (--on MACHINE --source GITDIR)",
+              file=sys.stderr)
         return 2
     if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
         print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
@@ -169,6 +233,11 @@ def cmd_run(argv: list[str]) -> int:
         return 2
     if ns.custody_r2 is False and ns.custody_ttl:
         print("research run: --custody-ttl is the lifetime of the --custody-r2 key; --no-custody-r2 mints none", file=sys.stderr)
+        return 2
+    try:
+        harness_opts = _normalize_timeout(harness_opts)
+    except ValueError as e:
+        print(f"research run: --timeout: {e}", file=sys.stderr)
         return 2
     if ns.on and ns.custody_r2 is not False:
         why = _custody_ttl_problem(ns.custody_ttl, harness_opts)
@@ -296,15 +365,24 @@ CUSTODY_TTL_CAP_S = 24 * 3600
 
 
 def _harness_timeout(harness_opts: list[str]) -> float | None:
-    """The harness ``--timeout`` (seconds) among the pass-through options, or ``None``."""
-    for i, o in enumerate(harness_opts):
-        v = o.split("=", 1)[1] if o.startswith("--timeout=") else harness_opts[i + 1] if o == "--timeout" and i + 1 < len(harness_opts) else None
-        if v is not None:
-            try:
-                return float(v)
-            except ValueError:
-                return None
-    return None
+    """The harness ``--timeout`` (seconds) among the pass-through options, or ``None`` (normalized by :func:`_normalize_timeout`)."""
+    v = remote.flag_value(harness_opts, "--timeout")
+    return None if v is None else float(v)
+
+
+def _normalize_timeout(harness_opts: list[str]) -> list[str]:
+    """``--timeout 40m`` -> ``--timeout 2400``: the harness, the custody-key guard and the lease extension all read seconds.
+    ValueError on a malformed value, so it is refused here and not by the machine after launch."""
+    out, i = [], 0
+    while i < len(harness_opts):
+        o = harness_opts[i]
+        if o == "--timeout" and i + 1 < len(harness_opts):
+            out += [o, f"{remote.timeout_seconds(harness_opts[i + 1]):g}"]
+            i += 2
+            continue
+        out.append(f"--timeout={remote.timeout_seconds(o.split('=', 1)[1]):g}" if o.startswith("--timeout=") else o)
+        i += 1
+    return out
 
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
@@ -336,7 +414,8 @@ def _survive_stray_signals() -> None:
 
     def note(signum: int, _frame: object) -> None:
         print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
-              f"and publishes the run when the workload exits; stop the workload with `kill -TERM -<pgid>` (status.json)", file=sys.stderr, flush=True)
+              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from the launcher, or "
+              f"`kill -TERM -<pgid>` (status.json) here, and never SIGKILL the runner", file=sys.stderr, flush=True)
 
     for s in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(s, note)
@@ -511,7 +590,59 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
     return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
-def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str]) -> int:
+GPU_WAIT_MIN = 120
+
+
+def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
+    """`research run --queue`: the queue places the job (`cluster submit`), then it launches as `--on` the placed machine does, with
+    the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
+    are an `--on` run's."""
+    if not ns.source or not ns.project:
+        print("research run --queue: --source GITDIR (the tree with tools/cluster, whose kinds/ it resolves) and --project are "
+              "required", file=sys.stderr)
+        return 2
+    timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
+    from .pods.lease import RUN_MARGIN_S
+
+    root = R.runs_root(ns.runs_dir)
+    run_id = ns.id or R.new_run_id()
+    given_max = ns.max_min * 60 if ns.max_min is not None else timeout
+    spec = {"project": ns.project, "submitter": os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-",
+            "class": ns.queue_class, "kind": ns.queue_kind, "question": ns.question or None, "gpus": ns.gpus,
+            "gpu-model": ns.gpu_model, "cpus": ns.cpus, "mem-gb": math.ceil(ns.mem_gb) if ns.mem_gb is not None else None,
+            "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
+            "disk-gb": ns.disk_gb,
+            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids}
+    try:
+        placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
+    except remote.Refused as e:
+        print(f"research run --queue: refused: {e}", file=sys.stderr)
+        return 3
+    gpus = int(placed["job"].get("gpus", 0))
+    phase = ns.queue_phase or ("gpu" if gpus else "cpu")
+    if (phase == "gpu") != bool(gpus):
+        print(f"research run --queue: a {phase} phase {'needs GPUs' if phase == 'gpu' else 'takes no GPUs'} (the job has {gpus})",
+              file=sys.stderr)
+        return 2
+    if timeout is None:
+        harness_opts = [*harness_opts, "--timeout", str(int(placed.get("max_s") or given_max) + (GPU_WAIT_MIN * 60 if gpus else 0))]
+    placed.update(phase=phase)
+    placed.setdefault("disk_gb", ns.disk_gb if ns.disk_gb is not None else 20)
+    placed.setdefault("kind", ns.queue_kind)
+    print(f"research: the queue places run {run_id} ({placed['kind']}, {phase} phase) on {placed['machine']} ({placed['why']})",
+          file=sys.stderr)
+    for w in placed.get("warnings") or ():
+        print(f"research run --queue: warning: {w}", file=sys.stderr)
+    ns.on, ns.mem_gb = placed["machine"], None
+    if ns.custody_r2 is not False and (why := _custody_ttl_problem(ns.custody_ttl, harness_opts)):
+        print(f"research run: {why}", file=sys.stderr)
+        return 2
+    harness_opts = ["--project", ns.project, *harness_opts]
+    return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
+
+
+def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str],
+                queue: dict | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
         return 2
@@ -529,6 +660,10 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     if asked_cwd is not None and not os.path.isabs(asked_cwd) and not ns.source:
         print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
               f"or an absolute --cwd (the default is the run dir)", file=sys.stderr)
+        return 2
+    if asked_cwd is None and ns.source and command and "/" in command[0] and not os.path.isabs(command[0]):
+        print(f"research run --on {ns.on}: {command[0]} is relative, and without --cwd the workload starts in the run dir, not the shipped "
+              f"tree; pass --cwd source (or --cwd DIR)", file=sys.stderr)
         return 2
     harness_args = ["--stage", ns.stage, *harness_opts]
     for e in ns.expect:
@@ -561,7 +696,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if custody else None)
+                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
@@ -570,14 +705,42 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
+
+
+def _run_dir(root: Path, ref: str, on: str | None) -> Path:
+    """`ref` under the local runs root, else, for a full run id, the run another VM launched, adopted from the machine that holds
+    it (`remote.adopt`).  FileNotFoundError names each machine's answer, and the store's attempt when it has one."""
+    try:
+        return R.resolve(root, ref)
+    except FileNotFoundError:
+        from .store import ids
+
+        if not ids.is_run_id(ref):
+            raise
+    try:
+        return remote.adopt(root, ref, on=on)
+    except remote.Refused as e:
+        raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
+
+
+def _attempt_hint(run_id: str) -> str:
+    try:
+        from .store.local import LocalStore
+
+        found = LocalStore().get_attempt(run_id) is not None
+    except Exception:  # noqa: BLE001  no store, no remote: the hint is optional
+        return ""
+    return f"; the store has its attempt: `research data show {run_id}`" if found else ""
 
 
 def cmd_fetch(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research fetch")
     ap.add_argument("ref")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
@@ -585,7 +748,7 @@ def cmd_fetch(argv: list[str]) -> int:
         print(f"research fetch --all: refused: {why}", file=sys.stderr)
         return 3
     try:
-        run_dir = R.resolve(root, ns.ref)
+        run_dir = _run_dir(root, ns.ref, ns.on)
         rec = remote.fetch(run_dir, everything=ns.all)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research fetch: {e}", file=sys.stderr)
@@ -596,12 +759,37 @@ def cmd_fetch(argv: list[str]) -> int:
               f"last observed {lo.get('state')} at {lo.get('at_utc')}; current status unknown", file=sys.stderr)
         return 4
     s = R.summarize(run_dir)
+    if ex := rec.get("launcher_exited"):
+        print(f"research fetch: {s['run_id']}: the machine's runner (pid {ex['runner_pid']}) exited without writing status.json; "
+              f"launcher.log ends: {ex['last_line'] or '(empty)'}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
     marker = rec.get("fetched_marker") if ns.all else None
     if marker and not marker.get("written"):
         print(f"research: {s['run_id']}: .fetched NOT written on the machine ({marker.get('reason')}); a pod guard keeps refusing to terminate",
               file=sys.stderr)
+    return 0
+
+
+def cmd_cancel(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
+                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
+    ap.add_argument("ref")
+    ap.add_argument("--reason", required=True)
+    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
+    ap.add_argument("--runs-dir", default=None)
+    ns = ap.parse_args(argv)
+    try:
+        run_dir = R.resolve(R.runs_root(ns.runs_dir), ns.ref)
+        out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
+    except (FileNotFoundError, LookupError, remote.Refused) as e:
+        print(f"research cancel: {e}", file=sys.stderr)
+        return 1
+    if not out["delivered"]:
+        print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
+        return 1
+    print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
+          f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
     return 0
 
 
@@ -677,7 +865,10 @@ def _fmt(s: dict) -> str:
 
 def cmd_status(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research status")
+    ap.add_argument("ref", nargs="?", help="just this run, its records fetched first while it is remote and not finished (a full run "
+                                           "id another VM launched is found on its machine)")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
     ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
@@ -694,14 +885,21 @@ def cmd_status(argv: list[str]) -> int:
             ledger = {"provider": "runpod", "observed_utc": utc_now_ms(), **data}
         except Exception as e:  # noqa: BLE001
             ledger = {"provider": "runpod", "error": f"{type(e).__name__}: {e}"}
-    if ns.refresh:
-        for s in R.list_runs(root):
+    one = None
+    if ns.ref:
+        try:
+            one = _run_dir(root, ns.ref, ns.on)
+        except (FileNotFoundError, LookupError) as e:
+            print(f"research status: {e}", file=sys.stderr)
+            return 1
+    if ns.refresh or one:
+        for s in [R.summarize(one)] if one else R.list_runs(root):
             if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
                 try:
                     remote.fetch(Path(s["dir"]))
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
-    rows = R.list_runs(root)
+    rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
     if ns.json:
@@ -711,7 +909,7 @@ def cmd_status(argv: list[str]) -> int:
         if ledger.get("error"):
             print(f"ledger    unavailable: {ledger['error']}")
         else:
-            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {ledger['observed_utc']}; the provider's numbers, not a research counter)")
+            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {both(ledger['observed_utc'])}; the provider's numbers, not a research counter)")
         print()
     if not rows:
         print(f"no runs under {root}")
@@ -737,13 +935,14 @@ def _tool_line(tool: dict | None) -> str:
 
 def cmd_inspect(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research inspect")
-    ap.add_argument("ref", help="run id, unique prefix, or directory")
+    ap.add_argument("ref", help="run id, unique prefix, or directory; a full run id another VM launched is fetched from its machine")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     try:
-        run_dir = R.resolve(root, ns.ref)
+        run_dir = _run_dir(root, ns.ref, ns.on)
     except (FileNotFoundError, LookupError) as exc:
         print(f"research inspect: {exc}", file=sys.stderr)
         return 1
@@ -812,12 +1011,18 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_inspect(rest)
     if cmd == "fetch":
         return cmd_fetch(rest)
+    if cmd == "cancel":
+        return cmd_cancel(rest)
     if cmd == "compare":
         return cmd_compare(rest)
     if cmd == "launch-request":
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "disk-hold":
+        from .disk import main as disk_main
+
+        return disk_main(rest)
     if cmd == "mem":
         from .mem import main as mem_main
 
@@ -830,6 +1035,14 @@ def main(argv: list[str] | None = None) -> int:
         from .store.cli import main as data_main
 
         return data_main(rest)
+    if cmd == "keep":
+        from .retention import keep_main
+
+        return keep_main(rest)
+    if cmd == "retention":
+        from .retention import main as retention_main
+
+        return retention_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
@@ -846,10 +1059,22 @@ def main(argv: list[str] | None = None) -> int:
         from .queue import main as queue_main
 
         return queue_main(rest)
+    if cmd == "jobs":
+        from .jobs.cli import main as jobs_main
+
+        return jobs_main(rest)
+    if cmd == "worker":
+        from .jobs.cli import worker_main
+
+        return worker_main(rest)
     if cmd == "git":
         from .commitmap import main as git_main
 
         return git_main(rest)
+    if cmd in ("msg", "slack"):
+        from .slack import main as slack_main
+
+        return slack_main(rest, prog=f"research {cmd}")
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

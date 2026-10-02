@@ -5,6 +5,8 @@
       --hardware l40s-48gb/bf16 --out DIR [--workers N] [--max-segments N] [--audits 20]
     python benchmarks/pous/bench.py --scheme band-chain/d12/v1 --impl vllm-gpu --impl-tree TREE --impl-commit SHA \\
       --build-dir DIR --weight-set qwen2.5-0.5b/linears+head --hardware l40s-48gb/bf16 --out DIR
+    python benchmarks/pous/bench.py --scheme band-chain/d12/v1 --impl band-gpu --build-dir DIR \\
+      --weight-set qwen2.5-0.5b/linears+head --hardware rtx-4090/e4m3 --out DIR [--nvme-dir DIR]
 
 Every implementation passes the same gates and reports the same metrics, written to `bench-result.json`
 (`verity-pous/bench-result/v1`) and, under `research run`, to `$RESEARCH_RUN_DIR/result.json`:
@@ -29,6 +31,15 @@ Implementations (`IMPLS`), each adding one class:
   - It runs through that tree's frozen harness, `verity-vllm pous-decode-bench` (`pous-dense-bench` in #188's tree, the same
     harness before its rename), with the flags of the band's run of record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
+* `p2-v1-gpu`: P2 v1, the frozen specification (`p2_v1/`): its reference pinned by the P2 kit's vectors, its GPU library
+  (decode with v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
+  at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): P2 v1 is not a
+  `verity_pous` registered scheme, whose P2 is the MVP's `p2-16448/v2`.
+* `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
+  (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
+  encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
+  the limit fixed before any load, timed audits under that loop with value, late and recompute controls, the `Π₂` step
+  floor (an upper bound on an attacker's), and optionally one block's read latency from NVMe.
 """
 
 from __future__ import annotations
@@ -89,7 +100,7 @@ def conformance_gate(name: str) -> dict[str, Any]:
 
 
 TAG_SEGMENTS = 448
-"""Segment tags are gated over at least this many segments (`band_meets_14`'s 14 GB store)."""
+"""Segment tags are gated over at least this many segments (the 14 GB store of `Pous.Pinned.BandMultiMeets14`)."""
 
 
 def tags_gate(tags: list[bytes], segments: int) -> dict[str, Any]:
@@ -228,6 +239,8 @@ class VllmGpu:
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
         from verity_pous import schemes
 
+        if ws["id"] not in self.MODELS:
+            raise SystemExit(f"vllm-gpu: its frozen harness runs only {sorted(self.MODELS)}, not {ws['id']!r}")
         tree = Path(a.impl_tree).resolve()
         model = self.MODELS[ws["id"]]
         impl_out = out / "impl"
@@ -274,6 +287,57 @@ class VllmGpu:
                                                                    "elapsed_s", "device_s", "late", "wrong", "cgroup_cpu")}},
             "profile": profile_json(scheme, k, limit, gaps) if accepted else None,
         }
+
+
+# ---------------------------------------------------------------------------------------------------------- band-gpu
+
+class BandGpu:
+    """The band (or dense) scheme's GPU kernels (`band_gpu/`) through the POUS-only harness (`band_gpu/harness.py`)."""
+
+    name = "band-gpu"
+
+    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
+        sys.path.insert(0, str(HERE))
+        from band_gpu import harness
+
+        body = harness.run(a, ws, out, w_segment=_w_segment, tag_segments=TAG_SEGMENTS, **kw)
+        scheme, extra, rows = body.pop("scheme_obj"), body.pop("extra_gaps"), body.pop("tag_rows")
+        body["scheme"], body["scheme_params"] = scheme.name, scheme.params.manifest()     # the band's d among them
+        if body["metrics"] is None:
+            body["profile"] = None
+            return body
+        body["gates"]["segment_tags"] = tags_gate(rows, len(rows))
+        if body.get("timed") is False:      # --audits 0: no audit, so no certificate gate and no profile
+            body["profile"] = None
+            return body
+        audit = body["metrics"]["audit"]
+        k, limit = int(audit.get("k") or 0), int(audit.get("limit_ns") or 0)
+        gate, gaps = certificate_gate(scheme, k, limit)
+        body["gates"]["certificate"] = gate
+        body["profile"] = profile_json(scheme, k, limit, gaps + extra) if body["gates"]["timed_audit"]["passed"] else None
+        return body
+
+
+# ---------------------------------------------------------------------------------------------------------- p2-v1-gpu
+
+class P2V1Gpu:
+    """P2 v1's GPU kernels (`p2_v1/`) through P2's arm of the POUS-only harness (`p2_v1/harness.py`)."""
+
+    name = "p2-v1-gpu"
+    own_scheme = "p2/v1"
+    experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"
+
+    def conformance_gate(self) -> dict[str, Any]:
+        sys.path.insert(0, str(HERE))
+        from p2_v1 import reference
+
+        return reference.conformance()
+
+    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
+        sys.path.insert(0, str(HERE))
+        from p2_v1 import harness
+
+        return harness.run(a, ws, out, w_segment=_w_segment, **kw)
 
 
 # ---------------------------------------------------------------------------------------------------------- p2-gpu
@@ -401,7 +465,7 @@ class P2Gpu:
         }
 
 
-IMPLS = {c.name: c for c in (Reference, VllmGpu, P2Gpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2Gpu)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -411,16 +475,43 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--weight-set", required=True, help="an id of benchmarks/pous/weight_sets.json")
     ap.add_argument("--hardware", required=True, help="a census hardware id (census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--audits", type=int, default=20)
+    ap.add_argument("--audits", type=int, default=20,
+                    help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
+                         "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the verifier's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
-    ap.add_argument("--max-segments", type=int, default=0, help="reference, p2-gpu: only the first N segments (0: all)")
+    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu, p2-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
-    ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu: the pous_native JIT build directory")
+    ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v1-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")
     ap.add_argument("--p2-bin", default=str(HERE / "p2_gpu" / "bin"), help="p2-gpu: the directory of the built kernels")
     ap.add_argument("--scratch", default="/tmp/pous-bench", help="large inputs (C, keys), kept out of the run directory")
+    ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over harness.KERNELS, as JSON (harness.SWITCHES)")
+    ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v1-gpu: the synthetic loop's token counts T")
+    ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v1-gpu: timed repetitions after one warm-up; every rep is recorded")
+    ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity_pous")
+    ap.add_argument("--pings", type=int, default=5000, help="band-gpu, p2-v1-gpu: round-trip calibration pings before and after the audits")
+    ap.add_argument("--k", type=int, default=0, help="band-gpu, p2-v1-gpu: challenges per audit (0: the certificate's)")
+    ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
+                    help="band-gpu, p2-v1-gpu: the calibration quantile added to the 0.5 ms deadline")
+    ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v1-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
+    ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
+                    help="band-gpu, p2-v1-gpu: time answers on the verifier's clock (wall) or by the responder's reported time (logical)")
+    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the verifier process's core")
+    ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the responder thread's core")
+    ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v1-gpu: T of the POUS forwards run during the audit (0: none)")
+    ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
+    ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v1-gpu: also time one block's read of C from a file here (O_DIRECT)")
+    ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v1-gpu: block reads timed from --nvme-dir")
+    ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
+    ap.add_argument("--p2-encode-blocks", type=int, default=2048,
+                    help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+    ap.add_argument("--band-d", type=int, default=0,
+                    help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
+                         "holds with its cliff at d")
+    ap.add_argument("--gates-only", action="store_true",
+                    help="band-gpu, p2-v1-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -428,31 +519,55 @@ def main(argv: list[str] | None = None) -> int:
     t = time.perf_counter()
     from verity_pous import schemes as _schemes
 
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu")):
+        raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v1-gpu run untimed (--audits 0)")
+    if a.band_d:
+        if a.impl != "band-gpu":
+            raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")
+        sys.path.insert(0, str(HERE))
+        from band_gpu.harness import with_in_degree
+        try:
+            with_in_degree(_schemes.get(a.scheme).params, a.band_d)
+        except ValueError as e:
+            raise SystemExit(str(e)) from None
+    impl = IMPLS[a.impl]()
+    if getattr(impl, "own_scheme", None):
+        a.scheme = impl.own_scheme
+        experimental, conformance = impl.experimental, impl.conformance_gate()
+    else:
+        experimental, conformance = _schemes.get(a.scheme).experimental, conformance_gate(a.scheme)
     doc: dict[str, Any] = {"schema": SCHEMA, "scheme": a.scheme, "weight_set": a.weight_set, "hardware": a.hardware,
-                           "experimental": _schemes.get(a.scheme).experimental,
+                           "experimental": experimental,
                            "source_commit": os.environ.get("RESEARCH_SOURCE_COMMIT"), "run_id": os.environ.get("RESEARCH_RUN_ID"),
-                           "gates": {"conformance": conformance_gate(a.scheme)}}
-    body = IMPLS[a.impl]().run(a, ws, out)
+                           "gates": {"conformance": conformance}}
+    body = impl.run(a, ws, out)
+    measurements = body.pop("measurements", [])
     doc["gates"].update(body.pop("gates"))
     doc.update(body)
     doc["wall_s"] = time.perf_counter() - t
     doc["passed"] = all(g.get("passed") for g in doc["gates"].values())
     (out / "bench-result.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    ewb = doc["metrics"]["ewb"]
-    print(json.dumps({"scheme": a.scheme, "impl": a.impl, "weight_set": a.weight_set, "passed": doc["passed"],
-                      "ewb_MBps": {t: round(v / 1e6, 1) for t, v in ewb.items()} if isinstance(ewb, dict) else round(ewb / 1e6, 3),
+    ewb = (doc.get("metrics") or {}).get("ewb")
+    print(json.dumps({"scheme": doc["scheme"], "impl": a.impl, "weight_set": a.weight_set, "passed": doc["passed"],
+                      **({"timed": False, "audits": doc["audits"]} if doc.get("timed") is False else {}),
+                      "ewb_MBps": {t: round(v / 1e6, 1) for t, v in ewb.items()} if isinstance(ewb, dict)
+                      else (round(ewb / 1e6, 3) if ewb is not None else None),
                       "gates": {g: v.get("passed") for g, v in doc["gates"].items()}}), flush=True)
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     if run_dir:
-        rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
-                else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
-        rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}]
+        rows = []
+        if doc["passed"] and doc.get("metrics"):   # a failed gate publishes no measurement, nor does a --gates-only run
+            rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
+                    else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
+            rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}, *measurements]
         result = out.resolve() / "bench-result.json"
         rel = str(result.relative_to(Path(run_dir).resolve())) if result.is_relative_to(Path(run_dir).resolve()) else str(result)
         Path(run_dir, "result.json").write_text(json.dumps({
             "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
-            "workload_fingerprint": {"benchmark": SCHEMA, "scheme": a.scheme, "impl": a.impl, "weight_set": a.weight_set,
-                                     "hardware": a.hardware, "impl_commit": a.impl_commit},
+            "workload_fingerprint": {"benchmark": SCHEMA, "scheme": doc["scheme"], "scheme_params": doc.get("scheme_params"),
+                                     "impl": a.impl, "weight_set": a.weight_set, "hardware": a.hardware,
+                                     "impl_commit": a.impl_commit,
+                                     **({"timed": False, "audits": doc["audits"]} if doc.get("timed") is False else {})},
             "validation": {"status": "passed" if doc["passed"] else "failed", "checker": "benchmarks/pous/bench.py gates",
                            "detail": json.dumps({g: v.get("passed") for g, v in doc["gates"].items()}),
                            "evidence": [rel]},

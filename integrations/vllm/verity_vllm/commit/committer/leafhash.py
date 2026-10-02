@@ -30,20 +30,16 @@ def mode_from_env(default: str = "host") -> str:
 
 
 def ext(build_dir: str | None = None, verbose: bool = False):
-    """JIT-build the leaf-hash extension once per process (`VERITY_LEAFHASH_BUILD` overrides the build directory, as the collector's)."""
+    """JIT-build the leaf-hash extension once per process into `<VERITY_LEAFHASH_BUILD or torch's default>/<source digest12>`, serialised
+    with other jobs on the host (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
-        from torch.utils.cpp_extension import load
+        from verity_vllm.commit.committer import native_jit
 
-        bd = build_dir or os.environ.get("VERITY_LEAFHASH_BUILD")
-        if bd:
-            os.makedirs(bd, exist_ok=True)
-            from verity_vllm.commit.committer.native_collect import _clear_stale_jit_lock
-
-            _clear_stale_jit_lock(bd)
         t0 = time.perf_counter()
-        _EXT = load(name="verity_leafhash", sources=[os.path.join(HERE, "native_leafhash.cu")], extra_cuda_cflags=["-O3"], with_cuda=True,
-                    build_directory=bd, verbose=verbose)
+        _EXT, _bd, _digest = native_jit.jit_load("verity_leafhash", [os.path.join(HERE, "native_leafhash.cu")],
+                                                 parent=build_dir or os.environ.get("VERITY_LEAFHASH_BUILD") or None, cuda_cflags=("-O3",),
+                                                 verbose=verbose)
         _EXT._verity_load_s = time.perf_counter() - t0
     return _EXT
 

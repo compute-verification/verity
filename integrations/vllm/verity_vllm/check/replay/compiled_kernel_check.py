@@ -21,7 +21,7 @@ import torch
 
 from verity_vllm.check import compiled_autotune
 from verity_vllm.commit import challenge as CH
-from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of
+from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of, warm_vml
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
        "uint8": torch.uint8, "int8": torch.int8}
@@ -92,6 +92,7 @@ class CompiledKernelCheck:
                  seed_source: str | None = None,
                  n_random: int = 4, pieces: int | None = None, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                  arrivals: dict[str, int] | None = None, prompts: dict[str, list[int]] | None = None) -> None:
+        warm_vml()
         self.c = committer
         self.model = model
         # [B>=2] tokens per request (`r<i>`), the engine's per-step row order (request, row lo, row hi) and the arrivals: the linkage ties

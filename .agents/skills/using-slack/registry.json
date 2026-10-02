@@ -1,0 +1,138 @@
+{
+  "schema": "verity/slack-registry/v1",
+  "workspace": "computeverification.slack.com",
+  "bot_id": "B0C5VQ1KKFW",
+  "humans": [
+    {
+      "name": "Daniel Reuter",
+      "slack_user": "U0BEN96ES8Y"
+    }
+  ],
+  "channels": {
+    "agent-coordination": {
+      "id": "C0C5RCXL66N",
+      "purpose": "Everything between handle holders: asks (tag one handle), announcements (tag some, or none for all), their threads.",
+      "subscribers": [
+        "old-accounting",
+        "old-circuits-and-proofs"
+      ],
+      "routed_by": "the top-level agent (bc-7f347b4b): it reads the channel and forwards each holder in its Project only the posts addressed to it"
+    },
+    "agent-alerts": {
+      "id": "C0C5Q30MCNA",
+      "purpose": "Machine alerts. Every top-level post is addressed to the subscribers.",
+      "subscribers": [
+        "infra"
+      ],
+      "bots": [
+        {
+          "name": "grafana",
+          "bot_id": null
+        }
+      ]
+    },
+    "ask-daniel": {
+      "id": "C0C5UCA0S0Z",
+      "purpose": "Everything that needs Daniel: one question per card (blocking or default); only Daniel (U0BEN96ES8Y) decides.",
+      "subscribers": [
+        "infra"
+      ],
+      "aliases": [
+        "approvals"
+      ]
+    }
+  },
+  "handles": [
+    {
+      "handle": "infra",
+      "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)",
+      "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
+      "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
+      "usergroup": "S0C5APDSYF9"
+    },
+    {
+      "handle": "proofs",
+      "holder": "the proofs coordinator (bc-8416bc72-c4cc-5551-93a8-b14a6e5f95d4); the research coordinator (bc-8ece7cde) keeps running the merge trains",
+      "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
+      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
+      "usergroup": "S0C5Q6KJZTQ"
+    },
+    {
+      "handle": "circuits",
+      "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)",
+      "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
+      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
+      "usergroup": "S0C5U3LHMFT"
+    },
+    {
+      "handle": "compute-accounting",
+      "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
+      "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
+      "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
+      "usergroup": "S0C5U3Q04JD"
+    },
+    {
+      "handle": "memory-accounting",
+      "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
+      "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
+      "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
+      "usergroup": "S0C5VRGBZFE"
+    },
+    {
+      "handle": "network-accounting",
+      "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
+      "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
+      "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
+      "usergroup": "S0C6LGGSY6L"
+    },
+    {
+      "handle": "console",
+      "holder": "the console coordinator (bc-ddee017b-705a-5429-a92e-fed2ba6ea491)",
+      "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
+      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
+      "usergroup": "S0C5LSDENA1"
+    },
+    {
+      "handle": "ci",
+      "holder": "the CI lead (bc-7ff3de9e-dd31-5d7f-9e53-265bfba177d0)",
+      "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
+      "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
+      "usergroup": null
+    },
+    {
+      "handle": "lean",
+      "holder": "the lean agent (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
+      "remit": "Lean: reviews every audit-flagged change to a pinned Lean guarantee.",
+      "charter": "Daniel, 2026-10-01 10:18 AM PDT",
+      "usergroup": null
+    },
+    {
+      "handle": "comms",
+      "holder": "comms (bc-3e100045-0b60-5d20-951e-7207a989b252)",
+      "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
+      "charter": "Daniel, 2026-10-01 9:12 AM PDT",
+      "usergroup": null
+    },
+    {
+      "handle": "top",
+      "holder": "top-level, Daniel's coordinator (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
+      "remit": "Top-level: Daniel's coordinator across every lead.",
+      "charter": "Daniel",
+      "usergroup": null
+    },
+    {
+      "handle": "old-accounting",
+      "holder": "the old pous coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
+      "remit": "Advising its successor, the accounting coordinator: handing off to it and relaying the old pous workers' results.",
+      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-accounting",
+      "usergroup": "S0C5WBQ3A76"
+    },
+    {
+      "handle": "old-circuits-and-proofs",
+      "holder": "the lander: the research coordinator (bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628), which runs the merge trains",
+      "remit": "The lander: runs the merge trains, and advises @circuits and @proofs, its successors.",
+      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
+      "usergroup": "S0C5MCG1A2Z"
+    }
+  ]
+}

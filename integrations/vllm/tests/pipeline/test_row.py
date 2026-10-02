@@ -3,6 +3,10 @@
 * a cancelled row takes its running stage (and the stage's forked workers) with it: GNU ``timeout`` moves the stage into
   its own process group, which never sees the runner's killpg, so the driver forwards TERM/INT/HUP to timeout's pid,
   waits for the stage to be gone, records the cancel and exits 128+signal;
+* a row's derives run in parallel by default, as many as the memory headroom holds at the largest shape's planned peak (a fit
+  that bounds the epoch's measured derives) and at most one per CPU, the longest shapes first;
+* a batch's workload Program compose waits only on the shapes its requests run, and its manifest is built beside the compose and the
+  envelope's derive, taking the workload digest once it is composed (none when the compose fails), kept only when the Build passes;
 * after a PASS Build the row stops (exit 21, no Match) when a call-boundary identity of its manifest has no source the
   Commit attaches, the first one named in stages.txt, and goes on to Match when each has one;
 * a Commit over a Match record whose account files are gone refuses to start (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE,
@@ -16,6 +20,7 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import json
 import os
@@ -44,10 +49,11 @@ _GNU_TIMEOUT = shutil.which("timeout") is not None and b"GNU" in subprocess.run(
 
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):
     env = {k: v for k, v in os.environ.items()
-           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITOR_REPO", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
+           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
     env.update(environ or {})
+    # `prepare` creates the collector's build dir, whose default is a pod path (`/workspace/cp/...`) a non-root check can't create
     return cli.parse("row", ["run", row, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp), "--py", sys.executable,
-                             *argv], env)
+                             "--native-collect-default", str(tmp / "nc_build"), *argv], env)
 
 
 def _row(tmp: Path, *argv: str, **kw) -> SingleRow:
@@ -108,8 +114,8 @@ def test_the_commit_flags_the_row_arms_exist():
     assert "--supersedes" in {fl for f in weights_of_record.Options.__dataclass_fields__.values() for fl in f.metadata.get("flags", ())}
 
 
-def test_a_foreign_veritor_repo_is_refused_by_name(tmp_path, capsys):
-    r = _row(tmp_path, environ={"VERITOR_REPO": str(tmp_path)})
+def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
+    r = _row(tmp_path, environ={"VERITY_TREE": str(tmp_path)})
     with pytest.raises(Stop) as e:
         r.setup({})
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
@@ -273,6 +279,179 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "commit"}.items() <= row_end.items()
 
 
+# ---------------------------------------------------------------------------------------------------------------- Build: derives
+
+#: request derives of the 2026-09-29 epoch's stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
+EPOCH_DERIVES = (("#11", 4096, 511, 16, 124529), ("#75", 1024, 127, 48, 43974), ("#74", 1024, 127, 36, 34107), ("#74", 817, 120, 36, 26893),
+                 ("#57", 1024, 127, 26, 21118), ("#67", 1024, 127, 16, 14071), ("#67", 1024, 28, 16, 11067))
+
+
+def test_the_planned_derive_peak_bounds_the_epochs_measured_ones_without_doubling_them():
+    for row, lp, t, layers, mib in EPOCH_DERIVES:
+        planned = R.derive_bytes(lp, t, layers) / (1 << 20)
+        assert mib <= planned <= 2 * mib, (row, lp, t, round(planned), mib)
+
+
+def test_auto_derives_as_many_as_the_memory_and_cpus_hold_at_the_largest_shape():
+    shapes = [(1024, 127), *[(lp, 64) for lp in range(100, 1000, 100)]]
+    per = R.derive_bytes(1024, 127, 16)
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32) == 8
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=4) == 4
+    assert R.build_jobs_auto(shapes[:3], 16, headroom=10 * per, cpus=32) == 4     # the step's derive and the three shapes'
+    assert R.build_jobs_auto(shapes[:1], 16, headroom=10 * per, cpus=32) == 2     # B=1: the step's beside the request's
+    assert R.build_jobs_auto(shapes, 16, headroom=per, cpus=32) == 1
+    assert R.build_jobs_auto(shapes, None, headroom=100 << 30, cpus=32) == 5       # the model's layers unknown: 20 GiB per derive
+    # a sweep's per-config share of a packed host: the budget, not the host's headroom, sizes auto
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32, budget_gb=5 * per / (1 << 30)) == 4
+    assert R.build_jobs_auto(shapes, 16, headroom=2 * per, cpus=32, budget_gb=100 * per / (1 << 30)) == 1
+
+
+def test_the_model_layers_come_from_the_checkpoints_config(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / "config.json").write_text(json.dumps({"text_config": {"num_hidden_layers": 26}}))
+    assert (R.model_layers(str(tmp_path / "a")), R.model_layers(str(tmp_path / "b")), R.model_layers(str(tmp_path / "c"))) == (16, 26, None)
+
+
+def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int, environ: dict[str, str] | None = None):
+    row = "llama32-1b__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager"
+    r = _row(tmp_path, *argv, row=row, environ=environ)
+    s = R.row_shape(r.path(r.wl), r.path("manifests/checkpoints.json"), str(tmp_path))
+    ck = tmp_path / "ck"
+    ck.mkdir()
+    (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
+    r.B, r.LP, r.T, r.MML, r.ck, r.tgt_args = s["B"], s["LP"], s["T"], s["I"] + s["O"], str(ck), []
+    ran: list[str] = []
+    monkeypatch.setattr(r, "launch_args", lambda lp, t: [])
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, *extra: ran.append(st) or 0)
+    monkeypatch.setattr(R, "_memory_headroom", lambda: 1 << 40)
+    monkeypatch.setattr(R, "_cpus", lambda: cpus)
+    return r, ran
+
+
+def test_a_rows_derives_run_in_parallel_by_default(tmp_path, monkeypatch):
+    r, ran = _derive_row(tmp_path, monkeypatch, cpus=4)
+    assert r.derive_all(60) == (0, 0)
+    mark = next(e for e in _timeline(r) if e["stage"] == "build.jobs")
+    assert (mark["jobs"], mark["requested"]) == (4, "auto") and len(ran) == 2 + len(R.extra_shapes(r.path(r.wl), r.LP, r.T))
+    r, _ran = _derive_row(tmp_path / "one", monkeypatch, "--build-jobs", "1", cpus=4)
+    r.derive_all(60)
+    assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 1
+    budget = 2.6 * R.derive_bytes(r.LP, r.T, 16) / (1 << 30)
+    r, _ran = _derive_row(tmp_path / "budget", monkeypatch, cpus=4, environ={"BUILD_RAM_BUDGET_GB": str(budget)})
+    r.derive_all(60)
+    assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 2
+
+
+def test_the_extra_shapes_derive_longest_first(tmp_path, monkeypatch):
+    r, ran = _derive_row(tmp_path, monkeypatch, cpus=1)
+    r.derive_all(60)
+    extra = [tuple(int(x) for x in st[len("build.derive_request_LP"):].split("_T")) for st in ran[2:]]
+    assert ran[:2] == ["build.derive_step", "build.derive_request"] and len(extra) > 1
+    assert [lp + t for lp, t in extra] == sorted((lp + t for lp, t in extra), reverse=True)
+
+
+def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int = 0, **shape) -> tuple[SingleRow, dict]:
+    """A B=8 Build whose children are stubbed: the compose records the dirs it was given, the manifest build takes the workload digest
+    and writes manifest.json, and the derives end only once the compose and the manifest beside them have, every request's shape
+    derived first (so nothing either one waits on is the envelope's derive)."""
+    r, _ran = _derive_row(tmp_path, monkeypatch, cpus=4)
+    for k, v in shape.items():
+        setattr(r, k, v)
+    seen: dict = {"derived": None, "manifests": [], "follow": None}
+
+    def run_tl(stage, to, lf, cmd, *extra):
+        assert stage == "build.global_program"
+        seen["derived"] = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--derived"]
+        if compose_rc == 0:
+            os.makedirs(f"{r.d}/build_workload", exist_ok=True)
+            Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
+        return compose_rc
+
+    def required_manifest(stage, digest=None):
+        seen["manifests"].append(wd := digest() if digest else None)
+        if wd == "":
+            return None
+        Path(f"{r.d}/manifest.json").write_text("{}")
+        return 0
+
+    follow = r.follow_compose
+
+    def follow_compose(to):
+        seen["follow"] = follow(to)
+        return seen["follow"]
+
+    def derive_all(to):
+        wl = r.path(r.wl)
+        for d in [*([f"{r.d}/build_request"] if (r.LP, r.T) in R.request_shapes(wl) else []),
+                  *(f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(wl, r.LP, r.T))]:
+            os.makedirs(d, exist_ok=True)
+            Path(f"{d}/result.json").write_text(json.dumps({"ok": True}))
+        seen["before_derives_end"] = (seen["follow"][0].result(), os.path.exists(f"{r.d}/manifest.json"))
+        os.makedirs(f"{r.d}/build_request", exist_ok=True)
+        Path(f"{r.d}/build_request/instances.json.gz").write_bytes(b"")
+        return 0, 0
+
+    for name, fn in (("gpu_exclusive", lambda why: None), ("follow_compose", follow_compose), ("derive_all", derive_all),
+                     ("guarded", lambda what, fn, *a: summary), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
+                     ("required_manifest", required_manifest), ("run_tl", run_tl), ("call_boundaries", lambda to, cmd=None: None)):
+        monkeypatch.setattr(r, name, fn)
+    monkeypatch.setattr(R, "build_line", lambda d: ("d" * 16, "m" * 16))
+    return r, seen
+
+
+def test_a_batch_composes_and_builds_its_manifest_without_waiting_for_the_envelope(tmp_path, monkeypatch):
+    r, seen = _batch_build(tmp_path, monkeypatch)
+    assert (r.LP, r.T) not in R.request_shapes(r.path(r.wl))
+    r.build()
+    assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == ["w" * 64]
+    assert seen["derived"] == [f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(r.path(r.wl), r.LP, r.T)]
+    assert (Path(r.d) / "manifest.json").exists() and (Path(r.d) / "stages.txt").read_text().startswith("build PASS ")
+    # an envelope a request runs is a component: the compose lists it
+    lp, t = sorted(R.request_shapes(r.path(r.wl)))[-1]
+    r, seen = _batch_build(tmp_path / "envelope", monkeypatch, LP=lp, T=t)
+    r.build()
+    assert seen["derived"][0] == f"{r.d}/build_request" and len(seen["derived"]) == len(R.request_shapes(r.path(r.wl)))
+
+
+def test_a_failed_batch_build_keeps_no_manifest(tmp_path, monkeypatch):
+    r, seen = _batch_build(tmp_path, monkeypatch, summary="FAIL")
+    with pytest.raises(Stop) as e:
+        r.build()
+    assert e.value.rc == 10 and seen["before_derives_end"][1] and not (Path(r.d) / "manifest.json").exists()
+    # a compose that fails gives the manifest no workload digest: none is built
+    r, seen = _batch_build(tmp_path / "compose", monkeypatch, compose_rc=1)
+    with pytest.raises(Stop) as e:
+        r.build()
+    assert e.value.rc == 10 and seen["before_derives_end"] == ((1, None), False) and seen["manifests"] == [""]
+    assert not (Path(r.d) / "manifest.json").exists()
+
+
+#: `manifest build-global` as far as the row sees it: the workload digest it was given (`-`: the next stdin line, an empty one fails)
+#: becomes manifest.json
+_MANIFEST_CHILD = """
+import json, sys
+a = sys.argv[1:]
+wd = a[a.index("--workload-digest") + 1]
+if wd == "-":
+    wd = sys.stdin.readline().strip()
+    if not wd:
+        sys.exit("no workload digest on stdin")
+json.dump({"workload_digest": wd}, open(a[a.index("--out") + 1], "w"))
+"""
+
+
+def test_a_batch_manifest_takes_the_workload_digest_once_it_is_composed(tmp_path, monkeypatch):
+    r, _ran = _derive_row(tmp_path, monkeypatch, cpus=4)
+    os.makedirs(f"{r.d}/build_request_LP9_T1")
+    monkeypatch.setattr(r, "cli", lambda *a, py=None: [sys.executable, "-c", _MANIFEST_CHILD, *a])
+    assert r.required_manifest("build", lambda: "w" * 64) == 0
+    assert json.loads((Path(r.d) / "manifest.json").read_text()) == {"workload_digest": "w" * 64}
+    assert r.required_manifest("build", lambda: "") is None and not (Path(r.d) / "manifest.json").exists()
+    assert [e.get("rc") for e in _timeline(r) if e["stage"] == "build.required_manifest" and e["ev"] == "end"] == [0, "none"]
+
+
 # ---------------------------------------------------------------------------------------------------------------- Build: call boundaries
 
 def _built(r: SingleRow, monkeypatch, **kw) -> dict:
@@ -281,7 +460,7 @@ def _built(r: SingleRow, monkeypatch, **kw) -> dict:
     b, _at = dense_program(**kw)
     _d, man = build_dir(Path(r.d), b.doc(LP), [PF[len("model."):]])
     (Path(r.d) / "manifest.json").write_text(json.dumps(man))
-    r.LP, r.T, r.ck = LP, T, "/ck"
+    r.B, r.LP, r.T, r.ck = 1, LP, T, "/ck"
     run_tl = r.run_tl
 
     def child(stage, to, lf, cmd, *extra):
@@ -448,6 +627,7 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     r = _row(tmp_path)
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.env = dataclasses.replace(r.env, norm_tap_so=str(tmp_path / "absent" / "verity_norm_tap.so"))   # a host with the default build (/workspace/cp/...) has the .so
     man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
     taps = R.applicable_taps(man, r.ck_)
     assert taps == ["norm_tap"]
@@ -458,9 +638,9 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
 
 
-def _tp_row(tmp_path: Path, row: str, **kw):
+def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     from verity_vllm.pipeline.row_tp import TpRow
-    o = _opts(tmp_path, row=row, **kw)
+    o = _opts(tmp_path, *argv, row=row, **kw)
     t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
               build=o.build, match=o.match, commit=o.commit)
     t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""

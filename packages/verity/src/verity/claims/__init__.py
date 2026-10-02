@@ -59,6 +59,10 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("sis", "Ring-SIS binding", "SIS"),
     # A3 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md, for the unit draw's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
+    # A4 there, for verity.randomness's keyed streams: SHA-256's compression function as a PRF keyed by its chaining value
+    # (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the secret bytes in its
+    # first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte secret)
+    Property("prf", "Pseudorandom function", "PRF"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
@@ -72,6 +76,10 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
     Instance("ajtai-n128", "Ajtai n = 128", algebraic=True),
     Instance("io-getrandombytes", "IO.getRandomBytes"),
+    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
+    Instance("python-secrets", "Python's secrets"),
+    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
+    Instance("flock-coin-server", "Flock's coin server"),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (

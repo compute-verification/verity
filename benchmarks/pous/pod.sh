@@ -7,28 +7,120 @@
 #   research run --on <pod> --project verity --source . --cwd source --campaign pous \
 #     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then p2-v1-gpu, and the table
+#   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
+#   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
 #
-# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM and the L40S are known, and any other GPU, or
-# none, needs HW=<census/hardware.json id>.
+# On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
+# the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
+# AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
+# limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
+# KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
+# run of record's kernels.
+#
+# GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
+# on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
+#
+# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
+# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<census/hardware.json id>.
+#
+# Every nvidia-smi query names the run's own GPU (--id): the lease's (GPU_LEASE_UUID), else CUDA_VISIBLE_DEVICES' first, else
+# the node's only GPU, never GPU 0 by default; a GPU run on a node with more GPUs and neither is refused. The clocks-*.txt
+# files start with the id queried and the index, UUID and bus id that answered.
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
 # frozen harness (pous-decode-bench, pous-dense-bench in #188's tree) and gates and profiles its result with this tree's verity_pous. reference runs
-# bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv.
+# bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
+# venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
-GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+# the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
+gpu_uuid() {
+  local v=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}} l
+  v=${v%%,*}
+  case $v in
+    GPU-*|MIG-*) echo "$v" ;;
+    "") l=$(nvidia-smi -L 2>/dev/null | grep '^GPU ')
+        [ "$(printf '%s\n' "$l" | grep -c '^GPU ')" = 1 ] && echo "$l" | sed -n 's/.*(UUID: \([^)]*\)).*/\1/p' ;;
+    *) nvidia-smi --id="$v" --query-gpu=uuid --format=csv,noheader 2>/dev/null | head -1 ;;
+  esac
+}
+GPU_UUID=$(gpu_uuid)
+smi() { [ -n "$GPU_UUID" ] && nvidia-smi --id="$GPU_UUID" "$@"; }
+clocks() {  # clocks NAME: $O/clocks-NAME.txt, headed by the id queried and the GPU that answered (untraced: no -x lines in it)
+  local -; set +x
+  { echo "nvidia-smi --id=$GPU_UUID: $(smi --query-gpu=index,uuid,pci.bus_id --format=csv,noheader)"
+    smi -q -d CLOCK,PERFORMANCE,POWER; } > "$O/clocks-$1.txt" 2>&1 || true
+}
+if [ -z "$GPU_UUID" ] && [ "$IMPL" != reference ] && [ "$(nvidia-smi -L 2>/dev/null | grep -c '^GPU ')" -gt 1 ]; then
+  echo "several GPUs and neither GPU_LEASE_UUID nor CUDA_VISIBLE_DEVICES: name the run's GPU (gpu-lease, or" \
+       "CUDA_VISIBLE_DEVICES=<index|UUID>) so its clocks and facts are read from it"; exit 2
+fi
+GPU=$(smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
 case "$GPU" in                                            # the census id is the device's, never a default another GPU inherits
   *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
+  *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
+  *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
-AUDITS=${AUDITS:-20}
+AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}
+GO=$([ "${GATES_ONLY:-0}" = 1 ] && echo --gates-only)
 mkdir -p "$W" "$O/bench"
-nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
+nvcc_release() { "$1/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1 \2/p'; }
+# The installed CUDA toolkit for torch's JIT build and P2 v1's library; nothing is installed or changed on the system (a
+# shared node's toolkit is the node's): CUDA_HOME, /usr/local/cuda, or a /usr/local/cuda-13.0, -12.9 or -12.8, the first that
+# is CUDA 13 or CUDA 12 (at least 12.8 on a Blackwell GPU: sm_100, sm_120)
+cuda_home() {
+  local need=0 cc home major minor
+  cc=$(smi --query-gpu=compute_cap --format=csv,noheader | head -1)
+  [ "${cc%%.*}" -ge 10 ] 2>/dev/null && need=8
+  for home in ${CUDA_HOME:-} /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.9 /usr/local/cuda-12.8; do
+    read -r major minor <<< "$(nvcc_release "$home")"
+    [ "${major:-0}" = 13 ] && { echo "$home"; return 0; }
+    [ "${major:-0}" = 12 ] && [ "${minor:-0}" -ge "$need" ] && { echo "$home"; return 0; }
+  done
+  return 3
+}
+# band-gpu's Python: torch pinned (TORCH_VERSION) from the PyTorch index for the toolkit's CUDA (torch's JIT build needs the
+# wheel's CUDA major to be nvcc's): 2.14.0 cu130 for CUDA 13, 2.7.1 cu128 for 12.8+, 2.7.1 cu126 below
+gpu_env() {
+  local home major minor
+  home=$(cuda_home) || { echo "no CUDA 13 or CUDA 12 toolkit for this GPU (at least 12.8 on Blackwell) is installed"; return 3; }
+  export CUDA_HOME=$home PATH=$home/bin:$PATH
+  read -r major minor <<< "$(nvcc_release "$CUDA_HOME")"
+  if [ "$major" = 13 ]; then
+    TORCH_CUDA=${TORCH_CUDA:-cu130}; TORCH_VERSION=${TORCH_VERSION:-2.14.0}
+  else
+    TORCH_CUDA=${TORCH_CUDA:-$([ "${minor:-8}" -ge 8 ] && echo cu128 || echo cu126)}; TORCH_VERSION=${TORCH_VERSION:-2.7.1}
+  fi
+  local venv=$W/gpu312-torch$TORCH_VERSION-$TORCH_CUDA
+  PY=$venv/bin/python
+  [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
+    && uv pip install -q --python "$PY" "torch==$TORCH_VERSION" --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || return 3
+  "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || return 3
+  export PATH=$(dirname "$PY"):$PATH
+}
+# the host facts a result is re-derived with, and two distinct physical cores (not SMT siblings) for the verifier and responder
+record_host() {
+  clocks before
+  nvcc --version > "$O/nvcc.txt" 2>&1 || true
+  lscpu -e > "$O/lscpu.txt" 2>&1 || true
+  uv pip freeze --python "$PY" > "$O/pip-freeze.txt" 2>/dev/null || true
+  if [ -n "${NVME_DIR:-}" ]; then
+    mkdir -p "$NVME_DIR"; findmnt -T "$NVME_DIR" > "$O/nvme-mount.txt" 2>&1; lsblk -o NAME,MODEL,TRAN,ROTA,SIZE > "$O/lsblk.txt" 2>&1
+  fi
+  local v r
+  read -r v r <<< "$(lscpu -p=CPU,CORE 2>/dev/null | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
+  VCPU=${VCPU:-${v:-3}}; RCPU=${RCPU:-${r:-2}}
+}
+smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,noheader || true
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
 export PATH=$HOME/.local/bin:$PATH
@@ -44,7 +136,7 @@ if [ "$IMPL" = vllm-gpu ]; then
   PY=${VENV:-/workspace/venv312}/bin/python
   export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
   # torch cu129 needs a CUDA 12.9 driver; below R575 a datacenter GPU runs it through NVIDIA's forward-compatibility libraries
-  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
+  DRV=$(smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
   if [ "$DRV" -lt 575 ]; then
     if [ ! -e /usr/local/cuda-12.9/compat/libcuda.so.1 ]; then
       . /etc/os-release; CUDA_REPO=ubuntu${VERSION_ID/./}
@@ -59,10 +151,63 @@ if [ "$IMPL" = vllm-gpu ]; then
   export PATH=$(dirname "$PY"):$PATH
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
     --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
+elif [ "$IMPL" = band-gpu ]; then
+  gpu_env || exit 3
+  record_host
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
+    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$WORKERS" --verifier-cpu "$VCPU" \
+    --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO \
+    ${BAND_D:+--band-d "$BAND_D"} ${KERNELS:+--kernels "$KERNELS"}
+  RC=$?
+  clocks after
+  exit $RC
+elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
+  gpu_env || exit 3
+  record_host
+  # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
+  # gmpy2's wheel's in band-gpu's venv: nothing is installed on the system), the device's arch
+  ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
+  GMPINC=
+  if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
+    uv pip install -q --python "$PY" gmpy2 || exit 3
+    GMPINC=$("$PY" -c 'import gmpy2, os; print(os.path.dirname(gmpy2.__file__))') || exit 3
+  fi
+  CG=$W/CGBN
+  [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
+  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
+  [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
+  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL                  # keyed by the nvcc too: a .so another toolkit built is never adopted
+  make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
+  arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
+    ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
+      --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
+      --workers "$WORKERS" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D")
+  }
+  if [ "$IMPL" = side-by-side ]; then
+    mkdir -p "$O/bench/band" "$O/bench/p2"
+    arm band-gpu "$O/bench/band" sub; RB=$?
+    clocks between
+    arm p2-v1-gpu "$O/bench/p2" sub; RP=$?
+    if [ -n "$GO" ]; then   # gates only: no measurements to table
+      RC=0
+    else
+      "$PY" benchmarks/pous/side_by_side.py "$O/bench/band/bench-result.json" "$O/bench/p2/bench-result.json" \
+        --out "$O/bench/side-by-side.json" --markdown "$O/bench/side-by-side.md"
+      RC=$?
+    fi
+    [ $RB -ne 0 ] || [ $RP -ne 0 ] && RC=1
+  else
+    arm p2-v1-gpu "$O/bench"; RC=$?
+  fi
+  clocks after
+  exit $RC
 elif [ "$IMPL" = p2-gpu ]; then
   # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for the device's arch
   export PATH=/usr/local/cuda/bin:$PATH
-  ARCH=${ARCH:-sm_$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
+  ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
   echo '#include <gmp.h>' | cpp >/dev/null 2>&1 || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3

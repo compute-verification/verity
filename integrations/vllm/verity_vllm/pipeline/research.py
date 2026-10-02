@@ -31,7 +31,7 @@ from verity_vllm.pipeline.row_driver import CLI, utc
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
-ACCOUNT = {"build": "build", "match": "match", "commit": "verdict"}
+ACCOUNT = {"build": "build", "plan": "plan", "match": "match", "commit": "verdict", "replay": "verdict"}
 
 
 def abs_store_env(environ: dict[str, str]) -> dict[str, str]:
@@ -100,6 +100,23 @@ def _tee(path: str, line: str) -> None:
         f.write(line + "\n")
 
 
+def build_input(py: str, d: str, row: str, build_in: str, env: dict[str, str],
+                research: Callable[[], tuple[list[str], dict[str, str]]]) -> tuple[str | None, str]:
+    """(why the Build in row dir ``d`` is not the cited Build artifact ``build_in``, as the precheck's FAIL detail, else None; the
+    Program digest of ``d``'s Build). ``research()``: the research CLI, as `research_argv` gives it."""
+    r = subprocess.run([py, *CLI, "research-outputs", "digest", d, row], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                       text=True, cwd=ROOT, env=env)
+    here = r.stdout.strip() if r.returncode == 0 else ""
+    if not here:
+        return f"PRECHECK_FAIL_BUILD_INPUT_ABSENT (cited {build_in} but {d} has no Build; run the build stage on this pod first)", here
+    cited = artifact_meta(research(), build_in, "program_digest")
+    if not cited:
+        return f"PRECHECK_FAIL_BUILD_INPUT_UNREADABLE (cited {build_in}: manifest not readable here, or no program_digest in meta)", here
+    if cited != here:
+        return f"PRECHECK_FAIL_BUILD_INPUT_MISMATCH (cited {build_in} program_digest={cited[:16]} != this dir's Build {here[:16]})", here
+    return None, here
+
+
 def stage(o: Any, run: Callable[[Any, str], int]) -> int:
     """One stage of the row as the workload of one research Attempt; ``run(o, stage)`` runs the row's stage."""
     env = o.env
@@ -109,18 +126,9 @@ def stage(o: Any, run: Callable[[Any, str], int]) -> int:
     child = abs_store_env(dict(env.environ))
     try:
         if o.stage != "build" and build_in:
-            r = subprocess.run([env.py, *CLI, "research-outputs", "digest", d, o.row], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                               text=True, cwd=ROOT, env=child)
-            here = r.stdout.strip() if r.returncode == 0 else ""
-            if not here:
-                _tee(f"{d}/stages.txt", f"precheck FAIL {utc()} PRECHECK_FAIL_BUILD_INPUT_ABSENT (cited {build_in} but {d} has no Build; run the build stage on this pod first)")
-                return 3
-            cited = artifact_meta(research_argv(o.research_bin, o.research_py, child), build_in, "program_digest")
-            if not cited:
-                _tee(f"{d}/stages.txt", f"precheck FAIL {utc()} PRECHECK_FAIL_BUILD_INPUT_UNREADABLE (cited {build_in}: manifest not readable here, or no program_digest in meta)")
-                return 3
-            if cited != here:
-                _tee(f"{d}/stages.txt", f"precheck FAIL {utc()} PRECHECK_FAIL_BUILD_INPUT_MISMATCH (cited {build_in} program_digest={cited[:16]} != this dir's Build {here[:16]})")
+            why, here = build_input(env.py, d, o.row, build_in, child, lambda: research_argv(o.research_bin, o.research_py, child))
+            if why:
+                _tee(f"{d}/stages.txt", f"precheck FAIL {utc()} {why}")
                 return 3
             _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 {o.stage}: consumes Build {build_in} (program_digest {here[:16]} verified)"
                                  f"{', Match ' + match_in if match_in else ''}")

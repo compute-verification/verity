@@ -1,0 +1,28 @@
+{
+ "seed": 2026092901,
+ "formTable": {
+  "lanes": 2540,
+  "reachable_lanes_kernel_compared": 2236,
+  "f16_intermediate_inexact_reachable": 16,
+  "kernel_f16_codes_differ": 0
+ },
+ "tagTable": 80,
+ "saltVectors": 74,
+ "rowVectors": {
+  "rows": 31,
+  "families": [
+   "loud416",
+   "loud448",
+   "padded",
+   "random",
+   "same-row",
+   "subnormal",
+   "tuple-edge",
+   "zero-both",
+   "zero-row"
+  ],
+  "atoms": 128,
+  "kernel_f16_slices_agree": 64,
+  "slices": 64
+ }
+}

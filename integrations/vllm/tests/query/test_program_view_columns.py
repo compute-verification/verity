@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import gzip
 import json
+import random
 
 import pytest
-from verity.proofs.query import ValueRef, boundary, partition_by
+from verity.proofs.query import PartitionError, ValueRef, VerificationUnit, boundary, partition_by
+from verity_vllm.query import module_body as mb
 from verity_vllm.query import program_view as pv
+from verity_vllm.query.module_body import boundary_without_literals, literal_calls, without_literals
 from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
 
 EPS = '{"f64":"0x1p-17"}'
@@ -160,3 +163,55 @@ def test_boundary_over_the_columnar_view_equals_the_materialized_one():
     assert [(u.id, u.calls) for u in a.units] == [(u.id, u.calls) for u in b.units]
     assert a.values == {ValueRef(-1, "out"), ValueRef(-2, "m.a.weight"), ValueRef(-2, "m.b.weight"), ValueRef(-2, "m.n.weight"),
                         ValueRef(0, "out"), ValueRef(1, "out"), ValueRef(2, "0"), ValueRef(2, "1"), ValueRef(4, "out"), ValueRef(5, "out"), ValueRef(6, "out")}
+
+
+def attention_like_rows(n: int, seed: int) -> list[dict]:
+    """ROWS, then `n` rows that each read a random set of earlier Calls (either port of the fused norm, Call 2), a weight, or
+    nothing (a literal), under five module prefixes."""
+    rnd = random.Random(seed)
+    rows = list(ROWS)
+    for i in range(len(ROWS), len(ROWS) + n):
+        if rnd.random() < 0.25:
+            args = []
+        else:
+            args = [[["n", j, 0, 4]] if j != 2 else [["n", 2, *rnd.choice([(0, 4), (4, 8), (2, 6)])]] for j in rnd.sample(range(i), min(i, rnd.randint(1, 12)))]
+            if rnd.random() < 0.3:
+                args.append([["p", rnd.choice([0, 1]), 0, 1]])
+        rows.append({"i": i, "spec": "SiluMul_v1{I=4}", "form": "call", "name": f"m.l{rnd.randrange(5)}/x[{i}]", "args": args})
+    return rows
+
+
+QUERIES = {"word": partition_by(lambda c: c.id), "module": partition_by(lambda c: c.name.split("/")[0]), "one": partition_by(lambda c: ""),
+           "parity": partition_by(lambda c: str(c.id % 2), order=lambda k: -int(k))}
+
+
+@pytest.mark.parametrize("step", [1, 2, 7, 1 << 24])
+@pytest.mark.parametrize("q", sorted(QUERIES))
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_the_columnar_boundary_without_literals_is_boundarys(monkeypatch, step, q, seed):
+    """Values, `produced_in` in insertion order, `read_by`, units and owner, whatever the numpy step (a Value first read in one step and
+    again in a later one keeps its first read), on Programs with outputs among the crossing Values, beside them and made by a literal."""
+    monkeypatch.setattr(mb, "_READS_PER_STEP", step)
+    P0 = from_instances(doc(attention_like_rows(60, seed)))
+    lit = literal_calls(P0)
+    outs = (ValueRef(len(P0.calls) - 1, "out"), ValueRef(2, "1"), ValueRef(-1, "out"), *(ValueRef(k, "out") for k in sorted(lit)[:1]))
+    for P in (P0, ProgramView(P0.calls, P0.params, outs, P0.digest, P0.source)):
+        for literals in (lit, frozenset()):
+            a, b = boundary_without_literals(P, QUERIES[q], literals), without_literals(boundary(P, QUERIES[q]), literals)
+            assert a.read_by._d is None
+            assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.values == b.values
+            assert [(u.id, u.calls) for u in a.units] == [(u.id, u.calls) for u in b.units] and a.owner == b.owner
+            assert dict(a.read_by) == b.read_by and a.read_by == b.read_by
+    assert lit and any(v.call in lit for v in boundary(P0, QUERIES["word"]).values), "the rows give the literal filter something to drop"
+
+
+def test_a_body_that_is_not_columnar_or_units_that_are_not_a_partition_go_to_boundary():
+    P, R = from_instances(doc()), reference_from_instances(doc())
+    Q = QUERIES["module"]
+    a, b = boundary_without_literals(R, Q, frozenset({6})), without_literals(boundary(R, Q), frozenset({6}))
+    assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.read_by == b.read_by and isinstance(a.read_by, dict)
+    for units in ((VerificationUnit("a", frozenset(range(8))), VerificationUnit("b", frozenset({3}))),      # Call 3 in two units
+                  (VerificationUnit("a", frozenset(range(7))),),                                            # Call 7 in none
+                  (VerificationUnit("a", frozenset(range(1, 9))),)):                                        # 8 is not a Call
+        with pytest.raises(PartitionError):
+            boundary_without_literals(P, lambda _P, units=units: units, frozenset())

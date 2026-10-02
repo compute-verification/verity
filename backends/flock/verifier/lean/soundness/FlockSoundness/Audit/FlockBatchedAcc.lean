@@ -21,7 +21,7 @@ $$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\
 At `k = cN₀/e`, `1/(1 − r) = c/(c−1)`, which is `2` at the record's `c = 2`. The knowledge term is
 its own bound averaged over the draw (`flock_batched_knowledgeSoundE`), with no named assumption.
 The link term stays named (`LinkSound`), for the link theorem under expected-time collision
-resistance (`Assumptions.SHA512ExpectedTimeCR`).
+resistance (`Assumptions.SHA512CRExpected`).
 -/
 
 namespace FlockSoundness.Audit

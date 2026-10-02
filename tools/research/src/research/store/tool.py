@@ -226,6 +226,9 @@ class Tool:
     #: one of their prefixes, less the paths a `!` pattern names (`merge.rule_touches`); an attempt where such a step was skipped
     #: does not admit that merge
     merge_requires: dict[str, list[str]] = field(default_factory=dict)
+    #: `research run --on`: an argv run on the machine in the shipped tree before the run is claimed (`remote.run_preflight`);
+    #: exit 0 admits the run, anything else refuses it with the preflight's stderr as the reason
+    preflight: list[str] = field(default_factory=list)
 
     def identity(self) -> dict[str, Any]:
         return {"name": self.name, "version": self.version}

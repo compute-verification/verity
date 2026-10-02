@@ -18,6 +18,8 @@ the wrapper `call()` signatures of the same artifacts.
 """
 from __future__ import annotations
 
+import importlib.util
+
 from verity_vllm.program.kernels.compiled_norm_literal import literal_variants
 
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
@@ -88,6 +90,32 @@ def roles_of(kernel: str, signature: list[str] | None = None, *, arity: int | No
     if n not in table:
         return {}, set()
     return table[n], WEIGHT_ARGS[k][n]
+
+
+_VML_WARM = False
+
+
+def warm_vml() -> bool:
+    """Make this process's first MKL VML call on one thread; False without torch, and a no-op after the first call.  torch's CPU `exp`
+    (the SiLU relation's), `log`, `tanh`, `erf` and the other VML functions run in the MKL torch links statically, whose first-call
+    initialisation races when several intra-op threads call at once: one thread's whole chunk then comes out at about 2e-4 relative
+    error (1771 ulp).  One call of any VML function initialises them all, so every entry point that may evaluate these relations calls
+    this before its first torch op."""
+    global _VML_WARM
+    if _VML_WARM:
+        return True
+    if importlib.util.find_spec("torch") is None:
+        return False
+    import torch
+
+    n = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        torch.exp(torch.zeros(1))
+    finally:
+        torch.set_num_threads(n)
+    _VML_WARM = True
+    return True
 
 
 def _fma(a, b, c):

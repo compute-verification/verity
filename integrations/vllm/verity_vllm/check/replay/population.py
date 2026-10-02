@@ -12,13 +12,14 @@ from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.kernels.rows import EVALUATORS
+from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 
 
 #: [R17 dense, ruling R17-11] the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units (R17-10 (3))
-ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4")
+ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4", "Attention_v5", "AttentionSoftcap_v2")
 
 
 def _phase(step: int, last_step: int) -> str:
@@ -152,7 +153,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
             if pd is None or pd["members"]:
                 continue                                                         # unmodelled / a member-straddling slice: a replay-time fault, not a name
             pf = pd["family"]
-            if pf not in EVALUATORS:
+            if pf not in EVALUATORS and pf not in DELEGATES:
                 out.add(f"{pf} ({NOT_YET.get(pf, 'no registered evaluator')})")
             elif depth + 1 >= INTERIOR_DEPTH:
                 out.add(f"{pf} (interior chain deeper than {INTERIOR_DEPTH})")
@@ -224,7 +225,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             _not_ev(f"MoE plane row -> plane slice mapping failed: {d['plane_error']}", "mapping", fam)
             not_ev_fam[f"{fam} (plane mapping failed)"] += 1
             continue
-        if fam not in EVALUATORS:
+        if fam not in EVALUATORS and fam not in DELEGATES:
             if d is None:
                 _not_ev(f"unmodelled family {fam} (manifest incomplete -- coverage fails closed)", "mapping", fam)
                 not_ev_fam[fam] += 1

@@ -11,7 +11,7 @@ hold_label = "hold"
 role = "vllm-coordinator"
 paths = ["integrations/vllm/", "!README.md"]
 
-# A named statement reviewer for any change to a pinned statement or to a definition a pin reads (lane contract §5).
+# A named statement reviewer for any change to a guarantee's statement or to a definition a pin reads (lane contract §5).
 [[grant]]
 role = "statement-reviewer"
 lean_audit = ["pins", "reads"]

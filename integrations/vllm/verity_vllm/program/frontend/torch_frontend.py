@@ -1,4 +1,4 @@
-"""PyTorch authoring frontend to `Program` (lane FE, thin prototype; `docs/frontend-pytorch-2026-09-07.md` §2–§3).
+"""PyTorch authoring frontend to `Program` (lane FE, thin prototype; frontend design §2–§3).
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
@@ -793,8 +793,8 @@ class Ops:
     def __getitem__(self, fid: str) -> _Callable:
         if fid in self._roles:
             return self._roles[fid]
-        vs = [n] if (n := fid if "_v" in fid else f"{fid}_v1") in self._registry.defs or "_v" in fid else [k for k in self._registry.defs if k.startswith(f"{fid}_v") and k[len(fid) + 2:].isdigit()]
-        if len(vs) != 1 or (d := self._registry.defs.get(vs[0])) is None:     # an unversioned name: its v1, else its one registered version
+        vs = [n] if (n := fid if "_v" in fid else f"{fid}_v1") in self._registry.defs or "_v" in fid else [k for k, d in self._registry.defs.items() if k.startswith(f"{fid}_v") and k[len(fid) + 2:].isdigit() and not hasattr(d, "word")]
+        if len(vs) != 1 or (d := self._registry.defs.get(vs[0])) is None:     # an unversioned name: its v1, else its one registered word version (never a Boolean one)
             raise FrontendError("E_UNREGISTERED_OP", f"no registered function {fid!r}")
         return Prim(d) if isinstance(d, PrimitiveDefinition) else Registered(d)
 

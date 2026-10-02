@@ -48,11 +48,9 @@ import time
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
 import contextlib
-import copy
 import dataclasses
 import gc
 import hashlib
-import inspect
 import json
 import os
 import random
@@ -73,8 +71,9 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import opened as OV  # noqa: E402
-from verity_vllm.commit import challenge as CH  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -186,19 +185,6 @@ def cgroup_mem_current() -> dict[str, int | None]:
     return out
 
 
-def rss_kb() -> tuple[int | None, int | None]:
-    try:
-        cur = hwm = None
-        for line in Path("/proc/self/status").read_text().splitlines():
-            if line.startswith("VmRSS:"):
-                cur = int(line.split()[1])
-            elif line.startswith("VmHWM:"):
-                hwm = int(line.split()[1])
-        return cur, hwm
-    except Exception:  # noqa: BLE001
-        return None, None
-
-
 def nvidia_smi_used_mib() -> int | None:
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True,
@@ -213,6 +199,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
     eng = engine.llm.llm_engine
     pending = sorted(range(len(requests)), key=lambda i: (int(requests[i].get("arrive_step") or 0), i))
     tokens: dict[str, list[int]] = {}
+    finish: dict[str, str | None] = {}
     finished: set[str] = set()
     step_t: list[float] = []
     step_tokens: list[int] = []
@@ -234,7 +221,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
         n = 0
         for o in outs:
             for c in o.outputs:
-                tokens[o.request_id] = [int(t) for t in c.token_ids]
+                tokens[o.request_id], finish[o.request_id] = [int(t) for t in c.token_ids], c.finish_reason
                 n += 1
             if o.finished:
                 finished.add(o.request_id)
@@ -247,7 +234,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
     walls = [step_t[0] - t0] + [b - a for a, b in zip(step_t, step_t[1:])]
     gen = sum(len(v) for v in tokens.values())
     return {"wall_s": t1 - t0, "iterations": it, "step_wall_s": walls, "step_tokens_out": step_tokens, "generated_tokens": gen,
-            "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "t_last_step": step_t[-1]}
+            "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "finish_reasons": finish, "t_last_step": step_t[-1]}
 
 
 # [coord ruling 41 / rev F-r16-23] the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
@@ -269,7 +256,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an
     unattested engine leaves it None (every EOS stop then fails by name) -- never the engine value as the rule, never inferred from the
     trace.  `notes` names what was refused."""
-    out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "notes": [], "srule": None}
+    out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "async_scheduling": None, "notes": [], "srule": None}
     try:
         from verity_vllm.pipeline import global_program as _GP
         _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
@@ -279,7 +266,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
         _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
-        out["declared_lag"], out["engine_lag"] = _decl_lag, _eng_lag
+        out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"R17-1: the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")
         elif _eng_lag != _decl_lag:
@@ -549,15 +536,16 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
     return len(zero_rows)
 
 
-def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None) -> dict[str, Any]:
-    """`served_tokens`: {workload request_id: [served token ids]} of THIS run (run_workload's `tokens`); `stop`: stop_rule_of_record's
-    {eos, lag} -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
+def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None,
+                   finish_reasons: dict | None = None) -> dict[str, Any]:
+    """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
+    -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
     """R14 BIND-01: the binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
     from verity_vllm.commit import binding as B, partition as PT
-    from verity_vllm.check import executed_prefix as EP
+    from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
     # gprog's workload digest or the labelled components fold).  The committer's own digest seeds the step roots and is recorded beside
@@ -685,15 +673,12 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     else:
         past = EP.rows_past_the_stop(bmap, request_steps)
     cov["rows_past_the_stop"] = past
-    # [COORD R17-27 (a)+(b)] the prefix is accepted only LINKED to the serving transcript + the Match account of the same attempt
-    # (--match-dir: capture/tokens.json + ../global_match.json): Commit served == Match served, the same two lengths, GM-01 PASS, lag
-    # attested on every leg.  A prefix reduced on the committer's own count alone is a problem, by name.
-    link = EP.link_to_match_account(epr, EP.load_match_account(getattr(args, "match_dir", None)), order=order, declared_lag=(stop or {}).get("declared_lag"),
-                                    served_tokens=served_by_rid)                   # rev S-r17-23 (c): the FULL served list per request
-    cov["match_account_link"] = link
-    if link["required"] or link["problems"]:
-        print(f"[delta] execution_extent: executed prefix <-> Match account (pair {pair}): {'LINKED' if link['ok'] else 'NOT LINKED'} tokens_equal {link.get('tokens_equal')} "
-              f"gm {((link.get('global_match') or {}).get('verdict'))}" + (f"; PROBLEMS {link['problems'][:3]}" if link["problems"] else ""), flush=True)
+    # [COORD R17-27 (a)+(b)] the prefix is accepted only LINKED to an account of the same attempt: the Match record (--match-dir: capture/tokens.json
+    # + ../global_match.json) and, where a prefix is reduced and the sampled ids are committed, the Commit's token record (commit/tokens_p<pair>.json,
+    # every served token opened from the run root); on a config run (no Match) the token record alone; never the committer's own count alone.
+    links = CT.account_links(com, rc, bmap, epr, out_dir=args.out, pair=pair, order=order, arrivals=arrivals, match_dir=getattr(args, "match_dir", None), stop=stop or {},
+                             served=served_by_rid, finish=None if finish_reasons is None else {_logical(str(k)): v for k, v in finish_reasons.items()}, past=past, program_digest=pd)
+    cov["match_account_link"], cov["commit_account_link"] = links["match_account_link"], links["commit_account_link"]
     if comp is not None:
         cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
     if wrong_program:                                                              # [COORD 5] a manifest of another Program is never a population
@@ -705,8 +690,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error="executed prefix of record: " + "; ".join(epr["problems"][:3]))
     elif not past["ok"]:                                                           # [R17-1] committed rows of a stopped request past its prefix
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=past["error"])
-    elif not link["ok"]:                                                           # [R17-27 (a)/(b)] a reduced prefix not linked to the Match account
-        cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error="executed prefix not linked to the Match account: " + "; ".join(link["problems"][:3]))
+    elif links["error"]:                                                           # [R17-27 (a)/(b)] a reduced prefix linked to no account of record
+        cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=links["error"])
     elif comp is not None and not comp.get("ok"):                                  # [R15 B8] an omitted / relabelled / duplicated request, named
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=comp.get("error") or "composition check failed")
     ctx_ok, ctx_why = B.map_context_check(bmap, rc)
@@ -946,12 +931,8 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
 # taken BEFORE any committer); later jobs reuse it when `engine_kwargs_for` yields the same kwargs / env flags / checkpoint (else the job is
 # refused with HOT-KEY-MISMATCH and the worker restarts, reason recorded).  Every committer built in a job is registered in _HOT["coms"] so
 # the worker can close it (uninstall + worker stop + pool shutdown) and re-check the engine is pristine after the job.  _HOT is None in a
-# plain (cold) process: nothing below changes.
+# plain (cold) process: nothing below changes.  A grouped Commit (`commit_group`) sets it too, with ``group`` (`group_reuse`) and ``last``.
 _HOT: dict[str, Any] | None = None
-
-class _ReplayReused(Exception):
-    """[R16 sys] control flow: this pair's C2 record is the cached one (see --replay-cache)."""
-
 
 HOT_UNSAFE = ("compiled_taps", "arms", "only_arm", "late_read", "value_check", "arena_unchecked", "profile_hooks", "moe_source")
 
@@ -963,7 +944,7 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append(f"--compiled-taps {args.compiled_taps} (Inductor hooks / runner patches are process-wide)")
     if args.arms:
         why.append("--arms (multi-committer arms)")
-    if args.only_arm:
+    if args.only_arm == "control" or (args.only_arm and args.compiled_taps != "off"):
         why.append(f"--only-arm {args.only_arm} (paired-process protocol)")
     if args.late_read:
         why.append("--late-read (mutates native_collect.GATHER_FLUSH_LEAVES)")
@@ -982,45 +963,6 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
     return why
 
 
-def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
-                               sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
-    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
-    manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
-    the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.query.manifest import format as MF
-    from verity_vllm.query.required import QUERIES
-    q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
-    if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
-        return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
-    t0 = time.monotonic()
-    labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-    if getattr(args, "programs_root", None):
-        fx = {"requests": [{"request_id": labels[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                            "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
-        loaded = MF.programs_for(fx, args.programs_root)
-    elif getattr(args, "program_dir", None):
-        one = MF.load_program(args.program_dir)
-        loaded = {labels[str(r.get("request_id"))]: one for r in reqs}
-    else:
-        return None, {"used": False, "why": "no --programs-root / --program-dir: producer facts not derivable"}
-    of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
-    of_record.update(str(x) for x in (required_manifest or {}).get("component_digests") or [])
-    of_record.update(str(c["program_digest"]) for c in ((required_manifest or {}).get("components") or {}).values()
-                     if isinstance(c, dict) and c.get("program_digest"))
-    digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
-    bad = sorted(k for k, d in digs.items() if d not in of_record)
-    if bad:
-        return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
-    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
-    del loaded
-    return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
-                   "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),
-                   "conflicts": sum(1 for f in facts.values() if f.get("conflict")), "wall_s": round(time.monotonic() - t0, 1),
-                   "method": "v1_bridge.population over the Programs of record: producing Call family, first-operand producer family, "
-                             "reading modules outside the producer's module (oracle_compare.producers_of_programs)"}
-
-
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
@@ -1032,12 +974,13 @@ class Options:
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
-    hash_threads: int = option("--hash-threads", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
+    hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     openings: int = option("--openings", type=int, default=64)
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] | None = option("--engine-arg", action="append", default=None)
     target: str | None = option("--target", default=None, help="[R13 hopper] TargetProfile JSON overrides / path (default: the workload's `target` block over this device)")
+    protocols_config: str | None = option("--protocols-config", default=None, help="the protocols' settings, a JSON file (default: the workload's `protocols_config`); never hashed")
     warmup: int = option("--warmup", type=int, default=2)
     label: str = option("--label", default="")
     gpu_tree: bool = option("--gpu-tree", default=False, action="store_true", help="native_host: GPU-resident SHA-256 chunk tree (CMT-2 hidden_gpu_tree.cu) over the arena; no D2H, no hashlib")
@@ -1071,14 +1014,20 @@ class Options:
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
     replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="[R16 sys, rev M-0051] reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key " "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and " "evaluated_here=0 (default OFF until coord rules)")
+    replay_bundle_cap_gb: float = option("--replay-bundle-cap-gb", type=float, default=300.0, help="--replay-deferred: the largest replay bundle this Commit writes (GB); a larger one is not written and the C2 replay runs in this process")
+    replay_bundle_overlap: int = option("--replay-bundle-overlap", type=int, default=1, choices=(0, 1), help="--replay-deferred full: 1 writes the bundle's store from the moment the run root is fixed, beside the binding and manifest coverage (replay_bundle.start; the same files and digests); 0 writes it at the C2 site, after them")
+    replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all, stratified by family (one stratum per family, round-robin, at least one each) in place of the row's per-stratum sample")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every RoPE head in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
+    plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
+    call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -1106,7 +1055,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         import faulthandler
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ir, verity_vllm, vllm-poc,
-    # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITOR_REPO must agree).
+    # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
     from verity_vllm.pipeline import source_identity as _sid
 
@@ -1126,6 +1075,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if _unsafe:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
+    _planner = RB.prepare(args)
     compiled_src = None
     fault = os.environ.get("VERITY_FAULT", "").strip()
     compiled_kernels = None
@@ -1204,12 +1154,34 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
-    engine_args = dict(wl.get("engine_args_required") or {})
-    engine_args.update(va.parse_engine_args(args.engine_arg))
+    engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
+    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
+    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
+    # (a control-only process has no committer at all: nothing installed, nothing compiled in)
+    kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
+    multi = bool(args.arms)
+    coms: dict[str, Any] = {}
+    # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
+    # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
+    # at their first consumer's input, not the module's forward output (oracle_compare.promote_handed_down); form (B) reads them every pair
+    oracle_producers: tuple[dict | None, dict] | None = None
+    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
+    if required_manifest is not None and kinds:
+        from verity_vllm.check import oracle_compare as _OCP
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, wl["requests"], wl["sampling"], tl=TL)
+        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
+        if oracle_producers[0]:
+            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
+            oracle_producers[1]["handed_down"] = _hd
+            if _hd["rows"]:
+                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
+                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
+                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
+    GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
-                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=wl.get("protocols_config")), execution=va.execution_of_workload(wl))
+                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=args.protocols_config or wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1319,41 +1291,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
 
     run_id = f"{Path(args.workload).stem}"
-    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
-    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
-    kinds = [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
-    multi = bool(args.arms)
-    coms: dict[str, Any] = {}
-    if args.only_arm == "control":
-        kinds = []                                           # control-only process: no committer at all (nothing installed, nothing compiled in)
     if os.environ.get("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
         import sys as _sys
 
         _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
         print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
-    # the Programs' producer facts for a v2-query manifest (which carries none), derived once BEFORE the committer is armed: the members
-    # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
-    # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
-    oracle_producers: tuple[dict | None, dict] | None = None
-    if required_manifest is not None and kinds:
-        from verity_vllm.check import oracle_compare as _OCP
-        try:
-            oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
-        except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-            oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
-        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
-        if oracle_producers[0]:
-            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
-            oracle_producers[1]["handed_down"] = _hd
-            if _hd["rows"]:
-                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
-                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
-                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
         if _HOT is not None:
-            _HOT.setdefault("coms", []).append(com)          # closed by the hot worker after the job (uninstall + worker stop + pool shutdown)
+            _HOT.setdefault("coms", []).append(GR.adopt(_HOT, com))          # closed after the job (hot worker, grouped Commit: on the group's pinned pool)
         if compiled_kernels is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
@@ -1385,7 +1332,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -1739,7 +1686,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--flip-weight did not change the element ({_before} -> {flip_weight_rec['after']}): pick another value")
             print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- checkpoint_binding (the weights pin) MUST FAIL naming {_fw[0]}", flush=True)
         with TL.span("prep.register_weights", kind=kind):
-            w = com.register_weights()
+            w = GR.register_weights(_HOT, com, args.weights_hash)
         TL.end("prep.committer_setup", kind=kind)
         print(f"[delta] weight registration ({kind}): {w}", flush=True)
         # [MAN-09, rev-cb M-0610 / coord M-0614 (1)] the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
@@ -1776,7 +1723,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _wor_rec["derived"] = WR.derivation_provenance(_pd, args.checkpoint_dir, args.checkpoints, None)
                         _wor_rec["derived"]["tool"] = "verity_vllm.pipeline.commit (in-process --checkpoint-dir fallback)"
                     (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
-                _live_wd = WR.live_param_digests(eng.model)
+                _live_wd = GR.live_digests(_HOT, eng.model, WR.live_param_digests)
                 print(f"[delta] weights of record ({kind}): root {str(_wor_rec.get('root_of_record'))[:16]} fields {_wor_rec.get('n_pinned')}/{_wor_rec.get('n_fields')} pinned, "
                       f"unpinned {len(_wor_rec.get('unpinned') or [])}, unresolved {len(_wor_rec.get('unresolved') or [])}, shards pinned {(_wor_rec.get('checkpoint') or {}).get('all_shards_pinned')}; "
                       f"live digests {_live_wd.get('n')} tensors in {_live_wd.get('wall_s')} s", flush=True)
@@ -1788,15 +1735,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # [R17 fp8] bounded staging: the warm-up is also the LEARN-ONLY pass -- every shape class of the workload (same lengths, same schedule
         # as the record runs: throwaway_requests) gets its plan here; a learning step over the transient budget records its plan and
         # discards its windows (placeholder root: this run is never a record).  The record runs then hit every plan and stage bounded.
+        # Its call boundaries are placeholder words of their shapes (TAPS.warmup): the record pass evaluates its own.
         TL.start("prep.warmup_instrumented", kind=kind)
-        if getattr(com, "bounded", False):
-            com.learn_only = True
+        TAPS.warmup(com, True)
         com.install()
         r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
         rc = com.finalize()
         com.uninstall()
+        TAPS.warmup(com, False)
         if getattr(com, "bounded", False):
-            com.learn_only = False
             _bs = rc.extra.get("bounded_staging") or {}
             print(f"[delta] bounded staging warm-up ({kind}): learned-only steps {_bs.get('learned_only_steps')} ({(_bs.get('learned_only_bytes') or 0) >> 20} MiB "
                   f"discarded), transient peak {(_bs.get('transient_peak_bytes') or 0) >> 20} MiB (budget {(_bs.get('learn_budget_bytes') or 0) >> 20} MiB), "
@@ -1813,7 +1760,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
-    protocols = PO.at_commit(_ekw["target"], eng.model, versions, wl.get("protocols_config"))   # after every committer registered the weights
+    protocols = PO.at_commit(_ekw["target"], eng.model, versions, args.protocols_config or wl.get("protocols_config"))   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
@@ -1833,6 +1780,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
     replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
+    deferred: dict[int, dict[str, Any]] = {}          # --replay-deferred: pair -> its replay bundle's context
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
     stop_of_record = stop_rule_of_record(eng, wl, versions)
@@ -1895,8 +1843,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
                 "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
-                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30,
-                            "nvidia_smi_used_mib": nvidia_smi_used_mib()},
+                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
@@ -1953,8 +1900,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                  # fail-closed diagnostics: WHICH positions failed (step, leaf index, identity) -- a failed opening is a Commit FAIL
                                  "failed": [{"step": o.step, "index": o.index, "identity": {k: (v if isinstance(v, (int, str, bool)) else str(v)) for k, v in (o.identity or {}).items()}}
                                             for o, k_ok in zip(ops, ok) if not k_ok][:16]},
-                    "weight_registration": rc.weight_registration,
-                }
+                    "weight_registration": rc.weight_registration}
                 for s in rc.steps:
                     step_rows.append({"pair": pair, "arm": arm, "step": s.step, "wall_s": r["step_wall_s"][s.step] if s.step < len(r["step_wall_s"]) else None,
                                       "n_leaves": s.n_leaves, "n_bytes": s.n_bytes, "n_tensors": s.n_tensors, "hashing_s": s.hashing_s,
@@ -1972,9 +1918,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
                 # R14 BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
+                _rb_started = RB.start(out, pair, com, rc, args, protocols)
+                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None), after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
-                    row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record)
+                    row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))
                     row["commit"]["rules_version"] = row["commit"]["binding"]["rules_version"]
                     b = row["commit"]["binding"]
                     print(f"[delta] BINDING (pair {pair}): map {b['map_entries_n']} entries digest {b['map_digest'][:16]}; population {b['population']['n']} "
@@ -2234,10 +2182,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                              "max_tokens": r.get("max_tokens") or sampling.get("max_tokens")} for i, r in enumerate(reqs)]}
                         _prod = OC.producers_of(required_manifest)
                         if oracle_producers is None:
-                            try:
-                                oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
-                            except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-                                oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+                            oracle_producers = CP.derived(args, required_manifest, reqs, sampling)
                             print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
                         if oracle_producers[0]:
                             _prod = OC.merge_producers(_prod, oracle_producers[0])
@@ -2268,334 +2213,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"attribution {_at.get('complete')} ({_at.get('pairs')} step/request pairs, unverified {_at.get('unverified_n')}, ambiguous {_at.get('ambiguous_steps')}) compared {oc.get('compared')} "
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
-                if getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
-                    # [DECISIONS-2 §4 C2 / M-0356 (1), manbind M-0394] C2 OF RECORD: sampled exact VU replay -- for a seeded stratified sample of
-                    # Program instance rows (spec x request x phase), read the COMMITTED bytes of the row's inputs (the Program's dataflow -> the
-                    # manifest's member rule -> the binding map), evaluate the registered relation (verity_vllm.program.kernels.derived_rows), compare with the
-                    # COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered boundary linkage (declared prompt -> input ids; sampled
-                    # id[s-1] -> input id[s]) over every (engine step, request).  Needs no Match record; the oracle-compare above is a diagnostic.
-                    # [R16 sys M-0043 / rev M-0051] REPLAY CACHE (--replay-cache, default OFF): sampled_replay is a pure function of (committed
-                    # bytes = the run root, the manifest digest, the seed, the replay code); a later pair whose FULL key equals an earlier pair's
-                    # reuses that pair's record (copy carries `reused_from`; `evaluated_here` = 0 so nothing is counted twice).  Any differing
-                    # component -> its own replay, refused by name in the log.  Within THIS Commit stage (this main() call) only.
-                    _rc_key: str | None = None
-                    if getattr(args, "replay_cache", False):
-                        try:
-                            if getattr(args, "replay_seed", None) is not None:
-                                _ks: Any = int(args.replay_seed)
-                            elif getattr(args, "replay_challenge", None):
-                                _ks = CH.challenge_seed(str(args.replay_challenge), rc.run_root)
-                            else:
-                                _ks = CH.root_seed(rc.run_root)
-                            _w_ref_k = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None
-                            _rc_key = json.dumps({"run_root": rc.run_root.hex(), "manifest_digest": (required_manifest or {}).get("manifest_digest") if isinstance(required_manifest, dict) else None,
-                                                  "program_digest": getattr(args, "program_digest", None), "seed": _ks,
-                                                  "binding_map_sha256": hashlib.sha256((Path(args.out) / f"binding_map_p{pair}.json").read_bytes()).hexdigest(),
-                                                  "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []),
-                                                  "code": versions.get("git_head"), "weights_root": _w_ref_k, "committer": com.name, "retain": getattr(args, "retain", None)}, sort_keys=True)
-                        except Exception as _ke:  # noqa: BLE001  -- no key, no reuse
-                            _rc_key = None
-                            print(f"[delta] replay cache: no key for pair {pair} ({_ke!r}); replay runs", flush=True)
-                    _cached = replay_cache.get(_rc_key) if _rc_key is not None else None
-                    if _rc_key is not None and _cached is None and replay_cache:
-                        _k0, _v0 = next(iter(replay_cache.items()))
-                        _d0 = sorted(k for k in json.loads(_k0) if json.loads(_k0)[k] != json.loads(_rc_key).get(k))
-                        print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
-                    TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
-                    try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_store as VUX, serving_rows as SRW
-                        from verity_vllm.query.manifest import format as MF
-                        if _cached is not None:
-                            raise _ReplayReused()
-                        _bm = json.loads((Path(args.out) / f"binding_map_p{pair}.json").read_text())
-                        _rl = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-                        # [rev-cb M-0411 O2] the population is derived from the Program OF RECORD: every loaded Program's digest must be the
-                        # Build digest of record (--program-digest, B=1) or one of the manifest's component digests (B>=2); else REFUSED by name
-                        _of_record = set()
-                        if getattr(args, "program_digest", None):
-                            _of_record.add(str(args.program_digest))
-                        if isinstance(required_manifest, dict):
-                            _of_record.update(str(x) for x in (required_manifest.get("component_digests") or []))
-                            for _c in (required_manifest.get("components") or {}).values():
-                                if isinstance(_c, dict) and _c.get("program_digest"):
-                                    _of_record.add(str(_c["program_digest"]))
-                        if getattr(args, "programs_root", None):
-                            _fx = {"requests": [{"request_id": _rl[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                                                 "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
-                            _loaded = MF.programs_for(_fx, args.programs_root)
-                        else:
-                            _l1 = MF.load_program(args.program_dir)
-                            _loaded = {_rl[str(r.get("request_id"))]: _l1 for r in reqs}
-                        _digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in _loaded.items()}
-                        if not _of_record:
-                            raise RuntimeError("no Program digest of record to check the replay Programs against (pass --program-digest / --required-manifest)")
-                        _bad = {k: d for k, d in _digs.items() if d not in _of_record}
-                        if _bad:
-                            _named = ", ".join(f"{k}: {d[:16]} ({_loaded[k].get('dir')})" for k, d in _bad.items())
-                            raise RuntimeError(f"replay Program(s) are not the Program of record: {_named} vs of-record {sorted(x[:16] for x in _of_record)} -- refused")
-                        _progs = {k: v["instances"] for k, v in _loaded.items()}
-                        _arr = {_rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in reqs}
-                        # [rev M-0570 (1), compiled f3fdaba37] ONE schedule of record for every consumer: when the population was placed on the
-                        # ENGINE's committed-step axis (binding.coverage.schedule.use == observed -- every request observed, contiguous, exactly
-                        # its cap), the replay's and the linkage's arrivals are the same observed ones; else the declaration stands (as before)
-                        _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-                        _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
-                        if _moved:
-                            print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
-                        _k0 = next(iter(_progs))
-                        _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
-                        _wp, _rd = SRW.readers(args.serving_rows, com, rc, SR.model_weights_provider(PO.weights_view(protocols, eng.model), _pi0.prefix), _progs, _bm, _arr, _loaded, required_manifest, args.label)
-                        # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
-                        # compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)
-                        _wc: dict[str, Any]
-                        try:
-                            _w_saved = getattr(com, "weights", None)
-                            _w_now = PO.register_weights(protocols, com)     # through what a protocol option released
-                            if _w_saved is not None:
-                                com.weights = _w_saved
-                            _w_ref = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else (_w_saved or {}).get("root")
-                            _wc = {"equal": (str(_w_now.get("root")) == str(_w_ref)) if _w_ref else None, "committed_root": _w_ref, "replay_root": _w_now.get("root"),
-                                   "tensors": _w_now.get("tensors"), "wall_s": _w_now.get("wall_s"), "hash": _w_now.get("hash"),   # [R16 sys SYS-05] time + path
-                                   "method": "live parameters re-registered at replay (register_weights) == the run's committed weights root",
-                                   "why": None if (_w_ref and str(_w_now.get("root")) == str(_w_ref)) else ("no committed weights root on the run" if not _w_ref else "root differs")}
-                        except Exception as _we:  # noqa: BLE001
-                            _wc = {"equal": None, "note": f"by reference, unverified at replay: {_we!r}"[:200]}
-                        # [O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given
-                        _seed_chal = None
-                        if getattr(args, "replay_seed", None) is not None:
-                            _seed, _seed_src, _seed_form = int(args.replay_seed), RC.PROVER_SEED_SOURCE, "prover-chosen"
-                        elif getattr(args, "replay_challenge", None):
-                            (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
-                            _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
-                        else:
-                            _seed, _seed_src, _seed_form = CH.root_seed(rc.run_root), RC.ROOT_SEED_SOURCE, "run-root"
-                        # [rev-cb F-cb-44] the committed store's retention decides the evaluator: DEVICE-retained blocks cannot be read by
-                        # forked children (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
-                        _blocks = getattr(com, "_gpu_blocks", None) or {}
-                        _retention = ("device" if any(b is not None and bool(getattr(b, "is_cuda", False)) for b, _u in _blocks.values())
-                                      else (str(args.retain) if getattr(args, "retain", None) else ("host" if _blocks else None)))
-                        # [R17-1 / F-moe-r17-03] the executed prefix of record of every request (binding_record placed the population over the
-                        # same: this run's served tokens + the declared stop rule / LAG) bounds the replay population and the linkage horizon;
-                        # a problem there (an early stop the declared rule cannot place) leaves every horizon None = the pre-R17-1 shape
-                        # (the cap's rows are then sampled and 'not evaluated' -> partial, never PASS; coverage already failed by name)
-                        _epr_r = EPX.executed_prefix_of_record(sorted(_arr, key=lambda k: int(k[1:])), {_rl[str(k)]: [int(t) for t in v] for k, v in r["tokens"].items() if str(k) in _rl},
-                                                               caps={_rl[str(q.get("request_id"))]: int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs},
-                                                               eos_of_record=stop_of_record.get("eos"), lag=stop_of_record.get("lag"))
-                        _horizons = ({k: int(v["executed_prefix_len"]) for k, v in _epr_r["requests"].items()} if _epr_r["ok"] else None)
-                        if _epr_r["any_eos_stop"]:
-                            print(f"[delta] replay/linkage horizons = the executed prefix of record: {_horizons} (LAG {_epr_r['lag']}; "
-                                  f"{'ok' if _epr_r['ok'] else 'PROBLEMS ' + str(_epr_r['problems'][:2])})", flush=True)
-                        # [R16 pin, coord ruling 36] the DECLARED seed of each request = the SamplingParams.seed the run was asked for (the same
-                        # per-request / sampling-level resolution vllm_adapter.sampling_params uses; None on a greedy row), and the Program's S
-                        # of record from each request Program's Build result (`sampling.splits == "derived"` + `sampling.geometry.num_sms`,
-                        # REQ-03 trees) -- the prescribed-input linkage reads BOTH from the record, never from the served run
-                        # [R16 pin, coord ruling 35 sixth consumer (sys M-0466)] the linkage horizon is the request's PROGRAM OF RECORD's, not
-                        # the workload cap: at B=1 served-shape (eos-truncated T_r < cap, exec 8d06abb60) and at B>=2 (GP-01 composes the
-                        # served shapes) the Program of record has T_r + 1 steps; linking range(arrive, arrive + cap) named the cap's
-                        # never-executed steps as unlinked.  Horizon = min(cap, Program steps) -- the Program's T from its Build result
-                        # (result.json T) else its ProgramIndex.n_steps; a request whose committed steps are FEWER than its Program of
-                        # record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request (horizon).
-                        _pi_steps: dict[str, int] = {}
-                        for _k, _v in _loaded.items():
-                            _t = (_v.get("result") or {}).get("T")
-                            _pi_steps[_k] = (int(_t) + 1) if _t is not None else (len(MF.segment_steps(_progs[_k]["rows"])) if _k in _progs else None)
-                        _wreq = [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
-                                  "prompt_token_ids": list(r["prompt_token_ids"]),
-                                  "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),
-                                  "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
-                                  "program_steps": _pi_steps.get(_rl[str(r.get("request_id"))]),
-                                  # [R17-1] the horizon is the executed prefix of record (cap on a length stop; served + LAG on an EOS stop):
-                                  # boundary_linkage verifies the EOS at steps[-1 - lag] and the placeholder row(s) fed the EOS inside it
-                                  "steps": SR.linkage_horizon(_arr[_rl[str(r.get("request_id"))]], int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
-                                                              _pi_steps.get(_rl[str(r.get("request_id"))]),
-                                                              executed=(None if _horizons is None else _horizons.get(_rl[str(r.get("request_id"))])))} for r in reqs]
-                        _spr = {}
-                        for _k, _v in _loaded.items():
-                            _smp = ((_v.get("result") or {}).get("sampling") or {})
-                            _spr[_k] = ({"derived": (_smp.get("geometry") or {}).get("num_sms")} if _smp.get("splits") == "derived" else _smp.get("splits"))
-                        # [rev M-0485; R17-1 / DP-pad-02 (b)] the Program's declared stop rule + LAG = stop_rule_of_record (read once above; the
-                        # SAME declaration GM-01 G6 reads); None = undeclared / unattested -> a request linked over fewer steps than its cap
-                        # fails closed by name (F-pm-24) -- never the engine value as the rule, never inferred from the trace
-                        _eos, _lag = stop_of_record.get("eos"), stop_of_record.get("lag")
-                        lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=_pi0.embed_op_path(), splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
-                        # [COORD R17-26 (1) in R17-27's box; reqval M-0343 / revb M-0349 n2] ONE mechanism for the not-executed(R17-1) class:
-                        # sampled_replay's `population.not_executed_by_rule` (reqval; Q(P) stays the cap-length manifest, the identities at
-                        # request-relative steps >= n_exec leave the pool BEFORE any draw, named).  THIS is its CALLER: every flag is a named
-                        # record fact -- a_r READ from the Match record (link_to_match_account: tokens.json / G6 lengths_by_request, path +
-                        # sha256 as a_r_source), served_len_commit = this run's own served length, linked = C2 boundary linkage + tokens_equal
-                        # + G6 agree, lag_attested = declared == record_attests == tokens.json, rows_past_stop = coverage's execution-past-
-                        # the-stop count, eos_declared = the served token a_r-1 is a declared EOS id (F-pm-24) -- never literals.  On a tree
-                        # without reqval's kwarg (this lane alone) nothing bounds the replay population: an EOS-stopped request's rows past
-                        # the stop are sampled and grade 'not evaluated' -> partial, never PASS (the class is unrepresentable there).
-                        _sr_kw: dict[str, Any] = {}
-                        # [reqval M-0585 / revb R3] + this run's own served list and the declared EOS ids per request: a consumer that derives
-                        # the class from Continuation_v1's recurrence (reqval a8f110f5f + pad a80a99ae7 on the tree) takes them; an older
-                        # signature receives only the arithmetic's facts (facts_accepted_by), never a TypeError
-                        _ep_facts = EPX.executed_prefix_facts(_epr_r, row["commit"].get("binding") or {}, lk, _arr, stop_of_record,
-                                                              served_tokens={_rl[str(k)]: [int(t) for t in v] for k, v in r["tokens"].items() if str(k) in _rl})
-                        if hasattr(SR, "executed_prefix_of_record") and "executed_prefix" in inspect.signature(SR.sampled_replay).parameters:
-                            _ep_facts = EPX.facts_accepted_by(SR.executed_prefix_of_record, _ep_facts)
-                            _sr_kw["executed_prefix"] = {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
-                            _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
-                            if _epr_r["any_eos_stop"] or _flt:
-                                print(f"[delta] not-executed(R17-1) class -> sampled_replay(executed_prefix=): " + ", ".join(
-                                    f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items())
-                                      + (f"; FAULTS {_flt}" if _flt else "; no faults"), flush=True)
-                        elif _epr_r["any_eos_stop"]:
-                            print("[delta] WARNING: this tree's sampled_replay has no executed_prefix= (reqval R17-26/R17-27 not in the tree): the EOS-stopped "
-                                  "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
-                        sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
-                                               seed_challenge=_seed_chal,
-                                               max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []),
-                                               workers=getattr(args, "replay_workers", None), retention=_retention,
-                                               ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
-                                               # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
-                                               manifest=(required_manifest if isinstance(required_manifest, dict) else None),
-                                               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
-                                               **_sr_kw)
-                        sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
-                        sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
-                        sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
-                                                           for k, v in _epr_r["requests"].items()} | {"lag": _epr_r["lag"], "ok": _epr_r["ok"], "problems": _epr_r["problems"][:3],
-                                                                                                      "facts_of_record": _ep_facts, "mechanism": ("population.not_executed_by_rule (reqval R17-26/R17-27)" if "executed_prefix" in _sr_kw else "none in this tree (rows past the stop sampled as ordinary strata)")}
-                        # [COORD R17-26/27; rel M-0410 (a)] ONE mechanism, reconciled on the record: the Commit's classification of the manifest
-                        # identities (binding coverage) and the population's third bucket must name the same identities -- n_exec per request,
-                        # count per row family; a batch-level / named-input family is outside the population split's reach and is named, not equal.
-                        if getattr(com, "_padding", None):
-                            # [B9.1 / R17-42; revb M-1419 (1), reqval M-1318 third consumer] a PADDED Commit: the population of record is the
-                            # FULL cap; the identities the replay excluded at n_exec are the padding's -- the named stratum
-                            # `inactive_by_enablement`, every entry read back == the bot word; the one-mechanism reconciliation compares the
-                            # Commit's padding classification against that bucket family by family (kept, renamed, never dropped)
-                            from verity_vllm.commit import padding_steps as _PSm
-                            _pp = _PSm.padded_population(sr, _bm, _rd.or_none, _epr_r)
-                            # [revb S-r17b-70 C3, M-1495] the two documents agree on one number: oracle_compare.padding (by family, pairs) == this stratum
-                            _pp["oracle_c3"] = _PSm.padding_vs_oracle(_pp, row["commit"].get("oracle_compare"), _bm)
-                            row["commit"]["inactive_by_enablement"] = _pp
-                            print(f"[delta] inactive-by-enablement stratum (pair {pair}): {'OK' if _pp['ok'] else 'FAIL'} -- {_pp['padding_entries']} padding entries, "
-                                  f"{_pp['checked_entries']} read back / {_pp['checked_words']:,} words == bot, {_pp['mismatches_n']} mismatches, {_pp['unread_n']} unread; "
-                                  f"population inactive {_pp['population_inactive_identities']}; by family "
-                                  + ", ".join(f"{f} {d['commit_padding_entries']}/{d['population_inactive']}" for f, d in _pp["by_family"].items())
-                                  + (f"; PROBLEMS {_pp['problems'][:3]}" if _pp["problems"] else ""), flush=True)
-                            if not _pp["ok"]:
-                                _cv = row["commit"].get("coverage")
-                                if isinstance(_cv, dict) and _cv.get("ok"):
-                                    _cv["ok"], _cv["error"] = False, "R17-42 inactive stratum: " + "; ".join(_pp["problems"][:3])
-                        elif "executed_prefix" in _sr_kw and _epr_r["any_eos_stop"]:
-                            _cc = (((row["commit"].get("binding") or {}).get("population") or {}).get("manifest") or {}).get("not_executed_by_rule")
-                            _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=_ids_full)
-                            sr["not_executed_reconciliation"] = _recon
-                            row["commit"]["not_executed_reconciliation"] = _recon
-                            print(f"[delta] not-executed(R17-1) reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
-                                  + ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items())
-                                  + f"; row families {[(f, d['commit'], d['population']) for f, d in _recon['by_family'].items()]}"
-                                  + (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"
-                                     if _recon["outside_population_reach"] else "")
-                                  + (f"; PROBLEMS {_recon['problems'][:3]}" if _recon["problems"] else ""), flush=True)
-                            if not _recon["ok"]:
-                                _cv = row["commit"].get("coverage")
-                                if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict
-                                    _cv["ok"], _cv["error"] = False, "R17-27 one mechanism: " + "; ".join(_recon["problems"][:3])
-                        sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
-                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}", flush=True)
-                        VUX.after_replay(args.vu_export_dir, sr, pair, rc.run_root, _progs, _bm, _rd, _wp, _arr, required_manifest, _sr_kw, _loaded, _digs, versions, eng)
-                        if _rc_key is not None and sr.get("result") is not None:
-                            replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(Path(args.out) / f"sampled_replay_p{pair}.json"),
-                                                     "seed": (sr.get("sample") or {}).get("seed"), "code": versions.get("git_head")}
-                    except _ReplayReused:
-                        _from = {"pair": _cached["pair"], "run_root": _cached["run_root"], "root_equal": rc.run_root.hex() == _cached["run_root"], "seed": _cached["seed"],
-                                 "code": _cached["code"], "artifact": _cached["artifact"], "key_sha256": hashlib.sha256(_rc_key.encode()).hexdigest(),
-                                 "rule": "coord M-0090 (5) / rev M-0051: identical (run_root, manifest_digest, seed, code, binding map, weights root, sample parameters) "
-                                         "within one Commit stage -> the same pure function; the ORIGINAL pair's record is the record of evaluation"}
-                        if not _from["root_equal"]:
-                            raise RuntimeError("replay cache: key matched but the run roots differ -- refused")     # cannot happen (root is in the key); fail closed anyway
-                        sr = copy.deepcopy(_cached["sr"])
-                        lk = copy.deepcopy(_cached["lk"])
-                        sr["reused_from"] = _from
-                        lk["reused_from"] = _from
-                        if isinstance(sr.get("sample"), dict):
-                            sr["sample"]["evaluated_here"] = 0
-                        _cached.setdefault("shared_by", []).append({"pair": pair, "run_root": rc.run_root.hex(), "root_equal": True,
-                                                                    "artifact": str(Path(args.out) / f"sampled_replay_p{pair}.json")})
-                        print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): REUSED pair {_cached['pair']}'s record (identical key: run root {rc.run_root.hex()[:16]}, "
-                              f"seed {_cached['seed']}, code {str(_cached['code'])[:9]}); no VU evaluated here", flush=True)
-                    except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
-                        sr = {"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
-                              "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
-                        lk = {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "why": f"boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
-                    _art = Path(args.out) / f"sampled_replay_p{pair}.json"
-                    _art.write_text(json.dumps({"sampled_replay": sr, "boundary_linkage": lk}, indent=1, default=str) + "\n")
-                    # [R17 fp8, F-fp8-C2PROG (FP8-STAGING §6)] the Programs of record loaded for the replay (B8: 8 Programs, 7.85 M instances =
-                    # 70,300 MiB of Python objects) and the binding map are dead once the replay + linkage records are written -- free them
-                    # HERE, before the openings-after-release replay pool and the next pair's run.  Attempt 1 kept them (locals live to the
-                    # end of the loop body and past it): run 93,052 + programs 70,300 + replay pool 54,800 coexisted = the 223,776 MiB peak.
-                    _rss_c2a = rss_kb()[0]
-                    _loaded = _progs = _pi0 = _rd = _bm = _digs = None       # rebinding (not `del`) is safe whether or not the try bound them
-                    gc.collect()
-                    _rss_c2g = rss_kb()[0]
-                    # [revb M-1143 (a)] the RSS drop is the evidence that the premise `c2_freed_before_replay` holds: 70 GB of small objects
-                    # die into pymalloc arenas and glibc's heap, which keep pages the OS never sees back until trimmed -- ask glibc to return
-                    # them (madvise/brk) so the drop measures the objects, not the allocators' retention; both deltas are on the record
-                    _trim = None
-                    try:
-                        import ctypes
-
-                        _trim = int(ctypes.CDLL("libc.so.6").malloc_trim(0))
-                    except Exception as e:  # noqa: BLE001  -- not glibc: the gc-only delta stands, named
-                        _trim = repr(e)[:80]
-                    _rss_c2b = rss_kb()[0]
-                    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": (_rss_c2a - _rss_c2b) >> 10,
-                                            "freed_by_gc_mib": (_rss_c2a - _rss_c2g) >> 10, "freed_by_malloc_trim_mib": (_rss_c2g - _rss_c2b) >> 10, "malloc_trim": _trim,
-                                            "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
-                    print(f"[delta] C2 PROGRAMS FREED (pair {pair}): RSS {_rss_c2a >> 10} -> {_rss_c2g >> 10} (gc) -> {_rss_c2b >> 10} MiB (malloc_trim {_trim}): "
-                          f"{(_rss_c2a - _rss_c2b) >> 10} MiB back before the openings-after-release replay", flush=True)
-                    TL.end("validate.sampled_replay", pair=pair, ok=sr.get("result"), n=(sr.get("sample") or {}).get("evaluated"), linkage=lk.get("result"),
-                           reused=("reused_from" in sr))
-                    row["commit"]["sampled_replay"] = {k: v for k, v in sr.items() if k not in ("strata",)} | {"artifact": str(_art), "strata_n": len(sr.get("strata") or {})}
-                    row["commit"]["boundary_linkage"] = lk
-                    vc = row["commit"]["value_correspondence"]
-                    vc["method"] = f"sampled-exact-replay({sr.get('grade')}) + boundary-linkage + " + vc["method"]
-                    # component shape per report M-0407 (1): population {n, source}, n, strata {mechanisms, requests, ranks, steps, lifetime}, seed,
-                    # unreplayable[] by name, why, artifact -- graded by finalize.grade_sampled_replay
-                    _pop, _smp = sr.get("population") or {}, sr.get("sample") or {}
-                    components["sampled_replay"] = {"result": sr.get("result"), "grade": sr.get("grade"), "why": sr.get("why"),
-                                                    "population": {"n": _pop.get("vus"), "source": _pop.get("source"), "by_family": _pop.get("by_family"),
-                                                                   "not_evaluable_by_family": _pop.get("not_evaluable_by_family")},
-                                                    "n": _smp.get("evaluated"), "equal": _smp.get("equal"), "mismatch_n": _smp.get("mismatch_n"), "picked": _smp.get("picked"),
-                                                    "per_stratum": _smp.get("per_stratum"), "strata": sr.get("strata_keys"), "strata_n": len(sr.get("strata") or {}),
-                                                    "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
-                                                    "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
-                                                    "evaluators": sr.get("evaluators"), "artifact": str(_art),
-                                                    "reference": "registered relation evaluators (verity_vllm.program.kernels.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
-                    components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
-                                                      "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
-                                                      "prescribed": lk.get("prescribed"),      # [R16 pin, ruling 36] seed / splits linkage record
-                                                      "reference": "declared workload prompt ids (arrival step) + the committed sampled ids of the previous step (ordered interfaces)"
-                                                                   " + declared per-request seed / SplitsFor_v1(committed live count, num_SMs of record) (prescribed inputs, ruling 36)"}
-                    components["negatives"] = {"suite": "tests/check/test_sampled_replay.py + tests/commit/test_binding_negatives.py",
-                                               "results": "unit: flipped committed byte, equal-shape request swap, wrong member, missing committed input (partial), unlinked decode "
-                                                          "chain, foreign prompt, verdict gates; live negatives are rev-cb's attack record on the FIX_READY"}
-                    for _c in (sr, lk):
-                        if _c.get("result") is False:
-                            vc["result"] = False
-                    if vc["result"] is None and sr.get("result") is True and lk.get("result") is True and vc_result in (None, True):
-                        vc["result"] = True
-                    _smp = sr.get("sample") or {}
-                    print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): {str(sr.get('grade')).upper()} evaluated {_smp.get('evaluated')} equal {_smp.get('equal')} "
-                          f"mismatch {_smp.get('mismatch_n')} not-evaluated {_smp.get('not_evaluated_n')} of population {(sr.get('population') or {}).get('vus')} VUs in "
-                          f"{(sr.get('population') or {}).get('strata_n')} strata (per-stratum {_smp.get('per_stratum')}, seed {_smp.get('seed')}); "
-                          f"not-evaluable {(sr.get('population') or {}).get('not_evaluable')}{(' -- ' + str(sr.get('why'))) if sr.get('why') else ''}", flush=True)
-                    if _smp.get("mismatch_n") and isinstance(sr.get("mismatch_by"), dict):        # [moe F-moe-r17-06] every mismatch by name
-                        print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): mismatches by family|request|phase {sr['mismatch_by'].get('by_family_request_phase')}", flush=True)
-                    print(f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair {pair}): {'OK' if lk.get('result') else ('FAIL' if lk.get('result') is False else 'NOT RUN')} "
-                          f"{lk.get('linked')}/{lk.get('pairs')} (step, request) boundaries linked{(' -- ' + str(lk.get('why'))) if lk.get('why') else ''}", flush=True)
-                    # [FLUSH-03 fact of record; rev M-0494 (3)] one line: the committed up plane != the committed down plane, per (request, step, layer)
-                    _ac = (sr.get("moe_planes") or {}).get("alias_check") or {}
-                    if _ac.get("compared"):
-                        print(f"[delta] C2 MOE PLANE ALIAS CHECK (pair {pair}): {'OK' if _ac.get('result') else 'ALIAS'} up != down bytes on "
-                              f"{int(_ac.get('compared', 0)) - int(_ac.get('identical_n', 0))}/{_ac.get('compared')} (request, step, layer) triples, "
-                              f"{len(_ac.get('per_layer') or {})} layers, plane words {_ac.get('plane_words')}"
-                              f"{(' -- ' + str(_ac.get('why'))) if _ac.get('why') else ''}"
-                              f"{(' (read errors ' + str(_ac.get('read_errors_n')) + ')') if _ac.get('read_errors_n') else ''}", flush=True)
+                _c2 = C2.Site(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
+                if not (args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started)) and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
+                    C2.run(_c2, replay_cache)
                 if _wor_rec is not None or _live_wd is not None:
                     # [MAN-09] WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
                     from verity_vllm.check import weights_of_record as WR
@@ -2667,7 +2287,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     # R13 p0b diagnostic: per-tensor digests of the retained (host) bytes, compared across paired instrumented runs to say
                     # WHICH identities differ when run roots disagree (values vs permutation vs schedule)
                     row["commit"]["fa2_zero_rows"] = tensor_digests(com, out, pair, prev_digests)
-                row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = commit_verdict(
+                row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = (RB.pending_verdict if pair in deferred else commit_verdict)(
                     row["commit"], row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=d, required_classes=required_classes)
                 if compiled_kernels is not None and row["commit"]["commit_pass"]:
                     ckc = row["commit"]["value_correspondence"]["compiled_check"]
@@ -2684,7 +2304,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"compiled ring refused acquisitions: refused_capture_alloc {cs['refused_capture_alloc']} "
                                                                                                     f"shape_mismatch {cs['shape_mismatch']} oversize_in_capture {cs['oversize_in_capture']}")
                 if not row["commit"]["commit_pass"]:
-                    print(f"[delta] COMMIT FAIL (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
+                    print(f"[delta] COMMIT {'FAIL' if row['commit']['commit_pass'] is False else 'PENDING'} (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
                 row["root_equal_expected"] = (rc.run_root.hex() == args.expect_root) if args.expect_root else None
                 if args.expect_root and rc.run_root.hex() != args.expect_root:
                     print(f"[delta] ROOT MISMATCH: run root {rc.run_root.hex()} != expected {args.expect_root}", flush=True)
@@ -2736,7 +2356,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.only_arm:
         # [R15 compiled] one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
         summary = {"schema": SCHEMA + "/only-arm", "only_arm": args.only_arm, "runs": len(rows), "versions": versions, "declaration": decl,
-                   "wall_s": [r["wall_s"] for r in rows], "commit_pass": (all(bool((r.get("commit") or {}).get("commit_pass")) for r in rows) if args.only_arm == "instrumented" else None),
+                   "wall_s": [r["wall_s"] for r in rows], "commit_pass": (RB.pass_of(rows) if args.only_arm == "instrumented" else None),
                    "table_md": f"only-arm {args.only_arm}: {len(rows)} runs, wall {[round(r['wall_s'], 4) for r in rows]}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
         (out / "summary.md").write_text(summary["table_md"] + "\n")
@@ -2778,8 +2398,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] wrote {out}", flush=True)
     # X-03 fail-closed: Commit PASS only if every instrumented run passed `commit_verdict` (manifest count == bound count, no collector
     # error, openings all verified, tokens equal); otherwise the first reason is printed and recorded and the process exits 3
-    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass")]
-    verdict = {"commit_pass": not fails and any(r["arm"] != "control" for r in rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
+    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass") and not RB.awaits_replay(r["commit"])]
+    pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(r.get("commit") or {})]
+    verdict = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
                "runs_failed": len(fails), "first_fail_reason": (fails[0][2] if fails else None),
                "required_classes": list(required_classes), "required_classes_source": (
                    f"program/query manifest {required_manifest['manifest_digest']} (R14 MAN-01; classes kept as a secondary check)" if required_manifest is not None else
@@ -2792,6 +2413,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "moe_source": {"mode": args.moe_source, "attached": moe_attached},
                "negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None),        # NEGATIVE TEST flags armed on this run, by name
                "run_roots": [r["commit"]["run_root"] for r in rows if r["arm"] != "control" and r.get("commit")]}
+    verdict.update({**CP.verdict_entry(args, plan_rec), **BP.verdict_entry(args, cb_rec)})
     # [R16 sys / coord M-0090 (5)] replay cache of record: the ORIGINAL pair's artifact lists the pairs that share its replay (root equality
     # explicit); the verdict carries the evaluated-vs-reused count so a reader sees at once that C2 ran once per distinct root
     if getattr(args, "replay_cache", False):
@@ -2838,24 +2460,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"admission {_a.get('admission_utc')} printed_before_run={_pbr}, first run {(_RUN0 or {}).get('utc')}; "
                   f"admission_of_record {(_a.get('admission_of_record') or {}).get('governing') if isinstance(_a.get('admission_of_record'), dict) else _a.get('admission_of_record')})", flush=True)
     PO.into_verdict(protocols, verdict, out, _ekw["target"], program_digest=args.program_digest, manifest=required_manifest)
+    RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
-    # [COORD R17-29 planner, calibration] measured vs predicted for the record-only plan printed before the run: one calibration ENTRY per
-    # Commit (VmHWM / footprint peaks / the peak step's staged bytes) -- exec collects these; the table in tests/fixtures/admission grows by name
-    for _pp in sorted(out.glob("admission_planner_*.json")):
-        try:
-            from verity_vllm.pipeline.admission_planner import calibrate as _planner_calibrate
-            _cal = _planner_calibrate(json.loads(_pp.read_text()), out, row=str(getattr(args, "row_id", None) or Path(args.out).name))
-            (out / _pp.name.replace("admission_planner_", "planner_calibration_")).write_text(json.dumps(_cal, indent=1, default=str) + "\n")
-            print(f"[delta] PLANNER CALIBRATION ({_pp.name}): measured {(_cal.get('measured_bytes') or 0) >> 20} MiB ({_cal.get('measured_by')}) / predicted "
-                  f"{_cal['predicted_bytes'] >> 20} MiB = {_cal.get('ratio')}; ratios {_cal.get('ratios')}; ENTRY {json.dumps(_cal['entry'])}", flush=True)
-        except Exception as _ce:
-            print(f"[delta] PLANNER CALIBRATION not computed for {_pp.name}: {type(_ce).__name__}: {_ce}", flush=True)
+    AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
     TL.event("process.end", "mark", rc=(3 if fails else 0), s=round(time.time() - _T_PROCESS0, 3), commit_pass=verdict["commit_pass"])
     if fails:
         print(f"[delta] COMMIT FAIL: {len(fails)}/{verdict['runs_instrumented']} instrumented runs failed the fail-closed check; first: pair {fails[0][0]} {fails[0][1]}: {fails[0][2]}", flush=True)
         sys.exit(3)
-    print(f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
+    print(f"[delta] COMMIT PENDING: {len(pending)}/{verdict['runs_instrumented']} instrumented runs pass every check of this process; their C2 replay runs from {[b['path'] for b in verdict['replay_deferred']['bundles']]}" if pending else
+          f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
 
 
 def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: dict, decl: dict | None) -> dict:
@@ -2920,7 +2534,7 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
             "abs_wall_ms": abs_wall_ms, "spans_mean_s": spans, "root_ready_delay_s": rr, "steady_hashing_by_step_s": steady, "steady_growth": growth,
             "backlog_max": backlog_max, "tokens_equal": tokens_eq, "versions": versions, "declaration": decl, "table_md": "\n".join(lines),
             # X-03 fail-closed verdict over the instrumented runs (see commit_verdict)
-            "commit_pass": bool(rows) and all(bool((r.get("commit") or {}).get("commit_pass")) for r in rows if r["arm"] != "control") and any(r["arm"] != "control" for r in rows),
+            "commit_pass": RB.pass_of(rows),
             "commit_fail_reasons": [(r.get("commit") or {}).get("commit_fail_reason") for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass")],
             "expected_tensors": [(r.get("commit") or {}).get("expected_tensors") for r in rows if r["arm"] != "control"],
             "committed_tensors": [(r.get("commit") or {}).get("committed_tensors") for r in rows if r["arm"] != "control"],

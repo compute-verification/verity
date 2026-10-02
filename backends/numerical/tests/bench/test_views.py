@@ -103,7 +103,7 @@ def test_parity_holds_on_a_seeded_random_store(store: LocalStore) -> None:
     security, instances, authentication and leaf, verification, red-team verdicts)."""
 
     rng = random.Random(20260925)
-    targets = list(TARGETS.values())
+    targets = [t for t in TARGETS.values() if t.name in T.FROZEN_INSTANCES]    # a result needs its target's frozen input set
     for i in range(240):
         cand = rng.choice(("A-GKR", "B-Ligero", "SP1"))
         target = rng.choice(targets)

@@ -1,5 +1,5 @@
 import FlockSoundness.Refine.Realizes
-import FlockLevel3.FoldStmt
+import FlockLevel3.Folded
 
 /-!
 # The statement decoding, part 1: the executable's layout is a block R1CS (PROTOCOL.md §10, §16.1)
@@ -502,6 +502,10 @@ theorem stmtOf_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st
     rw [cast_zmod, cast_zmod]
     push_cast
     ring
+  folded := by
+    intro α β lw ρ ts w hw
+    obtain ⟨v, hv, hw'⟩ := folded_eq st α β lw ρ ts w hw
+    exact ⟨v, hv, fold_size st α lw ρ v hv, hw'⟩
 
 /-- The fold `Setup.ofCircuit` hands the verifier realizes `stmtOf`. -/
 theorem ofCircuit_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :

@@ -5,7 +5,7 @@ split along them:
 
 * the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.registry.gemm_targets`
   (lane ampere): `TargetProfile.gemm_target()` -> `GemmTarget{key, vllm_arch_family, tuned_table, dot, kind, evidence}`; `ada` / `ampere` /
-  `hopper` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
+  `hopper` / `blackwell_consumer` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
   record's `dot` NAME to the registered step primitive (`DOTS`) and binds the Definition;
 * the *attention chain* is keyed by the effective FA version (`TargetProfile.effective_flash_attn_version()`: the declared knob, else vLLM's
   selector default for the capability — 3 on cc 9.x, 2 below) and by the target's step:
@@ -29,9 +29,13 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ir.defs import bind
-from verity.ml.prims import HopperBF16WgmmaDot16
+from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import fa2_check_inf as F2
+from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
+from verity_vllm.program.registry import fp8, nvfp4
+from verity_vllm.program.registry import gemm_bias as GB
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
@@ -43,6 +47,10 @@ class UnregisteredTarget(ValueError):
 
 #: the registered k16 step primitives by the name a `GemmTarget.dot` record carries.
 DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16": HopperBF16WgmmaDot16}
+#: the registered e4m3 k32 step primitives by the name a `GemmTarget.fp8_dot` record carries.
+FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
+#: the registered NVFP4 k64 block-scaled step primitives by the name a `GemmTarget.fp4_dot` record carries.
+FP4_DOTS: dict[str, Any] = {"BlackwellNvf4OmmaDot64": BlackwellNvf4OmmaDot64}
 
 #: attention-chain registration per tensor-core step family (`TargetProfile.tensor_core_family`).
 TARGETS: dict[str, dict[str, Any]] = {
@@ -56,9 +64,37 @@ TARGETS: dict[str, dict[str, Any]] = {
                "pipeline": "veritor.core.silicon_total.HOPPER_BF16_WGMMA_K16 (one group of 16, width 26, floor -133; lane HP 2026-09-07) = "
                            "silicon.HOPPER_BF16_M16N8K16 (Hawkeye H100)",
                "flash_attn_versions": (2, 3),
+               # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
+               # pre-bias word of Gemm_v2 + BiasAdd_v1
+               "gemm_bias_dot": True,
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
+    "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
+                           "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; under VLLM_BATCH_INVARIANT=1 "
+                                          "vLLM's linear layers run the Triton matmul_kernel_persistent, then `output + bias` in bf16, at every M; "
+                                          "other bf16 matmuls stay on cuBLASLt with split-K disabled, the same chain without a bias)",
+                           "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
+                                       "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
+                           "flash_attn_versions": (2,),
+                           "fa2_construction": "check-inf-per-iteration",
+                           # the fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`)
+                           "moe_expert_dot": True,
+                           # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`)
+                           "gemm_bias_dot": True,
+                           "evidence": {"attention_fa2": "the port's attention lane, RTX PRO 6000 (cc 12.0, 188 SMs, driver 595.91): property "
+                                                         "fa2_target_capture ef4b2584 (r20260930-033258-f611, art:d342a748): vLLM selects FLASH_ATTN "
+                                                         "FA2; _vllm_fa2_C carries cc 8.0 SASS + compute_80 PTX, so the kernel is the driver's JIT; "
+                                                         "kBlockM 64, kBlockN fa2_kblock_n(D) at D 64/96/128/256; MUFU ex2/rcp = core's tables on all "
+                                                         "2^32 inputs; 19,232 rows (122,228 heads) equal Attention_v2 with this DOT and Fa2InvSum on "
+                                                         "every finite head (Attention_v3: 997 differ); fa_tap_exactness 9dee6b6f / 9403e9fe guarded "
+                                                         "(r20260930-030755-9aab, art:592bc0ae)",
+                                        "gemm_bias": "RTX PRO 6000 (driver 580.173.02), torch 2.13.0+cu129, vLLM d9105ea80 under "
+                                                     "VLLM_BATCH_INVARIANT=1: linear_batch_invariant(x, W, b) on a biased qkv linear of the bf16 "
+                                                     "sweep (K 896, N 1152) launches matmul_kernel_persistent, then a bf16 add, at M 1, 2, 7 and 256; all "
+                                                     "306,432 words equal BiasAdd_v1(Gemm_v2{DOT=HopperBF16WgmmaDot16_v1}), and 80,572 of them "
+                                                     "differ from the bias added before the rounding (F.linear's cuBLASLt epilogue), run "
+                                                     "r20260930-140739-7974"}},
 }
 
 
@@ -83,6 +119,42 @@ def tensor_core_dot(profile):
     if name not in DOTS:
         raise UnregisteredTarget(f"GEMM target {profile.capability_str}: step {name!r} has no registered primitive")
     return DOTS[name]
+
+
+def moe_expert_dot(profile):
+    """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
+    target's registered step for the `_v2{E,K,N,DOT}` ones.  A family binds them when its record says `moe_expert_dot` (its
+    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one); every other family keeps the `_v1` records' binding
+    (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).  An unregistered target raises `UnregisteredTarget`."""
+    return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
+
+
+def gemm_bias_dot(profile):
+    """The k16 step of a biased linear's one-Call Definition `GemmBias_v2{K,N,DOT}` on the declared target, or None: the accepted kinds
+    bind `GemmBias_v1`, and a family whose record does not say `gemm_bias_dot` keeps `Gemm_v2` + `BiasAdd_v1`.  An unregistered target
+    raises `UnregisteredTarget`."""
+    if uses_accepted_kinds(profile):
+        return None
+    return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("gemm_bias_dot") else None
+
+
+def gemm_bias_spec(profile, K: int, N: int):
+    """The registered one-Call Definition of a batch-invariant linear with a bias (the launch, then `output + bias` in bf16) on the
+    declared target, or None when the target keeps the pair as two Calls."""
+    if uses_accepted_kinds(profile):
+        return bind(GB.GemmBias, K=int(K), N=int(N))
+    dot = gemm_bias_dot(profile)
+    return None if dot is None else bind(GB.GemmBiasV2, K=int(K), N=int(N), DOT=dot)
+
+
+def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
+    """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
+    (`routed` False) or the w2 launch with the routed weight."""
+    from verity_vllm.program.registry import moe as M
+    dot = moe_expert_dot(profile)
+    if dot is None:
+        return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
+    return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
 
 
 def tuned_gemm_table(profile) -> dict[tuple[int, int], dict[str, Any]]:
@@ -141,6 +213,21 @@ def fa3_masked_from(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, r
     index among the sequence's query rows in the launch; `seqlen_q` = the launch's max_seqlen_q, which picks the tile)."""
     g = max(1, int(NH) // max(1, int(KVH)))
     return F3.fa3_masked_from(T, fa3_kblock_n(D, seqlen_q, g), row, fa3_tile_m(D, seqlen_q, g), g)
+
+
+def fa2_check_inf(profile) -> bool:
+    """True when the target builds FA2's attention rows with FA2's per-iteration `Check_inf` chain (`Attention_v5`): an effective FA2
+    target whose family registers `fa2_construction = "check-inf-per-iteration"`.  The other FA2 families keep the chain their records
+    were accepted under (every block guarded)."""
+    return (profile.effective_flash_attn_version() == 2
+            and TARGETS.get(profile.tensor_core_family, {}).get("fa2_construction") == "check-inf-per-iteration")
+
+
+def fa2_masked_from(profile, T: int, D: int, seqlen_q: int, row: int, own_rows: int) -> int:
+    """`MASKED_FROM` of an `Attention_v5` row: the lowest key block FA2's kernel guards for query row `row` of its sequence (its index among
+    the sequence's `own_rows` query rows in the launch; the sequence's key count is the last row's, `T - 1 - row + own_rows`).  The launch's
+    max_seqlen_q (`seqlen_q`) decides causality: `varlen_fwd` runs a launch of one query row per sequence non-causal."""
+    return F2.fa2_masked_from(int(T) - 1 - int(row) + int(own_rows), own_rows, row, b1.fa2_kblock_n(D), int(seqlen_q) > 1)
 
 
 class LaunchContextConflict(ValueError):
@@ -246,10 +333,68 @@ def gemm_spec(profile, K: int, N: int):
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
-def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None):
-    """The registered attention Definition of one query row with T visible keys on the declared target.  Under the FA3 per-iteration
-    `Check_inf` construction (`fa3_check_inf`) the row's index among its sequence's query rows in the launch (`row`) selects its tile."""
+def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
+    """The registered Definition of the per-tensor FP8 linear (`_C.cutlass_scaled_mm` over the quantised row) on the declared
+    target: `ScaledMmFp8NoSwap_v1{K,N,BIAS,DOT}` where the GEMM target records the unswapped epilogue and its e4m3 step
+    (`GemmTarget.fp8_scale_order == "no_swap"`, `fp8_dot`); refused by name elsewhere."""
+    gt = gemm_target(profile)
+    dot = FP8_DOTS.get(gt.fp8_dot) if gt.fp8_dot else None
+    if gt.fp8_scale_order == "no_swap" and dot is not None:
+        return bind(fp8.ScaledMmFp8NoSwap, K=int(K), N=int(N), BIAS=bool(bias), DOT=dot)
+    raise UnregisteredTarget(f"per-tensor FP8 linear on {gt.key} ({profile.capability_str}): no registered binding")
+
+
+def _fp4_dot(profile):
+    gt = gemm_target(profile)
+    dot = FP4_DOTS.get(gt.fp4_dot) if gt.fp4_dot else None
+    if dot is None:
+        raise UnregisteredTarget(f"NVFP4 linear on {gt.key} ({profile.capability_str}): no registered binding")
+    return dot
+
+
+def nvfp4_quant_spec(profile, K: int):
+    """The registered Definition of the NVFP4 activation quantizer (`cvt_fp16_to_fp4`) on one row: `Nvfp4ActQuant_v1{K}` where the
+    GEMM target records the NVFP4 linear (`GemmTarget.fp4_dot`); refused by name elsewhere and for K not a multiple of 16."""
+    _fp4_dot(profile)
+    if int(K) % nvfp4.BLOCK:
+        raise UnregisteredTarget(f"NVFP4 linear: K={K} is not a multiple of {nvfp4.BLOCK}")
+    return bind(nvfp4.Nvfp4ActQuant, K=int(K))
+
+
+def nvfp4_gemm_spec(profile, K: int, N: int):
+    """The registered Definition of the NVFP4 GEMM (`cutlass_scaled_fp4_mm`) on one row: `ScaledMmNvfp4_v1{K,N,DOT}` with the
+    target's block-scaled step; refused by name elsewhere and for K not a multiple of 64 (the step)."""
+    dot = _fp4_dot(profile)
+    if int(K) % nvfp4.STEP_K:
+        raise UnregisteredTarget(f"NVFP4 linear: K={K} is not a multiple of {nvfp4.STEP_K}")
+    return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
+
+
+_SCALE_INPUT = {"Attention_v3": VI.AttentionV10, "Attention_v2": VI.AttentionV12, "Attention_v4": VI.AttentionV13,
+                "Attention_v5": F2.AttentionV11, "AttentionSoftcap_v1": VI.AttentionSoftcapV4, "AttentionSoftcap_v2": VI.AttentionSoftcapV5}
+
+
+def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
+                   cap: float | None = None, scale_input: bool = False):
+    """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
+    construction the row's index among its sequence's query rows in the launch (`row`) selects its tile (FA3, `fa3_check_inf`); FA2
+    (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`).  A logit soft cap `cap` selects the softcapped
+    chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere.
+    `scale_input`: the constant chain's twin that reads its values as inputs (`_SCALE_INPUT`: the scale `scale_log2`; a softcapped
+    chain's `softcap_mul` and `scale_log2`, with no `CAP`)."""
+    if scale_input:
+        spec = attention_spec(profile, T, NH, KVH, D, seqlen_q, row, own_rows, cap)
+        return bind(_SCALE_INPUT[spec.base_id], **{k: v for k, v in spec.bindings.items() if k != "CAP"})
     g = attention_geometry(profile, D, seqlen_q, NH, KVH)
+    if cap is not None:
+        from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+        if uses_accepted_kinds(profile):
+            return bind(DN.AttentionSoftcap, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap))
+        if not fa2_check_inf(profile) or row is None or own_rows is None:
+            raise UnregisteredTarget("a softcapped row off the accepted target is registered only under FA2's per-iteration Check_inf, "
+                                     "with the row's index among its sequence's query rows and their number")
+        return bind(F2S.AttentionSoftcapV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap), DOT=g["DOT"],
+                    INV=g["INV"], MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
     if uses_accepted_kinds(profile):
         return bind(b1.AttentionV3, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
     if fa3_check_inf(profile):
@@ -257,6 +402,12 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
             raise UnregisteredTarget("fa3_construction check-inf-per-iteration: the row's index among its sequence's query rows is not known")
         return bind(F3.AttentionV4, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
                     MASKED_FROM=fa3_masked_from(profile, T, NH, KVH, D, seqlen_q, row))
+    if fa2_check_inf(profile):
+        if row is None or own_rows is None:
+            raise UnregisteredTarget("fa2_construction check-inf-per-iteration: the row's index among its sequence's query rows, or their "
+                                     "number, is not known")
+        return bind(F2.AttentionV5, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
+                    MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
     return bind(b1.AttentionV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"])
 
 
@@ -273,11 +424,14 @@ def describe(profile) -> dict[str, Any]:
             "attention_kind": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}" if uses_accepted_kinds(profile)
             else f"Attention_v4{{T,NH,KVH,D,BN=fa3_kblock_n(D,seqlen_q,NH/KVH),DOT={t['dot_id']},INV=Fa3InvSum_v1,MASKED_FROM}}"
             if v == 3 and fa3_check_inf(profile)
+            else f"Attention_v5{{T,NH,KVH,D,BN=fa2_kblock_n(D),DOT={t['dot_id']},INV=Fa2InvSum_v1,MASKED_FROM}}" if fa2_check_inf(profile)
             else f"Attention_v2{{T,NH,KVH,D,BN={'fa2_kblock_n(D)' if v == 2 else 'fa3_kblock_n(D,seqlen_q,NH/KVH)'},DOT={t['dot_id']},"
                  f"INV={'Fa2InvSum_v1' if v == 2 else 'Fa3InvSum_v1'}}}",
             "evidence": {"gemm": list(gt.evidence), **t["evidence"]}}
 
 
-__all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
-           "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
+__all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
+           "moe_expert_dot", "moe_expert_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
+           "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
+           "scaled_mm_fp8_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]

@@ -176,11 +176,32 @@ def _layers(model: Any) -> list[tuple[str, Any]]:
     return [(name, m) for name, m in model.named_modules() if isinstance(m, types) and getattr(m, "weight", None) is not None]
 
 
+#: A quantized linear's parameters beside its weight (vLLM's FP8 and int8 methods)
+QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
+
+
+def quantized(layer: Any) -> str | None:
+    """Why ``layer`` is a quantized linear POUS can't hold, or None. Its weight is codes whose meaning sits in scales that
+    ``C`` does not encode, and its kernel reads a layout (FP8's column-major weight) that `TENSORS.restore`'s contiguous
+    tensor does not keep, so POUS refuses it rather than serve a misread weight."""
+    extra = [p for p in QUANT_PARAMS if getattr(layer, p, None) is not None]
+    if extra:
+        return f"a quantized linear ({', '.join(extra)})"
+    dtype = getattr(layer.weight, "dtype", None)
+    if dtype is not None and hasattr(dtype, "is_floating_point"):
+        if not (dtype.is_floating_point and getattr(dtype, "itemsize", 0) >= 2):
+            return f"a {dtype} weight (FP8 or integer codes)"
+    return None
+
+
 def _plaintext(entry: str, model: Any) -> tuple[list[tuple[str, Any]], dict[int, str], dict[str, bytes], dict[str, Any]]:
     """The layers, each layer's weight's name (its first holder's), and each unique weight's bytes and metadata."""
     layers = _layers(model)
     if not layers:
         raise ValueError(f"{entry}: the model has no {', '.join(t.__name__ for t in linear_types())} layer to encode")
+    bad = [f"{name}: {why}" for name, m in layers if (why := quantized(m))]
+    if bad:
+        raise ValueError(f"{entry} refuses quantized linears (the encoding holds unquantized weights only): " + "; ".join(bad))
     first: dict[Hashable, str] = {}
     names: dict[int, str] = {}
     weights: dict[str, bytes] = {}

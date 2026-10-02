@@ -1,0 +1,585 @@
+"""The config run (docs/vllm-config-sweep-plan.md §2-§4): the row mode (`--config-run 1`), the config record, the derived-Program cache,
+the family-stratified k-unit replay sample and the sweep driver's packing.  CPU only: row dirs, workloads and processes are stand-ins."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from tests.pipeline.test_row import _row
+from verity_vllm.check.replay.driver import family_strata
+from verity_vllm.check.replay.sample import sample
+from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline import program_cache as PC
+from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_records as R_
+from verity_vllm.pipeline import sweep as SW
+from verity_vllm.pipeline.row_driver import Stop
+
+ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+
+
+# ---------------------------------------------------------------------------------------------------------------- the row mode
+
+def test_a_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1")
+    calls = []
+    for name in ("build", "match", "commit", "research_result", "timeline_report"):
+        monkeypatch.setattr(r, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(r, "prepare", lambda: (calls.append("prepare"), setattr(r, "trap", True)))
+    monkeypatch.setattr(RC, "word_check", lambda row: calls.append("word_check"))
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert r.run() == 0
+    assert calls == ["prepare", "build", "word_check", "commit", "research_result", "config_record", "timeline_report"]
+
+
+def test_a_config_run_that_stops_still_writes_its_record(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1")
+    calls = []
+    monkeypatch.setattr(r, "prepare", lambda: setattr(r, "trap", True))
+    monkeypatch.setattr(r, "build", lambda: None)
+
+    def word_fail(row):
+        raise Stop(20)
+
+    monkeypatch.setattr(RC, "word_check", word_fail)
+    monkeypatch.setattr(r, "research_result", lambda: None)
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert r.run() == 20 and calls == ["config_record"]
+
+
+def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--replay-k", "128")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
+    assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
+    assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
+    row = _row(tmp_path / "row")
+    row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
+    plain = row.commit_cmd([])
+    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a row of record keeps its pairs"
+
+
+def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path):
+    pytest.importorskip("torch")                      # commit.py imports torch at module level (check runs with CPU torch)
+    from verity_vllm.pipeline import cli
+    r = _row(tmp_path, "--config-run", "1", "--replay-k", "128")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
+    assert (args.only_arm, args.bounded_staging, args.replay_k, args.pairs, args.warmup) == ("instrumented", True, 128, 1, 1)
+
+
+@pytest.mark.parametrize("commit_pass,rc,expect", [(True, 0, None), (False, 0, 12), (True, 3, 12)])
+def test_the_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, rc, expect):
+    r = _row(tmp_path, "--config-run", "1")
+    (Path(r.d) / "commit").mkdir()
+    (Path(r.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": commit_pass}))
+    if expect is None:
+        RC.commit_verdict(r, rc, 60)
+        assert "commit PASS" in (Path(r.d) / "stages.txt").read_text()
+    else:
+        with pytest.raises(Stop) as e:
+            RC.commit_verdict(r, rc, 60)
+        assert e.value.rc == expect
+
+
+def test_a_deferred_config_run_passes_the_flag_and_parses(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    assert "--replay-deferred" in cmd
+    plain = _row(tmp_path / "plain", "--config-run", "1")
+    plain.hidden_so, plain.B = "/x/verity_fa2_matReqG.so", 1
+    assert "--replay-deferred" not in plain.commit_cmd([])
+    of_record = _row(tmp_path / "row", "--replay-deferred", "1")
+    of_record.hidden_so, of_record.B = "/x/verity_fa2_matReqG.so", 1
+    assert "--replay-deferred" not in of_record.commit_cmd([]), "only a config run defers its replay"
+    pytest.importorskip("torch")
+    from verity_vllm.pipeline import cli
+    assert cli.parse("commit", cmd[cmd.index("commit") + 1:], {}).replay_deferred == "full"
+    slim = _row(tmp_path / "slim", "--config-run", "1", "--replay-deferred", "slim")
+    slim.hidden_so, slim.B = "/x/verity_fa2_matReqG.so", 1
+    sc = slim.commit_cmd([])
+    assert cli.parse("commit", sc[sc.index("commit") + 1:], {}).replay_deferred == "slim"
+
+
+def _pending_commit(r, *, bundles):
+    (Path(r.d) / "commit").mkdir()
+    (Path(r.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": None}))
+    (Path(r.d) / "commit" / "verdict.json").write_text(json.dumps({"commit_pass": None, "replay_deferred": {
+        "pending_pairs": [1], "bundles": [{"pair": 1, "path": "/b/replay_bundle_p1", "manifest_sha256": "ab" * 32}] * bundles}}))
+
+
+def test_a_deferred_commit_is_pending_with_its_bundle_and_fails_without_one(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(r, bundles=1)
+    assert RC.commit_verdict(r, 0, 60) is True
+    assert "commit PENDING" in (st := (Path(r.d) / "stages.txt").read_text()) and "/b/replay_bundle_p1" in st
+    with pytest.raises(Stop):
+        RC.commit_verdict(r, 3, 60)
+    bare = _row(tmp_path / "bare", "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(bare, bundles=0)
+    with pytest.raises(Stop):
+        RC.commit_verdict(bare, 0, 60)
+
+
+def test_a_pending_config_run_writes_no_record(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    calls = []
+    for name in ("build", "research_result", "timeline_report"):
+        monkeypatch.setattr(r, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(r, "prepare", lambda: setattr(r, "trap", True))
+    monkeypatch.setattr(r, "commit", lambda: setattr(r, "replay_pending", True))
+    monkeypatch.setattr(RC, "word_check", lambda row: None)
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert r.run() == 0 and "config_record" not in calls
+
+
+def test_a_failed_commit_and_a_decided_replay_delete_the_bundle_and_a_crashed_replay_keeps_it(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(r, bundles=1)
+    (Path(r.d) / "commit" / "replay_bundle_p1" / "store").mkdir(parents=True)
+    (Path(r.d) / "commit" / "replay_bundle_p2.partial").mkdir()
+    assert RC.commit_verdict(r, 0, 60) is True and (Path(r.d) / "commit" / "replay_bundle_p1").is_dir(), "a pending Commit keeps its bundle"
+    r.ck = str(tmp_path)
+    slim = Path(r.d) / "commit" / "replay_slim_p1"
+
+    def replay(st, to, lf, cmd, rc, keeps):
+        if keeps:                                                    # the replay writes its slim keep before it exits
+            slim.mkdir(exist_ok=True)
+            (slim / "slim.json").write_text("{}")
+        return rc
+
+    for rc, keeps, kept in ((2, False, True), (3, False, True), (3, True, False)):
+        monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, rc=rc, keeps=keeps: replay(st, to, lf, cmd, rc, keeps))
+        with pytest.raises(Stop):
+            RC.replay(r)
+        assert (Path(r.d) / "commit" / "replay_bundle_p1").is_dir() is kept, (rc, keeps)
+    assert "left no slim keep" in (Path(r.d) / "row.log").read_text(), "a decided replay without its slim keep keeps the bundle, by name"
+    assert not list((Path(r.d) / "commit").glob("replay_bundle_p*")) and (slim / "slim.json").is_file()
+    f = _row(tmp_path / "fail", "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(f, bundles=1)
+    (Path(f.d) / "commit" / "replay_bundle_p1.partial").mkdir()
+    with pytest.raises(Stop):
+        RC.commit_verdict(f, 3, 60)
+    assert not list((Path(f.d) / "commit").glob("replay_bundle_p*")), "a failed Commit leaves no bundle"
+
+
+def test_the_replay_stage_replays_the_one_bundle_beside_the_row_on_cpu(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(r, bundles=1)
+    r.ck = str(tmp_path)
+    seen = {}
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd: seen.update(st=st, cmd=cmd) or 0)
+    RC.replay(r)
+    cmd = seen["cmd"]
+    assert seen["st"] == "replay.commit_replay" and cmd[cmd.index("commit-replay") + 1] == f"{r.d}/commit/replay_bundle_p1"
+    assert cmd[cmd.index("--row-dir") + 1] == r.d and cmd[cmd.index("--checkpoint-dir") + 1] == str(tmp_path)
+    assert "replay PASS" in (Path(r.d) / "stages.txt").read_text()
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd: 3)
+    with pytest.raises(Stop) as e:
+        RC.replay(r)
+    assert e.value.rc == 12 and "replay FAIL" in (Path(r.d) / "stages.txt").read_text()
+
+
+@pytest.mark.parametrize("config_run,bundles,ck,why", [("0", 1, True, "config run"), ("1", 0, True, "0 replay bundles"),
+                                                       ("1", 1, False, "no checkpoint dir")])
+def test_the_replay_stage_refuses_what_it_cannot_decide(tmp_path, monkeypatch, config_run, bundles, ck, why):
+    r = _row(tmp_path, "--config-run", config_run, "--replay-deferred", "1")
+    _pending_commit(r, bundles=bundles)
+    r.ck = str(tmp_path) if ck else ""
+    monkeypatch.setattr(r, "run_tl", lambda *a: pytest.fail("nothing to replay"))
+    with pytest.raises(Stop):
+        RC.replay(r)
+    assert why in (Path(r.d) / "stages.txt").read_text()
+
+
+def test_a_replay_stage_writes_the_record_the_pending_commit_left_unwritten(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    r.stages = "replay"
+    calls = []
+    for name in ("research_result", "timeline_report"):
+        monkeypatch.setattr(r, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(r, "prepare", lambda: setattr(r, "trap", True))
+    monkeypatch.setattr(RC, "replay", lambda row: calls.append("replay"))
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert r.run() == 0 and calls == ["replay", "research_result", "config_record", "timeline_report"]
+
+
+def test_a_config_record_carries_the_replay_s_weights_attest(tmp_path):
+    d = _row_dir(tmp_path)
+    run = json.loads((d / "commit" / "runs.jsonl").read_text())
+    run["commit"]["weights_attest"] = {"root_openings": "3/3", "sources": {"checkpoint": 3, "bundle": 0}}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    assert CR.record(d, ROW)["commit"]["weights_attest"]["root_openings"] == "3/3"
+    assert "weights_attest" not in CR.record(_row_dir(tmp_path / "old"), ROW)["commit"], "a record without one is unchanged"
+
+
+TP2 = "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"
+
+
+def test_the_tp_path_runs_a_tp2_config_run_and_refuses_a_larger_world_by_name(tmp_path, monkeypatch):
+    from verity_vllm.config import UsageError
+    from verity_vllm.pipeline import cli, row
+    from verity_vllm.pipeline.row_tp import TpRow
+    ran = []
+    monkeypatch.setattr(TpRow, "run", lambda self: ran.append((self.W, self.config_run)) or 0)
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1"], {})
+    assert row.run_row(o, o.stages) == 0 and ran == [(2, True)]
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", "4"], {})
+    with pytest.raises(UsageError, match="runs at world 4; the config run covers single-GPU and TP2 rows"):
+        row.run_row(o, o.stages)
+    assert ran == [(2, True)]
+
+
+def _tp(tmp_path, *argv):
+    from tests.pipeline.test_row import TP_DENSE, _tp_row
+    import os
+    t = _tp_row(tmp_path, TP_DENSE, *argv)
+    os.makedirs(t.d, exist_ok=True)
+    return t
+
+
+def test_a_tp2_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkeypatch):
+    t = _tp(tmp_path, "--config-run", "1")
+    calls = []
+    for name in ("build", "match", "commit", "research_result", "timeline_report"):
+        monkeypatch.setattr(t, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(t, "prepare", lambda: (calls.append("prepare"), setattr(t, "trap", True)))
+    monkeypatch.setattr(RC, "word_check", lambda row: calls.append("word_check"))
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert t.run() == 0
+    assert calls == ["prepare", "build", "word_check", "commit", "research_result", "config_record", "timeline_report"]
+    calls.clear()
+    monkeypatch.setattr(t, "build", lambda: (_ for _ in ()).throw(Stop(10)))
+    assert t.run() == 10 and calls == ["prepare", "config_record", "research_result"], "a stopped config run still writes its record"
+
+
+def test_the_tp2_word_check_counts_the_components_of_both_ranks(tmp_path, monkeypatch):
+    t = _tp(tmp_path, "--config-run", "1")
+    seen = []
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    RC.word_check(t)
+    assert seen[0][seen[0].index("--world") + 1] == "2"
+    r = _row(tmp_path / "tp1", "--config-run", "1")
+    monkeypatch.setattr(r, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    RC.word_check(r)
+    assert seen[1][seen[1].index("--world") + 1] == "1"
+
+
+def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_path):
+    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
+    (Path(t.M) / "fold_match").mkdir(parents=True)
+    (Path(t.M) / "fold_match" / "tp2_fold_match.json").write_text("{}")
+    t.fold_profile = "derived_LLAMA32_1B_tp2"
+    cmd = t.commit_cmd([])
+    assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
+    assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and cmd[cmd.index("--replay-k") + 1] == "460"
+    assert not {"--match-dir", "--require-fold-match", "--value-check"} & set(cmd)
+    assert cmd.count("--build-rank") == 2 and cmd[cmd.index("--required-manifest") + 1] == f"{t.d}/manifest.json"
+    row = _tp(tmp_path / "row")
+    (Path(row.M) / "fold_match").mkdir(parents=True)
+    (Path(row.M) / "fold_match" / "tp2_fold_match.json").write_text("{}")
+    row.fold_profile = "derived_LLAMA32_1B_tp2"
+    plain = row.commit_cmd([])
+    i = plain.index("--required-manifest")
+    assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
+    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP row of record keeps its Match, pairs and value check"
+
+
+def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
+    from verity_vllm.pipeline import cli
+    from verity_vllm.pipeline.tp.config_run import only_arm_summary, replay_k_per_rank
+    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
+    cmd = t.commit_cmd([])
+    args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
+    assert (args.only_arm, args.replay_k, args.pairs, args.warmup, args.match_dir) == ("instrumented", 460, 1, 1, None)
+    assert replay_k_per_rank(460, 2) == {"0": 230, "1": 230} and replay_k_per_rank(461, 2) == {"0": 231, "1": 230}
+    assert replay_k_per_rank(None, 2) is None
+    one = [{"arm": "instrumented"}]
+    assert only_arm_summary("instrumented", one, one, [True]) == {"only_arm": "instrumented", "runs": 1, "commit_pass": True}
+    assert only_arm_summary("instrumented", one, one, [False])["commit_pass"] is False
+    assert only_arm_summary("instrumented", one, [], [])["commit_pass"] is False, "no instrumented run is not a pass"
+
+
+@pytest.mark.parametrize("commit_pass,expect", [(True, None), (False, 12)])
+def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, expect, monkeypatch):
+    t = _tp(tmp_path, "--config-run", "1")
+    t.to_k = 1
+    (Path(t.d) / "commit").mkdir()
+    (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": commit_pass, "pass": commit_pass}))
+    monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
+    monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
+    monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
+    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")      # never the host's pod-layout build (unreadable to other users on node 1)
+    Path(t.hidden_so).touch()
+    ran = []
+    monkeypatch.setattr(t, "manifest_global", lambda *a: ran.append("manifest_global") or 0)
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
+    if expect is None:
+        t.commit()
+        assert "commit PASS" in (Path(t.d) / "stages.txt").read_text()
+    else:
+        with pytest.raises(Stop) as e:
+            t.commit()
+        assert e.value.rc == expect
+    assert ran == ["commit.tp_commit"], "the config run's Commit reuses the Build's complete manifest"
+    assert t.child_env["VERITY_STAGING_BOUNDED"] == "1", "the ranks stage bounded, as the single-GPU config run's --bounded-staging"
+
+
+# ---------------------------------------------------------------------------------------------------------------- the config record
+
+def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, word_ok: bool = True) -> Path:
+    d = tmp_path / ROW
+    (d / "commit").mkdir(parents=True)
+    (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "aa"}, "request": {"ok": True, "program_digest": "bb"},
+                                                      "workload": {"ok": True, "workload_digest": "ww"}}))
+    (d / "manifest_header.json").write_text(json.dumps({"manifest_digest": "mm", "query": {"query_id": "Q_word_v1{X=16,W=32,R=no-recompute}"}}))
+    (d / "strict_word.json").write_text(json.dumps({"ok": word_ok, "check": "fast", "word_lines": 1, "components": 1, "problems": []}))
+    sr = {"result": mismatch == 0, "grade": "complete" if mismatch == 0 else "mismatch",
+          "sample": {"strata_by": "family", "k": 256, "picked": 256, "evaluated": 256, "equal": 256 - mismatch, "mismatch_n": mismatch,
+                     "not_evaluated_n": 0, "seed": 7, "seed_source": "run root"},
+          "mismatch": [{"i": 3, "family": "Gemm_v1", "request_id": "r0", "step": 2, "op_path": "model.layers.0.mlp"}] * mismatch,
+          "mismatch_by": {"by_family": {"Gemm_v1": mismatch} if mismatch else {}}}
+    run = {"arm": "instrumented", "wall_s": 12.5, "engine_steps": 32,
+           "commit": {"commit_pass": commit_pass, "commit_fail_reason": None if commit_pass else "C2 mismatch", "run_root": "rr",
+                      "openings": {"n": 64, "verified": 64}, "expected_tensors": 9, "committed_tensors": 9, "sampled_replay": sr}}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    return d
+
+
+def test_a_clean_config_run_s_record_is_pass_and_small(tmp_path):
+    rec = CR.write(_row_dir(tmp_path), ROW, tree="abc")
+    assert rec["outcome"] == "PASS" and rec["why"] is None
+    assert rec["config"] == {"row": ROW, "model": "llama32-1b", "dtype": "bf16", "gpu": "l40s", "tp": 1, "batch": 1, "input": 256, "output": 32,
+                             "arrivals": "mixed", "sampling": "greedy", "engine": "bi-eager"}
+    assert rec["build"]["programs"] == {"request": "bb", "step": "aa"} and rec["build"]["manifest_digest"] == "mm"
+    assert (rec["commit"]["run_root"], rec["replay"]["k"], rec["replay"]["equal"]) == ("rr", 256, 256)
+    assert (tmp_path / ROW / CR.NAME).stat().st_size < 8192
+
+
+@pytest.mark.parametrize("kw,why", [({"mismatch": 2, "commit_pass": False}, "commit FAIL: C2 mismatch"), ({"word_ok": False}, "word check FAIL")])
+def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
+    rec = CR.record(_row_dir(tmp_path, **kw), ROW)
+    assert rec["outcome"] == "FAIL" and rec["why"] == why
+    if kw.get("mismatch"):
+        assert rec["replay"]["differed"][0]["family"] == "Gemm_v1" and rec["replay"]["by_family"] == {"Gemm_v1": 2}
+
+
+def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "runs.jsonl").unlink()
+    assert CR.record(d, ROW)["why"] == "commit not run"
+
+
+ROW_TP2 = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
+
+
+def _tp_sr(rank: int, k: int, mismatch: int = 0) -> dict:
+    return {"result": mismatch == 0, "grade": "complete" if mismatch == 0 else "mismatch",
+            "sample": {"strata_by": "family", "k": k, "picked": k, "evaluated": k, "equal": k - mismatch, "mismatch_n": mismatch, "not_evaluated_n": 0,
+                       "seed": 10 + rank, "seed_source": "this rank's run root"},
+            "mismatch": [{"i": 5, "family": "Gemm_v1", "request_id": "r0", "step": 1, "op_path": "model.layers.0.mlp.down_proj"}] * mismatch,
+            "mismatch_by": {"by_family": {"Gemm_v1": mismatch} if mismatch else {}}}
+
+
+def _tp_row_dir(tmp_path: Path, *, mismatch_r1: int = 0, ranks: int = 2) -> Path:
+    d = tmp_path / ROW_TP2
+    (d / "commit").mkdir(parents=True)
+    (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "step": {"program_digest": "s0"}, "ranks": {
+        f"rank{r}": {"build_step": {"ok": True, "program_digest": f"s{r}"}, "build_request_LP256_T31": {"ok": True, "program_digest": f"q{r}"},
+                     "workload": {"ok": True, "workload_digest": f"w{r}"}} for r in range(2)}}))
+    (d / "manifest.json").write_text(json.dumps({"manifest_digest": "mm", "ranks": 2, "program_digest_per_rank": {"0": "w0", "1": "w1"},
+                                                 "query": {"query_id": "Q_word_v1{X=16,W=32,R=no-recompute}"}}))
+    (d / "strict_word.json").write_text(json.dumps({"ok": True, "check": "fast", "word_lines": 2, "components": 2, "problems": []}))
+    fail = mismatch_r1 > 0
+    per = {str(r): {"run_root": f"root{r}", "commit_pass": not (fail and r == 1), "commit_fail_reason": "sampled replay mismatch" if fail and r == 1 else None,
+                    "openings": {"n": 64, "verified": 64}, "extra": {"expected_tensors": 9, "committed_tensors": 9},
+                    "binding": {"coverage": {"ok": True}}, "sampled_replay": _tp_sr(r, 230, mismatch_r1 if r == 1 else 0)} for r in range(ranks)}
+    run = {"arm": "instrumented", "wall_s": 20.0, "engine_steps": 32,
+           "commit": {"tp_run_root": "tproot", "world": 2, "per_rank": per, "openings": {"n": 128, "verified": 128}, "tensors": 18,
+                      "commit_pass": not fail, "commit_fail_reason": "rank 1: sampled replay mismatch" if fail else "PASS"}}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    return d
+
+
+def test_a_clean_tp2_config_run_s_record_is_per_rank_and_in_total(tmp_path):
+    rec = CR.write(_tp_row_dir(tmp_path), ROW_TP2, tree="abc")
+    assert rec["outcome"] == "PASS" and rec["why"] is None and rec["config"]["tp"] == 2
+    b = rec["build"]
+    assert b["per_rank"]["1"] == {"ok": True, "programs": {"build_request_LP256_T31": "q1", "build_step": "s1"}, "workload_digest": "w1"}
+    assert (b["manifest_digest"], b["program_digest_per_rank"]) == ("mm", {"0": "w0", "1": "w1"})
+    c = rec["commit"]
+    assert (c["run_root"], c["reason"], c["openings"]) == ("tproot", None, {"n": 128, "verified": 128})
+    assert [c["per_rank"][r]["run_root"] for r in ("0", "1")] == ["root0", "root1"]
+    rp = rec["replay"]
+    assert (rp["k"], rp["evaluated"], rp["equal"], rp["mismatch_n"]) == (460, 460, 460, 0), "the replay's k units over both ranks"
+    assert [rp["per_rank"][r]["seed"] for r in ("0", "1")] == [10, 11]
+    assert (tmp_path / ROW_TP2 / CR.NAME).stat().st_size < 16384
+
+
+def test_a_tp2_config_run_that_differed_on_one_rank_names_the_rank(tmp_path):
+    rec = CR.record(_tp_row_dir(tmp_path, mismatch_r1=2), ROW_TP2)
+    assert rec["outcome"] == "FAIL" and rec["why"] == "commit FAIL: rank 1: sampled replay mismatch"
+    rp = rec["replay"]
+    assert (rp["ok"], rp["equal"], rp["mismatch_n"], rp["by_family"]) == (False, 458, 2, {"Gemm_v1": 2})
+    assert rp["differed"][0]["rank"] == 1 and rec["commit"]["per_rank"]["0"]["ok"] is True
+
+
+def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
+    d = _tp_row_dir(tmp_path, ranks=1)
+    rec = CR.record(d, ROW_TP2)
+    assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
+
+
+# ---------------------------------------------------------------------------------------------------------------- the Program cache
+
+def _workload(tmp_path: Path, name: str, *, batch: int = 1, prompt: list[int] | None = None) -> Path:
+    p = tmp_path / f"{name}.json"
+    p.write_text(json.dumps({"sweep": {"sampling": "greedy", "sampling_params": {"temperature": 0.0}, "batch": batch, "sampling_seeds": []},
+                             "requests": [{"prompt_token_ids": prompt or [1, 2, 3]}] * batch}))
+    return p
+
+
+def _derive(out: str, wl: Path, lp: int = 256) -> list[str]:
+    return ["/venv/bin/python", "-m", "verity_vllm.pipeline.cli", "build", "--model", "m", "--revision", "r", "--wrapper", "request",
+            "--LP", str(lp), "--T", "31", "--workload", str(wl), "--out", out]
+
+
+DEV = {"name": "NVIDIA L40S", "compute_cap": "8.9"}
+
+
+def test_the_cache_key_is_the_derive_without_its_out_dir_and_workload_path(tmp_path):
+    a, b = _workload(tmp_path, "a"), _workload(tmp_path, "b", prompt=[9, 9, 9])
+    k = PC.key(_derive("/x/a/build_request", a), workload=a, tree="t1", device=DEV)
+    assert k == PC.key(_derive("/y/b/build_request", b), workload=b, tree="t1", device=DEV), "the out dir and the prompts a derive never reads"
+    assert k != PC.key(_derive("/x/a/build_request", a, lp=512), workload=a, tree="t1", device=DEV), "another shape"
+    assert k != PC.key(_derive("/x/a/build_request", a), workload=a, tree="t2", device=DEV), "another tree"
+    assert k != PC.key(_derive("/x/a/build_request", a), workload=a, tree="t1", device={**DEV, "name": "NVIDIA H100"}), "another GPU"
+    b8 = _workload(tmp_path, "b8", batch=8)
+    assert k != PC.key(_derive("/x/a/build_request", b8), workload=b8, tree="t1", device=DEV), "the sampler geometry's batch"
+    assert PC.key(_derive("/x", a), workload=a, tree=None, device=DEV) is None, "no tree commit, no cache"
+
+
+def test_a_published_derive_is_restored_whole_and_the_first_publisher_stands(tmp_path):
+    derived = tmp_path / "row" / "build_request"
+    derived.mkdir(parents=True)
+    (derived / "result.json").write_text(json.dumps({"ok": True}))
+    (derived / "instances.json.gz").write_bytes(b"program")
+    root = tmp_path / "cache"
+    entry = PC.publish(root, "k1", derived, {"row": "r"})
+    assert entry == root / "k1" and PC.lookup(root, "k1") == entry
+    (derived / "instances.json.gz").write_bytes(b"other")
+    assert PC.publish(root, "k1", derived, {"row": "r2"}) == entry and (entry / "program" / "instances.json.gz").read_bytes() == b"program"
+    out = tmp_path / "row2" / "build_request"
+    PC.restore(entry, out)
+    assert (out / "instances.json.gz").read_bytes() == b"program" and not (out / "instances.json.gz").samefile(entry / "program" / "instances.json.gz")
+    failed = tmp_path / "failed"
+    failed.mkdir()
+    (failed / "result.json").write_text(json.dumps({"ok": False}))
+    assert PC.publish(root, "k2", failed, {}) is None and PC.lookup(root, "k2") is None
+
+
+# ---------------------------------------------------------------------------------------------------------------- the replay sample
+
+def test_family_strata_draw_k_units_with_every_family_at_least_once():
+    vus = [{"i": i, "family": fam, "stratum": f"{fam}|r{i % 3}|rank0|mid|op{i}|fresh-window"}
+           for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
+    keyed, per = family_strata(vus, 256)
+    assert per == 256 and {v["stratum"] for v in keyed} == {"Gemm_v1|all|all|all|all|all", "RoPE_v1|all|all|all|all|all",
+                                                           "Embedding_v1|all|all|all|all|all"}
+    picked, strata, tgt = sample(keyed, per, seed=11)
+    kept = picked[:min(max(256, len(strata)), tgt["stratified"])]
+    fams = [v["family"] for v in kept]
+    assert len(kept) == 256 and fams.count("Embedding_v1") == 3, "the small family is used up, the others fill k"
+    assert abs(fams.count("Gemm_v1") - fams.count("RoPE_v1")) <= 1
+    assert family_strata(vus, None, 2) == (vus, 2), "without k: the row's per-stratum sample, untouched"
+
+
+def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
+    vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
+           for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
+    keyed, per = family_strata(vus, 460, draw="uniform")
+    assert per == 460 and {v["stratum"] for v in keyed} == {"all|all|all|all|all|all"}
+    assert {v["family"] for v in keyed} == {"Gemm_v1", "RoPE_v1", "Embedding_v1"}, "each unit keeps its family for the record"
+    picked, strata, tgt = sample(keyed, per, seed=11)
+    assert len(picked) == tgt["stratified"] == 460 and len({(v["family"], v["i"]) for v in picked}) == 460, "without replacement"
+    assert strata == {"all|all|all|all|all|all": {"population": 1303, "sampled": 460}}
+    assert picked != sample(keyed, per, seed=12)[0]
+
+
+def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_is_refused():
+    from types import SimpleNamespace
+
+    from verity_vllm.pipeline.c2_replay import draw_of
+
+    assert [draw_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
+        "family", "family", "uniform"]
+    vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"} for fam in ("Gemm_v1", "RoPE_v1") for i in range(3)]
+    assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
+    with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
+        family_strata(vus, 4, draw="stratified")
+
+
+# ---------------------------------------------------------------------------------------------------------------- the sweep driver
+
+def test_estimates_follow_the_plan_s_classes():
+    assert SW.estimate(ROW) == SW.Need(gpus=1, ram_gb=150, cpus=16, minutes=60)
+    assert SW.estimate("llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager").ram_gb == 500
+    assert SW.estimate("qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager").ram_gb == 500
+    assert SW.estimate("olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager").gpus == 2, "the TP world's GPUs"
+
+
+def _cfg(row: str, ram: int, cpus: int = 16, minutes: int = 60, gpus: int = 1) -> SW.Config:
+    return SW.Config(row=row, need=SW.Need(gpus=gpus, ram_gb=ram, cpus=cpus, minutes=minutes))
+
+
+def test_the_plan_starts_the_large_builds_first_and_packs_the_small_ones_around_them():
+    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
+    cfgs = [_cfg("s1", 150), _cfg("s2", 150), _cfg("big1", 500, 32, 150), _cfg("big2", 500, 32, 150), _cfg("s3", 150), _cfg("huge", 2000)]
+    p = SW.plan(cfgs, host)
+    assert p["refused"] == [{"row": "huge", "why": "needs 2000 GB of RAM, the host has 1000"}]
+    by = {c["row"]: c for c in p["configs"]}
+    assert by["big1"]["start_min"] == 0 and by["big2"]["start_min"] == 0, "the large Builds start first"
+    assert all(by[s]["start_min"] == 150 for s in ("s1", "s2", "s3")), "RAM, not GPUs, holds the small ones until a Build ends"
+    assert p["makespan_min"] == 210
+
+
+def test_the_driver_frees_each_share_as_its_run_ends_and_records_it(tmp_path):
+    host = SW.Host(gpus=[0, 1], ram_gb=400, cpus=list(range(32)))
+    cfgs = [_cfg("a", 300, 16), _cfg("b", 100, 16), _cfg("c", 100, 16)]
+    started, order = [], iter(["a", "b", "c"])
+    clock = iter(float(t) for t in range(100))
+
+    def start(c, gpus, cpus):
+        started.append((c.row, gpus, (cpus[0], cpus[-1])))
+        (tmp_path / "rows" / c.row).mkdir(parents=True, exist_ok=True)
+        (tmp_path / "rows" / c.row / "config_record.json").write_text(json.dumps({"outcome": "PASS" if c.row != "c" else "FAIL", "why": None}))
+        return c.row
+
+    doc = SW.run(cfgs, host, tmp_path, start=start, wait=lambda: (next(order), 0), now=lambda: next(clock))
+    assert started == [("a", [0], (0, 15)), ("b", [1], (16, 31)), ("c", [0], (0, 15))]
+    assert [(d["row"], d["outcome"]) for d in doc["done"]] == [("a", "PASS"), ("b", "PASS"), ("c", "FAIL")]
+    assert json.loads((tmp_path / "sweep.json").read_text())["done"] == doc["done"] and doc["pending"] == [] and doc["running"] == []
+
+
+def test_a_tp2_cell_takes_two_gpus_of_one_host_and_its_ram_share(tmp_path):
+    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
+    tp2 = SW.Config(row=ROW_TP2, need=SW.estimate(ROW_TP2))
+    assert tp2.need == SW.Need(gpus=2, ram_gb=150, cpus=16, minutes=60)
+    p = SW.plan([tp2, _cfg("a", 150), _cfg("b", 150), _cfg("c", 150)], host)
+    by = {c["row"]: c for c in p["configs"]}
+    assert [by[r]["start_min"] for r in ("a", "b", "c")] == [0, 0, 0] and by[ROW_TP2]["start_min"] == 60, "it waits for two free GPUs"
+    assert len(by[ROW_TP2]["gpus"]) == 2 and SW.plan([tp2], host)["configs"][0]["gpus"] == [0, 1]
+    e = SW.child_env({}, tp2, [0, 1], list(range(16)), tmp_path, None)
+    assert (e["CUDA_VISIBLE_DEVICES"], e["BUILD_RAM_BUDGET_GB"]) == ("0,1", "150")
+
+
+def test_each_run_gets_its_share_as_the_build_budget_and_the_host_s_caches(tmp_path):
+    e = SW.child_env({"PATH": "/bin"}, _cfg("a", 300, 16), [1], list(range(16, 32)), tmp_path, "/cache/rules")
+    assert (e["CUDA_VISIBLE_DEVICES"], e["OMP_NUM_THREADS"], e["BUILD_RAM_BUDGET_GB"], e["VERITY_UNIT_RULE_CACHE"]) == ("1", "16", "300", "/cache/rules")
+    assert e["SWEEP_DIR"] == str(tmp_path / "rows") and e["PATH"] == "/bin"
+    assert "VERITY_UNIT_RULE_CACHE" not in SW.child_env({}, _cfg("a", 300), [0], [0], tmp_path, None)

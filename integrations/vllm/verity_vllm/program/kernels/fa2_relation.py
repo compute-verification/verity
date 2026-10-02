@@ -24,11 +24,11 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from importlib import resources
 from typing import Any
 
 import numpy as np
 
+from verity.ml import mufu
 from verity_vllm.program.kernels import fa2_model as FA
 
 try:  # share W4b's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
@@ -112,9 +112,8 @@ _TABLES: dict[str, FA.MufuTables] = {}
 
 
 def tables_dir() -> str:
-    """Where the MUFU.EX2 / MUFU.RCP delta tables live: the package data ``tables/W11-40f0cebeb670-20260907T1800Z``,
-    pinned by :data:`TABLE_SHA256`."""
-    return str(resources.files(__package__) / "tables" / "W11-40f0cebeb670-20260907T1800Z")
+    """Where the MUFU.EX2 / MUFU.RCP delta tables live: core's (``verity.ml.mufu.TABLE_DIR``), pinned by :data:`TABLE_SHA256`."""
+    return mufu.TABLE_DIR
 
 
 def tables() -> FA.MufuTables:

@@ -55,7 +55,7 @@ SCHEMA = "verity-sweep/hot-commit/v1"
 # toolchain view must not inherit that engine
 ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
-ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH"}
+ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
 WORKLOAD_ENGINE_KEYS = ("case", "model", "repo", "revision", "engine_args_required", "target", "execution", "row", "tokenizer", "dtype", "max_model_len")
 RC_HOT_INFRA = 70          # the worker died / refused before running the job (client falls back to cold)
 RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", "/workspace/cp/RELEASING"))     # pod_release.sh holds it while it ships
@@ -145,7 +145,10 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
             keyed = []
         paths += keyed or sorted(glob.glob(os.path.join(ncb, "*.so")) + glob.glob(os.path.join(ncb, "*", "*.so")))
     hgb = os.environ.get("HIDDEN_GPU_BUILD")
-    cands = sorted(glob.glob(os.path.join(hgb, "*.so"))) if hgb else sorted(glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so")))
+    # the .so lives one level down, in the source-keyed child (native_jit.jit_load); the flat legacy location is listed too
+    cands = sorted(glob.glob(os.path.join(hgb, "*.so")) + glob.glob(os.path.join(hgb, "*", "*.so"))) if hgb else sorted(
+        glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so"))
+        + glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*/*.so")))
     paths += cands
     out: dict[str, str | None] = {}
     for p in paths:
@@ -177,9 +180,12 @@ def unsafe_hints(argv: list[str], env: dict[str, str] | None = None) -> list[str
     ct = _argval(argv, "--compiled-taps", "off")
     if ct != "off":
         why.append(f"--compiled-taps {ct}")
-    for flag in ("--arms", "--only-arm", "--late-read", "--value-check"):
+    for flag in ("--arms", "--late-read", "--value-check"):
         if flag in argv:
             why.append(flag)
+    oa = _argval(argv, "--only-arm")
+    if oa == "control" or (oa and ct != "off"):
+        why.append(f"--only-arm {oa}")
     if "--arena-unchecked" in argv and _argval(argv, "--arena-mb") not in (None, "0"):
         why.append("--arena-unchecked (negative test)")
     if _argval(argv, "--moe-source") == "on":
@@ -514,10 +520,9 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
             cd._HOT["coms"] = []
             write_state(jobs=jobs, reuses=reuses, current=job["id"])
             log(f"job {job['id']} #{jobs}: {shlex.join(job['argv'])[:400]}")
-            # per-job process state: the worker's own env restored, then the job's per-job keys; the job's cwd
-            os.environ.clear()
-            os.environ.update(env0)
-            os.environ.update(job.get("env") or {})
+            # per-job process state: the worker's own env restored, then the job's per-job keys, then what the engine's build wrote
+            # into the process (Engine.environ: vLLM's batch invariance sets cuBLAS' switches as it builds); the job's cwd
+            cli.set_environment({**env0, **(job.get("env") or {}), **(getattr(cd._HOT.get("eng"), "environ", None) or {})})
             os.chdir(job.get("cwd") or cwd0)
             res: dict[str, Any] = {"schema": SCHEMA, "id": job["id"], "worker_pid": os.getpid(), "worker_job": jobs, "started": time.time()}
             had_engine = (cd._HOT.get("eng") is not None)

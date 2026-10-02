@@ -39,12 +39,13 @@ def fs_remote(env):
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
-               "lane", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
-               "pipeline")
+               "lane", "question", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
+               "pipeline", "kernel_outcome", "kernel_reason")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
-                     "grant", "commit_map")
+                     "grant", "ready", "commit_map")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype")
+APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites")
 
 
 def test_vocabulary_pins_every_key_by_asserter_and_form():
@@ -52,7 +53,10 @@ def test_vocabulary_pins_every_key_by_asserter_and_form():
     assert {n for n, g in groups.items() if g == vocab.GROUP_RESULT} == set(RESULT_KEYS)
     assert {n for n, g in groups.items() if g == vocab.GROUP_VERIFICATION} == set(VERIFICATION_KEYS)
     assert {n for n, g in groups.items() if g == vocab.GROUP_EVIDENCE} == set(EVIDENCE_KEYS)
-    assert vocab.KEYS == tuple(vocab.VOCAB) and len(vocab.KEYS) == len(RESULT_KEYS) + len(VERIFICATION_KEYS) + len(EVIDENCE_KEYS)
+    assert {n for n, g in groups.items() if g == vocab.GROUP_APPROACH} == set(APPROACH_KEYS)
+    assert vocab.KEYS == tuple(vocab.VOCAB) and len(vocab.KEYS) == len(RESULT_KEYS) + len(VERIFICATION_KEYS) + len(EVIDENCE_KEYS) + len(APPROACH_KEYS)
+    assert vocab.key("approach_status").values == ("live", "parked", "killed", "superseded", "merged")
+    assert vocab.key("approach_type").values == ("scheme", "route", "attack")
     # the constants are the strings (a consumer imports vocab.PROOF_CLASS, never spells it)
     assert (vocab.CANDIDATE, vocab.PROOF_CLASS, vocab.VERIFIED, vocab.MODEL_AGREES, vocab.INDEPENDENTLY_VERIFIED, vocab.VERIFIED_BY) == \
         ("candidate", "proof_class", "verified", "model_agrees", "independently_verified", "verified_by")
@@ -131,7 +135,7 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
     refused (exit 2, nothing written) with the reason; `--off-vocab` writes it with a warning."""
     st = LocalStore()
     refused = [(["nonesuch", "v1"], "label key 'nonesuch' is not in the vocabulary"),
-               (["Relation", "fp8-ada"], "did you mean 'relation'?"),
+               (["Relation", "fp8-ada"], "did you mean 'relation'"),
                (["verfied", "accepted"], "did you mean 'verified' or 'verifier'?"),
                (["subbatches", "32"], "label key 'subbatches' is a measurement or run parameter"),
                (["result_artifact", "art:" + "1" * 64], "names another store object: that is a ref"),

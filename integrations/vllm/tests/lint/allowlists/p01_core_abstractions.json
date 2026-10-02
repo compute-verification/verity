@@ -3,7 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "core-private", "symbol": "_spec_id_memo", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "core-private", "symbol": "Prog._node_functions", "detail": "verity.ir.codec._spec_id"},
-    {"file": "verity_vllm/pipeline/build.py", "kind": "core-private", "symbol": "_instance_sequence", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "core-private", "symbol": "_spec_histogram", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ir.codec._decode_refs"},
     {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ir.codec._lookup_primitive"},
@@ -22,8 +21,6 @@
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "core-patch", "symbol": "with_ordinary", "detail": "verity.ir.defs.REGISTRY.add()"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "core-private", "symbol": "address_map_modulo_guards", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "core-private", "symbol": "request_boundaries", "detail": "verity.ir.codec._spec_id"},
-    {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "core-patch", "symbol": "_extend_codec_lazy_families", "detail": "verity.ir.codec._LAZY_PRIMITIVE_FAMILIES"},
-    {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "core-private", "symbol": "_extend_codec_lazy_families", "detail": "verity.ir.codec._LAZY_PRIMITIVE_FAMILIES", "count": 2},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "_canonicalize", "detail": "verity.ir.codec._encode_definition"},
     {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "_Columns.param_reads_of", "detail": "verity.proofs.query.ValueRef._make"},

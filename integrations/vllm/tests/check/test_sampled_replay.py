@@ -55,7 +55,7 @@ NH, KVH, DH, MAXPOS = 3, 1, 16, 16      # rope=True: attention heads / kv heads 
 ABN = 16                                 # attn=True: the attention rows' key block (one k16 P.V step; T <= LP + T = 4 -> one partial block)
 
 
-def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: bool = False):
+def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: bool = False, registered: bool = False):
     """One request Program: per token row Embedding -> RMSNormTriton -> Gemm(gate_up) -> SiluMul -> Gemm(down) -> RMSNormFused(norm) ;
     per step Gemm(logits, tied embed) -> TokenSelect.  Names / args in the Build's instance-sequence schema.
     `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape, MAN-07): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
@@ -69,7 +69,9 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     `scale`: [R19 int-20, F-r19-int-20] the ROOT module scales the embedding in its own forward body -- `Bf16MulScalarTensor_v1{N=H}` at the
     UNROOTED path `model/mul_{s}[k]` (arg 0 = the embedding row, arg 1 = the one-word `weights` field `model.normalizer`, a buffer) -- and the
     first norm AND the final norm's residual read the SCALED row: an interior family (no member by the vocabulary) whose output crosses a
-    module boundary (the v2 query requires it as the root module's `out`)."""
+    module boundary (the v2 query requires it as the root module's `out`).
+    `registered`: `TargetProfile.registered_values` -- the norms are `RMSNormTriton_v3` / `RMSNormFusedCuda_v4` and attention
+    `Attention_v10`, each reading its eps / scale as the last arg, a field of the registered `values` parameter (index 1; weights move to 2)."""
     rope = rope or attn
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
@@ -99,7 +101,16 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
         i += 1
         return i - 1
 
-    W = lambda n: [["p", 1, woff[n][0], woff[n][1]]]  # noqa: E731
+    wp = 2 if registered else 1
+    W = lambda n: [["p", wp, woff[n][0], woff[n][1]]]  # noqa: E731
+    vfields = [("eps", int(np.float32(float.fromhex(json.loads(EPS)["f64"])).view(np.uint32)))]
+    if attn:
+        from verity_vllm.program.registry import b1
+        vfields.append((f"scale_log2_d{DH}", b1._scale_log2_bits(DH)))
+    VAL = {n: [["p", 1, k, k + 1]] for k, (n, _b) in enumerate(vfields)}
+    norm_t, norm_f = (f"RMSNormTriton_v3{{N={H}}}", f"RMSNormFusedCuda_v4{{N={H}}}") if registered else \
+        (f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}")
+    eps_arg = [VAL["eps"]] if registered else []
     prev_norm_out = None                                       # (row, member offset) of the last fused norm (residual stream)
     kv_rows: list[tuple[int, int]] = []                        # attn: (key RoPE row, qkv row) per position, in position order
     for s in range(1 + T):
@@ -110,12 +121,12 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
             e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{k}]", [ids, W("model.model.embed_tokens.weight")])
             if scale:                                                  # the root module's own scaling of the embedding: read by the child norms
                 e = add(f"Bf16MulScalarTensor_v1{{N={H}}}", f"model/mul_{s}[{k}]", [[["n", e, 0, H]], W("model.normalizer")])
-            ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
-                     [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
+            ln = add(norm_t, f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
+                     [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight"), *eps_arg])
             if rope:
                 pos = k if s == 0 else LP + s - 1                              # the token's position = its index in the sequence
                 cs_lo = woff["model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"][0] + pos * DH
-                CS = [["p", 1, cs_lo, cs_lo + DH]]
+                CS = [["p", wp, cs_lo, cs_lo + DH]]
                 qkv = add(f"Gemm_v1{{K={H},N={QKV}}}", f"model.model.layers.0.self_attn.qkv_proj/triton_launch_{s}q[{k}]",
                           [[["n", ln, 0, H]], W("model.model.layers.0.self_attn.qkv_proj.weight")])
                 qr = add(f"RoPE_v1{{NHEADS={NH},D={DH}}}", f"model.model.layers.0.self_attn.rotary_emb/rotary_embedding_{s}/query[{k}]",
@@ -124,10 +135,10 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
                          [[["n", qkv, NH * DH, (NH + KVH) * DH]], CS])
                 if attn:
                     kv_rows.append((kr, qkv))
-                    at = add(f"Attention_v3{{T={pos + 1},NH={NH},KVH={KVH},D={DH},BN={ABN}}}",
+                    at = add(f"Attention_v{10 if registered else 3}{{T={pos + 1},NH={NH},KVH={KVH},D={DH},BN={ABN}}}",
                              f"model.model.layers.0.self_attn.attn/unified_attention_with_output_{s}[t={k}]",
                              [[["n", qr, 0, NH * DH]], [["n", kr_, 0, KVH * DH] for kr_, _q in kv_rows],
-                              [["n", q_, (NH + KVH) * DH, QKV] for _k, q_ in kv_rows]])
+                              [["n", q_, (NH + KVH) * DH, QKV] for _k, q_ in kv_rows], *([VAL[f"scale_log2_d{DH}"]] if registered else [])])
                     add(f"Gemm_v1{{K={NH * DH},N={H}}}", f"model.model.layers.0.self_attn.o_proj/triton_launch_{s}o[{k}]",
                         [[["n", at, 0, NH * DH]], W("model.model.layers.0.self_attn.o_proj.weight")])
             gu = add(f"Gemm_v1{{K={H},N={2 * I}}}", f"model.model.layers.0.mlp.gate_up_proj/triton_launch_{s}a[{k}]",
@@ -138,12 +149,18 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
             act = add(f"SiluMul_v1{{I={I}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * I]]])
             dn = add(f"Gemm_v1{{K={I},N={H}}}", f"model.model.layers.0.mlp.down_proj/triton_launch_{s}b[{k}]",
                      [[["n", act, 0, I]], W("model.model.layers.0.mlp.down_proj.weight")])
-            nm = add(f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}", f"model.model.norm/fused_add_rms_norm_{s}[{k}]",
-                     [[["n", dn, 0, H]], [["n", e, 0, H]], W("model.model.norm.weight")])     # residual = the embedding (one layer)
+            nm = add(norm_f, f"model.model.norm/fused_add_rms_norm_{s}[{k}]",
+                     [[["n", dn, 0, H]], [["n", e, 0, H]], W("model.model.norm.weight"), *eps_arg])     # residual = the embedding (one layer)
             norm_rows.append(nm)
         lg = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", norm_rows[-1], 0, H]], W("model.model.embed_tokens.weight")])
         sel_prev = add(f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [[["n", lg, 0, V]]])
-    return {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]], "rows": rows}, woff
+    params = [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]]
+    inst = {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": params, "rows": rows}
+    if registered:
+        params.insert(1, ["values", "{" + ", ".join(f"{n}: Value<32>" for n, _b in vfields) + "}"])
+        inst["supplied"] = {"registration": {"param": 1, "name": "values", "fields": [{"name": n, "width": 32, "bits": f"0x{b:x}", "offset": k}
+                                                                                         for k, (n, b) in enumerate(vfields)]}, "run": []}
+    return inst, woff
 
 
 class Honest:
@@ -173,6 +190,8 @@ class Honest:
                 for kind, a, lo, hi in group:
                     if kind == "p" and pi.pnames[a] == "weights":
                         w = self.wslice(lo, hi)
+                    elif kind == "p" and a in pi.supplied:
+                        words.append(np.asarray([pi.supplied[a][1][lo]["bits"]], dtype=np.uint32))
                     elif kind == "p":
                         words.append(np.asarray(prompt[lo:hi], dtype=np.uint32))
                     else:
@@ -314,6 +333,47 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
     rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
     assert rep2["strata"] == rep["strata"] and rep2["sample"] == rep["sample"]
     assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16")
+
+
+def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_nothing(world):
+    bmap, committed = world.bmap_and_reader()
+    seen = {"plan": set(), "replay": set()}
+
+    def reader(key):
+        def read(step, name, lo, hi):
+            seen[key].add((step, name, lo, hi))
+            return committed(step, name, lo, hi)
+        return read
+
+    plan = SR.sampled_replay(_programs(world), bmap, reader("plan"), None, per_stratum=2, seed=3, plan=True)
+    rep = SR.sampled_replay(_programs(world), bmap, reader("replay"), _weights(world), per_stratum=2, seed=3, workers=0)
+    assert plan["plan"] is True and plan["picked"] == rep["sample"]["picked"] and plan["unresolved_n"] == 0
+    assert seen["replay"] and seen["replay"] <= seen["plan"], sorted(seen["replay"] - seen["plan"])[:4]
+    by_step: dict = {}
+    for req, step, _row, _op in plan["picks"]:
+        by_step.setdefault(req, {}).setdefault(str(step), 0)
+        by_step[req][str(step)] += 1
+    assert len(plan["picks"]) == plan["picked"] and len({tuple(p) for p in plan["picks"]}) == plan["picked"]
+    assert by_step == {r: {str(s): v[0] for s, v in st.items()} for r, st in rep["sample"]["picks_by_request_step"].items()}, \
+        "the plan's picks are the replay's, request by request and step by step"
+
+
+def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
+    bmap, committed = world.bmap_and_reader()
+    progs, seen = _programs(world), {"cold": [], "warm": []}
+
+    def reader(key):
+        def read(step, name, lo, hi):
+            seen[key].append((step, name, lo, hi))
+            return committed(step, name, lo, hi)
+        return read
+
+    memo: dict = {}
+    SR.populate(progs, [0], {}, {}, None, attention_paths=None, tp=None, program_dirs=None, manifest=None, memo=memo)
+    assert any(k[0] == "population" for k in memo)
+    cold = SR.sampled_replay(progs, bmap, reader("cold"), None, per_stratum=2, seed=3, plan=True)
+    warm = SR.sampled_replay(progs, bmap, reader("warm"), None, per_stratum=2, seed=3, plan=True, memo=memo)
+    assert warm["picked"] == cold["picked"] and seen["warm"] == seen["cold"] and seen["cold"]
 
 
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
@@ -1033,6 +1093,49 @@ def test_attention_rows_are_registered_units_of_the_population_and_the_interior_
     assert rep["applicability"]["families_not_yet"] == {}                          # nothing of this Program is a label
 
 
+def _attn_world(registered: bool) -> Honest:
+    rng = np.random.default_rng(23)
+    inst, woff = _program(attn=True, registered=registered)
+    n_w = max(hi for lo, hi in woff.values())
+    weights = _bf16(rng, n_w, 0.5)
+    weights[woff["model.model.layers.0.input_layernorm.weight"][0]:woff["model.model.layers.0.input_layernorm.weight"][1]] = 0x3F80
+    weights[woff["model.model.norm.weight"][0]:woff["model.model.norm.weight"][1]] = 0x3F80
+    lo, hi = woff["model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"]
+    weights[lo:hi] = (np.asarray(rng.uniform(-1, 1, hi - lo), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    return Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
+
+
+def test_registered_values_program_replays_like_its_constants_twin(attn_world):
+    """`TargetProfile.registered_values`: the norms' eps and the attention scale are fields of the registered `values` parameter, which is
+    neither the prompt nor a weight.  The honest run commits the same words as the constants Program's, and the replay evaluates every unit
+    of the same population, reading each value from the build's supplied layout."""
+    reg = _attn_world(True)
+    assert reg.pi.ids_params() == {0} and set(reg.pi.supplied) == {1}
+    assert reg.blocks.keys() == attn_world.blocks.keys()
+    assert all(np.array_equal(reg.blocks[k], attn_world.blocks[k]) for k in reg.blocks)
+    reps = {}
+    for name, w in (("const", attn_world), ("registered", reg)):
+        bmap, committed = w.bmap_and_reader()
+        reps[name] = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=64, seed=5, workers=0)
+    rc, rr = reps["const"], reps["registered"]
+    assert rr["result"] is True and rr["grade"] == "complete", json.dumps(rr, indent=1, default=str)[:3000]
+    assert rr["sample"]["mismatch_n"] == 0 and rr["sample"]["evaluated"] == rr["sample"]["picked"] == rc["sample"]["picked"]
+    rename = {"RMSNormTriton_v1": "RMSNormTriton_v3", "RMSNormFusedCuda_v2": "RMSNormFusedCuda_v4", "Attention_v3": "Attention_v10"}
+    assert rr["population"]["by_family"] == {rename.get(f, f): n for f, n in rc["population"]["by_family"].items()}
+    assert rr["population"]["not_evaluable"] == rc["population"]["not_evaluable"] == {}
+    vu = next(r for r in reg.pi.rows if r["spec"].startswith("Attention_v10"))
+    rec: list = []
+    EV._evaluate_row(reg.pi, OP.CommittedStore(*reg.bmap_and_reader()), _weights(reg), vu, "r0", 0, rec, depth=0)
+    assert rec[-1] == {"kind": "registered", "param": "values", "field": f"scale_log2_d{DH}", "bits": reg.inst["supplied"]["registration"]["fields"][1]["bits"]}
+    # the query names no supplied value: registration binds them, the run commits the same identities as the constants Program's
+    key = lambda m: sorted((e["family"], e["op_path"], e["output_member"], str(e["step"]), tuple(e["element_range"])) for e in m["identities"])  # noqa: E731
+    man = v2_manifest(reg.inst)
+    assert key(man) == key(v2_manifest(attn_world.inst))
+    bmap, committed = reg.bmap_and_reader()
+    rm = SR.sampled_replay(_programs(reg), bmap, committed, _weights(reg), per_stratum=64, seed=5, workers=0, manifest=man)
+    assert rm["result"] is True and rm["sample"]["mismatch_n"] == 0, json.dumps(rm, indent=1, default=str)[:3000]
+
+
 def test_attention_v3_honest_program_replays_bit_exactly_from_the_committed_kv_history(attn_world):
     bmap, committed = attn_world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5)
@@ -1373,6 +1476,27 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
 def _moe_evaluate_all(w, mutate, *, targets=("moe/L0@0",)):
     bmap, committed = w.bmap_and_reader(mutate=mutate)
     return SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, targets=list(targets), workers=0)
+
+
+def test_the_plan_of_every_moe_vu_reads_what_its_replay_reads_its_sum_plane_copy_too(moe_world):
+    """A MoeSum row's output is read back at its `moe/L<k>/sum` plane copy too (`describe`'s `copies`): a slim bundle planned without it
+    fails those picks as missing-input (OLMoE B8 slim: 17 of 460)."""
+    w = moe_world
+    bmap, committed = w.bmap_and_reader()
+    vus, _, _ = POP.population(w.pi, "r0")
+    assert any(v["family"] == "MoeSum_v1" for v in vus)
+    for vu in vus:
+        seen: dict[str, set] = {"plan": set(), "replay": set()}
+
+        def reader(key):
+            def read(step, name, lo, hi):
+                seen[key].add((step, name, lo, hi))
+                return committed(step, name, lo, hi)
+            return read
+
+        assert EV.plan_vu(w.pi, OP.CommittedStore.of_record(bmap, reader("plan"), None), vu, arrive=0) is None
+        EV.replay_vu(w.pi, OP.CommittedStore.of_record(bmap, reader("replay"), None), _weights(w), vu, arrive=0)
+        assert seen["replay"] and seen["replay"] <= seen["plan"], (vu["family"], sorted(seen["replay"] - seen["plan"])[:4])
 
 
 def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="moe/L0"):

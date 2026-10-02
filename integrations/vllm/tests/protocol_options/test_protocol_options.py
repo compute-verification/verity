@@ -403,7 +403,7 @@ def test_every_site_nests_in_install_order():
 APPLY = "LinearBase.quant_method.apply"
 
 
-def test_a_site_has_one_executor_and_sampled_proofs_needs_its_definition(monkeypatch):
+def test_a_site_has_one_executor(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "pearl-fp8-v4"))
     pouw.EXECUTES = (APPLY,)
     pous = _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
@@ -411,15 +411,63 @@ def test_a_site_has_one_executor_and_sampled_proofs_needs_its_definition(monkeyp
     pous.EXECUTES = (APPLY,)
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == \
         (f"pous:band-chain/d12/v1: {APPLY} already has an executor, pouw:ncp-v1; a site has one",)
-    del pous.EXECUTES
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v1", "sampled-proofs:vllm-v1"))
-    got = PO.refusals(commit)
-    assert len(got) == 1 and got[0].startswith(f"pouw:ncp-v1: executes {APPLY}, and the Program has no Definition")
-    pouw.traced_as = lambda scheme, ctx: "Int7Linear{K,N}" if scheme == "ncp-v1" else None
-    assert PO.refusals(commit) == ()
-    got = PO.refusals(PO.Context(stage="commit", enabled=("pouw:pearl-fp8-v4", "sampled-proofs:vllm-v1")))
-    assert len(got) == 1 and "no Definition" in got[0]
-    assert PO.refusals(_serve("pouw:pearl-fp8-v4")) == ()
+
+
+POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4")
+
+
+def _refused_beside_sampled_proofs(scheme):
+    """The refusal of an executor whose scheme has no circuit, as #311 words it."""
+    return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so sampled proofs "
+            f"would trace it as the stock computation (refused until the option names one: traced_as)")
+
+
+def _commit(*enabled):
+    return PO.Context(stage="commit", enabled=config.parse_protocols(enabled))
+
+
+def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
+    """`verity_pouw.circuit` (#364) has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
+    that scheme is admitted beside sampled proofs, and every other one keeps #311's refusal, word for word.  Without sampled
+    proofs nothing changes."""
+    from verity_pouw import circuit
+    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
+    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
+    pouw.EXECUTES = (APPLY,)
+    assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:vllm-v1")) == ()
+    for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
+        assert PO.refusals(_commit(f"pouw:{scheme}", "sampled-proofs:vllm-v1")) == (_refused_beside_sampled_proofs(scheme),)
+    for scheme in POUW_SCHEMES:
+        assert PO.refusals(_serve(f"pouw:{scheme}")) == ()
+    p = TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
+    assert PO.commit_guard(p) is p and PO.at_row(None, {"target": p.to_json()}) == p.protocols
+    with pytest.raises(SystemExit) as e:
+        PO.commit_guard(TargetProfile(protocols=("pouw:ncp-v1", "sampled-proofs:vllm-v1")))
+    assert e.value.code == 3
+    with pytest.raises(PO.Refused) as r:
+        PO.at_row("pouw:ncp-v1,sampled-proofs:vllm-v1", {})
+    assert r.value.reasons == (_refused_beside_sampled_proofs("ncp-v1"),)
+
+
+def test_traced_as_is_the_circuit_of_one_executed_call():
+    from verity_pouw.protocol import DomainError
+    t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
+    assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
+    assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
+    assert PO.traced_as("pous:band-chain/d12/v1", 16, 64, 16) is None and PO.circuit_registry("pous") is None
+    with pytest.raises(DomainError, match="64 [|] k"):
+        PO.traced_as("pouw:ncp-v2", 16, 65, 16)
+
+
+def test_without_its_circuit_registry_pouw_stays_refused_beside_sampled_proofs(monkeypatch):
+    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
+    pouw.EXECUTES = (APPLY,)
+    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity_pouw.not_a_circuit_registry")
+    got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
+    assert got[-1] == _refused_beside_sampled_proofs("ncp-v2")
+    assert got[0].startswith("pouw: its circuit registry verity_pouw.not_a_circuit_registry is not installed")
+    with pytest.raises(PO.Refused, match="is not installed"):
+        PO.traced_as("pouw:ncp-v2", 16, 64, 16)
 
 
 def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):

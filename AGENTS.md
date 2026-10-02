@@ -28,18 +28,36 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `annotations` is `verity/annotations/v0`: names, descriptions, formats and
     groupings keyed by descriptor ids, validated against a descriptor's
     structure, never inside a digest.
+    `boolean` is the Boolean profile of descriptor v1 (PROTOCOL §9): the gates
+    `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
+    `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
-    (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
+    (`evaluate`, the IR oracle, which also takes a table held in a registered
+    input lazily, as a `RegisteredTable`), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
+    `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
+    `evaluate_words` through the word view); `evaluate_batch` uses it for one
+    without a kernel.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
     comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
-    hardware and protocol objects core owns (`library`), and numpy kernels
+    hardware and protocol objects core owns (`library`), the pinned list of
+    operations with the guard that a program holds no data (`operations`), and numpy kernels
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
-    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.tc.relation`
+    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
+    the word library as Boolean Definitions: C-Flock's linear-form builder and
+    pieces (`forms`, `fp`, `tc_step`, `softmax`, `fp4`), the multiplexer tree (`gather`),
+    `trace.definition` (a builder traced into And/Xor/Not gates, with `word_of`
+    its word Definition), the BF16 dot, coordinate and GEMM and the E4M3, E5M2,
+    NVFP4 and MXFP4 steps and coordinates on bits (`gemm`: `DotBf16_v3`,
+    `GemmCoordinate_v3`, `Gemm_v3`, `GemmCoordinateE4m3_v2`, `GemmCoordinateNvf4_v2`,
+    `GemmCoordinateMxf4_v2`), attention's softmax operations and inverse sum on bits
+    (`attention`), the element-wise FP32, BF16 and I32 operations on bits
+    (`elementwise`), the bf16 widening on bits (`cast`), and the bf16 comparator,
+    the selects, PTX max / min and the E4M3 cast on bits (`scalar`). `verity.ml.tc.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
@@ -61,20 +79,26 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
- The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its draws from the verifier's own randomness, and verification plans. See its
- `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
- audit: registration, the verifier's draw over a partition's proof units, and the
- audit record with its profile; `benchmarks/one_stage` runs it end to end with
+ stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
+ The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the one-stage
+ audit (`one_stage`: registration, the verifier's draw over a partition's proof units, and the
+ audit record with its profile), the two-stage law, its draws from the verifier's own
+ randomness, and verification plans. The Lean states it; its `README.md` signposts that
+ Lean and lists what it does not state yet. `benchmarks/one_stage` runs the one-stage audit end to end with
  C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
  that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
- codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
- pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
+ codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`: the
+ statements of its guarantees, their proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
- (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
- pinned vectors; see its `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
+ pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
+ package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
+ `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
+ channel: the warden, its audit and calibration, and its Lean package (`lean/`).
+ `protocols/nci` is novel communication intensity, the policy that throttles frontier training
+ and leaves inference alone; so far only its Lean package (`lean/`).
+ Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -87,6 +111,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
+- `tools/cluster/`: `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger. Stdlib
+ only, imports neither `verity` nor `research`. On vy-nebius-2 its agent runs in shadow mode (read-only, beside
+ `gpu-lease`); nothing it decides is carried out yet (its `README.md`).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
@@ -121,6 +148,7 @@ what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tes
 `.agents/skills/testing/SKILL.md`.
 No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
+A test that adds more than about a minute to `check` says in its docstring what it catches that a cheaper test can't.
 
 ## Circuits
 
@@ -131,12 +159,13 @@ small binding in `circuit_check.targets`, which the suite enforces.
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
-`circuit-check --all`, the Lean verifier's build and its partition check against `verity.ir`, the Lean audit, and the
-verifier's cross-check against upstream's Rust verifier, at once on a multi-core CPU pod, with caches that hit only on
-identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
+`circuit-check --all`, C-Flock's Rust build and tests on its patched checkout, the Lean verifier's build and its partition check
+against `verity.ir`, the Lean audit, and the verifier's cross-check against upstream's Rust verifier, at once on a multi-core
+CPU pod, with caches that hit only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
 only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
 when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
-of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
+of the merged tree. The lander checks a train-prep commit with `tools/check/train.sh COMMIT POD` (`--agreement` for a pinned
+guarantee changed outside `backends/flock/`). A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
 (`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
 alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
@@ -147,21 +176,37 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib). New Lean goes into the
-  package whose dependencies it needs, in a subdirectory and namespace of its own. All packages share one toolchain and
+  `protocols/pous/lean/` (POUS's guarantees, their proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
+  named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
+  warden's timing-channel guarantees and their proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
+  core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
+  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
+  Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
+  a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
+  protocols' packages, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
+- Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
+  `Guarantees` (each a `def G : Prop`) are the trusted text, importing only one another, core's trusted text and
+  Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
+  each guarantee proved. The other packages move to this layout one at a time.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
-- A theorem that a ledger, a table or a PR cites as proved is pinned in `lean-audit.json`. `audit.py --update` records
-  it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
+- A guarantee (README "Glossary"), the theorem a ledger, a table or a PR cites as proved, is pinned in `lean-audit.json`.
+  `audit.py --update` records it. A changed record means the guarantee now says something else (its statement, or a
+  definition the statement reads).
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
-  `--update` prints (each changed signature before and after, each changed definition as it is now), and the merge
-  handoff names them.
-- A named assumption, or a hand-proved lemma a dependency could prove, has an entry in the package's `upstream` watch
-  list. The audit fails when the pinned dependency proves a theorem about it that nobody has acknowledged
-  (`tools/lean/upstream.py`). A document's "status upstream" cites that output; it is never written by hand.
+  `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
+  description names them. A guarantee that only moved to another module or name needs no reviewer when `--update
+  --moved MOVES.json` (old names to new) prints it as the same statement under its old names: its statement and every
+  definition it reads match their records.
+- A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
+  that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
+  dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
+  package's own definitions (PoUS's `LemmaA`) gets no entry, since no upstream theorem can mention them, and neither does
+  one about a single number (PoUS's `PrimeP16448`), whose entry would match every theorem about primes. A document's
+  "status upstream" cites that output; it is never written by hand.
 - Two agents never share a writable Lake build directory (`.lake`): parallel Lean work uses separate checkouts.
 - How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
 
@@ -179,9 +224,22 @@ Enforce deterministic requirements in code where practical. Use skills for
 recurring, non-obvious workflows, not as a substitute for tooling or as a
 reason to add approval steps.
 
-Make ordinary reversible engineering decisions independently. Surface changes
-to agreed semantics, acceptance criteria, material spending, or destructive
-behavior.
+Make ordinary reversible engineering decisions independently, and when a tool,
+rule or step gets in your way, fix it at the source if the fix is clearly yours
+rather than working around it. Surface changes to agreed semantics, acceptance
+criteria, material spending, or destructive behavior. When you can't tell which
+side a change is on, ask Daniel through your coordinator, with your
+recommendation, and record his ruling as a line here or in a skill so nobody
+asks twice. The rulings so far, and friction notes for what you can't fix now:
+`.agents/skills/friction/SKILL.md`.
+
+Two objectives are open, and Daniel wants help with them while we develop the
+codebase and the research harness: the right amount of cross-agent chatter and
+note-taking, enough to drive self-improvement and process wins and to catch
+inefficiencies but no more; and the right balance of autonomy, teamwork and
+asking Daniel. Neither is settled, and agents are expected to use their judgment
+and help tune both. Each ruling and each friction note is how a balance gets
+codified (`.agents/skills/friction/SKILL.md`).
 
 A guard never fails open, and an agent VM can be suspended at any moment, so
 nothing that bounds spend or preserves results may depend on one: pods bound
@@ -196,7 +254,7 @@ rather than accumulating them.
 ## Where writing goes
 
 - This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
-- Lane reports, handoffs, findings, drafts: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
+- Lane reports, checkpoints, findings, drafts, friction notes: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|finding|draft|friction`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`. Notes are records, never messages: a handoff, an order or an ask goes on Slack (below), or to your own Cursor workers as a follow-up.
 - Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
@@ -209,16 +267,27 @@ rather than accumulating them.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
-jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
+jobs detached on the pod, write one-line checkpoints, and message someone only to unblock or to change their plan. Before
+starting work another agent could plausibly be doing, read the notes' `kb/onboarding.md`: check `research notes approaches`
+and claim yours at your first checkpoint (`research notes claim`).
 
 Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
 origin lacks.
 
+Slack (computeverification.slack.com) is for handle holders (coordinators and service agents) and named humans only; a worker asks its
+own coordinator. The coordination API (ask, announce, 👀/✅/❌, who subscribes, the wake recipe): `.agents/skills/using-slack/SKILL.md`.
+
 ## Skills
+
+When writing or launching a job for `research run` (its cwd, its outputs, `--declared-output`, scratch), use
+`.agents/skills/writing-runs/SKILL.md`: custody uploads only the declared outputs and the run's own records in full.
 
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
+
+GPU kernel work (PoUW kernels on sm_120: what's been tried, gates, timing, recording every attempt, vLLM hookup):
+`.agents/skills/kernel-engineering/SKILL.md`.
 
 Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or `research merge`,
 a required review, a file every PR must update), assess its effect on research velocity with

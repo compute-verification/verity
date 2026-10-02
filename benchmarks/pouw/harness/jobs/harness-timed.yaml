@@ -1,0 +1,58 @@
+# A timed harness run on node 2 (vy-nebius-2), the kind whose numbers go on the panel: queue pouw, priority pouw-timed, which
+# preempts pouw's other jobs so the node is quiet. It holds all 8 GPUs, times on GPU (index) 5 alone, and is killed at 18 minutes
+# so it releases the node within the 20-minute window (server.md, 05:10Z and 05:50Z). Batch the shapes into one run.
+#
+#   sky jobs launch -n pouw-timed-<what> benchmarks/pouw/harness/jobs/harness-timed.yaml \
+#     --env BUILD=art:<id> --env GPU_UUID=<GPU 5's UUID, from server.md> \
+#     --env CMD='bench.py --shapes headline --arm-path ... --arm ...' \
+#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# The job sees the node's 8 GPUs in PCI bus order, so index 5 is GPU 5; the harness refuses any other UUID. Build and gate in
+# jobs/harness.yaml first: this job compiles nothing (BUILD: jobs/env.sh), and its gates run again before it times.
+name: pouw-harness-timed
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:8
+  cpus: 8
+  labels:
+    budget-line: nebius-prover-dev
+  memory: 24
+
+workdir: .
+
+envs:
+  CMD: null
+  BUILD: null
+  GPU: "5"
+  GPU_UUID: null
+  CAMPAIGN: pouw
+  RESEARCH_RUNS: /workspace/research/runs
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+run: |
+  set -euo pipefail
+  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source --timeout 1080 -- bash -c '
+    . benchmarks/pouw/harness/jobs/env.sh "$BUILD" &&
+    CUDA_VISIBLE_DEVICES="$GPU" CUDA_DEVICE_ORDER=PCI_BUS_ID "$PY" benchmarks/pouw/harness/$CMD \
+      --gpu "$GPU" --expect-uuid "$GPU_UUID" --out "$RESEARCH_RUN_DIR/harness.json"'
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: pouw
+          kueue.x-k8s.io/priority-class: pouw-timed
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
