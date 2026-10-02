@@ -6,7 +6,7 @@ import FlockSoundness.ExecParse
 `parse_facts`: a circuit file `HmRow.parse` accepted has only nets `Net.ofRows` built (its text nets, and a typed flat
 class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), ports of whole SHA-512
 blocks, the unit, `sha512x3` and `hm96` nets and every range's net among its nets, passed `HmRow.check`, and its
-`sha512x3` and `hm96` nets are the verifier's (`HmNets.check`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
+`sha512x3` and `hm96` nets are the verifier's (`HmNets.check`), entered only by the rows' wires (`wires_prefix`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
 -/
 
@@ -82,6 +82,35 @@ theorem array_mapM_ok {α β : Type} {f : α → Except String β} {xs : Array �
 theorem findIdx?_lt {α : Type} {xs : Array α} {p : α → Bool} {i : ℕ} (h : xs.findIdx? p = some i) : i < xs.size :=
   (Array.findIdx?_eq_some_iff_findIdx_eq.1 h).1
 
+theorem wire_eq {a b : Wire} (h1 : a.dst = b.dst) (h2 : a.src = b.src) : a = b := by
+  cases a; cases b; simp_all
+
+/-- `HmRow.parse`'s wire check: the file's wires begin with `derived`, and no later wire's ends satisfy `p`. -/
+theorem wires_prefix {wires derived : Array Wire} {p : ℕ → Bool}
+    (h : ¬ ((wires.size < derived.size || (List.range derived.size).any (fun i => wires[i]!.dst != derived[i]!.dst ||
+      wires[i]!.src != derived[i]!.src) || (wires.extract derived.size wires.size).any (fun w => p w.dst.1 || p w.src.1)) = true)) :
+    ∃ rest, wires.toList = derived.toList ++ rest ∧ ∀ w ∈ rest, p w.dst.1 = false ∧ p w.src.1 = false := by
+  simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, List.any_eq_true, Array.any_eq_true, List.mem_range,
+    not_exists, not_and, Bool.not_eq_true, bne_eq_false_iff_eq] at h
+  obtain ⟨⟨hsz, hpre⟩, hrest⟩ := h
+  refine ⟨(wires.extract derived.size wires.size).toList, ?_, ?_⟩
+  · have hsplit : wires.toList = (wires.extract 0 derived.size).toList ++ (wires.extract derived.size wires.size).toList := by
+      rw [← Array.toList_append, Array.extract_append_extract]
+      simp
+    rw [hsplit]
+    congr 1
+    apply List.ext_getElem
+    · simp; omega
+    · intro i h1 h2
+      simp only [Array.getElem_toList, Array.getElem_extract, Nat.zero_add]
+      have := hpre i (by simpa using h2)
+      rw [getElem!_pos wires i (by simp at h1; omega), getElem!_pos derived i (by simpa using h2)] at this
+      exact wire_eq this.1 this.2
+  · intro w hw
+    rw [Array.mem_toList_iff] at hw
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hw
+    simpa using hrest i hi
+
 /-! ## What `HmRow.parse` accepted -/
 
 /-- **What `HmRow.parse` accepted.** -/
@@ -89,6 +118,9 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
   portWords : ∀ p ∈ c.ports.toList, 2 * p.words = 128 * p.chunks
+  /-- the rows' chains and hm96 inputs come first, and no other wire enters the `sha512x3` or `hm96` net -/
+  rowWires : ∃ rest, c.wires.toList = (HmRow.rowWires c.ports c.shaNet c.hmNet).toList ++ rest ∧
+    ∀ w ∈ rest, w.dst.1 ≠ c.shaNet ∧ w.dst.1 ≠ c.hmNet
   unitNet : c.unitNet < c.nets.size
   shaNet : c.shaNet < c.nets.size
   hmNet : c.hmNet < c.nets.size
@@ -223,9 +255,9 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨l, -, h⟩ := except_bind_ok h
       exact ⟨l, h⟩
   simp (config := { zeta := false }) only [jpW] at h
-  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) derived rowNet jpD at h)
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpD] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) derived wiresT rowNet at h)
+  obtain ⟨hwires, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [rowNet] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨ls, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨leafId, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpF at h)
@@ -392,7 +424,14 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
       simpa using hp
     · cases hi
   refine ⟨?_, ⟨more, hm, hmore⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
+  have hrowWires := wires_prefix (p := rowNet) hwires
   exact { nets := hbuilt, ports := fun p hp => (hports p hp).1, portWords := fun p hp => (hports p hp).2,
+          rowWires := by
+            obtain ⟨rest, hl, hr⟩ := hrowWires
+            refine ⟨rest, hl, fun w hw => ?_⟩
+            have := (hr w hw).1
+            simp only [rowNet, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at this
+            exact this,
           unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩,
           rowNets := by cases w'; exact hrows, typed := rfl }
