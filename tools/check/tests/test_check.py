@@ -33,13 +33,14 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     """In release, as upstream's CI runs them, on the checkout the build step patches; in two invocations, since `--lib` on the
     upstream crates would drop their integration tests."""
     script = (ROOT / "backends" / "flock" / "check_build.sh").read_text()
-    mode = script[script.index('if [ "${1:-}" = test ]'):script.index("for features in")]
+    start = script.index('if [ "${1:-}" = test ]')
+    mode = script[start:script.index("\n  exit\nfi\n", start)]
     assert "for features in sha512 sha512,glue,seed-injection; do" in mode, "the proving build's set, without seed-injection"
     assert 'cargo test --release -q -p flock-live --lib --features "$features"' in mode
     patched = set()
     for p in sorted((ROOT / "backends" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)\n", mode).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
