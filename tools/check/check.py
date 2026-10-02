@@ -14,6 +14,7 @@
                                                             (a train that changes a pinned guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
+    python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
 
@@ -593,6 +594,16 @@ def preflight() -> list[tuple[str, list[str] | str, Path]]:
             ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT)]
 
 
+def preflight_only() -> int:
+    """`--preflight`: every preflight step, its output here; 0 when all pass."""
+    failed = []
+    for name, argv, cwd in preflight():
+        ok = not isinstance(argv, str) and subprocess.run(argv, cwd=cwd).returncode == 0
+        print(f"check: {name}: {'passed' if ok else argv if isinstance(argv, str) else 'FAILED'}", flush=True)
+        failed += [] if ok else [name]
+    return 1 if failed else 0
+
+
 def _tree(pid: int) -> list[int]:
     """``pid`` and its descendants, read from /proc (only ``pid`` where there is none)."""
     kids: dict[int, list[int]] = {}
@@ -797,6 +808,8 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
         return lean_agreement(*map(Path, argv[1:]))
+    if argv == ["--preflight"]:
+        return preflight_only()
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
