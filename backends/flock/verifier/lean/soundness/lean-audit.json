@@ -19540,6 +19540,23 @@
     "FlockSoundness.ZK.padOnto_M1",
     "FlockSoundness.ZK.padsOnto_monomial"
    ]
+  },
+  "FlockSoundness.ExecDelta": {
+   "digest": "d0dc142c90f29da4c4255da65e665148b30c275690e3b1901613eb0977e0771b",
+   "definitions": {
+    "FlockSoundness.HmRowBit": "6d182235b3057d736eccc7288e6dbe21606ae0ad234d5a5cccc286464d3d3102",
+    "FlockSoundness.ShaRowBit": "9a9e9c0d697b84ef2770d1bd63a7a0588e4fd4bbf49abdec303e333796f98837"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_block",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased",
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Zero.copyPos_zero"
+   ]
   }
  },
  "dependencies": {
