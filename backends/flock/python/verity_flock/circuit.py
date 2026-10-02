@@ -299,24 +299,27 @@ def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port], cou
     return out
 
 
-def _out_ports(outs: list, bit_rows: bool, seg_out_rows) -> tuple[list[Port], list[int]]:
-    """The output rows and each one's run of output ports: one row per port (``out_row``), and each run in ``seg_out_rows``
-    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, named after its first."""
+def _out_ports(outs: list, bit_rows: bool, seg_out_rows, v2_out_rows=()) -> tuple[list[Port], list[int]]:
+    """The output rows and each one's run of output ports: one row per port (``out_row``), each run in ``seg_out_rows``
+    (consecutive output ports, in order) one ``sha512/row-seg/v1`` row of exactly their words, and each run in ``v2_out_rows``
+    (one port or several) one ``sha512/row/v2`` row of exactly their words, each named after its first."""
     names = [nm for nm, _ in outs]
     starts, covered = {}, set()
-    for run in seg_out_rows:
-        i = names.index(run[0]) if run and run[0] in names else -1
-        if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
-            raise ValueError(f"segmented output row {list(run)}: a run of consecutive output ports, each in one row")
-        starts[i] = len(run)
-        covered |= set(run)
+    for seg, runs in ((True, seg_out_rows), (False, v2_out_rows)):
+        for run in runs:
+            i = names.index(run[0]) if run and run[0] in names else -1
+            if i < 0 or list(run) != names[i:i + len(run)] or covered & set(run):
+                raise ValueError(f"output row {list(run)}: a run of consecutive output ports, each in one row")
+            starts[i] = (len(run), seg)
+            covered |= set(run)
     rows, counts, j = [], [], 0
     while j < len(outs):
         if j in starts:
-            w = sum(x for _, x in outs[j:j + starts[j]])
-            rows.append(Port(outs[j][0], w, 16 * w, True))
-            counts.append(starts[j])
-            j += starts[j]
+            k, seg = starts[j]
+            w = sum(x for _, x in outs[j:j + k])
+            rows.append(Port(outs[j][0], w, 16 * w, seg))
+            counts.append(k)
+            j += k
         else:
             rows.append(out_row(*outs[j], bit_row=bit_rows))
             counts.append(1)
@@ -437,7 +440,7 @@ def _row_wires(ports: list[Port]) -> list:
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None, seg_ports: frozenset[str] = frozenset(),
-            seg_out_rows: tuple = ()) -> str:
+            seg_out_rows: tuple = (), v2_out_rows: tuple = ()) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -446,7 +449,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     in place of the one ``row_schema``; ``seg_ports``: the input ports among them that are segmented rows (``sha512/row-seg/v1``,
     PoUW's per-call role-X rows); ``seg_out_rows``: runs of consecutive output ports each committed as one segmented row of
     exactly their words, named after its first (META ``out_row_ports``), so that a unit reading the row as one input port
-    has the writer's leaf."""
+    has the writer's leaf; ``v2_out_rows``: runs (one port or several) each committed as one ``sha512/row/v2`` row of exactly
+    their words (PoUW's ok, tile digest and role-W rows), in place of a lone port's row zero-padded to whole blocks."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -471,9 +475,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise ValueError(f"{low.name}: segmented rows are bit rows of input ports: {sorted(seg_ports)}")
     ins = [_port(p.name, w, b, p.name in seg_ports) for p, (w, _), b in zip(sub.inputs, lv["in_ports"], bits_of, strict=True)]
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
-    if seg_out_rows and port_bits is None:
-        raise ValueError(f"{low.name}: segmented output rows are bit rows (row_schemas)")
-    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows)
+    if (seg_out_rows or v2_out_rows) and port_bits is None:
+        raise ValueError(f"{low.name}: output rows of exactly their words are bit rows (row_schemas)")
+    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows, v2_out_rows)
     ports = ins + orows
     ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
@@ -524,7 +528,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
             "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"],
             "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
-            **({"out_row_ports": counts} if seg_out_rows else {}),
+            **({"out_row_ports": counts} if seg_out_rows or max(counts, default=1) > 1 else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,

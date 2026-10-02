@@ -162,8 +162,10 @@ const SHA512_ROW_SEG_SEGMENT_TAG: &[u8] = b"verity/sha512-row-seg/v1/segment\0";
 pub const ROW_SEG_BITS: usize = 8192;
 /// a statement's `outputs` identity with runs of output ports (META `out_row_ports`), the Lean verifier's `Tags.outRowsIdentity`
 pub const OUT_ROWS_SEG_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word";
+/// the same with a run committed as a `hm96-sha512/row/v2` row, the Lean verifier's `Tags.outRowsV2Identity`
+pub const OUT_ROWS_V2_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row/v2 or hm96-sha512/row-seg/v1 row of their words (its row_schemas entry), hashed in the circuit; the public file has no output word";
 /// what `Composite::check` refuses of the output rows, word for word the Lean verifier's (`HmOut.checkRows`)
-pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports: a sha512/row-seg/v1 row of exactly their words, named after the first), each name once";
+pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports), a bit row of exactly their words (sha512/row/v2 or sha512/row-seg/v1) named after the first, each name once";
 const ROLE_X: u8 = 1;
 /// a port's compressions, at most: each reads 1024 message columns of a block of at most 2^IN_RANGE_K_LOG
 const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
@@ -926,10 +928,9 @@ impl Composite {
         if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_row_ports.len() || names.windows(2).any(|w| w[0] == w[1])
             || self.out_rows().iter().enumerate().any(|(j, p)| {
                 let (first, k, _, w) = self.out_group(j);
-                out_names.get(first) != Some(&p.name.as_str()) || match p.segs {
-                    Some(_) => p.bits != 16 * w,
-                    None => k != 1 || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words,
-                }
+                let padded = k == 1 && p.words == w.div_ceil(64) * 64 && p.bits == 16 * p.words;
+                out_names.get(first) != Some(&p.name.as_str())
+                    || !if p.segs.is_some() { p.bits == 16 * w } else if p.v2 { p.bits == 16 * w || padded } else { padded }
             })
         {
             return Err(OUT_ROWS_REFUSED.into());
