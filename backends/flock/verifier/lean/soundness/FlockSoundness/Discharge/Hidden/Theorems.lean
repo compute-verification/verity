@@ -1,4 +1,5 @@
 import FlockSoundness.Discharge.Hidden.Binding
+import FlockSoundness.Discharge.Hidden.Public
 
 /-!
 # The soundness of a hidden-output statement (`Stmt.setupHidden`)
@@ -23,7 +24,7 @@ theorem hidden_delta : HiddenDelta := by sorry
 
 theorem hidden_layout : HiddenLayout := by sorry
 
-theorem public_exposes : PublicExposes := by sorry
+theorem public_exposes : PublicExposes := public_exposes'
 
 theorem outputs_committed : OutputsCommitted := by sorry
 
