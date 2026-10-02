@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Layout.RowEnc
 import FlockSoundness.Discharge.Layout.KeysRow
+import FlockSoundness.Discharge.Layout.Outs
 import FlockSoundness.Discharge.Const
 import FlockSoundness.Discharge.Zero
 
@@ -13,11 +14,12 @@ row widths `16 · words` (`portRowW`), `lay` is `keyLayout` with the registratio
 returned outputs) and `bitCode` for the single gates' commit strings, and `rs` is `keyRowsEnc` with `enc := rowEnc` (the
 bytes `sha512/row/v1` hashes, `keyRow_enc`) and [e2e-const]'s `Const.constCols_keyProg` and [e2e-zero]'s
 `Zero.zeroCols_keyProg` for the constant's and the zero's gates (`keyedRows`). With `KeysRow` from the parse
-(`keysRow_of_parse`), `keyedRowsOfParse`.
+(`keysRow_of_parse`), `keyedRowsOfParse`; with the returned outputs' bits for the program's outputs (`outsOf`,
+`outsOut_outsOf`), `keyedRowsOuts`.
 
 What `rs` still takes: an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), the drawn units' sites
 (`BcSite`), and `outs` the returned outputs' bits (`OutsOut`); `keyedRowsOfParse` a unit with only its leaf group, and
-every input a unit row reads a port bit (`PortReads`).
+every input a unit row reads a port bit (`PortReads`); `keyedRowsOuts` no `OutsOut`.
 -/
 
 namespace FlockSoundness.Discharge.Layout
@@ -65,5 +67,15 @@ noncomputable def keyedRowsOfParse {tags : Tags} {bytes : ByteArray} {tables : L
     (houts : OutsOut c hU n outs) :
     Binding.HmRows (keyedLayout hparse outs saltCol popOf) :=
   keyedRows hparse saltCol ho hsite houts (keysRow_of_parse hc h1 hpr)
+
+variable {popOf} in
+/-- **`rs` at the production program's places, with the returned outputs' bits for the program's outputs**
+(`outs := outsOf`, `outsOut_outsOf`): `keyedRowsOfParse` without `OutsOut`. -/
+noncomputable def keyedRowsOuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
+    (ho : c.outNet = c.unitNet)
+    (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
+    Binding.HmRows (keyedLayout hparse (outsOf c hU n) saltCol popOf) :=
+  keyedRowsOfParse hparse saltCol hc h1 hpr ho hsite (outsOut_outsOf c hU n)
 
 end FlockSoundness.Discharge.Layout
