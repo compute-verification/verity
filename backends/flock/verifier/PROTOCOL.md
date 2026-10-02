@@ -1462,7 +1462,7 @@ expectation):
   refuses a row that does not open its registered root (set 16).
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
 
-D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` field names them per set (`--upstream-checks` in
+D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
 
 Elsewhere the spec follows upstream, even where upstream is lenient without soundness cost: record keys for unconfigured
