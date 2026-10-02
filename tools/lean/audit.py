@@ -520,11 +520,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(f"pins: {name} uses {', '.join(sorted(set(f['axioms']) - allowed))}")
         named = []
         for h in f["hypotheses"]:
-            if not h["closed"]:
-                continue
             if h["named"] and under(policy.get("assumptions", []), h["module"] or ""):
                 named.append(h["named"])
-            else:
+            elif h["closed"]:
                 fails.append(f"pins: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
                              f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
         now = {"signature": f["signature"].splitlines(),

@@ -252,12 +252,13 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
-  let hypotheses ← forallTelescope ci.type fun xs _ => do
+  let head := statementOf env meaning ci.type
+  let hypotheses ← forallTelescope ((head.map (·.2)).getD ci.type) fun xs _ => do
     let mut out := #[]
     for x in xs do
       let t ← inferType x
       unless ← isProp t do continue
-      let named : Option Name := match t with | .const c _ => some c | _ => none
+      let named : Option Name := match t.consumeMData.getAppFn with | .const c _ => some c | _ => none
       out := out.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
         ("type", toJson (toString (← ppExpr t))), ("closed", toJson (!t.hasFVar && !t.hasMVar)),
         ("named", toJson (named.map toString)), ("module", toJson ((named.bind moduleOf).map toString))]
