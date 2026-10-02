@@ -227,3 +227,32 @@ def test_the_vectors_reproduce_from_the_file_alone(doc):
         at_max += i["t_us"] == r["max_us"] and v["expected"]["survival_fraction"] == 1 / r["n"]
         past += r["max_us"] < i["t_us"] < r["max_us"] * 1.001 and v["expected"]["survival_fraction"] == 0
     assert inside >= 3 and at_max >= 1 and past >= 1
+
+
+def test_an_exclusion_window_leaves_out_the_runs_it_overlaps_and_says_why(tmp_path, doc):
+    """The second run (the twin, T0 + 60 s to T0 + 104 s) overlaps the window; the first run (to T0 + 44 s) does not."""
+    path = _chunk(tmp_path / "chunk-ex.npz")
+    ex = E.Exclude(T0 + 50_000_000_000, T0 + 61_000_000_000, "a fence breach")
+    assert not ex.hits({"start_ns": T0, "end_ns": T0 + 44_000_000_000})
+    b = E.Builder(ex)
+    b.add(path)
+    d = json.loads(json.dumps(b.document(arts=["art:t"], commit="test", generated_at="2026-10-02T00:00:00Z", host="h", gpu="g",
+                                         extra_notes=[]), allow_nan=False))
+    c19, full19 = d["cells"][19], doc["cells"][19]
+    assert (c19["runs"], c19["twin_runs"], c19["twin_answers"]) == (1, 0, 0) and full19["twin_runs"] == 1
+    assert c19["answers"] == full19["answers"]
+    assert [r["timestamping"] for r in d["timeline"]["runs"]] == [True]
+    assert not any(not r["timestamping"] for r in d["survival"])
+    assert d["timeline"]["minutes"] == doc["timeline"]["minutes"]
+    notes = " ".join(d["run"]["notes"])
+    assert "excluded: the 1 runs whose span overlaps" in notes and "a fence breach" in notes and "cell 19 pass 0" in notes
+    assert "the excluded runs' 400 are left out too" in notes
+    assert "excluded" not in " ".join(doc["run"]["notes"])
+    rows = {(r["cell"], r["metric"], r["op"], r["timestamping"]): r for r in d["survival"]}
+    for v in d["vectors"]:
+        i = v["inputs"]
+        r = rows[(i["cell"], i["metric"], i["op"], i["timestamping"])]
+        assert E.survival_at(d["t_us"], r["s"], r["max_us"], r["n"], i["t_us"]) == pytest.approx(
+            v["expected"]["survival_fraction"], rel=1e-9, abs=0)
+    with pytest.raises(SystemExit, match="needs --exclude-reason"):
+        E.main([str(path), "--out", str(tmp_path / "x.json"), "--exclude-window", "2026-10-02T17:28:07Z/2026-10-02T17:34:00Z"])

@@ -8,6 +8,10 @@ v2 (208 B, the zero-copy wait and completions), which enters the ToR model's res
 `CONFIGS` (baseline, tuned, zerocopy).  All of a file's chunks have one header and one set of sampled cores.
 
     uv run python benchmarks/pous/soak_export.py --out pous-soak.json CHUNK.npz [CHUNK.npz ...] [--art CHUNK.npz=art:… ...]
+        [--exclude-window START/END --exclude-reason TEXT]
+
+`--exclude-window` (UTC, e.g. `2026-10-02T17:28:07Z/2026-10-02T17:34:00Z`) leaves out every run whose span (`start_ns` to
+`end_ns`) overlaps it, as `Exclude` says; `run.notes` names the runs and the reason.
 
 Definitions (the file's `metrics`, `run.notes` and the spec `pous-soak-plots.md`):
 
@@ -288,10 +292,25 @@ def _nearest_rank(v: np.ndarray, p: float) -> float:
     return float(s[max(1, math.ceil(p * len(s) - 1e-9)) - 1])
 
 
+class Exclude:
+    """Runs left out of a file: every run whose span (`start_ns` to `end_ns`) overlaps [`start_ns`, `end_ns`].  Their answers
+    leave cells' counts, survival, quantiles, breakdown, timeline.runs, serving and stalls (and the warm-up count);
+    timeline.minutes keeps the window's host samples."""
+
+    def __init__(self, start_ns: int, end_ns: int, reason: str) -> None:
+        if end_ns <= start_ns:
+            raise SystemExit("the exclusion window ends before it starts")
+        self.start_ns, self.end_ns, self.reason = start_ns, end_ns, reason
+
+    def hits(self, run: dict[str, Any]) -> bool:
+        a, b = int(run.get("start_ns") or 0), int(run.get("end_ns") or 0)
+        return bool(a and b) and a < self.end_ns and b > self.start_ns
+
+
 class Chunk:
     """One chunk's answers with their stamps, metric values and masks; the npz stays open only while it is processed."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, exclude: Exclude | None = None) -> None:
         z = np.load(path, allow_pickle=False)
         self.meta = json.loads(str(z["meta_json"]))
         self.files = set(z.files)
@@ -299,6 +318,7 @@ class Chunk:
         col = {str(n): i for i, n in enumerate(z["rec_columns"])}
         self.header_bytes = HEADER_BYTES_V2 if "srv_zc_wait_ns" in col else HEADER_BYTES
         self.runs = self.meta["runs"]
+        self.excluded = {j for j, r in enumerate(self.runs) if exclude is not None and exclude.hits(r)}
         self.run = z["rec_run"].astype(np.int64)
         self.cell = z["rec_cell"].astype(np.int64)
         self.op = rec[:, col["op"]]
@@ -309,10 +329,12 @@ class Chunk:
         ts = np.array([bool(r.get("ts", True)) for r in self.runs], bool)
         t0 = np.array([int(r.get("t0_ns") or r.get("start_ns") or 0) for r in self.runs], np.int64)
         self.ts = ts[self.run] if len(self.runs) else np.zeros(len(rec), bool)
-        ok = rec[:, col["status"]] == 0
+        out = np.isin(self.run, list(self.excluded))
+        self.n_excluded = int(np.count_nonzero(out))
+        ok = (rec[:, col["status"]] == 0) & ~out
         self.warm_dropped = int(np.count_nonzero(ok & (st["t_sched"] < t0[self.run] + WARMUP_NS)))
         self.keep = ok & (st["t_sched"] >= t0[self.run] + WARMUP_NS) & np.isin(self.op, list(OPS))
-        self.status_nonzero = int(np.count_nonzero(~ok))
+        self.status_nonzero = int(np.count_nonzero((rec[:, col["status"]] != 0) & ~out))
         self.steps = z["steps"] if "steps" in z.files else np.zeros((0, 8), np.int64)
         self.samples = {k[len("sample_"):]: z[k] for k in z.files if k.startswith("sample_")}
         z.close()
@@ -345,7 +367,10 @@ class Chunk:
 
 
 class Builder:
-    def __init__(self) -> None:
+    def __init__(self, exclude: Exclude | None = None) -> None:
+        self.exclude = exclude
+        self.excluded_runs: list[str] = []
+        self.n_excluded = 0
         self.surv: dict[tuple[int, str, str, bool], Acc] = defaultdict(Acc)
         self.brk: dict[tuple[int, str, str], Acc] = defaultdict(Acc)
         self.cells_meta: dict[int, dict[str, Any]] = {}
@@ -371,7 +396,7 @@ class Builder:
         self.cpus: tuple[int, ...] = ()
 
     def add(self, path: Path) -> None:
-        c = Chunk(path)
+        c = Chunk(path, self.exclude)
         m = c.meta
         if self.header_bytes not in (None, c.header_bytes):
             raise SystemExit(f"{path.name}: a {c.header_bytes} B header among {self.header_bytes} B chunks")
@@ -387,6 +412,13 @@ class Builder:
                 raise SystemExit(f"{path.name}: cell {cell['id']} has config {cell['config']!r}, not one of {CONFIGS}")
             self.cells_meta[int(cell["id"])] = cell
         self.n_answers += len(c.op)
+        self.n_excluded += c.n_excluded
+        for j in sorted(c.excluded):
+            r = c.runs[j]
+            cell = self.cells_meta.get(int(r["cell"]), {})
+            self.excluded_runs.append(f"{r.get('start_utc') or _utc(int(r['start_ns']))}-{_utc(int(r['end_ns']))[11:]} cell "
+                                      f"{r['cell']} pass {r.get('pass', 0)} ({cell.get('load')}, {cell.get('rate')} Hz, "
+                                      f"{cell.get('kib')} KiB, {cell.get('config')})")
         self.n_kept += int(np.count_nonzero(c.keep))
         self.n_warm += c.warm_dropped
         self.wrong += int(m.get("wrong") or 0)
@@ -432,8 +464,8 @@ class Builder:
                     x = x[np.isfinite(x)]
                     if len(x):
                         self.brk[(cell, op, cid)].add(x)
-        for r in c.runs:
-            if "error" in r:
+        for j, r in enumerate(c.runs):
+            if "error" in r or j in c.excluded:
                 continue
             a, b = int(r.get("start_ns") or 0), int(r.get("end_ns") or 0)
             if a:
@@ -447,7 +479,7 @@ class Builder:
         sel = c.keep & (c.op == OP_READ)
         rows_by_run = dict(self._groups(c, sel, c.run))
         for j, r in enumerate(c.runs):
-            if "error" in r:
+            if "error" in r or j in c.excluded:
                 continue
             rows = rows_by_run.get(j, np.zeros(0, np.int64))
             ts = bool(r.get("ts", True))
@@ -550,8 +582,8 @@ class Builder:
                 sv["steps"] += len(w)
                 sv["gpu_ms"].extend(((w[:, 3] - w[:, 2]) / 1e6).tolist())
 
-        for r in c.runs:
-            if "error" in r or not r.get("t0_ns") or not r.get("end_ns"):
+        for j, r in enumerate(c.runs):
+            if "error" in r or j in c.excluded or not r.get("t0_ns") or not r.get("end_ns"):
                 self.prev_run = None
                 continue
             a, b = int(r["t0_ns"]) + WARMUP_NS, int(r["end_ns"])
@@ -727,6 +759,11 @@ class Builder:
 
     def notes(self, extra: list[str], survival: list[dict[str, Any]]) -> list[str]:
         out = list(extra)
+        if self.exclude:
+            out.append(f"excluded: the {len(self.excluded_runs)} runs whose span overlaps {_utc(self.exclude.start_ns)}-"
+                       f"{_utc(self.exclude.end_ns)[11:]}, {self.exclude.reason}: " + "; ".join(self.excluded_runs)
+                       + f". Their {self.n_excluded:,} answers are left out of cells' counts, survival, quantiles, breakdown, "
+                       "timeline.runs, serving and stalls; timeline.minutes keeps the window's host samples")
         cores = f"{self.cpus[0]}-{self.cpus[-1]}" if self.cpus else "80-93"
         header = self.header_bytes or HEADER_BYTES
         node0 = not self.cpus or all(c in NODE0_CPUS for c in self.cpus)
@@ -743,7 +780,8 @@ class Builder:
             f"warm-up: the first {WARMUP_NS / 1e9:g} s of each cell run (answers scheduled before the run's first arrival + "
             f"{WARMUP_NS / 1e9:g} s) is left out of cells' counts, survival, quantiles, breakdown, timeline and stalls: "
             f"{self.n_warm:,} answers; {self.n_kept:,} of {self.n_answers:,} answers remain"
-            + (f"; {self.status_nonzero:,} with a nonzero status are left out too" if self.status_nonzero else ""),
+            + (f"; {self.status_nonzero:,} with a nonzero status are left out too" if self.status_nonzero else "")
+            + (f"; the excluded runs' {self.n_excluded:,} are left out too" if self.exclude else ""),
             f"answers with no K_tx_resp (timestamping on) are left out of server_kernel and the ToR metrics: {self.no_ktx:,}",
             ("twins (cells run with timestamping off) appear as timestamping: false rows for elapsed, server_user, gpu_span and "
             "schedule_lag only; breakdown and stalls' components use timestamping-on answers"),
@@ -860,9 +898,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--host", default="vy-nebius-2")
     ap.add_argument("--gpu", default="RTX PRO 6000 Blackwell, GPU 7")
     ap.add_argument("--commit", default=None)
+    ap.add_argument("--exclude-window", metavar="START/END", help="UTC, e.g. 2026-10-02T17:28:07Z/2026-10-02T17:34:00Z: leave "
+                    "out every run that overlaps it")
+    ap.add_argument("--exclude-reason", help="why (required with --exclude-window), into run.notes")
     a = ap.parse_args(argv)
     given = dict(x.split("=", 1) for x in a.art)
-    b = Builder()
+    exclude = None
+    if a.exclude_window:
+        if not a.exclude_reason:
+            raise SystemExit("--exclude-window needs --exclude-reason")
+        lo, hi = (int(datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()) * 1_000_000_000
+                  for x in a.exclude_window.split("/"))
+        exclude = Exclude(lo, hi, a.exclude_reason)
+    b = Builder(exclude)
     arts = []
     for p in a.chunks:
         art = given.get(str(p)) or given.get(p.name)
