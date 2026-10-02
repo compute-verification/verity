@@ -627,6 +627,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "gpu_held_s_per_vu": out.get("gpu_held_s_per_coord"), "verify_s_per_statement": out.get("verify_s_per_statement"),
             "byte_identical": g["status"] == "passed" and bool(out.get("accepted")), "coins": out.get("coins"),
             "session": (out.get("session") or {}).get("label"), "scheme": SCHEMES.get(out.get("coins")),
+            "mode": "zk" if out.get("zk") else "m0",
             # flock-circuit is both the prover (`prove`) and the verifier (`serve`)
             "impl": {"commit": out["commit"]["commit"], "prover_sha256": _read(a.binary_sha), "verifier_sha256": _read(a.binary_sha)},
             "flags": flags, "question": a.question or question(a.dtype, a.K),
@@ -637,10 +638,15 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "host_vmstat": out.get("host_vmstat_steady"), "why": out.get("why") or g.get("why")}
 
 
+def mode(pt: dict) -> str:
+    """A point's mode: `zk` when its attempt ran ZK=1 (every session under --zk; metrics flags such a point `zk`), else `m0`."""
+    return pt.get("mode") or ("zk" if "zk" in (pt.get("flags") or []) else "m0")
+
+
 def rollup(a) -> None:
     """Append a point to its subcircuit's roll-up (verity/hillclimb-rollup/v0), the whole file written beside it and renamed over
-    it; strings cut at 200 characters and the commit at 12. Every point names its run, and a run already there is not appended
-    twice."""
+    it; strings cut at 200 characters and the commit at 12. Every point names its run and its mode (a point written before
+    `mode` gets it from its `zk` flag), and a run already there is not appended twice."""
     pt = json.loads(Path(a.point).read_text())
     f = Path(a.file)
     doc = json.loads(f.read_text())
@@ -654,6 +660,7 @@ def rollup(a) -> None:
     cut = lambda v: v[:200] if isinstance(v, str) else [cut(x) for x in v] if isinstance(v, list) else {k: cut(x) for k, x in v.items()} if isinstance(v, dict) else v  # noqa: E731
     pt = cut(pt)
     pt["commit"] = (pt.get("commit") or "")[:12]
+    pt["mode"] = mode(pt)
     doc["points"].append(pt)
     doc["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
