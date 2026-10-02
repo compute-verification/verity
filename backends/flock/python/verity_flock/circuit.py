@@ -286,12 +286,50 @@ def _row_wires(ports: list[Port]) -> list:
     return wires
 
 
+def _split_leaves(leaves: list[list[int]], in_ports: list[tuple[str, int]], public: dict) -> tuple[list, list, list]:
+    """Each flat input leaf as ``(public, index)``: a row word's index among the rows' words, or a public word's among the public
+    ports' words; then the units' ``leaves_in`` (a public leaf there a zero leaf, -1) and ``leaves_public``."""
+    owner, r, p = [], 0, 0
+    for nm, w in in_ports:
+        owner += [(nm in public, (p if nm in public else r) + k) for k in range(w)]
+        p, r = (p + w, r) if nm in public else (p, r + w)
+    li = [[-1 if x < 0 or owner[x][0] else owner[x][1] for x in u] for u in leaves]
+    lp = [[owner[x][1] if x >= 0 and owner[x][0] else -1 for x in u] for u in leaves]
+    return owner, li, lp
+
+
+def public_span(group: tuple, li: list[list[int]], lp: list[list[int]]) -> tuple[int, int]:
+    """The ``in`` region's words in a unit slot (PROTOCOL.md §16.10): the smallest aligned power-of-two span ``[w0, w0 + 2^e)`` of
+    128-bit words holding every public leaf, inside the leaf group, every leaf in it a public or a zero leaf in every unit.
+    Returns ``(w0, e)``."""
+    col, words, bits = group
+    if any(b != 16 for b in bits):
+        raise ValueError("public inputs: the unit's leaves are not 16-bit words")
+    pub = [col + 16 * j // 128 for u in lp for j, x in enumerate(u) if x >= 0]
+    if not pub:
+        raise ValueError("public inputs: no unit reads a public word")
+    a, b = min(pub), max(pub)
+    e = (a ^ b).bit_length()
+    w0 = a >> e << e
+    if w0 < col or w0 + (1 << e) > col + words:
+        raise ValueError(f"public inputs: the aligned span of words {w0}..{w0 + (1 << e)} leaves the unit's leaf group")
+    for j in range(len(bits)):
+        if w0 <= col + 16 * j // 128 < w0 + (1 << e) and any(lp[u][j] < 0 and li[u][j] >= 0 for u in range(len(li))):
+            raise ValueError(f"public inputs: leaf {j} reads a row word inside the public region's words {w0}..{w0 + (1 << e)}: "
+                             f"lay the public ports out as whole words")
+    return w0, e
+
+
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
-            program: str | None = None, statics: dict | None = None) -> str:
+            program: str | None = None, statics: dict | None = None, public_inputs: dict | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
-    partition names, else :func:`program_sha512` of the subcircuit."""
+    partition names, else :func:`program_sha512` of the subcircuit.
+
+    ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
+    recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from an ``in``
+    region (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_span`)."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -309,7 +347,18 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     for table, _ in (tail.lookups if tail else []):
         lookups[table] = lookups.get(table, 0) + 1
     lv = low.leaves
-    ins = [_port(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])]
+    public_inputs = dict(public_inputs or {})
+    in_ports = [(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])]
+    if set(public_inputs) - {nm for nm, _ in in_ports}:
+        raise ValueError(f"public inputs {sorted(set(public_inputs) - {nm for nm, _ in in_ports})}: not input ports")
+    for nm, v in public_inputs.items():
+        if set(v) != {"seed", "derivation"} or not all(isinstance(v[k], str) and v[k] for k in v):
+            raise ValueError(f"public input {nm}: it names its recomputation, a non-empty seed and derivation")
+    ins = [_port(nm, w) for nm, w in in_ports if nm not in public_inputs]
+    pins = [{"port": nm, "words": w, **public_inputs[nm]} for nm, w in in_ports if nm in public_inputs]
+    owner, leaves_in, leaves_public = _split_leaves(lv["in"], in_ports, public_inputs)
+    if pins:
+        public_span(low.layout.in_groups[0], leaves_in, leaves_public)
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
     ports = ins + [out_row(nm, w) for nm, w in outs]
     ul = _slot_log(low.layout.useful)
@@ -323,7 +372,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     def fits(G: int):
         # a range no region reads is packed (the compressions, the lookups, and the units when the tail returns the outputs)
         items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
-                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets else {})})]
+                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets and not pins else {})})]
         for i, lay in enumerate(stages):
             items.append(("unit", _slot_log(lay.useful), G, {"net": f"stage{i}"}))
         for t, c in lookups.items():
@@ -347,6 +396,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     public = dict(getattr(U, "public", []))
     # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16
     leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
+    if any(owner[x[3]][0] for x in leaf_cuts):
+        raise NotImplementedError(f"{low.name}: a cut input read from a public input port")
+    leaf_cuts = [[*x[:3], owner[x[3]][1]] for x in leaf_cuts]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = [j for j, tag in enumerate(tail.stages[-1].outs) if tag[0] == "ret"] if U.tail_rets else []
     programs = program_digests(sub, statics)
@@ -356,8 +408,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "row_schema": ROW_SCHEMA, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
-            "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"],
-            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, ins, outs, ports[len(ins):], sub), "leaf_scheme": LEAF_SCHEME,
+            "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": leaves_in, "leaves_out": lv["out"],
+            **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
+            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, ports[len(ins):], sub), "leaf_scheme": LEAF_SCHEME,
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
@@ -392,16 +445,16 @@ def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, lis
     return out
 
 
-def _dummy(low: IL.Lowering, ins: list[Port], out_ports: list, orows: list[Port], sub=None) -> dict:
+def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], out_ports: list, orows: list[Port], sub=None) -> dict:
     """The all-zero instance's output words (every output leaf) and every row's ``b || c`` under zero salts (its zero input rows,
     then its output rows), as the padding instances hold (a tail that returns the outputs: the template's reference evaluation of
-    the zero instance)."""
-    n_in = sum(p.words for p in ins)
+    the zero instance). Its public inputs are zero too."""
+    n_in = sum(w for _, w in in_ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
     if low.units.tail_rets:
-        ev = sub.evaluate({p.name: [np.zeros(w, dtype=np.uint16)] for p, w in zip(sub.inputs, [q.words for q in ins])})
+        ev = sub.evaluate({nm: [np.zeros(w, dtype=np.uint16)] for nm, w in in_ports})
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     words = [int(x) for x in outs[0]]
     at = np.cumsum([0] + [w for _, w in out_ports])
@@ -477,9 +530,29 @@ def share(rows: dict) -> tuple[dict, dict]:
     return tables, refs
 
 
+PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+
+
+def _public_bytes(pins: list[dict], words: dict, n: int) -> bytes:
+    """Every instance's public words, u16 LE, instance-major, the ports in META order."""
+    if not pins:
+        return b""
+    w = np.concatenate([np.asarray(words[pp["port"]], dtype=np.uint16).reshape(n, pp["words"]) for pp in pins], axis=1)
+    return np.ascontiguousarray(w.astype("<u2")).tobytes()
+
+
+def write_public_inputs(text: str, words: dict, n: int, path) -> None:
+    """The verifier's own ``--public-inputs`` file (PROTOCOL.md §16.10): a header line ``{format, instances, ports}``, its ports
+    META's ``public_inputs`` (each with its seed and derivation), then ``words`` (``{port: (n, words)}``, the verifier's own
+    recomputation of the population's public words) as the public file holds them."""
+    pins = json.loads(text.split("\n", 2)[1][5:]).get("public_inputs", [])
+    head = {"format": PUBLIC_INPUTS_FORMAT, "instances": n, "ports": pins}
+    Path(path).write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + _public_bytes(pins, words, n))
+
+
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
-          refs: dict | None = None, salts: dict | None = None) -> dict:
+          refs: dict | None = None, salts: dict | None = None, public_words: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -497,10 +570,19 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``, input ports): the shared-row tables and refs as given,
     in their order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt).
     ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
-    committer's own salts."""
+    committer's own salts.
+
+    A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
+    end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
+    (``{port: (n, words)}``), else the set's."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
+    pins = meta.get("public_inputs", [])
+    if public_words is None:
+        public_words = {pp["port"]: (rows[pp["port"]] if rows is not None and pp["port"] in rows else input_set.port(pp["port"], lo, hi))
+                        for pp in pins}
+    pub_tail = _public_bytes(pins, public_words, n)
     ports = [Port(nm, w) for nm, w, _ in meta["ports"]]
     ins, orows = ports[:meta["input_ports"]], ports[meta["input_ports"]:]
     out_ports = [tuple(x) for x in meta["out_ports"]]
@@ -539,12 +621,15 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
              "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
     head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "range": [lo, hi], "instances": n, "circuit_sha512": digest(text), "units": units, "frame_v3": fv, "rows": True}
+    if pins:
+        head["public_inputs"] = pins
     if refs is not None:
         head["shared_rows"] = {p.name: len(rows[p.name]) for p in ports}
         public = b"".join(bc for p in ports for bc in bcs[p.name])
         public += np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes()
     else:
         public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
+    public += pub_tail
     if path is not None:
         if refs is not None:
             private = b"".join(np.ascontiguousarray(rows[p.name].astype("<u2")).tobytes() for p in ports)
@@ -562,24 +647,30 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
-          indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False) -> Path:
+          indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
+          public_inputs: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
     (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
-    ``pub-<n>.bin``."""
+    ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
+    stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
+    :func:`write_public_inputs`)."""
     if public_only and salt_key is None:
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = set_statics(input_set)
-    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics)
+    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics, public_inputs=public_inputs)
     (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
-            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics))
+            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
+                                                            statics=statics, public_inputs=public_inputs))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
     write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    if public_inputs:
+        write_public_inputs(text, {nm: input_set.port(nm, lo, hi) for nm in public_inputs}, hi - lo, out / f"public-inputs-{hi - lo}.bin")
     return pub if public_only else inst
 
 
