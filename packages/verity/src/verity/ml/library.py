@@ -1,19 +1,22 @@
-"""The library: the hardware and protocol objects core owns, public in both tracks (Project doc `constant-api-public.md` §2.9).
+"""The library: the hardware and protocol objects core owns, the only objects the verifier holds (Project doc
+`constant-api-public.md` §2.9, as Daniel ruled on 1 Oct 2026: an operation's own definition is gates, and everything a program
+or a request brings is a value).
 
 Every circuit type and every table a statement names carries a label. It is ``library`` exactly when the object is on this
 list, and ``program`` otherwise:
 
-* the verifier holds library objects in both tracks and folds them itself;
-* in the public track it holds program objects too, and in the private track a program object is a section of the circuit
-  commitment, folded inside the outer proof.
+* the verifier holds library objects and folds them itself; they are the public track, and it holds nothing else;
+* a program object is no circuit object: it is a registered input of the program (`verity.ir.program`'s
+  `RegisteredInput<w>_v1`, bound at registration), a value committed under a hiding leaf and always hidden. There is one
+  build, the private one.
 
 The list is fixed and versioned. Adding or removing an entry is a new `VERSION`, and so a new `digest()`.
 
 **Tables** are named by the SHA-512 of their raw little-endian 32-bit words: the key under which the Lean verifier's archive
 holds them (`Flock/Lookup.lean`'s `MUFU_TABLES`). Their SHA-256 over the same bytes is the pin the circuit files' META names.
 The library holds the measured MUFU tables only. A table derived from a model's architecture (an activation such as
-``gelu_tanh_bf16``, or a software function such as ``tanh_rn``) stays ``program``: it names the architecture, and a library
-table is folded in every private-track session whether a unit reads it or not.
+``gelu_tanh_bf16``, or a software function such as ``tanh_rn``) stays ``program``, a registered input: it names the
+architecture, and a library table is folded in every session whether a unit reads it or not.
 
 **Definitions** are the IR primitives whose circuits are library types: the tensor-core steps and the casts that core
 registers. The row-hashing circuits (``sha512x3``, ``hm96``) join by their type digests once the hierarchical circuit format

@@ -75,6 +75,33 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a")
 
 
+def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_ticket_is_cleared(tmp_path, monkeypatch, capsys):
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    (line / f"{1:020d}-1").write_text("")                                    # a waiter that died: nobody holds its ticket
+    first = _hold(line / f"{2:020d}-2")                                      # a live one that came first; slot a is free
+    seen, ran = [], {}
+
+    def sleep(_s):
+        seen.append(sorted(p.name for p in line.iterdir()))
+        (line / f"{2:020d}-2").unlink()                                      # it takes its slot and runs
+        os.close(first)
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=sleep)
+    assert len(seen) == 1 and seen[0][0] == f"{2:020d}-2" and len(seen[0]) == 2, seen     # the dead ticket gone, ours behind
+    assert ran == {"slot": "a"} and list(line.iterdir()) == []
+    assert "slot: 1 check(s) ahead in line; retrying every 20 s" in capsys.readouterr().err
+
+
 def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
 
@@ -100,6 +127,39 @@ def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
                          env=env, capture_output=True, text=True, check=True)
     assert out.stdout.split() == [f"[{cpu}]", "True", "a"], out.stderr
     assert f"check slot a (cores {cpu})" in out.stderr
+
+
+def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
+    """Who holds check-a/b/c and since when, without `fuser` on the lock files (old-circuits-and-proofs, 1 Oct)."""
+    w = tmp_path / "windows"
+    w.write_text("2026-10-01T09:20Z 30\n")
+    slots = SLOT.parse(f"a 32-63\nb 64-95\nd 0-47 windows={w}\n")
+    held = _hold(tmp_path / "check-a.lock")
+    a, b, d = SLOT.status(slots, tmp_path, NOW)
+    me = Path(f"/proc/{os.getpid()}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()[:200]
+    assert a.startswith(f"a  cores 32-63  held by pid {os.getpid()} since ") and a.endswith(f": {me}")
+    assert b == "b  cores 64-95  free"
+    assert d.startswith("d  cores 0-47  free; blocked: window 2026-10-01T09:20Z")
+    os.close(held)
+    assert SLOT.status(slots[:1], tmp_path, NOW) == ["a  cores 32-63  free"]
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    assert SLOT.main(["--status"], now=lambda: NOW) == 0
+
+
+def test_a_waiters_line_in_proc_locks_is_not_the_holder(tmp_path):
+    lock = tmp_path / "check-a.lock"
+    lock.touch()
+    st = lock.stat()
+    dev = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "locks").write_text(f"1: FLOCK  ADVISORY  WRITE 4242 {dev} 0 EOF\n1: -> FLOCK  ADVISORY  WRITE 777 {dev} 0 EOF\n"
+                                f"2: POSIX  ADVISORY  WRITE 99 00:01:1 0 EOF\n")
+    assert SLOT.holder(lock, proc) == 4242
+    (proc / "locks").write_text(f"1: -> FLOCK  ADVISORY  WRITE 777 {dev} 0 EOF\n")
+    assert SLOT.holder(lock, proc) is None
+    assert SLOT.holder(tmp_path / "absent.lock", proc) is None
 
 
 def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):

@@ -9,7 +9,7 @@
 AND and XOR are one family each, a member per number of inputs (`and_gate(n)`, `xor_gate(n)`; `AND` and `XOR` are the
 two-input members `And2_v1` and `Xor2_v1`), decoded by id like the constants. The format fixes what each of these means; no
 semantics package defines or re-registers them. A Definition is *Boolean* (`is_boolean`) when its signature has only 1-bit
-leaves and every primitive it reaches is one of them or an `Input1_v1`.
+leaves and every primitive it reaches is one of them, an `Input1_v1` or a `RegisteredInput1_v1`.
 
 **Elements and the word view.** A Boolean Definition's ports carry bits; an *element* of a port is an innermost
 `Array<w, Value<1>>` (one w-bit element, bit j = leaf j, least significant first) or a lone `Value<1>`. `word_type` replaces
@@ -129,7 +129,7 @@ def is_constant_bit(fn: Any) -> bool:
 
 
 def _is_boolean_primitive(fn: PrimitiveDefinition) -> bool:
-    return is_gate(fn) or is_constant_bit(fn) or fn.id == "Input1_v1"
+    return is_gate(fn) or is_constant_bit(fn) or fn.id in ("Input1_v1", "RegisteredInput1_v1")
 
 
 _BOOLEAN: "weakref.WeakKeyDictionary[SpecializedDefinition, bool]" = weakref.WeakKeyDictionary()
@@ -137,7 +137,7 @@ _BOOLEAN: "weakref.WeakKeyDictionary[SpecializedDefinition, bool]" = weakref.Wea
 
 def is_boolean(fn: Any) -> bool:
     """Whether ``fn`` (a primitive, a composite, a complete specialization) has only 1-bit leaves in its signature and every
-    primitive it reaches is a gate, a constant bit or `Input1_v1`."""
+    primitive it reaches is a gate, a constant bit, `Input1_v1` or `RegisteredInput1_v1`."""
     if isinstance(fn, CompositeDefinition):
         fn = bind(fn)
     if isinstance(fn, PrimitiveDefinition):

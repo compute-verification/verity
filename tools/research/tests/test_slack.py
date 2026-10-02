@@ -724,8 +724,23 @@ def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, regis
                     "options": [{"value": "yes", "label": "Looks right", "recommended": True}, {"value": "no", "label": "Needs changes"}],
                     "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": "https://github.com/x/note.md", "requested_by": "infra",
                     "agent_url": "https://cursor.com/agents/bc-test"}
-    assert route.identity["seen"] == [("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})]
+    assert route.identity["seen"][0] == ("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})
     assert "the card's fields" in err and f"threadTs=1790800000.000100" in err and OIDC not in out + err
+
+
+def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, registry, capsys):
+    rc, _, err = run(capsys, *card_argv())
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    (ping,) = [m for m in fake.messages.get(ASK, []) if m.get("thread_ts") == "1790800000.000100"]
+    assert rc == 0 and ping["username"] == "infra" and ping["text"].startswith(f"<@{human}> a decision for you: Test: does the")
+    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"]
+
+
+def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, capsys):
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@daniel", "--text", "node 2 or node 3? I recommend node 3; node 3 by 5 PM PDT")
+    assert rc == 0 and posted(fake, out)["text"].startswith(f"<@{human}> node 2 or node 3?")
+    assert run(capsys, "send", "--as", "daniel", "--to", "@infra", "--text", "x")[0] == 2
 
 
 def test_a_route_without_the_fields_gets_the_old_shape_with_the_card_in_its_text(route, registry, capsys):
@@ -880,6 +895,10 @@ def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits #712 is ready")
     rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "@proofs see this")
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs see this")
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "both")
+    assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs both")
+    assert run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
+    assert fake.messages[COORD][-1]["text"].split("\n")[0].endswith("to @circuits @proofs")
 
 
 def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs, capsys):

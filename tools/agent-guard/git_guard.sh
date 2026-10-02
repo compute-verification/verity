@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # `git` that keeps credentials out of remote URLs: installed ahead of /usr/bin on agent VMs (tools/agent-guard/install.sh).
 #
 # - `remote -v`, `remote get-url`, `remote show` and `ls-remote --get-url` print URLs with the credential removed. Git prints

@@ -34,6 +34,7 @@ from pathlib import Path
 from collections.abc import Sequence
 from typing import Any, Callable
 
+from ..secret_hint import lost
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
@@ -217,7 +218,7 @@ class LocalStore:
         r = self.remote
         if r is None:
             why = getattr(self, "remote_error", None)
-            raise StoreError(why or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
+            raise StoreError(why or lost("R2_ENDPOINT", "R2_BUCKET") or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
         return r
 
     @property
