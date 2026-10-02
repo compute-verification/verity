@@ -122,6 +122,14 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 | `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each draw averaged over the draw |
 | `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
 | `δ_link`, the link term | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
+| `δ_link`, under `cr/sha-512` alone | `SHA512CRStrict` | `CROnly.linkCR_of_strict` (`LinkCRStrict`, `hCRs`: the same finders stopped at `q` evaluations) | `linkBoundE` at per-run cost `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`; at `q³ = t'·2^512` the hash part is `3(1 + k)·t'^{2/3}/2^{512/3}` (`CROnly.linkBoundE_at_cube`) |
+
+**`cr/sha-512` alone** (`FlockSoundness/CROnly/`). Every e2e theorem and the headline is restated with `hCRs` in place of
+`hCR` (`CROnly.flock_e2e_*`, `CROnly.uprog_e2e_*`, `CROnly.prog_e2e_count`, `_drawn`, `CROnly.flock_headline`), so they
+rest on `SHA512CRStrict` and no `SHA512CRExpected`. The price is the link term's: for audit B (`Q_s ≈ 2^24`, `ρ = 1/2`)
+`δ_link` is about `t^{2/3}·2^-123.5` against the record's `t·2^-209.4`, so `2^-70.2` instead of `2^-129.4` at `t = 2^80`.
+`expected_of_strict` (truncation at `q` and Markov) reads the stopped finder's bound as linear in its expected cost, which
+loses `(2(1 + k))^{1/3}` against the best budget for the finder's own cost.
 
 The four `flock_e2e_*_hm96` theorems (`FlockSoundness/Binding/E2E.lean`) add the four:
 `miss_L(K) + ksAvgStrict + δ_link + δ_tree` for the count curve, the same without `miss_L(K)` for a drawn unit. `δ_tree`
@@ -355,6 +363,14 @@ as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
 `expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
 and the certificate's `IsRowsUnit.computes_of_cert`.
+The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
+`linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
+`Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
+(`sum_hidingGap_le`, `hankel_universal`), hm96-sha512's values (`hm96_sha512_sum`: mean `2^-257` over a uniform key;
+`hm96_sha512_bad_keys`: `Hm96Hiding` at `2^-193` fails for at most `2^-64` of the keys), and Lemma B and Lemma C with it
+discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `adaptive_prefinal_le`,
+`adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge still takes of the key is its uniformity
+(`hash-derived-key` for the pinned key, `hm96/PROTOCOL.md` §2a).
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
