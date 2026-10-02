@@ -30,6 +30,7 @@ import numpy as np
 
 from verity.ir import partition_object as PO
 from verity.ir.cut import CallGraph, check_cut
+from verity.ir.program import input_id
 from verity.ir.units import Activation, PartitionUnits, UnitCircuit
 from verity.randomness import derive
 
@@ -96,7 +97,7 @@ class ClassCircuit:
 def lower_class(act: Activation, uc: UnitCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
     """C-Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
     prims = {act.gate(j).prim.id for j in uc.gates}
-    missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith(("Const", "Input"))))
+    missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith("Const") and input_id(p) is None))
     if missing:
         return ClassCircuit(uc.shape, None, None, missing, "no piece")
     if len(uc.gates) > max_gates:

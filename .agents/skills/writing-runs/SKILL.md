@@ -3,7 +3,7 @@ name: writing-runs
 description: >
   How to write a job for `research run` in Verity so its custody stays small: pick the working directory (`--cwd source`),
   write results under one output directory, declare them with `--declared-output GLOB`, and keep scratch, caches and build
-  trees in `$TMPDIR` or outside the run dir. Custody uploads the run's own logs and records, the declared files, and undeclared
+  trees in a `mktemp -d` directory outside the run dir. Custody uploads the run's own logs and records, the declared files, and undeclared
   files only up to 256 MiB; the rest it lists by path, size and sha256 without bytes. Use when writing or launching a
   `research run` command, a job's custody upload is slow or huge, custody printed "trimmed N undeclared file(s)", or a run's
   output is missing from its run record.
@@ -39,8 +39,9 @@ rule keep working. Once lanes declare their outputs it drops to 0, and undeclare
 3. **Keep outputs small:** the numbers, JSON, logs and the digests of big things. An artifact that must survive but is
    large (a model, a proof, a trace over about 100 MiB) goes into the store with `research data put --kind K --file P
    --preserve` from inside the job, and you record its `art:` id in `out/`.
-4. **Put scratch in `$TMPDIR`,** or in a directory outside the run dir that you delete. Caches, build trees (`target/`,
-   `.lake/`, `node_modules/`), downloaded datasets and checkpoints never go in the run dir.
+4. **Put scratch in a `mktemp -d` directory that you delete,** as in the example, or elsewhere outside the run dir. A job's
+   `$TMPDIR` may be unset (queued jobs on vy-nebius-1 have none), so `$TMPDIR/x` can become `/x`. Caches, build trees
+   (`target/`, `.lake/`, `node_modules/`), downloaded datasets and checkpoints never go in the run dir.
 
 ~~~bash
 research run --on M --cwd source --declared-output 'out/*' -- \

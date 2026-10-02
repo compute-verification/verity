@@ -8,13 +8,17 @@
                                                             inputs when the commit changes backends/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
-                                                            (`tools/check/slot.py`), the lock and cores the train checks take
+                                                            (`tools/check/slot.py`), the lock and cores the train checks take;
+                                                            --agreement sends the upstream build whatever the commit changes
+                                                            (a train that changes a pinned guarantee elsewhere: `train.sh`);
+                                                            a warning first when the commit can't land on REF as it is
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
 
-First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`) and the repository's wall-clock lint and
-blob cap (`LINTS`). The groups start only once it passes, so a check that one of them fails ends in seconds, not hours.
+First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
+tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
+once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
@@ -63,7 +67,9 @@ skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tes
 dir (`research run --custody-r2`, the default with --on: a delete-free key with GetObject), which `store_io` hands to its store
 CLI only.  So `--record --on` must be launched where the parent R2 key is (the Cursor secrets, or `~/.config/verity/r2.env` when it
 holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE=1
-is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.
+is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.  Under
+VERITY_STORE_REQUIRED=1 the suites' guard fails any skip whose reason says "the evidence store is not reachable", whichever helper
+fetched (C-Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 """
 from __future__ import annotations
 
@@ -343,10 +349,23 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     return subprocess.run(argv, cwd=ROOT).returncode
 
 
+def landable(base: str) -> bool:
+    """Whether `research merge` could land HEAD on ``base`` as it is: ``base`` is in HEAD, or merging HEAD into it leaves HEAD's own
+    tree (the gate's `tree_identical`). Otherwise the tree that lands is a merge nobody checked yet."""
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, "HEAD"], cwd=ROOT, capture_output=True).returncode == 0:
+        return True
+    r = subprocess.run(["git", "merge-tree", "--write-tree", base, "HEAD"], cwd=ROOT, capture_output=True, text=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == head
+
+
 def record(argv: list[str]) -> int:
-    """`--record [--on MACHINE] [--base REF]`: `research run --tool check` on this clean commit, with the pinned upstream build and
-    inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF (default origin/main)."""
+    """`--record [--on MACHINE] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the pinned
+    upstream build and inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF
+    (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
+    (`landable`) gets a warning and is checked anyway."""
     on = base = None
+    agreement = False
     rest = []
     it = iter(argv)
     for x in it:
@@ -354,16 +373,23 @@ def record(argv: list[str]) -> int:
             on = next(it)
         elif x == "--base":
             base = next(it)
+        elif x == "--agreement":
+            agreement = True
         else:
             rest.append(x)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
-    base = base or "origin/main"
+    if base is None:
+        subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
+        base = "origin/main"
+    if not landable(base):
+        print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
+              f"other than its own, so `research merge` won't take this check)")
     changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
     from research.merge import rule_touches
 
-    need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)]
+    need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
     env = dict(os.environ)
     if "lean-agreement" in need:
@@ -511,7 +537,7 @@ def agreement_closure(files: list[str]) -> list[str]:
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
-LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py::test_no_tracked_blob_exceeds_limit")
+LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py")
 #: how long a stopped step's processes have after SIGINT before SIGKILL
 STOP_GRACE_S = 60
 #: each step's record, one JSON line appended as the step ends

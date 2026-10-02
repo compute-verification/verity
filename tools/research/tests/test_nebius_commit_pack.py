@@ -6,7 +6,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
+import shlex
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -131,6 +134,25 @@ def test_a_leased_commit_mounts_its_queues_lease_pool_and_requests_no_gpu(dispat
     monkeypatch.setattr(dispatch, "LEASE_HOSTDIRS", {})
     pod = dispatch.render(_item(tree, lease="self"), "lane/c1", 1, 0)["spec"]["template"]["spec"]
     assert next(v for v in pod["volumes"] if v["name"] == "gpu-lease")["hostPath"]["path"] == "/run/gpu-lease"
+
+
+def test_a_node_2_build_resubmits_its_commit_with_the_items_lease_and_pinned_template(dispatch, tmp_path, monkeypatch):
+    """n2_build.sh's Commit submit dropped the item's `lease` (4 of 10 leased items came back unleased, Oct 1) and its
+    `template_sha`; its arguments must give dispatch.py's `submit` the item's own fields."""
+    code = re.search(r"python3 - \"\$item\" << 'EOF'\n(.*?)\nEOF\n", (NEBIUS / "n2_build.sh").read_text(), re.S).group(1)
+    tree, sha = _tree(tmp_path / "t"), dispatch.load_template("config-run")[1]
+    item = {**_item(tree, lease="self", template_sha=sha, queue="circuits"),
+            "n2": {"src": str(tree), "key": "c1", "mem_gb": 64, "cpus": 16}}
+    (tmp_path / "item.json").write_text(json.dumps(item))
+    out = subprocess.run([sys.executable, "-c", code, str(tmp_path / "item.json")], capture_output=True, text=True,
+                         check=True).stdout
+    args = shlex.split(next(ln for ln in out.splitlines() if ln.startswith("COMMIT_ARGS=("))[len("COMMIT_ARGS=("):-1])
+    got = []
+    monkeypatch.setattr(dispatch, "submit", lambda it, key, idx=0, tries=0, dry=False: got.append((it, key, idx)))
+    dispatch.main(["submit", "config-run", "n2-build/c1", "--tree", str(tree), "--task", "1", *args])
+    (sent, key, idx), = got
+    assert (key, idx) == ("n2-build/c1", 1) and sent["env"] == item["env"]
+    assert (sent.get("lease"), sent.get("template_sha"), sent.get("queue")) == ("self", sha, "circuits")
 
 
 def test_a_one_off_invocation_takes_the_loops_settings_from_dispatch_env(dispatch, tmp_path, monkeypatch):
@@ -335,6 +357,34 @@ def test_the_pack_hold_sends_the_spool_out_deletes_unstarted_pods_and_drains_at_
     assert [a for a, _ in dispatch.calls if a[0] == "delete"] == [("delete", "job", "pack-running", "--wait=false")]
 
 
+def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch, tmp_path, monkeypatch):
+    """A pod that can claim nothing idles 3 min and exits: 66 pack pods (181 GPU-min) ran no Commit on Oct 1."""
+    monkeypatch.setenv("PACK_BUNDLE_GLOBS", f"{tmp_path}/cov/*/commit/replay_bundle_p*")
+    monkeypatch.setenv("PACK_BUNDLE_CAP_GB", "100")
+    monkeypatch.setenv("PACK_BUNDLE_EST_GB", "60")
+    monkeypatch.setattr(dispatch, "quiet", lambda t=None: False)
+    dispatch.PACK_COMMITS = True
+    tree = _tree(tmp_path / "t")
+
+    def pods() -> int:
+        n = sum(1 for a, j in dispatch.calls
+                if a[0] == "create" and j["metadata"]["annotations"]["verity.dev/template"].startswith("commit-pack@"))
+        dispatch.calls.clear()
+        return n
+
+    dispatch.spool(_item(tree, LLAMA_B8.replace("__i256__o32__", "__i1024__o128__")), "lane/c1", 1)
+    dispatch.pack_pods([])
+    assert pods() == 1
+    entry = next(dispatch.PACK.glob("queue/*.json"))
+    (dispatch.PACK / "claimed" / "pod-gone").mkdir(parents=True)
+    (dispatch.PACK / "claimed" / "pod-gone" / "e.json").write_text(entry.read_text())
+    dispatch.pack_pods([])
+    assert pods() == 0
+    dispatch.spool(_item(tree, LLAMA_B8.replace("__b8__", "__b1__")), "lane/c2", 1)
+    dispatch.pack_pods([])
+    assert pods() == 1
+
+
 @pytest.mark.parametrize("path, drain", [("dispatch.py", (12, 33)), ("sky/commit_pack.py", (12, 28))])
 def test_no_pack_pod_starts_or_claims_from_1210z_and_none_runs_past_1235z(monkeypatch, path, drain):
     mod = _load(NEBIUS / path, f"windows_{drain[1]}", monkeypatch)
@@ -440,9 +490,21 @@ def test_the_bundle_cap_counts_the_commits_running_and_the_candidate(pilot):
     long_b8 = e(LLAMA_B8.replace("__i256__o32__", "__i1024__o128__"))
     short_b8, b1 = e(LLAMA_B8), e(LLAMA_B8.replace("__b8__", "__b1__"))
     assert pilot.bundle_est(long_b8) == pilot.BUNDLE_EST and pilot.bundle_est(short_b8) == pilot.BUNDLE_EST / 4
-    assert pilot.bundle_ok(long_b8, 0, []) and not pilot.bundle_ok(long_b8, 0, [long_b8])
+    n = int(pilot.BUNDLE_CAP // pilot.BUNDLE_EST)
+    assert pilot.bundle_ok(long_b8, 0, [long_b8] * (n - 1)) and not pilot.bundle_ok(long_b8, 0, [long_b8] * n)
     assert pilot.bundle_ok(short_b8, 0, [short_b8, short_b8]) and not pilot.bundle_ok(short_b8, int(pilot.BUNDLE_CAP), [])
     assert pilot.bundle_ok(b1, int(pilot.BUNDLE_CAP) * 2, [long_b8, long_b8])
+
+
+def test_a_full_pod_of_b8_1k_commits_fits_the_cap_with_each_models_measured_bundle(pilot):
+    """At 150 GB and 120 GB for every model, one B8 1k Commit ran at a time: the grid's bundles measured 25-57 GB, and the cap
+    held small Commits for 70-110 min with 6 of node 1's 8 GPUs empty (circuits, Oct 1)."""
+    def e(model):
+        return {"env": {"ROW": f"{model}__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"}}
+    small, phi3 = e("qwen3-06b"), e("phi3-mini")
+    assert pilot.bundle_est(small) >= 57e9 and pilot.bundle_est(phi3) >= 113e9
+    for e8 in (small, phi3):
+        assert pilot.bundle_ok(e8, 10**10, [e8] * (pilot.SLOTS - 1))
 
 
 def test_the_default_bundle_globs_count_every_sweep_on_node_1_but_not_published_attempts(monkeypatch):

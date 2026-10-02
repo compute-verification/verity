@@ -342,7 +342,8 @@ def tanh_f32_bits(x: int) -> int:
 
 
 @primitive("TanhF32Rn", 1, [("x", F32)], F32,
-           conformance="quarantine (lane dense): stand-in for libdevice tanhf; exact through both bf16 uses on all 65,536 words")
+           conformance="quarantine (lane dense): stand-in for libdevice tanhf; exact through both bf16 uses on all 65,536 words",
+           tables=(("tanh_rn", "registered"),))
 def TanhF32Rn(x: int) -> int:
     """RN32(tanh(x)) on encodings (float64 tanh, then one rounding to f32)."""
     return tanh_f32_bits(x)
@@ -436,7 +437,8 @@ ZERO_BITS = 0x00000000
 
 @primitive("GeluTanhMulBf16", 1, [("g", BF16), ("u", BF16)], BF16,
            conformance="quarantine (lane dense): T[x] exact on 65,282/65,282 non-NaN bf16 words of wave-1's GPU table; "
-                       "difftest vs torch.ops._C.gelu_tanh_and_mul on the pod (20/20 incl. zeros/max/subnormal/alternating)")
+                       "difftest vs torch.ops._C.gelu_tanh_and_mul on the pod (20/20 incl. zeros/max/subnormal/alternating)",
+           tables=(("gelu_tanh_bf16", "registered"),))
 def GeluTanhMulBf16(g: int, u: int) -> int:
     """`bf16(f32(bf16(gelu_tanh(f32(g)))) * (f32(u) + 0.0f))`, both conversions `cvt.rn.bf16.f32` (NaN -> 0x7FFF)."""
     a = gelu_tanh_bf16_bits(g)

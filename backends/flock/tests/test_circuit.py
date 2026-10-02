@@ -180,6 +180,18 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
     assert x0 != x2, "equal rows, different salts: different leaves"
     with pytest.raises(ValueError, match="one ref per instance"):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", share_rows=True, outs=outs, tables=tables, refs={**refs, "x": [0, 1, 3, 1]})
+    reg = {"cs": {"value": "w", "positions": [4, 2], "paths": ["00" * 64, "11" * 64]}}
+    shared = dict(share_rows=True, outs=outs, tables=tables, refs=refs)
+    assert FC.write(text, s, 0, 4, None, tmp_path / "reg.bin", salts=salts, registered=reg, **shared)["registered"] == reg
+    assert json.loads((tmp_path / "reg.bin").read_bytes().split(b"\n", 1)[0])["registered"] == reg
+    with pytest.raises(ValueError, match="one position and path per table row"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"cs": {**reg["cs"], "paths": ["00" * 64]}}, **shared)
+    with pytest.raises(ValueError, match="registered salts"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", registered=reg, **shared)
+    out = next(iter(outs))
+    with pytest.raises(ValueError, match="some input ports' tables"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={out: {**reg["cs"], "positions": [0] * 4,
+                                                                                          "paths": ["00" * 64] * 4}}, **shared)
 
 
 PUBLIC_CS = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
