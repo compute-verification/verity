@@ -225,7 +225,6 @@ def HeadlineCard : Prop :=
 
 theorem word_uniform : WordUniform := by sorry
 theorem word_reject : WordReject := by sorry
-theorem words_run : WordsRun := by sorry
 theorem fallback_rare : FallbackRare := by sorry
 theorem draw_card_rare : DrawCardRare := by sorry
 theorem execRefines_where : ExecRefinesWhere := by sorry
