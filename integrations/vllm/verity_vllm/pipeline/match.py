@@ -1079,8 +1079,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                # node order for homogeneous parameters) and, on a tensor-parallel rank fold, rank/world + the `peers_<i>` field tables
                # (step, k, kind, site, rows, N, leaf offset) -- cb_a.compare locates every peer leaf range from these, never by guessing
                "params": [[n, repr(t)] for n, t in (getattr(result, "params", None) or ())],
-               "tp": getattr(result, "tp", None),
-               "peers_layout": _jsonable(getattr(result, "peers_layout", None) or [])}
+               "tp": getattr(result, "tp", None), "peers_layout": _jsonable(getattr(result, "peers_layout", None) or []),
+               "supplied": _jsonable(getattr(result, "supplied", None) or {})}   # a `registered_values` fold's, with `input_nodes`
         p = run_dir / "program.json"
         _ptext = json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n"
         p.write_text(_ptext)

@@ -22,6 +22,7 @@ from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
 from verity.ir.defs import bind
 from verity.ir.refs import Affine, Explicit, concat
 from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import value_inputs as VI
 from verity.ir.types import Array, Record, Value
 
 # ---------------------------------------------------------------------------------------------------------
@@ -233,7 +234,7 @@ def p_rms_triton(node, ctx):
     a = node.enter.args
     spec, operands = bind(b1.RMSNormTriton, N=C["H"], EPS=C["EPS"]), (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]))
     if ctx.profile.registered_values:
-        spec, operands = bind(b1.RMSNormTritonV3, N=C["H"]), operands + (eps_input(C["EPS"]),)
+        spec, operands = bind(VI.RMSNormTritonV3, N=C["H"]), operands + (eps_input(C["EPS"]),)
     return Compute(spec, a["input_ptr"].shape[0], operands, (PerRow(a["output_ptr"]),), (node.id,), node.enter.module or "")
 
 
@@ -287,7 +288,7 @@ def p_attention(node, ctx):
         spec = bind(b1.AttentionV3, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
         operands = (Gather(q3, (i,)), GatherMany(_kv_flat(kc), (slots,)), GatherMany(_kv_flat(vc), (slots,)))
         if ctx.profile.registered_values:
-            spec = bind(b1.AttentionV10, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
+            spec = bind(VI.AttentionV10, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
             operands += (Supplied("registration", f"scale_log2_d{C['D']}", 32, b1._scale_log2_bits(C["D"])),)
         parts.append(Compute(spec, 1, operands, (Gather(out, (i,)),), (), node.enter.module or "", attribution=((req, p),)))
     return Group(tuple(parts), (node.id, ch.id), node.enter.module or "")
@@ -299,7 +300,7 @@ def p_fused_norm(node, ctx):
     x, res, w, eps = node.args
     spec, operands = bind(b1.RMSNormFusedCuda, N=C["H"], EPS=eps), (PerRow(x), PerRow(res), Shared(w))
     if ctx.profile.registered_values:
-        spec, operands = bind(b1.RMSNormFusedCudaV4, N=C["H"]), operands + (eps_input(eps),)
+        spec, operands = bind(VI.RMSNormFusedCudaV4, N=C["H"]), operands + (eps_input(eps),)
     return Compute(spec, x.shape[0], operands, (PerRow(x), PerRow(res)), (node.id,), node.enter.module or "")
 
 
@@ -493,7 +494,8 @@ def test_registered_values_are_inputs_of_the_program(memory):
     assert r.supplied == {"registration": {"param": 2, "name": "values", "fields": [
                               {"name": "eps", "width": 32, "bits": f"0x{eps:08x}", "offset": 0},
                               {"name": "scale_log2_d8", "width": 32, "bits": f"0x{scale:08x}", "offset": 1}]},
-                          "run": [{"param": 1, "name": "run", "request": REQ, "fields": []}]}
+                          "run": [{"param": 1, "name": "run", "request": REQ, "fields": []}],
+                          "input_nodes": {"prompt": [0], "run": [], "values": [1], "weights": [2]}}
     assert r.program.bindings == (RUN, RUN, REGISTRATION, RUN)
     assert len(inputs(r.program.circuit)[REGISTRATION]) == 2
     by = r.report.by_spec
