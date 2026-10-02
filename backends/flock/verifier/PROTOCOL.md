@@ -1655,10 +1655,11 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   `backends/flock/live`. Each session runs in its own Lean process, because a tampered copy keeps its original's key.
   - The sessions are a `selftest --zk --record-dir` run (`selftest_records.py`) and `serve`/`prove --zk` pairs (several
     tables, a draw).
-  - `zk_mutants.py` tampers with an honest one-table session. Each proof value is changed and carried into the retained
-    rounds that absorbed it; each record field is changed alone.
+  - `zk_mutants.py` tampers with one table of an honest session. Each proof value is changed and carried into the
+    retained rounds that absorbed it; each record field is changed alone.
   - The tampering covers the masked openings, level 0's lane messages, extra lanes, `e`, `T'` and `ybar`, the pads' root,
-    the triple, `τ`, the inner proof's columns, the coins, the coin tree, swapped reps and retained bytes.
+    the triple, `τ`, the inner proof's columns, the coins, the coin tree, swapped reps or tables and retained bytes. A
+    session read with another table count is refused at S2/R7.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
