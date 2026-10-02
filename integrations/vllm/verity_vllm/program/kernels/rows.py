@@ -734,8 +734,7 @@ def _check_targets() -> dict[str, list]:
     }
 
 
-def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None, batch: Callable | None = None,
-         check_targets: Callable | None = None) -> None:
+def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None, batch: Callable | None = None, check_targets: Callable | None = None) -> None:
     k = ROWS[family] = RowKernel(family, fn, returns)
     register(family, _instance(k), kernel=KERNEL, domain=DOMAIN, sample=sample or _sample(),
              check_targets=check_targets or (lambda rng: _check_targets()[family]), batch=batch)
