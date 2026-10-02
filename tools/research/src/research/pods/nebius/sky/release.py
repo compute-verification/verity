@@ -13,7 +13,8 @@ release stay deactivated (spec.active=false), new arrivals included. It reactiva
   - node 1's /workspace is under DISK_PAUSE_PCT (80, as df reports it): at or over it nothing is released (infra, 4:46 PM PDT).
 Rows circuits keeps held (batch 64, batch 16+ of 7B+ or MoE models, Gemma-2 at batch 16+ with 1024 input tokens, and the named ones) are never reactivated. It evicts nothing
 that Kueue has admitted, and deletes nothing. Since Kueue admits a leased Commit before a tick can hold it, the pacer holds
-deployments-gpu itself (stopPolicy Hold) while the projection is at the cap, and releases its own hold under it (gate()). It ticks every TICK_S (10) s and logs a tick when its summary changes or once a minute;
+deployments-gpu itself (stopPolicy Hold) unless the next Commit's projected bundle fits under the cap, and releases its own hold
+once it does (gate()). With no Commit in flight it always lets one through, outside the 78% latch, so a big one can't starve. It ticks every TICK_S (10) s and logs a tick when its summary changes or once a minute;
 a Job created while GPU quota is free is admitted in the same second, before any tick, so a lane must not resubmit a held Commit. `--dry-run` prints what it would do.
 
 Runs on vy-nebius-1 as research, from the deployed sky/ (tmux `commit-release`):
@@ -129,17 +130,20 @@ def guard_holds():
 
 
 def gate(close, projected, cap, now=None):
-    """Kueue admits a leased Commit (it requests no GPU) the moment it arrives, before a tick can deactivate it, so while the
-    projection is at the cap or the disk at DISK_PAUSE_PCT the pacer holds GPU_QUEUE itself (stopPolicy Hold: nothing new is
-    admitted, nothing running is touched), and lets it go once both are back under. It only undoes its own hold, never in the
-    quiet hour (12:30-13:30Z, whose own timers hold and release) or while the disk guard lists the queue."""
+    """Kueue admits a leased Commit (it requests no GPU) the moment it arrives, before a tick can deactivate it, so the pacer holds
+    GPU_QUEUE itself (stopPolicy Hold: nothing new is admitted, nothing running is touched) while `close`, and lets it go
+    otherwise. tick() closes it while the admitted Commits' projection plus the next Commit's (the next released or waiting one,
+    else the largest admitted, standing for the next arrival) would pass the cap, or the disk is at DISK_PAUSE_PCT. With no Commit
+    admitted it always opens (outside the 78% latch), so a big one can't starve. It only undoes its own hold, never in the quiet
+    hour (12:30-13:30Z, whose own timers hold and release) or while the disk guard lists the queue. `projected` is the projection
+    with the next Commit, for the log."""
     policy = k("get", "clusterqueue", GPU_QUEUE, "-o", "jsonpath={.spec.stopPolicy}").strip() or "None"
     g = time.gmtime(now)
     quiet = (12, 30) <= (g.tm_hour, g.tm_min) < (13, 30)
     if close:
         if policy == "None" and not quiet:
-            log(f"projected {projected:.0f} GB is at the {cap} GB cap (or the disk at {DISK_PAUSE_PCT}%): holding {GPU_QUEUE}, "
-                "so Kueue admits no new Commit")
+            log(f"projected {projected:.0f} GB with the next Commit is over the {cap} GB cap (or the disk at {DISK_PAUSE_PCT}%): "
+                f"holding {GPU_QUEUE}, so Kueue admits no new Commit")
             if not DRY:
                 k("patch", "clusterqueue", GPU_QUEUE, "--type=merge", "-p", '{"spec":{"stopPolicy":"Hold"}}')
                 GATE.parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +152,7 @@ def gate(close, projected, cap, now=None):
     if not GATE.exists():
         return
     if policy == "Hold" and not quiet and GPU_QUEUE not in guard_holds():
-        log(f"projected {projected:.0f} GB is under the {cap} GB cap: releasing {GPU_QUEUE}")
+        log(f"projected {projected:.0f} GB with the next Commit fits under the {cap} GB cap: releasing {GPU_QUEUE}")
         if not DRY:
             k("patch", "clusterqueue", GPU_QUEUE, "--type=merge", "-p", '{"spec":{"stopPolicy":"None"}}')
     if not DRY:
@@ -191,16 +195,19 @@ def tick(now=None):
         log(f"disk {disk:.1f}% reached {CAP_DROP_PCT}%: the bundle cap drops to {CAP_LOW_GB} GB until {CAP_LATCH} is removed")
         if not DRY:
             CAP_LATCH.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} disk {disk:.1f}%\n")
-    cap = CAP_LOW_GB if CAP_LATCH.exists() or disk >= CAP_DROP_PCT else room_cap(gb)
+    latched = CAP_LATCH.exists() or disk >= CAP_DROP_PCT
+    cap = CAP_LOW_GB if latched else room_cap(gb)
     flying = [w for w in ws if w["admitted"] or w["name"] in released]
-    projected = gb + sum(max(estimate_gb(w["row"]) - written_gb(w), 0) for w in flying)   # a Commit's bundle so far is already in gb
+    rest = {w["name"]: max(estimate_gb(w["row"]) - written_gb(w), 0) for w in flying}   # a Commit's bundle so far is already in gb
+    projected = gb + sum(rest.values())
     order = {c: i for i, c in enumerate(WAVES)}
     cands = sorted((w for w in ws if not w["active"] and not w["admitted"] and not kept(w["cov"], w["row"])),
                    key=lambda w: (order.get(w["cov"], len(WAVES)), batch(w["row"])))
     for w in cands:
         if inflight >= limits()[0] or disk >= DISK_PAUSE_PCT or NO_RELEASE.exists():
             break
-        if (batch(w["row"]) >= 8 and big >= limits()[1]) or projected + estimate_gb(w["row"]) > cap:
+        fits = projected + estimate_gb(w["row"]) <= cap or (inflight == 0 and not latched)   # with none in flight, a big one can't starve
+        if (batch(w["row"]) >= 8 and big >= limits()[1]) or not fits:
             continue
         log(f"release {w['cov']} ({w['row'][:40]}) {w['name']}: in flight {inflight}, batch-8+ {big}, bundles {gb:.0f} GB, "
             f"projected {projected:.0f} + {estimate_gb(w['row']):.0f} GB")
@@ -210,7 +217,12 @@ def tick(now=None):
         inflight += 1
         projected += estimate_gb(w["row"])
         big += batch(w["row"]) >= 8
-    gate(projected >= cap or disk >= DISK_PAUSE_PCT, projected, cap, now)
+    admitted = [w for w in ws if w["admitted"]]
+    waiting = [w for w in ws if w["name"] in released and not w["admitted"]] + [w for w in cands if w["name"] not in released]
+    base = gb + sum(rest.get(w["name"], 0) for w in admitted)
+    reserve = estimate_gb(waiting[0]["row"]) if waiting else max((estimate_gb(w["row"]) for w in admitted), default=0.0)
+    room = (not admitted and not latched) or base + reserve <= cap
+    gate(not room or disk >= DISK_PAUSE_PCT, base + reserve, cap, now)
     if not DRY:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text("\n".join(sorted(released)) + "\n")
