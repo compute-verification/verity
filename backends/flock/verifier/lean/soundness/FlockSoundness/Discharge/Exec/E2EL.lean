@@ -20,9 +20,10 @@ collision advantages; under `SHA512CRStrict` it is at most `StrictCR.ksAvgStrict
 the `_hm96` forms state (`Binding/E2E.lean`).
 
 **What the statement carries today.**
-* "Accept" is `execAccept`, any event on the audit's outcome that implies the Lean protocol's acceptance (`hExec`). So as pinned,
-  these are theorems about the protocol as Lean defines it. The executable's verdict, `flock-verify` on the run's transcript, is not an event
-  on that outcome. It enters when `hExec` is discharged, and that changes the statement's shape.
+* "Accept" is `execAccept`, any event on the audit's outcome that implies the Lean protocol's acceptance (`hExec`). So
+  as pinned, these are theorems about the protocol as Lean defines it. The executable's verdict, `flock-verify` on the
+  run's transcript, is not an event on that outcome. It enters when `hExec` is discharged, and that changes the
+  statement's shape.
 * "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `Prog` forms the
   units' rows are the program's (`Prog.rows`), and `ProgPlaces.placed` says the table's statement holds them.
 
@@ -59,9 +60,9 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} 
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
 
-/-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's acceptance), the
-probability that at least `K` units of the committed circuit are wrong at the committed values is at most
-`miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
+/-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
+acceptance), the probability that at least `K` units of the committed circuit are wrong at the committed values is at
+most `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
 (`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`assumptions/e2e-checklist.md`);
 `SHA512CRExpected` for `σ`'s link finders (`hCR`) is the assumption of record. -/
 theorem flock_e2e_countL
