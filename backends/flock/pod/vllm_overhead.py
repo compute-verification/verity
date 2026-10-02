@@ -327,7 +327,8 @@ def point(a) -> None:
         prover_s, native_s, cov = ph["prover_s"], d["native"][f"{phase}_s"], ph.get("coverage_gates")
     out = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"config": a.config, "row": d["row"], "phase": phase, "mode": mode, "basis": d["basis"],
-                                    "label": d.get("label"), "flags": d["flags"] + m.get("flags", []), "rollup_sha256": _sha(a.rollup)},
+                                    "label": d.get("label"), "flags": d["flags"] + m.get("flags", []), "rollup_sha256": _sha(a.rollup)}
+                                   | ({"rollup_art": a.rollup_art} if a.rollup_art else {}),
            "validation": {"status": "passed", "checker": "every measured shape's sessions accepted (vllm_overhead.py timing)",
                           "detail": f"coverage {cov:.4f} of the row's word gates measured; the rest priced per gate", "evidence": []},
            "measurements": [{"name": "overhead", "value": prover_s / native_s, "unit": "x-native"},
@@ -373,6 +374,7 @@ def main(argv=None) -> int:
     p.add_argument("--rollup", required=True)
     p.add_argument("--config", required=True)
     p.add_argument("--result", required=True)
+    p.add_argument("--rollup-art", default=None, help="the rollup's art id in the evidence store (vllm-overhead/v0)")
     a = ap.parse_args(argv)
     out = {"census": census, "timing": timing, "rollup": rollup, "point": point}[a.cmd_](a)
     # a shape job whose statement wasn't accepted fails, so the dispatcher's record says so
