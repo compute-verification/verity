@@ -115,7 +115,7 @@ def ExfiltrationOptimum : Prop :=
 `s/r` and width `b'`, with `K` as in `ExfiltrationOptimum` and `2(K + 1) ≤ n`. If `b + log₂(K+2)/(K+1) ≤ b' + log₂ r`,
 the unsplit partition certifies `ℓ` at cost `c(s) · n · Λ/(K+1) + ε`, and every law on the split partition certifying
 `ℓ` costs at least `(1 − K/n)(1 − Λ/(2(K+1)))` times that: splitting pays only when it cuts the width by more than
-`log₂ r + log₂(K+2)/(K+1)` bits. -/
+`log₂ r − log₂(K+2)/(K+1)` bits. -/
 def RefinementRule : Prop :=
   ∀ (n r b b' K : ℕ) (s f o δ ℓ : ℝ), 1 ≤ r → 0 < s → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 → 2 * (K + 1) ≤ n →
     (b : ℝ) * K + locBits n K ≤ ℓ → ℓ < (b : ℝ) * (K + 1) + locBits n (K + 1) →
