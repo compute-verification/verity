@@ -76,10 +76,9 @@ def main() -> int:
             for e in sorted(root.iterdir()):
                 r = json.loads((e / "rec.json").read_text()) if len(e.name) == 32 and (e / "rec.json").exists() else {}
                 # class_statement deletes a stage-only shape's circuit and .bin files once its cache entry holds copies: the
-                # entry's circuit is then checked against the record's digest. One circuit is staged at several N (entries of
-                # the same circuit), so the entry's n must be the record's too
-                rs = r.get("stage") or {}
-                if r.get("shape") == shape and rs.get("circuit_sha512") == csha and rs.get("n") == rec["stage"].get("n") and (
+                # entry's circuit is then checked against the record's digest. One circuit is staged at several N (one entry
+                # each), so the entry's statement must be the record's, not just its circuit
+                if r.get("shape") == shape and r.get("stage") == rec["stage"] and (
                         files(e) == fs if fs else (e / "circuit.txt").is_file() and sha512(e / "circuit.txt") == csha):
                     entry = e.name
                     break
