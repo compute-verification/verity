@@ -10,7 +10,8 @@ and what the merge gate runs per family: `../README.md`.
   - `backend.py`: the configured backends over the GEMM-coordinate subcircuits (`BACKENDS`: `FLOCK_FRAME_V3_BLAKE3`,
     `FLOCK_BLOCK`, `FLOCK_VLLM_V1`); `lowering.py` and `unit.py`: the pinned lowering of one tensor-core transition unit.
   - `ir_lower.py`: the generic IR lowering, an IR Definition composed from the per-op circuit pieces of `fp.py` (over
-    `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's units leave outside.
+    `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's units leave outside; `hidden_gather.py`: a read
+    at a private index of a registered table (`gelu_tanh_bf16`, `tanh_rn`), an opening of its frame-v3-sha512 tree.
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
     (`verity/flock-ir-sampling/v1`): their frame-v3 statements.
   - `partition_units.py`: every unit class of an arbitrary partition (`verity.ir.units`) lowered and checked against the

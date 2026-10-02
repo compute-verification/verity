@@ -8,7 +8,8 @@ A MUFU operation is a table lookup inside exponent and special-case logic (the C
 ``rms_triton_model.cpp``, and ``live/src/ir_tail.rs``): the piece computes the table index, reads the pinned table
 (:func:`table_read`, a ``gf2`` lookup, which a Flock statement proves with a lookup slot: M0's ``live/src/lookup.rs``) and
 finishes the result. The RSQ, SQRT and RCP circuits around the read are M0's (``verity_flock.tail``, verity PR #83); EX2's and
-FA2's inverse sum follow ``fa2_model.cpp``.
+FA2's inverse sum follow ``fa2_model.cpp``. A table the program brings (gemma's ``tanh_rn``, ``gelu_tanh_bf16``) is a value: in
+a circuit that registers it (``hidden_gather.register``), its read opens the registered table's tree at the private index.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from verity.ml.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_
 
 from . import fp
 from . import gf2
+from . import hidden_gather
 from . import unit_fp4
 from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 
@@ -122,8 +124,12 @@ for _name in TABLE_BITS:
 
 
 def table_read(C, table: str, idx):
-    """The pinned table ``table``'s word at ``idx`` (its low 31 bits, or ``TABLE_VALUE_BITS``)."""
+    """The table ``table``'s word at ``idx`` (its low 31 bits, or ``TABLE_VALUE_BITS``): a table registered in ``C``
+    (``hidden_gather.register``: ``gelu_tanh_bf16``, ``tanh_rn``) by an opening of its registered tree at the private index,
+    any other (the measured MUFU tables, and a program table its circuit does not register) by a lookup of the pinned table."""
     assert len(idx) == TABLE_BITS[table]
+    if table in getattr(C, "registered", {}):
+        return hidden_gather.read(C, table, list(idx))
     return C.lookup(table, list(idx), TABLE_VALUE_BITS.get(table, VALUE_BITS))
 
 
