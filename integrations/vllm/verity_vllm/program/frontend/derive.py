@@ -181,7 +181,7 @@ class Ctx:
     def __init__(self, *, mode: str, profile: str | None, config: dict | None, allowed_dims: dict, name: str, ruleset: RuleSet,
                  vocab, module, ep, B: Builder, user_inputs: dict[str, Coll], weights_coll: Coll | None, weights: list[WeightLeaf],
                  placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], values_param: int | None = None,
-                 weights_param: int | None = None) -> None:
+                 weights_param: int | None = None, tables: dict[str, int] | None = None) -> None:
         self.mode, self.profile, self.config, self.allowed_dims, self.name = mode, profile, dict(config or {}), dict(allowed_dims or {}), name
         self.ruleset, self.vocab, self.module, self.ep, self.B = ruleset, vocab, module, ep, B
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
@@ -189,6 +189,8 @@ class Ctx:
         #: the registered `values` parameter (`registered_values`): its index and fields in first-read order ({name, width, bits, offset})
         self.values_param, self.weights_param = values_param, weights_param
         self.values_fields: list[dict] = []
+        #: the registered tables the rules declared (`Rule.registered_tables`): name -> parameter index
+        self.tables: dict[str, int] = dict(tables or {})
         self.env: dict[Any, Any] = {}
         self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
@@ -363,6 +365,16 @@ class Ctx:
                    f"{f['width']}-bit 0x{f['bits']:x} at its first read")
         return Coll(Value(int(width)), Affine("p", self.values_param, f["offset"], 1))
 
+    def table(self, name: str, node=None) -> Coll:
+        """The registered table `name` (`verity_vllm.program.registry.tables`): the parameter a rule declared for it."""
+        node = node or self.current
+        if name not in self.tables:
+            refuse("numerics_unregistered", node, self.module_path(node), f"table {name!r} read but no rule declared it "
+                   "(`Rule.registered_tables`), or outside a registered_values derivation")
+        from verity_vllm.program.registry.tables import table_type
+        t = table_type(name)
+        return Coll(t, Affine("p", self.tables[name], 0, t.leaves))
+
     def supplied_layout(self) -> dict:
         """The registered `values` as the record states them (the fold's `FoldResult.supplied` layout): parameter index, name and every
         field with its leaf offset and bits (hex); {} without registered values."""
@@ -371,7 +383,7 @@ class Ctx:
         return {"registration": {"param": self.values_param, "name": "values",
                                  "fields": [{"name": f["name"], "width": f["width"], "bits": f"0x{f['bits']:0{f['width'] // 4}x}",
                                              "offset": f["offset"]} for f in self.values_fields]},
-                "run": []}
+                "run": [], **({"tables": [{"param": i, "name": n} for n, i in self.tables.items()]} if self.tables else {})}
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:
         node = node or self.current
@@ -550,7 +562,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
         corr_digest = correspondence_digest(corr_doc)
         flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
-                               registered=("values",) if ctx.registered_values else ())
+                               registered=("values", *ctx.tables) if ctx.registered_values else ())
         check_identity(flat_program, check_registry=check_registry)
         flat_digest = program_digest(flat_desc := encode_program(flat_program))
         program, family_report = flat_program, None
@@ -700,7 +712,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
                                      {"rule": r.rule_id, **derivation}))
 
     # parameters of the flat function: the user inputs (by placeholder name), the registered `values` (finalised after the
-    # translation: its fields are the values the Definitions read) and the weights record
+    # translation: its fields are the values the Definitions read), the registered tables the rules declare, and the weights record
     user_names = list(sig.user_inputs)
     if len(user_names) != len(example_inputs):
         refuse("shape", None, None, f"{len(example_inputs)} example inputs vs {len(user_names)} graph inputs")
@@ -711,10 +723,16 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
         if not isinstance(v, torch.Tensor):
             refuse("dynamic_control_flow", ph_nodes[un], None, f"input {un} is not a tensor (symbolic scalar inputs are not static structure)")
         params.append((un, type_of_tensor(v)))
-    values_param = None
+    values_param, tables = None, {}
     if registered_values:
         values_param = len(params)
         params.append(("values", Record()))
+        from verity_vllm.program.registry.tables import table_type
+        for r in ruleset.rules:
+            for tn in (r.registered_tables(ep, mode) if r.modes is None or mode in r.modes else ()):
+                if tn not in tables:
+                    tables[tn] = len(params)
+                    params.append((tn, table_type(tn)))
     wrec_t = Record(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
         params.append(("weights", wrec_t))
@@ -725,7 +743,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
               ep=ep, B=B, user_inputs=user_inputs, weights_coll=weights_coll, weights=leaves, placeholder_to_weight=placeholder_to_weight,
-              lifted_constants=lifted, values_param=values_param, weights_param=len(params) - 1 if wrec_t is not None else None)
+              lifted_constants=lifted, values_param=values_param, weights_param=len(params) - 1 if wrec_t is not None else None, tables=tables)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
     out = _translate(ctx)

@@ -9,6 +9,7 @@ from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
 
 
@@ -76,7 +77,11 @@ class GeluTanhAndMulRule(InPlaceRule):
                     evidence_domain="structural; numerics: GeluTanhMul_v1 (vLLM _C.gelu_tanh_and_mul)")
 
     def targets(self):
-        return _C_op("gelu_tanh_and_mul")
+        return targets_for("gelu_tanh_and_mul")
+
+    def registered_tables(self, ep, mode):
+        ts = self.targets()
+        return ("gelu_tanh_bf16",) if any(n.op == "call_function" and n.target in ts for n in ep.graph.nodes) else ()
 
     def applies(self, node, ctx):
         out, x = node.args[:2]
@@ -94,8 +99,11 @@ class GeluTanhAndMulRule(InPlaceRule):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
         I = rows[0].type.n // 2
-        fn = ctx.kind("gelu_tanh_mul", node, I=I)
-        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        if ctx.registered_values:
+            fn, table = ctx.kind("gelu_tanh_mul_table", node, I=I), (ctx.table("gelu_tanh_bf16", node),)
+        else:
+            fn, table = ctx.kind("gelu_tanh_mul", node, I=I), ()
+        outs = [ctx.call(fn, r, *table, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 

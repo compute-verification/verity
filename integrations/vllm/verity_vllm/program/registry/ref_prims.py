@@ -58,6 +58,7 @@ from functools import lru_cache
 
 import numpy as np
 
+from verity.ir.codec import register_lazy_family
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.ir.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
 from verity.ir.types import Array, Tuple, Value
@@ -264,19 +265,7 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
     return p
 
 
-def _extend_codec_lazy_families() -> None:
-    """Make `GatherF32x{V}_v1` decodable in a process that did not build the program (additive rebinding of the codec's
-    lazy-family table; `codec.py` itself is not edited)."""
-    import re
-
-    from verity.ir import codec
-    pat = re.compile(r"^GatherF32x(\d+)_v1$")
-    if any(p.pattern == pat.pattern for p, _ in codec._LAZY_PRIMITIVE_FAMILIES):
-        return
-    codec._LAZY_PRIMITIVE_FAMILIES = tuple(codec._LAZY_PRIMITIVE_FAMILIES) + ((pat, lambda m: gather_f32(int(m[1]))),)
-
-
-_extend_codec_lazy_families()
+register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: gather_f32(int(m[1])))   # decodable where the program was not built
 
 REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32ErfRn, F32TanhRn]
 
