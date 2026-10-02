@@ -138,6 +138,7 @@ from verity_vllm.observe.fold.resolver import (
     ResolutionReport,
     Shared,
     StepContext,
+    Supplied,
     Transparent,
     Unsupported,
     parts_of,
@@ -199,6 +200,9 @@ class FoldResult:
     tp: dict | None = None
     collectives: list[dict] = field(default_factory=list)
     peers_layout: list[dict] = field(default_factory=list)
+    #: a `registered_values` profile's supplied inputs (`_Fold.supplied`): the registered `values` and each request's `run_<i>`,
+    #: every field's name, width, bits and leaf offset; empty otherwise
+    supplied: dict = field(default_factory=dict)
     #: [COORD R17-28 F3, mprof] the Program's descriptor (`verity.ir.codec.encode_program`) as built for the digest: `persist_program`
     #: writes THIS instead of encoding the same Program a second time (36 s + a second digest at B8 1024/128; the descriptor is the
     #: digest's input, so program.json's `program` and `digest` come from one encoding by construction)
@@ -304,6 +308,10 @@ class _Fold:
         self.peers_param: dict[int, int] = {}
         self.peers_fields: dict[int, list[dict]] = {}
         self.peers_leaves: dict[int, int] = {}
+        # a `registered_values` profile: the parameter index of each `Supplied` owner ("values", or a request index for its
+        # `run_<i>`) and its fields so far ({name, width, bits, offset}), finalised to a Record at `_finish`
+        self.supplied_param: dict[str | int, int] = {}
+        self.supplied_fields: dict[str | int, list[dict]] = {}
         self.collectives: list[dict] = []
         self.cur_coll_k: int = 0
         self._coll_prep: dict[int, tuple[Compute, dict]] = {}   # id(c) -> (c, prep); c held so an id() reuse cannot alias a stale prep
@@ -425,6 +433,17 @@ class _Fold:
                 self.peers_fields[i] = []
                 self.peers_leaves[i] = 0
                 params.append(("peers" if len(reqs) == 1 else f"peers_{i}", Record()))   # placeholder type: fields finalised at _finish
+        # a `registered_values` profile: one run parameter `run` / `run_<i>` per request (its sampling values) after the peers, and
+        # the registered `values` (the program's) right before the weights; both Records are finalised at `_finish`.  Layout:
+        # prompts..., seeds..., peers..., runs..., values, weights.
+        if getattr(self.profile, "registered_values", False):
+            for i, _r in enumerate(reqs):
+                self.supplied_param[i] = len(params)
+                self.supplied_fields[i] = []
+                params.append(("run" if len(reqs) == 1 else f"run_{i}", Record()))
+            self.supplied_param["values"] = len(params)
+            self.supplied_fields["values"] = []
+            params.append(("values", Record()))
         params.append(("weights", self.weights_type))
         self.params = tuple(params)
         self.B = Builder(self.params, I32)  # ret type is set once the outputs are known
@@ -746,6 +765,8 @@ class _Fold:
                     colls.append(shared[k])
                 elif isinstance(op, Param):
                     colls.append(self._param(op, i, ptype, c, pname))
+                elif isinstance(op, Supplied):
+                    colls.append(self._supplied(op, ptype, c, pname))
                 else:
                     colls.append(self._wrap(ptype, self._read_operand(op, i), op.view, f"{spec_label(c.spec)}.{pname}[row {i}]"))
             rows.append(colls)
@@ -782,6 +803,44 @@ class _Fold:
         if leaf.type != ptype:
             raise FoldError(f"{spec_label(c.spec)}.{pname}[row {i}]: seed parameter is {leaf.type!r}, the parameter wants {ptype!r}")
         return leaf
+
+    def _supplied(self, op: Supplied, ptype: Type, c: Compute, pname: str) -> Coll:
+        """The leaf of the field `op` names in its owner's parameter (allocated at its first use, at the next leaf offset)."""
+        what = f"{spec_label(c.spec)}.{pname}"
+        if ptype != Value(int(op.width)):
+            raise FoldError(f"{what}: a {op.width}-bit supplied value for a parameter of type {ptype!r}")
+        if op.binding == "registration":
+            owner = "values"
+        elif op.binding == "run":
+            if op.request not in self.req_index:
+                raise FoldError(f"{what}: run value {op.name!r} names request {op.request!r}, which is not in the run header")
+            owner = self.req_index[op.request]
+        else:
+            raise FoldError(f"{what}: a value is bound per run or at registration, not {op.binding!r}")
+        if owner not in self.supplied_param:
+            raise FoldError(f"{what}: a Supplied operand under a profile without registered_values")
+        fields = self.supplied_fields[owner]
+        f = next((f for f in fields if f["name"] == op.name), None)
+        if f is None:
+            f = {"name": op.name, "width": int(op.width), "bits": int(op.bits), "offset": len(fields)}
+            fields.append(f)
+        elif (f["width"], f["bits"]) != (int(op.width), int(op.bits)):
+            raise FoldError(f"{what}: value {op.name!r} is {op.width}-bit 0x{int(op.bits):x} here and {f['width']}-bit 0x{f['bits']:x} "
+                            f"at its first use")
+        return Coll(ptype, Affine("p", self.supplied_param[owner], f["offset"], 1))
+
+    def supplied(self) -> dict:
+        """The Program's supplied inputs as the record states them: the registered `values` and each request's `run_<i>`, every field
+        with its leaf offset and bits (hex) -- what registration commits and what a run binds."""
+        def fields(owner):
+            return [{"name": f["name"], "width": f["width"], "bits": f"0x{f['bits']:0{f['width'] // 4}x}", "offset": f["offset"]}
+                    for f in self.supplied_fields[owner]]
+        if not self.supplied_param:
+            return {}
+        return {"registration": {"param": self.supplied_param["values"], "name": "values", "fields": fields("values")},
+                "run": [{"param": self.supplied_param[i], "name": self.params[self.supplied_param[i]][0],
+                         "request": self.requests[i]["request_id"], "fields": fields(i)}
+                        for i in sorted(k for k in self.supplied_param if k != "values")]}
 
     # [R17 D90] collectives ------------------------------------------------------------------------------
 
@@ -1155,6 +1214,17 @@ class _Fold:
                 params[pidx] = (params[pidx][0], Record(*[(f["name"], f["type"]) for f in flds]))
             self.params = tuple(params)
             self.B.params = self.params
+        if self.supplied_param:
+            if not self.supplied_fields["values"]:
+                msg = "registered_values profile: no Definition read a program value; the `values` parameter would be empty"
+                if self.strict:
+                    raise FoldError(msg)
+                self._problem("ValuesEmpty", msg, {})
+            params = list(self.params)
+            for owner, pidx in self.supplied_param.items():
+                params[pidx] = (params[pidx][0], Record(*[(f["name"], Value(f["width"])) for f in self.supplied_fields[owner]]))
+            self.params = tuple(params)
+            self.B.params = self.params
         body = self.B.finish(out)
         params, ret_type = self.params, out.type
         defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=params, _r=ret_type: (_p, _r), replayer(body),
@@ -1167,7 +1237,7 @@ class _Fold:
         descriptor = None
         if with_program:
             t0 = time.time()
-            program = Program(spec)
+            program = Program(spec, registered=("values",) if self.supplied_param else ())
             self.timings["program_s"] = round(time.time() - t0, 3)
             t0 = time.time()
             descriptor = encode_program(program)          # [R17-28 F3] encoded once: the digest's input AND program.json's `program`
@@ -1187,7 +1257,8 @@ class _Fold:
                           memory=mem, notes=self.notes, body=body, steps=self.steps, errors=self.errors, timings=self.timings,
                           sampled=sampled, discarded=discarded, refed=list(self.refed), weights_type=self.weights_type, params=self.params,
                           requests=list(self.requests), accesses=self.accesses, tp=dict(self.tp) if self.tp else None,
-                          collectives=list(self.collectives), peers_layout=self._peers_layout(), descriptor=descriptor)
+                          collectives=list(self.collectives), peers_layout=self._peers_layout(), descriptor=descriptor,
+                          supplied=self.supplied())
 
     def _peers_layout(self) -> list[dict]:
         """[R17 D90] The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
@@ -1225,7 +1296,7 @@ def _same_element(a: ViewDesc, b: ViewDesc) -> bool:
 
 
 def _row_operand_view(op: Operand, i: int) -> ViewDesc | None:
-    if isinstance(op, (Const, Param)):
+    if isinstance(op, (Const, Param, Supplied)):
         return None          # [R15 stoch] no device view: a Program constant / a declared parameter
     if isinstance(op, Shared):
         return op.view
@@ -1277,7 +1348,7 @@ def summarize(result: FoldResult) -> dict:
             "tp": result.tp,
             "collectives": [{**{k: v for k, v in c.items() if k != "own_view"}, "own_view": repr(c.get("own_view"))} for c in result.collectives],
             "collectives_by_kind": _hist(c["kind"] for c in result.collectives),
-            "peers_layout": result.peers_layout}
+            "peers_layout": result.peers_layout, "supplied": result.supplied}
 
 
 def _hist(items) -> dict[str, int]:

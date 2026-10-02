@@ -370,12 +370,18 @@ def nvfp4_gemm_spec(profile, K: int, N: int):
 
 
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
-                   cap: float | None = None):
+                   cap: float | None = None, scale_input: bool = False):
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
     construction the row's index among its sequence's query rows in the launch (`row`) selects its tile (FA3, `fa3_check_inf`); FA2
     (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`).  A logit soft cap `cap` selects the softcapped
-    chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere."""
+    chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere.
+    `scale_input`: the chain that reads the softmax scale as an input (its last parameter, `scale_log2`): `Attention_v10` on the
+    accepted target, nothing elsewhere yet."""
     g = attention_geometry(profile, D, seqlen_q, NH, KVH)
+    if scale_input:
+        if cap is not None or not uses_accepted_kinds(profile):
+            raise UnregisteredTarget("the attention scale is an input only on the accepted target's unsoftcapped chain (Attention_v10)")
+        return bind(b1.AttentionV10, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
     if cap is not None:
         from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
         if uses_accepted_kinds(profile):
