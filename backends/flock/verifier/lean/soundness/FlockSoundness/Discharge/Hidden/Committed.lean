@@ -10,7 +10,7 @@ import FlockSoundness.Discharge.Layout.Drawn
 In a satisfying witness of an untyped hidden-output statement, at block `o`, VU `g` and output row `j`:
 * the 128 bytes at the row's `hm96` output are the population's `b ‖ c` of the drawn unit there: `HmOut.regions`' region
   `p` pins them (`bc_pinned'`, `Layout.bc_pinned` at the region `regions_get` gives), and `HmOut.drawn` is `HmRow.drawn`
-  on the circuit without output ports (`Layout.bcChunk_drawn`);
+  on the circuit without output ports (`Layout.bcChunk_drawn`): `bc_drawnH`, at every row;
 * they are the commit string of the row prefix and the row's message bytes under its salt: the witness satisfies the flat
   twin (`sat_flat`), where `Hm.row_bc_flat` holds;
 * the row's message bytes are the output words the VU computes (`msg_bytes`): each message bit is a copy of `outSrc`
@@ -101,6 +101,47 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
   rw [hin]
   exact (blockBit_of_lt _ z o hy).symm
 
+/-- **The `b ‖ c` a satisfying witness of a drawn hidden-output statement holds at a proved unit's `hm96` slot** is the
+unit's `b ‖ c` in the registered population's public file, at every row `p`, input or output (`Layout.bc_drawn` at
+`Stmt.setupHidden`'s statement): region `p` of `HmOut.regions` pins it (`regions_get`, `bc_pinned'`), and
+`HmOut.drawn` is `HmRow.drawn` on the circuit without output ports. -/
+theorem bc_drawnH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
+    {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) (hpt : pop.tables = none) {D : Draw.UnitDraw}
+    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
+    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
+    (hr : o.val * st.c.g + g < D.proved.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
+        (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
+      (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList := by
+  have s := setupHidden_spec' h
+  obtain ⟨pop', hpop', -, hdr⟩ := s.pub
+  rw [hpop] at hpop'
+  cases hpop'
+  have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hdr d rfl
+  have hload := loadPublic_nil hpop
+  have hsz := (Layout.loadPublic_digests hload hpt).1
+  have hpopn : D.population = pop.n := by
+    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
+    rw [hD] at hD'
+    cases hD'
+    exact hpn
+  have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
+      Layout.bcChunk st.c st.pub o.val g' p = pop.digest D.proved[o.val * st.c.g + g'] p st.c.ports.size :=
+    fun g' hr' => Layout.bcChunk_drawn hdrawn hD hpt hsz hlt hr' hp
+  have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
+    have hr' : o.val * st.c.g + g' < D.proved.size := by omega
+    rw [hchunk g' hr']
+    exact Layout.pop_digest_size hload hpt (by rw [← hpopn]; exact hlt _ (Array.getElem_mem hr')) hp
+  obtain ⟨hrsz, hall⟩ := regions_get s.regions
+  have hpr : p < st.regions.size := hrsz ▸ hp
+  rw [← hchunk g hr]
+  exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
+
 /-- A row's message column (`Typed.msgCol`) in one of the row's compressions is `HmOut.delta`'s (`deltaMsgCol`). -/
 theorem msgCol_delta {c : Circuit} {g p b t : ℕ} (hk : b / 128 < ((HmRow.rowSlots c.ports).2[p]!).size) :
     Typed.msgCol c g p b t = deltaMsgCol c g p b t := by
@@ -183,28 +224,7 @@ theorem outputs_committed' : OutputsCommitted := by
     have := row_bc_flat L0 F0 rfl hupv hv1 hz0 o hg hpl
     rw [getElem!_eq_getD'] at this
     exact this
-  obtain ⟨pop', hpop', -, hdr⟩ := s.pub
-  rw [hpop] at hpop'
-  cases hpop'
-  have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hdr d rfl
-  have hload := loadPublic_nil hpop
-  have hsz := (Layout.loadPublic_digests hload hpt).1
-  have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
-    rw [hD] at hD'
-    cases hD'
-    exact hpn
-  have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
-      Layout.bcChunk st.c st.pub o.val g' (HmOut.nIn st.c + j) =
-        pop.digest D.proved[o.val * st.c.g + g'] (HmOut.nIn st.c + j) st.c.ports.size :=
-    fun g' hr' => Layout.bcChunk_drawn hdrawn hD hpt hsz hlt hr' hpl
-  have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' (HmOut.nIn st.c + j)).size = 128 := fun g' hg' => by
-    have hr' : o.val * st.c.g + g' < D.proved.size := by omega
-    rw [hchunk g' hr']
-    exact Layout.pop_digest_size hload hpt (by rw [← hpopn]; exact hlt _ (Array.getElem_mem hr')) hpl
-  obtain ⟨hrsz, hall⟩ := regions_get s.regions
-  have hpr : HmOut.nIn st.c + j < st.regions.size := hrsz ▸ hpl
-  have hpin := bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
-  rw [← msg_bytes L L0 F0 hv1 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl, hpin, hchunk g hr]
+  rw [← msg_bytes L L0 F0 hv1 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
+  exact (bc_drawnH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
 end FlockSoundness.Discharge.Hidden
