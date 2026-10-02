@@ -60,7 +60,7 @@ table, each row port's `b ‖ c` at the unit's site is the commit string of the 
 `hm96` slot. -/
 theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hs hscope (Reg := Reg)).Computes :=
   Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
-    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
+    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
     (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub (Layout.loadPublic_tables hpub hs))
 
 /-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
