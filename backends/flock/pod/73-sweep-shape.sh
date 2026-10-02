@@ -64,6 +64,8 @@ unset CARGO_TARGET_DIR
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done
+# a prebuilt BINARY skips 70-class-sweep.sh's build, which is where it puts CUDA 13.3's runtime on the library path
+if [ -n "${BINARY:-}" ]; then C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}; fi
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; } | tee $R/out/host.txt
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src:$REPO/protocols/sampled_proofs:$REPO/protocols/one_stage:$REPO/protocols/pouw
 case ${MODE:?cut or shape} in
@@ -116,6 +118,7 @@ stage|shape)
   so=0; { [ $MODE = stage ] || [ "${STAGE_ONLY:-0}" = 1 ]; } && so=1
   srv=0; [ "${SERVE_ONLY:-0}" = 1 ] && { : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR}"; srv=1; }
   [ -n "${VERIFIERS:-}" ] && [ $srv = 0 ] && export FC_VERIFIERS=$VERIFIERS
+  if [ $so = 0 ] && [ -n "${BINARY:-}" ] && ldd $BINARY | grep 'not found'; then echo "BINARY can't load its libraries"; exit 1; fi
   MARK=("${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}" $HERE/stage_mark.py)
   for SHAPE in ${SHAPES//,/ }; do
   k=$((k + 1)); O=$R/out/$k; mkdir -p $O
