@@ -8916,16 +8916,19 @@
    "assumptions": [],
    "type_hash": "31f8c90a820690bfabe900e8c6cbdff3a1a8b7fd6a2ef2f6d5b77ed85ef057cb"
   },
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_oneAny": {},
   "FlockSoundness.Discharge.ZkExec.acceptsZK_retained": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_retained : FlockSoundness.Discharge.ZkExec.AcceptsZKRetained"],
    "assumptions": [],
    "type_hash": "7b19cb64644e63be1d78fccd0f344befb84d017dac1ca1a4c1c5d8b08e7b9be6"
   },
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_retainedAny": {},
   "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_setupH : FlockSoundness.Discharge.ZkExec.AcceptsZKSetupH"],
    "assumptions": [],
    "type_hash": "f10a01b0e3f897bfad55f8a1f56bc2e0a72a9808ef9ef23183efec92cebcd8fa"
   },
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_setupOne": {},
   "FlockSoundness.Discharge.ZkExec.execRefinesZK_one": {
    "signature": [
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one {n : Nat} {Reg : Type} {mPts : Nat}",
