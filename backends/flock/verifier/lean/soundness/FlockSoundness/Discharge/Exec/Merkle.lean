@@ -468,7 +468,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **flock-verify refines each table of the session it accepts, for tags that implement `hm96-sha512/v1`**:
 `accepts_tables_hm96` with `hms` discharged by `setupH_tagsAt_hm96`. -/
 theorem accepts_tables_hm96_of_leaf {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
-    (h : Accepts I t) :
+    (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
@@ -488,7 +488,7 @@ theorem accepts_tables_hm96_of_leaf {I : Inputs} {t : Transcript} (hl : I.tags.m
                 PT_LOCAL sts[j].mPts (capDig p₀.cap) (ptsOf sts[j].mPts sess.points)) ms
               (s₀.rounds.toList.map (·.coins) ++ s₁.rounds.toList.map (·.coins)) out ∧
             out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch ∧ out.salts = saltsOf p₀ p₁ sch := by
-  obtain ⟨spec, sts, sess, hs, hd, hsz, hpos, hall⟩ := accepts_tables_hm96 h
+  obtain ⟨spec, sts, sess, hs, hd, hsz, hpos, hall⟩ := accepts_tables_hm96 hh h
   refine ⟨spec, sts, sess, hs, hd, hsz, hpos, fun j hj => ?_⟩
   obtain ⟨⟨d, hset, hdr⟩, sch, hf, hm22, hrest⟩ := hall j hj
   have hms := setupH_tagsAt_hm96 hl hset

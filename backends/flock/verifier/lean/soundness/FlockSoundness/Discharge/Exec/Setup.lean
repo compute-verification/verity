@@ -4,8 +4,9 @@ import FlockSoundness.Refine.Setup
 /-!
 # flock-verify's acceptance sets up each table with `Stmt.setupH`
 
-`Accepts I t` sets up the session with `Stmt.setupTables`. Each of its tables is `Stmt.setupH`'s statement
-(`setupTables_one`, `setupTables_many`): for one table, at the inputs and the record's draw; for `count > 1`, under
+`Accepts I t` sets up the session with `Stmt.setupTables`. Under a tag without hidden outputs
+(`tags.hiddenOutputs = false`; with them it calls `Stmt.setupHidden`), each of its tables is `Stmt.setupH`'s statement
+(`setupTables_ok`): for one table, at the inputs and the record's draw; for `count > 1`, under
 `Tags.tableIdentity` and at a subset draw of the table's part. So every fact proved of `setupH`'s statements
 (`setupH_wf`, `setupH_layout`, `placement_of_setupH`) holds of each table flock-verify accepts with
 (`accepts_setupH`).
@@ -74,10 +75,11 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables` sets up each table with `setupH`** (§16.12). For one table, its statement is `setupH`'s at the
-session's draw, and the session's spec is the table's. For `count > 1`, there are `count` tables, and table `j` is
-`setupH`'s statement under `Tags.tableIdentity count j` at a subset draw of its part. -/
-theorem setupTables_ok
+/-- **`setupTables` sets up each table with `setupH`** (§16.12) under a tag without hidden outputs (`hh`; with them
+it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's draw, and the session's spec is
+the table's. For `count > 1`, there are `count` tables, and table `j` is `setupH`'s statement under
+`Tags.tableIdentity count j` at a subset draw of its part. -/
+theorem setupTables_ok (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
     (count ≤ 1 ∧ ∃ st, Stmt.setupH tags cf pf coins tables draw partition program = .ok st ∧ spec = st.spec ∧
@@ -104,7 +106,8 @@ theorem setupTables_ok
     all_goals exact h
   simp (config := { zeta := false }) only [jp2] at h
   dsimp only at h
-  simp only [throw_bind', pure_bind] at h
+  have hn : ¬ tags.hiddenOutputs = true := by simp [hh]
+  simp only [throw_bind', pure_bind, ite_eq_right hn] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
@@ -126,13 +129,13 @@ theorem tagsAt_hm96Rows (tags : Tags) (count j : ℕ) : (tagsAt tags count j).hm
 
 /-- Every table `setupTables` returns is `setupH`'s statement, under the table's tags (`tagsAt`) and at some draw
 (the session's, for one table). -/
-theorem setupTables_setupH
+theorem setupTables_setupH (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
     0 < sts.size ∧ ∀ (j : ℕ) (hj : j < sts.size), ∃ d,
       Stmt.setupH (tagsAt tags count j) cf pf coins tables d partition program = .ok sts[j] ∧
         (count ≤ 1 → d = draw) := by
-  rcases setupTables_ok h with ⟨hc, st, hst, -, rfl⟩ | ⟨hc, hsz, hall, -⟩
+  rcases setupTables_ok hh h with ⟨hc, st, hst, -, rfl⟩ | ⟨hc, hsz, hall, -⟩
   · refine ⟨by simp, fun j hj => ⟨draw, ?_, fun _ => rfl⟩⟩
     have hj0 : j = 0 := by simpa using hj
     subst hj0
@@ -143,11 +146,11 @@ theorem setupTables_setupH
     simpa [tagsAt, show ¬ count ≤ 1 by omega] using hd
 
 /-- The session's two link points have every table's length. -/
-theorem setupTables_points
+theorem setupTables_points (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
     spec.points = 2 ∧ ∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts := by
-  rcases setupTables_ok h with ⟨-, st, -, rfl, rfl⟩ | ⟨-, -, -, hm, hp⟩
+  rcases setupTables_ok hh h with ⟨-, st, -, rfl, rfl⟩ | ⟨-, -, -, hm, hp⟩
   · exact ⟨rfl, fun j hj => by
       have : j = 0 := by simpa using hj
       subst this
@@ -156,22 +159,23 @@ theorem setupTables_points
 
 /-- **flock-verify's acceptance sets up each table with `setupH`**: when `Accepts I t`, every table's statement is
 `setupH`'s, under the table's tags and at some draw, the record's for a one-table session. -/
-theorem accepts_setupH {I : Inputs} {t : Transcript} (h : Accepts I t) :
+theorem accepts_setupH {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
       Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok () ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ d,
         Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition I.program =
           .ok sts[j] ∧ (I.count ≤ 1 → d = recordDraw t.record) := by
   obtain ⟨spec, sts, hs, hv⟩ := h
-  exact ⟨spec, sts, hs, hv, setupTables_setupH hs⟩
+  exact ⟨spec, sts, hs, hv, setupTables_setupH hh hs⟩
 
 /-- **A one-table acceptance is one `setupH` statement's**: the session's spec is the table's, and `Flock.verify` ran on
 `#[Setup.ofCircuit st]`, the form `verify_refines_ofCircuit_hm96` reads. -/
-theorem accepts_one {I : Inputs} {t : Transcript} (hc : I.count ≤ 1) (h : Accepts I t) :
+theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (hc : I.count ≤ 1)
+    (h : Accepts I t) :
     ∃ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition I.program =
         .ok st ∧ Flock.verify st.spec #[Setup.ofCircuit st] t.record t.proofs = .ok () := by
   obtain ⟨spec, sts, hs, hv⟩ := h
-  rcases setupTables_ok hs with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc', -⟩
+  rcases setupTables_ok hh hs with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc', -⟩
   · exact ⟨st, hst, by simpa using hv⟩
   · omega
 

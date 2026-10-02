@@ -85,7 +85,7 @@ its `fast100` schedule and at the statement `stmtOf sts[j]` read off its layout 
 rep's compiled game, played with its proof file's messages and its stream's coins, ends in a pend, and the salted
 table's verdict on those pends, at `capOfRoot` of the table's `root_B` and at `opnOf` of its two proof files, accepts. -/
 theorem accepts_verdict_hm96 {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
-    (h : Accepts I t) :
+    (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
@@ -115,8 +115,8 @@ theorem accepts_verdict_hm96 {I : Inputs} {t : Transcript} (hl : I.tags.merkleLe
             true := by
   obtain ⟨spec, sts, hs, hv⟩ := h
   obtain ⟨sess, schs, hsess, hsz, -, -, hall⟩ := verify_ok_tables hv
-  obtain ⟨-, hsetup⟩ := setupTables_setupH hs
-  obtain ⟨hp2, hmp⟩ := setupTables_points hs
+  obtain ⟨-, hsetup⟩ := setupTables_setupH hh hs
+  obtain ⟨hp2, hmp⟩ := setupTables_points hh hs
   have hpts := decode_points hsess
   rw [Array.size_map] at hsz
   refine ⟨spec, sts, sess, hs, hsess, hsz, fun j hj => ?_⟩

@@ -52,7 +52,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
 
 set_option maxHeartbeats 4000000 in
 /-- The session's spec retains rounds exactly when its tags do, for one table or several. -/
-theorem setupTables_retain
+theorem setupTables_retain (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
     spec.retainRounds = tags.retainRounds := by
@@ -75,7 +75,8 @@ theorem setupTables_retain
     all_goals exact h
   simp (config := { zeta := false }) only [jp2] at h
   dsimp only at h
-  simp only [throw_bind', pure_bind] at h
+  have hn : ¬ tags.hiddenOutputs = true := by simp [hh]
+  simp only [throw_bind', pure_bind, ite_eq_right hn] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
@@ -125,12 +126,13 @@ theorem decode_retained {text : String} {sess : Session} (hr : spec.retainRounds
 
 /-- **flock-verify's acceptance under retaining tags has every round's bytes**: the session's spec retains rounds, and
 every round of every stream of the record it decodes carries its framed bytes. -/
-theorem accepts_retained {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds = true) (h : Accepts I t) :
+theorem accepts_retained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
+    (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       spec.retainRounds = true ∧ ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
   obtain ⟨spec, sts, hs, hv⟩ := h
   obtain ⟨sess, -, hd, -⟩ := verify_ok_tables hv
-  have hsr : spec.retainRounds = true := (setupTables_retain hs).trans hr
+  have hsr : spec.retainRounds = true := (setupTables_retain hh hs).trans hr
   exact ⟨spec, sts, sess, hs, hd, hsr, decode_retained hsr hd⟩
 
 /-- `decode_retained` as `Refine/Frames.lean`'s `AllRetained`, for every stream. -/
@@ -141,10 +143,11 @@ theorem decode_allRetained {text : String} {sess : Session} (hr : spec.retainRou
 
 /-- **flock-verify's acceptance under retaining tags gives `AllRetained`** (`Refine/Frames.lean`) for every stream of
 the record it decodes: the hypothesis `squeeze_bindA`, `sample_bindA`, `forIn_answers` and `zerocheck_frames` take. -/
-theorem accepts_allRetained {I : Inputs} {t : Transcript} (hr : I.tags.retainRounds = true) (h : Accepts I t) :
+theorem accepts_allRetained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
+    (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       ∀ s ∈ sess.streams.toList, AllRetained s.rounds := by
-  obtain ⟨spec, sts, sess, hs, hd, hsr, -⟩ := accepts_retained hr h
+  obtain ⟨spec, sts, sess, hs, hd, hsr, -⟩ := accepts_retained hh hr h
   exact ⟨spec, sts, sess, hs, hd, decode_allRetained hsr hd⟩
 
 end FlockSoundness.Discharge.Exec
