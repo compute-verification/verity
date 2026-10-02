@@ -3,6 +3,7 @@ import FlockSoundness.Discharge.Exec.SessionL
 import FlockSoundness.Discharge.Exec.Setup
 import FlockSoundness.Discharge.Exec.Tables
 import FlockSoundness.Discharge.Exec.Headline
+import FlockSoundness.Discharge.Exec.CompiledL
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -13,6 +14,8 @@ import FlockSoundness.Discharge.Exec.Headline
   table run (`sessionG`, `batchedSessionG`);
 * `Setup`: flock-verify's acceptance sets up each table with `setupH` (`accepts_setupH`, `setupH_public`);
 * `Tables`: each accepted table is one accepting run of `tableAfterL` at `leaf512` (`accepts_tables_hm96`);
+* `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
+  `table_sound_compiled`;
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
   `flock_headline_exec_L`).
 -/
