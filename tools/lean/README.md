@@ -127,7 +127,9 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `pins`: the guarantees, the theorems a document or a PR cites as proved (README "Glossary"), and any lemma pinned
   beside them. `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions
   among the hypotheses, a hash of the type, and for each module the definitions the pins read, with a hash each, the pins that read them, and a `digest` of those hashes (which
-  the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
+  the record therefore determines). A restated guarantee (`theorem SecurityProofs.G : Guarantees.G`, whose type is a
+  `Prop` definition under `meaning`) also records its `statement`: that definition's value, printed as the signature is,
+  so that the record shows what the guarantee says and not only the name it says it under. Without `--update` the audit fails on any difference, so a statement, or a definition
   it depends on, cannot change without a visible diff of this file. A record holds the statement, not the proof: pin a
   `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
@@ -140,11 +142,13 @@ installs it first, so a machine without elan works), must pass clean and fail on
 **A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
 and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
 a Merkle binding guarantee vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
-change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
-pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The PR description
-names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
-and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
-reviewer. Definitions are compared by name, so one read from another module with the same content is counted on one line.
+change and prints what the reviewer reads: each changed pin's signature (and statement) before and after, and each changed
+definition a pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The PR
+description names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same
+type hash and named assumptions, after a toolchain bump or a change of notation, and for a restated guarantee the same
+hash of the definition its type names) gets one line, "printed differently", and needs no reviewer. So does a record that
+only gains its `statement`, "statement recorded": the definition's hash under `reads` already vouched for what it prints.
+Definitions are compared by name, so one read from another module with the same content is counted on one line.
 
 **A move is not a change.** When declarations move (pins renamed, the definitions they read renamed or moved to other
 namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` proves), write the moves as a JSON object of
@@ -153,8 +157,9 @@ old names to new ones, each a declaration or a namespace (the longest prefix app
 `Facts.lean` writes each pin's statement and each definition it reads once more with the build's names mapped back to
 the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded. The review
 compares those texts with the records of the old names: a pin that says what its record says gets one line, "the same
-statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own), and the
-definitions the same under their old names are counted on one line; neither needs a reviewer. Everything else prints as
+statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own, while
+its record gains `G`'s value as its `statement`), and the definitions the same under their old names are counted on one
+line; neither needs a reviewer. Everything else prints as
 without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
 constants of those texts (or two pins) would have one old name, since the comparison could not tell them apart; an old
 theorem kept under its old name as the lemma behind a new pin is no conflict.

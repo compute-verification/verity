@@ -186,6 +186,10 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     build()
     rep = audit(moved=moved)
     assert rep["failures"] == []
+    pins = A.load(pkg)["pins"]
+    assert pins["Control.SecurityProofs.a"]["statement"] == ["∀ (n : Nat), Eq (Control.Protocol.f n) n"]
+    assert "statement" not in pins["Control.SecurityProofs.b"]
+    assert A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None)["failures"] == []
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
         f"pin Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",
@@ -239,7 +243,57 @@ def moved_pin(name="Q.t", was="P.t", h="00000000000000cc", as_was="0000000000000
     for r, m in zip(p["reads"], reads):
         r["moved"] = m["moved"]
     p["moved"] = {"as": was, "sha256": sha(head or as_was)} | ({"head": head, "unfolded_sha256": sha(as_was)} if head else {})
-    return p
+    return p | ({"head": head, "statement": "∀ (h : P.Hyp) (n : Nat), Eq (Q.f n) n"} if head else {})
+
+
+def guarantee(statement="∀ (n : Nat), Eq (P.f n) n", g="6" * 32):
+    """A restated guarantee `P.t : P.G` as `Facts.lean` reports it: its type is the `Prop` definition `P.G` (in
+    `P.Guarantees`, hashing like ``g``), whose value prints as ``statement``."""
+    reads = [{"name": "P.G", "module": "P.Guarantees", "kind": "def", "hash": g},
+             {"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32}]
+    return pin(signature="P.t : P.G", hyps=[], reads=reads, h="00000000000000dd") | {"head": "P.G", "statement": statement}
+
+
+def test_a_restated_guarantee_records_its_statement_and_fails_while_it_is_stale():
+    pol = recorded(facts(pins={"P.t": guarantee("∀ (n : Nat),\n  Eq (P.f n) n")}))
+    assert pol["pins"]["P.t"] == {"signature": ["P.t : P.G"], "statement": ["∀ (n : Nat),", "  Eq (P.f n) n"], "assumptions": [],
+                                  "type_hash": sha("00000000000000dd")}
+    assert "statement" not in recorded()["pins"]["P.t"]
+    assert A.judge(pol, facts(pins={"P.t": guarantee("∀ (n : Nat),\n  Eq (P.f n) n")}), FILES)[0] == []
+    fails = A.judge(pol, facts(pins={"P.t": guarantee()}), FILES)[0]
+    assert fails == ["pins: P.t's statement changed:\n--- recorded\n+++ built\n@@ -1,2 +1 @@\n-∀ (n : Nat),\n-  Eq (P.f n) n\n"
+                     "+∀ (n : Nat), Eq (P.f n) n"]
+    unstated = pol | {"pins": {"P.t": {k: v for k, v in pol["pins"]["P.t"].items() if k != "statement"}}}
+    assert A.judge(unstated, facts(pins={"P.t": guarantee()}), FILES)[0] == [
+        "pins: P.t's record has no statement (P.G's value); run `audit.py --update` and commit it: `reads` already hashes it, "
+        "so it needs no reviewer"]
+
+
+def test_a_statement_recorded_for_the_first_time_needs_no_reviewer(tmp_path):
+    now = facts(pins={"P.t": guarantee()})
+    new = recorded(now)
+    old = new | {"pins": {"P.t": {k: v for k, v in new["pins"]["P.t"].items() if k != "statement"}}}
+    text = A.review(old, new, now, {})
+    assert text == [f"pin P.t: {A.STATED}"] and A.statement_changes(text) == []
+    reworded = facts(pins={"P.t": guarantee("∀ (n : Nat), Eq n (P.f n)", g="7" * 32)})
+    reworded["pins"]["P.t"]["reads"][0]["lines"] = [3, 3]
+    (tmp_path / "Guarantees.lean").write_text("namespace P\n\ndef G : Prop := ∀ n, n = f n\n\nend P\n")
+    text = A.review(old, A.judge(old, reworded, FILES, update=True)[1], reworded, {"P.Guarantees": tmp_path / "Guarantees.lean"})
+    assert text[0] == f"pin P.t: {A.STATED}" and A.statement_changes(text) == text[1:]
+    assert text[1] == "definition P.G (P.Guarantees), read by P.t: changed" and text[-1] == "    def G : Prop := ∀ n, n = f n"
+
+
+def test_a_restated_guarantee_whose_definition_changed_prints_its_statement_before_and_after():
+    now = facts(pins={"P.t": guarantee()})
+    old = recorded(now)
+    reworded = facts(pins={"P.t": guarantee("∀ (n : Nat), Eq n (P.f n)", g="7" * 32)})
+    text = A.review(old, A.judge(old, reworded, FILES, update=True)[1], reworded, {})
+    assert text == ["pin P.t: changed", "  before:", "    P.t : P.G", "    statement:", "      ∀ (n : Nat), Eq (P.f n) n",
+                    "  after:", "    P.t : P.G", "    statement:", "      ∀ (n : Nat), Eq n (P.f n)",
+                    "definition P.G (P.Guarantees), read by P.t: changed"] and A.statement_changes(text) == text
+    reprinted = facts(pins={"P.t": guarantee("∀ (n : Nat), P.f n = n")})
+    text = A.review(old, A.judge(old, reprinted, FILES, update=True)[1], reprinted, {})
+    assert text == [f"pin P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
 
 
 def test_a_definition_read_in_another_module_is_the_same_definition():
@@ -279,6 +333,7 @@ def test_a_statement_restated_as_a_prop_definition_is_the_same_statement():
     now = facts(pins={"Q.t": moved_pin(head="Q.T", extra=[head])})
     new = A.judge(current, now, FILES, update=True)[1]
     assert new["pins"]["Q.t"]["signature"] == ["Q.t : Q.T"] and "Q.Guarantees" in new["reads"]
+    assert new["pins"]["Q.t"]["statement"] == ["∀ (h : P.Hyp) (n : Nat), Eq (Q.f n) n"]
     text = A.review(old, new, now, {})
     assert text == [f"pin Q.t: moved from P.t, restated as Q.T: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"]
     now = facts(pins={"Q.t": moved_pin(head="Q.T", extra=[head], as_was="00000000000000bb")})

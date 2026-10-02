@@ -29,7 +29,8 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
                  that is not a constant of an `assumptions` module, or no longer says what its record says: signature,
-                 named assumptions, type hash, and (under `reads`, per module) the definitions the pins read,
+                 statement (a restated guarantee's: the value of the `Prop` definition its type names), named
+                 assumptions, type hash, and (under `reads`, per module) the definitions the pins read,
                  the pins that read them and the digest of those definitions; the hashes are SHA-256 over a canonical form
                  of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
                  are until `--update` rewrites them)
@@ -55,16 +56,16 @@ cannot; the `compile-time` check stands in for it then.
 
 A record holds the statement, not the proof, so a pin may be recorded on a `sorry` stub and pass once a proof with allowed
 axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, and prints what
-changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
-weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
-handoff; `--update` records them, it does not approve them.  A pin whose statement is the same but prints differently
-(same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer, and so does a
-definition read in another module with the same content.  `--moved FILE` (a JSON object of old names to new ones, each a
-declaration or a namespace) renames the record's pins and compares the build with the records under the old names: a pin
-moved or restated as a `Prop` definition (`theorem t : G`) that says what its record says, and the definitions the same
-under their old names, get one line each.  `--all` first runs the controls (`controls`): a
-fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
-check once a violation is added.
+changed: each changed pin's signature (and statement) before and after, and each changed definition a pin reads with its
+source now.  A weakened definition passes every axiom check and the replay, so those changes need a named statement
+reviewer in the merge handoff; `--update` records them, it does not approve them.  A pin whose statement is the same but
+prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no
+reviewer, and so do a record that only gains its statement and a definition read in another module with the same content.
+`--moved FILE` (a JSON object of old names to new ones, each a declaration or a namespace) renames the record's pins and
+compares the build with the records under the old names: a pin moved or restated as a `Prop` definition (`theorem t : G`)
+that says what its record says, and the definitions the same under their old names, get one line each.  `--all` first runs
+the controls (`controls`): a fixture package built with each audited toolchain (which `--build` installs first), which
+must pass clean and fail each check once a violation is added.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
 too; its reading and replay run beside the builds that follow.
@@ -526,20 +527,27 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             else:
                 fails.append(f"pins: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
                              f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
-        now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
+        now = {"signature": f["signature"].splitlines(),
+               **({"statement": f["statement"].splitlines()} if "statement" in f else {}),
+               "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
         pins[name] = now
         if update:
             continue
         if not rec:
             fails.append(f"pins: {name} has no record; run `audit.py --update` and commit the record")
             continue
-        for k in ("signature", "assumptions", "type_hash"):
-            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
-            if rec.get(k) != built:
-                diff = "\n".join(difflib.unified_diff(rec.get("signature", []), now["signature"], "recorded", "built", lineterm="",
-                                                      n=1)) if k == "signature" else f"{rec.get(k)} -> {built}"
+        for k in ("signature", "statement", "assumptions", "type_hash"):
+            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now.get(k)
+            if rec.get(k) == built:
+                continue
+            if k == "statement" and k not in rec:
+                fails.append(f"pins: {name}'s record has no statement ({f['head']}'s value); run `audit.py --update` and commit "
+                             f"it: `reads` already hashes it, so it needs no reviewer")
+            else:
+                diff = "\n".join(difflib.unified_diff(rec.get(k, []), now.get(k, []), "recorded", "built", lineterm="", n=1)) \
+                    if k in ("signature", "statement") else f"{rec.get(k)} -> {built}"
                 fails.append(f"pins: {name}'s {k.replace('_', ' ')} changed:\n{diff}")
-                break
+            break
     reads = pinned_reads(facts)
     now_reads, old_reads = read_groups(reads), read_groups(reads, old=True)
     if not update and ("reads" in policy or any(policy.get("pins", {}).values())):
@@ -582,48 +590,32 @@ REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
 MOVED = "the same statement under its old names"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
+STATED = "statement recorded: the value of the definition its type names, which `reads` hashes"
+
+
+def shown(record: dict) -> list[str]:
+    """A pin's record as a review prints it: its signature, and a restated guarantee's statement under it."""
+    return [*(f"    {s}" for s in record.get("signature", [])),
+            *(["    statement:", *(f"      {s}" for s in record["statement"])] if "statement" in record else [])]
 
 
 def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
-    """What a statement reviewer reads for an `--update`: each changed pin's signature before and after, and each changed
-    definition a pin reads, with the pins that read it and its source as it is now.  A pin whose statement is the same but
-    prints differently (a toolchain's printer, notation) gets one line, and so does one whose 32-bit record is rewritten
-    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line.
-    Definitions are compared by name, whichever module reads them.  After `--moved` (`facts_of`), a pin and a definition
-    are compared with the record of their old names, by their texts under the old names: a pin that says what its record
-    says gets one line (moved from its old name, restated as the `Prop` definition its type now names, whose definition
-    then needs no reading of its own), and the definitions that are the same are counted on one line."""
+    """What a statement reviewer reads for an `--update`: each changed pin's signature (and statement) before and after,
+    and each changed definition a pin reads, with the pins that read it and its source as it is now.  A pin whose
+    statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so does one whose
+    32-bit record is rewritten with SHA-256 while the 32-bit hash still matches, and one whose record only gains the
+    statement its type names (the definition's hash under `reads` vouches for it); read groups rewritten that way are
+    counted on one line.  A restated guarantee's statement that reads differently is printed differently only while the
+    definition its type names is unchanged.  Definitions are compared by name, whichever module reads them.  After
+    `--moved` (`facts_of`), a pin and a definition are compared with the record of their old names, by their texts under
+    the old names: a pin that says what its record says gets one line (moved from its old name, restated as the `Prop`
+    definition its type now names, whose definition then needs no reading of its own), and the definitions that are the
+    same are counted on one line."""
     out = []
     op, np = old.get("pins", {}), new.get("pins", {})
     moves = not facts.get("moved_conflicts")
     moved = {n: f["moved"] for n, f in facts["pins"].items() if moves and f.get("moved")}
     was = {n: moved[n]["as"] if n in moved and moved[n]["as"] in op else n for n in np}
-    covered = set()
-    for name in sorted(set(np) | (set(op) - set(was.values()))):
-        o = was.get(name, name)
-        a, b = op.get(o) or {}, np.get(name) or {}
-        if a == b and o == name:
-            continue
-        if o == name:
-            rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD and \
-                a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
-            if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and \
-                    a.get("assumptions") == b.get("assumptions"):
-                out.append(f"pin {name}: {REHASHED if rehashed else REPRINTED}")
-                continue
-        mv, th = moved.get(name, {}), a.get("type_hash")
-        if a and b and th and th in (mv.get("sha256"), mv.get("unfolded_sha256")):
-            restated = th != mv["sha256"]
-            covered |= {mv["head"]} if restated else set()
-            how = ", ".join([f"moved from {o}"] * (o != name) + [f"restated as {mv.get('head')}"] * restated)
-            out.append(f"pin {name}: {how + ': ' if how else ''}{MOVED}")
-            continue
-        out.append(f"pin {name}: {'new' if not a else 'removed' if not b else 'changed'}" + (f" (moved from {o})" if o != name else ""))
-        out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
-        out += ["  after:", *(f"    {s}" for s in b.get("signature", []))] if b else []
-        if a and b and a.get("assumptions") != b.get("assumptions"):
-            out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
-                       f"{', '.join(b.get('assumptions', [])) or 'none'}")
     spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
     now: dict[str, dict] = {}
     for m, es in pinned_reads(facts).items():
@@ -638,13 +630,47 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
     oreads = old.get("reads", {})
     recorded = {d: {"module": m, "hash": h, "pins": rec.get("pins", [])}
                 for m, rec in oreads.items() for d, h in definitions(rec).items()}
+
+    def same(d) -> bool:
+        x, y = recorded.get(d), now.get(d)
+        return bool(x and y) and x["hash"] is not None and x["hash"] == y["hash" if len(x["hash"]) == OLD else "sha256"]
+
+    covered = set()
+    for name in sorted(set(np) | (set(op) - set(was.values()))):
+        o = was.get(name, name)
+        a, b = op.get(o) or {}, np.get(name) or {}
+        if a == b and o == name:
+            continue
+        if o == name:
+            rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD and \
+                a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
+            reworded = "statement" in a and a["statement"] != b.get("statement") and \
+                not same(facts["pins"].get(name, {}).get("head"))
+            if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and \
+                    a.get("assumptions") == b.get("assumptions") and not reworded:
+                stated = "statement" not in a and a == {k: v for k, v in b.items() if k != "statement"}
+                out.append(f"pin {name}: {REHASHED if rehashed else STATED if stated else REPRINTED}")
+                continue
+        mv, th = moved.get(name, {}), a.get("type_hash")
+        if a and b and th and th in (mv.get("sha256"), mv.get("unfolded_sha256")):
+            restated = th != mv["sha256"]
+            covered |= {mv["head"]} if restated else set()
+            how = ", ".join([f"moved from {o}"] * (o != name) + [f"restated as {mv.get('head')}"] * restated)
+            out.append(f"pin {name}: {how + ': ' if how else ''}{MOVED}")
+            continue
+        out.append(f"pin {name}: {'new' if not a else 'removed' if not b else 'changed'}" + (f" (moved from {o})" if o != name else ""))
+        out += ["  before:", *shown(a)] if a else []
+        out += ["  after:", *shown(b)] if b else []
+        if a and b and a.get("assumptions") != b.get("assumptions"):
+            out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
+                       f"{', '.join(b.get('assumptions', [])) or 'none'}")
     regrouped = sum(old_group(rec) and all(now.get(d, {}).get("hash") == h for d, h in definitions(rec).items())
                     for rec in oreads.values())
     elsewhere = 0
     for d in sorted(set(recorded) | set(now)):
         x, y = recorded.get(d), now.get(d)
         away = bool(x and y) and (x["module"] != y["module"] or y["name"] != d)
-        if x and y and x["hash"] is not None and x["hash"] == y["hash" if len(x["hash"]) == OLD else "sha256"]:
+        if same(d):
             elsewhere += away and len(x["hash"]) != OLD
             continue
         if y and not x and y["name"] in covered:
@@ -666,8 +692,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
 
 def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review a named reviewer must read: all but the pins and read groups whose statements and definitions
-    are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, or moved)."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, MOVED_READS))]
+    are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved, or with the
+    statement recorded)."""
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, MOVED_READS, STATED))]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
@@ -943,7 +970,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
         log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build" + (
-            f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed or moved"
+            f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or stated"
             if len(notes) > len(must) else "") + (
             "; a named reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))

@@ -17,8 +17,9 @@ judgement; `audit.py` holds the policy.
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
 - `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines. Signatures print with no notation, since no notation is loaded: nothing a package
-  declares can change how its statements read.
+  `meaning`, with their source lines. A pin whose type is a `Prop` definition under `meaning` (a restated guarantee) also
+  gets that definition (`head`) and its value (`statement`), printed as the signature is. Signatures print with no
+  notation, since no notation is loaded: nothing a package declares can change how its statements read.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
@@ -245,10 +246,13 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
       ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
-  return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
+  let stated ← match statementOf env meaning ci.type with
+    | some (g, s) => do pure [("head", toJson g.toString), ("statement", toJson (toString (← ppExpr s)))]
+    | none => pure []
+  return Json.mkObj ([("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
-    ("reads", toJson ((reads env meaning ci.type.getUsedConstants).map readJson))]
+    ("reads", toJson ((reads env meaning ci.type.getUsedConstants).map readJson))] ++ stated)
 
 def names (j : Json) (k : String) : Array Name :=
   ((j.getObjValD k).getArr?.toOption.getD #[]).filterMap fun v => v.getStr?.toOption.map String.toName
