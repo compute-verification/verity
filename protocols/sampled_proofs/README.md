@@ -169,18 +169,23 @@ domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 A program's weights, constants and tables are values: committed once, at registration, under hiding leaves, and read
 only inside a proof (`one_stage.registered`).
 
-- A registered value is a root parameter of the program, as rows of `words` leaves in the parameter's leaf order. Row `r`
-  is committed as the circuit statement commits an input row: `hm96-sha512/row/v1` over `sha512/row/v1` (the words u16
-  LE, role x), with a 192-byte salt drawn once from the operating system and never used for another row. Its root is
-  the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B`
-  the bytes of `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words",
-  "leaves"})`. The prover keeps the rows and salts.
-- `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]`, digest
-  `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly when it registers values, so v1's bytes
-  are unchanged. R7 (`check`, with the verifier's own `registered = {parameter: words}`): the values are exactly the
-  verifier's, each with a SHA-512 hex root and the verifier's leaf count, width and domain (`registered_entries`, from
-  its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`): the log
-  is the only place the verifier holds roots, so a value is committed once whatever the caller passes.
+- A registered value is a root parameter of the program, as rows of `words` leaves in the parameter's leaf order, each
+  leaf `word_bits` bits: its leaf width rounded up to whole u16 words, 16 or 32 (`width`). Row `r` is committed as the
+  circuit statement commits that port's row: `hm96-sha512/row/v1` over `sha512/row/v1` of its u16 words (`row_words`:
+  each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 blocks, as a C-Flock port row and
+  its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
+  used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
+  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
+  {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
+  and salts.
+- `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus
+  `"word_bits"` when it is not 16), digest `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly
+  when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
+  words}`): the values are exactly the verifier's, each with a SHA-512 hex root and the verifier's integer leaf count,
+  words, width (`R7-word_bits`, which also refuses a `"word_bits": 16` written out) and domain (`registered_entries`,
+  from its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`):
+  the log is the only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the
+  default, so a 16-bit value's domain, entry and root are what they were before `word_bits`.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
@@ -189,10 +194,11 @@ only inside a proof (`one_stage.registered`).
   registration's salts (`Registered.statement`, `table` for each instance's position), so its `b ‖ c` are the
   registered ones, with header `registered: {port: {"value", "positions", "paths"}}`: per table row, its position and
   its frame-v3 path to the registered root (siblings leaf level first, 64 bytes each, hex). The Lean verifier, given the
-  verifier's own `--registered` file (`reads_file`: per port, the value, leaf count, domain and every unit's position
-  from its own program and query, and the root of the registration it accepted), checks every table row's path and
-  every instance's position, and refuses a statement that names no `registered` entry for such a port or names one it
-  was not given, and one whose units it did not derive (`backends/flock/verifier/PROTOCOL.md` §16.10).
+  verifier's own `--registered` file (`reads_file`: per port, the value, leaf count, row width (`words`, `word_bits`),
+  domain and every unit's position from its own program and query, and the root of the registration it accepted),
+  checks that the circuit port's rows are the registered rows' u16 words, every table row's path and every instance's
+  position, and refuses a statement that names no `registered` entry for such a port or names one it was not given,
+  and one whose units it did not derive (`backends/flock/verifier/PROTOCOL.md` §16.10).
 - The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
   registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
   (`audit.session_registered`) reads them off the accepted verdicts of record (the Lean verdict's `registered`), never

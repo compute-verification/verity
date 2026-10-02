@@ -102,7 +102,22 @@ class Collective:
     site: str            # issuing module path (e.g. `model.layers.3.self_attn.o_proj`)
 
 
-Operand = Shared | PerRow | Gather | GatherMany | Const | Param | Collective
+@dataclass(frozen=True)
+class Supplied:
+    """Every row consumes ONE input value of the Program, never a constant of it (a profile with `registered_values`):
+    `binding` "registration" -> a field of the registered `values` parameter, one field per `name` (a norm's eps, the attention
+    scale: what the program brings); "run" -> a field of `request`'s `run_<i>` parameter, one per (request, `name`) (the sampler's
+    temperature and top_p, a row's Philox position).  `bits` is the fold's record of the value (`FoldResult.supplied`, the source
+    of the registration record and the run's inputs); two operands of one field must agree on it."""
+
+    binding: str
+    name: str
+    width: int
+    bits: int
+    request: str | None = None
+
+
+Operand = Shared | PerRow | Gather | GatherMany | Const | Param | Collective | Supplied
 
 
 def operand_rows(op: Operand) -> int | None:
@@ -251,6 +266,9 @@ class Profile:
     notes: dict = field(default_factory=dict)
     # step passes: `pass(resolutions, ctx, roots) -> resolutions`, applied in order to a resolved step (one resolution per root kept)
     step_passes: tuple = ()
+    # the program's values (eps, the attention scale) and the request's sampling values are inputs (`Supplied` operands of the
+    # Definitions that read them as parameters), not constants; off: the legacy Definitions with the values as constants
+    registered_values: bool = False
 
 
 class ResolutionError(Exception):
