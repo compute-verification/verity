@@ -329,7 +329,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from an ``in``
-    region (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_span`)."""
+    region (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_span`).
+    The data guard counts a port whose derivation it does not list as data (``verity.ml.operations.public_data``)."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
