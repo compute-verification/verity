@@ -199,11 +199,9 @@ theorem ConverseAsymptotic : Guarantees.ConverseAsymptotic := by
 
 theorem Achievability : Guarantees.Achievability := Unequal.achievability
 
-theorem GranularityOptimum : Guarantees.GranularityOptimum := by
-  sorry
+theorem GranularityOptimum : Guarantees.GranularityOptimum := Unequal.granularityOptimum ConverseAsymptotic
 
-theorem GranularityChoice : Guarantees.GranularityChoice := by
-  sorry
+theorem GranularityChoice : Guarantees.GranularityChoice := Unequal.granularityChoice GranularityOptimum
 
 theorem HeavyUnit : Guarantees.HeavyUnit := by
   intro n w C δ L hL u hu
