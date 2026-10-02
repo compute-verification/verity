@@ -50,8 +50,9 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
 
 def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int]) -> None:
     """``ports`` (`pc4.PORTS[role]`) lists every parameter and output of the unit template ``fn`` exactly once, as a committed
-    row's port or a public input region.  Each committed row is its schema's word count (`leaves.ROW_WORDS`, the last word's
-    high bits zero): a port a tile reads ``reads[name]`` rows of counted for one row.  Each region is a parameter, in the
+    row's port or a public input region.  Each committed row's port bits are exactly its schema's words (`leaves.ROW_WORDS`),
+    so no bit of a committed row is outside the unit's ports (an ok row's word too, `pc4.ok_word`): a port a tile reads
+    ``reads[name]`` rows of counted for one row.  Each region is a parameter, in the
     unit's parameter order, whose every leaf has its anchor's width (``derivations``), and its leaves unpacked fill whole
     128-bit words."""
     params, out = fn.signature()
@@ -61,7 +62,7 @@ def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int
     types_ = dict(params) | dict(enumerate(outs))
     for schema, _role, ps in ports["rows"]:
         bits = sum(sum(types_[p].leaf_widths()) // reads.get(p, 1) for p in ps)
-        assert -(-bits // 16) == L.ROW_WORDS[schema](k), (fn.id, schema)
+        assert bits == 16 * L.ROW_WORDS[schema](k), (fn.id, schema)
     assert list(ports["regions"]) == [name for name, _t in params if name in ports["regions"]], fn.id
     for port, anchor in ports["regions"].items():
         widths = types_[port].leaf_widths()

@@ -14,8 +14,10 @@ import pouw_rows_vectors as V
 from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, bit_row, nvfp4_row_bytes, row_bytes, sha512_row_digest,
                                         sha512_row_v2_digest)
 from verity.evaluation import evaluate
+from verity.ml.scalar import BitAnd, SelectBf16
 
 from verity_pouw.circuit import leaves as L
+from verity_pouw.circuit import pc4, pc8
 from verity_pouw.schemes import pearl_c as C
 
 PINNED = json.loads(V.OUT.read_text())
@@ -91,3 +93,36 @@ def test_out_of_schema_rows_are_refused():
         L.words_tile(bytes(31))
     with pytest.raises(ValueError):
         L.words_ok(2)
+
+
+@pytest.mark.parametrize("case", [c for c in PINNED["cases"] if c["row"] == "ok"], ids=lambda c: c["case"])
+def test_an_ok_row_with_a_bit_set_above_bit_0_is_refused(case):
+    """An ok row is one word with bits 1-15 zero, so one admission value has one leaf: the reference reads the pinned
+    vector's word (`ok_of`) and refuses it with any one of bits 1-15 set, and so does `commit`, as it refuses a row of two
+    words or none."""
+    words, salt = V.words("ok", V.inputs(case["case"], "ok", case["k"])), V.shake(case["case"], "salt", L.INST.salt_bytes)
+    assert L.ok_of(words) == words[0] and L.commit("ok", words, salt).hex() == case["bc"]
+    for bad in [[words[0] | 1 << b] for b in range(1, 16)] + [[words[0], 0], []]:
+        with pytest.raises(ValueError, match="an ok row is one word"):
+            L.ok_of(bad)
+        with pytest.raises(ValueError, match="an ok row is one word"):
+            L.commit("ok", bad, salt)
+
+
+ROW_UNITS = ([pc4.templates(64)[r] for r in ("row_a", "row_b")]
+             + [pc8.templates(128, dev=d)[r] for d in ("h100", "sm120") for r in ("row_a", "row_b")])
+
+
+@pytest.mark.parametrize("fn", ROW_UNITS, ids=lambda fn: fn.id)
+def test_a_row_unit_fixes_its_ok_words_bits_1_to_15_in_gates(fn):
+    """The circuit can't write an ok row `ok_of` refuses: a row unit's last output, its ok row's one word (`leaves.OK`), is
+    `SelectBf16` of its admission bit between the constants 1 and 0 (`pc4.ok_word`), so every bit of the word is a gate's
+    and bits 1-15 are zero whatever the bit, not free bits of the committed row."""
+    b = fn.body
+    _space, k, _leaf = b.ret[len(b.ret) - 1]
+    gate = b.nodes[k]
+    bit, one, zero = (b.nodes[a.refs[0][1]] for a in gate.args)
+    assert fn.signature()[1].fields[-1] == L.OK
+    assert gate.fn.id == SelectBf16.id and bit.fn.id == BitAnd.id
+    assert [(c.fn.family, c.fn.evaluate()) for c in (one, zero)] == [("Const", 1), ("Const", 0)]
+    assert [L.ok_of([gate.fn.evaluate(v, 1, 0)]) for v in (0, 1)] == [0, 1]

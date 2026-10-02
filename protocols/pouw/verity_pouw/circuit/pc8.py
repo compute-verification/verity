@@ -64,7 +64,7 @@ from . import leaves as L
 from . import pc4
 from . import words as W
 
-F32, BF16, E4M3, BIT = W.F32, W.BF16, Value(8), Value(1)
+F32, BF16, E4M3, OK = W.F32, W.BF16, Value(8), L.OK
 R, SLICE, PEEL = C.R, C.SLICE, C.PEEL_K
 LINE = Array(R, E4M3)
 P_ROW = Array(PEEL, BF16)
@@ -144,7 +144,7 @@ def _row_sig(S_, second: str, extra: tuple = ()):
     k = S_.K
     first = "fb" if second == "fa" else "fa"
     params = (("x", Array(k, F32)), ("e", LINE), (first, BASIS(k)), (second, BASIS(k))) + extra
-    return params, Tuple(Array(k, E4M3), P_ROW, BIT)
+    return params, Tuple(Array(k, E4M3), P_ROW, OK)
 
 
 def _row_a_body(B, S_, x, line, fa, fb):
@@ -152,7 +152,7 @@ def _row_a_body(B, S_, x, line, fa, fb):
     alpha, beta, ok = _stats(e, x, k)
     codes, ew = _form(e, x, alpha, beta, line, fa, k, dev)
     af = [e.call(F2fpBf16, _chain(e, codes, fb.take(1, p), k, dev)) for p in range(R)]
-    return tuple_of(codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), ok)
+    return tuple_of(codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), pc4.ok_word(e, ok))
 
 
 Pc8RowADef = CompositeDefinition(
@@ -172,7 +172,7 @@ def _row_b_body(B, S_, x, line, fb, fa, g):
             acc = e.call(F32FmaV2, ew[p], g[p][q], acc)
         bf = _chain(e, codes, fa.take(1, q), k, dev)
         mid.append(e.call(F2fpBf16, e.call(F32AddV2, acc, e.call(F32Neg, bf))))
-    return tuple_of(codes, array_of(mid + [e.call(W.PouwBf16Neg, e.call(F2fpBf16, w)) for w in ew]), ok)
+    return tuple_of(codes, array_of(mid + [e.call(W.PouwBf16Neg, e.call(F2fpBf16, w)) for w in ew]), pc4.ok_word(e, ok))
 
 
 Pc8RowBDef = CompositeDefinition(
@@ -343,7 +343,7 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
 def _weight_sig(S_):
     k, n = S_.K, S_.N
     return ((("b", Array(n, Array(k, F32))), ("eb", Array(n, LINE)), ("fa", BASIS(k)), ("fb", BASIS(k)), ("g", GRAM)),
-            Tuple(CODES(n, k), Array(n, P_ROW), Array(n, BIT)))
+            Tuple(CODES(n, k), Array(n, P_ROW), Array(n, OK)))
 
 
 Pc8WeightDef = CompositeDefinition(
@@ -356,7 +356,7 @@ def _call_sig(S_):
     m, k, n = S_.M, S_.K, S_.N
     return ((("a", Array(m, Array(k, F32))), ("ea", Array(m, LINE)), ("fa", BASIS(k)), ("fb", BASIS(k)),
              ("bc", CODES(n, k)), ("pb", Array(n, P_ROW))),
-            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, BIT)))
+            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, OK)))
 
 
 Pc8CallDef = CompositeDefinition(
@@ -371,7 +371,7 @@ def _check_sig(S_):
     m, k, n = S_.M, S_.K, S_.N
     return ((("a", Array(m, Array(k, F32))), ("ea", Array(m, LINE)), ("b", Array(n, Array(k, F32))), ("eb", Array(n, LINE)),
              ("fa", BASIS(k)), ("fb", BASIS(k)), ("g", GRAM)),
-            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, BIT), Array(n, BIT)))
+            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, OK), Array(n, OK)))
 
 
 def _check_body(B, S_, a, ea, b, eb, fa, fb, g):
@@ -396,14 +396,14 @@ def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g):
 
 Pc8CallHiddenDef = CompositeDefinition(
     "Pc8CallHidden", 1, ("M", "K", "N", "TM", "TN", "DEV"),
-    lambda S_: (_call_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, BIT))),
+    lambda S_: (_call_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK))),
     lambda B, S_, *a: tuple_of(*_call_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, *a, hidden=True)),
     doc="`Pc8Call` hiding: each tile's digest of C̃ and U by tile row and column, and each A row's admission.",
     conformance="protocol-defined")
 
 Pc8CheckHiddenDef = CompositeDefinition(
     "Pc8CheckHidden", 1, ("M", "K", "N", "TM", "TN", "DEV"),
-    lambda S_: (_check_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, BIT), Array(S_.N, BIT))), _check_hidden_body,
+    lambda S_: (_check_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))), _check_hidden_body,
     doc="`Pc8Check` hiding: `Pc8CallHidden`'s outputs, then each B row's admission.", conformance="protocol-defined")
 
 

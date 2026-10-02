@@ -20,7 +20,8 @@ schema, so the registration domain of the tree a row sits in binds the schema id
                                   byte first), then P's 64 BF16 words
     fp8-p (pouw/row-fp8-p/v1)     k E4M3 codes two per word (low byte first), then   k/2 + 64           X or W
                                   P's 64 BF16 words
-    ok (pouw/row-ok/v1)           the row's admission bit, bit 0 of one word         1                  X (A_i) or W (B_j)
+    ok (pouw/row-ok/v1)           the row's admission bit, bit 0 of one word whose   1                  X (A_i) or W (B_j)
+                                  bits 1-15 are zero
     tile (pouw/tile-h0/v1)        the 32-byte tile digest (`PearlTileDigest`), two   16                 X
                                   bytes per word, low byte first
 
@@ -30,6 +31,10 @@ ports make up each row is `pc4.PORTS` and `pc8.PORTS`.  `words_*` are each row's
 `tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute
 every vector through its ports (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are
 public input regions (`anchors.region_words`).
+
+An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
+Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
+as a select between the constants 1 and 0, every bit fixed in gates (`pc4.ok_word`), and `ok_of` refuses any other word.
 """
 from __future__ import annotations
 
@@ -40,7 +45,7 @@ from verity.commitments import hm96
 from verity.commitments.frame_v3 import BitRowLeaf, RowLeaf
 from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, row_bytes
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ir.types import Array
+from verity.ir.types import Array, Value
 
 from ..schemes import pearl_c as C
 from . import hashes as H
@@ -50,6 +55,8 @@ U32 = W.U32
 INST = hm96.SHA512
 KEY = INST.default_key
 DIGEST = Array(8, U32)
+#: an ok row's one word, as its row unit returns it: the admission bit at bit 0, bits 1-15 zero
+OK = Value(16)
 P_WORDS = 64
 #: each row's schema id, which a registration domain binds with the row's word count (`ROW_WORDS`, at depth k) and role
 SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "pouw/row-nvfp4-p/v1",
@@ -119,6 +126,13 @@ def words_ok(ok: int) -> list[int]:
     return [ok]
 
 
+def ok_of(words: Sequence[int]) -> int:
+    """The admission bit of an ok row's words, refusing any row but one word with bits 1-15 zero."""
+    if len(words) != 1 or words[0] not in (0, 1):
+        raise ValueError("an ok row is one word: the admission bit at bit 0, bits 1-15 zero")
+    return words[0]
+
+
 def words_tile(digest: bytes) -> list[int]:
     if len(digest) != 32:
         raise ValueError("a tile digest is 32 bytes")
@@ -138,7 +152,9 @@ def row_leaf(row: str, n_words: int) -> RowLeaf | BitRowLeaf:
 
 
 def row_digest(row: str, words: Sequence[int]) -> bytes:
-    """x, the ``row`` row's digest of its 16-bit ``words`` (`row_leaf`'s layout)."""
+    """x, the ``row`` row's digest of its 16-bit ``words`` (`row_leaf`'s layout); an ok row's words pass `ok_of`."""
+    if row == "ok":
+        ok_of(words)
     return row_leaf(row, len(words)).layout().digest(row_bytes(words, 16))
 
 
@@ -153,6 +169,6 @@ def tree_leaf(bc: bytes) -> bytes:
     return INST.tree_leaf(KEY, bc)
 
 
-__all__ = ["DIGEST", "INST", "KEY", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
-           "digest_bytes", "row_digest", "row_leaf", "tile_digest", "tree_leaf", "words_bf16", "words_fp32", "words_fp8_p",
-           "words_nvfp4_p", "words_ok", "words_tile"]
+__all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
+           "digest_bytes", "ok_of", "row_digest", "row_leaf", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
+           "words_fp8_p", "words_nvfp4_p", "words_ok", "words_tile"]

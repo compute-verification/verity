@@ -31,8 +31,9 @@ public input region that `PORTS` names with its recomputation (`DERIVATIONS`).
 A row unit computes the row's statistics, its noise atoms, block scales and casts (the forming), Ẽ, and its half of the
 clean-up: P_A,i = [Ẽ_A,i ‖ RNE_bf16(A′_i·F_B)], P_B,j = [RNE_bf16(Ẽ_B,j·G − B̃_j·F_A) ‖ −Ẽ_B,j].  ``ok`` is the row's
 admission (`schemes.pearl_c4.row_passes`: every BF16 word finite and D-NF), one bit per row that an honest prover's tile
-always sets.  Every operation is the scheme's own, in its order: core's FP32 add, mul, FMA and divide (``_v2``), its
-casts and its sm_120 NVF4 and BF16 steps, and three PoUW primitives (`words`: sqrt.rn, Ẽ's exact decode, BF16 negation).
+always sets, returned as its ok row's one word with bits 1-15 zero in gates (`ok_word`).  Every operation is the scheme's
+own, in its order: core's FP32 add, mul, FMA and divide (``_v2``), its casts and its sm_120 NVF4 and BF16 steps, and three
+PoUW primitives (`words`: sqrt.rn, Ẽ's exact decode, BF16 negation).
 Three of the scheme's integer operations are written as float operations they equal on every row that ``ok`` admits:
 ``max(ue4m3(v), 0x01)`` is ``ue4m3(fmaxf(v, 2^-9))`` (the cast is monotone and ue4m3(2^-9) = 0x01), a block's
 ``max |D|`` is an `F32Fmaxf` reduction (D is finite on an admitted row), and ``ue4m3(β)``'s mask of bit 7 is dropped (β is
@@ -60,11 +61,11 @@ from verity.ir.cut import CallGraph, check_cut
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.partition import CutVerdict
 from verity.ir.refs import array_of, tuple_of
-from verity.ir.types import Array, Tuple, Value
+from verity.ir.types import Array, Tuple
 from verity.ml.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
 from verity.ml.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3ToF32, F2fpBf16, F32ToE2m1Sat, F32ToE4m3Sat,
                              HopperBF16WgmmaDot16, const)
-from verity.ml.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
+from verity.ml.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectBf16, SelectI32
 
 from ..protocol import DomainError
 from ..schemes import pearl_c as C
@@ -73,7 +74,7 @@ from . import anchors as A
 from . import leaves as L
 from . import words as W
 
-F32, BF16, E2M1, U8, BIT = W.F32, W.BF16, W.E2M1, W.U8, Value(1)
+F32, BF16, E2M1, U8, OK = W.F32, W.BF16, W.E2M1, W.U8, L.OK
 R, ATOM, BLOCK, PEEL = S.R, S.ATOM, S.NVFP4.block, S.PEEL_K
 LINE = Array(R, E2M1)
 P_ROW = Array(PEEL, BF16)
@@ -154,6 +155,12 @@ def _stats(e: _Emit, x, k: int):
     return w, alpha, ae, ok
 
 
+def ok_word(e: _Emit, ok):
+    """The ok row's word of the admission bit ``ok`` (`leaves.OK`): a select between the constants 1 and 0, so bit 0 is
+    ``ok`` and bits 1-15 are zero in gates, never free bits of the committed row."""
+    return e.call(SelectBf16, ok, 1, 0)
+
+
 def _form(e: _Emit, w, alpha, ae, line, basis, k: int):
     """A row's codes and scale bytes (`pearl_c4.form`): per element the noise atom D_t = NVF4.step(α·x_t, E ‖ 0 at a_E,
     F_t ‖ 0 at 2^-4), per block of 16 its scale s_b = ue4m3(fmaxf(f32(1/6)·max|D|, 2^-9)) and r_b = 1/s_b, and per element
@@ -186,7 +193,7 @@ def _row_sig(S_, second: str, extra: tuple = ()):
     k = S_.K
     first = "fb" if second == "fa" else "fa"
     params = (("x", Array(k, BF16)), ("e", LINE), (first, Array(k, LINE)), (second, Array(k, LINE))) + extra
-    return params, Tuple(Array(k, E2M1), Array(k // BLOCK, U8), P_ROW, BIT)
+    return params, Tuple(Array(k, E2M1), Array(k // BLOCK, U8), P_ROW, OK)
 
 
 def _row_a_body(B, S_, x, line, fa, fb):
@@ -195,7 +202,7 @@ def _row_a_body(B, S_, x, line, fa, fb):
     codes, scales = _form(e, w, alpha, ae, line, fa, k)
     ones = _ones(e, k)
     af = [e.call(F2fpBf16, _chain(e, codes, fb.take(1, p), scales, ones, k)) for p in range(R)]
-    return tuple_of(codes, scales, array_of(_e_tilde(e, line, ae) + af), ok)
+    return tuple_of(codes, scales, array_of(_e_tilde(e, line, ae) + af), ok_word(e, ok))
 
 
 Pc4RowADef = CompositeDefinition(
@@ -218,7 +225,7 @@ def _row_b_body(B, S_, x, line, fb, fa, g):
             acc = e.call(F32FmaV2, ew[p], g[p][q], acc)
         bf = _chain(e, codes, fa.take(1, q), scales, ones, k)
         mid.append(e.call(F2fpBf16, e.call(F32AddV2, acc, e.call(F32Neg, bf))))
-    return tuple_of(codes, scales, array_of(mid + [e.call(W.PouwBf16Neg, v) for v in et]), ok)
+    return tuple_of(codes, scales, array_of(mid + [e.call(W.PouwBf16Neg, v) for v in et]), ok_word(e, ok))
 
 
 Pc4RowBDef = CompositeDefinition(
@@ -385,7 +392,7 @@ def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hid
 def _weight_sig(S_):
     k, n = S_.K, S_.N
     return ((("b", Array(n, Array(k, BF16))), ("eb", Array(n, LINE)), ("fa", BASIS(k)), ("fb", BASIS(k)), ("g", GRAM)),
-            Tuple(CODES(n, k), SCALES(n, k), Array(n, P_ROW), Array(n, BIT)))
+            Tuple(CODES(n, k), SCALES(n, k), Array(n, P_ROW), Array(n, OK)))
 
 
 Pc4WeightDef = CompositeDefinition(
@@ -398,7 +405,7 @@ def _call_sig(S_):
     m, k, n = S_.M, S_.K, S_.N
     return ((("a", Array(m, Array(k, BF16))), ("ea", Array(m, LINE)), ("fa", BASIS(k)), ("fb", BASIS(k)),
              ("bc", CODES(n, k)), ("bs", SCALES(n, k)), ("pb", Array(n, P_ROW))),
-            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, BIT)))
+            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, OK)))
 
 
 Pc4CallDef = CompositeDefinition(
@@ -413,7 +420,7 @@ def _check_sig(S_):
     m, k, n = S_.M, S_.K, S_.N
     return ((("a", Array(m, Array(k, BF16))), ("ea", Array(m, LINE)), ("b", Array(n, Array(k, BF16))), ("eb", Array(n, LINE)),
              ("fa", BASIS(k)), ("fb", BASIS(k)), ("g", GRAM)),
-            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, BIT), Array(n, BIT)))
+            Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, OK), Array(n, OK)))
 
 
 def _check_body(B, S_, a, ea, b, eb, fa, fb, g):
@@ -441,14 +448,14 @@ def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g):
 
 Pc4CallHiddenDef = CompositeDefinition(
     "Pc4CallHidden", 1, ("M", "K", "N", "TM", "TN"),
-    lambda S_: (_call_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, BIT))),
+    lambda S_: (_call_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, OK))),
     lambda B, S_, *a: tuple_of(*_call_units(B, S_.K, (S_.TM, S_.TN), *a, hidden=True)),
     doc="`Pc4Call` hiding: each tile's digest of C̃ and U by tile row and column, and each A row's admission.",
     conformance="protocol-defined")
 
 Pc4CheckHiddenDef = CompositeDefinition(
     "Pc4CheckHidden", 1, ("M", "K", "N", "TM", "TN"),
-    lambda S_: (_check_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, BIT), Array(S_.N, BIT))), _check_hidden_body,
+    lambda S_: (_check_sig(S_)[0], Tuple(DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))), _check_hidden_body,
     doc="`Pc4Check` hiding: `Pc4CallHidden`'s outputs, then each B row's admission.", conformance="protocol-defined")
 
 
@@ -526,4 +533,5 @@ def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -
 
 
 __all__ = ["BASIS", "DERIVATIONS", "GRAM", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "Unit", "basis_fa",
-           "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates", "unit_cut", "units", "weight"]
+           "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "ok_word", "query", "templates", "unit_cut", "units",
+           "weight"]

@@ -707,7 +707,10 @@ useful    U/(α_A·α_B), glue
     committed inputs. `Pc4Check{M,K,N,TM,TN}` is both in one root. The scheme's tile is 64 × 64.
   - A unit is a tile, not a word, because a unit reads its rows through their commitments. Once rows are hidden it
     hashes them, and a word unit would hash about 4.9 KiB of rows for each word.
-  - ``ok`` is the row's admission (`parse_row`'s finiteness, then `row_passes`).
+  - ``ok`` is the row's admission (`parse_row`'s finiteness, then `row_passes`). A row unit returns it as its ok row's
+    one word, `SelectBf16` of the bit between the constants 1 and 0 (`pc4.ok_word`), so bits 1–15 are zero in gates.
+    No row check sees a hidden row's bits, C-Flock's and Lean's included, so this is what gives one admission value
+    one leaf; the reference refuses any other word (`leaves.ok_of`).
   - The noise lines and G are verifier-derived public inputs, built as `ncp-v2`'s anchors are (`anchors.TileAnchors`,
     from the scheme's `noise(ctx)`): the lines are TurboSHAKE128 of seeds that read public values alone (seed_A the
     salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), and G = F_Bᵀ·F_A (`gram`)
@@ -748,7 +751,7 @@ useful    U/(α_A·α_B), glue
     pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
     pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               v2
-    pouw/row-ok/v1       the row's admission bit, bit 0 of one word                1                 X, W               v2
+    pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     ~~~
 
