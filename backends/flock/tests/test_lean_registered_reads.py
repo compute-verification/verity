@@ -182,11 +182,32 @@ def test_the_ports_are_exactly_the_verifiers(staged):
     code, out = _statement(staged, _stage(staged, "extra-x", extra={"x": x_entry}), staged.dir / "own.json")
     assert code == 1 and "names port x registered, and the verifier's registered reads do not" in out
     bad = staged.dir / "bad.json"
+    cs = {k: v for k, v in staged.own["ports"]["cs"].items() if k not in ("words", "word_bits")}
     for doc, want in (({"format": "verity/registered-reads/v1", "ports": {}}, "not a verity/registered-reads/v0 file"),
-                      ({**staged.own, "ports": {}}, "no port")):
+                      ({**staged.own, "ports": {}}, "no port"),
+                      ({**staged.own, "ports": {"cs": {**cs, "words": 64, "word_bits": 8}}}, "leaves of 16 or 32 bits"),
+                      ({**staged.own, "ports": {"cs": {**cs, "word_bits": 32}}}, "a row's words when they are 32"),
+                      ({**staged.own, "ports": {"cs": {**cs, "words": 0}}}, "at least one to a row")):
         bad.write_text(json.dumps(doc))
         code, out = _statement(staged, public, bad)
         assert code == 2 and want in out, out
+
+
+def test_the_ports_rows_are_the_registered_rows(staged):
+    """The reads file's row width (`words` leaves of `word_bits`, each leaf `word_bits / 16` u16 words, padded to whole
+    SHA-512 blocks) must be the circuit port's: cs's rows are 64 u16 words, one block, which 64 16-bit leaves fill and so
+    do 32 32-bit ones; 64 32-bit leaves or 65 16-bit ones are two blocks, and are refused. A file that names no width has
+    the port's own 16-bit rows (the fixture's, `test_a_session_verified_with_registered_reads_is_held_to_them`)."""
+    assert staged.own["ports"]["cs"]["words"] == 64 and staged.own["ports"]["cs"]["word_bits"] == 16
+    public = _stage(staged, "honest-6")
+    for name, width, want in (("own-32x32", {"words": 32, "word_bits": 32}, None),
+                              ("own-64x32", {"words": 64, "word_bits": 32}, "rows of 64 32-bit leaves"),
+                              ("own-65x16", {"words": 65}, "rows of 65 16-bit leaves")):
+        code, out = _statement(staged, public, _own(staged, name, lambda ps, width=width: ps["cs"].update(width)))
+        if want is None:
+            assert code == 0, (name, out)
+        else:
+            assert code == 1 and f"port cs's rows are 64 u16 words, not {VALUE}'s registered {want}" in out, (name, out)
 
 
 def test_an_output_row_is_never_a_registered_value(staged):

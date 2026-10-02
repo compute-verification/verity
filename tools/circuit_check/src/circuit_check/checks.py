@@ -6,7 +6,9 @@
                      kernel (`verity.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.boolean.trace.word_of`) also equals that word Definition through its word view
+                     (`verity.ml.boolean.trace.word_of`) also equals that word Definition through its word view.  A
+                     registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
+                     entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
@@ -17,7 +19,9 @@
                      recorded: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed in two units
                      it reports, `recomputed_across`).  A Boolean Call is judged by v2: its `recomputed_across` is recorded,
                      in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
-                     beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning)
+                     beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning).
+                     Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
+                     warning, ``partition/unchecked``)
     lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
                      a template unit's; a Boolean Definition's lowering has at most its own And gates), a template unit's
                      circuit digest against its C-Flock
@@ -54,8 +58,8 @@ _EXAMPLES = 3
 class Options:
     """``vectors`` instances per correspondence check (the all-edge ones first), fewer when the reference would spend more than
     ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word query;
-    Definitions over ``partition_max_gates`` are not partitioned, over ``lower_max_gates`` IR gates or about ``lower_max_ands``
-    ANDs (the piece pins' estimate) not lowered whole;
+    Definitions over ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
+    ``lower_max_gates`` IR gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole;
     ``input_budget`` bounds instances x input leaves, ``lane_budget`` instances x units when a template's units are evaluated."""
 
     vectors: int = 64
@@ -66,6 +70,7 @@ class Options:
     W: int = 32
     extras: int = 0
     partition_max_gates: int = 4_000_000
+    partition_max_leaves: int = 1 << 22
     lower_max_gates: int = 256
     lower_max_ands: int = 60_000
     input_budget: int = 1 << 22
@@ -110,9 +115,9 @@ def _gates(t: Any) -> int:
     return 1 if isinstance(t, (PrimitiveDefinition, ScalarReference)) else int(t.gates)
 
 
-def _n_vectors(t: Any, opts: Options) -> int:
+def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
     params, _ = signature_of(t)
-    leaves = sum(pt.leaves for pt in params)
+    leaves = sum(pt.leaves for j, pt in enumerate(params) if j != table)
     n = max(opts.min_vectors, min(opts.vectors, opts.reference_budget // max(1, _gates(t))))
     return max(1, min(n, opts.input_budget // max(1, leaves)))
 
@@ -132,9 +137,48 @@ def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) ->
     return out, raised
 
 
-def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.ndarray], list]:
-    """The reference on the vectors (totality) and every registered kernel against it."""
+def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, F: Findings) -> tuple[dict, None, list]:
+    """The reference on the vectors of a Definition that reads a registered table: its other parameters' edge and random
+    vectors and the probes (`vectors.table_instances`), every instance reading the table lazily.  No kernel takes it."""
+    from .vectors import table_instances
+
+    n = _n_vectors(t, opts, probe.param)
+    instances, read, table = table_instances(params, probe, n, opts.seed)
+    ref: list[tuple[int, ...] | None] = []
+    raised: list[dict] = []
+    for i, args in enumerate(instances):
+        try:
+            ref.append(tuple(evaluate(t, *args)))
+        except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
+            ref.append(None)
+            raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
+    table["words_read"] = len(read)
+    other = [pt for j, pt in enumerate(params) if j != probe.param]
+    rec: dict[str, Any] = {"vectors": len(instances), "edge_vectors": min(n, edge_count(other)), "reference_raised": len(raised),
+                           "realizations": [], "table": table}
+    if raised:
+        F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {len(instances)} vectors",
+               examples=raised[:_EXAMPLES])
+    for name in sorted(kernels(t)):
+        rec["realizations"].append({"via": f"kernel:{name}", "declines": f"a kernel takes arrays, not the registered table {table['name']!r}"})
+    return rec, None, ref
+
+
+def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.ndarray] | None, list]:
+    """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
+    Definition reads a registered table (probed, `_probed_correspondence`) or has a parameter over the input budget that is none
+    (a failure)."""
+    from .targets import table_probe
+
     params, _ret = signature_of(t)
+    probe = table_probe(t)
+    if probe is not None:
+        return _probed_correspondence(t, params, probe, opts, F)
+    wide = [(j, pt.leaves) for j, pt in enumerate(params) if pt.leaves > opts.input_budget]
+    if wide:
+        F.fail("correspondence", "unprobed-table", t.id, f"parameter {wide[0][0]} has {wide[0][1]} leaves, over the input budget "
+               f"{opts.input_budget}, and no registered table probes it (`circuit_check.targets.TABLE_PROBES`)")
+        return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
     n = _n_vectors(t, opts)
     arrays = vectors(params, n, opts.seed)
     ref, raised = reference_outputs(t, params, arrays)
@@ -556,14 +600,27 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     entry: dict[str, Any] = {"definition": t.id, "form": kind, "gates": None if kind == "reference" else _gates(t)}
     corr, arrays, ref = correspondence(t, opts, F)
     params, _ = signature_of(t)
-    low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo) if lower_whole or kind != "composite" else \
-        {"lowered": False, "reason": "lowered as its template's units"}
+    if arrays is None:
+        low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
+               "registered table lazily" if "table" in corr else "no vectors"}
+    elif lower_whole or kind != "composite":
+        low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
+    else:
+        low = {"lowered": False, "reason": "lowered as its template's units"}
     corr["realizations"].append({"via": "c-flock:ir_lower", **low})
     wv = word_view(t, opts, F)
     if wv is not None:
         corr["realizations"].append(wv)
     entry["correspondence"] = corr
-    if kind == "composite":
+    leaves = 0 if kind == "reference" else sum(pt.leaves for pt in params)
+    if kind != "reference" and leaves > opts.partition_max_leaves:
+        why = (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
+               "and Q_call resolve every leaf")
+        F.warn("partition", "unchecked", t.id, 1, why)
+        entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
+        entry["redundant_gates"] = {"checked": False}
+        entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
+    elif kind == "composite":
         from verity.ir import boolean as BL
 
         part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)

@@ -60,6 +60,17 @@ def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     return {k: os.environ[k] for k in env}
 
 
+def snapshot() -> dict[str, str]:
+    return dict(os.environ)
+
+
+def set_since(before: Mapping[str, str]) -> dict[str, str]:
+    """The keys set or changed since ``before`` (a `snapshot`). vLLM's batch invariance writes cuBLAS' and NCCL's switches while it
+    builds an engine, so a process that resets its environment between Commits on one engine (`commit_group`, `hot.serve`) puts
+    these back."""
+    return {k: v for k, v in os.environ.items() if before.get(k) != v}
+
+
 def disable_compile_cache() -> None:
     os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
 

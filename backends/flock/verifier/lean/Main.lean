@@ -205,7 +205,8 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
       | .error e => return .error s!"closure map: not JSON: {e}"
 
 /-- `--registered F`: the verifier's own registered reads (`Registered.ofJson`: per registered port, the value, its
-registered root, leaf count and domain, and the position each unit reads), a path, or with `--archive` its SHA-512. -/
+registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
+SHA-512. -/
 def registeredInput (args : List String) : IO (Except String (Option (Array Registered.Port))) := do
   let some f := argOf args "--registered" | return .ok none
   let bytes ← match argOf args "--archive" with

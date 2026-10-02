@@ -8,9 +8,10 @@ The rule (no recomputes):
     no other unit; it is reported as the unit's redundant gates (`redundant_gates`), not a recompute.
   * For every computation gate exactly one unit certifies it: its proof being valid implies the gate is the correct function of the
     committed values the unit reads.  A value read across units is **committed once at serving**, and every reader reuses it.  There
-    are no public inputs: the Call's inputs (weights, tokens, earlier Calls' outputs) are committed, private values.  Constants and
-    wiring (`WIRING`: bit rearrangement, such as BF16 -> FP32 zero-extension) are circuit structure: hardwired into each unit's
-    statement, never committed, not counted as gates; a unit reads through wiring to its source.
+    are no public inputs: the Call's inputs (weights, tokens, earlier Calls' outputs) are committed, private values, and so is every
+    value a program or a request brings (a norm's epsilon, the attention scale, a softcap, temperature, top-p): a registered or run
+    input, committed under a hiding leaf.  Only an operation's own constant bits and wiring (`WIRING`: bit rearrangement, such as
+    BF16 -> FP32 zero-extension) are circuit structure, not counted as gates; a unit reads through wiring to its source.
   * **Width** counts bits (`verity.ir.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
     bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
     max, sum and inverse sum).  No dtype is read.
