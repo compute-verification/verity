@@ -1452,6 +1452,34 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
 
 
+def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_read(monkeypatch, tmp_path):
+    """Node 1, 06:58Z Oct 2: a leased engine was still listed while its context reset, and its lease ended before the locks were
+    read, so the probe blocked its pool. A second listing after the locks drops it."""
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    pool = tmp_path / "gpu-lease"
+    pool.mkdir()
+    monkeypatch.setattr(m, "POOL_DIRS", [pool])
+    monkeypatch.setattr(m, "LOG", tmp_path / "stray.jsonl")
+    # 20 released its lease on GPU 0 between the listings; 21 holds GPU 1 with no lease all along; 22 started after the first
+    listings = iter([[(20, "GPU-a"), (21, "GPU-b")], [(21, "GPU-b"), (22, "GPU-c")]])
+    monkeypatch.setattr(m, "compute_apps", lambda: next(listings))
+    monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": (0, 0), "GPU-b": (1, 1), "GPU-c": (2, 2)})
+    monkeypatch.setattr(m, "leases", lambda: {})
+    monkeypatch.setattr(m, "dev_minors", lambda pid: set(range(8)))
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: "u")
+    monkeypatch.setattr(m, "ancestors", lambda pid: {pid})
+    monkeypatch.setattr(m, "environ", lambda pid: {})
+    monkeypatch.setattr(m, "alive", lambda pid: True)
+    monkeypatch.setattr(m, "cmdline", lambda pid: f"python w{pid}.py")
+    monkeypatch.setattr(m, "pods_by_uid", lambda: {"u": {"metadata": {"uid": "u", "namespace": "default", "name": "nd-x"},
+                                                         "spec": {"containers": [{}],
+                                                                  "volumes": [{"name": "gpu-lease", "hostPath": {"path": str(pool)}}]}}})
+    assert [(s["pid"], s["gpu"]) for s in m.check(1_800_000_000.0)] == [(21, 1)]
+    assert "pid 21 (default/nd-x) ran on GPU 1 without a lease" in (pool / "blocked").read_text()
+
+
 @needs_flock
 def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
     import fcntl
