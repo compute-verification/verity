@@ -1559,6 +1559,28 @@ fn zkvtime(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     if v["accepted"] != true || proofs.len() != 2 {
         return;
     }
+    // level 0's padding codeword on each rep's ybar: the encoder's at every position, against pad_at at the queries' count of
+    // positions and 4,099 more
+    let lc = flock_core::pcs::ligerito::zk::prover_config(params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().unwrap(), zk_queries0(st.m).unwrap());
+    let (log_msg, rate) = (lc.initial_log_msg_cols, lc.log_inv_rates[0]);
+    for (rep, b) in proofs.iter().enumerate() {
+        let (_, pr, _): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(b).unwrap();
+        let ybar = &pr.pcs_open.ligerito.zk_level0.as_ref().unwrap().ybar;
+        let t = Instant::now();
+        let full = flock_core::pcs::ligerito::zk::pad_codeword(ybar, log_msg, rate);
+        let full_s = t.elapsed().as_secs_f64();
+        let mut x = 0x9e37_79b9_7f4a_7c15u64 ^ rep as u64;
+        let mut next = || { x ^= x << 13; x ^= x >> 7; x ^= x << 17; (x as usize) & (full.len() - 1) };
+        let read: Vec<usize> = (0..lc.queries[0]).map(|_| next()).collect();
+        let t = Instant::now();
+        let at = flock_core::pcs::ligerito::zk::pad_at(ybar, log_msg, rate, &read);
+        let at_s = t.elapsed().as_secs_f64();
+        let more: Vec<usize> = (0..4096).map(|_| next()).chain([0, 1, full.len() - 1]).collect();
+        let equal = at.iter().zip(&read).all(|(v, &q)| *v == full[q])
+            && flock_core::pcs::ligerito::zk::pad_at(ybar, log_msg, rate, &more).iter().zip(&more).all(|(v, &q)| *v == full[q]);
+        println!("ZKVTIME\t{}", json!({"what": "pad", "rep": rep, "log_msg": log_msg, "log_inv_rate": rate, "t_pad": ybar.len(), "positions": full.len(),
+                                       "full_s": full_s, "at_positions": read.len(), "at_s": at_s, "compared": read.len() + more.len(), "equal": equal}));
+    }
     let map = proofs.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
     let n: usize = arg("--reverify", "3").parse().unwrap();
     for i in 0..n {

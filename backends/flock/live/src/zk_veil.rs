@@ -1334,11 +1334,27 @@ mod tests {
         }
     }
 
+    /// The verifier and the prover read level 0's padding codeword only at the queried positions (`pad_at`): it is
+    /// `pad_codeword`, the encoder's, at every position of every shape here.
+    #[test]
+    fn pad_at_is_the_padding_codeword_at_every_position() {
+        use flock_core::pcs::ligerito::zk::{pad_at, pad_codeword};
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([5; 32]));
+        let shapes = [(0, 1, 1), (4, 1, 0), (4, 1, 1), (4, 1, 5), (5, 2, 16), (6, 1, 33), (7, 3, 100), (9, 1, 436), (9, 2, 512)];
+        for (n, (log_msg, rate, t_pad)) in shapes.into_iter().enumerate() {
+            let w = rng.f128s(STREAM_PADS, n as u64, 2 * t_pad);
+            let ybar: Vec<F256> = (0..t_pad).map(|i| F256::new(w[2 * i], w[2 * i + 1])).collect();
+            let full = pad_codeword(&ybar, log_msg, rate);
+            let qs: Vec<usize> = (0..full.len()).collect();
+            assert_eq!(pad_at(&ybar, log_msg, rate, &qs), full, "log_msg={log_msg} rate={rate} t_pad={t_pad}");
+        }
+    }
+
     /// Level 0 and level 1 of a two-rep session at toy size, exactly: for fixed coins the view (every row either rep opens,
     /// each rep's `ybar`, the pair's masked sums `e'` and, conservatively, all of `y_1'`) is F128-linear in the witness lanes
     /// and the prover's randomness (every lane's padding, the extra lanes, `e`'s pads), so it is independent of the witness
     /// exactly when the witness's images lie in the span of the randomness's. Built from the protocol's own `lane_codeword`,
-    /// `pad_codeword`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
+    /// `pad_at`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
     mod exact {
         use flock_core::pcs::ligerito::zk::{self as z0, EXTRA_LANES, Level0Zk};
         use flock_field::{F128, F256};
@@ -1405,11 +1421,11 @@ mod tests {
                 let (eq, rho) = (&c.eq[rep], c.rho[rep]);
                 let y1: Vec<F256> = (0..L).map(|i| (0..W).fold(rho[0] * r[a][i] + rho[1] * r[b][i], |acc, l| acc + eq[l] * p[l][i])).collect();
                 let ybar = z0::ybar(&zr, W, eq, rho);
-                let padcw = z0::pad_codeword(&ybar, LOG_MSG, 1);
+                let pad = z0::pad_at(&ybar, LOG_MSG, 1, &c.q[rep]);
                 let [e0, e1] = [enc(&y1.iter().map(|y| y.c0).collect::<Vec<_>>()), enc(&y1.iter().map(|y| y.c1).collect::<Vec<_>>())];
-                for &q in &c.q[rep] {
+                for (&q, &pc) in c.q[rep].iter().zip(&pad) {
                     let row: Vec<F128> = cw.iter().map(|l| l[q]).collect();
-                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[q], &[F128::ONE], W, pair[rep], rho, &padcw), |acc, l| acc + eq[l] * row[l]);
+                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[pc], &[F128::ONE], W, pair[rep], rho), |acc, l| acc + eq[l] * row[l]);
                     ok &= lhs == F256::new(e0[q], e1[q]);
                 }
                 let e = [a, b].map(|j| (0..L).fold(F256::ZERO, |acc, i| acc + c.b[rep][i] * r[j][i]));

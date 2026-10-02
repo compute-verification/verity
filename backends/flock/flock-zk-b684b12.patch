@@ -202,10 +202,10 @@ index 83a6207..68455c7 100644
  pub fn commit_merkle(codeword: Vec<F128>, params: &PcsParams) -> (Commitment, ProverData) {
      let timing = std::env::var_os("FLOCK_COMMIT_TIMING").is_some();
 diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
-index 31b6d20..a25080b 100644
+index 31b6d20..f5f6d0c 100644
 --- a/crates/flock-core/src/pcs/ligerito.rs
 +++ b/crates/flock-core/src/pcs/ligerito.rs
-@@ -64,6 +64,137 @@ use crate::{
+@@ -64,6 +64,157 @@ use crate::{
  
  pub(crate) mod extension;
  
@@ -322,6 +322,26 @@ index 31b6d20..a25080b 100644
 +        a.into_par_iter().zip(b).map(|(x, y)| F256::new(x, y)).collect()
 +    }
 +
++    /// [`pad_codeword`] at positions `qs` only (`pad_at(..)[i] == pad_codeword(..)[qs[i]]`), from the novel-basis identity the
++    /// induced basis uses, `Enc(v)(q) = Σ_j v_j X̂_j(q)` (`evaluate_scaled_basis_inplace`): with `X̂_{L + i} = Ŵ_{log_msg} X̂_i`
++    /// for `i < L = 2^log_msg`, `Enc(c·ybar ‖ ybar)(q) = (c + Ŵ_{log_msg}(q)) Σ_{i < t_pad} ybar_i X̂_i(q)`.
++    pub fn pad_at(ybar: &[F256], log_msg: usize, log_inv_rate: usize, qs: &[usize]) -> Vec<F256> {
++        assert!(ybar.len() <= 1 << log_msg, "t_pad exceeds the lane's message length");
++        assert!(qs.iter().all(|&q| q >> (log_msg + log_inv_rate) == 0), "a position outside the codeword");
++        let bits = ybar.len().next_power_of_two().trailing_zeros() as usize;
++        let sks_vks = super::eval_sk_at_vks(log_msg);
++        let inv: Vec<F128> = sks_vks.iter().map(|s| s.inv()).collect();
++        let [a, b] = [0, 1].map(|k| ybar.iter().map(|y| y.coordinates()[k]).collect::<Vec<_>>());
++        qs.par_iter().map(|&q| {
++            let x = F128::new(q as u64, 0);
++            let (mut sks, mut basis) = (vec![F128::ZERO; bits.max(1)], vec![F128::ZERO; 1 << bits]);
++            super::evaluate_scaled_basis_inplace(&mut sks, &mut basis, &sks_vks, &inv, x, F128::ONE);
++            let f = PAD_C + (0..log_msg).fold(x, |s, i| super::next_s(s, sks_vks[i])) * inv[log_msg];
++            let [u, v] = [&a, &b].map(|c| c.iter().zip(&basis).fold(F128::ZERO, |acc, (y, w)| acc + *y * *w) * f);
++            F256::new(u, v)
++        }).collect()
++    }
++
 +    /// Rep `z.rep`'s padding combination `ybar = Σ_l w_l pad_l + ρ_0 pad_{R_{2r}} + ρ_1 pad_{R_{2r+1}}` over the witness's
 +    /// `lanes` lanes, `w = eq(r̄)` the lane rounds' weights.
 +    pub fn ybar(z: &Level0Zk, lanes: usize, w: &[F256], rho: [F256; REP_LANES]) -> Vec<F256> {
@@ -330,12 +350,12 @@ index 31b6d20..a25080b 100644
 +    }
 +
 +    /// The level-0 enforced sum's extra terms for rep `rep`: `Σ_q w_q (ρ_0 row_q[L + 2r] + ρ_1 row_q[L + 2r + 1] +
-+    /// Enc(c·ybar ‖ ybar)(q))` for row weights `w = eq(α)`, `L` the witness's lane count.
-+    pub fn enforced_extra(rows: &[Vec<F128>], queries: &[usize], row_weights: &[F128], lanes: usize, rep: usize, rho: [F256; REP_LANES],
-+                          padcw: &[F256]) -> F256 {
++    /// Enc(c·ybar ‖ ybar)(q))` for row weights `w = eq(α)`, `L` the witness's lane count, and `pad[i]` the padding codeword
++    /// at row `i`'s query ([`pad_at`]).
++    pub fn enforced_extra(rows: &[Vec<F128>], pad: &[F256], row_weights: &[F128], lanes: usize, rep: usize, rho: [F256; REP_LANES]) -> F256 {
 +        let p = rep_lanes(rep);
-+        rows.iter().zip(queries).zip(row_weights).map(|((row, &q), &w)| {
-+            (rho[0] * row[lanes + p[0]] + rho[1] * row[lanes + p[1]] + padcw[q]) * w
++        rows.iter().zip(pad).zip(row_weights).map(|((row, &pc), &w)| {
++            (rho[0] * row[lanes + p[0]] + rho[1] * row[lanes + p[1]] + pc) * w
 +        }).fold(F256::ZERO, |a, b| a + b)
 +    }
 +}
@@ -343,7 +363,7 @@ index 31b6d20..a25080b 100644
  // ===================================================================
  // Config
  // ===================================================================
-@@ -2201,6 +2332,12 @@ pub struct LigeritoProof {
+@@ -2201,6 +2352,12 @@ pub struct LigeritoProof {
      /// queried consistency equations.
      #[serde(default)]
      pub consistency_batch_grinding_nonces: Vec<u64>,
@@ -356,7 +376,7 @@ index 31b6d20..a25080b 100644
  }
  
  impl LigeritoProof {
-@@ -4763,6 +4900,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
+@@ -4763,6 +4920,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
          None,
          None,
          None,
@@ -364,7 +384,7 @@ index 31b6d20..a25080b 100644
          challenger,
      )
  }
-@@ -4801,6 +4939,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
+@@ -4801,6 +4959,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
          }),
          round1_lookahead,
          None,
@@ -372,7 +392,7 @@ index 31b6d20..a25080b 100644
          challenger,
      )
  }
-@@ -4830,6 +4969,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4830,6 +4989,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
      l0_jit_basis: Option<BasisWindowFn<'_>>,
      l0_virtual_basis: Option<VirtualEqBasis>,
      seeded_stats: Option<Vec<F128>>,
@@ -380,7 +400,7 @@ index 31b6d20..a25080b 100644
      challenger: &mut Ch,
  ) -> LigeritoProof {
      recursive_prover_with_basis_impl(
-@@ -4849,6 +4989,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4849,6 +5009,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
          }),
          round1_lookahead,
          seeded_stats,
@@ -388,7 +408,7 @@ index 31b6d20..a25080b 100644
          challenger,
      )
  }
-@@ -5035,6 +5176,8 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -5035,6 +5196,8 @@ fn recursive_prover_inner<Ch: Challenger>(
                  fold_grinding_nonces: Vec::new(),
                  claim_batch_grinding_nonces: Vec::new(),
                  consistency_batch_grinding_nonces: Vec::new(),
@@ -398,7 +418,7 @@ index 31b6d20..a25080b 100644
          }
  
 diff --git a/crates/flock-core/src/pcs/ligerito/extension.rs b/crates/flock-core/src/pcs/ligerito/extension.rs
-index 195c44a..b90ae6a 100644
+index 195c44a..37aea35 100644
 --- a/crates/flock-core/src/pcs/ligerito/extension.rs
 +++ b/crates/flock-core/src/pcs/ligerito/extension.rs
 @@ -1690,6 +1690,22 @@ impl SumcheckProver256 {
@@ -525,9 +545,9 @@ index 195c44a..b90ae6a 100644
 +        Some((zp, rho)) => {
 +            let lanes = 1usize << initial_k;
 +            let rows: Vec<Vec<F128>> = opened_rows_0.iter().map(|r| r[..lanes].to_vec()).collect();
-+            let padcw = super::zk::pad_codeword(&zp.ybar, log_msg_cols_0, log_inv_rate_0);
++            let pad = super::zk::pad_at(&zp.ybar, log_msg_cols_0, log_inv_rate_0, &queries_0);
 +            induce_enforced_sum(&rows, &lane_challenges, &alpha_0)
-+                + super::zk::enforced_extra(&opened_rows_0, &queries_0, &build_eq_table(&alpha_0), lanes, zk0.map_or(0, |z| z.rep), *rho, &padcw)
++                + super::zk::enforced_extra(&opened_rows_0, &pad, &build_eq_table(&alpha_0), lanes, zk0.map_or(0, |z| z.rep), *rho)
 +        }
 +    };
      let msg = sumcheck.introduce_presplit_basis(basis_0, enforced_0);
@@ -657,10 +677,10 @@ index 195c44a..b90ae6a 100644
 +        Some(zp) => {
 +            let lanes = 1usize << initial_k;
 +            let rows: Vec<Vec<F128>> = proof.initial_proof.opened_rows.iter().map(|r| r[..lanes].to_vec()).collect();
-+            let padcw = super::zk::pad_codeword(&zp.ybar, log_cols_0, config.log_inv_rates[0]);
++            let pad = super::zk::pad_at(&zp.ybar, log_cols_0, config.log_inv_rates[0], &queries_0);
 +            induce_enforced_sum(&rows, &initial_challenges, &alpha_0)
-+                + super::zk::enforced_extra(&proof.initial_proof.opened_rows, &queries_0, &build_eq_table(&alpha_0), lanes,
-+                                            zk0.map_or(0, |z| z.rep), zk_rec.rho, &padcw)
++                + super::zk::enforced_extra(&proof.initial_proof.opened_rows, &pad, &build_eq_table(&alpha_0), lanes,
++                                            zk0.map_or(0, |z| z.rep), zk_rec.rho)
 +        }
 +    };
 +    if zk0.is_some() {

@@ -221,7 +221,10 @@ What is changed:
    ~~~
 
    It is folded into the induced basis's enforced sum (`zk::enforced_extra`). The induced basis itself is unchanged. The
-   identity holds at every position, as an identity of codewords.
+   identity holds at every position, as an identity of codewords. Both sides evaluate `Enc(c·ybar^r ‖ ybar^r)` at the
+   queried positions only (`zk::pad_at`, the novel-basis identity the induced basis uses), never the whole codeword
+   (`zk::pad_codeword`); the `zk_veil` test `pad_at_is_the_padding_codeword_at_every_position` checks the two agree at
+   every position of nine shapes up to `t_pad = L`.
 5. **Exposed** (padded, §2): the level-0 OOD value, the six lane-round messages and `e^r`. The prover's lane chain becomes
    the two lane-phase rows (§4).
 6. **Level 0's query count and padding.** The padded code is `RS[2L, L + t_pad]`, of rate `ρ' = (L + t_pad)/2L`, and the
@@ -268,7 +271,7 @@ is the minimum.
 
 **Checked:**
 - `zk_veil` test `exact::a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not`: at toy size (4 witness lanes of 16
-  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword`, `ybar` and
+  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_at`, `ybar` and
   `enforced_extra`. For fixed coins the view is F128-linear in the witness and the randomness, and it hides the witness
   exactly when the witness's images lie in the span of the randomness's. Even with all of both `y_1'^r` revealed, the
   per-rep pairs hide it; a shared pair does not, nor does `t_pad` below the distinct opened positions. The verifier's row
