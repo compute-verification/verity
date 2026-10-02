@@ -6879,6 +6879,11 @@
    "assumptions": [],
    "type_hash": "07da4bbfb8f70799c8f84577a71b68e7ab52535913e74f72ebb22d3746ff19f6"
   },
+  "Pouw.SecurityProofs.NCP.ShiftBy24Admissible": {
+   "signature": ["Pouw.SecurityProofs.NCP.ShiftBy24Admissible : Pouw.Guarantees.NCP.ShiftBy24Admissible"],
+   "assumptions": [],
+   "type_hash": "487b25a1bef0a653c54652e8304f79b01211ffcaa3b7e17c8e0cabc6e4820440"
+  },
   "Pouw.SecurityProofs.NCP.Stacked": {
    "signature": ["Pouw.SecurityProofs.NCP.Stacked : Pouw.Guarantees.NCP.Stacked"],
    "assumptions": [],
@@ -9472,7 +9477,7 @@
    ]
   },
   "Pouw.Guarantees.NCP": {
-   "digest": "b5bea43ef62ffa0c0720415cae0be727678ce6341547392e4876be57f81cb871",
+   "digest": "be54c6a5b3fe0c6c86071e5434478114b71f57d8b5987416ac78dc119f6d4521",
    "definitions": {
     "Pouw.Guarantees.NCP.BiasU8Iff": "151516e1e4ee87903f8f14ac1c567a5e551c88a0c5b90f9319f383faf2e09389",
     "Pouw.Guarantees.NCP.Cancel": "f94583533f0111a6bbcaa3c9623947cab329b9b707c7584f6ecd2e552f8c578b",
@@ -9486,6 +9491,7 @@
     "Pouw.Guarantees.NCP.NCPWordFloorIndU": "cd02c84dc9007fddefe6a563d3318c06be08e4319de136166a99fc4ff1c1c3a8",
     "Pouw.Guarantees.NCP.Range": "76983bd775f49c4240a70afd7b0d4cc9395c2f631860ebe94a4b9f3fa93c5ba1",
     "Pouw.Guarantees.NCP.RangeU": "50d942f10ccae0732bb8083d486599f94eb606ad593194527048583137746756",
+    "Pouw.Guarantees.NCP.ShiftBy24Admissible": "78da322e2c5e07fa873f5e260c69e0c6a2864d48637c5c81a1810079e68696df",
     "Pouw.Guarantees.NCP.Stacked": "02b66d25dc44f44196c5eb4ee1d490ccb41b7e8cece81a47c64f0afb2415fae6",
     "Pouw.Guarantees.NCP.TTNCPUIff": "2fe0085464b9ad5c66424a9710842259438e14b94dd3ebedec293f200e1f2188",
     "Pouw.Guarantees.NCP.TTNCPUWitness": "a0c9af8d21778ce0c6de58401518dccc4173d251594cf8e4d37798bfd3a41cf7",
@@ -9509,6 +9515,7 @@
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
     "Pouw.SecurityProofs.NCP.Range",
     "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.ShiftBy24Admissible",
     "Pouw.SecurityProofs.NCP.Stacked",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
     "Pouw.SecurityProofs.NCP.TTNCPUWitness",
@@ -9802,6 +9809,7 @@
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
     "Pouw.SecurityProofs.NCP.Range",
     "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.ShiftBy24Admissible",
     "Pouw.SecurityProofs.NCP.Stacked",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
     "Pouw.SecurityProofs.NCP.TTNCPUWitness",
@@ -12652,6 +12660,7 @@
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
     "Pouw.SecurityProofs.NCP.Range",
     "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.ShiftBy24Admissible",
     "Pouw.SecurityProofs.NCP.Stacked",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
     "Pouw.SecurityProofs.NCP.TTNCPUWitness",
@@ -12678,9 +12687,10 @@
    "pins": ["Pouw.NCP.Proofs.signedPermWitness", "Pouw.NCP.Proofs.wrap", "Pouw.NCP.Proofs.wrapInt7"]
   },
   "Pouw.Protocol.NCP.Protocol": {
-   "digest": "0152ce4bb1231c899f8d67eb339e4d757c0cbe85e0a08c6ddd820891d7761e4f",
+   "digest": "6010f965156c53eb41804566759a04e2a6dedd08e051738cb31671e59564e85e",
    "definitions": {
     "Pouw.NCP.Admissible": "932742e569b127183d5b24b051a204292da450d50ed9344c97f07212687cd6f8",
+    "Pouw.NCP.GameProofs.shiftBy": "78698993ab6bab4133901bc4aa04d4c082b7c36e5abbaf0db67119a589a313ca",
     "Pouw.NCP.InNoise6": "0b9af33233b2a2a1d1257f3a27af019107f05aba71957caacea4a2608ee1ad39",
     "Pouw.NCP.InSmall": "563a2a1b4d787558372aa9effad140d0ca639ca58794d400b4056805e33da146",
     "Pouw.NCP.Params": "2b771980c5edf5803df299bd9f9e3dfb3e2b79622b2a9a646157cb79093b4d41",
@@ -12744,6 +12754,7 @@
     "Pouw.SecurityProofs.NCP.IndependentWitness",
     "Pouw.SecurityProofs.NCP.MmWUExact",
     "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.ShiftBy24Admissible",
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
     "Pouw.SecurityProofs.NCP.TTNCPUWitness",
     "Pouw.SecurityProofs.NCP.YUChecked"
