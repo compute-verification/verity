@@ -4351,6 +4351,7 @@
    "assumptions": [],
    "type_hash": "e7ffbfe671c2f4572dbeaba890c450e8dd585edcfed17b12afe8511f1f08503b"
   },
+  "FlockSoundness.Discharge.DecodeZL.lig_carries": {},
   "FlockSoundness.Discharge.DecodeZL.op_carries": {
    "signature": [
     "FlockSoundness.Discharge.DecodeZL.op_carries :",
