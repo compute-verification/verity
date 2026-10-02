@@ -34,5 +34,7 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
   `port_commit_rows0`);
 * `Wide.Copies`: `HmRow.delta`'s Δ for any rows (`delta_flat_all`) and its copies at a row's own columns (`…_filterAll`);
 * `Wide.RowBc`: a row's `b ‖ c` under its own prefix for any rows (`row_bc_tgt`);
-* `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`).
+* `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
+* `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
+  (`outputs_committed_wide'`, `outputs_binding_wide_of`).
 -/
