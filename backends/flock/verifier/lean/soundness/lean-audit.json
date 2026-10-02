@@ -3159,6 +3159,19 @@
    "assumptions": [],
    "type_hash": "faa298987a07fd457b8d62a66971461fbd21088f1c1a245f056e557c705e26e2"
   },
+  "FlockSoundness.Discharge.Layout.computed_committed_output": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.computed_committed_output {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {R : Fin n → FlockSoundness.Rows} (I : (u : Fin n) → P.IsRowsUnit u (R u))",
+    "  (hread :",
+    "    ∀ (u : Fin n) (y : Fin (R u).w),",
+    "      (∀ (i : Fin (R u).nComp), Ne y ((R u).comp i)) → Eq (P.unit ((I u).wire y)) Option.none)",
+    "  {u : Fin n} {g : Fin C.N} (hg : SetLike.instMembership.mem (P.io u) g) (hgu : Eq (P.unit g) (Option.some u)) :",
+    "  SetLike.instMembership.mem C.outputs g"
+   ],
+   "assumptions": [],
+   "type_hash": "0329919ef3cbcfc0df2b2b74f6af89bc843e9ab73112071030aad746d973ca1d"
+  },
   "FlockSoundness.Discharge.Layout.copy_site": {
    "signature": [
     "FlockSoundness.Discharge.Layout.copy_site {T : FlockSoundness.Model.Statement}",
@@ -3357,12 +3370,14 @@
     "  (saltCol : Flock.Circuit → Nat → Nat → Nat → Nat → Nat) (popOf : Reg → Flock.Public)",
     "  (outBit : Reg → Fin (FlockSoundness.Discharge.Layout.keyN c hU n) → Bool)",
     "  (hsite :",
-    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
-    "      FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u)",
+    "      (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :",
     "  (FlockSoundness.Discharge.Layout.keyReaders rowW hparse outs saltCol popOf outBit).BcPinned"
    ],
    "assumptions": [],
-   "type_hash": "8a192338c1363bfecfdd8254302e5bb672cc1f99938d750db3e7f757ad61bf95"
+   "type_hash": "9abde487646ebb41c269665eadb6a6b564d8d7fd3c549fc89d67a45ed8966bb7"
   },
   "FlockSoundness.Discharge.Layout.keyProg_copies": {
    "signature": [
@@ -3395,8 +3410,10 @@
     "      Eq (Flock.HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables) (Except.ok c))",
     "  (ho : Eq c.outNet c.unitNet)",
     "  (hsite :",
-    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
-    "      FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u)",
+    "      (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)",
     "  (houts : FlockSoundness.Discharge.Layout.OutsOut c hU n outs) (S : Finset (Fin n)) (R : Reg) (u : Fin n) :",
     "  SetLike.instMembership.mem S u →",
     "    ∀ (M : FlockSoundness.Binding.Msg plan tab S R u),",
@@ -3412,7 +3429,23 @@
     "                (FlockSoundness.Discharge.Layout.outBitOf c hU n outs popOf R g)"
    ],
    "assumptions": [],
-   "type_hash": "deb64e31f735d733c0a49cbda73141e1690ad063ec9b14b740092865c19728a9"
+   "type_hash": "85cb0ffd5cb3370b31d8393cb9cede8d95cabf23472faaf91c29ca02ad2203c0"
+  },
+  "FlockSoundness.Discharge.Layout.keyProg_reads": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.keyProg_reads (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : Nat)",
+    "  (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n))) (u : Fin n)",
+    "  (y : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).w)",
+    "  (hy :",
+    "    ∀ (i : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).nComp),",
+    "      Ne y (((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).comp i)) :",
+    "  Eq",
+    "    (((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs).unit",
+    "      ((FlockSoundness.Discharge.Const.Prog.instC (FlockSoundness.Discharge.Placed.keyProg c hU n) outs u).wire y))",
+    "    Option.none"
+   ],
+   "assumptions": [],
+   "type_hash": "f3cb57a19e4810de271aff3005193f28423cf6c2f0615a2ef75280b38e027c0c"
   },
   "FlockSoundness.Discharge.Layout.keyProg_valPinned": {
    "signature": [
@@ -3518,8 +3551,10 @@
     "  (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n)))",
     "  (saltCol : Flock.Circuit → Nat → Nat → Nat → Nat → Nat) (popOf : Reg → Flock.Public) (ho : Eq c.outNet c.unitNet)",
     "  (hsite :",
-    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
-    "      FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u)",
+    "      (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)",
     "  (hkeys : FlockSoundness.Discharge.Layout.KeysRow c hU rowW)",
     "  (houts : FlockSoundness.Discharge.Layout.OutsOut c hU n outs)",
     "  (hc1 :",
@@ -3534,7 +3569,7 @@
     "    FlockSoundness.Discharge.Layout.rowEnc"
    ],
    "assumptions": [],
-   "type_hash": "7d189938644348a54548904982d64e5a6bc71b745beb650da658ee81972a79f6"
+   "type_hash": "6f4ce429334804c7efa2162d86910b86626c541cfb649d3be32e70ffa5f8caff"
   },
   "FlockSoundness.Discharge.Layout.keyedRows_enc": {
    "signature": [
@@ -3548,15 +3583,17 @@
     "  (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n)))",
     "  (saltCol : Flock.Circuit → Nat → Nat → Nat → Nat → Nat) (popOf : Reg → Flock.Public) (ho : Eq c.outNet c.unitNet)",
     "  (hsite :",
-    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
-    "      FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u)",
+    "      (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)",
     "  (houts : FlockSoundness.Discharge.Layout.OutsOut c hU n outs)",
     "  (hkeys : FlockSoundness.Discharge.Layout.KeysRow c hU (FlockSoundness.Discharge.Layout.portRowW c)) :",
     "  Eq (FlockSoundness.Discharge.Layout.keyedRows hparse saltCol ho hsite houts hkeys).enc",
     "    FlockSoundness.Discharge.Layout.rowEnc"
    ],
    "assumptions": [],
-   "type_hash": "7e412e053454e24db396926b6f48f3e0562f325f81413b2101e1e06f6e817f64"
+   "type_hash": "2c2720538583fe127342fed561af9107294c7a51750304b0066466a9e24eddc2"
   },
   "FlockSoundness.Discharge.Layout.keysRow_keyProg": {
    "signature": [
@@ -3959,6 +3996,14 @@
    ],
    "assumptions": [],
    "type_hash": "a52d4dfccc3659894d9356231ab77d36b18a25b1f6edfc56dc69b42b0aecc6a8"
+  },
+  "FlockSoundness.Discharge.Layout.outsOut_outsOf": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : Nat) :",
+    "  FlockSoundness.Discharge.Layout.OutsOut c hU n (FlockSoundness.Discharge.Layout.outsOf c hU n)"
+   ],
+   "assumptions": [],
+   "type_hash": "6dfcc9abd540bc57f9241a09e13a877ec4fc952c4067158d0b715cfb6ad6c6ab"
   },
   "FlockSoundness.Discharge.Layout.pack_bit": {
    "signature": [
@@ -9210,6 +9255,7 @@
     "FlockSoundness.Discharge.Const.image_oneWire",
     "FlockSoundness.Discharge.Layout.Readers.layout_row",
     "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.computed_committed_output",
     "FlockSoundness.Discharge.Layout.decode_row_of_cols",
     "FlockSoundness.Discharge.Layout.exists_read_of_io",
     "FlockSoundness.Discharge.Layout.gateAt_one",
@@ -9218,6 +9264,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -9226,6 +9273,7 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -10429,6 +10477,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -10436,6 +10485,7 @@
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
     "FlockSoundness.Discharge.Layout.keysRow_of_parse",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -10470,11 +10520,13 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
     "FlockSoundness.Discharge.Layout.keyRowsEnc_enc",
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -10513,7 +10565,7 @@
    ]
   },
   "FlockSoundness.Discharge.Layout.KeyProg": {
-   "digest": "788798107beb19e6b3721f4d107868aba086a81c25c8161171a9a80abb71e713",
+   "digest": "c70fef51fcd421ca2c9aad84374b4a6cc7249faf6170db9ebf989ae6bbb22012",
    "definitions": {
     "FlockSoundness.Discharge.Layout.KeysRow": "3b78a062498400e3eb6febfd902e5c8e6bdcbc2b6eae3e03d6bbacd62dcef27a",
     "FlockSoundness.Discharge.Layout.RowKey": "03e60f683ad2f743a10c77afe4d70fbd8925c54b7c2f47aa08fc60cae7ce89a4",
@@ -10526,7 +10578,7 @@
     "FlockSoundness.Discharge.Layout.keyReaders": "05dd4f344080cccb5ea0719368058adb71ab85374f0739fc621082de448d0387",
     "FlockSoundness.Discharge.Layout.keyRowAddr": "317f8cfa86de99d69c6495396dabb7a12e2c95d2d5b93be8d294f71029496484",
     "FlockSoundness.Discharge.Layout.keyRowOf": "c802517bd184f5fb01df5d24df8bc0d54d8c01a5d3d4ce8059ddef35f0887167",
-    "FlockSoundness.Discharge.Layout.keyRows": "3cad111039b3ce3ee0e3b0eda7f492c840b37b6f10980492c1c8d21a75661ce8",
+    "FlockSoundness.Discharge.Layout.keyRows": "99f24f9784af2639b362858b8f2781e188cc9ffd60421546c77390e4885dbc58",
     "FlockSoundness.Discharge.Layout.keySaltAddr": "b29d192ea94b2160300c1002d0e7fc0f9fdc1bf4a3a40a2bb21a4ac4835bb728",
     "FlockSoundness.Discharge.Layout.oneG": "dc3395f222bd201bb36d1ccc48e0af0ab475a6f18feecebfb33aca8c5d9a2c8c",
     "FlockSoundness.Discharge.Layout.zeroG": "45cb2aadfda5f30a87d0b37e244c49f2c310b13a1bc529bc667b0d18188fd3ca"
@@ -10535,6 +10587,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -10542,14 +10595,15 @@
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
     "FlockSoundness.Discharge.Layout.keysRow_of_parse",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate"
    ]
   },
   "FlockSoundness.Discharge.Layout.Keyed": {
-   "digest": "92d02198810b23baf46c86b6b13af8b83e0ce92c32bc151f7e3c81ca9fa556a3",
+   "digest": "cb4602ab0712b18200246c56a9cd7fea5cd69406afadc71a0370c682404de0eb",
    "definitions": {
     "FlockSoundness.Discharge.Layout.keyedLayout": "b984e14c15b1d247c14ff1add74829d09db95e427fd739deddf6fe825dcd85b3",
-    "FlockSoundness.Discharge.Layout.keyedRows": "58423660c89bb015ed39da63092ccbc92077ba646f69fe9597404ddf8a2fbe68"
+    "FlockSoundness.Discharge.Layout.keyedRows": "1df50dd6fe3bab2abf6c53e303c62fbed5484aeb27533200d803e6eeb16fc8f7"
    },
    "pins": ["FlockSoundness.Discharge.Layout.keyedRows_enc"]
   },
@@ -10585,11 +10639,11 @@
    ]
   },
   "FlockSoundness.Discharge.Layout.OutPin": {
-   "digest": "c5bcaf8e9a928c15806ed98d873a8eaca3e89b5c2dfecb1efab6d5151d0f2221",
+   "digest": "c82e8d393714ee6c563fa7cdb4f19074145e49e1920b2a565441401203daa3de",
    "definitions": {
     "FlockSoundness.Discharge.Layout.OutColAt": "e2ee1907bdbd13dcf09591550a6c8345788f0245f4fde085da07f4f10a38d506",
     "FlockSoundness.Discharge.Layout.OutsOut": "46d9b3deb075b2a12027bbb8df617514336e0f11b35b7d15cc897bfe147f8674",
-    "FlockSoundness.Discharge.Layout.keyRowsOut": "5718e512caeca5617bafb793c22bc3954ae49866e17ea789bdef74fc227faf0a",
+    "FlockSoundness.Discharge.Layout.keyRowsOut": "95dee7de4d46d7d00ce6f9641b925c5f6b08049cad9a4c6d3777654ff13cc6ca",
     "FlockSoundness.Discharge.Layout.outBitOf": "bb9868ef26945a4ac6adf48e750e5930072359add9b174ad04f3860c7a6bf745",
     "FlockSoundness.Discharge.Layout.outCol": "86fc998a57230246af0d50b259b54cd95f6a0bdd117d476c29ae9115bcf4e6b7",
     "FlockSoundness.Discharge.Layout.outDecode": "c4dbee414c1a0ca04e2c535b37da890ca4cc21dba1ef3eeddb8ed2c731249d38"
@@ -10598,7 +10652,8 @@
     "FlockSoundness.Discharge.Layout.keyProg_hout",
     "FlockSoundness.Discharge.Layout.keyRowsEnc_enc",
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
-    "FlockSoundness.Discharge.Layout.outDecode_of"
+    "FlockSoundness.Discharge.Layout.outDecode_of",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf"
    ]
   },
   "FlockSoundness.Discharge.Layout.OutRegion": {
@@ -10631,6 +10686,13 @@
     "FlockSoundness.Discharge.Layout.OutShape": "5b90b91badc60f82f214b40ba7a209d5377724161f053152ad1db1dd27cd16f5"
    },
    "pins": ["FlockSoundness.Discharge.Layout.outShape_of_parse"]
+  },
+  "FlockSoundness.Discharge.Layout.Outs": {
+   "digest": "e7c66a98de67705b7267c9dd7e31b4003170303cb5b81c35a5629a866355922d",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.outsOf": "a02cb0e26ff57e1a4ef33847605dee6eadf1e5c8aba2f01cf2ea063314801bd4"
+   },
+   "pins": ["FlockSoundness.Discharge.Layout.outsOut_outsOf"]
   },
   "FlockSoundness.Discharge.Layout.Pins": {
    "digest": "4f000c2727ad4347b5d10fb615e18860a1d72747ee0c76a1c87fbafbda129b81",
@@ -10696,13 +10758,13 @@
    ]
   },
   "FlockSoundness.Discharge.Layout.RowEnc": {
-   "digest": "d40e1cc6ec0b6b924740c6eca0ac8741d9235a952ea1b2fb06290ca6c87e6f95",
+   "digest": "bc29003b6d1f9bbacedbacb7650a0f98139f55181d2be1618472ef3c7134f0f1",
    "definitions": {
     "FlockSoundness.Discharge.Layout.BitVal.get": "9cbbb70943f500c5fbfef6b3319e4de43daff10fc0abcce8e9c4daa4b576476a",
     "FlockSoundness.Discharge.Layout.RowShaped": "69e03f7c1a9bf4eec50b6eaed0b5fd92ef89c1d5414338763556a8ab74aa67f2",
     "FlockSoundness.Discharge.Layout.bitCode": "f4502efc812d495271b25b0b2a5550fa373942b0f9919b806c12f967620ef1e7",
     "FlockSoundness.Discharge.Layout.instDecidablePredBitValRowShaped": "b50e1802367682e3a3678f678ed54a5f1733bf8f37554a0fc6cc1f44add962c2",
-    "FlockSoundness.Discharge.Layout.keyRowsEnc": "781dbf794570d8cf7c981ada6aa7f08eafe836be368d08ce250191747494dccb",
+    "FlockSoundness.Discharge.Layout.keyRowsEnc": "40cfa2f946287c65a015bcd31cbcbe2af108194fe6404cec25a308086dc26000",
     "FlockSoundness.Discharge.Layout.rowBytes": "ee7f0a2607b3c428fb7263db6dbe66426d961adf637e785210719d783800b417",
     "FlockSoundness.Discharge.Layout.rowEnc": "fb3bf83523887d88c2b52811e95b722cd80034e5cd142c09f9bc27a49bd56834"
    },
@@ -10746,12 +10808,14 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
     "FlockSoundness.Discharge.Layout.keyRowsEnc_enc",
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -10798,6 +10862,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -10806,6 +10871,7 @@
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
     "FlockSoundness.Discharge.Layout.keysRow_of_parse",
     "FlockSoundness.Discharge.Layout.out_site",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
@@ -10871,12 +10937,14 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
     "FlockSoundness.Discharge.Layout.keyRowsEnc_enc",
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -11096,6 +11164,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -11103,6 +11172,7 @@
     "FlockSoundness.Discharge.Layout.keyedRows_enc",
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
     "FlockSoundness.Discharge.Layout.keysRow_of_parse",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -11224,6 +11294,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -11237,6 +11308,7 @@
     "FlockSoundness.Discharge.Layout.out_drawn",
     "FlockSoundness.Discharge.Layout.out_pinned",
     "FlockSoundness.Discharge.Layout.out_site",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Layout.stackPlace_val_comp",
     "FlockSoundness.Discharge.Layout.stackRow_input",
@@ -11307,6 +11379,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -11315,6 +11388,7 @@
     "FlockSoundness.Discharge.Layout.keysRow_keyProg",
     "FlockSoundness.Discharge.Layout.keysRow_of_parse",
     "FlockSoundness.Discharge.Layout.msgCol_lt_of_parse",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Layout.starts_find",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
@@ -12195,6 +12269,7 @@
     "FlockSoundness.Discharge.Layout.bc_site_of",
     "FlockSoundness.Discharge.Layout.block_gateAt",
     "FlockSoundness.Discharge.Layout.col_val_comp",
+    "FlockSoundness.Discharge.Layout.computed_committed_output",
     "FlockSoundness.Discharge.Layout.copy_site",
     "FlockSoundness.Discharge.Layout.decode_row_of_cols",
     "FlockSoundness.Discharge.Layout.exists_read_of_io",
@@ -12204,6 +12279,7 @@
     "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
     "FlockSoundness.Discharge.Layout.keyProg_copies",
     "FlockSoundness.Discharge.Layout.keyProg_hout",
+    "FlockSoundness.Discharge.Layout.keyProg_reads",
     "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Layout.keyRowOf_wire",
     "FlockSoundness.Discharge.Layout.keyRow_enc",
@@ -12219,6 +12295,7 @@
     "FlockSoundness.Discharge.Layout.out_drawn",
     "FlockSoundness.Discharge.Layout.out_pinned",
     "FlockSoundness.Discharge.Layout.out_site",
+    "FlockSoundness.Discharge.Layout.outsOut_outsOf",
     "FlockSoundness.Discharge.Layout.region_read",
     "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Layout.stackPlace_val_comp",
