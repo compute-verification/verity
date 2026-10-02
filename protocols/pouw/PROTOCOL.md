@@ -498,7 +498,8 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   - The noise lines and G are anchored inputs, as in `pc4`.
   - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
     partition computes each value in exactly one unit.
-  - Not in it yet: the debit and the cap, and the hiding leaves of A's rows, B's rows and the tile's words.
+  - Not in it yet: the debit and the cap, and the hiding leaves of A's rows, B's rows and the tile's words. Until those
+    land, Pearl-C's runs are checked by its reference audit, a development shortcut that opens rows.
 
 ## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 
@@ -692,7 +693,8 @@ useful    U/(α_A·α_B), glue
   - The Programs evaluate to the pinned ``test-16-nvfp4`` vector, and every partition computes each value in exactly one
     unit.
   - Not in it yet: the debit and the cap, R1, D-24, and the hiding leaves of A's rows, B's rows and the tile's words.
-    Until those land, the replay above stays the check.
+    Until those land, runs are checked by the replay above, a development shortcut that opens rows, and every report
+    says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
