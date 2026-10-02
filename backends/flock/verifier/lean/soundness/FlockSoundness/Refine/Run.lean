@@ -9,9 +9,10 @@ is one: `g`, played with the prover's messages `ms` and the verifier's coins `cs
 
 * **Messages** are typed: each entry of `ms` is a type and a value of it, and a send node takes the next entry only when
   its type is the node's.
-* **Coins** are arrays of words, as a coin server records them. A coin node of type `Fin n → F` takes the next array
-  when it has `n` words and reads word `i` through `ι` as the coin's `i`-th value; a node of type `F` takes an array of
-  one word. The refinement fixes `ι` to the executable's field embedding, so the coins are the record's.
+* **Coins** are arrays of words, as a coin server records them. A coin node of type `Fin n → F` with `n ≠ 1` takes the
+  next array when it has `n` words and reads word `i` through `ι` as the coin's `i`-th value; a node of type `F` takes
+  an array of one word. So a run's coin step is determined by its array: one word is always the scalar. The refinement
+  fixes `ι` to the executable's field embedding, so the coins are the record's.
 
 On the executable's side, `consumed rs k k'` is the coins of rounds `k, …, k' − 1` of a replay transcript (PROTOCOL.md
 §6), and `RoundsWF` says every round's coin array has the round's coin count, as the record's check S12 ensures.
@@ -30,7 +31,7 @@ inductive Plays : {α : Type} → Game α → List Msg → List (Array W) → α
   | send {α M : Type} {k : M → Game α} (m : M) {ms : List Msg} {cs : List (Array W)} {a : α} :
       Plays (k m) ms cs a → Plays (.send M k) (⟨M, m⟩ :: ms) cs a
   | coinVec {α : Type} {n : ℕ} {iF : Fintype (Fin n → F)} {iN : Nonempty (Fin n → F)} {k : (Fin n → F) → Game α}
-      (c : Array W) (hc : c.size = n) {ms : List Msg} {cs : List (Array W)} {a : α} :
+      (c : Array W) (hc : c.size = n) (h1 : n ≠ 1) {ms : List Msg} {cs : List (Array W)} {a : α} :
       Plays (k fun i => ι c[i.val]!) ms cs a → Plays (@Game.coin α (Fin n → F) iF iN k) ms (c :: cs) a
   | coinOne {α : Type} {iF : Fintype F} {iN : Nonempty F} {k : F → Game α}
       (c : Array W) (hc : c.size = 1) {ms : List Msg} {cs : List (Array W)} {a : α} :

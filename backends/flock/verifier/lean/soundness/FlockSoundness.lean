@@ -152,4 +152,5 @@ import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
 import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.Discharge.ZkLink
+import FlockSoundness.Discharge.PlaysCoin
 import FlockSoundness.ZK.GK
