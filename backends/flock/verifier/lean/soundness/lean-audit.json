@@ -3121,6 +3121,31 @@
    "assumptions": [],
    "type_hash": "1c549d3d7068aea0808062d992dafd5af35c5af09e92a8f07abe1e7a75b95783"
   },
+  "FlockSoundness.Discharge.Exec.execOS_draw_card": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.execOS_draw_card {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
+    "  (S : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) (K pop : Nat) {Ω : Type} [Fintype Ω]",
+    "  [Nonempty Ω] {L : Fin m → Nat} (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) {d : Flock.Draw.UnitDraw}",
+    "  (h : Eq (FlockSoundness.Audit.Law.runOS (t ω) (Flock.Draw.Law.stratified K (Array.ofFn S)) pop) (Option.some d)) :",
+    "  Eq ((FlockSoundness.Audit.Law.execOS t (Flock.Draw.Law.stratified K (Array.ofFn S)) pop).draw ω).card",
+    "    (Finset.univ.sum fun s => k s)"
+   ],
+   "assumptions": [],
+   "type_hash": "6c929e64838eece7a75ecdd51f1091e9803024fbe65a262d7fead71e162e18c5"
+  },
+  "FlockSoundness.Discharge.Exec.execOS_draw_card_or": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
+    "  (S : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) (K pop : Nat) {Ω : Type} [Fintype Ω]",
+    "  [Nonempty Ω] {L : Fin m → Nat} (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) :",
+    "  Or",
+    "    (Eq ((FlockSoundness.Audit.Law.execOS t (Flock.Draw.Law.stratified K (Array.ofFn S)) pop).draw ω).card",
+    "      (Finset.univ.sum fun s => k s))",
+    "    (Eq ((FlockSoundness.Audit.Law.execOS t (Flock.Draw.Law.stratified K (Array.ofFn S)) pop).draw ω) Finset.univ)"
+   ],
+   "assumptions": [],
+   "type_hash": "fe4c2afd8a2616d0ed82235a9d038f778ab1075b05cd98e3b29c01c4ac5a8f50"
+  },
   "FlockSoundness.Discharge.Exec.execRefines_on": {
    "signature": [
     "FlockSoundness.Discharge.Exec.execRefines_on {D Sl : Type} [Nonempty D] [Inhabited D] [Inhabited Sl] {mPts n : Nat}",
@@ -3608,6 +3633,59 @@
    "assumptions": [],
    "type_hash": "2a013f44e2ebb502c4cea55654682f610054c79aa8a10f135589002321b767e5"
   },
+  "FlockSoundness.Discharge.Exec.setupH_mPts_execOS": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS {n m : Nat} {tags : Flock.Tags} {cf pf : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {partition : Option Lean.Json}",
+    "  {program : Option ByteArray} {st : Flock.Stmt} {c : Flock.Circuit}",
+    "  (hc :",
+    "    Eq (ite (Eq tags.typed Bool.true) (Flock.HmRow.parseTyped tags cf tables) (Flock.HmRow.parse tags cf tables))",
+    "      (Except.ok c))",
+    "  (σ : Fin n → Fin m) (k : Fin m → Nat) (S : Fin m → Flock.Draw.Stratum)",
+    "  (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) (K pop : Nat) {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin m → Nat}",
+    "  (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) {d : Flock.Draw.UnitDraw}",
+    "  (hrun : Eq (FlockSoundness.Audit.Law.runOS (t ω) (Flock.Draw.Law.stratified K (Array.ofFn S)) pop) (Option.some d))",
+    "  (dj : Finset (Fin n) → Lean.Json)",
+    "  (hdj :",
+    "    ∀ (B : Finset (Fin n)) (D : Flock.Draw.UnitDraw),",
+    "      Eq (Flock.Draw.UnitDraw.ofJson (dj B)) (Except.ok D) → Eq D.proved.size B.card)",
+    "  (h :",
+    "    Eq",
+    "      (Flock.Stmt.setupH tags cf pf coins tables",
+    "        (Option.some (dj ((FlockSoundness.Audit.Law.execOS t (Flock.Draw.Law.stratified K (Array.ofFn S)) pop).draw ω)))",
+    "        partition program)",
+    "      (Except.ok st)) :",
+    "  Eq st.mPts (FlockSoundness.Discharge.Exec.mPtsOf c.g (Finset.univ.sum fun s => k s))"
+   ],
+   "assumptions": [],
+   "type_hash": "4ca627997a67310ad4e91a8bf00730e281d08057ebb339be2c91307c3747d469"
+  },
+  "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or {n m : Nat} {tags : Flock.Tags} {cf pf : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {partition : Option Lean.Json}",
+    "  {program : Option ByteArray} {st : Flock.Stmt} {c : Flock.Circuit}",
+    "  (hc :",
+    "    Eq (ite (Eq tags.typed Bool.true) (Flock.HmRow.parseTyped tags cf tables) (Flock.HmRow.parse tags cf tables))",
+    "      (Except.ok c))",
+    "  (σ : Fin n → Fin m) (k : Fin m → Nat) (S : Fin m → Flock.Draw.Stratum)",
+    "  (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) (K pop : Nat) {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin m → Nat}",
+    "  (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ω : Ω) (dj : Finset (Fin n) → Lean.Json)",
+    "  (hdj :",
+    "    ∀ (B : Finset (Fin n)) (D : Flock.Draw.UnitDraw),",
+    "      Eq (Flock.Draw.UnitDraw.ofJson (dj B)) (Except.ok D) → Eq D.proved.size B.card)",
+    "  (h :",
+    "    Eq",
+    "      (Flock.Stmt.setupH tags cf pf coins tables",
+    "        (Option.some (dj ((FlockSoundness.Audit.Law.execOS t (Flock.Draw.Law.stratified K (Array.ofFn S)) pop).draw ω)))",
+    "        partition program)",
+    "      (Except.ok st)) :",
+    "  Or (Eq st.mPts (FlockSoundness.Discharge.Exec.mPtsOf c.g (Finset.univ.sum fun s => k s)))",
+    "    (Eq st.mPts (FlockSoundness.Discharge.Exec.mPtsOf c.g n))"
+   ],
+   "assumptions": [],
+   "type_hash": "f6848a201baf0ae56f8be1f39c02acadfd0acd1da19ec7450e56d36575ae3bb8"
+  },
   "FlockSoundness.Discharge.Exec.setupH_mPts_of_proved": {
    "signature": [
     "FlockSoundness.Discharge.Exec.setupH_mPts_of_proved {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
@@ -3671,6 +3749,49 @@
    ],
    "assumptions": [],
    "type_hash": "502f2260a03dfaa138c549817399f3af2a851f8c99914cd499a66239bea78c4f"
+  },
+  "FlockSoundness.Discharge.Exec.stratified_card": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.stratified_card {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
+    "  (S : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) {streams : Array ByteArray}",
+    "  {D : Array Nat} (h : Eq (Flock.Draw.stratified (Array.ofFn S) streams) (Option.some D)) :",
+    "  Eq (Finset.filter (fun u => Array.instMembership.mem D u.val) Finset.univ).card (Finset.univ.sum fun s => k s)"
+   ],
+   "assumptions": [],
+   "type_hash": "7980759ec22b6d268afb7760d03dbe5fdf144ea5eb97189108bfa1947f03ea69"
+  },
+  "FlockSoundness.Discharge.Exec.stratified_sub": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.stratified_sub (strata : Array Flock.Draw.Stratum) (streams : Array ByteArray)",
+    "  (D : Array Nat) (h : Eq (Flock.Draw.stratified strata streams) (Option.some D)) (x : Nat) :",
+    "  Array.instMembership.mem D x →",
+    "    Exists fun i =>",
+    "      And (instLTNat.lt i strata.size)",
+    "        (Exists fun li =>",
+    "          And",
+    "            (Eq",
+    "              (Flock.Draw.subset (Array.instGetElem?NatLtSize.getElem! strata i).k",
+    "                (Array.instGetElem?NatLtSize.getElem! strata i).size (streams.getD i ByteArray.empty))",
+    "              (Option.some li))",
+    "            (Exists fun j =>",
+    "              And (Array.instMembership.mem li j) (Eq ((Array.instGetElem?NatLtSize.getElem! strata i).unit j) x)))"
+   ],
+   "assumptions": [],
+   "type_hash": "79ec524ea31b3536acd0296a6f44a9500afaa6c285190c592dd38f6c906a5a9d"
+  },
+  "FlockSoundness.Discharge.Exec.subset_spec": {
+   "signature": [
+    "FlockSoundness.Discharge.Exec.subset_spec {k n : Nat} {src : ByteArray} {D : Array Nat}",
+    "  (h : Eq (Flock.Draw.subset k n src) (Option.some D)) :",
+    "  Exists fun π =>",
+    "    And (instLENat.le k n)",
+    "      (And (∀ (t : Nat), instLTNat.lt t n → instLTNat.lt (EquivLike.toFunLike.coe π t) n)",
+    "        (∀ (x : Nat),",
+    "          Iff (Array.instMembership.mem D x)",
+    "            (Exists fun i => And (instLTNat.lt i k) (Eq (EquivLike.toFunLike.coe π i) x))))"
+   ],
+   "assumptions": [],
+   "type_hash": "4925798ea75be993f147a68915f49e09bebe9adc5ef83b239db5c8c59d5e6a46"
   },
   "FlockSoundness.Discharge.Exec.table_sound_compiledL": {
    "signature": [
@@ -7545,9 +7666,16 @@
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Discharge.Exec.drawn_n",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_drawn",
     "FlockSoundness.Discharge.Exec.setupH_mPts_eq",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_of_proved",
+    "FlockSoundness.Discharge.Exec.stratified_card",
+    "FlockSoundness.Discharge.Exec.stratified_sub",
+    "FlockSoundness.Discharge.Exec.subset_spec",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
     "FlockSoundness.Prog.flock_headline_exec",
@@ -9113,11 +9241,15 @@
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
     "FlockSoundness.Discharge.Exec.decodesOn_of_all",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
     "FlockSoundness.Discharge.Exec.execRefines_on",
     "FlockSoundness.Discharge.Exec.execRefines_one",
     "FlockSoundness.Discharge.Exec.flock_batched_linkSoundEL",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.ksAvgBE_le_strictL",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
@@ -9288,6 +9420,11 @@
     "FlockSoundness.Audit.extraction_audit_work_rest",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
+    "FlockSoundness.Discharge.Exec.stratified_card",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
     "FlockSoundness.Prog.flock_headline_exec",
@@ -10035,6 +10172,8 @@
    "pins": [
     "FlockSoundness.Discharge.Exec.setupH_facts",
     "FlockSoundness.Discharge.Exec.setupH_mPts_drawn",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Discharge.Exec.setupH_mPts_of_proved"
    ]
   },
@@ -10266,6 +10405,10 @@
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
     "FlockSoundness.Prog.flock_headline_exec",
@@ -10291,6 +10434,10 @@
     "FlockSoundness.Audit.Law.execOS_escape_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
     "FlockSoundness.Prog.flock_headline_exec",
@@ -10316,6 +10463,11 @@
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card",
+    "FlockSoundness.Discharge.Exec.execOS_draw_card_or",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS",
+    "FlockSoundness.Discharge.Exec.setupH_mPts_execOS_or",
+    "FlockSoundness.Discharge.Exec.stratified_card",
     "FlockSoundness.Prog.flock_headline",
     "FlockSoundness.Prog.flock_headline_L",
     "FlockSoundness.Prog.flock_headline_exec",
