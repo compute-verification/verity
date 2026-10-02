@@ -9,3 +9,4 @@ import FlockSoundness.Discharge.Hm.Hash
 import FlockSoundness.Discharge.Hm.Salt
 import FlockSoundness.Discharge.Hm.Slot
 import FlockSoundness.Discharge.Hm.Mask
+import FlockSoundness.Discharge.Hm.Commit
