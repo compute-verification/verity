@@ -170,6 +170,13 @@
   }
  },
  "pins": {
+  "FlockSoundness.Audit.twoStage_compute": {},
+  "FlockSoundness.Audit.effEscape_bernoulli_subset_le": {},
+  "FlockSoundness.Audit.twoStage_wrong_set_le": {},
+  "FlockSoundness.Audit.twoStage_compute_closed": {},
+  "FlockSoundness.Audit.Partition.Refines.oracle₂_compute": {},
+  "FlockSoundness.Audit.Partition.flock_two_stage_compute": {},
+  "FlockSoundness.Audit.Partition.flock_two_stage_compute_closed": {},
   "FlockSoundness.Audit.InfluenceWitness.A.accepts": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
