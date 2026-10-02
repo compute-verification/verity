@@ -22,9 +22,11 @@ prover randomness independent of everything else. The target notion is VEIL's sp
 the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11), statistical
 given the common-reference-string step and the assumptions of §7. Malicious-verifier zero knowledge is M2's: the coin
 commitment and a single rewind (§9). M1's hiding claims are proved in Lean for the protocol as Lean defines it; that
-`flock-circuit --zk` computes that protocol is open (§7, "What Lean proves"), and so is §9's simulator theorem. The first
-red-team review (red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives each rep its own pair,
-and the re-review grants M1 with conditions. The proof class stays `NON_ZK_PROOF` until §7's gaps close.
+`flock-circuit --zk` computes that protocol is open (§7, "What Lean proves"), and so is §9's simulator theorem.
+red-team-m1-zk granted M1 (PR #123). Its first review found that the two reps shared level 0's extra lanes, and §7 now
+gives each rep its own pair. Its re-review granted with conditions at `8d621454`
+(`note:20260927T1011Z-handoff-from-red-team-m1-zk`), then granted at `fe35d67d`
+(`note:20260927T1400Z-handoff-from-red-team-m1-zk`). The proof class stays `NON_ZK_PROOF` until §7's gaps close.
 
 The `--zk` identity carries two stale strings: `hooks.stage` is `m2-prototype (committed verifier coins, CPU)` though the
 device proves too, and `hashes.coin_derivation` is `sha256 (verity.randomness)` though coin-tree v2 derives no coin (§9).
@@ -62,8 +64,9 @@ Finish                                     → Verdict
 - Rep 1's stream opens after rep 0's last round, on the CPU and on the device; no stream forks under `--zk`.
 - `Commit` and `Link` come from table 0 rep 0's level-0 hook, since the verifier refuses every round before `Link` (R5).
   Σ is `session_sigma`. `publics` is empty: the verifier reads the public words from its own file. `Link` is `y = 0` for
-  every table (nothing is prover-supplied), and the verifier refuses any other `y`. Rep 1's level-0 root must be rep 0's,
-  and a later table's reps must bind the root it committed, or the prover stops (C1's root check, §9).
+  every table (nothing is prover-supplied), and the verdict on each proof refuses any other `y` (`verify_zk`). Rep 1's
+  level-0 root must be rep 0's, and a later table's reps must bind the root it committed, or the prover stops (C1's root
+  check, §9).
 - A round's `content` is every frame the rep's challenger absorbed since its previous squeeze, ending with the squeeze's
   header; a stream's first round begins with its domain's frame. A frame is a 16-byte header `[op][kind][0; 6][u64le len]`
   and its payload, zero-padded to 16 bytes: `DOMAIN 01`, `LABEL 02`, `BYTES 05` (len in bytes); `OBSERVE 03` (kind `01`
@@ -106,8 +109,9 @@ proof bytes         bincode (Commitment, R1csProofLigerito with the masked field
 
 `final_c'` is sent only in the proof: upstream never absorbs it. The claim order in the opening is ab, then c, then the
 region claims (region-major, then the two link points). Every grinding nonce is the constant 0, both the `bytes nonce`
-above (`u64le(0)`) and the proof's nonce fields: live coins need no grinding (`LiveChallenger::grind_pow`, the device's
-`Framer`).
+above (`u64le(0)`) and the proof's nonce fields: live coins need no grinding. `LiveChallenger::grind_pow` and `Framer`'s
+(the device path's host side, as the CPU prover runs it under `FC_ZK_FRAMED`) absorb and return 0, and the device's
+proofs are the CPU prover's byte for byte (selftest `gpu_proofs_match_cpu`).
 
 ## 2. The pads
 
@@ -389,13 +393,22 @@ Negatives, each rejected on both reps (RoPE CPU selftest):
 
 The named assumptions are `Assumptions.Hm96Hiding` (hm96 hiding, `δ₁` per leaf) and `Assumptions.PadNonvanishing`
 (`X_L + c ≠ 0` on level 0's domain, checked on upstream's NTT). **So M1 is statistical special honest-verifier zero
-knowledge for one session, for the protocol as Lean defines it**, with distance about `N·2^-192` (claim ids
+knowledge for one session, for the protocol as Lean defines it**, with distance about `N·2^-192` (gap 5; claim ids
 `statistical-hiding`, `common-reference-string`, `hash-derived-key`). That the same holds for `flock-circuit --zk` rests
 on what is open:
 - **gap 3, code to Lean.** No Lean reference prover computes this file's messages, and no differential test ties one to
-  `flock-circuit --zk` on the CPU or the device. The theorems' hypotheses are not discharged for the code: `hreg` (H_reg,
-  §6), `InnerHolds` (the honest pads satisfy the inner proof), the tables' disjoint randomness (§2), `PadOnto`'s
-  `nS ≤ t_pad` (item 6) and `PadsOnto`'s `nQ ≤ 192` (168 queries, §5).
+  `flock-circuit --zk` on the CPU or the device. None of the theorems' hypotheses is discharged for the code:
+  - `hreg` (H_reg, §6) and `hinner : InnerHolds` (the honest pads satisfy the inner proof);
+  - the refusals as Lean states them: `hrank : T.Rank` (the mask slot's rank, §6), `hW` (`W^r` bijective: `ρ^r_0, ρ^r_1`
+    independent over F128, item 3) and `hβ` (`β ≠ 0`, §5). That the code's `mask_rank_ok`, `zk::rho_independent` and
+    `β = 0` refusals are these is not shown;
+  - the tables' disjoint randomness (§2);
+  - level 0's padding (`padOnto_M1`): `cols ≤ 40` and `t_pad ≤ 2^cols`, where `2^cols = L` is a lane's rows (`zk_queries0`
+    refuses `t_pad > L`; nothing checks `log₂ L ≤ 40`), `nS ≤ t_pad` (item 6), and the opened positions distinct and
+    inside the codeword;
+  - the inner proof's padding (`padsOnto_monomial`): distinct nonzero points (the code's are `1, 2, ..., N`, `zk_veil::Code`)
+    and `nQ ≤ 192` (168 queries, §5);
+  - that the code's level-0 and inner codes are the ones those two theorems take (`hA`, `hGp`, `hCp`).
 - **gap 4, the randomness:** ChaCha20 output as uniform (above) is an assumption, not yet a named `Prop`.
 - **gap 5, `δ₁`'s value:** `Hm96Hiding`'s `δ₁`, and so the `N·2^-192` figure, comes from hm96 §3 and the
   common-reference-string step under `hash-derived-key`, both on paper.
@@ -452,8 +465,6 @@ This is attribution, not hiding: that a mask is applied, not that it hides. Hidi
 the statistics' relation classes.
 
 **What M1 still needs:**
-- **The red team's re-review** of §4–§7 after its first review (F1: the reps' shared extra lanes, fixed in §7; F2: level
-  0's query count, §7 item 6; F5: the prover's own lincheck fold is an argument of `replay`, never read from a proof).
 - **Cost.** Measured on a 4-core VM, per rep, from loopback sessions (median of three timed runs):
 
   | | M0 prove | M1 prove | upstream under M1 | proof per rep |
@@ -506,9 +517,9 @@ the code computes the protocol as Lean defines it is gap 3 (§7).
   used (`CoinTree.checkFresh`, the verifier's `PROTOCOL.md` §7.4). *Binding* is the one assumption M2's zero knowledge
   adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` (`cr/sha-512`). It holds whatever key and salts V* chooses (hm96 §4
   holds for every key), and a collision found before ν existed opens nothing. Lean proves that two openings of one
-  position give a collision under ν (`coin_opening_binding_keyed`). That theorem gives the collision's existence, and
-  finding it is the extraction, gap 2. Against quantum verifiers the commitment must be collapse-binding
-  (ASSUMPTIONS.md §6).
+  position, with equally many coins that disagree on one, give a collision under ν (`coin_opening_binding_keyed`). That
+  theorem gives the collision's existence, and finding it is the extraction, gap 2. Against quantum verifiers the
+  commitment must be collapse-binding (ASSUMPTIONS.md §6).
 
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
