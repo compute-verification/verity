@@ -814,10 +814,19 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
                        ("gpus=1 max_min=300 project=verity", 30), ("gpus=0 max_min=300 project=pous", 30)):
         job.write_text(f"#!/usr/bin/env bash\n# fill: owner=t {head}\n")
         assert fr.header(job)["max_min"] == want, head
-    monkeypatch.setattr(fr, "MAX_MIN_EXCEPTIONS", {"gate.sh": 60})
-    gate = tmp_path / "gate.sh"
-    gate.write_text("# fill: owner=t gpus=1 max_min=90 project=verity\n")
-    assert fr.header(gate)["max_min"] == 60
+    (tmp_path / "fill").mkdir()
+    (tmp_path / "fill" / "max-min").write_text("# glob minutes until\nsoak-* 540 2026-10-02T14:45Z  # infra, thread 1\n"
+                                               "gate.sh 60 2026-10-02T14:45Z\nbroken.sh sixty 2026-10-02T14:45Z\n")
+    gate, soak, other = tmp_path / "gate.sh", tmp_path / "soak-a.sh", tmp_path / "broken.sh"
+    for p in (gate, soak, other):
+        p.write_text("# fill: owner=t gpus=1 max_min=900 project=pous\n")
+    at = datetime.datetime(2026, 10, 2, 6, 30, tzinfo=datetime.timezone.utc).timestamp()
+    assert fr.header(gate, at)["max_min"] == 60
+    assert fr.header(soak, at)["max_min"] == 495                        # never past the line's until: 06:30 + 495 min = 14:45
+    assert fr.header(other, at)["max_min"] == 30                        # a malformed line grants nothing
+    late = datetime.datetime(2026, 10, 2, 14, 44, 30, tzinfo=datetime.timezone.utc).timestamp()
+    assert fr.header(soak, late)["max_min"] == 30                       # under a minute left: the exception is over
+    assert fr.header(soak, late + 3600)["max_min"] == 30
     calls = []
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
     assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
