@@ -2,7 +2,8 @@
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
 `verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
 numerator scaling), the sampler lane's compare, selects and integer add, and PoUW's row units (`verity_pouw.circuit.pc4`: the
-NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and). Each is its IR primitive bit for bit
+NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and; `pc8`: the exact sums of squares; `leaves`: the
+byte packing). Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
@@ -22,7 +23,7 @@ from verity.ml.tc.cast import E2M1_UP
 from . import fp
 from . import gf2
 from . import unit_fp4
-from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, const, const_bits, lzc, maj, multiply, mux, or_reduce, sub
+from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const, const_bits, lzc, maj, multiply, mux, or_reduce, sub
 
 #: table name -> index bits (the MUFU tables' sha256 is ir_lower.TABLES[name], the others' TABLE_SHA256[name])
 TABLE_BITS = {"rsq": 24, "sqrt": 24, "rcp": 23, "ex2": 23, "tanh_mufu": 27, "tanh_rn": 27, "gelu_tanh_bf16": 16}
@@ -627,6 +628,82 @@ def pouw_f32_sqrt_rn(C, a):
     return mux(C, OR(C, A.nan, C.AND(A.s, NOT(A.zero))), const_bits(QNAN_MUFU, 32), word)
 
 
+# --- Pearl-C's sums of squares (`verity_pouw.circuit.pc8`) and the hiding leaves' byte packing (`verity_pouw.circuit.leaves`) ---
+
+def _square(C, m):
+    """m² at twice m's width: each cross product m_i m_j (i < j) once, at weight i + j + 1, and m_i at 2i, in one carry-save tree."""
+    cols = [[] for _ in range(2 * len(m))]
+    for i, x in enumerate(m):
+        cols[2 * i].append(x)
+        for j in range(i + 1, len(m)):
+            cols[i + j + 1].append(C.AND(x, m[j]))
+    return compress_columns(C, cols)[:2 * len(m)]
+
+
+def _sq300(C, x):
+    """``(m², max(e, 1), e != 0)`` of an F32 word: 2^300 x² = m² 2^(2 max(e, 1)) (`words.sq300`: the sign dropped, exponent 255
+    a normal one)."""
+    nz = or_reduce(C, x[23:31])
+    return _square(C, list(x[:23]) + [nz]), [x[23] ^ NOT(nz)] + list(x[24:31]), nz
+
+
+def pouw_sq_acc(C, acc, x):
+    """``PouwSqAcc_v1``: acc + m² 2^(2 max(e, 1)) mod 2^576, the 48-bit square shifted into place (below 2^558)."""
+    P, s, _ = _sq300(C, x)
+    return add(C, acc, fp.shl(C, P + [ZERO] * 510, [ZERO] + s), width=len(acc))
+
+
+def pouw_sq_ge(C, x, th):
+    """``PouwSqGe_v1``: x's `SQ48` encoding against θ's as unsigned words. 2^300 x² has at most 48 significant bits, so the
+    encoding is exact: a normal x's (2e - 1 + bit 47 of m²) << 48 | m² normalized to 48 bits, a subnormal's m² << 2 (below 2^48)."""
+    P, _, nz = _sq300(C, x)
+    a0 = C.AND(nz, NOT(P[47]))
+    enc = fp.shl(C, P, [a0, NOT(nz)]) + [a0] + sub(C, x[23:31], [a0], 8)[0] + [ZERO] * 7
+    return [NOT(sub(C, enc, th, 64)[1])]
+
+
+def _udiv(C, d, n):
+    """``(floor(d / n), d mod n != 0)`` for n != 0 by non-restoring division: R <- 2R + the next bit of d, less n when R >= 0,
+    else plus n, in two's complement one bit wider than n (R stays in [-n, n)); a final negative R is the remainder less n."""
+    w = len(n) + 1
+    R, q = [ZERO] * w, []
+    for b in reversed(d):
+        s = NOT(R[-1])
+        R = add(C, [b] + R[:-1], [v ^ s for v in n] + [s], cin=s, width=w)
+        q.append(NOT(R[-1]))
+    return q[::-1], or_reduce(C, add(C, R, [C.AND(R[-1], v) for v in n], width=w)[:-1])
+
+
+def _shr_sticky_low(C, x, amt, keep):
+    """``(the low keep bits of x >> amt, OR of the bits shifted out)``, the largest stage first, so that each stage builds only
+    the bits the later ones read; x >> amt must be below 2^keep."""
+    cur, sticky = list(x), ZERO
+    for k in reversed(range(len(amt))):
+        sh, s = 1 << k, amt[k]
+        sticky = OR(C, sticky, C.AND(s, or_reduce(C, cur[:sh])))
+        cur = [cur[j] ^ C.AND(s, cur[j] ^ (cur[j + sh] if j + sh < len(cur) else ZERO)) for j in range(min(len(cur), keep + sh - 1))]
+    return cur[:keep], sticky
+
+
+def pouw_sq_ceil(C, t, n):
+    """``PouwSqCeil_v1``: q = floor(64 t / n) and whether a remainder is left (`_udiv`); θ's significand is q's top 48 bits
+    (q >> E, E = max(bitlen(q) - 48, 0)) plus one when a bit below them or the remainder is set, which can carry out to 2^48:
+    then it is 2^47 under E + 1 (`words.up48`). n = 0 gives every bit set."""
+    q, r_nz = _udiv(C, [ZERO] * 6 + list(t), n)
+    _, lz = lzc(C, [ZERO] * (fp.ceil_pow2(len(q)) - len(q)) + q)
+    E, small = sub(C, const_bits(len(q) - 48, len(lz)), lz, len(lz))
+    E = [C.AND(NOT(small), e) for e in E]
+    top, sticky = _shr_sticky_low(C, q, E, 48)
+    m = add(C, top, [OR(C, sticky, r_nz)], width=48, carry_out=True)
+    enc = m[:47] + [m[47] ^ m[48]] + add(C, E, [m[48]], width=16)
+    n_zero = NOT(or_reduce(C, n))
+    return [OR(C, b, n_zero) for b in enc]
+
+
+def _bswap32(w):
+    return list(w[24:32]) + list(w[16:24]) + list(w[8:16]) + list(w[0:8])
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -697,6 +774,13 @@ PIECES = {
     "PouwF32SqrtRn_v1": pouw_f32_sqrt_rn,
     "PouwETilde_v1": pouw_e_tilde,
     "PouwBf16Neg_v1": lambda C, a: list(a[:15]) + [NOT(a[15])],
+    "PouwSqAcc_v1": pouw_sq_acc,
+    "PouwSqCeil_v1": pouw_sq_ceil,
+    "PouwSqGe_v1": pouw_sq_ge,
+    "PouwBswap32_v1": lambda C, x: _bswap32(x),
+    "PouwPack16x2_v1": lambda C, a, b: _bswap32(list(a) + list(b)),
+    "PouwPack8x4_v1": lambda C, *b: [v for w in reversed(b) for v in w],
+    "PouwPack4x8_v1": lambda C, *c: _bswap32([v for w in c for v in w]),
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}

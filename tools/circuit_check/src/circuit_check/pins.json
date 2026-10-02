@@ -863,11 +863,32 @@
   "PouwBf16Neg_v1": {
    "and": 0
   },
+  "PouwBswap32_v1": {
+   "and": 0
+  },
   "PouwETilde_v1": {
    "and": 112
   },
   "PouwF32SqrtRn_v1": {
    "and": 711
+  },
+  "PouwPack16x2_v1": {
+   "and": 0
+  },
+  "PouwPack4x8_v1": {
+   "and": 0
+  },
+  "PouwPack8x4_v1": {
+   "and": 0
+  },
+  "PouwSqAcc_v1": {
+   "and": 2514
+  },
+  "PouwSqCeil_v1": {
+   "and": 22592
+  },
+  "PouwSqGe_v1": {
+   "and": 727
   },
   "RopeOutAdd_v1": {
    "and": 2998

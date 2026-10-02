@@ -372,6 +372,87 @@ def test_the_sqrt_rn_piece_matches_the_ir():
     assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwF32SqrtRn_v1"], (32,), 32, vecs)) if g != ref(*v)] == []
 
 
+# --- Pearl-C's sums of squares (verity_pouw.circuit.pc8) and the hiding leaves' byte packing (verity_pouw.circuit.leaves) ----
+
+#: (id, operand widths) of the packings into a big-endian half
+POUW_PACK = [("PouwBswap32_v1", (32,)), ("PouwPack16x2_v1", (16, 16)), ("PouwPack8x4_v1", (8,) * 4), ("PouwPack4x8_v1", (4,) * 8)]
+
+
+@pytest.mark.parametrize("name,widths", POUW_PACK, ids=[p[0] for p in POUW_PACK])
+def test_the_byte_packings_are_wiring_and_match_the_ir(name, widths):
+    """A packing commits no AND, so its piece is an affine map of the 32 input bits, which zero and the 32 unit vectors fix;
+    the reference agrees on them, on every value of each operand up to 16 bits with the others random, and on random words."""
+    C = gf2.Circuit()
+    C.output("o", IL.PIECES[name](C, *[C.input(f"i{k}", w) for k, w in enumerate(widths)]))
+    assert C.counts()["ands"] == 0
+    rng = random.Random(47)
+    lo = [sum(widths[:k]) for k in range(len(widths))]
+    vecs = [[(u >> lo[k]) & ((1 << w) - 1) for k, w in enumerate(widths)]
+            for u in [0, *(1 << b for b in range(32)), *(rng.getrandbits(32) for _ in range(2000))]]
+    for k, w in enumerate(widths):
+        if w <= 16:
+            vecs += [[v if j == k else rng.getrandbits(wj) for j, wj in enumerate(widths)] for v in range(1 << w)]
+    ref = _pouw(name).evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
+
+
+def _f32_grid(rng: random.Random, n_random: int) -> list[int]:
+    """Every exponent field of both signs (255 included: the squares decode it as a normal exponent) with the mantissa's edges,
+    the two either side of a significand square's 2^47 (0x3504F3, 0x3504F4), and ``n_random`` random mantissas."""
+    return [(s << 31) | (e << 23) | m for e in range(256) for s in (0, 1)
+            for m in (0, 1, 2, 0x3504F3, 0x3504F4, 0x400000, 0x7FFFFE, 0x7FFFFF, *(rng.getrandbits(23) for _ in range(n_random)))]
+
+
+def test_the_square_comparison_matches_the_ir():
+    """``PouwSqGe``: x over `_f32_grid` (subnormal squares are exact below 2^48, normal ones 48 bits at an exponent), against
+    the encoding of its own square, one either side of it, one exponent field either side, a flipped random bit, 0, all ones
+    and a random encoding."""
+    from verity_pouw.circuit.words import sq300, up48
+
+    rng, M = random.Random(51), (1 << 64) - 1
+    vecs = []
+    for x in _f32_grid(rng, 4):
+        enc = up48(sq300(x))
+        ths = (enc, enc - 1, enc + 1, enc - (1 << 48), enc + (1 << 48), enc ^ (1 << rng.randrange(64)), 0, M, rng.getrandbits(64))
+        vecs += [[x, th & M] for th in ths]
+    ref = _pouw("PouwSqGe_v1").evaluate
+    want = [ref(*v) for v in vecs]
+    assert 0 < sum(want) < len(want)
+    assert [(v, g, w) for v, g, w in zip(vecs, run_piece(IL.PIECES["PouwSqGe_v1"], (32, 64), 1, vecs), want) if g != w] == []
+
+
+def test_the_square_accumulator_matches_the_ir():
+    """``PouwSqAcc``: x over `_f32_grid` against acc 0, all ones, random of random length, and 2^576 − 2^300 x² and one less
+    (the sum wraps to exactly 0, and stops one short of the wrap)."""
+    from verity_pouw.circuit.words import sq300
+
+    rng, W = random.Random(53), (1 << 576) - 1
+    vecs = [[acc, x] for x in _f32_grid(rng, 2)
+            for acc in (0, W, rng.getrandbits(576), rng.getrandbits(rng.randint(1, 576)), (W + 1 - sq300(x)) & W, (W - sq300(x)) & W)]
+    ref = _pouw("PouwSqAcc_v1").evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwSqAcc_v1"], (576, 32), 576, vecs)) if g != ref(*v)] == []
+
+
+def test_the_square_ceiling_matches_the_ir():
+    """``PouwSqCeil``: with n = 64 d and t = Q d − r (0 <= r < d), ⌈64 t / n⌉ = Q, so Q runs over up48's edges (48 bits exactly,
+    2^48 and either side; 2^k − 1, which rounds up to 2^k by a carry out of the mantissa; 2^k and 2^k + 1; the largest exact
+    48-bit mantissa at 2^k and one past it) and random Q of every other length, with no remainder and with one (r = 1, d − 1); n = 1
+    with t = 2^j − 1, 2^j, 2^j + 1 and all ones (the largest quotient, 64 (2^576 − 1)); random t and n of every length; n = 0
+    (all ones)."""
+    rng, W, M32 = random.Random(59), (1 << 576) - 1, (1 << 32) - 1
+    Qs = [0, 1, 2, (1 << 48) - 2, (1 << 48) - 1, 1 << 48, (1 << 48) + 1]
+    for k in (49, 50, 51, 64, 100, 300, 500, 575, 576):
+        Qs += [(1 << k) - 1, 1 << k, (1 << k) + 1, (1 << k) - (1 << (k - 48)), (1 << k) - (1 << (k - 48)) + 1]
+    Qs += [rng.getrandbits(b) for b in range(1, 577, 2)]
+    vecs = [[Q * d - r, 64 * d] for d in (1, 3, (1 << 20) + 7, (1 << 26) - 1) for Q in Qs for r in sorted({0, 1, d - 1})
+            if 0 <= Q * d - r <= W]
+    vecs += [[(1 << j) + dj, 1] for j in (42, 43, 100, 575) for dj in (-1, 0, 1)] + [[W, 1], [W, 2], [W, 3], [W, M32], [1, M32], [0, 1]]
+    vecs += [[rng.getrandbits(rng.randint(0, 576)), rng.getrandbits(rng.randint(1, 32))] for _ in range(1000)]
+    vecs += [[0, 0], [W, 0]] + [[rng.getrandbits(576), 0] for _ in range(20)]
+    ref = _pouw("PouwSqCeil_v1").evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwSqCeil_v1"], (576, 32), 64, vecs)) if g != ref(*v)] == []
+
+
 #: the pinned rcp table read inline: 16,712 + 584 decoder rows (14 low and 9 high index bits), 9,753 nonempty product rows and
 #: 24 copy rows, its 7 constant value bits wired to the constant; its 93,528,819 set bits
 READ_ROWS, READ_NNZ = 27_073, 93_528_819
