@@ -1,7 +1,7 @@
 """`verity_vllm.program.registry.boolean_silu`: the Boolean SiLU Definitions agree with their word Definitions (`trace.word_of`)
 on every gate word, on every pair of special words and on random and edge-product pairs, carry exactly their builder's live
 ANDs, are pinned by gate count and program digest, and partition under `Q_word_v1{X=16, W=32}` into one unit per element, as
-their word rows do. The v4 pair (word view the quarantined `SiluMulBf16_v2`) is also exact on the overflow window, the gates
+their word rows do. The v4 pair (word view the served `SiluMulBf16_v2`) is also exact on the overflow window, the gates
 whose ``expf(-g)`` overflows at every up word."""
 from __future__ import annotations
 
@@ -20,11 +20,10 @@ from verity.ir import partition_object as PO
 from verity.ir.defs import REGISTRY, bind
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import Circuit
+from verity_vllm.program.registry import act
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_silu as BSL
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine.act import silu_mul as QS
-from verity_vllm.program.registry.quarantine.act import silu_mul_bf16 as QB
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -102,8 +101,8 @@ def test_the_ands_are_the_builders_live_ands(version: str) -> None:
 def test_the_word_views() -> None:
     assert TR.word_of(bind(BSL.SiluMulBf16)) is P.SiluMulBf16
     assert TR.word_of(bind(BSL.SiluMul, I=8)).id == bind(b1.SiluMul, I=8).id == "SiluMul_v1{I=8}"
-    assert TR.word_of(bind(BSL.SiluMulBf16Expf)) is QB.SiluMulBf16 and QB.SiluMulBf16.id == "SiluMulBf16_v2"
-    assert TR.word_of(bind(BSL.SiluMulExpf, I=8)).id == bind(QS.SiluMul, I=8).id == "SiluMul_v2{I=8}"
+    assert TR.word_of(bind(BSL.SiluMulBf16Expf)) is act.SiluMulBf16 and act.SiluMulBf16.id == "SiluMulBf16_v2"
+    assert TR.word_of(bind(BSL.SiluMulExpf, I=8)).id == bind(act.SiluMul, I=8).id == "SiluMul_v2{I=8}"
 
 
 def _half(g: int) -> int:
@@ -141,11 +140,11 @@ def test_the_expf_band_table_differs_only_where_expf_overflows() -> None:
     """`SiluMulBf16_v2`'s silu half is `_v1`'s closed forms off the band but at NaN and -inf (0x7FFF) and -0 (kept), and on the
     band `expf_band_table` is `band_table` but at the gates whose ``expf(-g)`` overflows, each 0 (``g / inf`` = -0); some of those
     are nonzero in `band_table` (the finding's window)."""
-    silu = [QB.SiluMulBf16.evaluate(g, 0x3F80) for g in range(1 << 16)]
+    silu = [act.SiluMulBf16.evaluate(g, 0x3F80) for g in range(1 << 16)]
     old, new = BSL.band_table(), BSL.expf_band_table()
     over = {_index(g) for g in range(0x8000 | BSL.BAND_LO << 7, 0x8000 | (BSL.BAND_HI[1] + 1) << 7)
-            if -_f(g) >= QB.LN_F32_OVERFLOW}
-    assert min(g for g in range(0x8000, 1 << 16) if -_f(g) >= QB.LN_F32_OVERFLOW and (g >> 7) & 0xFF < 255) == 0xC2B2
+            if -_f(g) >= act.LN_F32_OVERFLOW}
+    assert min(g for g in range(0x8000, 1 << 16) if -_f(g) >= act.LN_F32_OVERFLOW and (g >> 7) & 0xFF < 255) == 0xC2B2
     assert all(new[i] == 0 for i in over)
     assert {i for i in range(len(old)) if old[i] != new[i]} == {i for i in over if old[i]} != set()
     for g, s in enumerate(silu):

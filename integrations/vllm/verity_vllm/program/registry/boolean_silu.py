@@ -22,7 +22,7 @@ band row (a sign and an exponent pair e, e + 1) to one minterm; each output bit 
 a fixed XOR of low minterms (or its complement, whichever has fewer terms). `SiluMul_v3{I}` is `SiluMul_v1`'s body on bits: a
 batch of I `SiluMulBf16_v3` Calls over (gu[i], gu[I + i]), so each member's 16 output bits are one unit under `Q_word_v1`.
 
-The v4 pair (`SiluMulBf16Expf`, `SiluMulExpf`) computes the quarantined `SiluMulBf16_v2` / `SiluMul_v2{I}` (`quarantine.act`,
+The v4 pair (`SiluMulBf16Expf`, `SiluMulExpf`) computes the served `SiluMulBf16_v2` / `SiluMul_v2{I}` (`registry.act`,
 vLLM `_C.silu_and_mul` on the red-team's sm_120 edge words: ``f / (1 + expf(-f))`` with expf's overflow) the same way:
 `silu_bf16_expf` sends NaN and -inf to 0x7FFF, keeps -0, and reads `expf_band_table`, where the gates whose ``expf(-g)``
 overflows (g <= -89) are -0; the up word passes ``+ 0.0f`` (-0 to +0), and every NaN result is 0x7FFF.  No sub-Call is a word
@@ -38,11 +38,9 @@ from verity.ir.types import Array
 from verity.ml.boolean import fp
 from verity.ml.boolean.forms import NOT, ONE, ZERO, OR, add, and_reduce, const_bits, or_reduce, sub
 from verity.ml.boolean.trace import definition
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import act, b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.boolean_activation import band
-from verity_vllm.program.registry.quarantine.act import silu_mul as QS
-from verity_vllm.program.registry.quarantine.act import silu_mul_bf16 as QB
 
 __all__ = ["BAND_HI", "BAND_LO", "SiluMul", "SiluMulBf16", "SiluMulBf16Expf", "SiluMulExpf", "band_table", "expf_band_table",
            "silu_bf16", "silu_bf16_expf", "silu_mul", "silu_mul_expf"]
@@ -107,7 +105,7 @@ def expf_band_table() -> tuple[int, ...]:
     for sign in (0, 1):
         for e in range(BAND_LO, BAND_HI[sign] + 1):
             for m in range(128):
-                out[m | (e & 0xF) << 7 | sign << 11] = QB.SiluMulBf16.evaluate(sign << 15 | e << 7 | m, ONE_BF16) & 0x7FFF
+                out[m | (e & 0xF) << 7 | sign << 11] = act.SiluMulBf16.evaluate(sign << 15 | e << 7 | m, ONE_BF16) & 0x7FFF
     return tuple(out)
 
 
@@ -151,7 +149,7 @@ SiluMul = CompositeDefinition("SiluMul", 3, ("I",), lambda S: ((("gu", Array(2 *
                               _silu_mul_rows, doc=_silu_mul_rows.__doc__, conformance="exact-model-tested")
 SiluMul.word = lambda b: bind(b1.SiluMul, I=b["I"])  # type: ignore[attr-defined]
 
-SiluMulBf16Expf = definition("SiluMulBf16", 4, silu_mul_expf, (("g", BF16), ("u", BF16)), BF16, word=QB.SiluMulBf16,
+SiluMulBf16Expf = definition("SiluMulBf16", 4, silu_mul_expf, (("g", BF16), ("u", BF16)), BF16, word=act.SiluMulBf16,
                              doc="vLLM _C.silu_and_mul's element on bits: SiluMulBf16_v2, "
                                  "bf16(f32(bf16(silu_f32(g))) * (f32(u) + 0.0f)), NaN 0x7FFF")
 
@@ -163,4 +161,4 @@ def _silu_mul_expf_rows(B, S, gu):
 
 SiluMulExpf = CompositeDefinition("SiluMul", 4, ("I",), lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
                                   _silu_mul_expf_rows, doc=_silu_mul_expf_rows.__doc__, conformance="exact-model-tested")
-SiluMulExpf.word = lambda b: bind(QS.SiluMul, I=b["I"])  # type: ignore[attr-defined]
+SiluMulExpf.word = lambda b: bind(act.SiluMul, I=b["I"])  # type: ignore[attr-defined]

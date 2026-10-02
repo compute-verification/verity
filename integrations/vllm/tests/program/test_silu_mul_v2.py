@@ -9,9 +9,8 @@ from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.registry import b1, prims as P
+from verity_vllm.program.registry.act import SiluMul, SiluMulBf16
 from verity_vllm.program.registry.quarantine.act import silu_mul_difftest as DT
-from verity_vllm.program.registry.quarantine.act.silu_mul import SiluMul
-from verity_vllm.program.registry.quarantine.act.silu_mul_bf16 import SiluMulBf16
 
 V1 = P.SiluMulBf16.evaluate
 V2 = SiluMulBf16.evaluate
