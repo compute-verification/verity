@@ -138,6 +138,64 @@ def test_a_train_lands_what_it_checked_and_bisects_to_the_breaking_ref(tmp_path,
     assert not _git(main, "worktree", "list").count("research-train")
 
 
+def _remote(tmp_path: Path, main: Path) -> Path:
+    """A bare `origin` holding main and A, B, BAD (each adding its own file), with A also as pull request 7's head."""
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(main, "remote", "add", "origin", str(origin))
+    for name, path in (("A", "a2.txt"), ("B", "b.txt"), ("BAD", "BAD")):
+        _branch(main, name, path)
+    _git(main, "push", "-q", "origin", "main", "A", "B", "BAD", "A:refs/pull/7/head")
+    return origin
+
+
+def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path, monkeypatch, capsys):
+    """The lander's train build (old-circuits-and-proofs, 2 Oct: a hand-built train fell back to the main checkout and put an
+    unchecked merge on main): run from a checkout on another branch with changes, the train is built in a scratch worktree from
+    origin's main, pushed as its branch, and the checkout is as it was; a second train stacks on the first's branch."""
+    main, _feat, _tip = _repos(tmp_path)
+    origin = _remote(tmp_path, main)
+    a, b = _git(main, "rev-parse", "A"), _git(main, "rev-parse", "B")
+    _git(main, "checkout", "-q", "-b", "lander-work", "BAD")
+    (main / "a.txt").write_text("uncommitted\n")
+    monkeypatch.chdir(main)
+    lint = ["--lint", "sh -c 'test ! -e BAD'"]
+    assert merge_main(["--train", "--prepare", "train-prep/1", f"7@{a[:9]}", *lint]) == 0, capsys.readouterr().err
+    tip = _git(origin, "rev-parse", "train-prep/1")
+    assert f"pushed origin/train-prep/1 = {tip[:12]} (tree {_git(origin, 'rev-parse', 'train-prep/1^{tree}')[:12]})" in capsys.readouterr().out
+    assert _git(origin, "rev-parse", "train-prep/1^1") == _git(origin, "rev-parse", "main") and _git(origin, "rev-parse", "train-prep/1^2") == a
+    assert _git(origin, "log", "-1", "--format=%s", "train-prep/1") == f"Merge #7 ({a[:8]})"
+    assert _git(main, "symbolic-ref", "--short", "HEAD") == "lander-work" and (main / "a.txt").read_text() == "uncommitted\n"
+    assert _git(main, "rev-parse", "HEAD") == _git(main, "rev-parse", "BAD") and "research-train" not in _git(main, "worktree", "list")
+    assert merge_main(["--train", "--prepare", "train-prep/2", "--onto", "train-prep/1", f"B@{b[:9]}", *lint]) == 0
+    assert _git(origin, "rev-parse", "train-prep/2^1") == tip and _git(origin, "rev-parse", "train-prep/2^2") == b
+
+
+def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_nothing(tmp_path, monkeypatch, capsys):
+    main, _feat, _tip = _repos(tmp_path)
+    origin = _remote(tmp_path, main)
+    a = _git(main, "rev-parse", "A")
+    _git(main, "checkout", "-q", "A")
+    (main / "a2.txt").write_text("A, reworked\n")
+    _git(main, "commit", "-q", "-am", "A moves")
+    _git(main, "push", "-q", "origin", "HEAD:refs/pull/7/head")
+    _git(main, "checkout", "-q", "main")
+    monkeypatch.chdir(main)
+    lint = ["--lint", "sh -c 'test ! -e BAD'"]
+    assert merge_main(["--train", "--prepare", "train-prep/x", f"#7@{a[:9]}", *lint]) == 1
+    assert "#7 has moved: its head on origin is" in capsys.readouterr().err
+    assert merge_main(["--train", "--prepare", "train-prep/x", f"BAD@{_git(main, 'rev-parse', 'BAD')}", *lint]) == 1
+    assert "failed on the train" in capsys.readouterr().err
+    _git(main, "checkout", "-q", "-b", "C", "main")
+    (main / "b.txt").write_text("C's b\n")
+    _git(main, "add", "b.txt")
+    _git(main, "commit", "-q", "-m", "C")
+    _git(main, "checkout", "-q", "main")
+    assert merge_main(["--train", "--prepare", "train-prep/x", "B", "C", *lint]) == 1
+    assert "C does not merge onto the train so far" in capsys.readouterr().err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep") == "" and "research-train" not in _git(main, "worktree", "list")
+
+
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
