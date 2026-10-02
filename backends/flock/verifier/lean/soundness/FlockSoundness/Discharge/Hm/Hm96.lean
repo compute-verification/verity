@@ -83,21 +83,33 @@ theorem eval_maskBit (z : Var → Bool) (key : ByteArray) (y : List Lin) (i : �
 theorem wordBit_lt {t : ℕ} (ht : t < 512) : wordBit t < 512 := by
   unfold wordBit; omega
 
-/-- **The hm96 gadget computes `b ‖ c`**: whenever its rows hold, its output's bit `t < 512` is bit `t` (byte-string
-order) of the padding compression `x = F(cv, pad)` XOR bit `t` of `M(key)·y`, and its bit `512 + t` is bit `t` of
-`c = F(F(mid, y₀), y₁ ‖ tail)`, SHA-512's last two compressions of `salt_prefix ‖ y`. -/
-theorem sound_hm96Row (key : ByteArray) : Sound (hm96Row key) fun z io =>
-    io.1.length = 512 ∧ io.2.1.length = 1024 ∧ io.2.2.1.length = 1536 ∧ io.2.2.2.length = 1024 ∧
+/-- `Flock.HmNets.hm96Row` after its three inputs. -/
+def hmTail (key : ByteArray) (cv pad y : List Lin) : M (List Lin × List Lin × List Lin × List Lin) := do
+  let x ← compress (words cv 8) (words pad 16)
+  let yw := saltWords y
+  let st ← compress (saltMid.map constW) (yw.take 16)
+  let st ← compress st (yw.drop 16 ++ saltTail.map constW)
+  let b := (List.range 512).map fun i => maskBit key y i (x.flatten.getD (wordBit i) Lin.zero)
+  let c := (List.range 512).map fun t => st.flatten.getD (wordBit t) Lin.zero
+  pure (cv, pad, y, b ++ c)
+
+theorem hm96Row_eq (key : ByteArray) : hm96Row key =
+    (input 512 >>= fun cv => input 1024 >>= fun pad => input 1536 >>= fun y => hmTail key cv pad y) := rfl
+
+/-- **The hm96 gadget computes `b ‖ c`** on inputs `cv`, `pad`, `y`: whenever its rows hold, its output's bit `t < 512` is
+bit `t` (byte-string order) of the padding compression `x = F(cv, pad)` XOR bit `t` of `M(key)·y`, and its bit `512 + t`
+is bit `t` of `c = F(F(mid, y₀), y₁ ‖ tail)`, SHA-512's last two compressions of `salt_prefix ‖ y`. -/
+theorem sound_hmTail (key : ByteArray) (cv pad y : List Lin) : Sound (hmTail key cv pad y) fun z io =>
+    io.1 = cv ∧ io.2.1 = pad ∧ io.2.2.1 = y ∧ (cv.length = 512 → pad.length = 1024 → io.2.2.2.length = 1024 ∧
       ∀ t < 512,
-        bit z io.2.2.2 t = (wbit (compressV ((words io.1 8).map (bv z)) ((words io.2.1 16).map (bv z))) (wordBit t) ^^
-          maskV key (bit z io.2.2.1) t) ∧
-        bit z io.2.2.2 (512 + t) = wbit (compressV (compressV saltMid (((saltWords io.2.2.1).map (bv z)).take 16))
-          (((saltWords io.2.2.1).map (bv z)).drop 16 ++ saltTail)) (wordBit t) := by
-  unfold hm96Row
-  refine Sound.bind' (sound_input 512) fun cv => Sound.bind' (sound_input 1024) fun pad =>
-    Sound.bind' (sound_input 1536) fun y => Sound.bind' (sound_compress _ _) fun x =>
+        bit z io.2.2.2 t = (wbit (compressV ((words cv 8).map (bv z)) ((words pad 16).map (bv z))) (wordBit t) ^^
+          maskV key (bit z y) t) ∧
+        bit z io.2.2.2 (512 + t) = wbit (compressV (compressV saltMid (((saltWords y).map (bv z)).take 16))
+          (((saltWords y).map (bv z)).drop 16 ++ saltTail)) (wordBit t)) := by
+  unfold hmTail
+  refine Sound.bind' (sound_compress _ _) fun x =>
     Sound.bind' (sound_compress _ _) fun st₁ => Sound.bind' (sound_compress _ _) fun st₂ =>
-    Sound.pure' fun z hst₂ hst₁ hx hy hpad hcv => ?_
+    Sound.pure' fun z hst₂ hst₁ hx => ⟨rfl, rfl, rfl, fun hcv hpad => ?_⟩
   obtain ⟨x1, x2⟩ := hx (length_words _ _) (words64_words (by omega)) (length_words _ _) (words64_words (by omega))
   obtain ⟨s11, s12⟩ := hst₁ (by simp [length_saltMid]) (words64_constW _) (by simp [length_saltWords])
     ((words64_saltWords y).take 16)
@@ -109,7 +121,7 @@ theorem sound_hm96Row (key : ByteArray) : Sound (hm96Row key) fun z io =>
   have ec : compressV (compressV saltMid (((saltWords y).map (bv z)).take 16))
       (((saltWords y).map (bv z)).drop 16 ++ saltTail) = st₂.map (bv z) := by
     rw [s22, s12, map_bv_constW, List.map_append, map_bv_constW, List.map_take, List.map_drop]
-  refine ⟨hcv, hpad, hy, by simp, fun t ht => ⟨?_, ?_⟩⟩
+  refine ⟨by simp, fun t ht => ⟨?_, ?_⟩⟩
   · rw [bit, List.getElem?_append_left (by simp; omega), List.getElem?_map, List.getElem?_range ht]
     simp only [Option.map_some, Option.getD_some]
     rw [eval_maskBit, List.getD_eq_getElem?_getD]
@@ -121,5 +133,22 @@ theorem sound_hm96Row (key : ByteArray) : Sound (hm96Row key) fun z io =>
     rw [List.getD_eq_getElem?_getD,
       show ev z (st₂.flatten[wordBit t]?.getD Lin.zero) = bit z st₂.flatten (wordBit t) from rfl, bit_flatten z s21,
       ec, wbit, getD_map_bv]
+
+/-- **The hm96 gadget computes `b ‖ c`** (`sound_hmTail`), with its inputs: `cv` (512 bits), `pad` (1024) and `y`
+(1536). -/
+theorem sound_hm96Row (key : ByteArray) : Sound (hm96Row key) fun z io =>
+    io.1.length = 512 ∧ io.2.1.length = 1024 ∧ io.2.2.1.length = 1536 ∧ io.2.2.2.length = 1024 ∧
+      ∀ t < 512,
+        bit z io.2.2.2 t = (wbit (compressV ((words io.1 8).map (bv z)) ((words io.2.1 16).map (bv z))) (wordBit t) ^^
+          maskV key (bit z io.2.2.1) t) ∧
+        bit z io.2.2.2 (512 + t) = wbit (compressV (compressV saltMid (((saltWords io.2.2.1).map (bv z)).take 16))
+          (((saltWords io.2.2.1).map (bv z)).drop 16 ++ saltTail)) (wordBit t) := by
+  rw [hm96Row_eq]
+  refine Sound.bind' (sound_input 512) fun cv => Sound.bind' (sound_input 1024) fun pad =>
+    Sound.bind' (sound_input 1536) fun y => Sound.mono (sound_hmTail key cv pad y) fun z io h hy hpad hcv => ?_
+  obtain ⟨h1, h2, h3, h4⟩ := h
+  obtain ⟨h5, h6⟩ := h4 hcv hpad
+  subst h1 h2 h3
+  exact ⟨hcv, hpad, hy, h5, h6⟩
 
 end FlockSoundness.Discharge.Hm
