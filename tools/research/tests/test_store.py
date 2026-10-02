@@ -1367,3 +1367,33 @@ def test_catalog_keeps_shipped_tables_positional_for_older_writers(tmp_path):
     assert ix.replicas("art:c")["remote"] == {"verified_utc": "2026-09-22T02:00:00Z", "detail": None, "verified": "sha256-readback"}
     Index(p)   # idempotent re-open
     assert ix.replicas("art:a")["remote"]["verified"] == "etag-md5"
+
+
+def test_index_artifact_holds_the_write_lock_before_it_reads(tmp_path):
+    """Two publishes into one machine's catalog: a writer that reads first and then asks to write cannot wait for the other (SQLite
+    skips the busy timeout there, as waiting could deadlock) and failed "database is locked" at once (node 1, 2026-10-01).  Another
+    writer that tries to take the lock while index_artifact reads must find it held; with busy_timeout 0 nothing here waits."""
+    import sqlite3
+
+    from research.store.index import Index
+
+    p = tmp_path / "catalog.sqlite"
+    ix = Index(p)
+    other = sqlite3.connect(p, isolation_level=None)
+    other.execute("PRAGMA busy_timeout = 0")
+    took = []
+
+    def on_statement(sql: str) -> None:
+        if sql.lstrip().upper().startswith("SELECT") and not took:
+            try:
+                other.execute("BEGIN IMMEDIATE")
+                other.execute("INSERT INTO labels VALUES ('t', 'k', 'v', 'by', 'ts', NULL, 'p')")
+                took.append(True)
+            except sqlite3.OperationalError:
+                took.append(False)
+
+    ix.db.set_trace_callback(on_statement)
+    ix.index_artifact({"kind": "blob/v1", "payload": {"bytes": 0}, "meta": {"a": 1}, "refs": {}}, "art:" + "0" * 64)
+    ix.db.set_trace_callback(None)
+    assert took == [False]
+    assert ix.db.execute("SELECT kind FROM artifacts").fetchall() == [("blob/v1",)]

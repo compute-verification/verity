@@ -13,14 +13,26 @@ the device plugin, so Kubernetes never hands it to another pod. Every other GPU 
 a detached process whose owner line says who=kubernetes, so no lease can take it, whatever list a waiting gpu-lease read at its
 start. A fence outlives this controller, so a crash fails closed. `pool.gpus` (the allowed file) lists every index.
 Each tick, with the brain absent (local rules):
-  - grow: when the waiters want more than the free pool GPUs and pending holders cover, submit holders (at most `$VY_POOL_MAX`);
-    a holder's GPU is unfenced once its pod runs and names its UUID;
+  - grow: when the waiters want more than the free pool GPUs and pending holders cover, submit holders (at most `$VY_POOL_MAX`,
+    and never past the queue's nominal GPU quota less what its other admitted Workloads reserve: a holder on borrowed quota is
+    Kueue's to reclaim mid-lease; with the quota unread, no growth). While every waiter is `--preemptible`, holders may borrow
+    `$VY_POOL_BORROW` GPUs more (default 0), until `$VY_POOL_BORROW_UNTIL` (UTC) if set: a Commit that reclaims one evicts its
+    holder, and the lease on it is then outside the pool and stopped. A holder's GPU is unfenced once its pod runs and names its UUID;
   - shrink: fence a pool GPU that has been free for `$VY_POOL_IDLE_S` with nobody waiting for it, then delete its holder;
     delete pending holders nobody waits for.
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
-hand) has its pod deleted at once: Kubernetes may already have given that GPU to someone else.
+hand, or Kueue reclaimed it) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease
+held by a host process (a `research run --queue` job, in no pod) is signalled instead, its gpu-lease scope else its owner pid:
+SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemption does.
+**Pools.** One controller serves one queue's pool, named `$VY_POOL_NAME` (its holders' `verity.dev/gpu-pool` label; default
+node1, the `provers` pool in /run/gpu-lease). A second pool runs as a second controller with its own `$GPU_LEASE_DIR`,
+`$VY_POOL_QUEUE`, `$VY_POOL_PRIORITY` and `$VY_POOL_NAME` (circuits': /run/gpu-lease-circuits, `deployments-gpu`, `circuits-gpu`,
+circuits): each fences, in its own lock files, every GPU its own holders don't hold, so a waiter gets only its own pool's GPUs.
+**Blocked.** While `$GPU_LEASE_DIR/blocked` exists (gpu_stray.py writes it when a process of the pool's pods runs on a GPU it
+holds no lease for; a person removes it once that's cleared), the pool grants nothing new: leases already held go on, every
+other pool GPU is fenced and its holder deleted, and pending holders are cancelled.
 **The brain.** With `$VY_LEASE_BRAIN` set (a command, e.g. `ssh vy-cluster cluster grant --node vy-nebius-1`), each tick sends
 it the state as JSON on stdin and reads `{"grants": {"<pid>": [index, ...]}, "pool_target": N}`. While it answers, this controller
 holds `agent.lock`, so every request queues for a grant (gpu-lease agent mode); after `BRAIN_MISSES` failures in a row it drops the
@@ -45,12 +57,16 @@ PRIORITY = os.environ.get("VY_POOL_PRIORITY", "dev")
 POOL_MAX = int(os.environ.get("VY_POOL_MAX", "3"))
 IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
 GRACE_S = int(os.environ.get("VY_LEASE_EXPIRY_GRACE_S", "120"))
+BORROW = int(os.environ.get("VY_POOL_BORROW", "0"))
+BORROW_UNTIL = os.environ.get("VY_POOL_BORROW_UNTIL", "")
+KILL_AFTER_S = 30
 BRAIN = os.environ.get("VY_LEASE_BRAIN", "")
 BRAIN_MISSES = 2
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 KUBECTL = os.environ.get("VY_KUBECTL", "sudo -n k3s kubectl").split()
 POOL_LABEL = "verity.dev/gpu-pool"
+POOL_NAME = os.environ.get("VY_POOL_NAME", "node1")
 FENCE_CMD = "n1-lease-fence"
 
 
@@ -143,16 +159,28 @@ def fence(i: int, t: float) -> int | None:
 
 
 def unfence(pids: list[int]) -> None:
+    """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
         try:
             os.killpg(pid, signal.SIGTERM)
         except OSError:
             pass
+    for pid in pids:
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+        for _ in range(200):
+            try:
+                os.killpg(pid, 0)
+            except OSError:
+                break
+            time.sleep(0.01)
 
 
 def holder_job(t: float) -> dict:
-    name = f"gpu-pool-{int(t * 1000)}"
-    labels = {POOL_LABEL: "node1"}
+    name = f"gpu-pool-{int(t * 1000)}" if POOL_NAME == "node1" else f"gpu-pool-{POOL_NAME}-{int(t * 1000)}"
+    labels = {POOL_LABEL: POOL_NAME}
     return {
         "apiVersion": "batch/v1", "kind": "Job",
         "metadata": {"name": name, "labels": {**labels, "kueue.x-k8s.io/queue-name": QUEUE,
@@ -167,6 +195,31 @@ def holder_job(t: float) -> dict:
                                      "resources": {"requests": {"cpu": "100m", "memory": "64Mi", "nvidia.com/gpu": "1"},
                                                    "limits": {"nvidia.com/gpu": "1"}}}]}}},
     }
+
+
+def _true(w: dict, kind: str) -> bool:
+    return any(c.get("type") == kind and c.get("status") == "True" for c in (w.get("status") or {}).get("conditions") or [])
+
+
+def unborrowed(obs: dict, holders: set[str]) -> int | None:
+    """GPUs the pool queue can give holders without borrowing: its nominal quota less the GPUs its other admitted Workloads
+    reserve. None when the ClusterQueue or the Workloads weren't read."""
+    cq, workloads = obs.get("cq"), obs.get("workloads")
+    if cq is None or workloads is None:
+        return None
+    nominal = sum(int(r.get("nominalQuota", 0)) for rg in cq["spec"].get("resourceGroups") or [] for f in rg.get("flavors") or []
+                  for r in f.get("resources") or [] if r.get("name") == "nvidia.com/gpu")
+    other = 0
+    for w in workloads:
+        if ((w.get("status") or {}).get("admission") or {}).get("clusterQueue") != QUEUE or _true(w, "Finished") \
+                or not _true(w, "QuotaReserved"):
+            continue
+        if any(o.get("name") in holders for o in w["metadata"].get("ownerReferences") or []):
+            continue
+        for ps in w["spec"].get("podSets") or []:
+            for c in ps["template"]["spec"].get("containers") or []:
+                other += int(((c.get("resources") or {}).get("requests") or {}).get("nvidia.com/gpu", 0) or 0) * int(ps.get("count", 1))
+    return max(0, nominal - other)
 
 
 def waiters() -> list[dict]:
@@ -190,6 +243,7 @@ class Controller:
         self.uuid_of_pod: dict[str, str] = {}
         self.free_since: dict[int, float] = {}
         self.outside: dict[int, int] = {}
+        self.stopping: dict[int, float] = {}           # host pid -> when it was first signalled
         self.brain_misses = BRAIN_MISSES
         self.agent_fd: int | None = None
         self.events: list[dict] = []
@@ -202,9 +256,32 @@ class Controller:
         print(json.dumps(rec), flush=True)
 
     def observe(self) -> dict:
-        jobs = json.loads(kubectl("get", "jobs", "-l", f"{POOL_LABEL}=node1", "-o", "json"))["items"]
+        jobs = json.loads(kubectl("get", "jobs", "-l", f"{POOL_LABEL}={POOL_NAME}", "-o", "json"))["items"]
         pods = json.loads(kubectl("get", "pods", "-o", "json"))["items"]
-        return {"jobs": jobs, "pods": pods}
+        try:
+            cq = json.loads(kubectl("get", "clusterqueue", QUEUE, "-o", "json"))
+            workloads = json.loads(kubectl("get", "workloads", "-A", "-o", "json"))["items"]
+        except (subprocess.CalledProcessError, ValueError, KeyError):
+            cq, workloads = None, None
+        return {"jobs": jobs, "pods": pods, "cq": cq, "workloads": workloads}
+
+    def stop(self, t: float, lease: dict, why: str) -> None:
+        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`."""
+        if lease.get("pod") or not (lease.get("pid") and lease.get("owner_alive")):
+            self.log(t, why, lease=lease)
+            if lease.get("pod"):
+                kubectl("delete", "pod", lease["pod"], "--wait=false")
+            return
+        pid = lease["pid"]
+        sig = signal.SIGKILL if t - self.stopping.setdefault(pid, t) >= KILL_AFTER_S else signal.SIGTERM
+        self.log(t, why, lease=lease, signal=sig.name)
+        if lease.get("scope") and subprocess.run(["systemctl", "--user", "kill", f"--signal={sig.name}", f"{lease['scope']}.scope"],
+                                                 capture_output=True).returncode == 0:
+            return
+        try:
+            os.kill(pid, sig)
+        except (ProcessLookupError, PermissionError) as e:
+            self.log(t, "signal-failed", pid=pid, error=str(e))
 
     def tick(self, t: float, obs: dict | None = None, dry: bool = False) -> dict:
         self.events = []
@@ -258,31 +335,31 @@ class Controller:
                 uid = pod_uid_of(pid) if pid else None
                 pod = pods_by_uid.get(uid) if uid else None
                 g["lease"] = {"who": f.get("who"), "run": f.get("run"), "since": f.get("since"), "until": f.get("until"),
-                              "pid": pid, "pod": pod["metadata"]["name"] if pod else None,
+                              "pid": pid, "scope": f.get("scope"), "pod": pod["metadata"]["name"] if pod else None,
                               "owner_alive": bool(pid) and Path(f"/proc/{pid}").exists(), "seen": iso(t)}
             gpus.append(g)
         want = waiters()
-        brain = self.ask_brain(t, gpus, want, pending) if BRAIN else None
+        try:
+            blocked = (DIR / "blocked").read_text().strip() or "blocked"
+        except OSError:
+            blocked = None
+        brain = self.ask_brain(t, gpus, want, pending) if BRAIN and not blocked else None
         for g in gpus:
             i, lease = g["index"], g.get("lease")
             if g["holder"] is None and lease:
                 self.outside[i] = self.outside.get(i, 0) + 1
                 if self.outside[i] >= 2 and not unmapped and not dry:
-                    self.log(t, "lease-outside-pool", gpu=i, lease=lease)
-                    if lease.get("pod"):
-                        kubectl("delete", "pod", lease["pod"], "--wait=false")
+                    self.stop(t, {**lease, "gpu": i}, "lease-outside-pool")
                 continue
             self.outside.pop(i, None)
             if lease and lease.get("until") and t > (epoch(lease["until"]) or t) + GRACE_S and not dry:
-                self.log(t, "expired", gpu=i, lease=lease)
-                if lease.get("pod"):
-                    kubectl("delete", "pod", lease["pod"], "--wait=false")
+                self.stop(t, {**lease, "gpu": i}, "expired")
             if g["holder"] is None and not g["fence_pids"] and not lease and not dry:
                 pid = fence(i, t)
                 if pid:
                     g["fence_pids"] = [pid]
                     self.log(t, "fenced", gpu=i)
-            if g["holder"] is not None and g["fence_pids"] and not dry:
+            if g["holder"] is not None and g["fence_pids"] and not dry and not blocked:
                 unfence(g["fence_pids"])
                 g["fence_pids"] = []
                 self.log(t, "unfenced", gpu=i, holder=g["holder"])
@@ -290,12 +367,33 @@ class Controller:
                 self.free_since.setdefault(i, t)
             else:
                 self.free_since.pop(i, None)
+        if blocked and not dry:
+            for g in gpus:
+                i = g["index"]
+                if g["holder"] is None or g.get("lease"):
+                    continue
+                if not g["fence_pids"] and (pid := fence(i, t)):
+                    g["fence_pids"] = [pid]
+                if g["fence_pids"]:
+                    kubectl("delete", "job", g["holder"], "--wait=false", "--ignore-not-found")
+                    self.log(t, "blocked-shrink", gpu=i, holder=g["holder"], why=blocked[:200])
+                    g["holder"] = None
+                    self.free_since.pop(i, None)
+            for name in pending:
+                kubectl("delete", "job", name, "--wait=false", "--ignore-not-found")
+                self.log(t, "cancel", holder=name, why="blocked")
         free = sorted(i for i in self.free_since if i in pool)
         wanted = sum(w["n"] for w in want)
         target = brain.get("pool_target") if brain else None
         if target is None:
             target = len(pool) - len(free) + wanted
-        target = max(0, min(POOL_MAX, int(target)))
+        self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
+        cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
+        borrow = BORROW if want and all(w.get("preempt") == "1" for w in want) and t < (epoch(BORROW_UNTIL) or float("inf")) else 0
+        limit = min(POOL_MAX, cap + borrow) if cap is not None else len(pool) + len(pending)
+        target = max(0, min(limit, int(target)))
+        if blocked:
+            target = len(pool) + len(pending)
         grow = target - len(pool) - len(pending)
         if grow > 0 and not dry:
             for k in range(grow):
@@ -320,7 +418,8 @@ class Controller:
                     self.log(t, "shrink", gpu=i, holder=pool[i])
                     extra -= 1
         state = {"t": iso(t), "node": SERVER, "mode": "brain" if self.agent_fd is not None else "local", "pool": len(pool),
-                 "pending_holders": pending, "waiting": want, "gpus": gpus, "events": self.events}
+                 "pool_name": POOL_NAME, "blocked": blocked, "pending_holders": pending, "waiting": want, "gpus": gpus,
+                 "events": self.events}
         if not dry:
             write(DIR / "pool.gpus", ",".join(str(i) for i in range(n)) + "\n")
             write(DIR / "n1-lease.json", json.dumps(state, indent=1) + "\n")

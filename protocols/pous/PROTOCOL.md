@@ -16,10 +16,11 @@ those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of 
 39%. This is the Ristenpart–Shacham–Shrimpton limit: indifferentiability does not carry over to storage games, so no
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
-over an ideal permutation `Π₂` of width `2m + 512`, to be proved in the ideal-permutation model. Its pebbling side is
-proved, but its ex post facto bounds are stated and not yet proved, and neither is in this package: `ChainExPostFacto`
-(B5 for `Π₂`) for dense, and its DAG-generic form `ChainExPostFactoG` for the band. `Π₂` itself (Feistel-SHAKE) is a
-heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
+over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
+post facto bounds are proved in this package (`PousProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`) for
+dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the pinned finals below (P3 with the concrete
+`H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
+is a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
 `docs/band-vs-dense.md`.
 
 ## The problem: timed audit, perfect isolation
@@ -64,28 +65,36 @@ The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Se
 ## The band scheme (secure-first)
 
 `band.SECURE_FIRST` is `BandParams(512, 524288, d = 12)`: 512 blocks of 65,536 B per segment (32 MiB), audited with
-`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs (`band_meets_64`, for every
-`d ≥ 5`, given `ChainExPostFactoG`). Segment `s` is exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs
+(`Pous.Pinned.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis). Segment `s` is
+exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
 below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, ..., C_{max(0, v-d)}` (Lean
 `parentsDesc (bandDAG B d) v`), then the pad.
+
+**The per-call floor** (`primitives.pi2_keccak_f`, `pi2_call_ns`). A 64 KiB `Π₂` call is ten Feistel rounds, and
+each round function absorbs a 2-byte prefix and a 65,568-byte half: 65,570 bytes, 483 blocks at SHAKE256's rate of
+136. Round `i + 1`'s absorb block `k` needs only round `i`'s squeeze block `k`, so the rounds stream, and in the
+overwrite chain a call boundary is a round boundary. A call in a chain costs 10 × 483 = 4,830 sequential Keccak-f,
+241.5 µs at 50 ns per Keccak-f; counting each round's 482 further squeeze blocks in sequence too would give 9,650
+(482.5 µs). The band's and dense's `call_ns` is 241,500 ns, so `D = 5` covers `Δ + RTT < 6 × 241.5 µs = 1.449` ms.
 
 - Block `v` costs `min(v, d) + 1` calls: 6,578 per segment at `d = 12`, 20 times fewer than dense's 131,328. Decoding
   is `d + 1 = 13` rounds deep, and a segment decodes in 24.6 s on one core in Python (dense: 493.9 s).
 - **Deployment condition, the cliff.** The effective `D`, the sequential `Π₂` calls an adversary completes within
   `Δ + RTT`, must not exceed `d`. With `d ≥ D′` the band is exactly as hard as dense at `D′` (`band_chain_hard`). At
   `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
-  dropped row has all its parents held, and the audit accepts with probability 1. At 483 µs per call, `d = 12` holds
-  while `Δ + RTT < 6.279` ms. `audit.TimedVerifier` refuses a deadline past it (`band.check_deployment`), and
-  `test_gap_attack_at_the_cliff` replays the attack on real labels.
+  dropped row has all its parents held, and the audit accepts with probability 1. At 241.5 µs per call, `d = 12`
+  holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms. `audit.TimedVerifier` refuses a deadline past it
+  (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
 - `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
 
 ## The dense scheme (selectable)
 
 `dense.POINT_64K` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
-`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. The 111 is what
-`chain_meets_64` (POUS `lean/submissions/sponge-dense/ChainEPF.lean`) certifies for this overwrite-chain `H`, given
-`ChainExPostFacto`; a random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs. The 111 is what
+`Pous.Pinned.ChainDenseMeets64` certifies for this overwrite-chain `H`, for one segment, with no hypothesis; a
+random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
 
 ~~~text
@@ -122,6 +131,13 @@ independently.
 The operating point is `params.OPERATING_POINT`: `n = 220`, `k = 12`, `wc = 2384` bits, so `m = 65,560` B and a segment
 is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets` is about.
 
+P3 has no certificate. `Pous.Pinned.P3ConcreteMeets64` (one segment), `P3ConcreteMeets14GB` (971 segments) and
+`P3ConcreteMeets64D12` (`B(220, 16)` at `D = 12`) are proved, with no hypothesis, for P3 over the overwrite chain in
+the ideal two-permutation model, at the operating point's parameters, `D = 10`, `Q = 2^20` and `k = 106`. But Lean's
+chain starts from `iv(domP3 tag L v)`: zeros, then `tag_s ‖ u256(2v + L)` in the 512-bit capacity part. The code's
+`h_0` is the instantiation's 48-byte header ("Backends") in the low bytes, with the capacity part zero. The pins are
+about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 item 16).
+
 ## Lifecycle
 
 1. **Commit.** The server commits to `W` before any salt exists (`setup.commit`: tagged SHA-256 over the parameters and
@@ -146,8 +162,11 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
    `chainScheme_encDec`, pending red-team §40). It also proves that the public game is equivalent to the private one
    for any scheme with that property (`pubAuditSecure_exact_iff`, `pubMeets_exact`), so the certificates carry over
    at `k = 111`:
-   - the band: `band_pub_meets_64` (`band-chain/BandPubEncoder.lean`), for every `d ≥ 5`, given `ChainExPostFactoG`;
-   - dense: `dense_pub_meets_64`, `seg_pub_meets_14`, and `chain_pub_meets_64`, the last given `ChainExPostFacto`.
+   - the band: `Pous.Pinned.BandPubMeets64`, `BandPubMeets14` and `BandPubMeets14Global`, for every `d ≥ 5`, with no
+     hypothesis, under the deployment conditions in their docstrings;
+   - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
+     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/PousProofs/Chain/Flat.lean`; not
+     pinned).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
    encode-after-decode lemma is not proved.
@@ -183,15 +202,15 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `theorem`, and its open `hypotheses`;
   - `claims`: ids in `verity.claims`' format.
 
-  At the frozen point, the band's certificates are given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
-  `d`.
-  - One segment is `band_meets_64`.
-  - 448 segments (14 GB) is `band_meets_14`, from POUS `lean/submissions/band-multi/`, red team §47 GO. It is one
-    `Meets` for the whole store: challenges are uniform over all its blocks, the state bound is the whole store's, and
-    one permutation serves every segment.
-  - Other segment counts are gaps in the storage profile.
+  Each `theorem` is the `Pous.Pinned` statement it rests on. At the frozen point, the band's certificate is
+  `Pous.Pinned.BandMultiMeetsFamily`, with no hypothesis: k 111, D 5, Q 2^20, 241.5 µs, cliff at `d`, for every segment
+  count N from 1 to `2^64` (all that `BandParams` allows), so no segment count is a gap. It is one `Meets` for the whole
+  store: challenges are uniform over all its blocks, the state bound is the whole store's, and one permutation serves
+  every segment. A 70 GiB store, 2,240 segments, is certified whole. At one segment it is also `BandChainMeets64`, and
+  at 448 (14 GB) `BandMultiMeets14`.
 
-  Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P2 (`schemes/p2.py`) is **experimental**:
+  Dense is `Pous.Pinned.ChainDenseMeets64`, with no hypothesis and no cliff, for one segment; other segment counts are
+  gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, and no hash call.
   - It follows the P2 spec (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, draft v0) except for its
     expander:
@@ -210,21 +229,20 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
 
-  P3 has no certificate for the
-  implemented `H`. Lean's `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final` (k 117, D 10, 64 KB and 971
-  segments) are about a random-oracle `H` and an ideal tweakable `P`, while the code's `H` is the overwrite chain.
+  P3 has no certificate: the concrete-`H` pins have its parameters, but their chain starts from a different `h_0`
+  ("P3 (research)").
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
-    band and dense, `Δ + RTT` must stay under 2.898 ms. `TimedVerifier` alone refuses only past the band's cliff, at
-    6.279 ms;
+    band and dense, `Δ + RTT` must stay under 1.449 ms. `TimedVerifier` alone refuses only past the band's cliff, at
+    about 3.14 ms (3,139,500 ns at `d = 12`);
   - a scheme with no certificate at its parameters.
 
   `research=True` runs such an audit anyway, except past the cliff.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
-  other than the theorem's. The band's certificate is `band_meets_64` at one segment and `band_meets_14` at 448.
+  other than the theorem's. The band's certificate covers every segment count from 1 to 2^64, and dense's one segment.
   `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
@@ -264,7 +282,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
+| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -328,8 +346,10 @@ rather than `verity.commitments`' frame v3.
 A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` sets the round budget per answer at
 `(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the adversary's fastest oracle call, and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
-`CERTIFIED_ROUNDS = 28` is the most the band certificate `band_twoWay_220_12` covers when a level costs 3 calls
-(`Π₂` of the oldest parent, `Π₂` of the pad, `P`), `⌊(D − 1)/3⌋ + 1 ≤ 10`.
+`CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
+`Pous.Pinned.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on `B(220, 16)`,
+both for Lean's `h_0`, not yet the code's ("P3 (research)"). The column-game certificate `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level
+(`Π₂` of the oldest parent, `Π₂` of the pad, `P`) reads as 28 rounds; no `Meets` statement covers that reading.
 
 `adversary.schedule` computes, for any holding, the fewest rounds after which each value is known. It covers keys
 (each query waits for the parent it absorbs), forward labels, promotion from held or revealed columns, and the
@@ -394,9 +414,15 @@ the timed audit and the simulator with the dense codec as default.
 
 ### The band
 
-The band's proofs are in the POUS store's `lean/submissions/band-chain/`, not yet in this package: `band_meets_64` gives
-`Meets` at 64 KiB, `B = 512`, `D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`, given
-`ChainExPostFactoG`.
+`Pous.BandChain.chainBand B d ℓ c dom` (`Pous/Model/BandChain.lean`) is the band over the overwrite chain on one ideal
+permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segments of it. The proofs are in this package
+(`PousProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and `sponge-dense/`),
+with no hypothesis: `Pous.Pinned.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`, `D = 5`, `Q = 2^20`, `k = 111`
+and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments (14 GiB), with per-segment and with
+global salts, `BandMultiMeets14K106` at `k = 106` per segment, and `BandMultiMeetsFamily` the `k = 111` row for every
+segment count `N` with `1 ≤ N ≤ 2^64` (`PousProofs/Chain/Family.lean`). `BandPubMeets*` are the same rows with an
+untrusted server encoding and the exact setup check (`Pous/Model/PubEncoder.lean`), under the four deployment conditions
+in their docstrings. The band needs `d ≥ D`.
 
 ### The dense scheme
 
@@ -426,8 +452,14 @@ and `ℓ ≥ 256`). Under it the two schemes write the same codeword, every tagg
 same rounds, work and acceptance probability, and the restricted oracle is again uniform. `domainSep_equiv` and
 `tag_injective_14` record the index-level fact: the tagged keying is the global one relabeled injectively.
 
+**Over the overwrite chain** (`Pous.Sponge.chainDense`, `H` the overwrite chain on an ideal permutation, proved with no
+hypothesis in `PousProofs/Chain/Flat.lean`): `Pous.Pinned.ChainDenseMeets64`, 512 blocks of 64 KiB at `D = 5`,
+`Q = 2^20`, `k = 111`; and the deployment point, `Pous.Pinned.ChainDenseMeets111`, `2^16` blocks of 1 KiB at `D = 64`,
+`Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does not reach; it is
+re-pinned at `k = 111`, four challenges more.
+
 **Not proved here:**
-- the concrete H, `ChainExPostFacto` (the main caveat);
+- a concrete permutation for `Π₂` (the main caveat);
 - the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and perfect
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
@@ -450,6 +482,10 @@ same rounds, work and acceptance probability, and the restricted oracle is again
 | `SampledAuditProd`, `SampledAuditSeq`, `SampledAuditSim` | "fewer than `k` answerable" gives a sampled-audit bound | proved |
 | `StackedAuditSeq`, `StackedAuditOnePercent` | the stacked one-way scheme's audit clause; the second is conditional on a depth-robust graph | proved |
 | `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
+| `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`Pous/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
+| `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`Pous/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
+| `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global` | the same band rows with a public encoder and the exact setup check (`Pous/Model/PubEncoder.lean`, `Pous/Accounting/PubMeets.lean`) | proved |
+| `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 
 Also proved and pinned in `lean-audit.json`, with no `Pous.Pinned` statement: the one-way bound on Fisch's stacked
 graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the
@@ -486,18 +522,16 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 ## Not here yet
 
-Done in the random-oracle model, and in this package (`lean/PousProofs/Dense/`): the dense re-certificate at
-`POINT_64K` (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB), and its form for the code's
-per-segment `tag_s` domains (`segTag_meets_14`). The band's statements are proved (`lean/submissions/band-chain/`,
-red-team §39), and the red team is verifying the proofs (§40). Pending:
+Done, in this package: in the random-oracle model, the dense re-certificate at `POINT_64K` (`dense_meets_64`), the
+multi-segment lemma (`seg_meets_14`, 14 GB) and its form for the code's per-segment `tag_s` domains
+(`segTag_meets_14`), in `lean/PousProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
+`ChainExPostFactoG` and `ChainExPostFacto` (`chainExPostFactoG_v6`, `chainExPostFacto_v6`), and from them the band,
+the dense chain scheme and P3 with the concrete `H` ("Pinned statements"), in `lean/PousProofs/Chain/Flat.lean`.
+Pending:
 
-- `ChainExPostFactoG`, the hypothesis of `band_meets_64` (the band at `k = 111`), and its complete-DAG form
-  `ChainExPostFacto`, the hypothesis of `chain_meets_64` (dense). Both carry the certificate from the random oracle to
-  the overwrite chain (`DISCREPANCIES.md` D5, B1).
+- P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
-- A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at
-  3 calls, and `n10prime` over all segments (`DISCREPANCIES.md`).
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
-- In `lean/`: the band's proofs (`lean/submissions/band-chain/`), N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`,
-  `n10prime`) and `p3-meets` come in later PRs.
+- In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
+  `p3-meets` (P3 with a random-oracle `H`) come in later PRs.

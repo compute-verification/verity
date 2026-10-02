@@ -40,6 +40,8 @@ KINDS: dict[str, str] = {
     "run-files/v1": "the files a result.json pointed at, as one tree",
     "run-record/v1": "every file of a run dir (stdout.log, stderr.log, launcher.log, job.json, status.json, outputs; markers excluded) as one "
                      "tree, named by its attempt as outputs.run_record: the run's custody on the remote (store.custody); meta {run_id, files, bytes}",
+    "node-data/v1": "a path of a node's working set, preserved by `research keep --preserve` (research.retention): payload its file or "
+                    "tree; meta {path, node, owner}; its retention record names the id",
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
@@ -50,6 +52,11 @@ KINDS: dict[str, str] = {
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
                                  "{arts}, pinned by backends/flock/verifier/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
+    "kernel-attempt/v1": "one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py, written by verify.py): meta = the "
+                         "variant id, parent, tier, harness commit and gate version, metrics and step times, gamma at both FP32 prices, "
+                         "the verifier's lines, the hypothesis; refs.parent = the attempt it changes; labels kernel_outcome, kernel_reason",
+    "approach/v1": "one approach of the registry (research.approaches): meta {campaign, slug} and nothing else, so the id is a function of "
+                   "the name <campaign>/<slug>; payload null; title, hypothesis, owner, status, reason and evidence are labels on it",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
     "trust-dossier/v1": "the computed trust level of one numerical target (tools/tc_probe/trust.py): meta = the TrustReport "
@@ -59,11 +66,17 @@ KINDS: dict[str, str] = {
     # vLLM integration (integrations/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
+    "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
+                           "plan/commit_plan.json (the key and the producer facts) + the plan stage's logs; meta {row, program_digest, "
+                           "plan_key, stage_status}; refs.build = the vllm-build/v1 planned from",
     "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
                             "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
                             "match_ok?}; refs.build = the vllm-build/v1 consumed",
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
                        "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
+    "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
+                           "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
+                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "

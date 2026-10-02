@@ -1,7 +1,7 @@
 """The driver under `verity-vllm row`: one row's evidence dir, its logs and telemetry, and the stage processes.
 
 The tree that runs is the tree this package was imported from (``config.ROOT``), never the environment: a caller whose
-``VERITOR_REPO`` names another tree is refused by name.  Stages are ``verity-vllm`` subcommands run as child processes
+``VERITY_TREE`` names another tree is refused by name.  Stages are ``verity-vllm`` subcommands run as child processes
 under the configured interpreter, with the tree as cwd and the environment the CLI was started with plus the pins below.
 Evidence: ``<sweep-dir>/<row>/`` -- ``stages.txt`` (one verdict line per stage), ``row.log``, ``timeline.jsonl``.
 
@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -54,6 +55,18 @@ def _read_json(path: str | Path) -> Any:
         return None
 
 
+def jit_cache(env: dict[str, str]) -> None:
+    """The CUDA driver's JIT cache on the host beside the tree's Triton cache (the template's ``TRITON_CACHE_DIR``), not in the pod's
+    home: vLLM's FA2 extension has no code for the RTX PRO 6000 (sm_120), so each pod's first launch of every attention kernel has the
+    driver compile its PTX on the CPU, about a minute of a held GPU, unless the compiled kernels outlive the pod."""
+    triton = env.get("TRITON_CACHE_DIR")
+    if not triton or env.get("CUDA_CACHE_PATH"):
+        return
+    path = os.path.join(os.path.dirname(os.path.dirname(triton)), "cuda", os.path.basename(triton))
+    os.makedirs(path, exist_ok=True)
+    env.update({"CUDA_CACHE_PATH": path, "CUDA_CACHE_MAXSIZE": str(4 << 30)})
+
+
 class Row:
     """One row's run: ``row`` id, checkpoint ``role``, HF ``repo`` and ``rev``, the requested ``stages``.
 
@@ -75,8 +88,8 @@ class Row:
     # ------------------------------------------------------------------------------------------------ setup
     def setup(self, pins: dict[str, str]) -> None:
         """Refuse a mixed tree, find the core and the runner beside it, and fix the stages' environment."""
-        if self.env.veritor_repo and os.path.realpath(self.env.veritor_repo) != self.tree:
-            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: {self.proc} at {self.tree} but $VERITOR_REPO={self.env.veritor_repo} names another tree",
+        if self.env.verity_tree and os.path.realpath(self.env.verity_tree) != self.tree:
+            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: {self.proc} at {self.tree} but $VERITY_TREE={self.env.verity_tree} names another tree",
                   file=sys.stderr)
             raise Stop(3)
         core, research = Path(self.tree, "../../packages/verity/src"), Path(self.tree, "../../tools/research/src")
@@ -88,10 +101,13 @@ class Row:
             raise Stop(3)
         core_s, research_s = os.path.realpath(core), os.path.realpath(research)
         env = dict(self.env.environ)
-        env.update({"VERITOR_REPO": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
+        env.update({"VERITY_TREE": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
                     "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
+        jit_cache(env)
+        if GL.leased(env):
+            GL.hide_devices(env)
         self.child_env = env
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
@@ -207,6 +223,20 @@ class Row:
         self.tl(stage, "end", ("rc", rc), *extra)
         return rc
 
+    @property
+    def leased(self) -> bool:
+        """The item leases its GPU (`gpu_lease`): its pod has none of its own."""
+        return GL.leased(self.child_env)
+
+    def run_gpu(self, stage: str, to: int | str, lf: str, cmd: list[str]) -> int:
+        """``run_tl`` for the stage that needs the GPU: under a lease when the item is leased, else as any stage."""
+        if not self.leased:
+            return self.run_tl(stage, to, lf, cmd)
+        rc, rec = GL.run(self.d, lf, cmd, int(to), self.child_env, lambda t, argv: self.run_tl(stage, t, lf, argv))
+        self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']} after "
+                 f"{rec['released_at']}{' (kept: ' + rec['kept'] + ')' if rec.get('kept') else ''}, rc={rc}")
+        return rc
+
     def gpu_exclusive(self, why: str) -> None:
         """One engine per pod: ask the pod's hot Commit workers to stop before a stage starts its own engine (an idle
         worker exits, a busy one is waited for, never killed); the wait is on the timeline."""
@@ -253,11 +283,11 @@ class Row:
             f.write(line + "\n")
         return rc, line
 
-    def call_boundaries(self, to: int | str) -> None:
+    def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has
-        a source the Commit attaches (`gate call-boundaries`); the verdict line names the first identity without one."""
+        a source the Commit attaches (`cmd`, else `gate call-boundaries`); the verdict line names the first identity without one."""
         lf = f"{self.d}/call_boundaries.log"
-        rc = self.run_tl("build.call_boundaries", to, lf, self.cli("gate", "call-boundaries", self.d, "--out", f"{self.d}/call_boundaries.json"))
+        rc = self.run_tl("build.call_boundaries", to, lf, cmd or self.cli("gate", "call-boundaries", self.d, "--out", f"{self.d}/call_boundaries.json"))
         with open(lf, errors="replace") as f:
             line = (f.read().splitlines() or [""])[-1][:600]
         if rc == 0:

@@ -1,5 +1,6 @@
-"""Circuits for the primitives a template's units leave outside: attention's softmax (the FTZ f32 ops, ``F32Max``,
-``GuardNegInfZero``, MUFU.EX2, FA2's inverse sum), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
+"""Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
+f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
+`verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
 numerator scaling) and the sampler lane's compare, selects and integer add. Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
@@ -11,8 +12,13 @@ FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
 
+from verity.ml.boolean.scalar import f32_to_e4m3_sat, fmaxmin as _fmaxmin
+from verity.ml.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
+                                       f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
+
 from . import fp
 from . import gf2
+from . import unit_fp4
 from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 
 #: table name -> index bits (the MUFU tables' sha256 is ir_lower.TABLES[name], the others' TABLE_SHA256[name])
@@ -28,7 +34,6 @@ TABLE_SHA256 = {"tanh_mufu": "4c25bacba332fda09d215e64dc5ca3ec9a7dfdc98a3ea7971f
 QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
-DEFAULT_NAN = 0xFFC00000
 #: every NaN result of `NvLogf_v2`'s logs (`sampling.LOG_NAN`, the GPU's canonical NaN)
 LOG_NAN = 0x7FFFFFFF
 BIG = 0x7E800000       # 2^126
@@ -50,17 +55,16 @@ def _load_table(name: str):
     if name in TABLE_SHA256:
         arr = np.ascontiguousarray(_DERIVED[name](), dtype="<u4")
     else:
-        from verity_vllm.program.kernels import fa2_relation, rms_relation
-        t = fa2_relation.tables() if name == "ex2" else rms_relation.tables("cuda")
-        arr = np.ascontiguousarray(getattr(t, name), dtype="<u4")
+        from verity.ml import mufu
+        arr = np.ascontiguousarray(mufu.table(name), dtype="<u4")
     if hashlib.sha256(arr.tobytes()).hexdigest() != table_sha256(name):
         raise ValueError(f"the {name} table is not the pinned one ({table_sha256(name)})")
     return arr
 
 
 #: [identity below, saturated from) on |x| of each tanh table: the words its table holds. MUFU.TANH's are the IR's measured rules
-#: (``prims.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x itself below
-#: 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
+#: (``verity.ml.mufu.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x
+#: itself below 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
 TANH_BOUNDS = {"tanh_mufu": (0x3B800001, 0x41000000), "tanh_rn": (0x39B89BA3, 0x41102CB4)}
 
 
@@ -69,14 +73,14 @@ def _tanh_index(lo: int, hi: int):
 
 
 def _mufu_tanh_table():
-    """``MufuTanh_v1``'s measured table (``prims._tanh_shards``) at every positive word of [identity_below, saturate_from), by the
-    word's low 27 bits."""
+    """``MufuTanh_v1``'s measured table (``verity.ml.mufu.mufu_tanh_shards``) at every positive word of [identity_below,
+    saturate_from), by the word's low 27 bits."""
     import numpy as np
-    from verity_vllm.program.registry import prims as RP
+    from verity.ml import mufu
 
     lo, hi = TANH_BOUNDS["tanh_mufu"]
-    assert (lo, hi) == (RP.MUFU_TANH_RULES["identity_below"], RP.MUFU_TANH_RULES["saturate_from"])
-    (sh,) = RP._tanh_shards()
+    assert (lo, hi) == (mufu.MUFU_TANH_RULES["identity_below"], mufu.MUFU_TANH_RULES["saturate_from"])
+    (sh,) = mufu.mufu_tanh_shards()
     out = np.zeros(1 << 27, np.uint32)
     for k in range((lo - sh.lo) // sh.block_words, (hi - 1 - sh.lo) // sh.block_words + 1):
         b = sh.block(k)
@@ -125,10 +129,6 @@ def table_read(C, table: str, idx):
 
 # --- helpers ---------------------------------------------------------------------------------------------------------------
 
-def _eq_const(C, bits, value: int):
-    return and_reduce(C, [b if (value >> i) & 1 else NOT(b) for i, b in enumerate(bits)])
-
-
 def _ult_const(C, w, k: int):
     """``w < k`` for an unsigned word and a constant."""
     return sub(C, w, const_bits(k, len(w)), len(w))[1]
@@ -147,74 +147,7 @@ def _word(C, cases, default):
     return out
 
 
-def _is_nan(C, w):
-    return C.AND(and_reduce(C, w[23:31]), or_reduce(C, w[:23]))
-
-
-def ftz(C, w):
-    """A subnormal word flushed to its signed zero."""
-    e_nz = or_reduce(C, w[23:31])
-    return [C.AND(e_nz, m) for m in w[:23]] + list(w[23:])
-
-
-# --- attention's softmax -----------------------------------------------------------------------------------------------------
-
-def f32_add_ftz(C, a, b):
-    """``F32AddFtz_v1``: ftz(RN(ftz(a) + ftz(b)))."""
-    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b), ir_nan=True))
-
-
-def f32_sub(C, a, b):
-    """numpy float32's ``a - b``: RN; a's NaN quieted when a is a NaN, else b's (its own sign), else 0xFFC00000 for an invalid
-    operation (inf - inf of one sign)."""
-    r = fp.f32_add(C, a, fp.f32_neg(b))
-    A, B = fp.unpack(C, a), fp.unpack(C, b)
-    r = mux(C, C.AND(C.AND(A.inf, B.inf), NOT(A.s ^ B.s)), const_bits(DEFAULT_NAN, 32), r)
-    src = mux(C, A.nan, a[:22] + a[23:], b[:22] + b[23:])
-    return mux(C, OR(C, A.nan, B.nan), src[:22] + [ONE] + src[22:], r)
-
-
-def f32_sub_ftz(C, a, b):
-    """``F32SubFtz_v1``: ftz(RN(ftz(a) - ftz(b)))."""
-    return ftz(C, f32_sub(C, ftz(C, a), ftz(C, b)))
-
-
-def f32_mul_ftz(C, a, b):
-    """``F32MulFtz_v1``: ftz(RN(ftz(a) * ftz(b)))."""
-    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b), ir_nan=True))
-
-
-def f32_fma_ftz(C, a, b, c):
-    """``F32FmaFtz_v1``: ftz(RN(ftz(a) * ftz(b) + ftz(c)))."""
-    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), ftz(C, c)))
-
-
-def f32_fma_sub_ftz(C, a, b, c):
-    """``F32FmaSubFtz_v1``: ftz(RN(ftz(a) * ftz(b) - ftz(c)))."""
-    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c))))
-
-
-def f32_gt(C, a, b):
-    """``F32GtStrict_v1``: a > b on f32 values (NaN false, +0 == -0)."""
-    _, mag_gt = sub(C, b[:31], a[:31], 31)
-    _, mag_lt = sub(C, a[:31], b[:31], 31)
-    both_zero = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
-    sa, sb = a[31], b[31]
-    gt = C.AND(C.AND(NOT(sa), NOT(sb)), mag_gt) ^ C.AND(C.AND(NOT(sa), sb), NOT(both_zero)) ^ C.AND(C.AND(sa, sb), mag_lt)
-    return [C.AND(C.AND(gt, NOT(_is_nan(C, a))), NOT(_is_nan(C, b)))]
-
-
-def f32_max(C, a, b):
-    """``F32Max_v1``: ``x > y ? x : y`` on the flushed operands (FA2's ``MaxOp``)."""
-    x, y = ftz(C, a), ftz(C, b)
-    return mux(C, f32_gt(C, x, y)[0], x, y)
-
-
-def guard_neg_inf_zero(C, m):
-    """``GuardNegInfZero_v1``: ``m == -inf ? 0 : m``."""
-    keep = NOT(_eq_const(C, m, 0xFF800000))
-    return [C.AND(keep, b) for b in m]
-
+# --- attention's softmax (the FTZ f32 ops, F32Max and GuardNegInfZero are `verity.ml.boolean.softmax`'s) ---------------------
 
 def mufu_ex2(C, x):
     """``MufuEx2Ftz_v1`` (``fa2_model.cpp`` mufu_ex2_bits): x as a signed fixed-point value with 23 fraction bits; the table at
@@ -529,40 +462,11 @@ def bf16_gt(C, a, b):
     return [C.AND(C.AND(gt, NOT(nan_a)), NOT(nan_b))]
 
 
-def _fmaxmin(C, a, b, want_max: bool):
-    """PTX ``max.f32`` / ``min.f32``: a NaN operand yields the other, two NaNs 0x7FFFFFFF; ``max(+0, -0) = +0``,
-    ``min(+0, -0) = -0``."""
-    na, nb = _is_nan(C, a), _is_nan(C, b)
-    r = mux(C, f32_gt(C, b, a)[0] if want_max else f32_gt(C, a, b)[0], b, a)
-    both_zero = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
-    zs = C.AND(a[31], b[31]) if want_max else OR(C, a[31], b[31])
-    r = mux(C, both_zero, [ZERO] * 31 + [zs], r)
-    r = mux(C, na, b, mux(C, nb, a, r))
-    return mux(C, C.AND(na, nb), _c32(0x7FFFFFFF), r)
-
-
 def f32_sat(C, a):
     """``F32Sat_v1`` (``cvt.sat.f32.f32``): clamp to [+0, 1]; NaN and every negative word (-0 included) give +0."""
     r = mux(C, NOT(_ult_const(C, a[:31], ONE_F)), _c32(ONE_F), a)
     keep = NOT(OR(C, a[31], _is_nan(C, a)))
     return [C.AND(keep, x) for x in r[:31]] + [ZERO]
-
-
-def f32_to_e4m3_sat(C, x):
-    """``F32ToE4m3Sat_v1`` (``cvt.rn.satfinite.e4m3x2.f32``): RN-even onto the E4M3 grid (three fraction bits from 2^-6, steps of
-    2^-9 below), ±448 (0x7E) past it and for the infinities, 0x7F for NaN."""
-    s, e, m, e_max, e_zero, m_nz = _fields(C, x)
-    sig = m + [NOT(e_zero)]
-    normal = NOT(_ult_const(C, e, 121))                       # |x| >= 2^-6
-    amt = mux(C, normal, const_bits(19, 5),
-              mux(C, _ult_const(C, e, 116), const_bits(24, 5), sub(C, const_bits(140, 8), e, 8)[0][:5]))
-    y, sticky = fp.shr_sticky(C, sig, amt)                    # the kept bits and a guard bit
-    n = add(C, y[1:5] + [ZERO], [C.AND(y[0], OR(C, sticky, y[1]))], width=5)
-    base = [C.AND(normal, b) for b in sub(C, e, const_bits(121, 8), 8)[0][:4]]
-    enc = add(C, [ZERO] * 3 + base, n, width=8)
-    sat = OR(C, NOT(_ult_const(C, e, 136)), NOT(_ult_const(C, enc, 0x7F)))
-    out = mux(C, sat, const_bits(0x7E, 7), enc[:7]) + [s]
-    return mux(C, C.AND(e_max, m_nz), const_bits(0x7F, 8), out)
 
 
 def i32_le(C, a, b):
@@ -692,6 +596,9 @@ PIECES = {
     "F32IsFinite_v1": lambda C, a: [NOT(and_reduce(C, a[23:31]))],
     "I32Eq_v1": lambda C, a, b: [and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])],
     "HopperE4m3QgmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:])),
+    "BlackwellE4m3QmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:]), groups=(32,), W=26, F=-133),
+    "BlackwellNvf4OmmaDot64_v1": lambda C, acc, *ab: unit_fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:132], ab[132:136]),
+    "BlackwellMxf4OmmaDot64_v1": lambda C, acc, *ab: unit_fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:130], ab[130:132], ue8m0=True),
     "I32Le_v1": i32_le,
     "MufuTanh_v1": mufu_tanh,
     "TanhF32Rn_v1": tanh_rn,

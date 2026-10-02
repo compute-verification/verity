@@ -10,12 +10,18 @@
 #   Nothing is served again and nothing is retried; every artefact stays under $OUT/N3/.
 #
 # usage: stoch_negative_n3.sh <row-id> <role> <hf-repo> <revision> <out-dir>
-#        env: VERITOR_REPO, SWEEP_DIR, PY, PY312 as row_pod.sh; N3_MUTATION = python over the manifest dict `w` (default: move the
+#        env: SWEEP_DIR, PY, PY312 as row_pod.sh; N3_MUTATION = python over the manifest dict `w` (default: move the
 #        arrival of the request that arrives last-but-one ... see below) — the mutation must change some batch-mate's live count
-#        across the 4/5 (32/16) boundary or the negative is vacuous (reported as NEGATIVE-VACUOUS, not as caught).
+#        across a split boundary (4/5 = 32/16 at 142 SMs) or the negative is vacuous (reported as NEGATIVE-VACUOUS, not as caught).
 set -uo pipefail
 ROW=${1:?row-id}; ROLE=${2:?role}; REPO=${3:?hf repo}; REV=${4:?revision}; OUT=${5:?out-dir}
-cd "${VERITOR_REPO:-/workspace/cp/veritor}"
+# the tree that runs is the one this script lives in, never an environment default
+TREE_SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+if [ -n "${VERITY_TREE:-}" ] && [ "$(cd "$VERITY_TREE" 2>/dev/null && pwd -P)" != "$TREE_SELF" ]; then
+  echo "PRECHECK_FAIL_SOURCE_IDENTITY: stoch_negative_n3.sh at $TREE_SELF but \$VERITY_TREE=$VERITY_TREE names another tree" >&2; exit 3
+fi
+export VERITY_TREE=$TREE_SELF
+cd "$VERITY_TREE" || exit 1
 export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 PY=${PY:-/workspace/venv-cu129/bin/python}; PY312=${PY312:-/workspace/venv-py312/bin/python}
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW
@@ -26,15 +32,23 @@ N=$OUT/N3; mkdir -p "$N"
 log() { echo "$(date -u +%FT%TZ) [stoch-neg-N3 $ROW] $*" | tee -a "$OUT/negatives.log"; }
 MML=$($PY312 -c "import json;w=json.load(open('$WL'));print(max(r['prompt_len']+r['max_tokens'] for r in w['requests']))")
 # default mutation (empty N3_MUTATION): the first non-first request whose arrival moved 9 engine steps earlier changes r0's declared S
-# somewhere (crosses the 4/5 live boundary); an explicit N3_MUTATION is python over the manifest dict `w`
+# somewhere (crosses a live-count boundary of SplitsFor_v1 at the Builds' num_SMs: 4/5 at 142, 5/6 at 188); an explicit N3_MUTATION
+# is python over the manifest dict `w`
 MUT=${N3_MUTATION:-}
-# the mutated manifest + the declared schedules before/after (the negative is vacuous if r0's schedule does not change)
-$PY312 - "$WL" "$N/workload.json" "$MUT" "$N/schedules.json" <<'EOF'
-import json, sys
+# the mutated manifest + the declared schedules before/after (the negative is vacuous if r0's schedule does not change), at the
+# num_SMs the Builds under $D declare (sampling.geometry.num_sms)
+$PY312 - "$WL" "$N/workload.json" "$MUT" "$N/schedules.json" "$D" <<'EOF' || { log "N3: no schedule (see above)"; exit 2; }
+import glob, json, sys
 from verity_vllm.pipeline.build import declared_live_counts
 from verity_vllm.program.registry.topp_split import splits_for
+nsms = {int(g["num_sms"]) for p in glob.glob(f"{sys.argv[5]}/build_request*/result.json")
+        for g in [((json.load(open(p)).get("sampling") or {}).get("geometry") or {})] if g.get("num_sms") is not None}
+if len(nsms) != 1:
+    sys.exit(f"the Builds ({sys.argv[5]}/build_request*/result.json) declare num_SMs {sorted(nsms)}, not one value: "
+             "the declared split schedule has no constant")
+NSM = nsms.pop()
 w = json.load(open(sys.argv[1])); w0 = json.loads(json.dumps(w))
-def sched(wl, i, nsm=142):
+def sched(wl, i, nsm=NSM):
     n = declared_live_counts(wl["requests"]); r = wl["requests"][i]; a = int(r.get("arrive_step", 0) or 0)
     return [splits_for(n[a + s], nsm) for s in range(int(r["max_tokens"]))]
 mut = sys.argv[3]
@@ -50,7 +64,7 @@ json.dump(w, open(sys.argv[2], "w"), indent=1)
 sys.argv[3] = mut
 s0, s1 = sched(w0, 0), sched(w, 0)
 diff = [s for s in range(len(s0)) if s0[s] != s1[s]]
-json.dump({"r0_shape": {"LP": int(w0["requests"][0]["prompt_len"]), "T": int(w0["requests"][0]["max_tokens"]) - 1},
+json.dump({"r0_shape": {"LP": int(w0["requests"][0]["prompt_len"]), "T": int(w0["requests"][0]["max_tokens"]) - 1}, "num_sms": NSM,
            "declared_schedule_of_record": s0, "declared_schedule_mutated": s1, "events_with_different_S": diff,
            "mutation": sys.argv[3], "requests_mutated": [(a["request_id"][:8], a.get("arrive_step"), b.get("arrive_step"), a["max_tokens"], b["max_tokens"])
                                                          for a, b in zip(w0["requests"], w["requests"]) if a != b]}, open(sys.argv[4], "w"), indent=1)

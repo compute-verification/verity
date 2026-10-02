@@ -37,7 +37,7 @@ LIMITS: dict[str, dict[str, float]] = {
 }
 COMMON = {"root_free_gb": 60.0, "root_hard_free_gb": 45.0, "inode_pct": 80.0, "mem_avail_pct": 10.0, "idle_gpu_gib": 20.0,
           "idle_gpu_s": 900.0, "unpreserved_runs": 10, "unpreserved_age_s": 3600.0, "inode_growth_per_h": 100_000,
-          "inode_rate_min_s": 900.0, "inode_base_max_s": 3600.0,
+          "inode_rate_min_s": 900.0, "inode_base_max_s": 3600.0, "inode_hard_h": 12.0,
           "replay_share": 0.5, "replay_floor_gb": 90.0}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 DCGM = 'service="nvidia-dcgm-exporter"'
@@ -106,10 +106,13 @@ def replay_queue_kueue(workloads: list[dict], floor_gb: float) -> dict[str, Any]
 
 def replay_queue_fill(fill_dir: Path, floor_gb: float) -> dict[str, Any]:
     """Node 2's replay RAM to come: queued `*replay*` fill jobs (max(mem_gb, floor)) and running `*commit*` jobs, each of which
-    queues a replay of its bundle when it ends (at the floor). A queued Commit reserves nothing until it runs."""
+    queues a replay of its bundle when it ends (at the floor). A queued Commit reserves nothing until it runs. The runner's
+    dotfiles beside a running job (`.<job>.pgid`, `.<job>.unit`) are not jobs."""
     items = []
     for sub, pat in (("queue", "replay"), ("running", "commit")):
         for f in sorted((Path(fill_dir) / sub).glob(f"*{pat}*")):
+            if f.name.startswith("."):
+                continue
             try:
                 head = f.read_text(errors="replace")[:2000]
             except OSError:
@@ -235,7 +238,11 @@ def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, floa
         if p and r["t"] >= p.get("t", r["t"]) + lim["inode_rate_min_s"]:
             rate = (d["iused"] - p["iused"]) / (r["t"] - p["t"]) * 3600
             if rate > lim["inode_growth_per_h"]:
-                b.append(f"{d['path']} gaining {rate:,.0f} inodes/h > {lim['inode_growth_per_h']:,.0f}")
+                left_h = (lim["inode_pct"] / 100 * d.get("inodes", 0) - d["iused"]) / rate
+                if left_h < lim["inode_hard_h"]:
+                    b.append(f"HARD {d['path']} gaining {rate:,.0f} inodes/h: {lim['inode_pct']:.0f}% of inodes in {max(left_h, 0):.1f} h")
+                else:
+                    b.append(f"{d['path']} gaining {rate:,.0f} inodes/h > {lim['inode_growth_per_h']:,.0f}")
     m = r["mem"]
     if m["avail_pct"] < lim["mem_avail_pct"]:
         b.append(f"RAM available {m['avail_pct']:.1f}% < {lim['mem_avail_pct']:.0f}%")

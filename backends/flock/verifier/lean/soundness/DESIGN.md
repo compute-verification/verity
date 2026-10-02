@@ -163,8 +163,9 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   An exponential tail comes from disjoint blocks: the unseen set is the intersection of the blocks' unseen sets, so `r`
   blocks of `2N₀/(e(ε − ε_c⁻))` runs fail with probability at most `2^-r`.
 - **Canonical values.** The extractor should output the values behind the `hm96` commit strings, not "one satisfying
-  witness". Two satisfying candidates that differ behind a commit string are an `hm96` collision. This, and
-  `registered_weights`, need the SHA-512 leaf layout in the model.
+  witness". Two satisfying candidates that differ behind a commit string are an `hm96` collision. `registered_weights`
+  is proved for the model's rows (`Binding/`, under `HmRowComputes`); the canonical values still need the extractor to
+  output them.
 - **Binding to registered data.** Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
 - **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
@@ -583,10 +584,10 @@ If real concurrency is ever needed:
   - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
   - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
     `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
-    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1. `unitPlace_of_setupH` gives
+    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`. `unitPlace_of_setupH` gives
     the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
     analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
   - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`
     hypothesis. They rest on A2, `ValueBinding` and the lowering; the `_placed` forms take `UnitPlace`
-    (row placement and L1) for the lowering.
+    (row placement) for the lowering.

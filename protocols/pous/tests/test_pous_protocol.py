@@ -8,12 +8,13 @@ import itertools
 import json
 import os
 import random
+import re
 from pathlib import Path
 
 import pytest
 
 from verity.claims import get as core_claim
-from verity_pous import band, dense, protocol, schemes
+from verity_pous import band, dense, primitives, protocol, schemes
 from verity_pous.codec import Geometry
 from verity_pous.layout import Layout
 from verity_pous.params import Params
@@ -199,7 +200,7 @@ def test_segment_tags_are_salt_then_u64_segment():
 
 @pytest.mark.parametrize("name", sorted(SMALL))
 def test_identical_segments_encode_differently(name):
-    """The hard requirement behind `band_meets_14` and `shared_domain_breaks`: segments with the same bytes of `W`
+    """The hard requirement behind `BandMultiMeetsFamily` and `shared_domain_breaks`: segments with the same bytes of `W`
     must encode to different blocks, because each segment is keyed by its own tag."""
     base = SMALL[name]()
     sch = type(base)(base.params.with_segments(3))
@@ -234,31 +235,50 @@ def test_a_shared_domain_breaks_the_audit(name):
     assert not v.run(lambda i: own[0][i % b]).accepted
 
 
+def test_the_band_certificate_covers_every_segment_count():
+    """`Pous.Pinned.BandMultiMeetsFamily`: one `Meets` for the whole store at k = 111, for every segment count from 1 to
+    2^64 (`FAMILY_SEGMENTS`, all that `BandParams` allows), with no hypothesis.  The certificate used to be
+    `band_meets_64` at one segment, `band_meets_14` at 448 and `band_meets_family` between, each given
+    `ChainExPostFactoG`; `chainExPostFactoG_v6` proves that hypothesis, and the family pin covers every count."""
+    for n in (1, 30, 448, 2240, 1 << 64):
+        cert = schemes.Band(band.SECURE_FIRST.with_segments(n)).certificate
+        assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == (
+            "Pous.Pinned.BandMultiMeetsFamily", n, 111, 5, ())
+    from verity_pous.schemes import band as band_scheme
+    assert band_scheme.FAMILY_SEGMENTS == 1 << 64
+
+
 def test_the_14_gb_certificate():
-    """`band_meets_14`: one `Meets` for 448 segments (14 GB) at k = 111, the same hypothesis as one segment; other
-    segment counts keep the gap."""
+    """448 segments (14 GB, where the family is also `BandMultiMeets14`) and 30 segments are certified, with no gap."""
     sch = schemes.get(segments=448)
-    cert = sch.certificate
-    assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == ("band_meets_14", 448, 111, 5,
-                                                                                    ("ChainExPostFactoG",))
     vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(32)] * sch.params.blocks)
     v = protocol.Verifier(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
     assert v.gaps == ()
-    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800, cert)
+    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800,
+                                sch.certificate)
     assert p.certified and p.state_bound_bits == 113_929_658_799
-    assert schemes.get(segments=30).certificate.theorem == "band_meets_64"
-    v30 = protocol.Verifier(schemes.get(segments=30), _fake_vk(schemes.get(segments=30)), protocol.challenge_key(b"\x00" * 32, vk))
-    assert v30.gaps == ("W has 30 segments; band_meets_64 is about 1",)
+    s30 = schemes.get(segments=30)
+    assert protocol.Verifier(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
+
+
+def test_the_family_certificate_covers_a_70_gb_store():
+    """A 70 GiB FP8 store (2,240 segments of 32 MiB) is certified whole by `BandMultiMeetsFamily`, as one `Meets` over
+    its 1,146,880 blocks."""
+    sch = schemes.get(segments=2240)
+    cert = sch.certificate
+    assert (cert.theorem, cert.segments, cert.k) == ("Pous.Pinned.BandMultiMeetsFamily", 2240, 111)
+    assert sch.params.blocks == 2240 * 512
 
 
 def test_certificates_at_their_points():
     b = schemes.get().certificate
-    assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 483_000, 12, 1)
-    assert (b.theorem, b.hypotheses) == ("band_meets_64", ("ChainExPostFactoG",))
+    assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 241_500, 12, 1)
+    assert (b.theorem, b.hypotheses) == ("Pous.Pinned.BandMultiMeetsFamily", ())
     d = schemes.get("dense-chain/v1").certificate
-    assert (d.theorem, d.hypotheses, d.cliff, d.k, d.rounds) == ("chain_meets_64", ("ChainExPostFacto",), None, 111, 5)
+    assert (d.theorem, d.hypotheses, d.cliff, d.k, d.rounds, d.segments) == ("Pous.Pinned.ChainDenseMeets64", (), None,
+                                                                             111, 5, 1)
     assert schemes.get("p3/v1").certificate is None
-    assert schemes.Band(band.BandParams(512, 524_288, 4)).certificate is None      # band_meets_64 needs d ≥ 5
+    assert schemes.Band(band.BandParams(512, 524_288, 4)).certificate is None      # the band pins need d ≥ 5
     assert schemes.Band(band.BandParams(512, 524_288, 5)).certificate.cliff == 5
     assert schemes.Band(band.BandParams(256, 524_288, 12)).certificate is None
     with pytest.raises(ValueError, match="cliff"):
@@ -267,26 +287,86 @@ def test_certificates_at_their_points():
         protocol.Certificate(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
 
 
+def test_certificates_name_proved_pins():
+    """A certificate's `theorem` is the `Pous.Pinned` statement it rests on (`lean/Pous/Pinned.lean`), and its proof
+    `PousProofs.X` is pinned in `lean/lean-audit.json`.  Experimental schemes are exempt: P2's pin is proposed."""
+    lean = Path(__file__).parents[1] / "lean"
+    statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Pinned.lean").read_text(), re.M))
+    pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
+    checked = 0
+    for name in schemes.REGISTRY:
+        sch = schemes.get(name)
+        if sch.certificate is None or sch.experimental:
+            continue
+        x = sch.certificate.theorem.removeprefix("Pous.Pinned.")
+        assert sch.certificate.theorem == f"Pous.Pinned.{x}" and x in statements and f"PousProofs.{x}" in pins, name
+        checked += 1
+    assert checked == 2
+
+
+def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
+    """P3's operating point has the parameters of `Pous.Pinned.P3ConcreteMeets64` (`n = 220`, `wc = 2384`,
+    `B(220, 12)`, one segment) but not its `H`.  Lean's overwrite chain starts from `iv(domP3 tag L v)`: zeros, then
+    the tag and `2v + L` in the 512-bit capacity part.  The code's starts from the instantiation's header in the low
+    bytes, with the capacity part zero.  So P3 has no certificate; when the two agree, this fails and one is due."""
+    sch = schemes.get("p3/v1")
+    p = sch.params
+    assert (p.n, p.wc, p.k, p.segments) == (220, 2384, 12, 1)
+    tag, layer, v = int.from_bytes(SALT + (3).to_bytes(8, "little"), "little"), 1, 5
+    lean_h0 = (tag | (2 * v + layer) << 256) << p.m
+    h0 = sch.prims.h.initial(tag, layer, v, len(p.parents(v)))
+    assert h0 != lean_h0 and h0 >> p.m == 0 and lean_h0 & ((1 << p.m) - 1) == 0
+    assert sch.certificate is None
+
+
 def _fake_vk(sch: protocol.Scheme) -> VerifierKey:
     return VerifierKey.from_leaves(sch.params, SALT, [hashlib.sha256(bytes([i % 251])).digest()
                                                      for i in range(sch.params.blocks)])
 
 
+def test_the_call_floor_is_the_streamed_chain_count():
+    """A 64 KiB `Π₂` call in a chain is 10 rounds of one absorb each: the prefix and a 65,568-byte half are 65,570
+    bytes, 483 SHAKE256 blocks, so 4,830 Keccak-f, 241,500 ns at 50 ns.  Counting every round's 482 further squeeze
+    blocks in sequence too gives 9,650 (482,500 ns), the 483 µs the certificates used to carry."""
+    half = (2 * 524_288 + 512) // 16
+    absorb = -(-(primitives.ROUND_PREFIX_BYTES + half) // primitives.SHAKE256_RATE)
+    assert (half, absorb, primitives.FEISTEL_ROUNDS, primitives.KECCAK_F_NS) == (65_568, 483, 10, 50)
+    assert primitives.pi2_keccak_f(524_288) == primitives.FEISTEL_ROUNDS * absorb == 4_830
+    assert primitives.FEISTEL_ROUNDS * (absorb + -(-half // primitives.SHAKE256_RATE) - 1) == 9_650
+    assert primitives.pi2_call_ns(524_288) == 241_500
+    assert band.SECURE_FIRST.call_ns == dense.POINT_64K.call_ns == 241_500
+    for name in ("band-chain/d12/v1", "dense-chain/v1"):
+        cert = schemes.get(name).certificate
+        assert cert.call_ns == 241_500 and (cert.rounds + 1) * cert.call_ns == 1_449_000
+    assert (schemes.get().certificate.cliff + 1) * 241_500 == 3_139_500
+
+
+def test_a_two_ms_deadline_is_refused_for_five_rounds():
+    """Δ + RTT = 2.0 ms fits 8 calls of 241.5 µs, past the certificate's D = 5 (under the old 483 µs it fit 4)."""
+    sch = schemes.get()
+    vk = _fake_vk(sch)
+    k = protocol.challenge_key(b"\x00" * 32, vk)
+    with pytest.raises(ValueError, match="fits 8 calls of 241500 ns; the certificate covers 5"):
+        protocol.Verifier(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
+    research = protocol.Verifier(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
+    assert any("covers 5" in g for g in research.gaps) and research.certificate.effective_rounds(research.limit_ns) == 8
+
+
 def test_the_verifier_enforces_the_certificate():
-    """k = 111 is certified only for D = 5 calls of 483 µs: Δ + RTT < 2.898 ms, inside the cliff at 6.279 ms."""
+    """k = 111 is certified only for D = 5 calls of 241.5 µs: Δ + RTT < 1.449 ms, inside the cliff at 3.1395 ms."""
     sch = schemes.get()
     vk, key = _fake_vk(sch), b"\x00" * 32
     k = protocol.challenge_key(key, vk)
     assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=36_800).k == 111
-    assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_397_999).gaps == ()
+    assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_398_000)
+        protocol.Verifier(sch, vk, k, rtt_allowance_ns=949_000)
     with pytest.raises(ValueError, match="below"):
         protocol.Verifier(sch, vk, k, k=110)
-    uncertified = protocol.Verifier(sch, vk, k, rtt_allowance_ns=3_000_000, research=True)
+    uncertified = protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
     assert any("covers 5" in g for g in uncertified.gaps)
     with pytest.raises(ValueError, match="cliff"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=5_779_000, research=True)
+        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
     with pytest.raises(ValueError, match="parameters"):
         protocol.Verifier(schemes.get(segments=2), vk, k)
 
@@ -296,7 +376,7 @@ def test_the_dense_certificate_has_no_cliff_but_the_same_rounds():
     vk = _fake_vk(sch)
     k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_398_000)
+        protocol.Verifier(sch, vk, k, rtt_allowance_ns=949_000)
     far = protocol.Verifier(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
     assert not any("cliff" in g for g in far.gaps)
 
@@ -311,9 +391,10 @@ def test_certified_profile_of_one_band12_segment():
     v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
-    assert p.certified and p.gaps == () and p.effective_rounds == 1
+    assert p.certified and p.gaps == () and p.effective_rounds == 2
     assert p.state_bound_bits == 254_307_274 == (512 * 524_288 * 18) // 19
-    assert "band_meets_64, given ChainExPostFactoG" in p.statement()
+    assert "(Pous.Pinned.BandMultiMeetsFamily; under ideal-permutation, " in p.statement()
+    assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
     late = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
@@ -321,10 +402,14 @@ def test_certified_profile_of_one_band12_segment():
 
 
 def test_many_segments_are_a_gap_not_a_refusal():
-    """`band_meets_64` is about one segment; the 14 GB multi-segment form is the next item."""
-    sch = schemes.get(segments=2)
+    """A segment count its certificate doesn't state is a gap, not a refusal: `ChainDenseMeets64` is about one segment,
+    and no pinned statement covers the dense chain scheme at more.  The band's family pin covers every count, so two
+    band segments have none."""
+    band2 = schemes.get(segments=2)
+    assert protocol.Verifier(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
+    sch = schemes.get("dense-chain/v1", segments=2)
     v = protocol.Verifier(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
-    assert v.gaps == ("W has 2 segments; band_meets_64 is about 1",)
+    assert v.gaps == ("W has 2 segments; Pous.Pinned.ChainDenseMeets64 is about 1",)
 
 
 def test_claims_resolve_and_local_ones_are_not_in_core():

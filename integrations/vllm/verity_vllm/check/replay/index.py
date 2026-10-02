@@ -88,7 +88,7 @@ class ProgramIndex:
     counts), read with the correspondence of its Build dir (`program_dir`; without one, the rows' recorded names)."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 program_dir: str | None = None, query: str | None = None):
+                 program_dir: str | None = None, query: str | None = None, norm_scales: bool = False):
         self.rows: list[dict] = list(inst["rows"])
         # [tp TP-08d] a RANK Program (derive_step --tp W --rank r; result.json `tp` = {"world": W, "rank": r}): its population carries the
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
@@ -97,11 +97,15 @@ class ProgramIndex:
         # [v2 flip, P2] Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
         # (`Population.program_path`: its owning module, a collective site's site path)
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
+        self._v2_ports: dict[int, dict[str, str]] = {}
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
         from verity_vllm.correspondence.reader_for_query import Correspondence
         from verity_vllm.query.program_view import from_instances
+        from verity_vllm.query import norm_scales as NS
         from verity_vllm.query.required import population
+        # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
+        population = NS.population if norm_scales else population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
         pop = population(P, corr, tp=self.tp, **({"query": q} if (q := query or DEFAULT_QUERY) else {}))
@@ -109,6 +113,7 @@ class ProgramIndex:
             mem = pop.members_of(cid)
             if mem:
                 self._v2[cid] = [(m.member, m.width, m.dtype) for m in mem]
+                self._v2_ports[cid] = dict(reversed([(m.port, m.member) for m in mem]))      # a port's own member, before a partial on it
                 self._v2_module[cid] = pop.program_path(cid)
         self.correspondence: dict[str, Any] | None = corr.provenance()
         del P, corr, pop
@@ -188,6 +193,10 @@ class ProgramIndex:
 
     def step_of(self, i: int) -> int:
         return max(0, bisect.bisect_right(self._seg_lo, int(i)) - 1)
+
+    def member_of_port(self, i: int) -> dict[str, str]:
+        """Row i's output port -> the member it is committed as (`CallMember.port`); {} for a row whose outputs are interior."""
+        return dict(self._v2_ports.get(int(i), {}))
 
     def describe(self, r: dict) -> dict | None:
         """Family, statics, module -> op_path, members (name, width, dtype) and request-local row of a Program row; None if unmodelled."""

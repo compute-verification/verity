@@ -1,16 +1,16 @@
 #!/bin/sh
 # disk_guard.sh check | status | release: vy-nebius-1's /workspace guard (a systemd timer every minute, from cluster_up.sh).
-# At VY_DISK_HOLD_PCT (90) it sets stopPolicy: Hold on every queue whose jobs write to /workspace (VY_DISK_QUEUES), so Kueue
+# At VY_DISK_HOLD_PCT (80, infra's mark at 4:38 PM PDT Sep 30) it sets stopPolicy: Hold on every queue whose jobs write to /workspace (VY_DISK_QUEUES), so Kueue
 # admits nothing new; admitted workloads keep running, and it deletes nothing. While the disk stays at or above the mark it
-# re-asserts the hold every tick, so the quiet hour's release can't undo it. Below VY_DISK_RELEASE_PCT (85) it releases only the
+# re-asserts the hold every tick, so the quiet hour's release can't undo it. Below VY_DISK_RELEASE_PCT (75) it releases only the
 # queues it held itself (VY_DISK_STATE), and never inside the quiet hour (12:30-13:30Z), whose own release follows. Each hold and
 # release is a line on stdout (the journal) and an alert note in the alert sink's outbox, which reaches lanes/infra/.
 set -eu
 K=${VY_KUBECTL:-k3s kubectl}
 QUEUES=${VY_DISK_QUEUES:-deployments-cpu deployments-gpu provers backfill circuits}
 MOUNT=${VY_DISK_MOUNT:-/workspace}
-HOLD=${VY_DISK_HOLD_PCT:-90}
-RELEASE=${VY_DISK_RELEASE_PCT:-85}
+HOLD=${VY_DISK_HOLD_PCT:-80}
+RELEASE=${VY_DISK_RELEASE_PCT:-75}
 STATE=${VY_DISK_STATE:-/var/lib/vy-disk-guard/held}
 OUTBOX=${VY_DISK_OUTBOX:-/workspace/monitoring/alerts/outbox}
 

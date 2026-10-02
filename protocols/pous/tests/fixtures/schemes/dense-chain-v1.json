@@ -1,6 +1,6 @@
 {
  "certificate": {
-  "call_ns": 483000,
+  "call_ns": 241500,
   "claims": [
    "ideal-permutation",
    "random-oracle",
@@ -14,14 +14,12 @@
   "cliff": null,
   "delta": "1/100",
   "eps_log2": -128,
-  "hypotheses": [
-   "ChainExPostFacto"
-  ],
+  "hypotheses": [],
   "k": 111,
   "rho": "18/19",
   "rounds": 5,
   "segments": 1,
-  "theorem": "chain_meets_64",
+  "theorem": "Pous.Pinned.ChainDenseMeets64",
   "work": 1048576
  },
  "name": "dense-chain/v1",

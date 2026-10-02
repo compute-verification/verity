@@ -165,7 +165,7 @@ sys.stdout.write(s.replace("integrations:\n  frameworks:\n", "integrations:\n  f
     echo "   would add the plain-pod framework (\"pod\") to kueue-manager-config and restart Kueue"
   fi
 fi
-# kueue.yaml holds the target split (provers 4 GPUs); provers gives up one GPU per GPU held for direct runs.
+# kueue.yaml holds the target split (provers 2 GPUs); provers gives up one GPU per GPU held for direct runs.
 direct=$([ "$VY_DIRECT_GPUS" = none ] && echo 0 || echo "$VY_DIRECT_GPUS" | tr ',' '\n' | grep -c .)
 python3 - "$QUEUES" "$direct" > /tmp/kueue-rendered.yaml <<'PY'
 import re, sys
@@ -237,11 +237,11 @@ grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && for what in hold:12:30 
 done
 run sudo systemctl daemon-reload
 grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
-# the disk guard: every minute, hold every queue's admissions while /workspace is 90% full, release its own holds under 85%
+# the disk guard: every minute, hold every queue's admissions while /workspace is 80% full, release its own holds under 75%
 run sudo install -m 755 "$SRC/disk_guard.sh" /usr/local/bin/vy-disk-guard
 if [ ! -f /etc/systemd/system/vy-disk-guard.timer ]; then
   if [ "$mode" = --apply ]; then
-    printf '[Unit]\nDescription=disk guard: hold Kueue admissions while /workspace is 90%% full\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-disk-guard check\n' \
+    printf '[Unit]\nDescription=disk guard: hold Kueue admissions while /workspace is 80%% full\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-disk-guard check\n' \
       | sudo tee /etc/systemd/system/vy-disk-guard.service > /dev/null
     printf '[Unit]\nDescription=disk guard every minute\n\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=1min\n\n[Install]\nWantedBy=timers.target\n' \
       | sudo tee /etc/systemd/system/vy-disk-guard.timer > /dev/null

@@ -14,6 +14,8 @@
 # build dirs (.lake/), synced source trees (trees/, and the src/ copies fill jobs make), the check toolchain, a fill job's
 # running copy.  The run writes backup/MANIFEST.tsv (unit, file, sha256 and bytes of the whole tarball, chunks) and
 # backup/summary.json.  Restore a unit: cat tars/NAME.tar.zst.* | zstd -d | tar -x
+# It packs nothing while a timed window runs or waits (the fill runner's status.txt): it waits before each unit, and after
+# BACKUP_QUIET_MAX_S (default 3600) of windows it stops with exit 75, leaving the rest to the next hour's backup.
 set -euo pipefail
 : "${RESEARCH_RUN_DIR:?run this through research run}"
 SRC=${BACKUP_SRC:-/workspace/pouw}
@@ -25,6 +27,20 @@ EXCL=(--exclude=env --exclude=venv --exclude=.venv --exclude=site-packages --exc
 TAR=(tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime
      "${EXCL[@]}")
 PREV=$(readlink -f "$LAST" 2>/dev/null || true)
+STATUS=${BACKUP_STATUS:-/workspace/pouw/fill/status.txt}
+QUIET_MAX_S=${BACKUP_QUIET_MAX_S:-3600}
+waited=0
+quiet() {
+  while head -1 "$STATUS" 2> /dev/null | grep -qE "timed True|window waiting True"; do
+    if [ "$waited" -ge "$QUIET_MAX_S" ]; then
+      echo "backup.sh: timed windows held it for ${waited}s; stopping, the next hour's backup takes the rest" >&2
+      exit 75
+    fi
+    sleep 10
+    waited=$((waited + 10))
+  done
+}
+quiet
 cd "$SRC"
 # units.txt: the unit directories; loose.txt: every kept file outside them (so each kept file is in exactly one tarball)
 python3 - "$DEST" <<'EOF'
@@ -51,6 +67,7 @@ pack() {   # pack NAME LABEL TAR-ARGS...: one deterministic tarball in 60 MiB ch
            # larger files stalled from node 2 (connections left in CLOSE-WAIT at 0 B/s)
   local name=$1 label=$2; shift 2
   local tmp="$DEST/tars/.$name.tmp" try
+  quiet
   # a unit a running job rewrites can change or lose a file mid-read (tar exits non-zero): retry it, and after three misses
   # leave it to the next hour's backup (skipped.txt) rather than lose every unit after it
   for try in 1 2 3; do

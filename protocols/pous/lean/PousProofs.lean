@@ -23,4 +23,13 @@ import PousProofs.P3.Column.TwoWay
 import PousProofs.P3.Column.BandTwoWay
 import PousProofs.Dense.DenseReCert
 import PousProofs.Dense.SegTagged
+import PousProofs.Chain.Flat
+import PousProofs.Chain.Family
+import PousProofs.P2.Count
+import PousProofs.P2.Rows
+import PousProofs.P2.Domain
+import PousProofs.P2.Margin
+import PousProofs.P2.RingBasic
+import PousProofs.P2.RingTight
+import PousProofs.P2.RingTrunc
 import PousProofs.Pinned

@@ -11,6 +11,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
 from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
 from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)
 from verity_vllm.observe.fold.tree import step_events
@@ -373,13 +374,14 @@ def test_gemm_constexpr_mismatch_is_unsupported():
     assert len(uns) == 1 and "pinned" in uns[0].reason and uns[0].detail["mismatches"]["BLOCK_SIZE_K"] == {"observed": 32, "pinned": 64}
 
 
-def _context_on_host(start, sample, sms):
+def _context_on_host(start, sample, sms, cc=(8, 9)):
     """A StepContext whose run header carries the capture host's GPU document (`profile.gpu.multi_processor_count`), as
     `verity_vllm.engine.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
     ctx = context(start, sample)
     prof = dict(ctx.header.profile)
     if sms is not None:
-        prof["gpu"] = {"name": "NVIDIA L40S", "compute_capability": [8, 9], "multi_processor_count": sms}
+        prof["gpu"] = {"name": "NVIDIA L40S" if tuple(cc) == (8, 9) else f"cc {cc[0]}.{cc[1]}", "compute_capability": list(cc),
+                       "multi_processor_count": sms}
     hdr = RunHeader(ctx.header.schema, ctx.header.created_utc, ctx.header.profile_id, prof, ctx.header.model, ctx.header.workload, ctx.header.notes)
     return StepContext(hdr, ctx.start, ctx.sample, ctx.links, ctx.roots, ctx.config, ctx.profile)
 
@@ -453,6 +455,21 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
     unbiased = by_spec(resolve_step(step_events(plain), context(start)))
     assert {s: len(v) for s, v in specs.items() if s.startswith("Gemm_v1")} == \
         {s: len(v) for s, v in unbiased.items() if s.startswith("Gemm_v1") and s != f"Gemm_v1{{K={H},N={QKV}}}"}
+
+
+@pytest.mark.parametrize("cc,sms", [((12, 0), 188), ((9, 0), 132)])
+def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
+    """The same pair on a `Gemm_v2` target (cc 12.0, cc 9.0): one `GemmBias_v2{K,N,DOT}` at the add, the record target's one-Call
+    Definition (`registry.targets.gemm_bias_spec`), the frontend's choice."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.registry import targets as TG
+    events, start = decode_step(qkv_bias="add", num_sms=sms)
+    se = step_events(events)
+    specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))
+    tp = TargetProfile(compute_capability=cc, num_sms=sms)
+    gemm, fused = TG.gemm_spec(tp, H, QKV).id, TG.gemm_bias_spec(tp, H, QKV)
+    assert fused is not None and fused.id.startswith("GemmBias_v2{") and len(specs[fused.id]) == 1, sorted(specs)
+    assert gemm not in specs and not any(s.startswith("BiasAdd_v1") for s in specs), sorted(specs)
 
 
 def test_a_biased_linear_whose_pre_bias_output_is_read_again_keeps_gemm_and_bias_add():
@@ -662,11 +679,18 @@ def test_gumbel_two_stage_sampler_is_one_token_select():
     assert isinstance(by_op["aten.gather.default"], Compute)
     stages = [r for r in res if getattr(r, "pattern", None) == "sample.gumbel_two_stage"]
     assert len(stages) == 3
-    # a non-greedy header makes the sampler Unsupported (the kernel's temperature branch is a workload fact)
-    res2 = resolve_step(step_events(events), context(start, None, sampling={"greedy": False, "temperature": 0.7}))
+    # a non-greedy header makes the sampler Unsupported (the kernel's temperature branch is a workload fact).  The stochastic pattern owns
+    # the kernel under it (the profile lists it first) and refuses the greedy chain's bf16 logits, which no float32 widening precedes; the
+    # greedy pattern refuses the header by itself
+    stochastic = {"greedy": False, "temperature": 0.7}
+    se2 = step_events(events)
+    res2 = resolve_step(se2, context(start, None, sampling=stochastic))
     uns = [r for r in res2 if isinstance(r, Unsupported)]
-    assert uns and uns[0].op.endswith("_gumbel_sample_kernel") and "greedy" in uns[0].reason
+    assert uns and uns[0].op.endswith("_gumbel_sample_kernel") and uns[0].reason == "sampler logits are not a row-contiguous float32 [R,V] view"
     assert "TokenSelect_v1{V=49152}" not in by_spec(res2)
+    kernel = next(n for n in se2.roots if n.op.endswith("_gumbel_sample_kernel"))
+    alone = TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, context(start, None, sampling=stochastic))
+    assert isinstance(alone, Unsupported) and "outside greedy sampling" in alone.reason
 
 
 def test_integer_metadata_triton_kernel_is_noop():

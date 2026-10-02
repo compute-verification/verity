@@ -203,6 +203,17 @@ def test_a_main_moved_outside_the_queue_rebuilds_next_on_it(world):
     _git(world.origin, "merge-base", "--is-ancestor", moved, "refs/heads/next")      # raises unless next is on the new main
 
 
+def test_the_clone_follows_the_callers_origin_so_a_url_that_stopped_working_does_not_strand_it(world):
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.queue().sync()
+    moved = world.tmp / "origin-now.git"
+    world.origin.rename(moved)                  # the URL the clone was made from fails now, as one with a rotated token does
+    world.origin = world.gh.origin = moved
+    members, _ = world.queue().sync()
+    assert [m.pr for m in members] == [1]
+    assert _git(world.tmp / "q" / "verity", "remote", "get-url", "origin") == str(moved)
+
+
 def test_a_rewritten_pr_head_is_fetched_by_force_and_merged(world):
     old = world.change({"a.txt": "1\n"})
     world.gh.put(1, old)
@@ -253,6 +264,41 @@ def test_pr_label_targets_and_grants(tmp_path, monkeypatch):
     assert labels_sync.push_targets(reviewer, [grant_target(12, head)])["failed"] == []
     assert len(labels_sync.pull_targets(queue_host, [grant_target(12, head)])["pulled"]) == 1
     assert [lab.value for lab in queue_host.labels(grant_target(12, head), key=vocab.GRANT)] == ["red-team"]
+
+
+
+class _Unreachable:
+    """A configured remote whose endpoint is down: every call raises."""
+
+    def describe(self):
+        return "fs:/unreachable"
+
+    def __getattr__(self, name):
+        def fail(*a, **k):
+            raise OSError("injected: endpoint unreachable")
+        return fail
+
+
+def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_path, monkeypatch):
+    from research.queue import StoreGrants
+
+    head = "0123456789abcdef0123456789abcdef01234567"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    reviewer, queue_host = LocalStore(tmp_path / "reviewer"), LocalStore(tmp_path / "queue")
+    reviewer.add_label(grant_target(12, head), vocab.GRANT, "red-team", "red-team-flock-3", ts="2026-09-29T05:30:00Z")
+    reviewer.add_label(grant_target(12, head), vocab.READY, True, "lane-12", ts="2026-09-29T05:31:00Z")
+    assert labels_sync.push_targets(reviewer, [grant_target(12, head)])["failed"] == []
+    logs: list[str] = []
+    grants = StoreGrants(queue_host, log=logs.append)
+    real = LocalStore.remote.fget
+    monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
+    assert grants(12, head) == set() and grants.ready(12, head) is False, "a failed pull is never a grant"
+    assert len(logs) == 2 and all(x.startswith(f"research queue: labels of pr:12@{head}: pulling from fs:/unreachable failed (OSError")
+                                  for x in logs)
+    monkeypatch.setattr(LocalStore, "remote", property(real))
+    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and len(logs) == 2
 
 
 def test_rules_refuse_what_they_cannot_place():

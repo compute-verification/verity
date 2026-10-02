@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# BF16 GemmCoordinate hillclimb, one step at one K (gemm_hill.py): the gate (byte identity at B = 16: the GPU's proofs and
-# transcripts equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving equal those
-# verified one at a time), then one m = 35 statement of
+# BF16 GemmCoordinate hillclimb, one step at one K (gemm_hill.py): the preflight check (byte identity at B = 16: the GPU's
+# proofs and transcripts equal the CPU prover's, the device paths agree, and sessions verified beside the next ones' proving
+# equal those verified one at a time), then one m = 35 statement of
 # GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1} proved warm once and timed three times, nvidia-smi dmon sampling the GPU's
 # utilization and memory every second from the start, and the job's own cores sampled every 5 s (out/slice_cores.tsv: another
 # job pinned to them flags the point cpu-slice-shared); result.json (the campaign contract's) and out/metrics.json carry the
@@ -13,23 +13,28 @@
 # env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
 #      pin to, inside the job's affinity)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices; pass CPUS=16).
 #      Node 1's dispatcher starts every `provers` task on the same cores (128-175), so a job holds a lock on every slice it pins
-#      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds  GATE=1  WARM=1  RUNS=3
-#      PEAK_ID=rtx-pro-6000-server/bf16
+#      (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds
+#      PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
+#      POINTS=1 (N: one GPU session of N points, one preflight check and then the step's statement swept N times, each point
+#      under out/p<i>/ with its own hillclimb-<i>.json citing the check, and result.json the session's; gemm_hill.py;
+#      0: the preflight check alone, its record the run's one output, and with STAGE_ONLY=1 only its statement staged)
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  QUESTION= (the job's research question, else the
 #      campaign's)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
-#      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the gate's and the step's statements into FLOCK_STAGE_CACHE,
-#      default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the cache, so it holds its
-#      GPU from the gate's selftests on, and its point is flagged staged-on-gpu if it staged the step's statement itself)  SM=120
-#      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the gate's and the step's statements and serve their sessions on
-#      the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR alone (the GPU
-#      job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the pod network, so
-#      this pod holds only the prover); give both jobs the same K, N, WARM, RUNS and FC_VERIFY_AHEAD, and FC_VERIFY_SERVERS to
-#      the serving one
-#      ZK=1 (the gate's selftests, the serve and the prove with --zk; then zkaudit, the selftest build's, on the gate's and the
-#      step's statements: out/zkaudit-{gate,m35}.json, and the job fails unless every byte the verifier kept is attributed and
-#      none is in the clear)  ZKAUDIT_RUNS=RUN,... (only that zkaudit, on earlier runs' statements: see zkaudit below)
+#      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the preflight check's and the step's statements into
+#      FLOCK_STAGE_CACHE, default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the
+#      cache, so it holds its GPU from the preflight check's selftests on, and its point is flagged staged-on-gpu if it staged
+#      the step's statement itself)  SM=120
+#      VERIFIERS=DIR with SERVE_ONLY=1 (a job with no GPU: stage the preflight check's and the step's statements and serve their
+#      sessions on the pod's address, published under DIR, until they are served or FC_SERVE_WAIT_S pass), and VERIFIERS=DIR
+#      alone (the GPU job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the
+#      pod network, so this pod holds only the prover); give both jobs the same K, N, POINTS, WARM, RUNS and
+#      FC_VERIFY_AHEAD, and FC_VERIFY_SERVERS to the serving one (its verifier processes serve every point's sessions)
+#      ZK=1 (one point: the preflight check's selftests, the serve and the prove with --zk; then zkaudit, the selftest build's, on
+#      the preflight check's and the step's statements: out/zkaudit-{preflight,m35}.json, and the job fails unless every byte
+#      the verifier kept is attributed and none is in the clear)  ZKAUDIT_RUNS=RUN,... (only that zkaudit, on earlier runs'
+#      statements: see zkaudit below)
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -50,6 +55,9 @@ export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLO
 export HOME=$FLOCK_WORK/home FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache}
 [ "${STAGE_ONLY:-0}" = 1 ] || [ "${SERVE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
 [ -n "${VERIFIERS:-}" ] && [ "${SERVE_ONLY:-0}" != 1 ] && export FC_VERIFIERS=$VERIFIERS
+POINTS=${POINTS:-1}; [ "${STAGE_ONLY:-0}" = 1 ] && [ "$POINTS" != 0 ] && POINTS=1
+case $POINTS in ''|*[!0-9]*|0?*) echo "POINTS=$POINTS: a count of points (0: the preflight check alone)"; exit 1 ;; esac
+[ "$POINTS" = 0 ] && [ "${PREFLIGHT:-${GATE:-1}}" != 1 ] && { echo "POINTS=0 runs the preflight check alone: not with PREFLIGHT=0"; exit 1; }
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
 INST=${N:-}; unset N
 DEFS=$R/out/defs.json; INST=$(python3 backends/flock/pod/gemm_hill.py defs --K $K ${INST:+--n $INST} --out $DEFS) || exit 1
@@ -85,6 +93,8 @@ keep() {
 done_() { kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
 zok=1 ZKA=; [ "${ZK:-0}" = 1 ] && [ "${GPU:-1}" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${NSYS:-0}" != 1 ] && [ "${NCU:-0}" != 1 ] && ZKA=1
+# metrics reads a point's zkaudit records beside its own metrics.json, which only out/ holds
+[ -n "$ZKA" ] && [ "$POINTS" -gt 1 ] && { echo "ZK=1 with POINTS=$POINTS: zkaudit judges one point's statement; run POINTS=1"; exit 1; }
 # zkaudit NAME RESULTS BINARY_SHA: the statement a phase's classes/results.jsonl names, as FLOCK_STAGE_CACHE keeps it (the
 # phase's own copy is gone once proved), under the phase's selftest build (binary.sha256's second line), on CUDA 13.3's
 # libraries as 70-class-sweep.sh runs it: out/zkaudit-NAME.json
@@ -113,48 +123,56 @@ EOF
   python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(0 if d.get("checks_pass") and d.get("attributed") else 1)' \
     $R/out/zkaudit-$1.json || zok=0
 }
-# ZKAUDIT_RUNS=RUN,... (GATE=0): only zkaudit, on each earlier run's gate and step statements (its out/{gate,m35} records name
-# them, and FLOCK_STAGE_CACHE still holds them): out/zkaudit-RUN-{gate,m35}.json; the job fails unless every one passes
+# ZKAUDIT_RUNS=RUN,... (PREFLIGHT=0): only zkaudit, on each earlier run's preflight check's and step's statements (its
+# out/{preflight,m35} records name them, out/gate in a run from before the rename, and FLOCK_STAGE_CACHE still holds them):
+# out/zkaudit-RUN-{preflight,m35}.json; the job fails unless every one passes
 if [ -n "${ZKAUDIT_RUNS:-}" ]; then
   for r in ${ZKAUDIT_RUNS//,/ }; do
-    for p in gate m35; do zkaudit $r-$p $(dirname $R)/$r/out/$p/classes/results.jsonl $(dirname $R)/$r/out/$p/binary.sha256; done
+    pf=preflight; [ -d $(dirname $R)/$r/out/gate ] && pf=gate
+    for p in $pf m35; do zkaudit $r-$p $(dirname $R)/$r/out/$p/classes/results.jsonl $(dirname $R)/$r/out/$p/binary.sha256; done
   done
   [ $zok = 1 ]; exit
 fi
-# the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, under 5 GB of the GPU's)
-GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial SELFTEST_JOBS=3"
+GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial"
+# the preflight check's three GPU cases at once, each its own process, while 3 x one case's device memory fits the GPU's free
+# memory (class_statement's guard), else one at a time. One case's bound per K (B = 16) is its measured peak (selftest.per_case)
+# with some room: at most 4794, 5074, 9272 and 17678 MiB at K = 2048, 4096, 8192 and 16384 (r20261001-092917-8b05,
+# r20261001-131526-f969), with the pod's host memory at most 12, 16, 27 and 53 GB with the three at once
+case $K in 2048|4096) CASE_MIB=6144 ;; 8192) CASE_MIB=12288 ;; 16384) CASE_MIB=20480 ;; *) CASE_MIB= ;; esac
+[ -n "$GS" ] && [ -n "$CASE_MIB" ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=$CASE_MIB"
 ok=1
 if [ "${SERVE_ONLY:-0}" = 1 ]; then
   : "${VERIFIERS:?SERVE_ONLY=1 needs VERIFIERS=DIR, where the GPU job finds the addresses}"
   ph serve start
-  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 \
-    SELFTEST=0 > $R/out/gate.log 2>&1 &
+  OUT=$S/preflight RESEARCH_RUN_DIR=$S/preflight SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 \
+    SELFTEST=0 > $R/out/preflight.log 2>&1 &
   GP=$!
-  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 SERVE_ONLY=$VERIFIERS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST \
-    MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 > $R/out/sweep.log 2>&1 &
+  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 SERVE_ONLY=$VERIFIERS SERVE_POINTS=$POINTS bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS \
+    BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 > $R/out/sweep.log 2>&1 &
   SP=$!
   wait $GP || ok=0
   wait $SP || ok=0
   ph serve end
-  keep gate; keep m35
-  cp $S/gate/classes/served.jsonl $R/out/gate-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
+  keep preflight; keep m35
+  cp $S/preflight/classes/served.jsonl $R/out/preflight-served.jsonl; cp $S/m35/classes/served.jsonl $R/out/served.jsonl
   [ $ok = 1 ] && python3 -c 'import json, sys; r = [json.loads(l)["serve"] for f in sys.argv[1:] for l in open(f) if l.strip()]
-sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] and not x["timed_out"] for x in r) else 1)' \
-    $R/out/gate-served.jsonl $R/out/served.jsonl
+sys.exit(0 if len(r) == 2 and all(x["accepted"] and x["served"] == x["sessions"] * x.get("points", 1) and not x["timed_out"] for x in r) else 1)' \
+    $R/out/preflight-served.jsonl $R/out/served.jsonl
   exit
 fi
-if [ "${GATE:-1}" = 1 ]; then
-  ph gate start
-  OUT=$S/gate RESEARCH_RUN_DIR=$S/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \
-    > $R/out/gate.log 2>&1 || ok=0
-  ph gate end
-  keep gate
-  cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
-  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit gate $S/gate/classes/results.jsonl $S/gate/binary.sha256
+if [ "${PREFLIGHT:-${GATE:-1}}" = 1 ]; then
+  ph preflight start
+  OUT=$S/preflight RESEARCH_RUN_DIR=$S/preflight bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 $GS PORT=7720 \
+    > $R/out/preflight.log 2>&1 || ok=0
+  ph preflight end
+  keep preflight
+  python3 backends/flock/pod/gemm_hill.py key --binary-sha $R/out/preflight/binary.sha256 --out $R/out/preflight/key.json
+  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit preflight $S/preflight/classes/results.jsonl $S/preflight/binary.sha256
 fi
 # NSYS=1: a profile, not a point: the step's prove process under Nsight Systems' CUDA trace (out/nsys/prove-<pid>.nsys-rep, and
 # its kernel, memcpy and API summaries beside it), unpacked into NSYS_ROOT (default FLOCK_WORK/nsys-root) as 71-gemm-slowdown.sh
-# does; no metrics, result.json or hillclimb.json, since the trace slows the prove. Pass GATE=0: the gate proves nothing it needs.
+# does; no metrics, result.json or hillclimb.json, since the trace slows the prove. Pass PREFLIGHT=0: the preflight check proves
+# nothing it needs.
 # NSYS_ARGS replaces the trace's options (default: CUDA and NVTX, no CPU sampling); `nsys status -e` in the pod goes to
 # out/nsys/status.txt, so a CPU-sampled profile records whether the pod could sample
 NSW=
@@ -170,12 +188,12 @@ if [ "${NSYS:-0}" = 1 ]; then
 fi
 # NCU=1: a profile, not a point: one kernel (NCU_KERNEL, default zerocheck's round 1) under Nsight Compute, from NCU_ROOT (an ncu
 # CLI tree, default FLOCK_WORK/ncu-root). A kernel replayed over several passes has every allocation it can reach saved first, to
-# host memory once the GPU's is full, so the full section set runs on the gate's B = 16 statement (NCU_B16_COUNT launches,
+# host memory once the GPU's is full, so the full section set runs on the preflight check's B = 16 statement (NCU_B16_COUNT launches,
 # default 2: one per rep) and the step's statement gets only NCU_M35_METRICS, single-pass counters (no save: its 70+ GiB would
 # not fit the job's memory), on NCU_COUNT launches (default 2) after the first NCU_SKIP (default 2: the warm session's). The B = 16
 # statement takes NCU_M35_METRICS on one launch first: unless ncu collects them in one pass there, the step's statement gets
-# NCU_M35_FALLBACK (out/ncu/m35-metrics.txt says which). out/ncu/{b16,m35}-<pid>.ncu-rep and their CSV pages. Pass GATE=0; not
-# with NSYS=1
+# NCU_M35_FALLBACK (out/ncu/m35-metrics.txt says which). out/ncu/{b16,m35}-<pid>.ncu-rep and their CSV pages. Pass PREFLIGHT=0;
+# not with NSYS=1
 NCW=
 if [ "${NCU:-0}" = 1 ]; then
   [ -n "$NSW" ] && { echo "NCU=1 and NSYS=1: one profiler at a time"; exit 1; }
@@ -205,16 +223,24 @@ if [ "${NCU:-0}" = 1 ]; then
   fi
   NSW="$NCW --metrics $M35 --launch-skip ${NCU_SKIP:-2} --launch-count ${NCU_COUNT:-2} -o $R/out/ncu/m35-%p"
 fi
-if [ $ok = 1 ]; then
-  ph sweep start
-  OUT=$S/m35 RESEARCH_RUN_DIR=$S/m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/stamps.tsv -- $NSW" \
+# the session's points, one after another (P: each one's directory under out/ and the scratch, none with one point); a point
+# that fails ends the session
+pdir() { [ "$POINTS" = 1 ] || echo p$1/; }
+ran=0
+for i in $(seq 0 $((POINTS - 1))); do
+  [ $ok = 1 ] || break
+  P=$(pdir $i); mkdir -p $R/out/$P
+  ph sweep${P:+-p$i} start
+  OUT=$S/${P}m35 RESEARCH_RUN_DIR=$S/${P}m35 WRAP="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $R/out/${P}stamps.tsv -- $NSW" \
     bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
-    WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/sweep.log 2>&1 || ok=0
-  ph sweep end
-  keep m35
-  cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
+    WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/${P}sweep.log 2>&1 || ok=0
+  ph sweep${P:+-p$i} end
+  keep ${P}m35
+  cp $S/${P}m35/classes/results.jsonl $R/out/${P}results.jsonl 2>/dev/null
+  python3 backends/flock/pod/gemm_hill.py key --binary-sha $R/out/${P}m35/binary.sha256 --out $R/out/${P}key.json
   [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit m35 $S/m35/classes/results.jsonl $S/m35/binary.sha256
-fi
+  ran=$((ran + 1))
+done
 kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null
 if [ -n "$NCW" ]; then
   for f in $R/out/ncu/passes-*.ncu-rep $R/out/ncu/m35-*.ncu-rep; do [ -f "$f" ] && $NC --import $f --page raw --csv > ${f%.ncu-rep}.raw.csv; done
@@ -228,16 +254,31 @@ if [ -n "$NSW" ]; then
   [ $ok = 1 ] && ls $R/out/nsys/*.nsys-rep > /dev/null; exit
 fi
 if [ "${STAGE_ONLY:-0}" = 1 ]; then
-  cp $S/gate/classes/staged.jsonl $R/out/gate-staged.jsonl; cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
+  cp $S/preflight/classes/staged.jsonl $R/out/preflight-staged.jsonl
+  [ "$POINTS" = 0 ] && { [ $ok = 1 ] && grep -q '"stage"' $R/out/preflight-staged.jsonl; exit; }
+  cp $S/m35/classes/staged.jsonl $R/out/staged.jsonl
   [ $ok = 1 ] && grep -q '"stage"' $R/out/staged.jsonl; exit
+fi
+if [ "$POINTS" = 0 ]; then
+  python3 backends/flock/pod/gemm_hill.py session --dir $R --points 0 || ok=0
+  [ $ok = 1 ] && [ $zok = 1 ]; exit
 fi
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3
-PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
-  $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
-  --stamps $R/out/stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
-  --vmstat $R/out/vmstat.tsv \
-  --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
-  --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
-[ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
+# every point that ran, or the one the session refused before it ran (its record says why)
+ph metrics start
+for i in $(seq 0 $(( (ran > 0 ? ran : 1) - 1 ))); do
+  P=$(pdir $i); mkdir -p $R/out/$P
+  BS=$R/out/${P}m35/binary.sha256; [ -f $BS ] || BS=$R/out/preflight/binary.sha256
+  if [ "$POINTS" = 1 ]; then RES=$R/result.json HC=$R/hillclimb.json; else RES=$R/out/${P}result.json HC=$R/hillclimb-$i.json; fi
+  PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
+    $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
+    --stamps $R/out/${P}stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
+    --vmstat $R/out/vmstat.tsv \
+    --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $BS --step ${STEP:-0} \
+    --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --point $i --points $POINTS --preflight-key $R/out/preflight/key.json \
+    --point-key $R/out/${P}key.json --out $R/out/${P}metrics.json --result $RES --hillclimb $HC || ok=0
+done
+ph metrics end
+python3 backends/flock/pod/gemm_hill.py session --dir $R --points $POINTS || ok=0
 [ $ok = 1 ] && [ $zok = 1 ] && grep -q '"status": "passed"' $R/result.json

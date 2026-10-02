@@ -9,6 +9,7 @@ same checks as `circuit-check --all`.
 """
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import importlib.util
 import json
@@ -62,6 +63,26 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
     calls = TG.call_families()
     assert {"Gemm_v1", "RMSNormTriton_v1", "Attention_v3", "TokenSelect_v1", "GumbelTopPTokenSelect_v1", "RoPEHead_v1"} <= calls
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
+
+
+def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
+    """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
+    `boolean_gather.gather_bf16(n)` builds), and an id neither knows still raises."""
+    from verity_vllm.query import word as W
+
+    real = W.specialization
+
+    def unregistered(fam, statics):
+        if fam.startswith("GatherBf16x"):
+            raise KeyError(f"primitive {fam} is not in the registry")
+        return real(fam, statics)
+
+    monkeypatch.setattr(W, "specialization", unregistered)
+    monkeypatch.setattr(TG, "suite", lambda: SUITE)
+    for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
+        assert TG.definition(fid) is SUITE[fid]
+    with pytest.raises(KeyError):
+        TG.definition("NoSuchDefinition_v9")
 
 
 # --- the suite ----------------------------------------------------------------------------------------------------------------
@@ -175,9 +196,111 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
     e = CK.check_definition(fn, OPTS, as_call=True)
     assert "partition/gate-recomputed CircuitCheckRecompute_v1 (1 gate(s))" in [f["name"] for f in e["failures"]]
+    assert e["partition"]["q_word"] == 1                                # a word Call keeps v1: the recompute fails
+    assert e["partition"]["whole"]["q_word_v2"] == {"codes": [], "recomputed_across": 1}   # v2 reports it, refuses nothing
     inner = CK.check_definition(fn, OPTS, as_call=False)                 # not a Call: its copies are redundant gates, not a failure
     assert not [f for f in inner["failures"] if f["check"] == "partition"] and inner["partition"]["isolated"]
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
+
+
+#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two units
+BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
+
+
+def _partition(fn, q_word, opts=OPTS):
+    F = CK.Findings()
+    rec, _rule = CK.partition(fn, opts, F, {}, applies=True, q_word=q_word)
+    rec.pop("_graph", None)
+    return rec, [f["name"] for f in F.failures if f["check"] == "partition"]
+
+
+def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
+    """A Boolean Call is judged by `Q_word` v2: the values two units compute are recorded, in the entry and the summary, not
+    failed; under v1 the same cut fails by name."""
+    from verity.ir import boolean as BL
+
+    fn = TG.definition(BOOL_RECOMPUTE)
+    assert BL.is_boolean(fn) and TG.family(fn) in TG.call_families()
+    rec, failed = _partition(fn, 2)
+    assert not failed and rec["q_word"] == 2 and rec["recomputed_across"] == 1120
+    assert CK.summarize([{"definition": fn.id, "partition": rec, "failures": [], "warnings": []}])["recomputed_across"] == {fn.id: 1120}
+    _rec, failed = _partition(fn, 1)
+    assert failed == [f"partition/gate-recomputed {fn.id} (1120 gate(s))"]
+    rec, failed = _partition(fn, 2, dataclasses.replace(OPTS, partition_max_gates=10))   # over the budget: unchecked, no count
+    assert not failed and not rec["checked"] and rec["recomputed_across"] is None
+
+
+def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
+    """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
+    from verity.ir.partition import CutVerdict
+    from verity_vllm.query import word as W
+
+    real = W.units
+
+    def wide(G, *a, **k):
+        R = real(G, *a, **k)
+        c = R["cut"]
+        detail = {**c.detail, "unit-too-wide": {"n": 1, "gates": [[0, 17, 2]], "limits": [16, 32, 0]}}
+        return {**R, "cut": CutVerdict(False, tuple(c.codes) + ("unit-too-wide",), detail)}
+
+    monkeypatch.setattr(W, "units", wide)
+    fn = TG.definition(BOOL_RECOMPUTE)
+    rec, failed = _partition(fn, 2)
+    assert failed == [f"partition/unit-too-wide {fn.id} (1 gate(s))"], failed
+    assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
+
+
+def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
+    """`Q_call` v1 beside `Q_word`: a Boolean Call's units, committed bits and the values two units compute (reported); a Call with
+    a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
+    from verity.ir.defs import PrimitiveDefinition
+    from verity.ir.types import Array, Value
+
+    fn = TG.definition(BOOL_RECOMPUTE)
+    rec, failed = _partition(fn, 2)
+    assert not failed and rec["q_call"] == QCALL_ROPE
+    add64 = PrimitiveDefinition("CircuitCheckAdd64", 1, (("a", Value(64)), ("b", Value(64))), Value(64), lambda a, b: (a + b) % (1 << 64),
+                                register=False)
+    wide = _composite("CircuitCheckWide64", ((("a", Array(2, Value(64))),), Value(64)), lambda B, S, a: B.call(add64, a[0], a[1]))
+    F = CK.Findings()
+    rec, _rule = CK.partition(wide, OPTS, F, {}, applies=True)
+    assert rec["q_call"]["inapplicable"] == {"definition": wide.id, "gate": 0, "primitive": add64.id, "width": 64, "X": 32, "why": "gate-too-wide"}
+    assert [w["name"] for w in F.warnings if w["code"] == "q-call-inapplicable"] == [f"partition/q-call-inapplicable {wide.id}: 1 gate-too-wide"]
+    assert not [f for f in F.failures if f["code"].startswith("q-call")]
+    assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
+
+
+#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a unit, and the same values computed in two units as v2 reports
+QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
+              "codes": []}
+
+
+def test_the_boolean_versions_of_the_served_calls_are_calls():
+    """Sigma's image of the word Call families (`boolean_version`, the switch's `word=` table) is held as Calls."""
+    calls = TG.call_families()
+    assert {"RMSNormFusedCuda_v3", "RMSNormTriton_v2", "Gemm_v3", "Attention_v8", "RoPE_v2", "SiluMul_v3", "TokenSelect_v2",
+            "Embedding_v2"} <= calls
+    assert {"RMSNormFusedCuda_v2", "RMSNormTriton_v1", "Gemm_v1"} <= calls
+    assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
+
+
+def test_every_call_the_suite_checks_is_partitioned():
+    """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap)."""
+    calls = TG.call_families()
+    over = {k: fn.gates for k, fn in SUITE.items() if TG.family(fn) in calls and getattr(fn, "gates", 0) > OPTS.partition_max_gates}
+    assert not over
+
+
+def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding():
+    """The suite keeps a family's smallest specialization over `MAX_GATES`; a Boolean norm's smallest binds the word MUFU, so its
+    smallest Boolean binding (the one the Program on bits calls) is checked too."""
+    from verity.ir import boolean as BL
+    for word, bits in [("RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v1}", "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v2}"),
+                       ("RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v1,SCALEA=DivFullScaleA_v1,RCP=DivFullRcp_v1}",
+                        "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v2,SCALEA=DivFullScaleA_v3,RCP=DivFullRcp_v2}")]:
+        assert {word, bits} <= set(SUITE) and SUITE[bits].gates > TG.MAX_GATES
+        assert BL.is_boolean(SUITE[bits]) and not BL.is_boolean(SUITE[word])
 
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
@@ -280,6 +403,9 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
     assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([fp8, "-q", "--strict"]) == 1
+    capsys.readouterr()
+    assert cli.main([BOOL_RECOMPUTE, "-q"]) == 0
+    assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 
 
 def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):

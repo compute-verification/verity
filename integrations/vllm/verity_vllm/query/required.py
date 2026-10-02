@@ -49,13 +49,13 @@ from functools import reduce
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.ir import partition_object as PO
-from verity.proofs.query import Policy, RequiredValues, ValueRef, boundary, partition_by, required_values
+from verity.proofs.query import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
 from verity_vllm.query import word as word_query
-from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary,
-                                           without_literals)
+from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
+                                           module_body_boundary)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "collective_kind",
@@ -88,7 +88,7 @@ SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "AttentionSoftcap_v1", "AttentionN_v1", "AttentionTP2_v1"})
+FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
 
 
 def collective_kind(family: str) -> str | None:
@@ -125,8 +125,12 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("Gemm_v1", "out", "0", _LINEAR_WHY, condition="own_parameter"),
     Residual("Gemm_v2", "out", "0", _LINEAR_WHY, condition="own_parameter"),
     Residual("BiasAdd_v1", "out", "0", _LINEAR_WHY + " (the biased linear's epilogue is the returned tensor)", condition="own_parameter"),
+    Residual("GemmBias_v1", "out", "0", _LINEAR_WHY + " (the biased linear as one Call)", condition="own_parameter"),
+    Residual("GemmBias_v2", "out", "0", _LINEAR_WHY + " (the biased linear as one Call)", condition="own_parameter"),
     Residual("ScaledMmFp8Block_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
+    Residual("NcpLinearRow_v1", "out", "0", _LINEAR_WHY + " (the `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
+    Residual("NcpLinearRowBias_v1", "out", "0", _LINEAR_WHY + " (the fused-bias `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "
              "world takes the slot of its rank-local operand when that operand is a Linear's reading its own weight)", condition="operand_own_parameter"),
     Residual("RoPE_v1", "query", "0", "the Build records RoPE's return slots by keyword (`query` / `key`); v1 spells them as the tuple index of "
@@ -345,7 +349,7 @@ class Population:
         self.B_module = B_module = module_body_boundary(P, corr, literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
-            self.B = B = without_literals(boundary(P, self.Q), literals)
+            self.B = B = boundary_without_literals(P, self.Q, literals)
         else:
             self.Q = Q_module_body_v1(P, corr)
             self.B = B = B_module
@@ -508,8 +512,11 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+
         cc = ((res.get("target") or {}).get("declared") or {}).get("compute_capability") or [8, 9]
-        profile = "hopper" if (fa == 3 or (fa is None and int(cc[0]) >= 9)) else "ampere"
+        fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
+        profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
     return profile, fa, attn_obs
 
 

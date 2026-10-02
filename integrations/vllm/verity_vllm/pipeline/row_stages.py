@@ -8,7 +8,8 @@
   workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
   ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
   row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
-  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``).
+  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``, over the Programs the Commit reads with ``boundary-plan``, which
+  writes the Commit's call-boundary plan on a PASS).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
   a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
@@ -18,11 +19,13 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
+``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
+it and writes ``config_record.json``.  The **plan** stage (``row_plan``, on CPU) derives what the Commit needs before the GPU is held.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
-record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
-attaches; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
+record incomplete at Commit; 15 plan FAIL; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the
+Commit attaches; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
 """
 from __future__ import annotations
 
@@ -34,10 +37,12 @@ import shutil
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Callable
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
 
@@ -65,6 +70,7 @@ class SingleRow(Row):
         self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
         self.config_run = commit.config_run == "1"
+        self.replay_pending = False
 
     def run(self) -> int:
         try:
@@ -73,10 +79,15 @@ class SingleRow(Row):
                 self.build()
                 if self.config_run:
                     RC.word_check(self)
+            if stage_on(self.stages, "plan"):
+                RP.plan(self)
             if stage_on(self.stages, "match") and not self.config_run:
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
+            if stage_on(self.stages, "replay"):
+                RC.replay(self)
+                self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
                 RC.config_record(self)
@@ -84,7 +95,9 @@ class SingleRow(Row):
         finally:
             if self.trap:
                 self.research_result()
-        if self.config_run:
+        if self.replay_pending:
+            self.log("config run PENDING: the C2 replay runs on CPU from the sealed bundle (`row stage replay`), which writes config_record.json")
+        elif self.config_run:
             RC.config_record(self)
         self.tl("row", "end", ("ok", "true"))
         self.timeline_report()
@@ -168,10 +181,10 @@ class SingleRow(Row):
         self.LP = self.cb.lp if self.cb.lp is not None else s["LP"]
         self.T = self.cb.t if self.cb.t is not None else s["T"]
         self.MML = self.I + self.O
-        self.tgt = R.declared_target(self.path(self.wl), self.protocols)
+        self.tgt = R.declared_target(self.path(self.wl), self.protocols, row=self.row)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
         # the attention implementation the row executes (declared, else the pinned vLLM's default for this device) selects the tap
-        _, fa = self.output(self.cli("row", "fa-version", self.wl), stderr=subprocess.DEVNULL)
+        _, fa = self.output(self.cli("row", "fa-version", self.wl, *self.tgt_args), stderr=subprocess.DEVNULL)
         if self.guarded_max():
             self.hidden_so = self.env.hidden_so or (self.env.hidden_so_fa3_guarded if fa.strip() == "3" else self.env.hidden_so_fa2_guarded)
         else:
@@ -207,36 +220,9 @@ class SingleRow(Row):
         """The row runs the guarded-max tap build: by default, as every row's attention is FA2/FA3 (GUARDED_MAX_TAP=0 for A/B only)."""
         return self.ck_.guarded_max_tap == "1"
 
-    def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
-        guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
-        wd = ""
-        policy = R.tap_policy_flags(self.ck_)
-        self.tl(f"{stage}.required_manifest", "start", ("query", R.QUERY_OF_RECORD))
-        if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
-            wd = R.workload_digest(self.d)
-            cmd = self.cli("manifest", "build-global", "--fixture", self.wl, "--programs-root", self.d,
-                           *(["--workload-digest", wd] if wd else []), *policy, "--out", f"{self.d}/manifest.json")
-        else:
-            cmd = self.cli("manifest", "build", "--program", f"{self.d}/build_request", "--workload", self.wl, *policy,
-                           "--out", f"{self.d}/manifest.json")
-        log = f"{self.d}/manifest.log"
-        with open(log, "w") as f:
-            rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
-        if rc == 0:
-            self.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-            self.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
-            return 0
-        if os.path.exists(f"{self.d}/manifest.json"):
-            os.remove(f"{self.d}/manifest.json")
-        hit = next((ln for ln in open(log, errors="replace") if "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" in ln), None)
-        if hit is not None:
-            self.log(f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE: {hit.rstrip(chr(10))}")
-            self.tl(f"{stage}.required_manifest", "end", ("rc", 3), ("fail_class", "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"))
-            return 3
-        self.tl(f"{stage}.required_manifest", "end", ("rc", 1))
-        self.log(f"required-value manifest NOT built (rc={rc}; see manifest.log): {_tail(log)}")
-        return 1
+    def required_manifest(self, stage: str, digest: Callable[[], str] | None = None) -> int | None:
+        """The required-value manifest of record (`row_build.required_manifest`) -> 0 | 3 | 1 | None."""
+        return RB.required_manifest(self, stage, digest)
 
     # ------------------------------------------------------------------------------------------------ Build
     def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None) -> list[str]:
@@ -260,13 +246,14 @@ class SingleRow(Row):
         return ["--launch-max-seqlen-q", *lc.split("\n")] if lc else []
 
     def derive_all(self, to: int) -> tuple[int, int]:
-        """The step, request and extra-shape derives, serially or ``--build-jobs`` wide -> (step rc, request rc)."""
+        """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
         cmd_s = self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "step", "--M", str(self.B), "--pos0", "8",
                          "--max-model-len", str(self.MML), "--workload", self.wl, "--out", f"{self.d}/build_step", *self.tgt_args)
         lctx = self.launch_args(self.LP, self.T)
         cmd_r = self.request_cmd(self.LP, self.T, f"{self.d}/build_request", lctx)
-        req = self.cb.build_jobs or "1"
-        jobs = str(R.build_jobs_auto()) if req == "auto" else req
+        req = self.cb.build_jobs or "auto"
+        shapes = [(self.LP, self.T), *R.extra_shapes(self.path(self.wl), self.LP, self.T)]
+        jobs = str(R.build_jobs_auto(shapes, R.model_layers(self.ck), budget_gb=self.cb.build_ram_budget_gb)) if req == "auto" else req
         jobs_n = int(jobs) if re.fullmatch(r"[0-9]+", jobs) else 1
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
@@ -326,22 +313,36 @@ class SingleRow(Row):
                 out += ["--derived", dd]
         return out
 
+    def follow_compose(self, to: int) -> tuple[Any, str, str]:
+        """B >= 2: the workload Program's compose and the manifest beside the derives (`row_build.follow_compose`)."""
+        return RB.follow_compose(self, to)
+
     def build(self) -> None:
         scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
         to = self.cb.build_timeout or min(CAP, 900 * scale)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
+        follow = self.follow_compose(to) if self.B > 1 else None
         rc1, rc2 = self.derive_all(to)
         wall = int(time.time()) - t0
         self.tl("build.summary", "start")
         ok = self.guarded("build summary", R.build_summary, self.d)
         wd = ""
+        early = None
         self.tl("build.summary", "end", ("ok", ok))
+        if follow is not None:
+            fut, done, stop = follow
+            open(done if ok == "PASS" else stop, "w").close()
+            rcw, early = fut.result()
+            for f in (done, stop):
+                if os.path.exists(f):
+                    os.remove(f)
         if ok == "PASS":
-            rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
-                              self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
-                                       "--checkpoint-dir", self.ck, py=self.py312))
+            if follow is None:
+                rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
+                                  self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
+                                           "--checkpoint-dir", self.ck, py=self.py312))
             wd = (R.load_json(f"{self.d}/build_workload/workload_program.json") or {}).get("workload_digest") or ""
             if not (rcw == 0 and wd):
                 ok = "FAIL"
@@ -356,7 +357,7 @@ class SingleRow(Row):
                 self.verdict("build-target", "WAIVED", line, quiet=True)
         mrc = 0
         if ok == "PASS" and os.path.isfile(f"{self.d}/build_request/instances.json.gz"):
-            mrc = self.required_manifest("build")
+            mrc = self.required_manifest("build") if early is None else early
             if mrc == 3:
                 self.verdict("build", "FAIL", f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see {self.d}/manifest.log)")
                 self.tl("stage.build", "end", ("ok", "false"))
@@ -365,6 +366,8 @@ class SingleRow(Row):
             if mrc != 0:
                 ok = "FAIL"
                 self.verdict("build-manifest", "FAIL", "required-value manifest not built (manifest.log)")
+        elif early == 0 and os.path.exists(f"{self.d}/manifest.json"):
+            os.remove(f"{self.d}/manifest.json")
         digest, man = R.build_line(self.d)
         self.verdict("build", ok, f"rc={rc1}/{rc2} wall={wall}s digest={digest} workload_digest={wd[:16]} manifest={man}")
         self.tl("stage.build", "end", ("ok", ok), ("wall_s", wall))
@@ -372,7 +375,7 @@ class SingleRow(Row):
             self.log("BUILD FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10 if mrc == 0 else 13)
-        self.call_boundaries(to)
+        self.call_boundaries(to, RP.call_boundaries_cmd(self))
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
@@ -520,10 +523,10 @@ class SingleRow(Row):
             self.log(f"WARN match: MATCH_SNAP_STEPS={self.snap_steps} explicit while form (B) must be complete ({fb}): the Commit's form (B) stays partial")
 
     # ------------------------------------------------------------------------------------------------ Commit
-    def commit_stop(self, rc: int, detail: str) -> None:
-        self.verdict("commit", "FAIL", detail)
-        self.tl("stage.commit", "end", ("ok", "false"))
-        self.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
+    def commit_stop(self, rc: int, detail: str, stage: str = "commit") -> None:
+        self.verdict(stage, "FAIL", detail)
+        self.tl(f"stage.{stage}", "end", ("ok", "false"))
+        self.tl("row", "end", ("ok", "false"), ("stopped_at", stage))
         raise Stop(rc)
 
     def commit_cmd(self, taps: list[str]) -> list[str]:
@@ -535,6 +538,8 @@ class SingleRow(Row):
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
         if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
             cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
+            if ck.replay_deferred in ("1", "slim"):
+                cmd += ["--replay-deferred", *(["slim"] if ck.replay_deferred == "slim" else [])]
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
@@ -589,7 +594,7 @@ class SingleRow(Row):
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return ""
 
-    def manifest_of_record(self) -> str:
+    def manifest_of_record(self, stage: str = "commit") -> str:
         """The required-value manifest the Commit runs over: the one named, else the Build's when it is of record (`R.manifest_not_of_record`:
         the query of record with a partition, the Build's Program digest, the row's tap policies, a passing word check); any other is moved
         aside, never used, and the manifest rebuilt here from the Build's request Programs."""
@@ -605,11 +610,11 @@ class SingleRow(Row):
                 os.replace(f"{d}/manifest.json", prev)
                 self.log(f"manifest.json beside the Build {why}: moved aside ({os.path.basename(prev)}), rebuilding the manifest of record")
         if not man and (os.path.isfile(f"{d}/build_request/instances.json.gz") or glob.glob(f"{d}/build_request_LP*_T*")):
-            mrc = self.required_manifest("commit")
+            mrc = self.required_manifest(stage)
             if mrc == 3:
-                self.commit_stop(3, f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see {d}/manifest.log)")
+                self.commit_stop(3, f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see {d}/manifest.log)", stage)
             if mrc != 0:
-                self.commit_stop(13, f"required-value manifest not built (B={self.B}; manifest.log)")
+                self.commit_stop(13, f"required-value manifest not built (B={self.B}; manifest.log)", stage)
             man = f"{d}/manifest.json"
         return man
 
@@ -628,7 +633,7 @@ class SingleRow(Row):
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
             raise Stop(14)
 
-    def weights_of_record(self) -> list[str]:
+    def weights_of_record(self, stage: str = "commit") -> list[str]:
         """The weights of record beside the component Program (reused only when it is this Program's, of this tree's schema
         and complete; else moved aside and re-derived from the pinned checkpoint dir) -> the Commit's flags."""
         from verity_vllm.check.weights_of_record import SCHEMA
@@ -646,24 +651,24 @@ class SingleRow(Row):
                 os.replace(wor, prev)
                 self.log(f"weights of record: existing record beside {os.path.basename(pd)} not reused -- {stale}; moved aside ({os.path.basename(prev)}), re-deriving")
         if not os.path.isfile(wor) and ck and os.path.isdir(ck):
-            self.tl("commit.weights_of_record", "start")
+            self.tl(f"{stage}.weights_of_record", "start")
             with open(f"{d}/weights_of_record.log", "w") as f:
                 rc = subprocess.run(self.cli("weights-of-record", "--program-dir", pd, "--checkpoint-dir", ck, "--out", wor,
                                              *([f"--supersedes={prev}"] if prev else [])),
                                     stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
             last = _tail(f"{d}/weights_of_record.log", 10**6)
             if rc == 0:
-                self.tl("commit.weights_of_record", "end", ("rc", 0))
+                self.tl(f"{stage}.weights_of_record", "end", ("rc", 0))
                 self.log(f"weights of record: {last}")
             else:
-                self.tl("commit.weights_of_record", "end", ("rc", 1))
+                self.tl(f"{stage}.weights_of_record", "end", ("rc", 1))
                 self.log(f"WARNING weights of record not derived (see weights_of_record.log): {last}")
         elif not os.path.isfile(wor):
             self.log(f"WARNING weights of record NOT derived: no local checkpoint dir for the workload's (model, tokenizer_revision) (CK='{ck}'; "
                      "checkpoints.json local_path / HF hub snapshot absent on this pod) -- the Commit will FAIL 'weights unpinned (MAN-09)' by name")
-            self.tl("commit.weights_of_record", "mark", ("reused", "false"), ("derived", "false"))
+            self.tl(f"{stage}.weights_of_record", "mark", ("reused", "false"), ("derived", "false"))
         else:
-            self.tl("commit.weights_of_record", "mark", ("reused", "true"))
+            self.tl(f"{stage}.weights_of_record", "mark", ("reused", "true"))
         if os.path.isfile(wor):
             return ["--weights-of-record", wor]
         return ["--checkpoint-dir", ck] if ck else []
@@ -698,7 +703,6 @@ class SingleRow(Row):
         if not os.path.isfile(self.hidden_so):
             self.commit_stop(12, f"hidden .so missing: {self.hidden_so}")
         self.tl("commit.prepare", "start")
-        pd_req = f"{d}/build_request"
         if self.B <= 1:
             served = R.served_shape(d)
             if served:
@@ -724,26 +728,19 @@ class SingleRow(Row):
             self.log(f"C2 live oracle-compare armed: --match-dir {d}/match (Match record of this attempt; snapshot steps {snap})")
         elif self.B > 1:
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
-        if os.path.isfile(f"{pd_req}/instances.json.gz"):
-            cmd += ["--programs-root", d] if self.B > 1 else ["--program-dir", pd_req]
-            cmd += (ck.replay_args or "").split()
-            where = f"--programs-root {d}" if self.B > 1 else f"--program-dir {pd_req}"
-            self.log(f"C2 of record armed: sampled exact VU replay + boundary linkage ({where} {ck.replay_args or ''})")
-            cmd += self.weights_of_record()
-        else:
-            self.log(f"WARNING: C2 sampled replay NOT armed (no {pd_req}/instances.json.gz): C2 of record not run")
+        cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
         t0 = int(time.time())
-        if ck.hot_engine == "1":
+        if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log",
                               self.cli("hot", "submit", "--root", self.env.hot_root, "--idle", self.env.hot_idle, "--", *cmd[4:]))
         else:
             self.gpu_exclusive("commit-cold")
-            rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
+            rck = self.run_gpu("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
         if self.config_run:
-            RC.commit_verdict(self, rck, wall)
+            self.replay_pending = RC.commit_verdict(self, rck, wall)
             return
         if rck == 0 and man:
             self.manifest_verify(man)

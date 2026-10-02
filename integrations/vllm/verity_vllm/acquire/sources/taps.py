@@ -16,7 +16,9 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity_vllm.acquire.sources import call_boundary_source, norm_scale_source, router_softmax_source, scale_products_source, vocab_range_source
+from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
+from verity_vllm.program.registry.topp_split import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
@@ -45,17 +47,32 @@ class TapSources:
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], taps: TapSources, *,
-           explicit_classes: bool = False, model: Any = None, programs: Sequence[str | None] = ()) -> tuple[str, ...]:
+           explicit_classes: bool = False, model: Any = None, programs: Sequence[str | None] = (),
+           call_boundary_plan: Plan | None = None) -> tuple[str, ...]:
     """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), the call-boundary source when
-    the manifest names call boundaries (its Programs found under `programs`) and the scale-products source when the manifest names its
-    family; returns the required classes with their families added unless the caller gave them explicitly."""
+    the manifest names call boundaries (its Programs found under `programs`, its plan `call_boundary_plan` when derived already) and the
+    scale-products source when the manifest names its family; returns the required classes with their families added unless the caller
+    gave them explicitly."""
     for f, _key, mod, _fam, _cls in SOURCES:
         required_classes, _src = mod.attach(com, getattr(taps, f), manifest, required_classes, explicit_classes=explicit_classes, model=model)
     required_classes, _src = call_boundary_source.attach(com, bool(call_boundary_source.manifest_sites(manifest)), manifest, required_classes,
-                                                         explicit_classes=explicit_classes, model=model, programs=programs)
+                                                         explicit_classes=explicit_classes, model=model, programs=programs,
+                                                         plan=call_boundary_plan)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
+    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
+        com.prescribe_idle_splits = splits_for_v1            # a derived-S Program: a step vLLM ran without top-p binds its prescribed S
     return required_classes
+
+
+def warmup(com: Any, on: bool) -> None:
+    """Around the Commit's warm-up instrumented run, which is never a record (its root is discarded): bounded staging learns only
+    (`learn_only`) and every source with placeholder words (the call-boundary source's `placeholder`) commits them instead of evaluating."""
+    if getattr(com, "bounded", False):
+        com.learn_only = on
+    for src in getattr(com, "sources", None) or ():
+        if hasattr(src, "placeholder"):
+            src.placeholder = on
 
 
 def attached(manifest: Mapping[str, Any] | None) -> list[str]:
@@ -110,4 +127,4 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]

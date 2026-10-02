@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# GEMM proving slowdown, one attempt (gemm_slowdown.py): the gate (byte identity at B = 16: the GPU's proofs and transcripts equal
-# the CPU prover's, and the device paths agree), then both GEMM coordinates timed at their largest statement, then the same GPU's
-# native GEMMs; result.json carries the prefill and decode slowdowns. Run from the verity tree (research run --cwd source).
-# env: GATE=1 (0: skip the gate)  WARM=1 RUNS=3  BATCH_ANDS=2^32 MAX_STATEMENT_BITS=2^34  ITERS=100
+# GEMM proving slowdown, one attempt (gemm_slowdown.py): the preflight check (byte identity at B = 16: the GPU's proofs and
+# transcripts equal the CPU prover's, and the device paths agree), then both GEMM coordinates timed at their largest statement,
+# then the same GPU's native GEMMs; result.json carries the prefill and decode slowdowns. Run from the verity tree (research run
+# --cwd source).
+# env: PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1 RUNS=3  BATCH_ANDS=2^32
+#      MAX_STATEMENT_BITS=2^34  ITERS=100
 #      DEFS=backends/flock/pod/gemm-coordinates.defs.json (the Call counts: gemm-coordinates-4k fills 256 tiles of K = 2048)
 #      GPUS="4 5 6 7" (on a machine with /run/gpu-lease: take the first free of these, as gpu-lease does)
 #      any other KEY=VALUE reaches the prover's environment (FC_NATIVE_SHA=0, FC_HOST_PINNED=0, ...)
@@ -60,8 +62,9 @@ fi
 python3 backends/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &
 SAMPLER=$!
 trap 'kill $SAMPLER 2>/dev/null' EXIT
-if [ "${GATE:-1}" = 1 ]; then
-  OUT=$R/out/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
+PREFLIGHT=${PREFLIGHT:-${GATE:-1}}
+if [ "$PREFLIGHT" = 1 ]; then
+  OUT=$R/out/preflight bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
     SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial || exit 1
 fi
 # NSYS=1: a profile, not an attempt: the m = 34 prove sessions under Nsight Systems' CUDA trace (unpacked like CUDA 13.3), each
@@ -88,6 +91,6 @@ W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.loc
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
   --index-url https://download.pytorch.org/whl/cu128; } || exit 1
 $W/torch/bin/python backends/flock/pod/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
-G=; [ "${GATE:-1}" = 1 ] && G="--gate $R/out/gate/classes/results.jsonl"
+G=; [ "$PREFLIGHT" = 1 ] && G="--preflight $R/out/preflight/classes/results.jsonl"
 $W/py/bin/python3 backends/flock/pod/gemm_slowdown.py compute --sweep $R/out/m34/classes/results.jsonl $G --native $R/out/native.json \
   --result $R/result.json

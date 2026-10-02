@@ -42,7 +42,7 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"deployments-gpu", "deployments-cpu", "circuits", "provers", "backfill"}
     assert set(q["backfill"].values()) == set(q["circuits"].values()) == {0}                          # backfill borrows; circuits drains
-    assert (q["deployments-gpu"]["nvidia.com/gpu"], q["deployments-cpu"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 0, 3)
+    assert (q["deployments-gpu"]["nvidia.com/gpu"], q["deployments-cpu"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (6, 0, 2)
     assert q["deployments-gpu"]["cpu"] == 4 * q["deployments-gpu"]["nvidia.com/gpu"]                   # 4 vCPU per GPU: never waits on CPU
     assert (q["deployments-cpu"]["cpu"], q["provers"]["cpu"]) == (100, 64)
     assert sum(x["cpu"] for x in q.values()) + CONTROLLER["cpu"] <= NODE["cpu"]              # every admitted pod can be placed           # checks and pinned benches run outside Kueue
@@ -52,11 +52,13 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     text = (SKY / "kueue.yaml").read_text()
     gpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-gpu}" in d and "ClusterQueue" in d)
     cpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-cpu}" in d and "ClusterQueue" in d)
-    assert '{name: nvidia.com/gpu, nominalQuota: "5", borrowingLimit: "2"}' in gpuq and '{name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}' in cpuq
+    assert '{name: nvidia.com/gpu, nominalQuota: "6", borrowingLimit: "2"}' in gpuq and '{name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}' in cpuq
     for d in (gpuq, cpuq):
         assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in d and "reclaimWithinCohort: LowerPriority" in d
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
-    assert provers.count("borrowingLimit: 0") == 3 == provers.count("nominalQuota")              # a borrowed bench is evicted by reclaim
+    borrow = {r: usage_report().quantity(v) for r, v in re.findall(r"\{name: (\S+), nominalQuota: [^,]+, borrowingLimit: \"([^\"]+)\"\}", provers)}
+    others = {res: sum(x[res] for name, x in q.items() if name != "provers") for res in ("nvidia.com/gpu", "cpu", "memory")}
+    assert borrow == others                    # proofs borrows every idle GPU, with the CPU and memory to run them (Daniel 10:58 PM PDT)
     assert text.count("    withinClusterQueue: Never") == 5 and text.count("policy: LowerPriority") == 2   # never evict a running Build
     assert text.count("cohortName: nebius") == 5 and text.count("    reclaimWithinCohort: Any") == 1
     backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
@@ -94,7 +96,8 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert '[ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)' in gpu and '"${deferred[@]}"' in gpu
     detect = "grep -q VLLM_REPLAY"
     assert gpu.count(detect) == 1 and replay.count(detect) == 2                        # setup and run resolve it as the Commit does
-    assert 'if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*' in replay
+    assert 'if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then\n    python3 - "$SWEEP_DIR/$ROW" << \'EOF\'' in replay
+    assert "rm -rf" not in replay                                     # the keep check alone deletes a bundle (the next test)
     assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
@@ -118,11 +121,92 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert "  memory: 96 " in r3 and "  memory: 64 " in r2                                                  # VY_REPLAY_MEMORY
 
 
+def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
+    """On 1 Oct 00:13-06:01Z node 1's replay tasks deleted 67 passed rows' sealed bundles (1.3 TB) as soon as config_record.json
+    existed: their trees predate keep-leaves, so nothing else held the leaves a later CPU replay reads. A bundle now goes only when
+    commit/replay_slim_p<pair>/ is its complete keep (cpu_replay.keep's slim.json: this bundle's MANIFEST.json, dump_sha256, every
+    file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml and n2_commit.sh run the same lines."""
+    import hashlib
+    import subprocess
+    import textwrap
+
+    text = (SKY / "jobs" / "config-run.yaml").read_text()
+    run = textwrap.dedent(text.split("\n---\n")[3].split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]) + "\n"
+    try:
+        import yaml
+        assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
+    except ImportError:
+        pass
+    assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
+    body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
+    n2 = (SKY.parent / "n2_commit.sh").read_text()
+    assert n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0] == body
+    assert 'then discard_kept_bundles "$row_dir"; fi' in n2 and "rm -rf \"$row_dir\"/commit/replay_bundle_p" not in n2
+    (tmp_path / "discard.py").write_text(body)
+    sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+
+    def row(name: str, pairs=(0,), keep: dict[int, dict] | None = None) -> Path:
+        """A replayed row with a sealed bundle per pair, and for each pair in `keep` its slim keep, slim.json fields overridden."""
+        r = tmp_path / name
+        for p in pairs:
+            b = r / "commit" / f"replay_bundle_p{p}"
+            (b / "store").mkdir(parents=True)
+            (b / "store" / "leaves").write_bytes(b"L" * 4096)
+            (b / "MANIFEST.json").write_text(json.dumps({"files": {"store/leaves": {"sha256": sha(b / "store" / "leaves"), "bytes": 4096}}}))
+        for p, over in (keep or {}).items():
+            k = r / "commit" / f"replay_slim_p{p}"
+            (k / "store").mkdir(parents=True)
+            (k / "store" / "opened").write_bytes(b"S" * 64)
+            (k / "binding_map.json").write_text("{}\n")
+            files = {f: {"sha256": sha(k / f), "bytes": (k / f).stat().st_size} for f in ("binding_map.json", "store/opened")}
+            doc = {"schema": "verity-vllm/replay-slim/v1", "pair": p, "files": files,
+                   "bundle_manifest_sha256": sha(r / "commit" / f"replay_bundle_p{p}" / "MANIFEST.json"),
+                   "dump_sha256": hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), **over}
+            (k / "slim.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+        return r
+
+    def discard(r: Path) -> list[str]:
+        out = subprocess.run(["python3", str(tmp_path / "discard.py"), str(r)], capture_output=True, text=True, check=True).stdout
+        assert out.splitlines() == [ln.split(" ", 1)[1] for ln in (r / "row.log").read_text().splitlines()]
+        return out.splitlines()
+
+    bundle = lambda r, p=0: r / "commit" / f"replay_bundle_p{p}"
+    r = row("kept-whole", keep={0: {}})
+    [line] = discard(r)
+    assert not bundle(r).exists() and "deleted" in line and (r / "commit" / "replay_slim_p0" / "slim.json").is_file()
+    r = row("no-keep")
+    [line] = discard(r)
+    assert bundle(r).is_dir() and "kept: no slim keep" in line
+    r = row("two", pairs=(0, 1), keep={0: {}})
+    assert [ln.split(" kept")[0].split(" deleted")[0] for ln in discard(r)] == [f"replay bundle {bundle(r, p)}" for p in (0, 1)]
+    assert not bundle(r, 0).exists() and bundle(r, 1).is_dir()
+    for name, over, why in [("other-bundle", {"bundle_manifest_sha256": "0" * 64}, "made from another bundle"),
+                            ("dump", {"dump_sha256": "0" * 64}, "dump_sha256"),
+                            ("pair", {"pair": 1}, "keep of pair 0"),
+                            ("schema", {"schema": "verity-vllm/replay-slim/v0"}, "replay-slim/v1"),
+                            ("empty", {"files": {}, "dump_sha256": hashlib.sha256(b"{}").hexdigest()}, "lists files")]:
+        r = row(name, keep={0: over})
+        [line] = discard(r)
+        assert bundle(r).is_dir() and why in line, (name, line)
+    r = row("changed-file", keep={0: {}})
+    (r / "commit" / "replay_slim_p0" / "store" / "opened").write_bytes(b"T" * 64)
+    assert "1 of" in discard(r)[0] and bundle(r).is_dir()
+    r = row("missing-file", keep={0: {}})
+    (r / "commit" / "replay_slim_p0" / "binding_map.json").unlink()
+    assert "incomplete (FileNotFoundError" in discard(r)[0] and bundle(r).is_dir()
+    r = row("blank-slim", keep={0: {}})
+    (r / "commit" / "replay_slim_p0" / "slim.json").write_text("")
+    assert "incomplete (JSONDecodeError" in discard(r)[0] and bundle(r).is_dir()
+    r = row("partial", keep={0: {}})
+    bundle(r).rename(r / "commit" / "replay_bundle_p0.partial")
+    assert "not a sealed bundle" in discard(r)[0] and (r / "commit" / "replay_bundle_p0.partial").is_dir()
+
+
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
     bench = (SKY / "jobs" / "prover-bench.yaml").read_text()
     assert 'ov.noisy: "true"' in bench and 'OV_NOISY: "true"' in bench and "podAntiAffinity" not in bench
     quiet = (SKY / "quiet_hour.sh").read_text()
-    assert "QUEUES=${VY_QUIET_QUEUES:-deployments-cpu deployments-gpu circuits}" in quiet and '"stopPolicy\\":\\"$policy' in quiet
+    assert "QUEUES=${VY_QUIET_QUEUES:-deployments-cpu deployments-gpu circuits}" in quiet and '"stopPolicy\\":\\"$2' in quiet
     up = (SKY / "cluster_up.sh").read_text()
     assert "hold:12:30 release:13:30" in up and "quiet_hour.sh" in up
 
@@ -135,14 +219,14 @@ def test_every_server_script_parses():
         assert r.returncode == 0, f"{f.name}: {r.stderr}"
 
 
-def test_the_disk_guard_holds_every_queue_at_90_and_releases_only_its_own_holds(tmp_path):
-    """vy-disk-guard: at 90% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
-    re-holds a queue someone released; under 85% it releases only its own holds, and not inside the quiet hour. `df`, `date` and
-    `kubectl` are fakes (the policy of each queue is a file)."""
+QUEUES = ["deployments-cpu", "deployments-gpu", "provers", "backfill", "circuits"]
+
+
+def stop_policy_node(tmp_path: Path, start: dict[str, str]):
+    """vy-nebius-1's stopPolicy writers (disk_guard.sh, quiet_hour.sh) run against fakes of `df`, `date` and `kubectl`, the policy
+    of each queue a file. Returns run(script, verb, used %, HHMM) -> stdout, and policies() -> {queue: stopPolicy}."""
     import subprocess
-    up = (SKY / "cluster_up.sh").read_text()
-    assert "disk_guard.sh\" /usr/local/bin/vy-disk-guard" in up and "vy-disk-guard.timer" in up and "OnUnitActiveSec=1min" in up
-    bin_dir, kq, outbox = tmp_path / "bin", tmp_path / "cq", tmp_path / "outbox"
+    bin_dir, kq = tmp_path / "bin", tmp_path / "cq"
     for d in (bin_dir, kq):
         d.mkdir()
     (bin_dir / "df").write_text('#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted"\n'
@@ -152,31 +236,74 @@ def test_the_disk_guard_holds_every_queue_at_90_and_releases_only_its_own_holds(
                                      '  patch) echo "$6" | sed \'s/.*stopPolicy":"\\([A-Za-z]*\\)".*/\\1/\' > "$KQ/$3" ;;\nesac\n')
     for f in bin_dir.iterdir():
         f.chmod(0o755)
-    queues = ["deployments-cpu", "deployments-gpu", "provers", "backfill", "circuits"]
-    for q in queues:
-        (kq / q).write_text("Hold" if q == "circuits" else "None")     # circuits is in its quiet hour
+    for q, p in start.items():
+        (kq / q).write_text(p)
 
-    def tick(used: int, hm: str = "1400") -> str:
+    def run(script: str, verb: str, used: int = 70, hm: str = "1400") -> str:
         env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "KQ": str(kq), "DF_USED": str(used), "HM": hm, "VY_KUBECTL": str(bin_dir / "kubectl"),
-               "VY_DISK_STATE": str(tmp_path / "held"), "VY_DISK_OUTBOX": str(outbox)}
-        r = subprocess.run(["sh", str(SKY / "disk_guard.sh"), "check"], env=env, capture_output=True, text=True)
-        assert r.returncode == 0, r.stderr
+               "VY_DISK_STATE": str(tmp_path / "disk-held"), "VY_DISK_OUTBOX": str(tmp_path / "outbox"),
+               "VY_QUIET_STATE": str(tmp_path / "quiet-held")}
+        r = subprocess.run(["sh", str(SKY / script), verb], env=env, capture_output=True, text=True)
+        assert r.returncode == 0 and r.stderr == "", r.stderr
         return r.stdout
 
-    def policies() -> dict:
-        return {q: (kq / q).read_text().strip() for q in queues}
+    return run, lambda: {q: (kq / q).read_text().strip() for q in start}
 
-    assert tick(89) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
-    assert "held deployments-cpu deployments-gpu provers backfill" in tick(90)
+
+def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(tmp_path):
+    """vy-disk-guard: at 80% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
+    re-holds a queue someone released; under 75% it releases only its own holds, and not inside the quiet hour."""
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "disk_guard.sh\" /usr/local/bin/vy-disk-guard" in up and "vy-disk-guard.timer" in up and "OnUnitActiveSec=1min" in up
+    outbox, queues = tmp_path / "outbox", QUEUES
+    run, policies = stop_policy_node(tmp_path, {q: "Hold" if q == "circuits" else "None" for q in queues})  # circuits is in its quiet hour
+    kq = tmp_path / "cq"
+
+    def tick(used: int, hm: str = "1400") -> str:
+        return run("disk_guard.sh", "check", used, hm)
+
+    assert tick(79) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
+    assert "held deployments-cpu deployments-gpu provers backfill" in tick(80)
     assert set(policies().values()) == {"Hold"} and len(list(outbox.iterdir())) == 1
     note = next(outbox.iterdir()).read_text()
     assert "lane: infra" in note and "nothing was deleted" in note and "provers" in note
     (kq / "provers").write_text("None")                                   # released by hand while the disk is still full
-    assert tick(91) == "" and policies()["provers"] == "Hold" and len(list(outbox.iterdir())) == 1
-    assert tick(87) == "" and set(policies().values()) == {"Hold"}        # between the marks: nothing changes
-    assert tick(80, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
-    assert "released deployments-cpu deployments-gpu provers backfill" in tick(80)
+    assert tick(81) == "" and policies()["provers"] == "Hold" and len(list(outbox.iterdir())) == 1
+    assert tick(77) == "" and set(policies().values()) == {"Hold"}        # between the marks: nothing changes
+    assert tick(70, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
+    assert "released deployments-cpu deployments-gpu provers backfill" in tick(70)
     assert policies() == {**{q: "None" for q in queues}, "circuits": "Hold"} and len(list(outbox.iterdir())) == 2
+
+
+def test_the_quiet_hour_releases_only_the_holds_it_set(tmp_path):
+    """vy-quiet-hour's 13:30Z release used to set None on all three of its queues, so it cleared the disk guard's hold and a lane's
+    hold by hand. Now its 12:30 hold takes only the queues nobody holds, and its release frees only those, and none the disk guard
+    has since taken as its own."""
+    run, policies = stop_policy_node(tmp_path, {q: "Hold" if q == "deployments-gpu" else "None" for q in QUEUES})  # a lane's hold
+    kq = tmp_path / "cq"
+    assert run("quiet_hour.sh", "release") == "" and run("quiet_hour.sh", "status").startswith("held by the quiet hour: \n")
+    out = run("quiet_hour.sh", "hold")
+    assert "deployments-gpu stopPolicy=Hold, held by someone else: left alone" in out
+    assert set(policies().values()) == {"None", "Hold"} and policies()["circuits"] == policies()["deployments-cpu"] == "Hold"
+    run("quiet_hour.sh", "hold")
+    assert (tmp_path / "quiet-held").read_text().split() == ["deployments-cpu", "circuits"]
+    (kq / "circuits").write_text("None")                                 # released by hand inside the hour, and then the disk fills
+    assert "held provers backfill circuits" in run("disk_guard.sh", "check", 82, "1241")
+    out = run("quiet_hour.sh", "release")
+    assert "deployments-cpu stopPolicy=None" in out and "circuits stopPolicy=Hold, held by the disk guard: left alone" in out
+    assert policies() == {**{q: "Hold" for q in QUEUES}, "deployments-cpu": "None"}
+    assert (tmp_path / "quiet-held").read_text() == ""
+    assert "released provers backfill circuits" in run("disk_guard.sh", "check", 70, "1331")
+    assert policies() == {**{q: "None" for q in QUEUES}, "deployments-gpu": "Hold"}
+
+    assert "held deployments-cpu provers backfill circuits" in run("disk_guard.sh", "check", 81, "1210")    # the next day
+    assert "held by someone else" in run("quiet_hour.sh", "hold") and (tmp_path / "quiet-held").read_text() == ""
+    run("quiet_hour.sh", "release")
+    assert set(policies().values()) == {"Hold"}
+    run("disk_guard.sh", "check", 70, "1245")
+    assert set(policies().values()) == {"Hold"}                         # the guard keeps its holds through the hour
+    run("disk_guard.sh", "check", 70, "1330")
+    assert policies() == {**{q: "None" for q in QUEUES}, "deployments-gpu": "Hold"}
 
 
 def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
@@ -243,7 +370,7 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
     up = (SKY / "cluster_up.sh").read_text()
     render = up[up.index("<<'PY'\n") + len("<<'PY'\n"):up.index("\nPY\n")]
     (tmp_path / "render.py").write_text(render)
-    for direct, want in ((4, 0), (0, 3), (2, 1)):
+    for direct, want in ((4, 0), (0, 2), (1, 1)):
         out = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue.yaml"), str(direct)], capture_output=True, text=True, check=True).stdout
         provers = out.split("metadata: {name: provers}")[1]
         assert re.search(r"\{name: nvidia.com/gpu, nominalQuota: (\d+)", provers).group(1) == str(want)
@@ -307,14 +434,18 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
 
 
 def test_submit_caps_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
-    """A job waiting for quota holds one of SkyPilot's 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait."""
+    """A SkyPilot job waiting for quota holds one of its 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait. The
+    dispatcher's Kueue Jobs hold none, so any number of them waiting blocks nothing."""
     import subprocess
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "waiting.py").write_text(sub[sub.index("\n", sub.index("<<'WAITING'")) + 1:sub.index("\nWAITING\n")])
     assert sub.index("<<'WAITING'") > sub.index("<<'PY'") and sub.index("<<'WAITING'") < sub.index("sky jobs launch -y")
 
     def check(template, queues, finished=0):
-        items = [{"spec": {"queueName": q}, "status": {}} for q in queues]
+        pod = {"ownerReferences": [{"kind": "Pod", "name": "sky-head"}]}
+        items = [{"metadata": pod, "spec": {"queueName": q}, "status": {}} for q in queues]
+        items += [{"metadata": {"ownerReferences": [{"kind": "Job", "name": "nd-x"}]}, "spec": {"queueName": "deployments-gpu"},
+                   "status": {}}] * 40                                                  # the dispatcher's waiting Kueue Jobs
         items += [{"spec": {"queueName": "circuits"}, "status": {"admission": {"clusterQueue": "circuits"}}}] * 3
         items += [{"spec": {"queueName": "circuits"}, "status": {"conditions": [{"type": "Finished", "status": "True"}]}}] * finished
         (tmp_path / "wl.json").write_text(json.dumps({"items": items}))
@@ -348,6 +479,45 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
             assert re.search(r'--out "?/workspace/jobs/', line), (f.name, line)
     capture = (SKY / "jobs" / "port-capture.yaml").read_text()
     assert 'vllm_bootstrap.sh" --cpu --out' in capture and "pod-$(hostname)" in capture     # no native taps; $CMD gets its own copy
+
+
+def test_a_per_pod_copy_goes_once_research_run_exits(tmp_path):
+    """prover-bench, prover-dev and port-capture run $CMD in a copy of the tree of their own (it writes there), ~4.7k inodes each that
+    nothing reads once the pod is gone: node 1 held ~690 of them on Oct 2. The run step removes its copy after `research run` exits,
+    keeps that exit status, and leaves the copy in place while research run runs from it. port-capture keeps the shared copy."""
+    import os
+    import shutil
+    import subprocess
+    import textwrap
+
+    jobs, synced = tmp_path / "jobs", tmp_path / "synced"
+    (synced / "tools/research/src/research/pods/nebius/sky").mkdir(parents=True)
+    shutil.copy(SKY / "job_tree.sh", synced / "tools/research/src/research/pods/nebius/sky/job_tree.sh")
+    (synced / "marker").write_text("x\n")
+    (jobs / "bin").mkdir(parents=True)
+    (jobs / "bin" / "uv").write_text('#!/bin/sh\n[ -f "$SRC/marker" ] && [ "$(pwd)" = "$SRC" ] || exit 99\nexit "$RC"\n')
+    (jobs / "bin" / "uv").chmod(0o755)
+    host = subprocess.run(["hostname"], capture_output=True, text=True, check=True).stdout.strip()
+    env = {**os.environ, "SRC": str(synced), "VY_JOB_TREES": str(jobs / "src"), "CUDA_HOME": str(tmp_path / "cuda"), "CAMPAIGN": "c",
+           "CMD": "true"}
+    shared = subprocess.run(["bash", str(SKY / "job_tree.sh"), str(synced)], capture_output=True, text=True, env=env, check=True).stdout.strip()
+
+    def step(doc: dict, key: str, rc: int) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", "-c", doc[key].replace("/workspace/jobs", str(jobs))], capture_output=True, text=True,
+                              env={**env, "RC": str(rc)}, cwd=tmp_path)
+
+    for name, copy in (("prover-bench", jobs / "src" / host), ("prover-dev", jobs / "src" / host),
+                       ("port-capture", jobs / "src" / f"pod-{host}")):
+        text = (SKY / "jobs" / f"{name}.yaml").read_text()
+        doc = {"setup": textwrap.dedent(text.split("\nsetup: |\n", 1)[1].split("\n\nrun: |\n", 1)[0]),
+               "run": textwrap.dedent(text.split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0])}
+        for rc in (0, 3):
+            if name != "port-capture":
+                assert step(doc, "setup", 0).returncode == 0 and (copy / "marker").is_file(), name
+            r = step(doc, "run", rc)
+            assert r.returncode == rc, (name, rc, r.stderr)
+            assert not copy.exists(), (name, rc)
+            assert (Path(shared) / "marker").is_file(), name
 
 
 def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_lock(tmp_path):
@@ -387,6 +557,49 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     assert (jobs / "count").read_text() == "run\n" and not (jobs / ".vllm-bootstrap.lock").exists()      # no rerun, no lock taken
     other = subprocess.run(["bash", str(boot), "--cases", "B1", "--cpu", "--out", str(jobs / "b")], env=env, capture_output=True, text=True, check=True)
     assert "cached" not in other.stdout and (jobs / "count").read_text() == "run\nrun\n"                  # another role bootstraps
+
+
+def test_a_leased_bootstrap_takes_its_gpu_before_the_host_lock_so_others_bootstrap_while_it_waits(tmp_path):
+    """A leased job's pod (GPU_LEASE set) has no GPU of its own: a real GPU-mode bootstrap runs under the lease tool, which it calls
+    before it opens the host-wide lock. The fake lease tool stands for a pool with no GPU free yet: when called it finds the lock free
+    and runs another job's CPU bootstrap to completion, then grants GPU 3. Taking the lease inside the lock (Oct 1 22:13-23:02Z on
+    vy-nebius-1) finds it held instead. A cached bootstrap and a --cpu one never call the tool."""
+    import os
+    import shutil
+    import subprocess
+    tree = tmp_path / "tree"
+    sky = tree / "tools/research/src/research/pods/nebius/sky"
+    sky.mkdir(parents=True)
+    shutil.copy(SKY / "vllm_bootstrap.sh", sky / "vllm_bootstrap.sh")
+    ops = tree / "integrations/vllm/verity_vllm/ops"
+    ops.mkdir(parents=True)
+    (ops / "pod_bootstrap.sh").write_text('echo "$2 cvd=${CUDA_VISIBLE_DEVICES-unset}" >> "$WORK/seen"; echo BOOTSTRAP-OK\n')
+    jobs = tmp_path / "jobs"
+    (jobs / "venv312/lib/python3.12/site-packages").mkdir(parents=True)
+    lease = tmp_path / "gpu-lease"
+    lease.write_text(
+        '#!/usr/bin/env bash\necho "$*" >> "$VY_JOBS/lease"\n'
+        'if flock -n "$VY_JOBS/.vllm-bootstrap.lock" true; then\n'
+        '  echo free >> "$VY_JOBS/lock"\n'
+        '  env -u VY_BOOTSTRAP_LEASED bash "$OTHER" --cases B1 --cpu --out "$VY_JOBS/b" >> "$VY_JOBS/other"\n'
+        'else\n  echo held >> "$VY_JOBS/lock"\nfi\n'
+        'while [ "$1" != -- ]; do shift; done; shift\nexport CUDA_VISIBLE_DEVICES=3\nexec "$@"\n')
+    lease.chmod(0o755)
+    env = {**os.environ, "VY_JOBS": str(jobs), "HF_HOME": str(tmp_path / "hf"), "GPU_LEASE": str(lease), "CUDA_VISIBLE_DEVICES": "",
+           "OTHER": str(sky / "vllm_bootstrap.sh")}
+    env.pop("VY_BOOTSTRAP_LEASED", None)
+
+    def boot(*args: str) -> str:
+        return subprocess.run(["bash", str(sky / "vllm_bootstrap.sh"), *args, "--out", str(jobs / "b")], env=env, capture_output=True,
+                              text=True, check=True).stdout
+
+    assert boot("--cases", "B0").strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "lease").read_text() == f"1 --wait --max-min 60 --mem-gb 0 -- bash {sky / 'vllm_bootstrap.sh'} --cases B0 --out " \
+        f"{jobs / 'b'}\n"
+    assert (jobs / "lock").read_text() == "free\n" and (jobs / "other").read_text().strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "seen").read_text() == "B1 cvd=\nB0 cvd=3\n"         # the other job's bootstrap ran while this one waited
+    assert "cached" in boot("--cases", "B0") and (jobs / "lease").read_text().count("\n") == 1
+    assert "cached" in boot("--cases", "B1", "--cpu") and (jobs / "lease").read_text().count("\n") == 1
 
 
 def test_submit_names_the_tools_it_is_missing(tmp_path):

@@ -324,6 +324,7 @@ FP8_RULE = "y = the FP32 accumulator of K/32 ascending DOT steps over (x, w) fro
 #: Census GEMM semantics with a ``verity.ml.tc`` model but no IR target here: a subcircuit binds, it cannot be generated.
 GEMM_MODEL_ONLY = {
     "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
+    "sm120.mma.m16n8k32.e4m3": ("sm120-mma-e4m3", "sm120 mma · FP8 (E4M3)", "e4m3"),
 }
 #: NVFP4 on sm_120 (RTX 5090): E2M1 codes with UE4M3 scales per block of 16; y the FP32 accumulator of
 #: ``verity.ml.kernels.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.

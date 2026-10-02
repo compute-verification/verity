@@ -2,11 +2,12 @@
 # lines below, from usage_report.py's summary.
 #
 # One cohort (nebius). GPU generation and CPU checking are separate queues (Daniel, 16:05Z: batch everything):
-#   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 5 GPUs, a fixed 4 vCPU and 160 GiB per GPU (a batch-8
-#                    Commit requests 170 GB; 20:40Z), so it never waits on CPU or memory quota. Every pod it runs requests at most 4 vCPU per GPU (test_nebius_sky) and bursts onto idle cores.
+#   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 6 GPUs (Daniel 1 Oct 01:35Z: circuits' vLLM work first),
+#                    a fixed 4 vCPU per GPU and 800 GiB, borrowing up to 320 GiB more (a batch-8 Commit requests 170 GB; 20:40Z). Every pod it runs requests at most 4 vCPU per GPU (test_nebius_sky) and bursts onto idle cores.
 #   deployments-cpu  a vLLM deployment's CPU work (Builds, replay and checks): no GPU, and it can't borrow one.
-#   provers          the provers' 3 GPUs; never borrows (borrowingLimit 0; root 14:34Z): a bench admitted on borrowed quota was
-#                    evicted mid-run by a reclaim, twice (fv2-a8's GPU, m0-v3-a14's CPU), and benches pinned to 160-191 run one at a time.
+#   provers          the provers' floor of 2 GPUs, one per proving lane, plus 1 borrowed (Daniel 1 Oct 01:35Z). It borrows idle GPUs, CPU and memory from the cohort (Daniel 19:12Z: one pool, borrowing
+#                    both ways, no ceremony), and a borrowed job is evicted when the Commits reclaim their quota: a timed bench
+#                    stays inside provers' own nominal quota (an earlier bench on borrowed quota was evicted mid-run, twice).
 #   backfill         the dispatcher's standing tier (root via RC, 15:36Z): nominal quota 0, so everything it runs is borrowed idle quota,
 #                    evicted first. It preempts nobody. LocalQueues backfill (the dispatcher) and pous-overflow (PoUW's untimed work).
 #   circuits         draining since 16:10Z: nominal quota 0, and its in-flight vLLM deployments finish on borrowed idle quota. Delete it
@@ -21,8 +22,7 @@
 # ~1,690 GiB), less ~3 vCPU of pods outside Kueue and the jobs controller, or it admits pods that stay Pending. Quota is requests,
 # not use: pods have no CPU limit and burst onto idle cores. The merge checks and pinned benches run outside Kueue on their own cores.
 # While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh holds those with a placeholder pod and
-# applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs wait meanwhile, since provers doesn't
-# borrow. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
+# applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0). Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata: {name: vy-nebius-1}
@@ -47,8 +47,8 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: "5", borrowingLimit: "2"}
-      - {name: cpu, nominalQuota: "20", borrowingLimit: "8"}
+      - {name: nvidia.com/gpu, nominalQuota: "6", borrowingLimit: "2"}
+      - {name: cpu, nominalQuota: "24", borrowingLimit: "8"}
       - {name: memory, nominalQuota: "800Gi", borrowingLimit: "320Gi"}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
@@ -107,9 +107,11 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 3, borrowingLimit: 0}
-      - {name: cpu, nominalQuota: 64, borrowingLimit: 0}
-      - {name: memory, nominalQuota: 384Gi, borrowingLimit: 0}
+      # Proofs borrows every idle GPU, and the cohort's whole CPU and memory to go with them; Commits (600) reclaim from it (300)
+      # (Daniel, 10:58 PM PDT 30 Sep).
+      - {name: nvidia.com/gpu, nominalQuota: 2, borrowingLimit: "6"}
+      - {name: cpu, nominalQuota: 64, borrowingLimit: "124"}
+      - {name: memory, nominalQuota: 384Gi, borrowingLimit: "1280Gi"}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue

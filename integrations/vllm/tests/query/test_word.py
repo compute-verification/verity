@@ -1,6 +1,8 @@
 """`Q_word_v1{X,W,R=no-recompute}` (`verity_vllm.query.word`): every computation gate certified by exactly one unit, cross-unit reads
 only through committed values (`verity.ir.partition.validate_unit_cut`), wiring and constants as structure, the widths as the IR's own
-|out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, and failures by name."""
+|out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
+the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
+the code, and the manifest is the same with it."""
 from __future__ import annotations
 
 import numpy as np
@@ -374,9 +376,12 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
     assert r["families"] == ["AttentionHead_v3", "Attention_v3", "EmbeddingShard_v1", "RMSNormTriton_v1"] and r["n"] == 4 and r["same"], r
 
 
+@pytest.mark.slow
 def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
     """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
-    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported."""
+    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported.  A workload
+    digest read from stdin once the components are built (`--workload-digest -`) gives the manifest the same digest named on the
+    command line gives, and none read fails it."""
     import gzip
     import json
     import shutil
@@ -394,16 +399,88 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
     (tmp_path / "wl.json").write_text(json.dumps(fx))
 
-    def build_global(jobs: int, out: str) -> subprocess.CompletedProcess:
+    def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(tmp_path / "wl.json"),
-                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), "--out", str(tmp_path / out)],
-                              cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), *extra, "--out", str(tmp_path / out)],
+                              cwd=Path(__file__).resolve().parents[2], input=stdin, capture_output=True, text=True)
 
     for jobs in (1, 3):
         assert build_global(jobs, f"m{jobs}.json").returncode == 0
     assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes()
+    assert build_global(3, "named.json", "--workload-digest", "w" * 64).returncode == 0
+    assert build_global(3, "stdin.json", "--workload-digest", "-", stdin="w" * 64 + "\n").returncode == 0
+    assert (tmp_path / "named.json").read_bytes() == (tmp_path / "stdin.json").read_bytes() != (tmp_path / "m1.json").read_bytes()
+    p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
+    assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
     shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
     fx["requests"][1]["max_tokens"] = T
     (tmp_path / "wl.json").write_text(json.dumps(fx))
     p = build_global(3, "bad.json")
     assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]
+
+
+# ---------------------------------------------------------------------------------------------------------------- the rule cache
+
+def _no_cut(fn):
+    raise AssertionError(f"{fn.id} cut again: its cached rule was not read")
+
+
+def test_a_cached_rule_is_the_rule_computed_and_a_later_process_reads_it_back(tmp_path, monkeypatch, attn):
+    computed = W.unit_rule(attn, memo={})
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
+    assert W.unit_rule(attn, memo={}) == computed and list(tmp_path.rglob("*.json"))
+    monkeypatch.setattr(W, "Graph", _no_cut)
+    assert W.unit_rule(attn, memo={}) == computed
+
+
+def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_the_code(tmp_path, monkeypatch, norm):
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
+    limits = W.gate_limits(None)
+
+    def at(fn, X=16, lim=limits):
+        return W._rule_entry(fn, X, 32, 0, lim)[0]
+    base = at(norm)
+    assert len({base, at(_fn("RMSNormTriton_v1", N=1024, EPS=1e-05)), at(norm, X=8), at(norm, lim=W.gate_limits(1000))}) == 4
+    assert W.definition_digest(norm) != W.definition_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
+    monkeypatch.setattr(W, "_CODE", ["another cut"])
+    assert at(norm) != base
+
+
+def test_an_entry_under_another_key_or_unreadable_is_not_read(tmp_path, monkeypatch, norm):
+    import json
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
+    rule = W.unit_rule(norm, memo={})
+    path, key = W._rule_entry(norm, 16, 32, 0, W.gate_limits(None))
+    path.write_text(json.dumps({"key": {**key, "digest": "0" * 64}, "rule": {**rule, "units_per_call": 0}}))
+    assert W.unit_rule(norm, memo={}) == rule
+    path.write_text("{")
+    assert W.unit_rule(norm, memo={}) == rule
+
+
+def test_a_rule_json_would_not_give_back_equal_is_not_written(tmp_path, monkeypatch, norm):
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
+    W._cache_rule(norm, 16, 32, 0, W.gate_limits(None), {"violations": [("tuple", 1)]})
+    W._cache_rule(norm, 16, 32, 0, W.gate_limits(None), {"gates": np.int64(3)})
+    assert not list(tmp_path.rglob("*.json"))
+
+
+def test_the_manifest_is_the_same_without_the_cache_as_with_it_cold_and_read_back(tmp_path, monkeypatch):
+    from verity_vllm.pipeline import manifest as M
+    d = _program_dir(tmp_path)
+
+    def build():
+        monkeypatch.setattr(W, "_RULES", {})
+        return M.build(d, request_id="r0", word="16/32")
+    plain = build()
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path / "rules")])
+    cold = build()
+    monkeypatch.setattr(W, "Graph", _no_cut)
+    assert plain == cold == build() and plain["query"]["word_check"]["units"] > 0
+
+
+def test_the_manifest_cli_takes_the_cache_directory_from_its_flag_or_the_environment():
+    from verity_vllm.pipeline import cli
+    argv = ["build", "--program", "p", "--out", "o"]
+    assert cli.parse("manifest", [*argv, "--unit-rule-cache", "/r"], {}).unit_rule_cache == "/r"
+    assert cli.parse("manifest", argv, {W.RULE_CACHE_ENV: "/e"}).unit_rule_cache == "/e"
+    assert cli.parse("manifest", ["build-global", "--fixture", "f", "--programs-root", "p", "--out", "o"], {}).unit_rule_cache is None
