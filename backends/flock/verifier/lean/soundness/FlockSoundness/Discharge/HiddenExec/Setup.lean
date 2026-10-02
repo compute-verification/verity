@@ -6,11 +6,11 @@ import FlockSoundness.Discharge.Hidden.Theorems
 
 `setupOne_hidden`, `setupOne_public`: `setupOne` is `setupHidden` under hidden outputs and `setupH` otherwise.
 
-The rest are what this area reads of `Stmt.setupHidden`'s statements, all [wave2-hidden]'s (`Discharge/Hidden/`):
-`setupHidden_tags`, `setupHidden_drawn`, `setupHidden_parseC` and `setupHidden_n` are projections of its
-`Hidden.setupHidden_spec` (`Spec`'s `tagsEq`, `pub`, `parse`, and `n`, `blocksReal`, `nbl`). `setupHidden_hm96`,
-`setupHidden_wf` and `parse_untyped` are stubs here, under the names and statements [wave2-hidden] posted for its own,
-until those land.
+The rest are what this area reads of `Stmt.setupHidden`, all from [wave2-hidden]'s `Hidden.setupHidden_spec`
+(`Discharge/Hidden/`). `setupHidden_tags`, `setupHidden_drawn`, `setupHidden_parseC` and `setupHidden_n` are projections
+of `Spec` (`tagsEq`, `pub`, `parse`, and `n`, `blocksReal`, `nbl`). `setupHidden_hm96` and `setupHidden_wf` also read
+what `HmOut.parse` and `HmOut.regions` check (`hmOut_parse_facts`, `hmOut_regions_wf`), and `parse_untyped` is
+`HmOut.parse` without typed rows: `HmRow.parse`, then `HmOut.checkRows`.
 -/
 
 set_option Elab.async false
@@ -34,21 +34,75 @@ theorem setupOne_public (hh : tags.hiddenOutputs = false) :
       Stmt.setupH tags cf pf coins tables draw partition program := by
   simp [setupOne, hh]
 
+set_option maxHeartbeats 4000000 in
+/-- What `HmOut.parse` checks of its circuit, typed or not: the leaf scheme is the tags', and every range's slots are
+`7 ≤ slotLog ≤ kLog` (`HmRow.check`). -/
+theorem hmOut_parse_facts {bytes : ByteArray} {c : Circuit} (h : HmOut.parse tags bytes tables = .ok c) :
+    c.leafScheme = tags.merkleLeaf ∧ (∀ r ∈ c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ c.kLog) := by
+  unfold HmOut.parse at h
+  dsimp only at h
+  cases ht : tags.typed
+  · simp only [ht, Bool.not_false, ↓reduceIte] at h
+    obtain ⟨c₀, h0, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    obtain ⟨_, hc⟩ := hm_parse_check_none h0
+    exact ⟨parse_leafScheme_pre h0, hm_check_slots hc⟩
+  · simp only [ht, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨⟨k, r⟩, -, h⟩ := ebind_ok h
+    dsimp only at h
+    cases r with
+    | inr t =>
+      obtain ⟨c₁, h1, h⟩ := ebind_ok h
+      simp only [pure_bind] at h
+      obtain ⟨_, -, h⟩ := ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      obtain ⟨_, hc⟩ := hm_parse_check_some h1
+      have e1 := parse_leafScheme_tmpl h1
+      have e2 := hm_check_slots hc
+      exact ⟨e1, e2⟩
+    | inl unit =>
+      obtain ⟨c₁, h1, h⟩ := ebind_ok h
+      simp only [pure_bind] at h
+      obtain ⟨_, -, h⟩ := ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      obtain ⟨_, hc⟩ := hm_parse_check_none h1
+      have e1 := parse_leafScheme_pre h1
+      have e2 := hm_check_slots hc
+      exact ⟨e1, e2⟩
+
+/-- Every region `HmOut.regions` builds is a `mkRegion`, so WF at the circuit's `kLog`. -/
+theorem hmOut_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmOut.regions c pub = .ok regs) :
+    ∀ x ∈ regs.toList, RegionWF c.kLog x := by
+  unfold HmOut.regions at h
+  dsimp only at h
+  intro x hx
+  obtain ⟨p, hp⟩ := mapM_ok_mem h x hx
+  exact mkRegion_wf hp
+
 /-- `Spec.tagsEq`. -/
 theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.tags = tags :=
   (Hidden.setupHidden_spec h).tagsEq
 
-/-- [wave2-hidden]'s `setupHidden_hm96`. -/
+/-- `Spec.merkle` at `Spec.parse`'s leaf scheme, which is the tags'. -/
 theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.merkle = MerkleScheme.hm96Sha512 := by
-  sorry
+  have s := Hidden.setupHidden_spec h
+  have h2 := s.merkle
+  rw [(hmOut_parse_facts s.parse).1, hl, find_hm96] at h2
+  exact (Option.some.inj h2).symm
 
-/-- [wave2-hidden]'s `setupHidden_wf`. -/
+/-- `StmtWF` from `Spec.parse`'s slots, `Spec.pin` and `Spec.m`; `RegionsWF` from `Spec.m`, `Spec.mPts` and
+`Spec.regions`. -/
 theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     StmtWF st ∧ RegionsWF st := by
-  sorry
+  have s := Hidden.setupHidden_spec h
+  exact ⟨wf_of_facts (hmOut_parse_facts s.parse).2 (hm_pin_ok s.pin) s.m, s.m, s.mPts, hmOut_regions_wf s.regions⟩
 
 /-- `Spec.pub`, at a draw. -/
 theorem setupHidden_drawn {d : Json}
@@ -69,9 +123,17 @@ theorem setupHidden_n (h : Stmt.setupHidden tags cf pf coins tables draw partiti
   have s := Hidden.setupHidden_spec h
   exact ⟨s.n, by rw [s.nbl, s.blocksReal]⟩
 
-/-- [wave2-hidden]'s `parse_untyped`: an untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows`. -/
+set_option maxHeartbeats 4000000 in
+/-- An untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows`. -/
 theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
     HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () := by
-  sorry
+  unfold HmOut.parse at h
+  dsimp only at h
+  simp only [ht, Bool.not_false, ↓reduceIte] at h
+  obtain ⟨c₀, h0, h⟩ := ebind_ok h
+  obtain ⟨u, hu, h⟩ := ebind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  exact ⟨h0, hu⟩
 
 end FlockSoundness.Discharge.HiddenExec
