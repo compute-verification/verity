@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 import torch
 
 from verity.ir.refs import Coll, PartLog, array_of
@@ -25,6 +27,42 @@ def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) 
         out.append(log)
     logs[layer_name] = (out[0], out[1])
     return out[0], out[1]
+
+
+def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[object, tuple[Coll, ...]]:
+    """The norm Definition for `role` (`rmsnorm`, `rmsnorm_fused`, `layer_norm`, `layer_norm_aten`; its other `statics`) and its trailing
+    operands: `EPS` a static, or under `registered_values` eps the registered value `eps` (the f32 word the kernel reads), the same name
+    the fold supplies."""
+    if not ctx.registered_values:
+        return ctx.kind(role, node, N=N, EPS=eps, **statics), ()
+    bits = int(np.float32(eps).view(np.uint32))
+    return ctx.kind(f"{role}_value", node, N=N, **statics), (ctx.supplied("eps", 32, bits, node),)
+
+
+def scalar_kind(ctx, role: str, node, N: int, C: float) -> tuple[object, tuple[Coll, ...]]:
+    """The elementwise kind `role` (`bf16_div_scalar`, `bf16_mul_scalar`, `add_scalar_f32`, `add_scalar_bf16`) and its trailing operands:
+    `C` a static, or under `registered_values` the f32 word the ATen kernel reads (the division's `RN32(1 / C)`, else `f32(C)`), a
+    registered value of its own named by the role (`div_scalar`, `mul_scalar`, `add_scalar_f32`, `add_scalar_bf16`; `_1`, ... for
+    another value)."""
+    if not ctx.registered_values:
+        return ctx.kind(role, node, N=N, C=C), ()
+    from verity_vllm.program.registry.dense import reciprocal_bits
+    bits = reciprocal_bits(C) if role == "bf16_div_scalar" else int(np.float32(C).view(np.uint32))
+    return ctx.kind(f"{role}_value", node, N=N), (ctx.supplied(role.removeprefix("bf16_"), 32, bits, node, distinct=True),)
+
+
+def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, ...]:
+    """The attention chain's trailing operands: none (the scale `D^-0.5 * log2(e)` a constant), or under `registered_values` the
+    registered value `scale_log2_d{D}`, the same name the fold supplies; a softcapped chain's (`cap`) are FA2's two words instead,
+    `softcap_mul_d{D}` (`softmax_scale / cap`) and `softcap_scale_log2` (`cap * log2(e)`)."""
+    if not ctx.registered_values:
+        return ()
+    if cap is not None:
+        from verity_vllm.program.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+        return (ctx.supplied(f"softcap_mul_d{D}", 32, softcap_mul_bits(D, cap), node),
+                ctx.supplied("softcap_scale_log2", 32, softcap_scale_log2_bits(cap), node))
+    from verity_vllm.program.registry import b1
+    return (ctx.supplied(f"scale_log2_d{D}", 32, b1._scale_log2_bits(D), node),)
 
 
 def rows_of(x: Coll) -> tuple[list[Coll], tuple[int, ...]]:

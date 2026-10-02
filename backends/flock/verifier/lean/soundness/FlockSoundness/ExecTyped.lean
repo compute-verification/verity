@@ -69,13 +69,17 @@ namespace Typed
 def starts (c : Circuit) : Array ℕ :=
   (c.ports.foldl (fun (acc : Array ℕ × ℕ) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
 
-/-- Message bit `t` of byte `byte` of row `p`'s message in VU `g` (`HmRow.delta`'s `msgCol`). -/
+/-- Message bit `t` of byte `byte` of row `p`'s message in VU `g` (`HmRow.delta`'s `msgCol`): in its chain's
+`sha512x3` slot, or past the chain in its hm96 slot's `pad`. -/
 def msgCol (c : Circuit) (g p byte t : ℕ) : ℕ :=
   let (_, where_) := HmRow.rowSlots c.ports
   let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
+  let hin := portCols (c.nets.getD c.hmNet default).2.inGroups
   let (k, o) := (byte / 128, byte % 128)
-  let (slot, sub) := (where_[p]!)[k]!
-  c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+  if k < (where_[p]!).size then
+    let (slot, sub) := (where_[p]!)[k]!
+    c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+  else c.slotCol c.hmNet g p + hin[1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
 
 /-- **A unit column's block position** in VU `g` (`HmRow.delta`'s `col`): the root's own columns in its slot, a part's
 in its layout's slot. -/
@@ -181,13 +185,21 @@ theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = 
         · simp
   intro d hd
   have h0 : ExtL (constPairs c pin) (DeltaIn c) d := ⟨[], by simp [hd], by simp⟩
-  -- the rows' cv and pad bits
+  -- the rows' constant bits
   refine run_bind_pair (Q := TailQ c pin tb) (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_range _ (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) h0) ?_
-  · refine forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩)
-      (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd)
-    · exact Or.inr (Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩)
-    · exact Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩
+  · refine forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩)
+      (forIn_id_inv_range _ (fun t _ ht d hd => ?_)
+        (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd))
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩))⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
+      · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩)
   intro d hd
   -- the units' leaf bits
   refine run_bind_pair (Q := TailQ c pin tb) (forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl,

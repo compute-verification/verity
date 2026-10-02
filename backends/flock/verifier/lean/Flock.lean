@@ -23,6 +23,7 @@ import Flock.Statement
 import Flock.Verify
 import Flock.Partition
 import Flock.HmRow
+import Flock.Registered
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
@@ -31,3 +32,4 @@ import Flock.Rows
 import Flock.Qword
 import Flock.Program
 import Flock.Extract
+import Flock.Qcall
