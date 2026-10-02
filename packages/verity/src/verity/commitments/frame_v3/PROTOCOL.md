@@ -185,7 +185,18 @@ digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
   the tree leaves.
 - **Constant midstates.** Q(ℓ) and every S(j, s, m_j) is one block fixed by ℓ. An 8 KiB row (ℓ = 65,536) costs 8 × 9 segment
   compressions plus 5 outer ones, 77 against `sha512/row/v2`'s 65, with a serial chain of 9 + 5 = 14 against 65.
+- **Word rows.** A row of n w-bit words (BF16 A_i rows, w = 16; Pearl-C's FP32 A rows, w = 32) is the bit row of its elements
+  (above): ℓ = w·n and the row bytes are the words little-endian, `row_bytes` byte for byte (`sha512_row_seg_word_digest`). Like
+  v2, no role or word width enters the digest, so it is not the row's `sha512/row/v1` digest: a consumer reads the port's leaf
+  schema, and a word row moved to row-seg has new digests, leaves and roots.
 - **Hiding.** `hm96-sha512/row-seg/v1` is the hiding leaf over this digest, under unchanged `hm96-sha512/v1`.
+- **Written by several ports (C-Flock).** A row one unit writes as several output ports and another reads as one input port
+  (PoUW's A′ ‖ P_A) is one row on both sides. The writer's META `out_row_ports` lists each output row's run of consecutive
+  output ports (absent: one row per port, zero-padded to whole blocks); a run's row is a row-seg row of exactly their words
+  in port order (ℓ = 16 · their words), named after its first port, and its message bits are copies of those output words.
+  Its digest, `b ‖ c` and tree leaf are then the reader's for the same words and salt. Both verifiers refuse runs that do not
+  cover the output ports once in order, a run whose row is not row-seg of exactly their words, and a padded row of more
+  than one port. The pair vectors are `ROW_SEG_PAIRS` in `backends/flock/tests/test_lean_verifier.py`.
 - **Reference and conformance.** `rowleaf.sha512_row_seg_segments`, `_prefix`, `_segment_prefix` and `_digest`, the last refusing a
   nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536 and word rows (BF16 k = 4096 and 5, FP32 k = 4096), with every
   segment's prefix and digest, and the 65,536-bit row's hiding leaf. `test_rowleaf_seg.py` checks them and the cost above.

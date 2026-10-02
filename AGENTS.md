@@ -107,7 +107,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test
-  enforces it. Developer notes in its `README.md`.
+  enforces it. Developer notes in its `README.md`. Code reaches the Nebius
+  nodes only through `research deploy install` from a pushed commit, listed in
+  `pods/nebius/deploy.toml`; `research deploy drift` names what isn't `main`'s.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).

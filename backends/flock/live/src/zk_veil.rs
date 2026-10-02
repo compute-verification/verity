@@ -15,8 +15,8 @@
 //! check `ε h_ab + w + σ x + ρ y = ρ σ`). The ring switch's claim check on the two non-region claims (whose values are
 //! masked) is a constraint too; its `s_hat_v` stays in the clear, hidden by the mask slot's uniform words (see
 //! [`mask_rank_ok`]). All constraints are batched with verifier coins into one `⟨c, h⟩ = t`, proved by [`prove_inner`]:
-//! the prover sends `τ = ⟨c, μ⟩` for a committed uniform `μ`, then `Y = h + β μ` (with its padding), and opens `Q` columns
-//! of both codewords.
+//! `final_c'` (a constant of two constraints, which upstream never absorbs) is absorbed before the coins, the prover sends
+//! `τ = ⟨c, μ⟩` for a committed uniform `μ`, then `Y = h + β μ` (with its padding), and opens `Q` columns of both codewords.
 //!
 //! **Simulation** ([`simulate_inner`], and the binary's `simulate`): every exposed value is uniform (the pads are), `Y` is
 //! uniform, `τ = (⟨c, Y⟩ + t) / β`, and the opened columns are uniform subject to `C(Y)_j = C(h)_j + β C(μ)_j` (the padding
@@ -181,8 +181,8 @@ impl Layout {
     pub fn len(&self) -> usize {
         self.tw() + 1
     }
-    /// The pads in the order the prover absorbs the values they mask (`final_c` is never absorbed): the algebraic phase's,
-    /// then level 0's (absorbed between `zk::LABEL_OPEN` and `zk::LABEL_CLOSE`).
+    /// The pads in the order the prover absorbs the values they mask (`final_c`, which upstream never absorbs, is the inner
+    /// proof's first item): the algebraic phase's, then level 0's (absorbed between `zk::LABEL_OPEN` and `zk::LABEL_CLOSE`).
     pub fn absorbed(&self) -> Vec<usize> {
         let mut v: Vec<usize> = (0..SKIP).map(|i| self.r1ab(i)).collect();
         v.extend((0..SKIP).map(|i| self.r1c(i)));
@@ -950,10 +950,13 @@ pub fn query_positions(words: &[F128], n: usize) -> Vec<usize> {
 }
 
 /// The prover's inner proof, on the rep's challenger after the opening. `cons` are the algebraic phase's and the ring
-/// switch's constraints (the triple's are added here). Refuses `β = 0` (the simulator refuses the same coins).
-pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, mut cons: Vec<(&'static str, Lin)>, ch: &mut Ch)
-    -> Result<InnerProof, String> {
+/// switch's constraints (the triple's are added here). `final_c`: the proof's `final_c'`, a constant of two of `cons` that
+/// nothing before absorbs, absorbed before `ε` so that it is fixed before the batching coins. Refuses `β = 0` (the simulator
+/// refuses the same coins).
+pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, final_c: F128, mut cons: Vec<(&'static str, Lin)>,
+                                   ch: &mut Ch) -> Result<InnerProof, String> {
     ch.observe_label(LABEL_INNER);
+    ch.observe_f128(final_c);
     let eps = ch.sample_f128();
     let rho = eps * p.h[lay.fa()] + p.h[lay.tx()];
     let sigma = p.h[lay.fb()] + p.h[lay.ty()];
@@ -982,7 +985,8 @@ pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, mut
 }
 
 /// The verifier's side of [`prove_inner`].
-pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, mut cons: Vec<(&'static str, Lin)>, ch: &mut Ch) -> Result<(), String> {
+pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, final_c: F128, mut cons: Vec<(&'static str, Lin)>, ch: &mut Ch)
+    -> Result<(), String> {
     let code = Code::new(lay.len() + K_PAD);
     if pr.y.len() != code.msg || pr.opened.len() != Q || pr.salts.len() != Q || pr.paths.len() != Q || pr.root.len() != 64
         || pr.tau_commit.len() != 64 || pr.tau_salt.len() != TAU_SALT_BYTES
@@ -990,6 +994,7 @@ pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, mut cons: Vec
         return Err("zk inner: malformed proof".into());
     }
     ch.observe_label(LABEL_INNER);
+    ch.observe_f128(final_c);
     let eps = ch.sample_f128();
     ch.observe_f128_slice(&[pr.rho, pr.sigma]);
     cons.extend(triple_constraints(lay, eps, pr.rho, pr.sigma));
@@ -1122,11 +1127,9 @@ mod tests {
     fn layout_is_a_bijection_on_the_exposed_values() {
         let lay = Layout::new(25, 22, 1, 6);
         let mut seen = vec![false; lay.len()];
-        for i in lay.absorbed() {
+        for i in lay.absorbed().into_iter().chain([lay.fc()]) {
             assert!(!std::mem::replace(&mut seen[i], true));
         }
-        assert!(!seen[lay.fc()], "final_c is never absorbed");
-        seen[lay.fc()] = true;
         assert!(seen[..lay.exposed()].iter().all(|x| *x));
         assert_eq!(lay.len(), lay.exposed() + 4);
     }
@@ -1161,14 +1164,56 @@ mod tests {
         l.a[0] = F128::ONE;
         l.a[1] = F128::ONE;
         let coins: Vec<F128> = (1..2000u64).map(|i| F128::new(i * 7919, i)).collect();
-        let pr = prove_inner(&ic, &p, &lay, vec![("t", l.clone())], &mut Tape::new(&coins)).unwrap();
-        verify_inner(&pr, &lay, vec![("t", l.clone())], &mut Tape::new(&coins)).unwrap();
+        let pr = prove_inner(&ic, &p, &lay, F128::ZERO, vec![("t", l.clone())], &mut Tape::new(&coins)).unwrap();
+        verify_inner(&pr, &lay, F128::ZERO, vec![("t", l.clone())], &mut Tape::new(&coins)).unwrap();
         let mut bad = l.clone();
         bad.c += F128::ONE;
-        assert!(verify_inner(&pr, &lay, vec![("t", bad)], &mut Tape::new(&coins)).is_err());
+        assert!(verify_inner(&pr, &lay, F128::ZERO, vec![("t", bad)], &mut Tape::new(&coins)).is_err());
         let mut pr2 = pr.clone();
         pr2.opened[3].0 += F128::ONE;
-        assert!(verify_inner(&pr2, &lay, vec![("t", l)], &mut Tape::new(&coins)).is_err());
+        assert!(verify_inner(&pr2, &lay, F128::ZERO, vec![("t", l)], &mut Tape::new(&coins)).is_err());
+    }
+
+    /// `final_c'` is a constant of two rows (`replay`'s c_eval, the ring switch's c claim), so a prover who knew `γ` before
+    /// fixing it could cancel any failing row. Coins are committed in advance (M2) and only the rounds' bytes bind a message:
+    /// the verifier accepts when the inner proof checks and its rounds are the ones the prover sent before each coin.
+    #[test]
+    fn final_c_solved_after_the_batching_coins_is_refused() {
+        let lay = Layout::new(20, 16, 0, 0);
+        let s = lay.len();
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([7; 32]));
+        let p = Pads::draw(&mut rng, &lay, 0);
+        let code = Code::new(s + K_PAD);
+        let ic = InnerCommit::new(&p, crate::zk_hooks::LeafSalts::for_seed(&ProverSeed::injected([8; 32])).expand(9, code.n));
+        let v = F128::new(0xc0ffee, 0x5eed);
+        let fc = v + p.h[lay.fc()];
+        let cons = |fc: F128, broken: bool| -> Vec<(&'static str, Lin)> {
+            let ab = p.h[lay.fa()] + if broken { F128::ONE } else { F128::ZERO };
+            vec![("zerocheck c_eval", Lin::masked(fc, lay.fc(), s).add_const(v)), ("zerocheck final a·b", Lin::masked(ab, lay.fa(), s)),
+                 ("ring switch c", Lin::masked(fc, lay.fc(), s).add_const(v))]
+        };
+        let coin = |k: u64| F128::new(k.wrapping_mul(0x9e37_79b9_7f4a_7c15), k + 1);
+        let schedule = vec![vec![coin(1)], (10..16).map(coin).collect(), vec![coin(99)], (100..100 + Q as u64).map(coin).collect()];
+        let run = |broken: bool, solve: bool| -> bool {
+            let mut pch = crate::RecordingChallenger::new(b"rep", schedule.clone());
+            let pr = prove_inner(&ic, &p, &lay, fc, cons(fc, broken), &mut pch).unwrap();
+            let mut sent = fc;
+            if solve {
+                let mut all = cons(fc, broken);
+                all.extend(triple_constraints(&lay, schedule[0][0], pr.rho, pr.sigma));
+                let g = &schedule[1];
+                let (c, t) = batch(&all, g);
+                let sum = c.iter().zip(&p.h).fold(t, |a, (x, y)| a + *x * *y);
+                sent += sum * (g[0] + g[2]).inv();
+            }
+            let mut vch = crate::RecordingChallenger::new(b"rep", schedule.clone());
+            let ok = verify_inner(&pr, &lay, sent, cons(sent, broken), &mut vch).is_ok();
+            assert!(pch.mismatch.is_none() && vch.mismatch.is_none());
+            ok && vch.rounds == pch.rounds
+        };
+        assert!(run(false, false), "the honest proof");
+        assert!(!run(true, false), "a failing row");
+        assert!(!run(true, true), "a failing row cancelled by final_c' solved after γ");
     }
 
     #[test]
