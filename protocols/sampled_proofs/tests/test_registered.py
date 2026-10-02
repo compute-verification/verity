@@ -226,10 +226,18 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
              ({"registered": [{**e, "domain": "00" * 64}]}, "R7-domain"), ({"registered": [{**e, "root": "xy"}]}, "R7-root"),
              ({"registered": []}, "R7-values"), ({"registered": [e, e]}, "R7-values"), ({"registered": [{**e, "value": "x"}]}, "R7-values"),
              ({"registered": [{**e, "extra": 1}]}, "R7-registered"), ({"format": "verity/registration/v1"}, "R1-protocol"),
-             ({"registered": [{**e, "word_bits": 32}]}, "R7-word_bits"), ({"registered": [{**e, "word_bits": 16}]}, "R7-word_bits")]
+             ({"registered": [{**e, "word_bits": 32}]}, "R7-word_bits"), ({"registered": [{**e, "word_bits": 16}]}, "R7-word_bits"),
+             ({"registered": [{**e, "leaves": 5.0}]}, "R7-leaves"), ({"registered": [{**e, "words": 2.0}]}, "R7-words")]
     for change, code in cases:
         assert code in R.check({**rec, **change}, prog, Q, **kw, registered={"W": 2}).codes, code
     assert "R7-registered" in R.check(rec, prog, Q, **kw, registered={"W": 3}).codes
+    # a count equal to the verifier's is still refused as a bool: True would give the registration a second digest
+    one = _program(pos=(0, 0), rows=1)
+    rec1, ports1 = _record(one, G.Registered.commit(P.program_sha512(one), "W", TABLE[:1]))
+    kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
+    assert rec1["registered"][0]["leaves"] == 1 and R.check(rec1, one, Q, **kw1, registered={"W": 2}).ok
+    true = {**rec1, "registered": [{**rec1["registered"][0], "leaves": True}]}
+    assert R.digest(true) != R.digest(rec1) and R.check(true, one, Q, **kw1, registered={"W": 2}).codes == ("R7-leaves",)
     # the record names 16 by leaving it out, whatever the entry it was given
     assert R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED, registered=[{**e, "word_bits": 16}]) == rec
 
@@ -245,6 +253,9 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     assert R.check(rec, prog, Q, **kw, registered={"W": 2}).ok
     no_width = {k: x for k, x in reg.entry().items() if k != "word_bits"}
     assert R.check({**rec, "registered": [no_width]}, prog, Q, **kw, registered={"W": 2}).codes == ("R7-word_bits",)
+    as_float = {**rec, "registered": [{**reg.entry(), "word_bits": 32.0}]}
+    assert R.digest(as_float) != R.digest(rec)
+    assert R.check(as_float, prog, Q, **kw, registered={"W": 2}).codes == ("R7-word_bits",)
     sixteen = G.Registered.commit(P.program_sha512(prog), "W", TABLE)
     assert set(R.check({**rec, "registered": [sixteen.entry()]}, prog, Q, **kw, registered={"W": 2}).codes) == {"R7-domain",
                                                                                                               "R7-word_bits"}

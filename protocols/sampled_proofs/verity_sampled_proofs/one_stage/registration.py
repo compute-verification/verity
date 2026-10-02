@@ -207,12 +207,14 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             continue
         if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.match(e["root"])):
             c.fail("R7-root", v)
+        # a count is an int, never a float or bool equal to it, and 16 is named by leaving word_bits out: one record
+        # digest per registration
         for k in ("leaves", "words", "domain"):
-            if e[k] != want[k]:
+            if e[k] != want[k] or (k != "domain" and type(e[k]) is not int):
                 c.fail(f"R7-{k}", {"value": v, "registered": e[k], "verifier": want[k]})
-        # 16 is named by leaving word_bits out: one encoding per width
-        if e.get(G.WIDTH_KEY, G.WORD_BITS) != want["word_bits"] or e.get(G.WIDTH_KEY) == G.WORD_BITS:
-            c.fail("R7-word_bits", {"value": v, "registered": e.get(G.WIDTH_KEY, G.WORD_BITS), "verifier": want["word_bits"]})
+        width = e.get(G.WIDTH_KEY, G.WORD_BITS)
+        if type(width) is not int or width != want["word_bits"] or e.get(G.WIDTH_KEY) == G.WORD_BITS:
+            c.fail("R7-word_bits", {"value": v, "registered": width, "verifier": want["word_bits"]})
         if v in held and e["root"] != held[v]:
             c.fail("R7-held", {"value": v, "registered": e["root"], "verifier": held[v]})
 

@@ -181,11 +181,11 @@ only inside a proof (`one_stage.registered`).
 - `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus
   `"word_bits"` when it is not 16), digest `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly
   when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
-  words}`): the values are exactly the verifier's, each with a SHA-512 hex root and the verifier's leaf count, width
-  (`R7-word_bits`, which also refuses a `"word_bits": 16` written out) and domain (`registered_entries`, from its own
-  program), and a value an earlier record of the log registered keeps that record's root (`held_roots`): the log is the
-  only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the default, so
-  a 16-bit value's domain, entry and root are what they were before `word_bits`.
+  words}`): the values are exactly the verifier's, each with a SHA-512 hex root and the verifier's integer leaf count,
+  words, width (`R7-word_bits`, which also refuses a `"word_bits": 16` written out) and domain (`registered_entries`,
+  from its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`):
+  the log is the only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the
+  default, so a 16-bit value's domain, entry and root are what they were before `word_bits`.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
