@@ -1,6 +1,6 @@
 # Network warden Lean package (`network-timing`)
 
-Definitions, pinned statements and proofs for the bucketed warden's timing channel: how much a covert sender inside a
+Definitions, guarantees and proofs for the bucketed warden's timing channel: how much a covert sender inside a
 spatial unit X can carry across its boundary ∂X through **when** frames leave, once the declared Program fixes their
 content and order. Conventions follow POUS's package (`protocols/pous/lean/`): the same toolchain and Mathlib pin,
 `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a check file.
@@ -17,8 +17,9 @@ NetTiming/SecurityProofs/Counting.lean   Theorem 1(b) (the tree lemma on accepte
 NetTiming/SecurityProofs/Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the
                                          block caps)
 NetTiming/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witness, and the toy
+                                         of the September draft
 lean-audit.json                the policy and pin records for tools/lean/audit.py
-CheckAxioms.lean               one #print axioms line per pinned theorem, then the three proved but unpinned
+CheckAxioms.lean               one #print axioms line per pin, then the three proved but unpinned lemmas
 ~~~
 
 ~~~bash
@@ -36,7 +37,7 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 31 pinned theorems' records, whose meaning it follows through those three (`meaning`).
+record, a kernel replay, and the 31 pins' records, whose meaning it follows through those three (`meaning`).
 A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 ## The model
@@ -70,7 +71,7 @@ image and is not stated.
 Program meets both conditions while its timing advice still changes its rows, and `joint_witness` meets every hypothesis
 of `Guarantees.EncardDecodableLeBlocks` at once, with a reacting operator.
 
-## The pinned theorems
+## The pins
 
 The 31 records in `lean-audit.json`. The 22 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
 lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by `card_free`):
