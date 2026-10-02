@@ -51,6 +51,7 @@ runs/
 backends/direct/fixtures/crosscheck_units.json
 backends/flock/tests/fixtures/hidden-outputs
 backends/flock/tests/fixtures/public-inputs
+backends/flock/tests/fixtures/public-inputs-blocks
 backends/gkr/fixtures/babybear-transcripts/transcript_vu4.json
 backends/gkr/fixtures/babybear-transcripts/transcript_vu64.json
 backends/gkr/fixtures/v2_synth/circuit.txt

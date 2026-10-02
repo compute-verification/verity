@@ -1,6 +1,7 @@
 """Public input ports (PROTOCOL.md §16.10): the Lean verifier reads a hidden-output statement whose unit reads a public
 input port (RoPE's `cs`, its cos/sin table) from in regions, as the Rust prover writes it, on its recorded CPU selftest
-sessions, and holds the public file's words to the verifier's own recomputation (`--public-inputs F`).
+sessions, with the public words in one aligned block of the unit's leaf group and in two, and holds the public file's words to
+the verifier's own recomputation (`--public-inputs F`).
 
 It is the one test in `check` of public input ports against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has them. So it catches a verifier that disagrees with the prover on the in regions,
@@ -27,7 +28,13 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: public_inputs=PUBLIC)` on `generate(rope-head/d64/neox-bf16, 4, 20260926)`; `records-cpu/`: `flock-circuit selftest
 #: --instances inst-4.bin --circuit circuit.txt --record-dir` (CPU, non-zk) at 54146af61
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
+#: the same set under the x8 lowering (`cs` in words 2..3 of a unit's leaf group), its META edited so that each unit's second
+#: x word (leaves 8..15) is a second public port `xh` (`XH`): public words 1..3, two in regions of blocks (1, 0) and (2, 1)
+#: (`circuit.aligned_blocks`), staged with `circuit.write(..., public_words=)` and `write_public_inputs`; records as above at
+#: 4d53e4749
+BLOCKS = Path(__file__).resolve().parent / "fixtures" / "public-inputs-blocks"
 PUBLIC = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
+XH = {"port": "xh", "words": 32, "seed": "test/rope-x", "derivation": "test/rope-x/second-word"}
 STATEMENT = "verity/flock-circuit+seed-injection"
 CASES = {"honest": True, "public_input_claim_false": False, "output_claim_false": False, "digest_claim_false": False,
          "output_row_committed_false": False}
@@ -37,11 +44,17 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 
 
 @pytest.fixture(scope="module")
-def store():
-    assert (FIXTURE / "stage" / "circuit.txt").is_file(), (
-        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures backends/flock/tests/fixtures/public-inputs`")
+def stores():
+    for d in (FIXTURE, BLOCKS):
+        assert (d / "stage" / "circuit.txt").is_file(), (
+            f"{d} is not fetched: `uv run research data fetch-fixtures backends/flock/tests/fixtures/{d.name}`")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    return FIXTURE
+    return {"one-block": FIXTURE, "two-blocks": BLOCKS}
+
+
+@pytest.fixture(scope="module")
+def store(stores):
+    return stores["one-block"]
 
 
 def _split(f: Path) -> tuple[dict, bytes]:
@@ -92,10 +105,13 @@ def test_the_files_name_the_ports_recomputation(store):
     assert pub_head["public_inputs"] == pins and pub_body.endswith(body) and len(body) == _words(store)
 
 
+@pytest.mark.parametrize("layout", ["one-block", "two-blocks"])
 @pytest.mark.parametrize("case", list(CASES))
-def test_it_gives_the_provers_sessions_their_verdicts(store, case, tmp_path):
-    """Each session under the verifier's own recomputation of its public file's words: a false public word's session is
-    rejected by the proof, never by the session parameters, once the verifier's file says the same word."""
+def test_it_gives_the_provers_sessions_their_verdicts(stores, layout, case, tmp_path):
+    """Each session under the verifier's own recomputation of its public file's words, with the public words in one aligned
+    block and in two: a false public word's session is rejected by the proof, never by the session parameters, once the
+    verifier's file says the same word."""
+    store = stores[layout]
     rec = store / "records-cpu"
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(rec), str(tmp_path)], check=True,
                    capture_output=True)
@@ -167,6 +183,11 @@ def _leaves_only(meta):
     meta.pop("public_inputs")
 
 
+def _row_beside_public(meta):
+    # unit 0's leaf 7, a word of x, read from the public words instead: word 0 then holds both rows and a public word
+    meta["leaves_in"][0][7], meta["leaves_public"][0][7] = -1, 0
+
+
 def _non_hidden(d, tmp):
     return d / "stage" / "circuit.txt", d / "stage" / "pub-4.bin", d / "stage" / "public-inputs-4.bin"
 
@@ -187,6 +208,8 @@ REFUSALS = {
                                                              "(a non-empty seed and derivation)"),
     "circuit_names_no_port": (_meta_edit(_no_port), "--public-inputs: the circuit names no public input port"),
     "leaves_without_ports": (_meta_edit(_leaves_only), "META: leaves_public without public_inputs"),
+    "row_word_beside_public": (_meta_edit(_row_beside_public), "public inputs: leaf 0 reads a row word inside word 0, which "
+                                                               "holds a public word"),
 }
 
 
@@ -204,8 +227,21 @@ def test_a_statement_without_hidden_outputs_takes_no_public_inputs(store):
                                                          "input ports"), (p.stdout, p.stderr)
 
 
-def test_the_honest_statement_is_the_provers(store):
+@pytest.mark.parametrize("layout, regions", [("one-block", 3), ("two-blocks", 4)])
+def test_the_honest_statement_is_the_provers(stores, layout, regions):
+    """The statement's Hello is the prover's: two digest regions (x and out), then an in region per block."""
+    store = stores[layout]
     p = _statement(store / "stage" / "circuit.txt", store / "stage" / "pub-4.bin", store / "stage" / "public-inputs-4.bin")
     st = json.loads(p.stdout)
     record = json.loads((store / "records-cpu" / "honest.json").read_text())["record"]
-    assert st["regions"] == 3 and st["hello"] == record["hello"] and st["sigma"] in st["hello"]
+    assert st["regions"] == regions and st["hello"] == record["hello"] and st["sigma"] in st["hello"]
+
+
+def test_the_two_block_files_name_both_ports(stores):
+    from verity_flock import circuit as FC
+    meta = json.loads((stores["two-blocks"] / "stage" / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert meta["public_inputs"] == [{"port": p, "words": 64, **r} for p, r in PUBLIC.items()] + [XH]
+    words = {16 * j // 128 for u in meta["leaves_public"] for j, q in enumerate(u) if q >= 0}
+    assert FC.aligned_blocks(sorted(words)) == [(1, 0), (2, 1)]
+    head, body = _split(stores["two-blocks"] / "stage" / "public-inputs-4.bin")
+    assert head["ports"] == meta["public_inputs"] and len(body) == _words(stores["two-blocks"])
