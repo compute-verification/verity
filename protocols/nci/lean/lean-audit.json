@@ -59,6 +59,16 @@
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
+  "Nci.SecurityProofs.Training": {
+   "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
+   "assumptions": [],
+   "type_hash": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a"
+  },
+  "Nci.SecurityProofs.UpdatedMatMul": {
+   "signature": ["Nci.SecurityProofs.UpdatedMatMul : Nci.Guarantees.UpdatedMatMul"],
+   "assumptions": [],
+   "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
+  },
   "Nci.SecurityProofs.full_positions": {
    "signature": [
     "Nci.SecurityProofs.full_positions {D : Verity.Circuit} (c : Nci.Chain D) (R : Finset (Fin D.N)) (d : Nat)",
@@ -125,25 +135,34 @@
  },
  "reads": {
   "Nci.Assumptions": {
-   "digest": "3b9036ede0e70cc270a4a11307b3d6f9cac6d7403468c15f39104955cf69ec97",
+   "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
    "definitions": {
-    "Nci.Assumptions.ActivationsIncompressible": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
+    "Nci.Assumptions.ActivationsIncompressible": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a",
+    "Nci.Assumptions.PartialSumsIncompressible": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
    },
-   "pins": ["Nci.SecurityProofs.iu_reads"]
+   "pins": ["Nci.SecurityProofs.Training", "Nci.SecurityProofs.UpdatedMatMul", "Nci.SecurityProofs.iu_reads"]
   },
   "Nci.Guarantees": {
-   "digest": "7f8093220c615dda3b3a307513ff20746a9e9d5076d9977ef77170c4bc8ed37f",
+   "digest": "766daef01d1febae2310342a74ed2f97908c6a09b2d03c85f8750ec6ce7015df",
    "definitions": {
     "Nci.Guarantees.Inference": "23d56232118a97bcf16c30143ce0e193b0058e2442abd9d09674a512007a3013",
-    "Nci.Guarantees.ReadBound": "7bebcecb05808d9088b29248b1d6c07dd8da1fc5fd13d10cf6ad822a15070804"
+    "Nci.Guarantees.ReadBound": "7bebcecb05808d9088b29248b1d6c07dd8da1fc5fd13d10cf6ad822a15070804",
+    "Nci.Guarantees.Training": "cb2ed87094fe723c57f7327f35b1c25bc823ee878bee89603ec3d5019462a4a5",
+    "Nci.Guarantees.UpdatedMatMul": "e0aea8b94ad0a9a9cedcbba81016e1756664aaccf5740ac10a84a45a67500ca4"
    },
-   "pins": ["Nci.SecurityProofs.Inference", "Nci.SecurityProofs.ReadBound"]
+   "pins": [
+    "Nci.SecurityProofs.Inference",
+    "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.Training",
+    "Nci.SecurityProofs.UpdatedMatMul"
+   ]
   },
   "Nci.Protocol": {
-   "digest": "cf2105850c44a9a6f6d1bc659cd612ae35cfe24ce07af99350e6e1d197b35516",
+   "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
    "definitions": {
     "Nci.Chain": "0b52c8b6855d719f822cbf6fe6b18dd80ae28b16eb039ac4c1bed5de6257067b",
     "Nci.Chain.Full": "dd0c7b4b628845315e320d9d98fa4949694561cb434d566b1e98eff0efd53fff",
+    "Nci.Chain.G": "fa22ae34e4b677bc281e991d81a899c284ecebc2cedae523a07b1eed0153761c",
     "Nci.Chain.L": "f9c126387e5fdebd6eafd76514447f9743af1358843aa597ef7e44bcc3beb4f9",
     "Nci.Chain.LinkedWhole": "ef95c857ac59218aae46c6e2c784324ab64fe11f6d513a1b2e0fc8fc38d5d309",
     "Nci.Chain.N": "a3516e57848bbb7a08174afa2616fcd67f3c6d17222d47367638ae33d436bf4b",
@@ -153,9 +172,11 @@
     "Nci.Chain.e": "cf731b4725503cd8500766b5207448bbb0e191376bfd9e37dd23dc0859b9055d",
     "Nci.Chain.inputsUsed": "f44d6cc25eefae517eec80cc710951972729867d4f01c3cd23ea5e4289ca0c5b",
     "Nci.Chain.prod": "f93107b277887433cf3cf5e3c4b288f296da194ef90a7548d50991887f1f741c",
+    "Nci.Chain.spread": "2e84359e5cdd2f46797753f171674bfed9d573515c12d0137b9ea57ba19d9a98",
     "Nci.Chain.weightsUsed": "619fa633941d3f1653a7f24f6f8f15f8d4a69c1256959721a5217d5db4b78596",
     "Nci.Chain.π": "6a9b562b9e4049d46f5bf4e583261877552c341e0bfef5c6f04ac925342e1373",
     "Nci.Complies": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e",
+    "Nci.F": "c31b19ed94123523c913f7ab5cafd3f2d30f3192515ba9a9b45baaaf9be8b331",
     "Nci.Policy": "a81cff6c812131f35e8b34e7d21b6fe0cdfc05c26075c9806d0b45ca908d872c",
     "Nci.Reads": "903f172448c1e6ba345b3cd869c3ac06e7d5aaec4079abda78b5a83ef574d228",
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79",
@@ -164,6 +185,8 @@
    "pins": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.Training",
+    "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.full_positions",
     "Nci.SecurityProofs.iu_reads",
     "Nci.SecurityProofs.other_positions"
@@ -197,6 +220,8 @@
    "pins": [
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.Training",
+    "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.full_positions",
     "Nci.SecurityProofs.iu_reads",
     "Nci.SecurityProofs.other_positions"
@@ -211,7 +236,13 @@
     "Verity.Declaration.Implements": "0b973c0f940a9a9bf3bd04e3124fe027e62d041007816a4834a681c1c53e3aa1",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "pins": ["Nci.SecurityProofs.Inference", "Nci.SecurityProofs.ReadBound", "Nci.SecurityProofs.iu_reads"]
+   "pins": [
+    "Nci.SecurityProofs.Inference",
+    "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.Training",
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.iu_reads"
+   ]
   },
   "Verity.Protocol.Partition": {
    "digest": "a61efe7bc07bac847495f338197cdbd33a863ef3f0523f100bcb46ef3da67298",
@@ -220,7 +251,13 @@
     "Verity.Partition.gates": "ee436a2cedef88f54396204589ab1dfaf55be636d8a0a1376f41740dd9ba79c7",
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9"
    },
-   "pins": ["Nci.SecurityProofs.Inference", "Nci.SecurityProofs.ReadBound", "Nci.SecurityProofs.other_positions"]
+   "pins": [
+    "Nci.SecurityProofs.Inference",
+    "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.Training",
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.other_positions"
+   ]
   }
  },
  "dependencies": {
