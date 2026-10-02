@@ -268,7 +268,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
       ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
-  let stated ← match statementOf env meaning ci.type with
+  let stated ← match head with
     | some (g, s) => do pure [("head", toJson g.toString), ("statement", toJson (toString (← ppExpr s)))]
     | none => pure []
   return Json.mkObj ([("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
