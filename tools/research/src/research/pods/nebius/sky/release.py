@@ -4,13 +4,17 @@
 Every tick: circuits' Commit workloads in deployments-gpu (items vllm-epoch-run/* and n2-build/*) that this controller didn't
 release stay deactivated (spec.active=false), new arrivals included. It reactivates them in circuits' order while
   - at most MAX_INFLIGHT (6) of its releases are unfinished,
-  - at most MAX_BIG (4) Commits at batch 8 or more are unfinished (released or admitted),
+  - at most MAX_BIG (6) Commits at batch 8 or more are unfinished (released or admitted),
   - node 1's unreplayed replay bundles (jobs/cov, jobs/probe-jit), plus the estimated bundles of the unfinished Commits and of
     the candidate, stay under the cap: what is left under CAP_ROOM_PCT (75) of /workspace after everything that is not a bundle,
     at most CAP_GB (2000), recomputed every tick; 150 GB once the disk has reached 78%. A model's estimate is learned from its
     finished bundles (the largest GB per batch x tokens seen, x1.25; bundle-sizes.json). Until then it is infra's 120 GB x batch/8 x (input + output tokens)/1152
     for Phi-3-mini, scaled by the model's hidden size x layers against Phi-3-mini's and at least 10 GB (it stays above every bundle
     measured on Sep 30: Phi-3-mini, Mistral-7B, TinyLlama, Llama-3.2-1B, Qwen2.5-0.5B and -1.5B),
+  - a model the pacer has no size for (none learned, and not in the formula's table, so the formula guesses it as Phi-3-mini:
+    on 2 Oct that guess ran 1.3-6x low for qwen25-3b, yi15-6b and gemma2-9b, and node 1's disk went from 61% to 80% in 26 min)
+    has at most one Commit unfinished until one has succeeded and taught its size; while that one is admitted the LocalQueue
+    stays held, so a second can't be admitted the moment it arrives,
   - node 1's /workspace is under DISK_PAUSE_PCT (80, as df reports it): at or over it nothing is released (infra, 4:46 PM PDT).
 Rows circuits keeps held (batch 64, batch 16+ of 7B+ or MoE models, Gemma-2 at batch 16+ with 1024 input tokens, and the named ones) are never reactivated. It evicts nothing
 that Kueue has admitted, and deletes nothing. Since Kueue admits a leased Commit before a tick can hold it, the pacer holds
@@ -160,6 +164,12 @@ def learn(flying, written, jobs):
             SIZES.write_text(json.dumps(table, indent=1, sort_keys=True) + "\n")
 
 
+def sized(row):
+    """Whether the pacer has a size for `row`'s model it trusts: a rate learned from a succeeded Commit, or the formula's own
+    row (HIDDEN_X_LAYERS). Any other model is estimated as Phi-3-mini, a guess."""
+    return model(row) in learned() or any(row.startswith(k + "__") for k in HIDDEN_X_LAYERS)
+
+
 def estimate_gb(row):
     """A Commit's bundle, GB: from the largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else
     infra's formula scaled from Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
@@ -180,20 +190,22 @@ GPU_QUEUE = "deployments-gpu"                                  # the LocalQueue 
 GATE = ROOT / "gpu-held"                                      # exists while the pacer itself holds GPU_QUEUE
 
 
-def gate(close, projected, cap):
+def gate(close, projected, cap, probing=()):
     """Kueue admits a leased Commit (it requests no GPU) the moment it arrives, before a tick can deactivate it, so the pacer holds
     the GPU_QUEUE LocalQueue itself (stopPolicy Hold: nothing new is admitted from it, nothing running is touched) while `close`,
     and lets it go otherwise. tick() closes it while the admitted Commits' projection plus the next Commit's (the next released
     or waiting one, else the largest admitted, standing for the next arrival) would pass the cap, or the disk is at
-    DISK_PAUSE_PCT. With no Commit admitted it always opens (outside the 78% latch), so a big one can't starve.
+    DISK_PAUSE_PCT, or a Commit of a model with no size (`probing`, sized()) is admitted: the next arrival may be another of
+    that model. With no Commit admitted it always opens (outside the 78% latch), so a big one can't starve.
     The hold gates Commits only, by construction: the lease pools' GPU holders are submitted to their own LocalQueue
     (deployments-gpu-pool, n1_lease.py's VY_POOL_LOCAL_QUEUE), and the quiet hour and the disk guard hold the ClusterQueue, a
     different object. It only undoes its own hold and never touches a HoldAndDrain. `projected` is for the log."""
     policy = k("get", "localqueue", GPU_QUEUE, "-n", "default", "-o", "jsonpath={.spec.stopPolicy}").strip() or "None"
     if close:
         if policy == "None":
-            log(f"projected {projected:.0f} GB with the next Commit is over the {cap} GB cap (or the disk at {DISK_PAUSE_PCT}%): "
-                f"holding the {GPU_QUEUE} LocalQueue, so Kueue admits no new Commit")
+            why = (f"a Commit of {', '.join(probing)} (no size yet) is admitted" if probing else
+                   f"projected {projected:.0f} GB with the next Commit is over the {cap} GB cap (or the disk at {DISK_PAUSE_PCT}%)")
+            log(f"{why}: holding the {GPU_QUEUE} LocalQueue, so Kueue admits no new Commit")
             if not DRY:
                 k("patch", "localqueue", GPU_QUEUE, "-n", "default", "--type=merge", "-p", '{"spec":{"stopPolicy":"Hold"}}')
                 GATE.parent.mkdir(parents=True, exist_ok=True)
@@ -252,6 +264,7 @@ def tick():
     learn(flying, written, jobs)
     rest = {w["name"]: max(estimate_gb(w["row"]) - written[w["name"]], 0) for w in flying}   # a Commit's bundle so far is already in gb
     projected = gb + sum(rest.values())
+    probing = {model(w["row"]) for w in flying if not sized(w["row"])}     # one Commit at a time of a model with no size yet
     order = {c: i for i, c in enumerate(WAVES)}
     cands = sorted((w for w in ws if not w["active"] and not w["admitted"] and not kept(w["cov"], w["row"])),
                    key=lambda w: (order.get(w["cov"], len(WAVES)), batch(w["row"])))
@@ -259,7 +272,7 @@ def tick():
         if inflight >= limits()[0] or disk >= DISK_PAUSE_PCT or NO_RELEASE.exists():
             break
         fits = projected + estimate_gb(w["row"]) <= cap or (inflight == 0 and not latched)   # with none in flight, a big one can't starve
-        if (batch(w["row"]) >= 8 and big >= limits()[1]) or not fits:
+        if (batch(w["row"]) >= 8 and big >= limits()[1]) or not fits or (not sized(w["row"]) and model(w["row"]) in probing):
             continue
         log(f"release {w['cov']} ({w['row'][:40]}) {w['name']}: in flight {inflight}, batch-8+ {big}, bundles {gb:.0f} GB, "
             f"projected {projected:.0f} + {estimate_gb(w['row']):.0f} GB")
@@ -269,12 +282,15 @@ def tick():
         inflight += 1
         projected += estimate_gb(w["row"])
         big += batch(w["row"]) >= 8
+        if not sized(w["row"]):
+            probing.add(model(w["row"]))
     admitted = [w for w in ws if w["admitted"]]
     waiting = [w for w in ws if w["name"] in released and not w["admitted"]] + [w for w in cands if w["name"] not in released]
     base = gb + sum(rest.get(w["name"], 0) for w in admitted)
     reserve = estimate_gb(waiting[0]["row"]) if waiting else max((estimate_gb(w["row"]) for w in admitted), default=0.0)
     room = (not admitted and not latched) or base + reserve <= cap
-    gate(not room or disk >= DISK_PAUSE_PCT, base + reserve, cap)
+    probe = sorted({model(w["row"]) for w in admitted if not sized(w["row"])})
+    gate(not room or disk >= DISK_PAUSE_PCT or bool(probe), base + reserve, cap, probe)
     if not DRY:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text("\n".join(sorted(released)) + "\n")

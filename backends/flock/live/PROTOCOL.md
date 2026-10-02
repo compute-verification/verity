@@ -343,8 +343,9 @@ Results for RoPE at `m = 25`, 64 sessions (128 transcripts) per kind:
 
 Evidence: `lanes/flock-zk/evidence/`.
 
-**The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data (with `final_c'`, the opening's
-batching nonces and the commitment's parameters), is attributed to a class:
+**The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data (with the opening's batching
+nonces and the commitment's parameters), is attributed to a class. The inner proof's round values are `final_c'`, `[ρ, σ]`
+and `Y`, in that order (selftest `zk_audit_attributes_the_inner_proof`). The audit checks that:
 - masked values differ from the control's;
 - region `s_hat_v` equal their public recomputation;
 - every Ligerito value differs from the control's;

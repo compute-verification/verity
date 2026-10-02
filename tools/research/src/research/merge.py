@@ -1,5 +1,6 @@
 """`research merge REF [--into BRANCH] [--tool check] [-m MESSAGE] [--push] [--dry-run]`: the merge gate.
 `research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]`: several refs as one checked candidate (`train`).
+`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
 
@@ -23,11 +24,15 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced) and then swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
 `research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
+
+A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
+from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -236,8 +241,69 @@ def _record(tree: Path, tool: str, command: list[str], on: str | None, project: 
 POLL_S = 20
 
 
+#: a pinned train ref: pull request N or a branch of the remote, at the head that was reviewed
+PIN = re.compile(r"#?([\w./-]+)@([0-9a-f]{7,40})")
+
+
+def pinned(repo: Path, ref: str, remote: str) -> tuple[str, str]:
+    """(how the train's merge message names ``ref``, the commit it merges).  ``N@SHA`` (pull request N) and ``BRANCH@SHA`` are
+    fetched from ``remote`` and refused unless the head there is still SHA; any other ref is the commit it names here."""
+    m = PIN.fullmatch(ref)
+    if not m:
+        return ref, _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
+    name, want = m.groups()
+    label, src = (f"#{name}", f"pull/{name}/head") if name.isdigit() else (name, name)
+    _git(repo, "fetch", "-q", remote, src)
+    head = _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
+    if not head.startswith(want):
+        raise Refused(f"{label} has moved: its head on {remote} is {head[:12]}, not {want}; review the new head and name it")
+    return label, head
+
+
+def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
+    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each; the chain's commits, which
+    are the train's prefixes.  Refused at the first that doesn't merge."""
+    chain = []
+    for label, sha in pins:
+        r = _git(tree, "merge", "--no-ff", "-m", f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}", sha, check=False)
+        if r.returncode:
+            _git(tree, "merge", "--abort", check=False)
+            raise Refused(f"{label} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
+        chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
+    return chain
+
+
+#: what `prepare` runs on a train before pushing it, under this interpreter: check's preflight (`uv.lock`, the repository's lints)
+PREFLIGHT = ["tools/check/check.py", "--preflight"]
+
+
+def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str]) -> tuple[str, str]:
+    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`) merged in order onto ``onto`` as
+    ``remote`` has it (the target, or the prep branch of a train ahead, to stack on it) in a scratch worktree, refused at the first
+    that doesn't merge; ``lint`` run on the result there; its tip pushed to ``remote`` as ``branch``, never forced, and read back.
+    Every step names the scratch worktree or ``repo``'s object store, never its checkout.  Returns (the tip, its tree)."""
+    r = _git(repo, "fetch", "-q", remote, onto, check=False)
+    base = _git(repo, "rev-parse", "--verify", f"{'FETCH_HEAD' if r.returncode == 0 else onto}^{{commit}}").stdout.strip()
+    pins = [pinned(repo, ref, remote) for ref in refs]
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    tree = Path(tempfile.mkdtemp(prefix="research-train-"))
+    _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
+    try:
+        tip = _chain(tree, pins, stamp)[-1]
+        if subprocess.run(lint, cwd=tree).returncode:
+            raise Refused(f"`{shlex.join(lint)}` failed on the train ({tip[:12]}); nothing was pushed")
+        _git(repo, "push", "-q", remote, f"{tip}:refs/heads/{branch}")
+        got = (_git(repo, "ls-remote", remote, f"refs/heads/{branch}").stdout.split() or ["nothing"])[0]
+        if got != tip:
+            raise Refused(f"{remote}'s {branch} is {got[:12]} after the push, not the train {tip[:12]}")
+        return tip, _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
+    finally:
+        _git(repo, "worktree", "remove", "--force", str(tree), check=False)
+
+
 def train(repo: Path, refs: list[str], into: str, store, tool: str, command: list[str], on: str | None = None,
-          project: str | None = None, log=print, spec: str | None = None, sends: list[str] = ()) -> tuple[str | None, str | None]:
+          project: str | None = None, log=print, spec: str | None = None, sends: list[str] = (),
+          remote: str = "origin") -> tuple[str | None, str | None]:
     """Merge ``refs`` in order onto ``into``'s tip as one candidate (a chain of `--no-ff` merges in a scratch worktree), record
     `tool` on it once and fast-forward ``into`` to it when it passes: the tree that lands is the one checked.  When it fails,
     bisect the chain's prefixes (each an exact commit, checked the same way) to the first ref whose merge makes it fail, and
@@ -246,19 +312,13 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into or _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the checkout must be a clean {into}")
+    pins = [pinned(repo, ref, remote) for ref in refs]
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     branch = f"research-train/{stamp}"
     _git(repo, "worktree", "add", "-q", "-b", branch, str(tree), "HEAD")
     try:
-        chain = []
-        for ref in refs:
-            sha = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
-            r = _git(tree, "merge", "--no-ff", "-m", f"Merge {ref} ({sha[:8]})\n\nTrain: {stamp}", sha, check=False)
-            if r.returncode:
-                _git(tree, "merge", "--abort", check=False)
-                raise Refused(f"{ref} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
-            chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
+        chain = _chain(tree, pins, stamp)
         need = required_steps(repo, "HEAD", chain[-1], tool)
         if need and on and not sends:
             raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
@@ -398,13 +458,20 @@ def main(argv: list[str]) -> int:
     ap.add_argument("ref", nargs="*", help="the commit to merge (a branch, tag or sha); with --train, several, in merge order")
     ap.add_argument("--sweep", action="store_true", help="merge nothing: close the open pull requests on the remote's --into and "
                     "retarget the ones based on a branch that is (with --dry-run: say what it would do)")
-    ap.add_argument("--remote", default="origin", help="the remote whose --into branch the sweep reads (default origin)")
+    ap.add_argument("--remote", default="origin", help="the remote whose --into branch the sweep reads, that pinned train refs are "
+                    "fetched from and --prepare pushes to (default origin)")
     ap.add_argument("--train", action="store_true", help="merge the refs as one candidate, record the tool on it, fast-forward on "
                     "a pass, bisect to the offending ref on a failure")
     ap.add_argument("--on", default=None, metavar="MACHINE", help="--train: record the tool on this machine (research run --on)")
     ap.add_argument("--project", default=None, help="--train: the project the run belongs to (required with --on)")
     ap.add_argument("--command", default=None, help="--train: the workload command (default the tool declaration's)")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="--train --on: ship this file with every run (research run --send)")
+    ap.add_argument("--prepare", default=None, metavar="BRANCH", help="--train: record and land nothing; build the train, run --lint "
+                    "on it and push it to --remote as BRANCH (never forced), for `tools/check/train.sh BRANCH MACHINE`")
+    ap.add_argument("--onto", default=None, metavar="BASE", help="--prepare: the branch on --remote (or commit) the train starts "
+                    "from (default --into; a train ahead's prep branch stacks this one on it)")
+    ap.add_argument("--lint", default=None, metavar="CMD", help="--prepare: what must pass on the train before it's pushed "
+                    "(default `python tools/check/check.py --preflight` under this interpreter)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
     ap.add_argument("--push", action="store_true", help="once the merge lands, push --into to --remote (never forced), then sweep; "
                     "without it the sweep runs before the push and can close nothing the merge landed")
@@ -437,13 +504,27 @@ def main(argv: list[str]) -> int:
         return 0
     if not a.ref:
         ap.error("a ref to merge is required (or --sweep)")
+    if a.prepare:
+        if not a.train:
+            ap.error("--prepare needs --train")
+        onto = a.onto or a.into
+        lint = shlex.split(a.lint) if a.lint else [sys.executable, *PREFLIGHT]
+        try:
+            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint)
+        except Refused as e:
+            print(f"research merge: refused: {e}", file=sys.stderr)
+            return 1
+        print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
+              f"check it with `tools/check/train.sh {a.prepare} MACHINE`, land it with `research merge {a.prepare}`")
+        return 0
     if a.train:
         from .store import tools_registry
 
         decl = tools_registry.load(a.tool, repo)
         command = shlex.split(a.command) if a.command else list(decl.command)
         try:
-            land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send)
+            land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send,
+                              remote=a.remote)
         except Refused as e:
             print(f"research merge: refused: {e}", file=sys.stderr)
             return 1

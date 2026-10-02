@@ -274,9 +274,10 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), and a circuit with public input ports its own `--public-inputs F`
 (§16.10). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
-Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree. -/
+Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
+none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--coins seed|os] [--zk] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -284,8 +285,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let zk := args.contains "--zk"
+  if zk && (argOf args "--coins").isSome then
+    IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
   let coins := if zk then Coins.tree (Zk.coinSpec (tags.tableNames count))
     else if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
@@ -387,6 +391,7 @@ def statementCmd (args : List String) : IO UInt32 := do
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2

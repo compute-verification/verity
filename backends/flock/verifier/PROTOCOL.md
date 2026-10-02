@@ -273,6 +273,8 @@ bytes for the link points after recording `Commit`. Each 16-byte group is one F1
 `hi = le64(bytes[8..16])`). Soundness assumes only that these bytes are uniform and unknown to the prover before it sent
 the round.
 
+M0 draws `os` coins under `FC_COINS=os`; `verify --coins os` binds its live-OS identity (`Tags.withCoins`).
+
 ### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`, `coin-commit/sha256`, `coin-commit/sha512`)
 
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
@@ -298,10 +300,10 @@ handled them. The verdict reveals `seed`, `nonce`, `commitment` and the request 
 
 For the verifier of record the seed changes nothing it checks: the coins are still read from the record. It adds two
 optional checks that a prover (or an auditor) runs: the commitment opens to the revealed seed and nonce, and each
-round's coins equal `coins_q`. The second needs the global request index `q` of every round, which the record does not
-store (rounds are grouped by stream, and interleaved reps are allowed). Recommendation for PR #83: record `q` per round.
-Until then an auditor recomputes `q` only for sessions whose reps ran sequentially (points, then all of rep 0, then all
-of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
+round's coins equal `coins_q`. The second needs every round's global request index `q`: M0's records carry it as `g`
+since `34c3d0815`, and `flock-circuit replay-coins` runs both checks. Older ones lack it (rounds are grouped by stream,
+and reps may interleave), so an auditor recomputes `q` only if the reps ran sequentially (points, then all of rep 0,
+then all of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
 pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
 
 ### 7.3 The unit draw
@@ -415,15 +417,15 @@ revealed before that answer. `Flock.CoinTree` checks the record; the openings ne
 the commitment protects the prover (§7 of the spec).
 - **`Hello`.** `coins` is `{"block", "nonce", "rounds_log", "scheme", "streams"}`. The verifier's own `Hello` (`helloOf`
   with `Coins.tree`) leaves the nonce empty.
-- **R7** (`CoinTree.checkHello`). The received `coins.nonce` must be 64 lowercase hex digits. It is put into the
-  verifier's `Hello`, which is serialized canonically and must equal the received string byte for byte.
+- **R7** (`CoinTree.checkHello`). The received `coins.nonce` must be 64 lowercase hex digits. The verifier's
+  `Hello` with it, serialized canonically, must equal the received string byte for byte.
 - **The record's `coin_tree`** (`CoinTree.checkRecord`).
   - It has exactly `key`, `nonce`, `root` and `spec`.
   - The nonce is `Hello`'s. The key is 256 bytes with bit 2047 zero (bit 7 of byte 255), and the root 64 bytes, both
     lowercase hex.
   - The spec is `{"block", "rounds_log", "scheme", "streams"}`, the verifier's.
 - **Freshness** (`CoinTree.checkFresh`). `verify` refuses a session whose key an earlier session of the same run used.
-- **Scope.** Only `--zk` sessions (§16.14) carry a coin tree; the checks run once `Hello` names the scheme (`Stmt.spec`'s
+- **Scope.** Only `--zk` sessions (§16.14) carry one; the checks run once `Hello` names the scheme (`Stmt.spec`'s
   `coinTree`). `flock-verify coin-tree-check` runs them alone, on §9's values (`test_lean_coin_tree.py`).
 
 ## 8. The proof container
@@ -1396,8 +1398,8 @@ statements define such a session; any other statement refuses `J > 1`.
     `2J` rep streams. S14's roots are in table order, which is lexicographic.
   - Table `t`'s reps are the files `<t>.rep<r>.bin`. Each is verified against its table's statement and domain, and S18
     applies per table.
-- **The live protocol's rules the record can't show.** One `Commit` carries every root. Every proof comes after the
-  session's last coin (the barrier, which serves zero-knowledge; a verifier accepts without it).
+- **Live rules the record can't show.** One `Commit` carries every root. Every proof comes after the session's last
+  coin (the barrier, which serves zero-knowledge; a verifier accepts without it).
 
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
@@ -1428,9 +1430,9 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 
 ### 16.14 `--zk` sessions
 
-`verify --zk`, the verifier's setting, checks `flock-circuit --zk` sessions (any `J`, draws) after the same setup, public
-inputs too (D7), by `backends/flock/live/PROTOCOL.md`'s masked protocol on §7.4's coin tree (`Flock.Zk*`).
-`hooks` is upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
+`verify --zk` (the verifier's setting) checks `flock-circuit --zk` sessions (any `J`, draws, hidden outputs, public inputs:
+D7) by the live PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`;
+`proof_class` stays `NON_ZK_PROOF`. **Agreement:** README.
 
 ## 17. Acceptance, assumptions and trust
 
@@ -1447,8 +1449,8 @@ run in CI on every change to the Lean verifier, the statements or the pinned fil
 2. **Fuzzing.** Mutations of honest vectors (a byte of a proof, a coin, a round digest, a record field, the public input)
    are generated with a fixed seed per CI run and a rolling seed per nightly run. Both verifiers must return the same
    verdict on each, and no mutation of a proof byte or of a round digest may be accepted by either.
-3. **Coverage.** The corpus covers every statement and layout in §16, `m` from 22 to 35 where a statement reaches it,
-   both coin sources (§7), and every check id of §5.3 and every rejection listed in §8–§14 at least once.
+3. **Coverage.** The corpus covers every statement and layout in §16 but `--zk` (§16.14), `m` from 22 to 35 where a
+   statement reaches it, `os` and `seed` coins (§7), every check id of §5.3 and every rejection in §8–§14 at least once.
 
 A disagreement fails CI and is resolved against the paper and this spec, never by copying upstream's behaviour into the
 Lean verifier without a spec change. After the gate passes, production runs only the Lean verifier; upstream's verifier
@@ -1466,10 +1468,11 @@ vector exercising one carries upstream's expected verdict (`upstream_accepted`):
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root.
-- **D6:** a `--zk` record's `coin_tree` (§7.4, §16.14); upstream ignores it.
+- **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** public input words (§16.10, also `--zk`): upstream takes no recomputation, and accepts any.
 
-The corpus's `upstream_checks` names the closed ones per set (`--upstream-checks` in `redigest.py`, `fuzz.py`).
+D3 and D4 are closed at `631567f7`; the corpus's `upstream_checks` names the closed ones per set (`--upstream-checks`
+in `redigest.py`, `fuzz.py`).
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
 unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
@@ -1615,10 +1618,8 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
 - **Spec self-check:** `transcript_check.py` rebuilds every round of a session from this spec alone (§6, §8, §9–§13,
   including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. It checks the transcript and
   the layout, not the verifier's equations.
-- **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
-  bytes.
-- **`--zk` sessions (§16.14)** are not in `vectors.json`: the pinned upstream build predates `--zk`. `agree.py --zk`
-  compares them with `flock-circuit replay --zk` (`backends/flock/live`), and `zk_mutants.py` tampers with each check.
+- **Missing:** no stored session uses `seed` coins or `--zk`, and none exercises the legacy L-TAIL path with a forged cut
+  word as bytes.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 

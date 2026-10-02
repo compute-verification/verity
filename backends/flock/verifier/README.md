@@ -21,7 +21,7 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 ~~~text
 cd backends/flock/verifier/lean && lake build          # .lake/build/bin/flock-verify
 flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
-flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR]   # digest, Σ, Hello
+flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
 ~~~
 
 `ID` names a version:
@@ -38,7 +38,10 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
   statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10), with
-  public outputs. Runs staged from `68ae79f2` until hidden outputs use this name.
+  public outputs. Runs staged from `68ae79f2` until hidden outputs use this name. A proving build's session of this
+  statement or a later one (the hidden-output and typed ones) on per-round OS coins (`FC_COINS=os`) needs `--coins os`,
+  which binds the identity that mode writes, not who drew the coins (PROTOCOL.md §7.1, §17.2); a seeded one needs
+  `--coins seed`, the default.
 - `verity/flock-circuit@e51e2b86` (and `+seed-injection`): PR #83 from `e51e2b86`, for the runs staged before `68ae79f2`.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
@@ -173,3 +176,6 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   set needs a pinned upstream build with `flock-circuit replay` (the selftest's `record_replays_offline` already replays
   in process). `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit
   (`statement`, and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06`.
+- `--zk` sessions (§16.14): no pinned upstream build has them, so check's agreement step replays none. `agree.py --zk`
+  compares Lean's verdicts with the live build's `replay --zk`, and `test_lean_zk.py` with its server's, on the sessions of
+  `art:8126390c` (`@967b8d06+seed-injection`).
