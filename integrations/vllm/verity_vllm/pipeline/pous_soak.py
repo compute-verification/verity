@@ -327,6 +327,7 @@ class SecondEngine:
         self.bytes = 2 * layers * sum(i * o for i, o in shapes)
         if self.cuda:
             free, _ = torch.cuda.mem_get_info(self.dev)
+            free += torch.cuda.memory_reserved(self.dev) - torch.cuda.memory_allocated(self.dev)  # the allocator's cached blocks
             if free < self.bytes + (2 << 30):
                 raise SystemExit(f"the second engine needs {self.bytes / 2**30:.1f} GiB and 2 GiB spare; {free / 2**30:.1f} GiB free")
         self.w = [torch.empty(i, o, dtype=torch.bfloat16, device=self.dev).normal_(0, 0.02)
