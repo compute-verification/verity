@@ -130,7 +130,7 @@ a = sys.argv
 val = lambda k, d=None: a[a.index(k) + 1] if k in a else d
 if val('--gpus') == '9':
     print(json.dumps({'refused': 'vy-nebius-2: not 9 GPUs'})); sys.exit(3)
-print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {'gpus': int(val('--gpus', 0))},
+print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {'gpus': int(val('--gpus', 0)), 'cpus': int(val('--cpus', 1))},
                   'wrap': ['env', 'HELD=1'], 'workload_wrap': ['lease', '--'], 'kind': val('--kind'),
                   'question': val('--question', ''), 'max_s': int(val('--max-s', 1200)), 'warnings': ['stub warning']}))
 """
@@ -176,6 +176,9 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--", "true"]) == 0
     assert seen[-1]["queue"]["kind"] == "adhoc" and seen[-1]["queue"]["phase"] == "cpu"
     assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "600"
+    assert seen[-1]["env"] == dict.fromkeys(cli.THREAD_POOL_VARS, "1"), "thread pools take the job's CPUs"
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--cpus", "4", "--env", "OMP_NUM_THREADS=2", "--", "true"]) == 0
+    assert seen[-1]["env"] == {**dict.fromkeys(cli.THREAD_POOL_VARS, "4"), "OMP_NUM_THREADS": "2"}, "the job's --env decides"
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "cpu", "--gpus", "1", "--", "true"]) == 2
     assert "a cpu phase takes no GPUs" in capsys.readouterr().err
     assert main([*base, "--kind", "lean-audit", "--question", "does it check?", "--disk-gb", "5", "--", "true"]) == 0
@@ -187,7 +190,7 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
 
     assert main([*base, "--mem-gb", "8", "--gpus", "9", "--max-min", "1", "--", "true"]) == 3
     assert "the queue refuses the job: vy-nebius-2: not 9 GPUs" in capsys.readouterr().err
-    assert len(seen) == 3
+    assert len(seen) == 4
 
 
 def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue(tmp_path, capsys):
