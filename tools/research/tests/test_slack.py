@@ -982,20 +982,20 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 2                                             # a status line reaches the root's poster
 
 
-def test_one_author_rings_one_inbox_from_a_thread_at_most_six_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
+def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
-    for i in range(8):
+    for i in range(slack.CAP_PER_HOUR + 2):
         assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", f"point {i}")[0] == 0
     rung = bells(fake, box)
-    assert sum(m["text"].startswith("from infra,") for m in rung) == 6 and sum("paused" in m["text"] for m in rung) == 1
+    assert sum(m["text"].startswith("from infra,") for m in rung) == slack.CAP_PER_HOUR and sum("paused" in m["text"] for m in rung) == 1
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
     for who in ("proofs", "lean", "console", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
-    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == 13
+    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 
 
 def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
