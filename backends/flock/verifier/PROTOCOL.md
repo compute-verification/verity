@@ -1300,10 +1300,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   Verdicts report `registered`.
 - **Public input ports** (`Flock.HmIn`, §16.13's statements). META may name `public_inputs` (`[{port, words, seed,
   derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs that are words the verifier
-  recomputes from public data, not rows (the design owner's condition, Oct 2). Their leaves lie in
-  `[w0, w0 + 2^e)`, the smallest aligned span of whole words of an unpacked unit range's leaf group holding them, and Δ
-  copies none of their bits. Regions `in r` follow the digests: `2^s` words each, `s = min(e, PT_LOCAL − 7 − ⌈log2
-  count⌉)`, the slot bits free, valued at each instance's public words. The header repeats `public_inputs`; the body ends
+  recomputes from public data, not rows (the design owner's condition, Oct 2). The words of an unpacked unit range's leaf
+  group holding them hold no row leaf; each run of them is cut into the largest aligned blocks of `2^e` words, and Δ copies
+  none of their bits. Regions `in r` follow the digests, block by block: `2^s` words each, `s = min(e, PT_LOCAL − 7 −
+  ⌈log2 count⌉)`, the slot bits free, valued at each instance's public words. The header repeats `public_inputs`; the body ends
   with every instance's public words (u16 LE). The verifier needs its own `--public-inputs F` (`verity/flock-public-inputs/v1`:
   `{format, instances, ports}`, then the population's words) and refuses a word that differs, a missing file, and a port
   named on one side only.
