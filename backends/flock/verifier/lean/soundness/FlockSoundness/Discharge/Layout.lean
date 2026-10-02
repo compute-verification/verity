@@ -4,6 +4,7 @@ import FlockSoundness.Discharge.Layout.Region
 import FlockSoundness.Discharge.Layout.HmRegion
 import FlockSoundness.Discharge.Layout.Pins
 import FlockSoundness.Discharge.Layout.Drawn
+import FlockSoundness.Discharge.Layout.QSort
 import FlockSoundness.Discharge.Layout.Site
 import FlockSoundness.Discharge.Layout.OfRows
 import FlockSoundness.Discharge.Layout.KeyProg
@@ -23,6 +24,8 @@ from the decoder's places and the executable's regions:
   (`Readers.Copies`), the rows' pinned `b ‖ c` (`Readers.BcPinned`) and the other pinned values (`Readers.ValPinned`);
 * `Drawn`: at a drawn statement, the pinned `b ‖ c` of a proved unit's `hm96` slot is the unit's in the registered
   population's public file (`bc_drawn`);
+* `QSort`: every proved unit of a draw is in the population, with or without a closure (`proved_lt_population`, by
+  `all_qsort`: `Array.qsort` keeps a property of every element);
 * `Site`: at a drawn unit's site in its table's accepted statement, the population's `b ‖ c` at port `p`'s `hm96` output
   (`bc_site`) and, at each message-keyed unit input, its row's bit (`copy_site`);
 * `OfRows`: readers whose commit strings are units' row ports and single gates (`Readers.ofRows`), with Δ's copies

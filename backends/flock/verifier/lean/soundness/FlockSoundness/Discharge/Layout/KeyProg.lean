@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Layout.Site
 import FlockSoundness.Discharge.Layout.OfRows
+import FlockSoundness.Discharge.Layout.QSort
 
 set_option Elab.async false
 
@@ -431,10 +432,11 @@ theorem keyProg_bcPinned
 
 include hparse in
 /-- **`BcSite` at a site of `keyProg`'s places** in a circuit whose unit returns the outputs: the VU is below
-`2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), and the other conditions are `BcSite`'s. -/
+`2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the draw's decoding
+(`proved_lt_population`), and the other conditions are `BcSite`'s. -/
 theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (h : u ∈ S)
     {pop : Public} {d : Lean.Json} {D : Draw.UnitDraw} (hd : (si.acc S R u h).draw = some d)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ v ∈ D.proved, v < D.population)
+    (hD : Draw.UnitDraw.ofJson d = .ok D)
     (hregs : ∀ r ∈ (si.acc S R u h).st.regions.toList,
       Refine.regionOf (si.acc S R u h).st.c.kLog ((si.acc S R u h).st.m - (si.acc S R u h).st.c.kLog) r ∈
         (si.acc S R u h).regs)
@@ -444,7 +446,7 @@ theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg
   have hc := (si.acc S R u h).c_eq (hparse S R u h)
   have hv := si.hvu S R u h
   rw [hc] at hv
-  refine ⟨d, D, hd, hD, hlt, hregs, hpop, hpt, ?_, ?_⟩
+  refine ⟨d, D, hd, hD, proved_lt_population hD, hregs, hpop, hpt, ?_, ?_⟩
   · rw [hc]; exact vu_lt_pow2 (hparse S R u h) ho hv
   · rw [hc]; exact hu
 
