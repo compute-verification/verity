@@ -31,7 +31,7 @@ def pacer(tmp_path, monkeypatch):
     monkeypatch.setenv("VY_PACER_DIR", str(tmp_path / "pacer"))
     mod = load("release", NEBIUS / "sky" / "release.py", monkeypatch)
     mod.ROOT.mkdir(parents=True)
-    mod.cluster = {"policy": "None", "patches": [], "wls": {}}
+    mod.cluster = {"policy": "None", "patches": [], "wls": {}, "jobs": {}}
 
     def k(*args, stdin=None):
         if args[:5] == ("get", "localqueue", mod.GPU_QUEUE, "-n", "default"):
@@ -44,14 +44,14 @@ def pacer(tmp_path, monkeypatch):
             mod.cluster["wls"][args[2]]["spec"]["active"] = json.loads(args[-1])["spec"]["active"]
             return ""
         if args[:2] == ("get", "jobs"):
-            return json.dumps({"items": [{"metadata": {"name": f"job-{n}", "annotations": {"verity.dev/item": f"vllm-epoch-run/{n}"}}}
-                                         for n in mod.cluster["wls"]]})
+            return json.dumps({"items": list(mod.cluster["jobs"].values())})
         if args[:2] == ("get", "workloads"):
             return json.dumps({"items": list(mod.cluster["wls"].values())})
         raise AssertionError(f"the pacer touched something other than its LocalQueue and Commits: {args}")
 
     monkeypatch.setattr(mod, "k", k)
-    monkeypatch.setattr(mod, "written_gb", lambda w: 0.0)
+    mod.written = {}
+    monkeypatch.setattr(mod, "written_gb", lambda w: mod.written.get(w["row"], 0.0))
     mod.disk = {"bundles": 0.0, "pct": 50.0, "room": 1200}
     monkeypatch.setattr(mod, "bundles_gb", lambda: mod.disk["bundles"])
     monkeypatch.setattr(mod, "disk_pct", lambda: mod.disk["pct"])
@@ -66,6 +66,8 @@ def commit(mod, name: str, row: str, admitted: bool = False, active: bool = True
         "spec": {"queueName": "deployments-gpu", "active": active,
                  "podSets": [{"template": {"spec": {"containers": [{"env": [{"name": "ROW", "value": row}]}]}}}]},
         "status": {"admission": {"clusterQueue": "deployments-gpu"}} if admitted else {}}
+    mod.cluster["jobs"][f"job-{name}"] = {"metadata": {"name": f"job-{name}", "annotations": {"verity.dev/item": f"vllm-epoch-run/{name}"}},
+                                          "status": {}}
 
 
 def test_it_holds_while_the_admitted_projection_passes_the_cap_and_lets_its_own_hold_go_under_it(pacer):
@@ -118,6 +120,30 @@ def test_it_never_releases_a_hold_it_did_not_set_nor_a_hold_and_drain(pacer):
     pacer.cluster["policy"] = "HoldAndDrain"
     pacer.tick()
     assert pacer.cluster["patches"] == [] and not pacer.GATE.exists()
+
+
+def test_a_succeeded_commits_bundle_teaches_its_model(pacer):
+    commit(pacer, "cov-a", B32, admitted=True)
+    pacer.written[B32] = 60.0
+    pacer.tick()
+    pacer.written[B32] = 96.0                        # its bundle grows to 96 GB for 32 x 1152
+    pacer.tick()
+    assert pacer.estimate_gb(B8) == 120.0            # in flight: nothing learned yet
+    del pacer.cluster["wls"]["cov-a"]
+    pacer.cluster["jobs"]["job-cov-a"]["status"] = {"succeeded": 1}
+    pacer.tick()
+    assert pacer.estimate_gb(B8) == pytest.approx(96.0 / 4 * 1.25)
+    assert json.loads(pacer.SIZES.read_text()) == {"phi3-mini": pytest.approx(96.0 / (32 * 1152))}
+
+
+def test_a_failed_commits_partial_bundle_teaches_nothing(pacer):
+    commit(pacer, "cov-a", B32, admitted=True)
+    pacer.written[B32] = 5.0
+    pacer.tick()
+    del pacer.cluster["wls"]["cov-a"]
+    pacer.cluster["jobs"]["job-cov-a"]["status"] = {"failed": 1}
+    pacer.tick()
+    assert pacer.estimate_gb(B8) == 120.0 and not pacer.SIZES.exists()
 
 
 def test_the_lease_pool_holders_go_to_their_own_local_queue_on_the_same_cluster_queue(monkeypatch):
