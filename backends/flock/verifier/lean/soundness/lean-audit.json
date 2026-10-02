@@ -5558,7 +5558,7 @@
     "  Eq spec.retainRounds tags.retainRounds"
    ],
    "assumptions": [],
-   "type_hash": "db0eb5ae1c7361ccf304879d1edbccc6f24a3ade972b56ada350aca20f2bc2ae"
+   "type_hash": "8463e3a6aaeaf37df986f49054f41b4c6176f4e8fe493ce7b71cd837cebbefc9"
   },
   "FlockSoundness.Discharge.Exec.simAudit_eq_on": {
    "signature": [
@@ -17534,7 +17534,7 @@
    ]
   },
   "FlockSoundness.Discharge.Exec.Event": {
-   "digest": "1eec0dbd5ff1079d1f968b285874f1d59966c4f8f27b76aaae29d3f66ad9e366",
+   "digest": "c56c209665ee62d02eae95a9d67728f31b833363f6ab3dcd225f3846995fa48d",
    "definitions": {
     "FlockSoundness.Discharge.Exec.Accepts": "ca70925abb83f3c8603f3a7834ae1e0f6303c0f71debae1519e99829633fdf49",
     "FlockSoundness.Discharge.Exec.ExecRefines": "4b5939cb2ca38fed84e9c1012ee2761723ce412f7363171d049ec9612835acd6",
@@ -17556,7 +17556,7 @@
     "FlockSoundness.Discharge.Exec.Transcript.record": "71f2e9b51830e4679369f371ca7e2bf31557ad4b5e5f05cd4eea21ca1160e54b",
     "FlockSoundness.Discharge.Exec.auditLive": "c401690a50fb7327ee31abd7fceb26752a337ffb68882642e5eea0b927d15daa",
     "FlockSoundness.Discharge.Exec.recordDraw": "cac056736a453a536399132c2f9e7abf9261728b674e33aef46b8485dfe28b52",
-    "FlockSoundness.Discharge.Exec.setupOf": "6b11c85acc68985be288516410f3d21a9343a691f56e8470457cfbc9b483c6fd"
+    "FlockSoundness.Discharge.Exec.setupOf": "a1b00a74a7d210e3564d54a90f1691ea9da1252cd87fbeac47ee3b0225b9e412"
    },
    "pins": [
     "FlockSoundness.Discharge.Exec.accepts_allRetained",
