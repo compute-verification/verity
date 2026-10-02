@@ -5917,6 +5917,7 @@
    "assumptions": [],
    "type_hash": "d2da2550213f5e7bed80ff4187d95971065fdc4ec421b4790343bc2c5f3daab5"
   },
+  "FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden": {},
   "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden": {
    "signature": [
     "FlockSoundness.Discharge.HiddenExec.flock_headline_hidden {n : Nat} {I : FlockSoundness.Discharge.Exec.Inputs}",
@@ -6047,6 +6048,14 @@
    "assumptions": [],
    "type_hash": "e2fd9aedb3c97def6b739fa8bc426d6d3f00b2dede3500795fa6b7ccfc84cc94"
   },
+  "FlockSoundness.Discharge.HiddenExec.hConstH": {},
+  "FlockSoundness.Discharge.HiddenExec.hZeroH": {},
+  "FlockSoundness.Discharge.HiddenExec.keyProgH_bcPinned": {},
+  "FlockSoundness.Discharge.HiddenExec.keyProgH_copies": {},
+  "FlockSoundness.Discharge.HiddenExec.keyProgH_valPinned": {},
+  "FlockSoundness.Discharge.HiddenExec.keyRowH_enc": {},
+  "FlockSoundness.Discharge.HiddenExec.keyRowsH_computes": {},
+  "FlockSoundness.Discharge.HiddenExec.rsAtH_computes": {},
   "FlockSoundness.Discharge.HiddenExec.setupTables_okAny": {
    "signature": [
     "FlockSoundness.Discharge.HiddenExec.setupTables_okAny : FlockSoundness.Discharge.HiddenExec.SetupTablesOkAny"
@@ -6054,6 +6063,8 @@
    "assumptions": [],
    "type_hash": "dae9b3ab9f2d6009d4ef133efeceb73d4173d54ba70e3a769d9306dc384aebd7"
   },
+  "FlockSoundness.Discharge.HiddenExec.sitesAtH_bcSite": {},
+  "FlockSoundness.Discharge.HiddenExec.sitesAtH_parse": {},
   "FlockSoundness.Discharge.HiddenExec.tableAtH_of_accepts": {
    "signature": [
     "FlockSoundness.Discharge.HiddenExec.tableAtH_of_accepts : FlockSoundness.Discharge.HiddenExec.TableAtHOfAccepts"
@@ -6061,6 +6072,7 @@
    "assumptions": [],
    "type_hash": "2bc9285c933cde697d7408d966656271666a9100198d1a7ccaa940f82c2cf2bd"
   },
+  "FlockSoundness.Discharge.HiddenExec.tableAtH_unsat": {},
   "FlockSoundness.Discharge.Hm.bc_site_col": {
    "signature": [
     "FlockSoundness.Discharge.Hm.bc_site_col {T : FlockSoundness.Model.Statement}",
