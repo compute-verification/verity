@@ -22,6 +22,13 @@ class Exec(Exception):
     pass
 
 
+@pytest.fixture(autouse=True)
+def any_core(monkeypatch):
+    """main() keeps only slots within the process's own cores; these tests name cores the machine running them may not give
+    this process (a check slot pins it), so they see every core. The real-exec test runs a fresh slot.py and sees its own."""
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
+
+
 def _hold(path: Path) -> int:
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -103,6 +110,28 @@ def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch)
     assert SLOT.reread([{"name": "x"}]) == SLOT.parse("a 0\nd 1\n")
     slots.write_text("# being rewritten\n")
     assert SLOT.reread([{"name": "x"}]) == [{"name": "x"}]
+
+
+def test_a_slot_outside_the_processs_cores_is_skipped_never_pinned_onto(tmp_path, monkeypatch, capsys):
+    """Node 1's slot d (128-159) killed every check that took it: a `research run` session there is held to cores 0-127."""
+    (tmp_path / "slots").write_text("d 128-159\na 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(128)))
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(env=env)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: ran.update(cpus=cpus))
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW)
+    assert ran["env"]["CHECK_SLOT"] == "a" and ran["cpus"] == {0}
+    assert "skipping d (128-159): outside this process's cores" in capsys.readouterr().err
+    (tmp_path / "slots").write_text("d 128-159\n")
+    with pytest.raises(SystemExit, match="none of .* slots is within this process's cores"):
+        SLOT.main(["--", "true"], now=lambda: NOW)
 
 
 def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_ticket_is_cleared(tmp_path, monkeypatch, capsys):
