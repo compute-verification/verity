@@ -7,9 +7,11 @@
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
-  research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
-  research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
-  research inspect <run-id|prefix|path> [--runs-dir D] [--json]
+  research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
+  research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
+  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
+                                                 # a full run id another VM launched (no local dir): found on --on NAME, else on
+                                                 # each ssh machine, and its records fetched here (remote.adopt)
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
@@ -705,10 +707,37 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     return 0
 
 
+def _run_dir(root: Path, ref: str, on: str | None) -> Path:
+    """`ref` under the local runs root, else, for a full run id, the run another VM launched, adopted from the machine that holds
+    it (`remote.adopt`).  FileNotFoundError names each machine's answer, and the store's attempt when it has one."""
+    try:
+        return R.resolve(root, ref)
+    except FileNotFoundError:
+        from .store import ids
+
+        if not ids.is_run_id(ref):
+            raise
+    try:
+        return remote.adopt(root, ref, on=on)
+    except remote.Refused as e:
+        raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
+
+
+def _attempt_hint(run_id: str) -> str:
+    try:
+        from .store.local import LocalStore
+
+        found = LocalStore().get_attempt(run_id) is not None
+    except Exception:  # noqa: BLE001  no store, no remote: the hint is optional
+        return ""
+    return f"; the store has its attempt: `research data show {run_id}`" if found else ""
+
+
 def cmd_fetch(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research fetch")
     ap.add_argument("ref")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
@@ -716,7 +745,7 @@ def cmd_fetch(argv: list[str]) -> int:
         print(f"research fetch --all: refused: {why}", file=sys.stderr)
         return 3
     try:
-        run_dir = R.resolve(root, ns.ref)
+        run_dir = _run_dir(root, ns.ref, ns.on)
         rec = remote.fetch(run_dir, everything=ns.all)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research fetch: {e}", file=sys.stderr)
@@ -811,7 +840,10 @@ def _fmt(s: dict) -> str:
 
 def cmd_status(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research status")
+    ap.add_argument("ref", nargs="?", help="just this run, its records fetched first while it is remote and not finished (a full run "
+                                           "id another VM launched is found on its machine)")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
     ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
@@ -828,14 +860,21 @@ def cmd_status(argv: list[str]) -> int:
             ledger = {"provider": "runpod", "observed_utc": utc_now_ms(), **data}
         except Exception as e:  # noqa: BLE001
             ledger = {"provider": "runpod", "error": f"{type(e).__name__}: {e}"}
-    if ns.refresh:
-        for s in R.list_runs(root):
+    one = None
+    if ns.ref:
+        try:
+            one = _run_dir(root, ns.ref, ns.on)
+        except (FileNotFoundError, LookupError) as e:
+            print(f"research status: {e}", file=sys.stderr)
+            return 1
+    if ns.refresh or one:
+        for s in [R.summarize(one)] if one else R.list_runs(root):
             if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
                 try:
                     remote.fetch(Path(s["dir"]))
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
-    rows = R.list_runs(root)
+    rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
     if ns.json:
@@ -871,13 +910,14 @@ def _tool_line(tool: dict | None) -> str:
 
 def cmd_inspect(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research inspect")
-    ap.add_argument("ref", help="run id, unique prefix, or directory")
+    ap.add_argument("ref", help="run id, unique prefix, or directory; a full run id another VM launched is fetched from its machine")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     try:
-        run_dir = R.resolve(root, ns.ref)
+        run_dir = _run_dir(root, ns.ref, ns.on)
     except (FileNotFoundError, LookupError) as exc:
         print(f"research inspect: {exc}", file=sys.stderr)
         return 1
