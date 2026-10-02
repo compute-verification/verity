@@ -2,24 +2,28 @@
 the row's admission bit admits, its units evaluate to `schemes.pearl_c`'s forming v1, clean-up and checked words (the pinned
 ``test-16-v1`` vector on the H100, the scheme itself on both sm_120 records), its admission bit is the scheme's on every row
 (finiteness, the noise floor and `live_row`, each at its boundary), and its partition computes every value in exactly one
-unit."""
+unit; its hiding Programs publish only admission bits and commit strings, and only those are computed twice."""
 from __future__ import annotations
 
 import json
 import random
 import struct
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 
+import circuit_fixtures as CF
 import pearl_c_vectors as V
 from verity.evaluation import evaluate
 from verity.ir import partition_object as PO
+from verity.ir.cut import RECOMPUTE, check_cut
 from verity.ir.program import Program
 from verity.ml.fp32 import F32FmaV2
 from verity.ml.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.ml.scalar import I32Le
 from verity.ml.tc.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import pc8
 from verity_pouw.circuit import words as W
 from verity_pouw.protocol import DomainError, Tile
@@ -262,6 +266,58 @@ def test_the_partition_computes_every_value_in_exactly_one_unit(side):
     _g, _owner, verdict = pc8.unit_cut(fn)
     assert verdict.ok, verdict.codes
     assert verdict.detail["certified"] == verdict.detail["computed_gates"]
+
+
+# ---- the hiding Programs ----------------------------------------------------------------------------------------------
+
+HIDDEN = pc8.Shape(4, 128, 6, tile=(2, 3), dev="sm120", hidden=True)
+
+
+def test_the_hiding_programs_publish_the_commit_strings_of_every_row_and_tile():
+    """`Pc8WeightHidden`, `Pc8CallHidden` and `Pc8CheckHidden` return the admission bits and `leaves.commit` of every row a
+    unit reads or writes (A_i and B_j as fp32 rows, A′_i ‖ P_A,i and B̃_j ‖ P_B,j as fp8-p rows, each tile's reads equal to
+    its row units') and of every tile digest (`pearl_c.leaf` of the plain units' C̃ and U), and no checked word."""
+    m, k, n = HIDDEN.m, HIDDEN.k, HIDDEN.n
+    _s, _ctx, _ops, a, ea, b, eb, fa, fb, g = _case("pc8-hidden", (m, k, n), HIDDEN.dev)
+    plain = replace(HIDDEN, hidden=False)
+    wout = evaluate(pc8.weight(plain), b, eb, fa, fb, g)
+    bc, pb, ok_b = wout[:n * k], wout[n * k:-n], wout[-n:]
+    cout = evaluate(pc8.call(plain), a, ea, fa, fb, bc, pb)
+    c, u = ([cout[f * m * n + i * n:f * m * n + (i + 1) * n] for i in range(m)] for f in range(2))
+    row_a = pc8.templates(k, HIDDEN.tile, HIDDEN.dev)["row_a"]
+    outs = [evaluate(row_a, a[i * k:(i + 1) * k], ea[32 * i:32 * (i + 1)], fa, fb) for i in range(m)]
+    mids_a = [L.words_fp8_p(o[:k], o[k:-1]) for o in outs]
+    mids_b = [L.words_fp8_p(bc[j * k:(j + 1) * k], pb[64 * j:64 * (j + 1)]) for j in range(n)]
+    rows = lambda x, r: [L.words_fp32(x[i * k:(i + 1) * k]) for i in range(r)]   # noqa: E731
+    s = CF.salts(m, n, HIDDEN.tile)
+    want_call, want_weight = CF.hidden_outputs(HIDDEN.tile, cout[2 * m * n:], rows(a, m), mids_a, ok_b, rows(b, n), mids_b,
+                                               c, u, s)
+    y = CF.salt_args(s)
+    assert evaluate(pc8.weight(HIDDEN), b, eb, fa, fb, g, y["yb"], y["ybm"]) == want_weight
+    assert evaluate(pc8.call(HIDDEN), a, ea, fa, fb, bc, pb, y["ya"], y["yam"], y["ybm"], y["yt"]) == want_call
+    got = evaluate(pc8.check(HIDDEN), a, ea, b, eb, fa, fb, g, y["ya"], y["yam"], y["yb"], y["ybm"], y["yt"])
+    assert got == want_call + want_weight
+
+
+@pytest.mark.parametrize("side", ["check", "weight", "call"])
+def test_the_hiding_partition_computes_only_commit_strings_twice(side):
+    """`pc4`'s hiding partition test on Pearl-C's: the plain units, the partition object verifies, and every value two
+    units compute is a leaf's gate (so `Q_word` v1 refuses the cut for that alone and v2's report passes it)."""
+    fn = {"check": pc8.check, "weight": pc8.weight, "call": pc8.call}[side](HIDDEN)
+    prog, q = Program(fn), pc8.query(HIDDEN, side)
+    us = pc8.units(fn)
+    full = {"row_b": HIDDEN.n, "row_a": HIDDEN.m, "tile": 2 * 2}
+    assert Counter(u.role for u in us) == {r: full[r] for r in pc8.ROLES[side]}
+    tp = pc8.templates(HIDDEN.k, HIDDEN.tile, HIDDEN.dev, True)
+    assert [t for _k, t, _a, n in PO.evaluate(prog, q).ranges for _ in range(n)] == [PO.template_id(tp[u.role]) for u in us]
+    assert PO.verify(PO.build(prog, q), prog).ok
+    g, owner, v1 = pc8.unit_cut(fn)
+    across, outside = CF.recomputed_across(g, owner)
+    assert outside == []
+    assert v1.codes == (("gate-recomputed",) if side != "weight" else ()) and (across > 0) == (side != "weight")
+    v2 = check_cut(g, owner, limits=None, recompute=RECOMPUTE[2])
+    assert v2.ok and v2.detail["recomputed_across"]["n"] == across
+    assert v2.detail["certified"] == v2.detail["computed_gates"]
 
 
 def test_shapes_outside_the_circuit_are_refused():
