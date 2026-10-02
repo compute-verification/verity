@@ -273,6 +273,14 @@ bytes for the link points after recording `Commit`. Each 16-byte group is one F1
 `hi = le64(bytes[8..16])`). Soundness assumes only that these bytes are uniform and unknown to the prover before it sent
 the round.
 
+`flock-circuit`'s non-ZK session (M0) seeds by default (§7.2) and draws `os` coins under `FC_COINS=os` on both sides (from
+main's `804be92b4`; a selftest build always seeds). Its identity then carries `coins: "live-os (every round's coins the
+verifier's OS draws: no seed, no PRF)"`, and `hashes.coin_commitment` and `hashes.coin_derivation` read `"none
+(FC_COINS=os)"`. The identity is in the statement digest, so Σ moves with the mode. `verify --coins os` (and `statement
+--coins os`) sets the statement up with that identity (`Tags.withCoins`) for the statements a proving build emits
+(`Tags.liveOs`: `@967b8d06` and `/types`); every other statement, and `--coins seed`, keeps its identity. A session on the
+other mode's coins is refused at S2/R7.
+
 ### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`, `coin-commit/sha256`, `coin-commit/sha512`)
 
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
