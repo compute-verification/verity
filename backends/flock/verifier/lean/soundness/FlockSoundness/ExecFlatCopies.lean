@@ -781,7 +781,7 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       exact netOfD_built hnet) hpc
     have P' : ParseFacts tags st.c := by
       rw [hc]
-      exact ⟨P.nets, P.ports, P.portWords, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
+      exact ⟨P.nets, P.ports, P.portWords, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed⟩
     obtain ⟨ls, hcheck⟩ := P'.check
     have h0 : c'.nets[0]? = some ("unit", net) := by
