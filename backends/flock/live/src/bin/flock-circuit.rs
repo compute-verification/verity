@@ -2351,11 +2351,21 @@ fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool) {
     (device, host_units, plan.host_mapped.unwrap_or(true))
 }
 
-/// A one-table session's witness, built ahead of it: for this statement, seed and witness mode only.
+/// The plan's controls a prebuilt witness and M1 draw read ([`wit`], [`witness_mode`], [`zk_prepare`]): a session takes them only
+/// under the same ones.
+fn prebuild_key(plan: &Plan) -> ([bool; 16], u8) {
+    ([plan.gpu, plan.fast, plan.message_flip, plan.input_flip, plan.unit_flip, plan.chain_forged, plan.salt_forged, plan.midstate_forged,
+      plan.pad_forged, plan.mask_random, plan.cut_flip, plan.tail_swapped, plan.zero_witness, plan.zk_zero_pads, plan.zk_pad_mismatch,
+      plan.zk_shared_pair], plan.zk_l0_tamper)
+}
+
+/// A one-table session's witness, built ahead of it: for this statement and instances, seed, witness mode and plan controls only.
 struct Prebuilt {
     st: Arc<Stmt>,
+    inst: Arc<Instances>,
     seed: ProverSeed,
     mode: (bool, bool, bool),
+    key: ([bool; 16], u8),
     w0: Wit,
     wt0: WitData,
     built_s: f64,
@@ -2401,7 +2411,7 @@ fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed
         let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
         let (wt0, built_s) = witness_uploaded(&st, &w0, mode);
         let zk = zk.map(|h| h.join().unwrap_or_else(|e| panic!("M1's randomness: {}", panic_msg(e))));
-        Prebuilt { st, seed, mode, w0, wt0, built_s, zk }
+        Prebuilt { key: prebuild_key(&plan), st, inst, seed, mode, w0, wt0, built_s, zk }
     })
 }
 
@@ -2450,6 +2460,8 @@ struct Proved {
     witness_s: f64,
     witness_prebuilt_s: Option<f64>,
     zk_prebuilt_s: Option<f64>,
+    /// per table: its level-0 salt tree's id, and the range of ids its later trees took
+    salt_ids: Vec<[u64; 3]>,
     prove_s: Vec<f64>,
     buckets: Vec<Value>,
     tp0: Instant,
@@ -2519,14 +2531,16 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let lig = lig_of(plan);
     // a witness built beside the previous session, taken (once: the handle leaves the plan) when it is the one this session
-    // would build, for this statement and seed; under M1 on the device it carries the session's level-0 hiding, pads and salt
-    // key. Its wait counts as this session's witness time
+    // would build, for this statement, instances, seed and plan controls; under M1 on the device it carries the session's
+    // level-0 hiding, pads and salt key. Any other is dropped, and the session draws its own. Its wait counts as this session's
+    // witness time
     let tw = Instant::now();
     let mut pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
         .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
         .flatten()
         .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
-        .filter(|p| Arc::ptr_eq(&p.st, st) && p.seed == seed && p.mode == (device, host_units, mapped));
+        .filter(|p| Arc::ptr_eq(&p.st, st) && Arc::ptr_eq(&p.inst, &tabs.list[0].inst) && p.seed == seed
+                && p.mode == (device, host_units, mapped) && p.key == prebuild_key(plan));
     let t_pre = tw.elapsed().as_secs_f64();
     let zk_ahead = pre.as_mut().and_then(|p| p.zk.take());
     let zk_prebuilt_s = zk_ahead.as_ref().map(|z| z.built_s);
@@ -2816,13 +2830,17 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    let salt_ids = salts_t.iter().map(|s| {
+        let s = s.lock().unwrap_or_else(PoisonError::into_inner);
+        [s.level0_id(), s.issued().start, s.issued().end]
+    }).collect();
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
-                zk_prebuilt_s, prove_s, buckets, tp0 })
+                zk_prebuilt_s, salt_ids, prove_s, buckets, tp0 })
 }
 
 fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, zk_prebuilt_s,
-                 prove_s, buckets, tp0 } = p;
+                 salt_ids, prove_s, buckets, tp0 } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
@@ -2866,6 +2884,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
                "step0_checked": step0.is_ok() && v["accepted"] == true && (is_zk(st) || seed_coins())});
     rec["zk_prebuilt_s"] = json!(zk_prebuilt_s);
+    rec["salt_ids"] = json!(salt_ids);
     (rec, proofs)
 }
 
@@ -3710,7 +3729,9 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
 /// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
 /// the host's units, rep 1 from rep 0's witness and level-0 commitment, and the compressions natively (host units only where the
 /// device witness takes them, a statement whose units return its outputs; reuse never under M1), its witness built ahead of the
-/// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
+/// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts. A
+/// witness (and M1 draw) built ahead for another seed, or under another plan control, is taken and dropped: the session's proofs
+/// are its own draw's.
 #[cfg(feature = "seed-injection")]
 fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let run = |plan: Plan| {
@@ -3721,9 +3742,17 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         (v, proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
     };
     let a = run(Plan { gpu: true, host_units: Some(false), rep_reuse: Some(false), native_sha: Some(false), host_mapped: Some(false), ..Plan::default() });
-    let mut pb = Plan { gpu: true, host_units: Some(true), rep_reuse: Some(true), native_sha: Some(true), host_mapped: Some(true), ..Plan::default() };
-    pb.prebuilt = Some(Arc::new(Mutex::new(Some(prebuild(st, inst, &pb, ProverSeed::injected([1; 32]))))));
-    let b = run(pb);
+    let pb = Plan { gpu: true, host_units: Some(true), rep_reuse: Some(true), native_sha: Some(true), host_mapped: Some(true), ..Plan::default() };
+    // the session's plan with a witness built ahead for `seed` under `built`'s controls; whether the session took the handle
+    let ahead = |built: &Plan, seed: u8| {
+        let slot = Arc::new(Mutex::new(Some(prebuild(st, inst, built, ProverSeed::injected([seed; 32])))));
+        let r = run(Plan { prebuilt: Some(slot.clone()), ..pb.clone() });
+        let taken = slot.lock().unwrap_or_else(PoisonError::into_inner).is_none();
+        (r, taken)
+    };
+    let (b, b_taken) = ahead(&pb, 1);
+    // a witness and M1 draw built for another seed, or under another control of the draw, is dropped: the session draws its own
+    let others = [ahead(&pb, 2), ahead(&Plan { zk_zero_pads: true, ..pb.clone() }, 1)];
     let used = |k: &str| b.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
     let used_a = |k: &str| a.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
     let accepted = a.0["accepted"] == true && b.0["accepted"] == true;
@@ -3731,10 +3760,20 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     // under M1 the prebuilt session's level-0 hiding and pads come from its prebuild, the other's from its own draw
     let zk_ahead = [a.0["zk_prebuilt_s"].is_number(), b.0["zk_prebuilt_s"].is_number()];
     let zk_ahead_ok = zk_ahead == [false, zk_overlap(st, &Plan { gpu: true, ..Plan::default() })];
-    json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
+    let discarded: Vec<Value> = others.iter().map(|((v, proofs, rec), taken)| json!({
+        "accepted": v["accepted"], "taken": taken, "prebuilt": v["witness_prebuilt_s"].is_number(), "zk_prebuilt": v["zk_prebuilt_s"].is_number(),
+        "proofs_equal": *proofs == a.1, "transcripts_equal": *rec == a.2, "salt_ids_equal": v["salt_ids"] == b.0["salt_ids"],
+        "pass": v["accepted"] == true && *taken && !v["witness_prebuilt_s"].is_number() && !v["zk_prebuilt_s"].is_number() && *proofs == a.1
+                && *rec == a.2 && v["salt_ids"] == b.0["salt_ids"]})).collect();
+    let discarded_ok = discarded.iter().all(|d| d["pass"] == true);
+    // each session's salt trees (level 0's, then a fresh id per later tree): under M1, the prebuilt draw's are the in-session draw's
+    let salt_ids_ok = !b.0["salt_ids"].is_null() && (!is_zk(st) || b.0["salt_ids"] == a.0["salt_ids"]);
+    json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts; a witness built ahead for another seed or plan is dropped",
+           "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
            "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "zk_prebuilt": zk_ahead, "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
-           "pass": accepted && pe && te && zk_ahead_ok})
+           "taken": b_taken, "salt_ids": [a.0["salt_ids"].clone(), b.0["salt_ids"].clone()], "discarded": {"other_seed": discarded[0], "other_controls": discarded[1]},
+           "pass": accepted && pe && te && zk_ahead_ok && b_taken && salt_ids_ok && discarded_ok})
 }
 
 #[cfg(not(feature = "seed-injection"))]
