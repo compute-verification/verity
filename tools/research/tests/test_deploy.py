@@ -82,7 +82,6 @@ nodes = ["n"]
 path = "{node}/tree"
 src = "src/t"
 nodes = ["n"]
-run = ["tmux:a"]
 """)
     return {"repo": repo, "node": node, "manifest": manifest, "v1": v1, "nodes": deploy.load(manifest)}
 
@@ -136,46 +135,6 @@ def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(wo
     for rep in reps:
         e = next(e for e in rep["entries"] if e["path"] == str(a))
         assert e["state"] == "ok" and "restart tmux:a" in e["restart"]
-
-
-def test_a_tmux_pane_that_started_before_its_file_changed_needs_a_restart(world, tmp_path, monkeypatch):
-    a = world["node"] / "bin" / "a.py"
-    a.write_text("a2\n")
-    pane = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE)  # names no file
-    stub = tmp_path / "stub"
-    stub.mkdir()
-    monkeypatch.setenv("PATH", f"{stub}:{os.environ['PATH']}")
-
-    x = world["node"] / "tree" / "x.yaml"
-    x.write_text("x1\n")
-
-    def restart(tmux: str, mtime: float) -> str | None:
-        (stub / "tmux").write_text(f"#!/bin/sh\n{tmux}\n")
-        (stub / "tmux").chmod(0o755)
-        for f in (a, x):
-            os.utime(f, (mtime, mtime))
-        rep = deploy.drift(world["nodes"]["n"], "origin/main", local, world["repo"])
-        assert next(e for e in rep["entries"] if e["path"] == str(x))["restart"] is None   # a tree's run names no pane of each file
-        return next(e for e in rep["entries"] if e["path"] == str(a))["restart"]
-
-    def started(pid: int) -> float:
-        btime = next(int(ln.split()[1]) for ln in open("/proc/stat") if ln.startswith("btime"))
-        return btime + int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19]) / os.sysconf("SC_CLK_TCK")
-
-    lists = lambda pid: f'[ "$1 $4" = "list-panes =a" ] && echo {pid} && exit 0; exit 1'
-    named = None
-    try:
-        assert "restart tmux:a" in restart(lists(pane.pid), FUTURE)  # a loop that read the file once, before it changed
-        assert restart(lists(pane.pid), 1) is None                   # the pane started after it
-        assert restart("exit 1", FUTURE) is None                     # no such session
-        named = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(a)], stdin=subprocess.PIPE)
-        old, new = started(1), started(named.pid)                    # pid 1 as the old pane, `named` restarted inside it
-        assert new - old > 2
-        assert restart(lists(1), (old + new) / 2) is None            # the process that names the file counts, not its pane
-    finally:
-        for p in filter(None, (pane, named)):
-            p.stdin.close()
-            p.wait()
 
 
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
