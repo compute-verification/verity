@@ -263,8 +263,19 @@ if [ ! -f /etc/systemd/system/vy-store-evict.timer ]; then
     echo "   would write vy-store-evict.service and vy-store-evict.timer (every hour, as ubuntu)"
   fi
 fi
+# and the same for research's own store and check runs (/workspace/research/{store,runs}), as research, their owner
+if [ ! -f /etc/systemd/system/vy-store-evict-research.timer ]; then
+  if [ "$mode" = --apply ]; then
+    printf '[Unit]\nDescription=store eviction: drop local copies of research runs the remote store holds\n\n[Service]\nType=oneshot\nUser=research\nNice=19\nIOSchedulingClass=idle\nEnvironment=VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs\nExecStart=/usr/local/bin/vy-store-evict\n' \
+      | sudo tee /etc/systemd/system/vy-store-evict-research.service > /dev/null
+    printf '[Unit]\nDescription=research store eviction every hour\n\n[Timer]\nOnBootSec=15min\nOnUnitActiveSec=1h\n\n[Install]\nWantedBy=timers.target\n' \
+      | sudo tee /etc/systemd/system/vy-store-evict-research.timer > /dev/null
+  else
+    echo "   would write vy-store-evict-research.service and vy-store-evict-research.timer (every hour, as research)"
+  fi
+fi
 run sudo systemctl daemon-reload
-run sudo systemctl enable --now vy-store-evict.timer
+run sudo systemctl enable --now vy-store-evict.timer vy-store-evict-research.timer
 
 step "5. the host's CUDA driver library for GPU-less pods (/workspace/jobs/cuda-driver)"
 # A coverage cell's Build task has no GPU, and so no driver libraries in its pod, but importing vLLM's CUDA platform (#536) loads
