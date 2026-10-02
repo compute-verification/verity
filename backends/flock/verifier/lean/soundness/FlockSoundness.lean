@@ -130,6 +130,7 @@ import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
 import FlockSoundness.Binding
+import FlockSoundness.Registered
 import FlockSoundness.Headline
 import FlockSoundness.ZK.Masking
 import FlockSoundness.ZK.Adaptivity
