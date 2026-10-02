@@ -402,15 +402,16 @@ MIN_BAND_D = 5
 count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
 
 
-def with_in_degree(base: Any, d: int) -> Any:
-    """The band's geometry at in-degree `d` (`--band-d`), refused below `MIN_BAND_D`: such a band has no certificate."""
+def with_in_degree(base: Any, d: int, timed: bool = True) -> Any:
+    """The band's geometry at in-degree `d` (`--band-d`).  A timed run is refused below `MIN_BAND_D`: such a band has no
+    certificate.  An untimed run (`--audits 0`) claims no audit, so it measures the band at any in-degree the codec takes."""
     from verity_pous.band import BandParams
 
     if not isinstance(base, BandParams):
         raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
-    if d < MIN_BAND_D:
+    if timed and d < MIN_BAND_D:
         raise ValueError(f"band in-degree d = {d} is refused: the band's certificate (Pous.Pinned.BandMultiMeetsFamily) holds "
-                         f"for d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d")
+                         f"for d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d (an untimed run, --audits 0, measures it)")
     return BandParams(base.blocks_per_segment, base.m, d, base.segments)
 
 
@@ -763,12 +764,13 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     from .live import scheme_of
 
     base = base or schemes.get(a.scheme).params
-    if getattr(a, "band_d", 0):
-        base = with_in_degree(base, a.band_d)
+    band_d = getattr(a, "band_d", None)
+    if band_d is not None:
+        base = with_in_degree(base, band_d, timed=bool(a.audits))
     seg = base.segment_bytes
     total = -(-ws["bytes"] // seg)
     n = min(total, a.max_segments) if a.max_segments else total
-    scheme = scheme_of(schemes.Band(base).name if getattr(a, "band_d", 0) else a.scheme, base.with_segments(n))
+    scheme = scheme_of(schemes.Band(base).name if band_d is not None else a.scheme, base.with_segments(n))
     p = scheme.params
     width = p.block_bytes
     used = min(ws["bytes"], n * seg)

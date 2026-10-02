@@ -300,6 +300,20 @@ def test_bench_refuses_a_band_d_without_a_certificate_and_on_another_impl(tmp_pa
         bench.main(["--impl", "reference", "--band-d", "6", *common])
 
 
+def test_an_untimed_run_measures_the_band_below_the_certified_in_degree(tmp_path):
+    """`--audits 0 --band-d 2`: below `MIN_BAND_D` the band has no certificate, so a timed run refuses it, but an untimed one
+    claims no audit and measures it; its gates pass at d = 2, the pinned vector's at the registered d."""
+    harness = _harness()
+    params = _small()
+    with pytest.raises(ValueError, match="d = 2 is refused"):
+        harness.with_in_degree(params, 2)
+    body = _bench().BandGpu().run(_args(tmp_path, band_d=2, audits=0), WS, tmp_path,
+                                  backend=_backend(harness.with_in_degree(params, 2, timed=False)), base=params,
+                                  vectors=_vectors(params))
+    assert body["scheme"] == "band-chain/d2/v1" and body["scheme_params"]["d"] == 2 and body["timed"] is False
+    assert all(g["passed"] for g in body["gates"].values()) and body["gates"]["vector"]["d"] == 12
+
+
 def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_so(tmp_path, monkeypatch):
     """`--audits 0` (`AUDITS=0`, an untimed placement): the gates, encode, the loop and the step floor run, but no limit,
     audit or control does; the result says `timed: false` and carries no audit, deadline or latency number to cite."""
