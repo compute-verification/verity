@@ -22,9 +22,7 @@ open Flock
 namespace FlockSoundness.Discharge.Zero
 
 /-- **Slot offset `off` is a bit of one of the unit's input ports**, not an input padding row. -/
-def InPort (c : Circuit) (off : ℕ) : Prop :=
-  ∃ p < (portCols c.unit.inGroups).size, (portCols c.unit.inGroups)[p]!.1 ≤ off ∧
-    off < (portCols c.unit.inGroups)[p]!.1 + (portCols c.unit.inGroups)[p]!.2
+def InPort (c : Circuit) (off : ℕ) : Prop := off ∈ portBits c.unit.inGroups
 
 /-- **Stacked input `x` of a VU reads the zero**: copy `x / W` of the unit, at slot offset `x % W`
 (`W = inWords · WORD`), is a port bit that reads the zero. -/
