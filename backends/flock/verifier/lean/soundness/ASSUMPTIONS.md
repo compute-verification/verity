@@ -25,7 +25,7 @@ is the coin server's randomness for the round coins, which the model embodies (A
 
 | `Prop` | Claim id | Bound | Taken for |
 |---|---|---|---|
-| `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg` |
+| `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg`, and, in `CROnly`, the link finders stopped at `q` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message | the round coins |
@@ -56,7 +56,12 @@ hash, nor false of every hash.
   - `qR ≥ t′ + v`, for the registered-path finder (`Reads.pick`: one run, and the two openings' climbs);
   - `qG ≥ (1 + 5M)·t′ + 2k·v`, for zero knowledge's simulator finder (`ZK.GK.Model.finder`: the GK simulator with cap
     `M`, at most `1 + 5M` runs of `V*` on every outcome by `sim_runs_le`, then T6's extraction, which re-verifies the
-    two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`).
+    two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`);
+  - `t′` itself, for the link finders stopped at `q` (`CROnly.LinkCRStrict`, `hCRs`). `q` is checked in Lean: the stopped
+    finder's cost, `truncCost`, is at most `q` on every outcome. But that is the modeled cost, `t′` per run played
+    (`cT`), so under the strict form `t′` must bound every run on every outcome, not on average: the prover's
+    evaluations, and the acceptance check `accω` the finder runs on each. The openings' verification and the extraction
+    (`rdT`, `cand`) are charged nowhere, and must fit in `t′` or in `q`'s slack.
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
   is unsupported. Tying the five to one per-run count in the signatures would check this in Lean; it is a follow-up.
@@ -132,6 +137,18 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 | `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
 | `δ_reg`, the registered reads' path binding | `SHA512CRStrict` | `Reads.prob_off_le` (`hR`) | `qR²/2^513` |
 | `δ_link`, the link term | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
+| `δ_link`, under `cr/sha-512` alone | `SHA512CRStrict` | `CROnly.linkCR_of_strict` (`LinkCRStrict`, `hCRs`: the same finders stopped at `q` evaluations) | `linkBoundE` at per-run cost `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`; at `q³ = t'·2^512` the hash part is `3(1 + k)·t'^{2/3}/2^{512/3}` (`CROnly.linkBoundE_at_cube`) |
+
+**`cr/sha-512` alone** (`FlockSoundness/CROnly/`). Every e2e theorem of the non-ZK session and the headline is restated
+with `hCRs` in place of `hCR` (`CROnly.flock_e2e_*`, `CROnly.uprog_e2e_*`, `CROnly.prog_e2e_count`, `_drawn`,
+`CROnly.flock_headline`), so they rest on `SHA512CRStrict` and no `SHA512CRExpected`. The price is the link term's: for
+audit B (`Q_s ≈ 2^24`, `ρ = 1/2`) `δ_link` is about `t^{2/3}·2^-123.5` against the record's `t·2^-209.4`, so `2^-70.2`
+instead of `2^-129.4` at `t = 2^80`. `expected_of_strict` (truncation at `q` and Markov) reads the stopped finder's
+bound as linear in its expected cost, which loses `(2(1 + k))^{1/3}` against the best budget for the finder's own cost.
+**Scope:** these are all theorems about the non-ZK session (`batchedSession`, `Audit/FlockBatched.lean`, whose verifier
+checks `final_c` in the clear). `--zk`'s soundness theorems (`Discharge/ZkSession`: `zk_flock_count`, `_execOS`) are
+about a model that receives `final_c'` before the inner proof, as main's verifier does not until #793. `CROnly` restates
+none of them, and calls nothing of main's `--zk` sound.
 
 The four `flock_e2e_*_hm96` theorems (`FlockSoundness/Binding/E2E.lean`) add the four:
 `miss_L(K) + ksAvgStrict + δ_link + δ_tree` for the count curve, the same without `miss_L(K)` for a drawn unit. `δ_tree`
@@ -206,7 +223,9 @@ A6, which no check of the record establishes.
 
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
 prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSoundness/Assumptions.lean` and
-`docs/zk-proof-public.md`.
+`docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
+hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), while zero knowledge still takes
+`hash-derived-key` for the pinned key and `PadNonvanishing`.
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
@@ -387,6 +406,14 @@ as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
 `expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
 and the certificate's `IsRowsUnit.computes_of_cert`.
+The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
+`linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
+`Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
+(`sum_hidingGap_le`, `hankel_universal`), hm96-sha512's values (`hm96_sha512_sum`: mean `2^-257` over a uniform key;
+`hm96_sha512_bad_keys`: `Hm96Hiding` at `2^-193` fails for at most `2^-64` of the keys), and Lemma B and Lemma C with it
+discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `adaptive_prefinal_le`,
+`adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge still takes of the key is its uniformity
+(`hash-derived-key` for the pinned key, `hm96/PROTOCOL.md` §2a).
 Zero knowledge's Theorem GK is pinned (`FlockSoundness/ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
 `Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
 `Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and

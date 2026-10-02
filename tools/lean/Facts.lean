@@ -26,11 +26,11 @@ there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SH
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
-statement that is a `Prop` definition under `meaning` also with that definition unfolded, so that `audit.py` can compare
-them with records made before the move. `moved_conflicts` lists each constant of those texts (or pin) whose old name
-would be another one's too: there the comparison would not tell the two apart. A constant that keeps its name stands for
-itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a lemma) is no
-conflict.
+statement that is a `Prop` definition under `meaning` also with that definition unfolded (`statementOf`), so that
+`audit.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
+pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
+its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
+lemma) is no conflict.
 -/
 
 open Lean Meta
@@ -144,14 +144,30 @@ def readCanon (ci : ConstantInfo) (rn : Name → Name := id) : String :=
   | .opaqueInfo v => canonText v.type rn ++ "\n=\n" ++ canonText v.value rn
   | ci => canonText ci.type rn
 
+/-- The value of a constant that is a theorem the elaborator made from a proof nested in a definition
+(`<decl>._proof_<n>`, `abstractNestedProofs`), a proof a theorem's statement keeps in place. -/
+def auxProof? (env : Environment) : Expr → Option Expr
+  | .const n@(.str _ s) us =>
+    match env.find? n with
+    | some (.thmInfo v) =>
+      if s.startsWith "_proof_" then some (v.value.instantiateLevelParams v.levelParams us) else none
+    | _ => none
+  | _ => none
+
+/-- `e` with each auxiliary proof (`auxProof?`) replaced by its value applied to its arguments. -/
+partial def inlineAuxProofs (env : Environment) (e : Expr) : Expr :=
+  let e' := e.replace fun x => (auxProof? env x.getAppFn).map (·.beta x.getAppArgs)
+  if e' == e then e else inlineAuxProofs env e'
+
 /-- When a statement is a `Prop` definition declared under `meaning` (a theorem `t : G` that proves a named statement),
-that definition and its value. -/
+that definition and its value, with the proofs the elaborator abstracted out of it put back, so that it reads as the
+same statement written as a theorem's type would. -/
 def statementOf (env : Environment) (meaning : Array Name) (t : Expr) : Option (Name × Expr) := do
   let .const g us := t.consumeMData | none
   let .defnInfo v ← env.find? g | none
   let i ← env.getModuleIdxFor? g
   guard (v.type.isProp && under meaning env.header.moduleNames[i.toNat]!)
-  return (g, v.value.instantiateLevelParams v.levelParams us)
+  return (g, inlineAuxProofs env (v.value.instantiateLevelParams v.levelParams us))
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
 def uses : ConstantInfo → Array Name

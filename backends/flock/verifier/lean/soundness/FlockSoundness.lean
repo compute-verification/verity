@@ -141,6 +141,7 @@ import FlockSoundness.ZK.Hiding
 import FlockSoundness.ZK.RealLeaves
 import FlockSoundness.ZK.Session
 import FlockSoundness.ZK.AdaptivePrefinal
+import FlockSoundness.CROnly
 import FlockSoundness.Discharge.Zero
 import FlockSoundness.Discharge.Const
 import FlockSoundness.Discharge.Placed
