@@ -3,7 +3,9 @@ modeled latency, the thresholds τ, the server-side breakdown, a per-run and per
 slowest challenge answers with their context, and interpolation vectors.
 
 It reads the soak's chunks (`verity_vllm.pipeline.pous_soak`, one npz per chunk) one at a time and never holds two: every
-per-cell statistic is accumulated as it goes.
+per-cell statistic is accumulated as it goes.  The corrected rerun's chunks export the same way: their response header is
+v2 (208 B, the zero-copy wait and completions), which enters the ToR model's response bytes, and a cell's `config` is one of
+`CONFIGS` (baseline, tuned, zerocopy).  All of a file's chunks have one header and one set of sampled cores.
 
     uv run python benchmarks/pous/soak_export.py --out pous-soak.json CHUNK.npz [CHUNK.npz ...] [--art CHUNK.npz=art:… ...]
 
@@ -44,7 +46,12 @@ TOP_STALLS = 200
 OP_PING, OP_READ = 2, 4
 OPS = {OP_READ: "challenge", OP_PING: "ping"}
 LOADED = ("decode", "prefill", "mixed")
+#: the responder configs a cell's `config` takes (`pous_soak` ALL_CONFIGS; zerocopy from the corrected rerun on)
+CONFIGS = ("baseline", "tuned", "zerocopy")
+#: the response header: 24 words (v1, the soak) or 26 (v2, the rerun's zero-copy wait and completions)
 HEADER_BYTES = 192
+HEADER_BYTES_V2 = 208
+NODE0_CPUS = range(96)
 BLOCK_BYTES = (65_536, 147_456, 393_216)
 ROUNDS = range(6)
 QUANTILES = (("p50_us", 0.5), ("p90_us", 0.9), ("p99_us", 0.99), ("p999_us", 0.999), ("p9999_us", 0.9999))
@@ -187,11 +194,11 @@ def tor_terms(metric: str, response_bytes: int) -> dict[str, float]:
             "constant_us": nic_rx + tx + req + 2 * prop}
 
 
-def tor_params(metric: str) -> dict[str, Any]:
+def tor_params(metric: str, header_bytes: int = HEADER_BYTES) -> dict[str, Any]:
     link, setting = TOR[metric]
-    per = {str(b): tor_terms(metric, HEADER_BYTES + b) for b in BLOCK_BYTES}
+    per = {str(b): tor_terms(metric, header_bytes + b) for b in BLOCK_BYTES}
     return {"link_bps": link, "setting": setting, "nic": "mlx5_core", "mtu": MTU, "mss_bytes": MSS,
-            "frame_overhead_bytes": FRAME_OVERHEAD, "header_bytes": HEADER_BYTES, "b_pcie_bytes_per_s": B_PCIE,
+            "frame_overhead_bytes": FRAME_OVERHEAD, "header_bytes": header_bytes, "b_pcie_bytes_per_s": B_PCIE,
             "rx_usecs": RX_USECS_DEFAULT if setting == "default" else 0.0, "nic_rx_base_us": NIC_RX_BASE_US,
             "tx_fixed_us": TX_FIXED_US, "request_frame_bytes": REQ_FRAME, "prop_ns_per_m": PROP_NS_PER_M, "cable_m": CABLE_M,
             "t_nic_rx_us": per[str(BLOCK_BYTES[0])]["t_nic_rx_us"], "t_req_ser_us": per[str(BLOCK_BYTES[0])]["t_req_ser_us"],
@@ -200,7 +207,7 @@ def tor_params(metric: str) -> dict[str, Any]:
             "constant_us_by_block": {b: v["constant_us"] for b, v in per.items()}}
 
 
-def metrics_table() -> list[dict[str, Any]]:
+def metrics_table(header_bytes: int = HEADER_BYTES) -> list[dict[str, Any]]:
     out = [{"id": k, "label": lab, "kind": "measured", "formula": f, "params": {"needs_kernel_stamps": kern}}
            for k, (lab, f, kern) in MEASURED.items()]
     for k, (link, setting) in TOR.items():
@@ -208,7 +215,7 @@ def metrics_table() -> list[dict[str, Any]]:
                     "formula": "R + t_nic_rx + t_nic_tx_and_wire + t_req_ser + 2·t_prop, R = K_tx_resp − K_rx_req; "
                                "t_nic_tx_and_wire = tx_fixed + max(bytes / B_pcie, wire_bytes · 8 / L), wire_bytes = bytes + "
                                "90 · ⌈bytes / MSS⌉, bytes = header + block",
-                    "params": tor_params(k)})
+                    "params": tor_params(k, header_bytes)})
     return out
 
 
@@ -290,6 +297,7 @@ class Chunk:
         self.files = set(z.files)
         rec = z["rec"]
         col = {str(n): i for i, n in enumerate(z["rec_columns"])}
+        self.header_bytes = HEADER_BYTES_V2 if "srv_zc_wait_ns" in col else HEADER_BYTES
         self.runs = self.meta["runs"]
         self.run = z["rec_run"].astype(np.int64)
         self.cell = z["rec_cell"].astype(np.int64)
@@ -328,7 +336,7 @@ class Chunk:
         for k in TOR:
             const = np.zeros(len(self.op))
             for b in np.unique(self.nbytes):
-                const[self.nbytes == b] = tor_terms(k, HEADER_BYTES + int(b))["constant_us"]
+                const[self.nbytes == b] = tor_terms(k, self.header_bytes + int(b))["constant_us"]
             v[k] = v["server_kernel"] + const
         return v
 
@@ -359,13 +367,24 @@ class Builder:
         self.stall_seq = 0
         self.t_first: int | None = None
         self.t_last: int | None = None
+        self.header_bytes: int | None = None
+        self.cpus: tuple[int, ...] = ()
 
     def add(self, path: Path) -> None:
         c = Chunk(path)
         m = c.meta
+        if self.header_bytes not in (None, c.header_bytes):
+            raise SystemExit(f"{path.name}: a {c.header_bytes} B header among {self.header_bytes} B chunks")
+        self.header_bytes = c.header_bytes
+        cpus = tuple(int(x) for x in c.samples.get("cpus", ()))
+        if cpus and self.cpus and cpus != self.cpus:
+            raise SystemExit(f"{path.name}: sampled cores {cpus[0]}-{cpus[-1]}, not {self.cpus[0]}-{self.cpus[-1]}")
+        self.cpus = self.cpus or cpus
         self.chunk_meta.append({k: m.get(k) for k in ("job", "chunk_index", "chunk_start_utc", "end_utc", "chunk_start_ns", "env")})
         self.seed = self.seed or m.get("schedule_seed")
         for cell in m.get("cells", []):
+            if cell["config"] not in CONFIGS:
+                raise SystemExit(f"{path.name}: cell {cell['id']} has config {cell['config']!r}, not one of {CONFIGS}")
             self.cells_meta[int(cell["id"])] = cell
         self.n_answers += len(c.op)
         self.n_kept += int(np.count_nonzero(c.keep))
@@ -682,7 +701,7 @@ class Builder:
                     "end_utc": _utc(self.t_last) if self.t_last else None,
                     "chunks": arts, "answers": self.n_answers, "wrong": self.wrong, "schedule_seed": self.seed,
                     "notes": self.notes(extra_notes, survival)},
-            "cells": cells, "metrics": metrics_table(), "t_us": [_r(t, 10) for t in T_US], "survival": survival,
+            "cells": cells, "metrics": metrics_table(self.header_bytes or HEADER_BYTES), "t_us": [_r(t, 10) for t in T_US], "survival": survival,
             "quantiles": quantiles,
             "thresholds": [{"block_bytes": b, "call_ns": self.calls[b],
                             "rounds": [{"d": d, "D": min(d, 5), "tau_us_at_m1": _r(tau_us(d, self.calls[b]), 10)} for d in ROUNDS]}
@@ -708,11 +727,16 @@ class Builder:
 
     def notes(self, extra: list[str], survival: list[dict[str, Any]]) -> list[str]:
         out = list(extra)
+        cores = f"{self.cpus[0]}-{self.cpus[-1]}" if self.cpus else "80-93"
+        header = self.header_bytes or HEADER_BYTES
+        node0 = not self.cpus or all(c in NODE0_CPUS for c in self.cpus)
         out += [
-            "NVML (GPU 7's SM utilisation, power, temperature), the 10 s GPU utilisations and loadavg are missing before "
-            "07:58Z: the sampler kept only their first row per chunk (fixed in 3ab25fa4); chunks without them: "
-            + (", ".join(self.no_nvml_chunks) or "none") + "; those minutes carry null",
-            "cross-socket D2H: GPU 7 is on NUMA node 1, the soak's cores 80-93 on node 0, so every block copy crosses sockets",
+            ("NVML (GPU 7's SM utilisation, power, temperature), the 10 s GPU utilisations and loadavg are missing before "
+             "07:58Z: the sampler kept only their first row per chunk (fixed in 3ab25fa4); chunks without them: "
+             + ", ".join(self.no_nvml_chunks) + "; those minutes carry null") if self.no_nvml_chunks else
+            "NVML (GPU 7's SM utilisation, power, temperature), the 10 s GPU utilisations and loadavg: in every chunk",
+            f"cross-socket D2H: GPU 7 is on NUMA node 1, the soak's cores {cores} on node 0, so every block copy crosses sockets"
+            if node0 else f"same-socket D2H: GPU 7 and the cores {cores} are on NUMA node 1, so no block copy crosses sockets",
             "node 2 is a KVM VM: steal time is the hypervisor's, read from /proc/stat; no CPU frequency (cpu_freq_khz is -1)",
             ("loopback biases R (server_kernel, and every ToR estimate built on it) upward: the server's xmit of each response "
             "skb runs the verifier's TCP receive softirq inline (contract §3)"),
@@ -737,13 +761,14 @@ class Builder:
              "leave these rows out"),
             ("the ToR model (contract §3) on node 2: mlx5_core, 400 Gb/s, MTU 1500 (MSS 1448, 90 B per frame), B_pcie 25 GB/s, "
             "rx-usecs 8 for default (t_nic_rx 10 µs) and 2 µs for tuned; the 100 Gb/s variants use the same terms at 100 Gb/s; "
-            "response bytes = the 192 B header (24 words) + the block (pings carry the cell's block from the staging buffer)"),
+            f"response bytes = the {header} B header ({header // 8} words) + the block (pings carry the cell's block from the "
+            "staging buffer)"),
             ("thresholds: call_ns from verity_pous.primitives.pi2_call_ns at the explorer's commit 57cddd474 (equal on main); "
             "τ(m) = (D + 1)·call_ns/m/1000 − 0.001 µs, D = min(d, 5), m = 1; an answer is over τ when its value > τ"),
             ("timeline.runs[].over_tau is keyed by metric, then '<block>/d<d>': {\"elapsed\": {\"65536/d0\": count, ...}, "
             "\"tor_400_tuned\": {...}}; every run is counted against every block's thresholds; twins have elapsed only"),
             ("timeline.minutes: steal_ms_per_s on the core the verifier (or responder) last ran on at each 100 ms sample, and the "
-            "largest other core among 80-93; softirq_per_s summed over cores 80-93 and all softirq types; ctx_switch_per_s the "
+            f"largest other core among {cores}; softirq_per_s summed over cores {cores} and all softirq types; ctx_switch_per_s the "
             "voluntary + involuntary switches of the responder thread, verifier and checker; clock_offset_range_ns the range of "
             "CLOCK_REALTIME − CLOCK_MONOTONIC (bracketed) within the minute"),
             ("serving: vLLM steps whose GPU start falls in a run's measured window (first arrival + 1 s to the run's end), per cell "
@@ -751,7 +776,7 @@ class Builder:
             self.free_note(),
             "stalls: the 200 slowest timestamping-on or twin challenge answers by elapsed; steal_ms is the stolen time over the "
             "100 ms samples spanning [V0, V1] on the responder's or verifier's core (the larger, 10 ms jiffies); softirq the "
-            "softirqs on cores 80-93 over the same samples; vllm_step_overlap the share of [V0, V1] inside vLLM steps' GPU "
+            f"softirqs on cores {cores} over the same samples; vllm_step_overlap the share of [V0, V1] inside vLLM steps' GPU "
             "intervals; " + ATTRIBUTION_RULE + "; attribution_label names the cause and, for socket and unknown, the largest "
             "part",
         ]

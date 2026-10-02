@@ -29,15 +29,17 @@ COLS = ("t_sched", "t_send0", "t_recv", "status", "device_ns", "srv_krx", "srv_u
 T0 = 1_790_924_000_000_000_000
 
 
-def _chunk(path: Path) -> Path:
+def _chunk(path: Path, v2: bool = False) -> Path:
     """Two runs of cell 19 (decode, 10 Hz, 64 KiB, tuned), one with timestamping and its twin: 400 answers each, every tenth
     a ping, the first second of each run inside the warm-up; one answer with no K_tx_resp.  The second run keeps the decode
-    load, so the 18 s from the first run's end to its first arrival are a no-challenge window."""
+    load, so the 18 s from the first run's end to its first arrival are a no-challenge window.  ``v2``: the rerun's chunk,
+    header v2 (its zero-copy columns), cell 29 (decode, 10 Hz, 64 KiB, zerocopy) and node 1's cores 116-123."""
+    cid = 29 if v2 else 19
     rng = np.random.default_rng(7)
     rows, cell, run, ktx, s4, runs = [], [], [], [], [], []
     for j, ts in enumerate((True, False)):
         start = T0 + j * 60_000_000_000
-        runs.append({"cell": 19, "pass": 0, "ts": ts, "start_ns": start, "t0_ns": start + 2_000_000_000,
+        runs.append({"cell": cid, "pass": 0, "ts": ts, "start_ns": start, "t0_ns": start + 2_000_000_000,
                      "end_ns": start + 44_000_000_000, "start_utc": E._utc(start), "status": "done",
                      "load": {"mode": "decode", "switched": j == 0}})
         for i in range(400):
@@ -48,23 +50,24 @@ def _chunk(path: Path) -> Path:
             s0 = t + 10_000
             s1, s2 = (s0 + 100, s0 + 30_000) if op == E.OP_READ else (0, 0)
             s3 = (s2 or s0) + 4_000
-            rows.append([t, t + 1_000, t + 1_000 + lat, 0, 25_000 if op == E.OP_READ else 0, krx, s0, s3, s1, s2, op, 65_536])
+            rows.append([t, t + 1_000, t + 1_000 + lat, 0, 25_000 if op == E.OP_READ else 0, krx, s0, s3, s1, s2, op, 65_536]
+                        + ([0, i] if v2 else []))
             k = s3 + 40_000 if ts and i != 123 else 0
-            cell.append(19), run.append(j), ktx.append(k), s4.append(s3 + 45_000)
+            cell.append(cid), run.append(j), ktx.append(k), s4.append(s3 + 45_000)
     steps = np.array([[T0 + k * 1_000_000_000, 0, T0 + k * 1_000_000_000, T0 + k * 1_000_000_000 + 700_000_000, 8, 8, 0, 8]
                       for k in range(120)], np.int64)
     n = 1200
     t_ns = T0 + np.arange(n, dtype=np.int64) * 100_000_000
-    cpus = np.arange(80, 94)
-    cpustat = np.zeros((n, 14, 10), np.int64)
+    cpus = np.arange(116, 124) if v2 else np.arange(80, 94)
+    cpustat = np.zeros((n, len(cpus), 10), np.int64)
     cpustat[:, :, 7] = np.arange(n)[:, None] // 50
-    meta = {"runs": runs, "cells": E_cells(), "wrong": 0, "schedule_seed": "ab" * 32, "job": "test", "chunk_index": 0,
+    meta = {"runs": runs, "cells": E_cells(v2), "wrong": 0, "schedule_seed": "ab" * 32, "job": "test", "chunk_index": 0,
             "chunk_start_utc": E._utc(T0), "end_utc": E._utc(T0 + 120_000_000_000), "env": {"gpu_uuid": "GPU-7"}}
-    np.savez(path, rec=np.array(rows, np.int64), rec_columns=np.array(COLS), rec_cell=np.array(cell, np.int16),
+    np.savez(path, rec=np.array(rows, np.int64), rec_columns=np.array(COLS + (("srv_zc_wait_ns", "srv_zc_completions") if v2 else ())), rec_cell=np.array(cell, np.int16),
              rec_run=np.array(run, np.int32), rec_k_tx_resp=np.array(ktx, np.int64), rec_s4=np.array(s4, np.int64),
              steps=steps, meta_json=np.array(json.dumps(meta)), sample_t_ns=t_ns, sample_cpus=cpus,
-             sample_lastcpu=np.tile([92, 90, 89], (n, 1)), sample_cpustat=cpustat,
-             sample_softirq=np.cumsum(np.ones((n, 10, 14), np.int64), axis=0),
+             sample_lastcpu=np.tile([122, 120, 118] if v2 else [92, 90, 89], (n, 1)), sample_cpustat=cpustat,
+             sample_softirq=np.cumsum(np.ones((n, 10, len(cpus)), np.int64), axis=0),
              sample_thread_ctxt=np.cumsum(np.ones((n, 3, 2), np.int64), axis=0),
              sample_clock_triple=np.stack([t_ns - 5, t_ns + 1_000, t_ns + 5], axis=1),
              sample_nvml=np.array([[t, 90, 0, 0, 0, 200_000, 50, 0, 0, 0] for t in t_ns[::10]], np.int64),
@@ -75,10 +78,12 @@ def _chunk(path: Path) -> Path:
     return path
 
 
-def E_cells():
-    return [{"id": 18 * li + 6 * ri + 2 * si + ci, "load": load, "rate": rate, "kib": kib, "config": cfg}
+def E_cells(v2: bool = False):
+    configs = E.CONFIGS if v2 else ("baseline", "tuned")
+    k = len(configs)
+    return [{"id": 9 * k * li + 3 * k * ri + k * si + ci, "load": load, "rate": rate, "kib": kib, "config": cfg}
             for li, load in enumerate(("idle", "decode", "prefill", "mixed")) for ri, rate in enumerate((10, 100, 1000))
-            for si, kib in enumerate((64, 144, 384)) for ci, cfg in enumerate(("baseline", "tuned"))]
+            for si, kib in enumerate((64, 144, 384)) for ci, cfg in enumerate(configs)]
 
 
 @pytest.fixture(scope="module")
@@ -87,6 +92,35 @@ def doc(tmp_path_factory):
     b.add(_chunk(tmp_path_factory.mktemp("soak") / "chunk-test.npz"))
     d = b.document(arts=["art:test"], commit="test", generated_at="2026-10-02T00:00:00Z", host="h", gpu="g", extra_notes=[])
     return json.loads(json.dumps(d, allow_nan=False))
+
+
+def test_a_rerun_chunk_carries_its_208_byte_header_zerocopy_and_node_1_into_the_file(tmp_path, doc):
+    b = E.Builder()
+    b.add(_chunk(tmp_path / "chunk-v2.npz", v2=True))
+    d2 = json.loads(json.dumps(b.document(arts=["art:v2"], commit="test", generated_at="2026-10-02T00:00:00Z", host="h", gpu="g",
+                                          extra_notes=[]), allow_nan=False))
+    assert d2["schema"] == "pous-soak/v1" and len(d2["cells"]) == 108
+    assert {c["config"] for c in d2["cells"]} == set(E.CONFIGS) and d2["cells"][29]["config"] == "zerocopy"
+    assert d2["cells"][29]["runs"] == 1
+    assert {m["params"]["header_bytes"] for m in d2["metrics"] if m["kind"] == "modeled"} == {208}
+    assert {m["params"]["header_bytes"] for m in doc["metrics"] if m["kind"] == "modeled"} == {192}
+
+    def tor(d, cell):
+        return next(r for r in d["quantiles"] if (r["cell"], r["metric"], r["op"]) == (cell, "tor_100_default", "challenge"))
+
+    def kern(d, cell):
+        return next(r for r in d["quantiles"] if (r["cell"], r["metric"], r["op"]) == (cell, "server_kernel", "challenge"))
+
+    extra = E.tor_terms("tor_100_default", 208 + 65_536)["constant_us"] - E.tor_terms("tor_100_default", 192 + 65_536)["constant_us"]
+    assert extra > 0
+    assert (tor(d2, 29)["max_us"] - kern(d2, 29)["max_us"]) - (tor(doc, 19)["max_us"] - kern(doc, 19)["max_us"]) == pytest.approx(extra)
+    notes = " ".join(d2["run"]["notes"])
+    assert "208 B header (26 words)" in notes and "same-socket D2H" in notes and "cores 116-123" in notes
+    assert "80-93" not in notes and "in every chunk" in notes
+    assert "192 B header (24 words)" in " ".join(doc["run"]["notes"]) and "cross-socket D2H" in " ".join(doc["run"]["notes"])
+    b.add(_chunk(tmp_path / "chunk-v2b.npz", v2=True))
+    with pytest.raises(SystemExit, match="192 B header"):
+        b.add(_chunk(tmp_path / "chunk-v1.npz"))
 
 
 def test_survival_interpolation_is_log_log_and_ends_at_one_over_n_at_max():
