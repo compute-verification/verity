@@ -335,12 +335,23 @@ REJECT = [
     ("a binding unlike the key's record", lambda d: _set_binding(d, "N", 5), "keyed by its id and binding record"),
     ("a composite id that is not Name_vN", lambda d: d["definitions"]["TPair_v1"].update(id="TPair_v01"), "Name_vN"),
     ("a root with a parameter", lambda d: _root(d)["params"].append(["x", ["Value", 32]]), "without parameters"),
+    ("an Input node inside a Definition", lambda d: _inner_input(d, "Input32_v1"), "appears only in the root's body"),
+    ("a RegisteredInput node inside a Definition", lambda d: _inner_input(d, "RegisteredInput32_v1"), "appears only in the root's body"),
 ]
 
 
 def _rename(desc: dict, old: str, new: str) -> None:
     desc["definitions"][new] = dict(desc["definitions"].pop(old), id=new)
     desc["callees"][desc["callees"].index(old)] = new
+
+
+def _inner_input(desc: dict, fid: str) -> None:
+    """TPair's second node, `s + a`, becomes an input node: TPair returns (a + b, an input no parameter binds)."""
+    if fid not in desc["callees"]:
+        desc["callees"].append(fid)
+        desc["definitions"][fid] = {"form": "primitive", "id": fid, "params": [], "ret": ["Value", 32]}
+    desc["definitions"]["TPair_v1"]["body"]["nodes"][1] = {"args": [], "fn": desc["callees"].index(fid), "form": "primitive",
+                                                           "out": desc["types"].index(["Value", 32])}
 
 
 def _graph(g: cut.CallGraph) -> dict:

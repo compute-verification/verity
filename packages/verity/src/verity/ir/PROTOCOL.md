@@ -208,6 +208,7 @@ have):
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
 - a root that is not a composite without parameters;
+- an input node (§5.2) in a definition other than the root;
 - a node form other than the four, or keys other than its form's;
 - a primitive node whose callee is a composite, or a call or scan node whose callee is a primitive;
 - a batch whose axes are not null or naturals or whose `n` is not a natural; a scan whose `n` or `n_xs` is not a natural, or
@@ -253,7 +254,8 @@ node* is either (`program.is_input`, `program.input_id`). w is in canonical deci
 `Input16_v2` and `Input16` are not Input ids, nor are `RegisteredInput016_v1` and `RegisteredInput16_v2` registered-input ids.
 Each input primitive of width w has no parameters and returns `Value<w>`: a gate whose value is prescribed (asserted equal to
 the claimed input), not computed, and never held by the program. The decoder materializes it from the id, ahead of any
-registry entry.
+registry entry. An input node appears only in the root's body: `Program` and the decoder (§4.6) refuse one in any other
+definition, where no parameter would bind it.
 
 The Program's Calls (`partition_object.calls`, the units of `Q_word`) are the root body's nodes that are not input nodes, in
 body order.

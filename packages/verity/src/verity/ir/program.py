@@ -113,6 +113,7 @@ class Program:
         self.annotations: dict[str, Any] = dict(annotations or {})
         self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else RUN for n in names)
         self.root = _lower_root(fn, self.bindings)
+        _refuse_inner_inputs(self.root)
         self._circuit: Circuit | None = None
         if strict is not None and (held := strict(self.root)):
             raise ValueError(f"program function {fn.id} holds data, which a strict Program refuses: "
@@ -152,6 +153,22 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     # affine (an Input batch is one contiguous interval) so weight tensors stay O(1).
     root.input_colls = [_gate_coll(c, body) for c in input_colls]  # type: ignore[attr-defined]
     return root
+
+
+def _refuse_inner_inputs(root: SpecializedDefinition) -> None:
+    """An input node appears only in the root's body (PROTOCOL.md §5.2): one inside a Definition the root instantiates would be
+    a gate no parameter binds, so it is refused, as `codec.decode_program` refuses it."""
+    seen: set[str] = set()
+    todo = [n.fn for n in root.body.nodes]
+    while todo:
+        fn = todo.pop()
+        if not isinstance(fn, SpecializedDefinition) or fn.id in seen:
+            continue
+        seen.add(fn.id)
+        for k, node in enumerate(fn.body.nodes):
+            if is_input(node.fn):
+                raise ValueError(f"definition {fn.id!r} node {k}: an input node ({node.fn.id}) appears only in the root's body")
+            todo.append(node.fn)
 
 
 def _gate_refs(r, body: Body):
