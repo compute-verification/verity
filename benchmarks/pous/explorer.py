@@ -11,14 +11,15 @@ soundness.
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:
 
-1. τ_us = (d + 1) · call_ns / m / 1000 − 0.001.
+1. D = min(d, the deepest D in `eps_proof`), since the verifier refuses a deadline past its certificate; then
+   τ_us = (D + 1) · call_ns / m / 1000 − 0.001.
 2. p = S(τ_us), ln S interpolated linearly in ln t between the curve's points; S = 1 below the grid, the last segment's
    slope above it; S floored at `S_FLOOR`.
 3. μ = λT · p; f₀ is the smallest f with `f0_max_mean[α][f] ≥ μ`, past the table Bernstein's
    f₀ = ⌈μ + L/3 + √(L²/9 + 2μL)⌉ − 1 with L = ln(1/α).
 4. With L = ln(1/β): sampling = L / (λT) when f₀ = 0, else θ = ln(1 + x + √(2x)) with x = L / f₀ and
    sampling = (θf₀ + L) / ((1 − e^−θ) λT).  Any θ bounds; `g_opt` is the optimum the closed form is checked against.
-5. bound = ε_proof(D = d) + sampling.
+5. bound = ε_proof(D) + sampling.
 
     uv run python benchmarks/pous/explorer.py --out pous-explorer.json [--histograms verify-honest.json ...]
 
@@ -145,8 +146,13 @@ def call_ns(block_bytes: int) -> int:
     return pi2_call_ns(8 * block_bytes)
 
 
+def rounds(doc: dict[str, Any], d: int) -> int:
+    """Rule 1's D: the cliff d, capped at the deepest D with an ε_proof, since the verifier refuses a deadline past it."""
+    return min(d, max(e["D"] for e in doc["eps_proof"]))
+
+
 def tau_us(d: int, call: float, m: float) -> float:
-    """Rule 1: the threshold just under the cliff, (d + 1) calls at margin m."""
+    """Rule 1: the threshold just under D + 1 calls at margin m, with D from `rounds`."""
     return (d + 1) * call / m / 1000 - 0.001
 
 
@@ -402,15 +408,17 @@ def curve(s_fine: np.ndarray, block_bytes: int) -> list[float]:
 def evaluate(doc: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
     """Rules 1–5 on the file `doc` alone, as the page evaluates them."""
     call = {b["block_bytes"]: b["call_ns"] for b in doc["block_sizes"]}[inputs["block_bytes"]]
-    tau = tau_us(inputs["d"], call, inputs["m"])
+    D = rounds(doc, inputs["d"])
+    tau = tau_us(D, call, inputs["m"])
     model = next(m for m in doc["honest_models"] if m["id"] == inputs["model"])
     c = next(c for c in model["curves"] if c["block_bytes"] == inputs["block_bytes"])
     p = survival_at(c["t_us"], c["survival_fraction"], tau)
     n = inputs["lambda_per_s"] * inputs["T_s"]
     f0 = f0_from_table(n * p, inputs["alpha"], doc["f0_max_mean"][str(inputs["alpha"])])
     samp = sampling(f0, n, inputs["beta"])
-    eps = {e["D"]: e["eps_proof_fraction"] for e in doc["eps_proof"]}[inputs["d"]]
-    return {"tau_us": tau, "p_fraction": p, "f0_count": f0, "sampling_fraction": samp, "bound_fraction": eps + samp}
+    eps = {e["D"]: e["eps_proof_fraction"] for e in doc["eps_proof"]}[D]
+    return {"rounds_D": D, "tau_us": tau, "p_fraction": p, "f0_count": f0, "sampling_fraction": samp,
+            "bound_fraction": eps + samp}
 
 
 def vector_inputs() -> list[dict[str, Any]]:
@@ -428,8 +436,9 @@ def vector_inputs() -> list[dict[str, Any]]:
     for bt in BETAS[1:]:
         out.append({**out[0], "model": "rack", "d": 1, "beta": bt})
         out.append({**out[0], "model": "heavy-tail", "d": 2, "beta": bt})
-    for d in (3, 4, 5):
+    for d in (3, 4, 5, 12):
         out.append({**out[0], "model": "measured", "d": d})
+    out.append({**out[0], "model": "datacenter", "d": 12, "block_bytes": 393_216})
     out += [{**out[0], "model": "hardened", "T_s": 1},                                  # f₀ = 0
             {**out[0], "model": "measured", "lambda_per_s": 10, "T_s": 60},
             {**out[0], "model": "measured", "lambda_per_s": 10_000, "T_s": 86_400},       # Bernstein
