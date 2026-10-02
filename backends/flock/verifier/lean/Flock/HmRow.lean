@@ -1238,19 +1238,36 @@ structure Ports where
 
 def Ports.words (pi : Ports) : Nat := pi.ports.foldl (· + ·.2) 0
 
-/-- The in regions' words in a unit slot: the smallest aligned power-of-two span `[w0, w0 + 2^e)` of 128-bit words holding
-every unit's public leaves (leaf `j` in word `col + j / 8` of the leaf group), as `(w0, e)`; `none` without a public leaf. -/
-def span (c : Circuit) (pi : Ports) : Option (Nat × Nat) :=
+/-- The 128-bit words of a unit slot holding some unit's public leaf (leaf `j` in word `col + j / 8` of the leaf group),
+ascending and distinct. -/
+def words (c : Circuit) (pi : Ports) : Array Nat :=
   let col := (c.unit.inGroups.getD 0 default).col
-  let words := pi.leaves.foldl (fun acc l => (Array.range l.size).foldl (fun acc j => if l[j]! ≥ 0 then acc.push (col + j / 8) else acc) acc) #[]
-  if words.isEmpty then none else
-    let (a, b) := (words.foldl min words[0]!, words.foldl max words[0]!)
-    let e := if a ^^^ b == 0 then 0 else Nat.log2 (a ^^^ b) + 1
-    some (a / 2 ^ e * 2 ^ e, e)
+  let ws := pi.leaves.foldl (fun acc l => (Array.range l.size).foldl (fun acc j => if l[j]! ≥ 0 then acc.push (col + j / 8) else acc) acc) #[]
+  (ws.qsort (· < ·)).foldl (fun acc w => if acc.back? == some w then acc else acc.push w) #[]
 
-/-- Each in region's `2^s` words per unit slot: `7 + s` free bits beside the unit range's `log2ceil(count)` slot bits, at
-most `PT_LOCAL` of them. -/
-def inLog (c : Circuit) (e : Nat) : Nat := min e (PT_LOCAL - (7 + log2ceil c.unitRange.count))
+/-- Ascending distinct words as aligned power-of-two blocks `(w, e)` (`w` a multiple of `2^e`): each maximal run of
+consecutive words cut from its start, every block the largest aligned one that fits in what is left of the run. -/
+def blocks (ws : Array Nat) : Array (Nat × Nat) := Id.run do
+  let runs := ws.foldl (fun (acc : Array (Nat × Nat)) w => match acc.back? with
+    | some (a, b) => if w == b then acc.pop.push (a, b + 1) else acc.push (w, w + 1)
+    | none => #[(w, w + 1)]) #[]
+  let mut out := #[]
+  for (a0, b) in runs do
+    let mut a := a0
+    for _ in [0:b - a0] do
+      if a < b then
+        let e := ((List.range (Nat.log2 (b - a) + 1)).filter (a % 2 ^ · == 0)).getLast?.getD 0
+        out := out.push (a, e)
+        a := a + 2 ^ e
+  return out
+
+/-- The in regions as `(w, s)`, `2^s` words of every unit slot from word `w`: each block of `words`, `2^e` words, split into
+`2^(e - s)` regions, `s = min(e, PT_LOCAL - 7 - log2ceil(count))` (`7 + s` free bits beside the unit range's slot bits). -/
+def inRegions (c : Circuit) (pi : Ports) : Array (Nat × Nat) :=
+  let top := PT_LOCAL - (7 + log2ceil c.unitRange.count)
+  (blocks (words c pi)).foldl (fun acc (w, e) =>
+    let s := min e top
+    (Array.range (2 ^ (e - s))).foldl (fun acc r => acc.push (w + r * 2 ^ s, s)) acc) #[]
 
 /-- META `public_inputs` (each port `{port, words, seed, derivation}`, a non-empty seed and derivation, nothing else) and
 `leaves_public`, checked: a port named once and no row's name; no typed instance; one public leaf map per unit, each public
@@ -1286,14 +1303,16 @@ def parse (c : Circuit) : V Ports := do
   if ur.packed then throw "public inputs: a packed unit range (the in region reads it)"
   if 7 + log2ceil ur.count > PT_LOCAL then
     throw s!"public inputs: {ur.count} unit slots, too many for an in region of at most {PT_LOCAL} free bits"
-  let some (w0, e) := span c pi | throw "public inputs: no unit reads a public word"
+  let ws := words c pi
+  if ws.isEmpty then throw "public inputs: no unit reads a public word"
   let g0 := c.unit.inGroups.getD 0 default
-  if w0 < g0.col || w0 + 2 ^ e > g0.col + g0.words then
-    throw s!"public inputs: the in region's words {w0}..{w0 + 2 ^ e} leave the unit's leaf group"
+  for (w, e) in blocks ws do
+    if w < g0.col || w + 2 ^ e > g0.col + g0.words then
+      throw s!"public inputs: the in region's words {w}..{w + 2 ^ e} leave the unit's leaf group"
   for u in [0:c.upv] do
     let (lp, li) := (pi.leaves[u]!, c.leavesIn.getD u #[])
-    if let some j := (List.range li.size).find? (fun j => w0 ≤ g0.col + j / 8 && g0.col + j / 8 < w0 + 2 ^ e && lp[j]! < 0 && li[j]! ≥ 0) then
-      throw s!"public inputs: leaf {j} reads a row word inside the in region's words {w0}..{w0 + 2 ^ e}"
+    if let some j := (List.range li.size).find? (fun j => ws.binSearchContains (g0.col + j / 8) (· < ·) && lp[j]! < 0 && li[j]! ≥ 0) then
+      throw s!"public inputs: leaf {j} reads a row word inside word {g0.col + j / 8}, which holds a public word"
   return pi
 
 /-- Whether block column `q` is a bit of a public leaf: in unit slot `k`'s leaf group (unit `k % upv`), leaf `j`'s 16 bits
@@ -1309,18 +1328,20 @@ def delta (c : Circuit) (pi : Ports) (pin : Nat) : Array (Nat × Nat) × Array (
   let (da, db) := HmOut.delta c pin
   if pi.ports.isEmpty then (da, db) else (da.filter (!publicCol c pi ·.1), db.filter (!publicCol c pi ·.1))
 
-/-- The in regions, `2^(e - s)` of them over the span `[w0, w0 + 2^e)` (`inLog`): region `r` is `2^s` words from word
-`w0 + r 2^s` of every unit slot, its bytes per slot the leaves' 16-bit words, u16 LE: a public leaf its instance's public word,
-zero for a zero leaf, a padding instance or a slot past the units. -/
+/-- The in regions (`inRegions`): region `r`, `(w, s)`, is `2^s` words from word `w` of every unit slot, its bytes per slot the
+leaves' 16-bit words, u16 LE: a public leaf its instance's public word, zero for a zero leaf, a padding instance or a slot
+past the units. -/
 def regions (c : Circuit) (pi : Ports) (pub : Public) : V (Array Region) := do
-  let some (w0, e) := span c pi | return #[]
+  if pi.ports.isEmpty then return #[]
   let bits := fun (lo n : Nat) => (Array.range n).map (lo + ·)
   let ur := c.unitRange
-  let (sb, s, np) := (log2ceil ur.count, inLog c e, pi.words)
+  let (sb, np) := (log2ceil ur.count, pi.words)
   let col := (c.unit.inGroups.getD 0 default).col
-  (Array.range (2 ^ (e - s))).mapM fun r =>
-    let j0 := 8 * (w0 + r * 2 ^ s - col)
-    mkRegion c.kLog s!"in {r}" (bits 0 (7 + s) ++ bits ur.slotLog sb) (ur.start + (w0 + r * 2 ^ s) * WORD) fun b =>
+  let ins := inRegions c pi
+  (Array.range ins.size).mapM fun r =>
+    let (w, s) := ins[r]!
+    let j0 := 8 * (w - col)
+    mkRegion c.kLog s!"in {r}" (bits 0 (7 + s) ++ bits ur.slotLog sb) (ur.start + w * WORD) fun b =>
       (Array.range (2 ^ sb)).foldl (fun acc k =>
         let (g, u) := (k / c.upv, k % c.upv)
         let i := if k < ur.count then c.instOf pub.n b g else none
