@@ -3,6 +3,7 @@ import FlockSoundness.CROnly.Truncate
 import FlockSoundness.CROnly.Link
 import FlockSoundness.CROnly.E2E
 import FlockSoundness.CROnly.E2EMore
+import FlockSoundness.CROnly.Registered
 import FlockSoundness.CROnly.Hm96Defs
 import FlockSoundness.CROnly.Hiding
 import FlockSoundness.CROnly.Hankel
