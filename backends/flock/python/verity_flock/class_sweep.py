@@ -36,21 +36,30 @@ SAMPLER = re.compile(r"^(GumbelTopPTokenSelect|GumbelTokenSelect|TokenSelect|Top
 
 
 def graph_calls(g: dict, modules: str | None = None) -> dict[str, int]:
-    """A program graph's Call count per Call Definition (descriptor id); a varying group (attention over key counts) expanded to
-    one id per value. ``modules``: a module-path prefix to keep."""
+    """A program graph's Call count per Call Definition (descriptor id); a varying group (attention over key counts, and under
+    `Attention_v5` over MASKED_FROM too) expanded to one id per value: `varying_calls` keys are the values comma-joined in
+    `varying`'s order. ``modules``: a module-path prefix to keep."""
     calls: dict[str, int] = collections.Counter()
     for x in g["groups"]:
         if modules and not x["module"].startswith(modules):
             continue
         if x.get("varying"):
-            (axis, (lo, hi)), = x["varying"].items()
-            per = x.get("varying_calls") or {str(v): 1 for v in range(int(lo), int(hi) + 1)}
+            axes = list(x["varying"])
+            per = x.get("varying_calls")
+            if not per:
+                if len(axes) != 1:
+                    raise ValueError(f"group {x.get('id')} varies over {axes} without varying_calls")
+                (lo, hi), = x["varying"].values()
+                per = {str(v): 1 for v in range(int(lo), int(hi) + 1)}
             base = (x.get("definition_ids") or [None])[0]
             if base is None:
                 continue
             scale = x["calls"] // max(1, sum(int(c) for c in per.values()))
-            for v, n in per.items():
-                calls[re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(v)}", base)] += int(n) * scale
+            for vk, n in per.items():
+                fid = base
+                for axis, v in zip(axes, vk.split(","), strict=True):
+                    fid = re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(v)}", fid)
+                calls[fid] += int(n) * scale
         elif x.get("spec"):
             calls[x["spec"]] += x["calls"]
     return dict(calls)

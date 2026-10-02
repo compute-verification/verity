@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from verity_flock import class_sweep as CW
 
 ATT = "Attention_v3{{T={t},NH={nh},KVH=8,D=64,BN=64}}"
@@ -19,6 +21,16 @@ def test_graph_calls_expands_a_varying_group():
                 {"module": "m.lm_head", "spec": "SiluMul_v1{I=512}", "calls": 1}])
     assert CW.graph_calls(g) == {ATT.format(t=1, nh=32): 2, ATT.format(t=2, nh=32): 2, ATT.format(t=3, nh=32): 2, "SiluMul_v1{I=512}": 5}
     assert CW.graph_calls(g, "m.layers.0.mlp") == {"SiluMul_v1{I=512}": 4}
+
+
+def test_graph_calls_expands_a_group_varying_over_two_statics():
+    att5 = "Attention_v5{{T={t},NH=32,KVH=4,D=128,BN=64,MASKED_FROM={m}}}"
+    g = _graph([{"id": "g7", "module": "m.layers.0.attn", "spec": None, "calls": 3, "varying": {"MASKED_FROM": [0, 1], "T": [1, 65]},
+                 "varying_calls": {"0,1": 1, "0,2": 1, "1,65": 1}, "definition_ids": [att5.format(t=1, m=0), att5.format(t=65, m=1)]}])
+    assert CW.graph_calls(g) == {att5.format(t=1, m=0): 1, att5.format(t=2, m=0): 1, att5.format(t=65, m=1): 1}
+    g["groups"][0]["varying_calls"] = None
+    with pytest.raises(ValueError, match="g7 varies over"):
+        CW.graph_calls(g)
 
 
 def test_grid_keeps_every_tail_the_largest_and_a_geometric_step():
