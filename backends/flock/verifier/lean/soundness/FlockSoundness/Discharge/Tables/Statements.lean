@@ -1,5 +1,5 @@
 import FlockSoundness.Discharge.Tables.Headline
-import FlockSoundness.Discharge.Exec.Setup
+import FlockSoundness.Discharge.Tables.Accepts
 
 /-!
 # Sessions of `J` tables: the statements
@@ -201,6 +201,11 @@ def AcceptsTables : Prop :=
             (some (partDraw population units I.count j)) I.partition I.program = .ok sts[j]
 
 theorem accepts_tables : AcceptsTables := by
-  sorry
+  intro I t hh hc h
+  obtain ⟨spec, sts, hs, hv⟩ := h
+  obtain ⟨hmt, hmax, population, units, hD1, hD2, hpos, hmod, hsz, hall⟩ := setupTables_parts hh hc hs
+  refine ⟨spec, sts, hs, hv, hmt, hmax, population, units, hD1, hD2, hpos, hmod, hsz, fun j hj => ?_⟩
+  rw [tagsAt, ite_eq_right (show ¬ I.count ≤ 1 by omega)]
+  exact hall j hj
 
 end FlockSoundness.Discharge.Tables
