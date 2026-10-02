@@ -164,7 +164,8 @@ theorem setupH_flatLayout (ht : tags.typed = true)
       exact netOfD_built hnet) hpc
     have P' : ParseFacts tags st.c := by
       rw [hc]
-      exact ⟨P.nets, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.typed⟩
+      exact ⟨P.nets, P.portWords, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
+        (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed⟩
     refine ⟨by rw [hc], ?_, layout_of P' hpin hda hdb hm hk⟩
     have h0 : c'.nets[0]? = some ("unit", net) := by
       rw [← Array.getElem?_toList, hmore]
