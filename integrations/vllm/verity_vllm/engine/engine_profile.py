@@ -95,7 +95,11 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     if not cp.get("downloaded") or not cp.get("local_path"):
         raise SystemExit(f"{cp['repo']} is not downloaded on this pod (manifest says resolve-only)")
     if not Path(cp["local_path"]).exists():
-        raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing")
+        # a host whose HF cache is elsewhere (HF_HOME) holds the same pinned revision under its own hub
+        hub = Path(os.environ.get("HF_HOME") or "/nonexistent") / "hub" / f"models--{cp['repo'].replace('/', '--')}" / "snapshots" / str(cp.get("revision"))
+        if not hub.exists():
+            raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing (nor under HF_HOME: {hub})")
+        cp = {**cp, "local_path": str(hub)}
     return cp
 
 
