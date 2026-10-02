@@ -4,6 +4,8 @@ import FlockSoundness.Discharge.Layout.Region
 import FlockSoundness.Discharge.Layout.HmRegion
 import FlockSoundness.Discharge.Layout.Pins
 import FlockSoundness.Discharge.Layout.Drawn
+import FlockSoundness.Discharge.Layout.Site
+import FlockSoundness.Discharge.Layout.OfRows
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -19,5 +21,10 @@ from the decoder's places and the executable's regions:
 * `Pins`: `lay` and `rs` from fixed readers (`Readers`) and three facts of every satisfying witness: Δ's copies
   (`Readers.Copies`), the rows' pinned `b ‖ c` (`Readers.BcPinned`) and the other pinned values (`Readers.ValPinned`);
 * `Drawn`: at a drawn statement, the pinned `b ‖ c` of a proved unit's `hm96` slot is the unit's in the registered
-  population's public file (`bc_drawn`).
+  population's public file (`bc_drawn`);
+* `Site`: at a drawn unit's site in its table's accepted statement, the population's `b ‖ c` at port `p`'s `hm96` output
+  (`bc_site`) and, at each message-keyed unit input, its row's bit (`copy_site`);
+* `OfRows`: readers whose commit strings are units' row ports and single gates (`Readers.ofRows`), with Δ's copies
+  from the row bits alone (`ofRows_copies`), the rows' `b ‖ c` (`ofRows_bcPinned`) and the single gates' bits
+  (`ofRows_valPinned`; 1 on the constant's gates and 0 on the zero's, `gate_pub`).
 -/

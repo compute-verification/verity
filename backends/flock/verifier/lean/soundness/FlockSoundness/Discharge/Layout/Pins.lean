@@ -28,8 +28,8 @@ open Game Model Audit Binding
 variable {C : Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ}
 
 /-- **Fixed readers and the registration's values.** The commit strings (`Pos`), the commit string holding each wire
-(`pos`) and its bit there (`idx`); where a drawn unit's table's witness holds each commit string's `rowBits q` bits
-(`rowAt`), its salt (`saltAt`) and, at a row (`isRow`), its `hm96` slot's 128 output bytes (`bcAt`); and what the
+(`pos`) and its bit there (`idx`); where a drawn unit's table's witness holds bit `k < rowBits q` of each commit string
+`q` (`rowAt`), its salt (`saltAt`) and, at a row (`isRow`), its `hm96` slot's 128 output bytes (`bcAt`); and what the
 registration holds: a row's `b ‖ c` (`regBc`), another commit string's value (`regVal`). All are fixed by the draw, the
 registration, the unit and the commit string, before any witness. -/
 structure Readers (C : Circuit) {n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -43,8 +43,7 @@ structure Readers (C : Circuit) {n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Fins
   idx : Fin C.N → Fin W
   rowBits : Pos → ℕ
   hidx : ∀ g, (idx g).val < rowBits (pos g)
-  rowAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → (q : Pos) → Fin (rowBits q) →
-    Fin (2 ^ (Partition.tabOf plan tab S R u).S.m)
+  rowAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → Pos → ℕ → Fin (2 ^ (Partition.tabOf plan tab S R u).S.m)
   saltAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → Pos → Fin 192 → Fin 8 →
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m)
   bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → Pos → Fin 128 → Fin 8 →
@@ -66,7 +65,7 @@ variable {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
 /-- The value a witness holds at commit string `q`: its bits at `rowAt`, `false` past them. -/
 noncomputable def valAt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Binding.Msg plan tab S R u) (q : rd.Pos) :
     Fin rd.W → Bool :=
-  padBits (bitsAt (Binding.wit plan tab S R u M) (rd.rowAt S R u q))
+  padBits (bitsAt (Binding.wit plan tab S R u M) fun k : Fin (rd.rowBits q) => rd.rowAt S R u q k.val)
 
 /-- **Δ's copies**: in a satisfying witness, each column of a drawn unit on a committed wire holds the witness's bit at
 the wire's row address. -/
@@ -74,7 +73,7 @@ def Copies : Prop :=
   ∀ S R u (hu : u ∈ S) M, Binding.Sat plan tab S R u M → ∀ c, (place S R u hu).inst.wire c ∈ P.io u →
     (Partition.tabOf plan tab S R u).S.block (Binding.wit plan tab S R u M) (place S R u hu).o ((place S R u hu).col c) =
       Binding.wit plan tab S R u M (rd.rowAt S R u (rd.pos ((place S R u hu).inst.wire c))
-        ⟨rd.idx ((place S R u hu).inst.wire c), rd.hidx _⟩)
+        (rd.idx ((place S R u hu).inst.wire c)).val)
 
 /-- **The rows' `b ‖ c` is pinned**: in a satisfying witness, at each of a drawn unit's committed wires held by a row,
 the bytes at `bcAt` are the registration's `b ‖ c`. -/
@@ -97,7 +96,8 @@ def regLeaf (encO : (Fin rd.W → Bool) → List UInt8) (R : Reg) (q : rd.Pos) :
 Δ's copies. -/
 noncomputable def layout (encO : (Fin rd.W → Bool) → List UInt8) (hcopy : rd.Copies place) :
     Binding.Layout P plan tab (P.placeDecoder plan tab place) :=
-  ofBits place rd.Pos rd.W rd.pos rd.idx (rd.regLeaf encO) rd.rowBits rd.hidx rd.rowAt rd.saltAt hcopy
+  ofBits place rd.Pos rd.W rd.pos rd.idx (rd.regLeaf encO) rd.rowBits rd.hidx
+    (fun S R u q k => rd.rowAt S R u q k.val) rd.saltAt hcopy
 
 /-- **The layout's rows**: `hm96-sha512/row/v1` at the readers' rows, with `enc` the bytes `sha512/row/v1` hashes, and a
 plain leaf `SHA-512(encO v)` elsewhere. `bc_registered` is `BcPinned` and `other_registered` is `ValPinned`. -/
