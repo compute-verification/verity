@@ -343,6 +343,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Attention_v10", lambda: bind(VI.AttentionV10, T=17, NH=1, KVH=1, D=16, BN=16)),
         ("Attention_v11", lambda: bind(fa2_check_inf.AttentionV11, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
                                        DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
+        ("Attention_v12", lambda: bind(VI.AttentionV12, T=17, NH=1, KVH=1, D=16, BN=16, DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
+        ("Attention_v13", lambda: bind(VI.AttentionV13, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1, DOT=hopper.HopperBF16WgmmaDot16,
+                                       INV=hopper.Fa3InvSum)),
+        ("AttentionSoftcap_v4", lambda: bind(VI.AttentionSoftcapV4, T=17, NH=1, KVH=1, D=16, BN=16)),
+        ("AttentionSoftcap_v5", lambda: bind(VI.AttentionSoftcapV5, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                             DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
         # the Definitions that read a registered table (`gelu_tanh_bf16`) through `TableRead16x1_v1`
         ("GeluTanhMul_v3", lambda: bind(tables.GeluTanhMulV3, I=16)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),

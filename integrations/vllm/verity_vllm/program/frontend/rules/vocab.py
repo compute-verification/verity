@@ -71,6 +71,9 @@ _VALUE_KINDS = {
     "rmsnorm_fused_value": lambda N: ir_bind(_vi.RMSNormFusedCudaV4, N=N),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
+    "attention_dot_plain_value": lambda T, NH, KVH, D, BN, DOT, INV: ir_bind(_vi.AttentionV12, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV),
+    "attention_dot_fa3_value": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM:
+        ir_bind(_vi.AttentionV13, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
 }
 _VALUE_NOTES = {
     "rmsnorm_value": "RMSNormTriton_v3{N}(x, w, eps): RMSNormTriton_v1's body with eps an input",
@@ -78,6 +81,9 @@ _VALUE_NOTES = {
     "attention_value": "Attention_v10{T,NH,KVH,D,BN=fa2_kblock_n(D)}(q, kc, vc, scale_log2): Attention_v3's body with the scale an input",
     "attention_dot_value": "Attention_v11{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}(q, kc, vc, scale_log2): Attention_v5's body with the scale an "
                            "input (FA2's per-iteration Check_inf); no kind elsewhere",
+    "attention_dot_plain_value": "Attention_v12{T,NH,KVH,D,BN,DOT,INV}(q, kc, vc, scale_log2): Attention_v2's body with the scale an input",
+    "attention_dot_fa3_value": "Attention_v13{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}(q, kc, vc, scale_log2): Attention_v4's body with the scale an "
+                               "input (FA3's per-iteration Check_inf)",
 }
 
 # -- profile "b1-eager": the B0/B1 vLLM eager profile (TA1's registered composites, v1) --------------------------
@@ -138,6 +144,8 @@ REFERENCE_CPU_F32 = Vocabulary(
         "gelu": lambda N, DT, APPROX: ir_bind(RP.GeluRef, N=N, DT=DT, APPROX=APPROX),
         "layer_norm": lambda N, EPS, DT: ir_bind(RP.LayerNormRef, N=N, EPS=EPS, DT=DT),
         "rmsnorm": lambda N, EPS, DT: ir_bind(RP.RMSNormRef, N=N, EPS=EPS, DT=DT),
+        "layer_norm_value": lambda N, DT: ir_bind(_vi.LayerNormRefV2, N=N, DT=DT),
+        "rmsnorm_value": lambda N, DT: ir_bind(_vi.RMSNormRefV2, N=N, DT=DT),
         "softmax": lambda N, DT: ir_bind(RP.SoftmaxRef, N=N, DT=DT),
         "embedding": lambda V, H, DT: ir_bind(RP.EmbeddingRef, V=V, H=H, DT=DT),
         "argmax": lambda V, DT: ir_bind(RP.ArgmaxRef, V=V, DT=DT),
@@ -152,7 +160,9 @@ REFERENCE_CPU_F32 = Vocabulary(
         "add": "AddRef_v1{N,DT}: " + _ref_doc(RP.AddRef), "mul": "MulRef_v1{N,DT}: " + _ref_doc(RP.MulRef),
         "relu": "ReluRef_v1{N,DT}: " + _ref_doc(RP.ReluRef), "silu": "SiluRef_v1{N,DT}: " + _ref_doc(RP.SiluRef),
         "gelu": "GeluRef_v1{N,DT,APPROX}: " + _ref_doc(RP.GeluRef), "layer_norm": "LayerNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.LayerNormRef),
-        "rmsnorm": "RMSNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.RMSNormRef), "softmax": "SoftmaxRef_v1{N,DT}: " + _ref_doc(RP.SoftmaxRef),
+        "rmsnorm": "RMSNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.RMSNormRef),
+        "layer_norm_value": "LayerNormRef_v2{N,DT}(x, g, b, eps): LayerNormRef_v1's body with eps an input",
+        "rmsnorm_value": "RMSNormRef_v2{N,DT}(x, w, eps): RMSNormRef_v1's body with eps an input", "softmax": "SoftmaxRef_v1{N,DT}: " + _ref_doc(RP.SoftmaxRef),
         "embedding": "EmbeddingRef_v1{V,H,DT}: " + _ref_doc(RP.EmbeddingRef), "argmax": "ArgmaxRef_v1{V,DT}: " + _ref_doc(RP.ArgmaxRef),
         "i64_to_i32": "I64ToI32_v1: " + _ref_doc(RP.I64ToI32),
         "eager_attention": "EagerAttentionRef_v1{T,NH,KVH,D,DT,SCALE_OP}: " + _ref_doc(RP.EagerAttentionRef),
@@ -243,6 +253,14 @@ def _dense_kinds() -> tuple[dict, dict]:
         "scale_row_bf16": lambda N: ir_bind(DN.ScaleRowBf16, N=N),
         "mul_vec_f32": lambda N: ir_bind(DN.MulVecF32, N=N),
         "narrow_f32_bf16": lambda N: ir_bind(DN.NarrowF32ToBf16, N=N),
+        # the value-input twins (`TargetProfile.registered_values`): the scalar or the softcap's words a registered value
+        "attention_softcap_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionSoftcapV4, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
+        "attention_softcap_dot_value": lambda T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM:
+            ir_bind(_vi.AttentionSoftcapV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM),
+        "bf16_div_scalar_value": lambda N: ir_bind(_vi.Bf16DivScalarV3, N=N),
+        "bf16_mul_scalar_value": lambda N: ir_bind(_vi.Bf16MulScalarV3, N=N),
+        "add_scalar_f32_value": lambda N: ir_bind(_vi.AddScalarF32V3, N=N),
+        "add_scalar_bf16_value": lambda N: ir_bind(_vi.AddScalarBf16V3, N=N),
     }
     notes = {
         "scale_tensor": "Bf16MulScalarTensor_v1{N}: aten.mul.Tensor(bf16 row, 0-d bf16 tensor) — f32 multiply, cvt.rn.bf16.f32",
@@ -261,6 +279,14 @@ def _dense_kinds() -> tuple[dict, dict]:
         "scale_row_bf16": "ScaleRowBf16_v1{N}: aten.mul.Tensor(x.to(f32) [M,N], s f32 [M,1]) — one FMUL",
         "mul_vec_f32": "MulVecF32_v1{N}: aten.mul.Tensor(x f32 [M,N], w f32 [N]) — one FMUL",
         "narrow_f32_bf16": "NarrowF32ToBf16_v1{N}: aten.to.dtype(f32 -> bf16) — cvt.rn.bf16.f32 (NaN -> 0x7FFF)",
+        "attention_softcap_value": "AttentionSoftcap_v4{T,NH,KVH,D,BN=fa2_kblock_n(D)}(q, kc, vc, softcap_mul, scale_log2): AttentionSoftcap_v1's "
+                                   "body with FA2's two softcap words inputs",
+        "attention_softcap_dot_value": "AttentionSoftcap_v5{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}(q, kc, vc, softcap_mul, scale_log2): "
+                                       "AttentionSoftcap_v2's body with the two words inputs (FA2's per-iteration Check_inf)",
+        "bf16_div_scalar_value": "Bf16DivScalar_v3{N}(x, inv): Bf16DivScalar_v1's body with RN32(1/C) an input",
+        "bf16_mul_scalar_value": "Bf16MulScalar_v3{N}(x, c): Bf16MulScalar_v1's body with f32(C) an input",
+        "add_scalar_f32_value": "AddScalarF32_v3{N}(x, c): AddScalarF32_v1's body with f32(C) an input",
+        "add_scalar_bf16_value": "AddScalarBf16_v3{N}(w, c): AddScalarBf16_v1's body with f32(C) an input",
     }
     return kinds, notes
 
@@ -356,7 +382,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
-           "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS)},
+           "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
+           "layer_norm_aten_value": lambda N: ir_bind(_vi.LayerNormAtenV2, N=N)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -403,7 +430,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                   "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
-                              "bf16(w * (rstd * (x - mean)) + b)"})
+                              "bf16(w * (rstd * (x - mean)) + b)",
+           "layer_norm_aten_value": "LayerNormAten_v2{N}(x, w, b, eps): LayerNormAten_v1's body with eps an input"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

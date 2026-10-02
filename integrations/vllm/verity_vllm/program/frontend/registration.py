@@ -31,8 +31,13 @@ class Registration:
     def names(self) -> tuple[str, ...]:
         return ("values", *self.tables)
 
-    def value(self, name: str, width: int, bits: int) -> Coll:
-        """The field `name`, allocated at its first read; every read of one name is the same `width`-bit word."""
+    def value(self, name: str, width: int, bits: int, distinct: bool = False) -> Coll:
+        """The field `name`, allocated at its first read; every read of one name is the same `width`-bit word.  `distinct`: a value
+        of its own (a scalar of a generic kind) -- the field `name`, `name_1`, ... that holds these bits, in first-read order."""
+        if distinct:
+            same = [f for f in self.fields if f["name"] == name or f["name"].startswith(name + "_") and f["name"][len(name) + 1:].isdigit()]
+            f = next((f for f in same if (f["width"], f["bits"]) == (width, bits)), None)
+            name = f["name"] if f is not None else name if not same else f"{name}_{len(same)}"
         f = next((f for f in self.fields if f["name"] == name), None)
         if f is None:
             f = {"name": name, "width": width, "bits": bits, "offset": len(self.fields)}

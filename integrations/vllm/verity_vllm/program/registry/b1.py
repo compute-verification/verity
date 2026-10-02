@@ -998,9 +998,9 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
                         ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
            conformance="exact-model-tested")
-def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev):
-    """`AttnBlock_v1` with kBlockN (`BN`) and the tensor-core step (`DOT`) as statics: one BN-key block of the
-    flash online softmax for one query row (FA2 with BN=64/mma.sync; FA3 with BN=128/wgmma: hopper-profile.md §4)."""
+def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
+    """`AttnBlock_v1` with kBlockN (`BN`) and the tensor-core step (`DOT`) as statics: one BN-key block of the flash online softmax
+    for one query row (FA2 with BN=64/mma.sync; FA3 with BN=128/wgmma: hopper-profile.md §4).  `scale_log2`: `AttnBlock_v12`'s input."""
     D, NVIS, FIRST, BN, DOT = S.D, S.NVIS, S.FIRST, S.BN, S.DOT
     dot = bind(DotBf16V2, K=D, DOT=DOT)
     s = [B.call(dot, q, k[c]) for c in range(NVIS)]  # A: S = Q K^T, chained k-steps, acc 0 per block
@@ -1009,7 +1009,7 @@ def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    scale_log2 = B.call(const(32, _scale_log2_bits(D))) if scale_log2 is None else scale_log2
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -1050,10 +1050,10 @@ def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev):
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
                       Array(S.D, BF16)),
            conformance="exact-model-tested")
-def AttentionHeadV2(B, S, q, k, v):
+def AttentionHeadV2(B, S, q, k, v, *extra, block=AttnBlockV2):
     """`AttentionHead_v1` with kBlockN, the tensor-core step and the epilogue inverse sum as statics: causal attention
     of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited last -> first; epilogue
-    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`."""
+    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`.  `extra` / `block`: `AttentionHead_v12`'s."""
     T, D, BN, DOT, INV = S.T, S.D, S.BN, S.DOT, S.INV
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -1069,15 +1069,15 @@ def AttentionHeadV2(B, S, q, k, v):
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = bind(AttnBlockV2, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT)
+        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT)
         if first:
             z = B.call(ZERO32)
             m0 = z
             l0 = _Coll(Array(4, F32), concat([z.refs] * 4))
             o0 = _Coll(Array(D, F32), concat([z.refs] * D))
-            st = B.call(blk, q, kb, vb, m0, l0, o0)
+            st = B.call(blk, q, kb, vb, m0, l0, o0, *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(INV, total)
@@ -1091,16 +1091,16 @@ def AttentionHeadV2(B, S, q, k, v):
                        ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
                       Array(S.NH, Array(S.D, BF16))),
            conformance="exact-model-tested")
-def AttentionV2(B, S, q, kc, vc):
-    """`Attention_v1` over `AttentionHead_v2{T, D, BN, DOT, INV}`: GQA, head h reads KV head h // (NH/KVH)."""
+def AttentionV2(B, S, q, kc, vc, *extra, head=AttentionHeadV2):
+    """`Attention_v1` over `AttentionHead_v2{T, D, BN, DOT, INV}`: GQA, head h reads KV head h // (NH/KVH).  `extra`: `Attention_v12`'s."""
     T, NH, KVH, D = S.T, S.NH, S.KVH, S.D
     G = NH // KVH
     outs = []
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
         vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(bind(AttentionHeadV2, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV), q[g * G:(g + 1) * G], kg, vg,
-                            axes=(0, None, None)))
+        outs.append(B.batch(bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV), q[g * G:(g + 1) * G], kg, vg, *extra,
+                            axes=(0, None, None) + (None,) * len(extra)))
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 

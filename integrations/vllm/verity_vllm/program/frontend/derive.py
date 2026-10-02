@@ -347,10 +347,10 @@ class Ctx:
     def registered_values(self) -> bool:
         return self.registration is not None
 
-    def supplied(self, name: str, width: int, bits: int, node=None) -> Coll:
-        """The field `name` of the registered `values` parameter (`Registration.value`): a program value (eps, the attention scale)
-        that the Definition reading it takes as an input."""
-        return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits)))
+    def supplied(self, name: str, width: int, bits: int, node=None, distinct: bool = False) -> Coll:
+        """The field `name` of the registered `values` parameter (`Registration.value`; `distinct`: one field per distinct value): a
+        program value (eps, the attention scale, a scalar) that the Definition reading it takes as an input."""
+        return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
     def table(self, name: str, node=None) -> Coll:
         """The registered table `name` (`verity_vllm.program.registry.tables`), declared by a rule (`Rule.registered_tables`)."""

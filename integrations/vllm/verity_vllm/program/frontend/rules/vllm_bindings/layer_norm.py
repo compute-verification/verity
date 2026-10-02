@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from verity.ir.refs import Coll
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, aten
 from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
 
@@ -63,8 +63,8 @@ class LayerNormAtenRule(OpRule):
         rows, lead = rows_of(ctx.coll(xn))
         wc, bc = ctx.coll(wn), ctx.coll(bn)
         N, eps = rows[0].type.n, float(eps)
-        fn = ctx.kind("layer_norm_aten", node, N=N, EPS=eps)
-        outs = [ctx.call(fn, r, wc, bc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        fn, value = norm_kind(ctx, "layer_norm_aten", node, N, eps)
+        outs = [ctx.call(fn, r, wc, bc, *value, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
         ctx.bind_weight_role(wn, self, "layer_norm.weight", N=N, EPS=eps)
         ctx.bind_weight_role(bn, self, "layer_norm.bias", N=N, EPS=eps)
