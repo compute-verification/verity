@@ -1,5 +1,4 @@
 import Mathlib.Data.ZMod.Basic
-import Pous.Accounting.LemmaA
 import Pous.Accounting.Params
 import Pous.Model.M1p
 
@@ -29,8 +28,9 @@ contain a `mul` (rounds of only `add`, `one` and `key` cost no depth), at most `
 queries (`add`, `mul`, `one`) in total. `Q` counts key queries, not Keccak-f calls: the certificate converts, at the
 key expander's cost per query. Hardware enters only through the certificate's numbers, never here: `D` from the
 claim `ring-mul-floor` (no device in scope completes one multiplication in `Z/p` at the scheme's width faster than
-`t_mul`, using all of its resources), `Q` from `keccak-rate-ceiling`, and `L` from `ring-op-ceiling`. The model
-itself is the claim `generic-ring`. Every statement over these is parametric in `D`, `Q` and `L`.
+`t_mul`, using all of its resources; ASICs and FPGAs are out of its scope), `Q` from `keccak-rate-ceiling`, and `L`
+from `ring-op-ceiling` (no device in scope performs more than `L` ring operations within one answer's deadline). The
+model itself is the claim `generic-ring`. Every statement over these is parametric in `D`, `Q` and `L`.
 
 `SeqResponderOn`, `SimResponderOn`, `AuditSecureOn` and `MeetsOn` are `SeqResponder`, `SimResponder`, `AuditSecure`
 and `Meets` with `RingBounded D Q L` in place of `Bounded D Q`. `Bounded`, `AuditSecure` and `Meets` are unchanged.
@@ -139,11 +139,6 @@ structure SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type wh
   step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog (ringRO B w p) (Bits sch.ℓ × Bits S)
   bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
 
-/-- `TimedProdResponder` with `RingBounded D Q L`: block `i` from `(W, pp, σ)`, the form Lemma A is about. -/
-structure ProdResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
-  prog : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog (ringRO B w p) (Bits sch.ℓ)
-  bounded : ∀ W pp σ i, (prog W pp σ i).RingBounded D Q L
-
 /-- `simAccepts` for a `SimResponderOn`. -/
 def simAcceptsOn (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n) (A₁ : Preprocessor sch S)
     (A₂ : SimResponderOn sch S D Q L k) (x : Outcome sch k) : Prop :=
@@ -234,14 +229,6 @@ noncomputable def p2ring (B w p b : ℕ) [NeZero B] [NeZero p] : Scheme (ringRO 
   enc W ω _ := (Fin.elim0, fun j =>
     encBlock ω.1 (ω.2 j).1 (ω.2 j).2 (bitsOfNat w (bitsVal ((codeEquiv B b).symm W j))))
   dec _ C f := codeEquiv B b fun j => (decBlock B w p b j (C j)).run f
-
-/-! ## The certificate row -/
-
-/-- **A row of the certificate at an effective domain of `M` points**: some `g ∈ [1, B]` has `((g − 1)/B)^k ≤ 1/100`
-and `|Hist|·Γ(g) ≤ 2^-128`, with `Γ = gammaM1 B S Q g M`, Lemma A's M1 bound at a domain of `M` points. -/
-def RingRow (B M S Q k : ℕ) : Prop :=
-  ∃ g, 1 ≤ g ∧ g ≤ B ∧ (((g - 1 : ℕ) : ℚ) / B) ^ k ≤ 1 / 100 ∧
-    (histCount B k : ℝ≥0∞) * gammaM1 B S Q g M ≤ 2⁻¹ ^ 128
 
 set_option exponentiation.threshold 20000 in
 /-- P2's registered 16,448-bit modulus is nonzero, so the ring model is defined at it. -/

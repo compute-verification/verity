@@ -277,42 +277,6 @@
    "assumptions": [],
    "type_hash": "7c6ebb3bc80cc0ed0e1043ef5f51bff9e17ad7e2b8b28ea7f864cc4c9ee6a4d4"
   },
-  "PousP2Ring.meetsOn_b19_k88": {
-   "signature": [
-    "PousP2Ring.meetsOn_b19_k88 (hP : Pous.P2.Assumptions.PrimeP16448) (hA : Pous.P2.Assumptions.RingLemmaAP2) (b : Nat)",
-    "  (hsp : instLENat.le (instHMul.hMul 20 16448) (instHMul.hMul 21 b)) (hb : instLENat.le b 16447) :",
-    "  And",
-    "    (∀ (D L : Nat),",
-    "      instLENat.le",
-    "          (instHAdd.hAdd (instHMul.hMul 2 (instHSub.hSub (instHPow.hPow 2 16448) 21065))",
-    "            (instHMul.hMul (instHMul.hMul (instHAdd.hAdd D 1) (instHPow.hPow L 2))",
-    "              (instHPow.hPow 2 (instHAdd.hAdd D 2))))",
-    "          (instHMul.hMul (instHPow.hPow 2 6) (instHSub.hSub (instHPow.hPow 2 16448) 21065)) →",
-    "        Pous.MeetsOn (Pous.p2ring (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b)",
-    "          Pous.Reveal.sequential D (instHPow.hPow 2 20) L 88 Pous.Params.εMax)",
-    "    (Pous.MeetsOn (Pous.p2ring (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b)",
-    "      Pous.Reveal.sequential 16309 (instHPow.hPow 2 20) (instHPow.hPow 2 64) 88 Pous.Params.εMax)"
-   ],
-   "assumptions": ["Pous.P2.Assumptions.PrimeP16448", "Pous.P2.Assumptions.RingLemmaAP2"],
-   "type_hash": "b13bb59aea8a44014f066e486c3973dda5f0745c19dd22feb0e8155c79a68834"
-  },
-  "PousP2Ring.meetsOn_of_row": {
-   "signature": [
-    "PousP2Ring.meetsOn_of_row (B w p b c : Nat) [NeZero B] [NeZero p] (hp : Nat.Prime p) (h4 : Eq (instHMod.hMod p 4) 3)",
-    "  (hb : instLENat.le (instHPow.hPow 2 b) p) (hp2 : instLENat.le p (instHPow.hPow 2 w))",
-    "  (hsp : instLENat.le (instHMul.hMul 20 w) (instHMul.hMul 21 b)) (hA : Pous.P2.Assumptions.RingLemmaA B w p b c)",
-    "  (D Q L k lam : Nat)",
-    "  (hDL :",
-    "    instLENat.le",
-    "      (instHAdd.hAdd (instHMul.hMul c p)",
-    "        (instHMul.hMul (instHMul.hMul (instHAdd.hAdd D 1) (instHPow.hPow L 2)) (instHPow.hPow 2 (instHAdd.hAdd D 2))))",
-    "      (instHMul.hMul (instHPow.hPow 2 lam) p))",
-    "  (hrow : Pous.RingRow B (instHDiv.hDiv p (instHPow.hPow 2 lam)) ((Pous.p2ring B w p b).stateBound Pous.Params.ρ) Q k) :",
-    "  Pous.MeetsOn (Pous.p2ring B w p b) Pous.Reveal.sequential D Q L k Pous.Params.εMax"
-   ],
-   "assumptions": [],
-   "type_hash": "5908bba7e94f7e2196c7e918f6242e2411cdb51c081f40daeada9f3082e969a2"
-  },
   "PousP2Ring.meets_of_meetsOn": {
    "signature": [
     "PousP2Ring.meets_of_meetsOn {B w p : Nat} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (reveal : Pous.Reveal)",
@@ -320,13 +284,6 @@
    ],
    "assumptions": [],
    "type_hash": "ea38f93ac88c505e672f942af16f2f7ffe9ef67fc3b69c5fd1c3735643338bdb"
-  },
-  "PousP2Ring.ringLemmaA_sat": {
-   "signature": [
-    "PousP2Ring.ringLemmaA_sat (B w p b : Nat) [NeZero B] [NeZero p] : Pous.P2.Assumptions.RingLemmaA B w p b p"
-   ],
-   "assumptions": [],
-   "type_hash": "b60a4ba22684d07080c85cff25d9feac6aba77916d170857ed31fe285fb7a5a8"
   },
   "PousP2Ring.tight": {
    "signature": [

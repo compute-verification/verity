@@ -250,8 +250,7 @@ end Run
 with `(p+1)/4 < 2^n`: a responder that keeps no state and recomputes each challenged block (`recBlock`) within
 `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries is always right, so `p2ring` fails `MeetsOn`
 in the sequential audit at every `D ≥ 2(n + 1)`, `Q ≥ 2`, `L ≥ 4n + 5`, `k` and `ε`. At P2's modulus this is
-`D ≥ 32,894` (`tight_p16448`). The guarantee (`meetsOn_of_row`) holds up to `D_cert = 16,309` at `L = 2^64`
-(`meetsOn_b19_k88`), conditional on `RingLemmaA`; whether `MeetsOn` holds for `D` between the two is open. -/
+`D ≥ 32,894` (`tight_p16448`). No `(D, L)` at which `MeetsOn` holds is proved. -/
 theorem tight (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p)
     (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n) (D Q L k : ℕ) (hD : 2 * (n + 1) ≤ D) (hQ : 2 ≤ Q)
     (hL : 4 * n + 5 ≤ L) (ε : ℝ≥0∞) : ¬ MeetsOn (p2ring B w p b) .sequential D Q L k ε := by
@@ -283,8 +282,7 @@ theorem p16448_root_bits : (2 ^ 16448 - 21065 + 1) / 4 < 2 ^ 16446 := by decide 
 
 /-- **Tightness at P2's modulus** `p = 2^16448 − 21065`: recomputation (`2·16,447 = 32,894` multiplication rounds,
 `2` key queries, `65,789` ring queries per answer) breaks `MeetsOn` for every `B`, every payload width `b ≤ 16,447`,
-`k` and `ε`. The guarantee holds up to `D_cert = 16,309` (`meetsOn_b19_k88`, at `L = 2^64` and conditional on
-`RingLemmaA`); between the two it is open. -/
+`k` and `ε`. -/
 theorem tight_p16448 (hP : PrimeP16448) (B : ℕ) [NeZero B] (b : ℕ) (hb : b ≤ 16447) (D Q L k : ℕ)
     (hD : 32894 ≤ D) (hQ : 2 ≤ Q) (hL : 65789 ≤ L) (ε : ℝ≥0∞) :
     ¬ MeetsOn (p2ring B 16448 (2 ^ 16448 - 21065) b) .sequential D Q L k ε :=

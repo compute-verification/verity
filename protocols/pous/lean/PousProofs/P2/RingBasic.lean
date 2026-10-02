@@ -387,9 +387,7 @@ theorem decBlock_bounded (j : Fin B) (c : Bits w) : (decBlock B w p b j c).RingB
 `20·w ≤ 21·b`: `p2ring B w p b` is correct, holds `W` and is within the space bound; decoding one block
 (`decBlock`, the program `dec` runs on every block) is `RingBounded 2 2 3`: two rounds that contain a
 multiplication, two key queries and three ring queries, on every primitive; and storing `C` whole and answering by
-lookup (`honestPre`, no query) passes the sequential audit with probability 1 for every `k`. So the requirement is
-not vacuous: the honest decoder spends 2 multiplication rounds per block, against the `D` of thousands that the
-guarantee (`meetsOn_of_row`) allows. -/
+lookup (`honestPre`, no query) passes the sequential audit with probability 1 for every `k`. -/
 theorem complete (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p)
     (hp2 : p ≤ 2 ^ w) (hsp : 20 * w ≤ 21 * b) :
     (p2ring B w p b).Correct ∧ (p2ring B w p b).CodeHoldsW ∧ (p2ring B w p b).SpaceBound Params.expansion ∧
