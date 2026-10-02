@@ -11,6 +11,7 @@ import FlockSoundness.Discharge.Layout.OutSite
 import FlockSoundness.Discharge.Layout.OfRows
 import FlockSoundness.Discharge.Layout.KeyProg
 import FlockSoundness.Discharge.Layout.OutPin
+import FlockSoundness.Discharge.Layout.RowEnc
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -45,5 +46,8 @@ from the decoder's places and the executable's regions:
   `keyRows`);
 * `OutPin`: the units' committed gates at those places hold the population's returned outputs (`keyProg_hout`, with the
   registration's bit `outBitOf`), when they are the returned outputs' bits (`OutsOut`) of the shape region "out" packs
-  (`OutShape`), and `rs` with them (`keyRowsOut`).
+  (`OutShape`), and `rs` with them (`keyRowsOut`);
+* `RowEnc`: the bytes `sha512/row/v1` hashes for a row (`rowEnc`, injective by `rowEnc_inj`; the layout's values carry
+  their width, `BitVal`): at `keyProg`'s row port `q`, `rowPrefix words` and the row's bytes at the message columns
+  (`keyRow_enc`, [e2e-hm]'s `port_commit` row), and `rs` with it (`keyRowsEnc`).
 -/
