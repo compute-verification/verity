@@ -97,8 +97,13 @@ def test_drift_names_each_files_state_and_the_strays(world):
     (node / "bin" / "c.py").write_text("c-fix\n")           # the pushed hotfix main lacks
     (node / "bin" / "a.py.bak-20261001T0000Z").write_text("a0\n")
     (node / "tree" / "x.yaml.prev").write_text("x0\n")
+    _git(repo, "checkout", "-q", "fix")
+    _commit(repo, {"src/t/new.py": "a PR adds it\n"}, "a PR's new file")
+    _git(repo, "push", "-q", "origin", "fix")
+    _git(repo, "checkout", "-q", "main")
+    (node / "tree" / "new.py").write_text("a PR adds it\n")
     rep = deploy.drift(world["nodes"]["n"], "origin/main", local, repo)
-    assert _states(rep) == {"a.py": "stale", "b": "ok", "c.py": "ahead", "unit.service": "missing", "x.yaml": "missing"}
+    assert _states(rep) == {"a.py": "stale", "b": "ok", "c.py": "ahead", "unit.service": "missing", "x.yaml": "missing", "new.py": "ahead"}
     by = {Path(e["path"]).name: e for e in rep["entries"]}
     assert "fix" in by["c.py"]["detail"] and "not in origin/main" in by["c.py"]["detail"]
     assert world["v1"][:12] in by["a.py"]["detail"]
@@ -188,6 +193,38 @@ def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_r
         holder.wait()
     out = capsys.readouterr().out
     assert "restart when safe: tmux:a (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
+
+
+def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went(world, capsys):
+    node, n = world["node"], world["nodes"]["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, repo=world["repo"])
+    (node / "bin" / "unit.service").write_text("[Unit]\n")
+    bak, one_off = node / "bin" / "a.py.bak-20261001T0611Z", node / "bin" / "probe-once.sh"
+    bak.write_text("a0\n")
+    one_off.write_text("echo\n")
+    old_tree = node / "tree" / "jobs.bak-20260930T2115Z"
+    old_tree.mkdir()
+    (old_tree / "x.yaml").write_text("x0\n")
+    with pytest.raises(RuntimeError, match="not a stray of n"):
+        deploy.attic(n, "origin/main", "lane-x", [str(node / "bin" / "a.py")], False, local, repo=world["repo"])
+    holder = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(one_off)], stdin=subprocess.PIPE)
+    try:
+        with pytest.raises(RuntimeError, match="a process runs"):
+            deploy.attic(n, "origin/main", "lane-x", [str(one_off)], False, local, repo=world["repo"])
+    finally:
+        holder.stdin.close()
+        holder.wait()
+    assert deploy.attic(n, "origin/main", "lane-x", [], True, local, dry=True, repo=world["repo"]) == [(str(bak), None),
+                                                                                                       (str(old_tree / "x.yaml"), None)]
+
+    assert deploy.main(["attic", "n", str(one_off), "--backups", "--by", "lane-x", "--no-fetch"], run=local,
+                       manifest=world["manifest"], repo=world["repo"]) == 0
+    assert "restore one with `sudo mv DEST PATH`" in capsys.readouterr().out
+    assert not bak.exists() and not one_off.exists() and not old_tree.exists() and (node / "tree").is_dir()
+    rec = [r for ln in (node / "research" / "deploy" / "record.jsonl").read_text().splitlines() if "attic" in (r := json.loads(ln))]
+    assert {r["path"] for r in rec} == {str(bak), str(one_off), str(old_tree / "x.yaml")} and all(r["by"] == "lane-x" for r in rec)
+    assert Path(next(r["attic"] for r in rec if r["path"] == str(bak))).read_text() == "a0\n"
+    assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
 
 
 def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsys):
