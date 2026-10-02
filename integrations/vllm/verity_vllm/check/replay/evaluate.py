@@ -114,6 +114,16 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                     wsl = np.asarray(arr, dtype=_NP_BY_BITS.get(bits, np.uint16)).reshape(-1)
                     inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits})
                     wref = {"field": fname, "range": [flo, fhi]}
+                elif a in pi.supplied:
+                    binding, fields = pi.supplied[a]
+                    f = fields.get(lo)
+                    if f is None or hi - lo != 1:
+                        raise _Unresolved(f"{pname} slice [{lo}, {hi}) is not one field of the supplied layout")
+                    if binding != "registration":
+                        raise _Unresolved(f"run value {pname}.{f['name']}: the run Record's values are not read by the replay yet")
+                    # the registered value as the build's layout records it: what registration binds, never a committed word
+                    words.append(np.array([f["bits"]], dtype=_NP_BY_BITS[int(f["width"])] if int(f["width"]) in _NP_BY_BITS else np.uint64))
+                    inputs_rec.append({"kind": "registered", "param": pname, "field": f["name"], "bits": f"0x{f['bits']:x}"})
                 elif pname in (SEED_PARAM, RM.SPLITS_PARAM):
                     # [R16 stoch, F-r16-20] the sampler's named INPUTS: the committed runner.sampler/seed word of THIS (step, request) and,
                     # under derived S, the committed runner.sampler/splits word of the event the Program's slice names (`splits[s]` = the
