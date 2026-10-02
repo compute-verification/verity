@@ -5847,11 +5847,17 @@
    "assumptions": [],
    "type_hash": "d9e3d9269e686b094d3d9fdd10e4d3ddeac667ee2f1710f6f036f8f57d4b0646"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_binding_tail": {},
+  "FlockSoundness.Discharge.Hidden.outputs_binding_v2": {},
+  "FlockSoundness.Discharge.Hidden.outputs_binding_wide": {},
   "FlockSoundness.Discharge.Hidden.outputs_committed": {
    "signature": ["FlockSoundness.Discharge.Hidden.outputs_committed : FlockSoundness.Discharge.Hidden.OutputsCommitted"],
    "assumptions": [],
    "type_hash": "686c4a68e8dd09e90bf1e86157d569151977deaba2c943182c385e6b70d7e5e6"
   },
+  "FlockSoundness.Discharge.Hidden.outputs_committed_tail": {},
+  "FlockSoundness.Discharge.Hidden.outputs_committed_v2": {},
+  "FlockSoundness.Discharge.Hidden.outputs_committed_wide": {},
   "FlockSoundness.Discharge.Hidden.public_exposes": {
    "signature": ["FlockSoundness.Discharge.Hidden.public_exposes : FlockSoundness.Discharge.Hidden.PublicExposes"],
    "assumptions": [],
