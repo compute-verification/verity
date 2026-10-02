@@ -1,8 +1,9 @@
 """The Commit stage's serving rows: the units of the verifier's partition, read exactly as the replay reads them (committed
 members through an opened reader, registered weights for weight slices), committed in M0's serving row format by
 :mod:`verity_vllm.commit.serving_rows`.  On when the row stage writes a request (``commit --serving-rows``), which it does by default:
-``{"dir", "partition", "run", "committer", "outputs"?}``.  The partition file (``{partition, partition_digest, population, scope?}``)
-is the verifier's, fixed before serving; ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``).
+``{"dir", "partition", "run", "committer", "outputs"?}``.  They are committed before the replay's seed: by the replay in process
+(`c2_replay.evaluate`) or, under ``--replay-deferred``, at the deferral site (`c2_replay.serving_rows`), never from the bundle.
+The partition file (``{partition, partition_digest, population, scope?}``) is the verifier's, fixed before serving; ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``).
 ``partition: "auto"`` (the row stage's default) is every RoPE head of the served Program (`auto_partition`), its population counted
 from the Program's rows; a run with none commits nothing.  ``outputs``: how output ports commit (``commit.serving_rows.Window``),
 salted rows by default.
@@ -54,17 +55,32 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
     from verity_vllm.check.oracle_compare import OpenedReader
 
     if request:
-        req = json.loads(Path(request).read_text())
-        try:
-            after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
-                         weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req["run"],
-                         row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
-                         committer=req.get("committer"), outputs=req.get("outputs", CS.ROW_SCHEMA))
-        except Exception as e:  # noqa: BLE001
-            Path(req["dir"]).mkdir(parents=True, exist_ok=True)
-            (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
-            print(f"[serving-rows] FAILED (no verdict changes): {e!r}"[:400], flush=True)
+        commit_request(request, com, rc, weights, programs, bmap, arrivals, loaded, manifest, row)
     return weights, OpenedReader(com, rc)
+
+
+def commit_request(request: str, com: Any, rc: Any, weights: Callable, programs: dict[str, dict[str, Any]], bmap: dict[str, Any],
+                   arrivals: dict[str, int], loaded: dict[str, dict[str, Any]], manifest: Any, row: str | None) -> None:
+    """The ``request``'s serving rows, committed through their own opened reader of ``com``; a failure is written beside them
+    (`failed`)."""
+    from verity_vllm.check.oracle_compare import OpenedReader
+
+    req = json.loads(Path(request).read_text())
+    try:
+        after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
+                     weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req["run"],
+                     row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
+                     committer=req.get("committer"), outputs=req.get("outputs", CS.ROW_SCHEMA))
+    except Exception as e:  # noqa: BLE001
+        failed(request, e)
+
+
+def failed(request: str, e: BaseException) -> None:
+    """The ``request``'s serving rows were not committed: the traceback goes to ``error.txt`` in its directory; no verdict changes."""
+    d = Path(json.loads(Path(request).read_text())["dir"])
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "error.txt").write_text("".join(traceback.format_exception(e)))
+    print(f"[serving-rows] FAILED (no verdict changes): {e!r}"[:400], flush=True)
 
 
 def auto_partition(program_sha512: str) -> dict[str, Any]:

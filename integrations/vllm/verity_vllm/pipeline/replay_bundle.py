@@ -20,7 +20,8 @@ It is built under `replay_bundle_p<pair>.partial/` and renamed into place once s
 A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
 held for the two in turn; the bundle's device-resident tensors and the engine's facts are read before `start` returns, so nothing
 after it reads the device and a leased Commit can give its GPU back there (`gpu_lease.release`); a slim one is written at the C2
-site, after the challenge its reads come from.
+site, after the challenge its reads come from.  The run's serving rows are committed at the C2 site too, before the plan
+(`c2_replay.serving_rows`); the bundle neither holds nor commits them.
 `open_bundle` checks every file against the manifest before anything is read from it.
 """
 from __future__ import annotations
@@ -37,6 +38,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
+
 from verity_vllm.commit import registered_weights as RW
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.pipeline import c2_replay as C2
@@ -48,6 +51,9 @@ HASHED = "_hashed"
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
         "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
+#: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
+WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
+         "uint8": (8, np.uint8), "int8": (8, np.uint8)}
 
 
 def path(out: str | os.PathLike, pair: int) -> Path:
@@ -74,18 +80,41 @@ def refuse(args: Any) -> None:
            "one instrumented committer only (no --arms, no control-only process)" if args.arms or args.only_arm == "control" else
            "--padded-finalize: padding steps are not in the replay bundle's store" if args.padded_finalize else
            f"--compiled-taps {args.compiled_taps}: the compiled check is its own C2" if args.compiled_taps != "off" else
-           "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else
-           "--serving-rows commits through the live committer" if args.serving_rows else None)
+           "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else None)
     if why:
         raise SystemExit(f"--replay-deferred: {why}")
 
 
 @dataclass
 class Started:
-    """A full store's write running beside the checks before the C2 site (`start`), and the engine's facts read when it began."""
+    """A full store's write running beside the checks before the C2 site (`start`), and the engine's facts read when it began.
+    ``weights``: the weights provider by prefix over the registered tensors it read (`extras_weights`), None when they could not be."""
     future: Future
     hashed: dict[str, str]
     engine: dict[str, Any]
+    weights: Callable[[str], Callable] | None = None
+
+
+def provider(words: dict[str, np.ndarray], prefix: str, consumed: set[str]) -> Callable[[str, int, int], np.ndarray | None]:
+    """The replay's weights reader over the opened tensors (Program field -> registered name, as `opening.model_weights_provider`);
+    every field it is asked for lands in ``consumed``."""
+    def read(field: str, lo: int, hi: int) -> np.ndarray | None:
+        name = field[len(prefix):] if prefix and field.startswith(prefix) else field
+        name = name if name in words or field not in words else field
+        consumed.add(name)
+        a = words.get(name)
+        return None if a is None or hi > a.size else a[lo:hi]
+
+    return read
+
+
+def extras_weights(extras: tuple[dict[str, Any], list[tuple[int, str, Any]]]) -> Callable[[str], Callable]:
+    """The weights provider by prefix over `weights_extra`'s tensors, held in host memory once the GPU is given back: the registered
+    buffers and engine constants (RoPE's ``cos_sin_cache``), in the widths the replay reads; a checkpoint tensor is not among them."""
+    tree, extra = extras
+    words = {name: np.frombuffer(raw, dtype=np.uint8).view(WORDS[tree["names"][i][1]][1]) for i, name, raw in extra
+             if tree["names"][i][1] in WORDS}
+    return lambda prefix: provider(words, prefix, set())
 
 
 def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) -> Started | None:
@@ -117,7 +146,7 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
 
     fut = pool.submit(write)
     pool.shutdown(wait=False)
-    return Started(fut, hashed, engine)
+    return Started(fut, hashed, engine, None if isinstance(extras, ValueError) else extras_weights(extras))
 
 
 def prepare(args: Any) -> Any:
@@ -133,11 +162,13 @@ def prepare(args: Any) -> Any:
 def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
           tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None,
           plan: Callable[[], dict[str, Any]] | None = None, row: dict[str, Any], deferred: dict[int, dict],
-          started: Started | None = None) -> bool:
+          started: Started | None = None, serving: Callable[[Callable | None], Any] | None = None) -> bool:
     """At the C2 site of a deferred run: writes the bundle's store and weights tree (or takes the write `start` began), puts the run's
     deferred sampled-replay and linkage records on `row` and the bundle's context in `deferred[pair]` (sealed once the run's record is
     final, after the weights pin and the openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is
-    SLIM: only the ranges and tree nodes they opened.  False, with nothing written, when the store would exceed
+    SLIM: only the ranges and tree nodes they opened.  ``serving`` commits the run's serving rows (`c2_replay.serving_rows`), given
+    `Started.weights` when the GPU is given back: after the full store's write, before the plan's reads (they come from the seed), so
+    neither the slim store nor the replay holds or commits them.  False, with nothing written, when the store would exceed
     `args.replay_bundle_cap_gb`: the replay then runs in process."""
     from verity_vllm.check.replay.driver import engine_facts_of_record
 
@@ -148,7 +179,9 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
         write_s, hashed = started.future.result(), started.hashed
         print(f"[delta] REPLAY BUNDLE (pair {pair}): store written in {write_s:.1f} s beside the checks before the C2 site "
               f"(waited {time.perf_counter() - t0:.1f} s here)", flush=True)
-    else:
+    if serving is not None:
+        serving(started.weights if started is not None else None)
+    if started is None:
         if plan is not None:
             t0 = time.perf_counter()
             try:

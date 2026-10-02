@@ -106,7 +106,7 @@ def test_a_deferred_config_run_passes_the_flag_and_parses(tmp_path):
     assert cli.parse("commit", sc[sc.index("commit") + 1:], {}).replay_deferred == "slim"
 
 
-def test_a_row_commits_its_serving_rows_by_default_where_the_commit_has_a_c2_site(tmp_path):
+def test_a_row_commits_its_serving_rows_by_default_deferred_or_not(tmp_path):
     from verity.ir import partition_object as PO
     from verity_vllm.commit import serving_rows as CS
     from verity_vllm.pipeline import serving_rows as SRW
@@ -116,10 +116,11 @@ def test_a_row_commits_its_serving_rows_by_default_where_the_commit_has_a_c2_sit
         r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
         return r.commit_cmd([])
 
-    for cmd in (cmd_of("row"), cmd_of("config", "--config-run", "1")):
+    deferred = [cmd_of(m, "--config-run", "1", "--replay-deferred", m) for m in ("1", "slim")]
+    for cmd in (cmd_of("row"), cmd_of("config", "--config-run", "1"), *deferred):
         req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
         assert req["partition"] == SRW.AUTO and "outputs" not in req, "auto partition, hidden outputs"
-    assert "--serving-rows" not in cmd_of("deferred", "--config-run", "1", "--replay-deferred", "1")
+    assert all("--replay-deferred" in cmd for cmd in deferred), "committed at the deferral site (c2_replay.serving_rows)"
     assert "--serving-rows" not in cmd_of("off", "--serving-rows", "0")
     auto = SRW.auto_partition("ab" * 64)
     assert SRW.templates(auto["partition"]) == ["RoPEHead_v1{D=64}"] and auto["partition_digest"] == PO.digest(auto["partition"])

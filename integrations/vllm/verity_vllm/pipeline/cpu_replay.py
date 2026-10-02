@@ -58,9 +58,6 @@ from verity_vllm.program.kernels.compiled_relations import warm_vml
 
 ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "
            "and the tensor roots fold to the committed weights root")
-#: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
-WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
-         "uint8": (8, np.uint8), "int8": (8, np.uint8)}
 SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 SLIM_DOC = "slim.json"
 PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
@@ -150,7 +147,7 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, key: bytes | 
     else:
         src = "checkpoint"
         try:
-            words, _note = WR.compose(name, list(shape), WORDS[dt][0], ck)
+            words, _note = WR.compose(name, list(shape), RB.WORDS[dt][0], ck)
         except (KeyError, ValueError) as e:
             return src, None, f"not composed from the checkpoint: {e}"[:200], False
         raw = np.ascontiguousarray(words).reshape(-1).view(np.uint8)
@@ -170,7 +167,7 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
     names, kp = tree["names"], Path(bundle) / "weights" / RW.KEY_FILE
     key = kp.read_bytes() if kp.is_file() else None
     folded = RW.tree_root(tree)
-    servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in WORDS]
+    servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in RB.WORDS]
     with ThreadPoolExecutor(max(1, threads)) as pool:
         opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck, key)), servable))
     words: dict[str, np.ndarray] = {}
@@ -178,7 +175,7 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
     for i, src, raw, why, read in opened:
         name = names[i][0]
         if raw is not None:
-            words[name] = raw.view(WORDS[names[i][1]][1])
+            words[name] = raw.view(RB.WORDS[names[i][1]][1])
             by_src[src] += 1
         elif not read:
             unopened.append({"name": name, "why": why})
@@ -194,19 +191,6 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
              "mismatched_n": len(mismatched), "mismatched": mismatched[:16], "unopened_n": len(unopened), "unopened": unopened[:16],
              "shards": getattr(ck, "pin", None), "wall_s": round(time.perf_counter() - t0, 3)}
     return words, check
-
-
-def provider(words: dict[str, np.ndarray], prefix: str, consumed: set[str]) -> Callable[[str, int, int], np.ndarray | None]:
-    """The replay's weights reader over the opened tensors (Program field -> registered name, as `opening.model_weights_provider`);
-    every field it is asked for lands in ``consumed``."""
-    def read(field: str, lo: int, hi: int) -> np.ndarray | None:
-        name = field[len(prefix):] if prefix and field.startswith(prefix) else field
-        name = name if name in words or field not in words else field
-        consumed.add(name)
-        a = words.get(name)
-        return None if a is None or hi > a.size else a[lo:hi]
-
-    return read
 
 
 def _sha256(p: Path) -> str:
@@ -264,13 +248,14 @@ def manifest_of(o: Options, ctx: dict[str, Any], args: SimpleNamespace) -> tuple
 
 
 def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
-    """The Commit's replay arguments, with its Programs read from this row dir (their digests are checked against the record)."""
+    """The Commit's replay arguments, with its Programs read from this row dir (their digests are checked against the record).  No
+    serving rows: the Commit committed them at the deferral site (`c2_replay.serving_rows`)."""
     a = dict(ctx["args"])
     a["programs_root"] = o.row_dir if a.get("programs_root") else None
     a["program_dir"] = os.path.join(o.row_dir, "build_request") if a.get("program_dir") else None
     if o.replay_workers is not None:
         a["replay_workers"] = o.replay_workers
-    return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)
+    return SimpleNamespace(**a | {"serving_rows": None}, replay_cache=False, vu_export_dir=None)
 
 
 CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
@@ -431,7 +416,7 @@ def replay(o: Options) -> bool | None:
     with SD.touched(store) as touched:
         C2.run(C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
                        manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
-                       components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
+                       components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: RB.provider(words, p, consumed),
                        weights_check=lambda: dict(wc), tl=tl, reads=reads), {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
     decide(row, ctx, wc, b, consumed, words, tree.get("extra") or {})

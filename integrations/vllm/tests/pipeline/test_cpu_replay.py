@@ -90,7 +90,7 @@ def test_every_servable_tensor_opens_against_the_committed_root_and_is_served_as
     assert wc["servable"] == 4 and wc["opened"] == 3 and wc["opened_by_source"] == {"checkpoint": 2, "bundle": 1}
     assert [u["name"] for u in wc["unopened"]] == ["model.unknown.weight"] and wc["mismatched_n"] == 0
     consumed = set()
-    rd = CPU.provider(words, "model.", consumed)
+    rd = RB.provider(words, "model.", consumed)
     assert np.array_equal(rd("model." + QKV, 0, 64), _served()[QKV][1].reshape(-1)) and rd("model." + QKV, 0, 65) is None
     assert np.array_equal(rd("model.rotary_emb.cos_sin_cache", 0, 8), COS_SIN.view(np.uint32))
     assert consumed == {QKV, "model.rotary_emb.cos_sin_cache"}
@@ -206,6 +206,11 @@ def test_the_replay_takes_the_commits_workers_unless_told_otherwise():
     assert CPU.replay_args(o, {"args": {**ctx["args"], "replay_workers": 12}}).replay_workers == 12
     a = CPU.replay_args(CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c", replay_workers=4), ctx)
     assert a.replay_workers == 4 and a.program_dir == "/row/build_request" and ctx["args"]["replay_workers"] is None
+
+
+def test_the_replay_from_a_bundle_commits_no_serving_rows():
+    ctx = {"args": {"programs_root": "x", "program_dir": None, "serving_rows": "/run/serving_rows/request.json"}}
+    assert CPU.replay_args(CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c"), ctx).serving_rows is None
 
 
 def test_the_workers_are_capped_at_the_measured_peaks_that_fit_in_the_cgroup(tmp_path, monkeypatch):

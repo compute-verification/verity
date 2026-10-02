@@ -50,7 +50,8 @@ class Site:
     prefix; `weights_check()`: the proof that the slices it serves are the committed weights ({"equal": bool, ...});
     `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's draw is made
     again after it, read only, in this process (`plan`), and its record lands here: a forked evaluator's reads of `com` never reach this
-    process, so this is what makes `commit.store_dump.touched` see every pick's."""
+    process, so this is what makes `commit.store_dump.touched` see every pick's.  `serving_committed`: the run's serving rows are
+    committed (`serving_rows`), so the replay commits none."""
     args: Any
     out: Path
     pair: int
@@ -72,6 +73,7 @@ class Site:
     after_replay: Callable | None = None
     protocols: Any = None
     reads: dict[str, Any] | None = None
+    serving_committed: bool = False
 
 
 def live_weights(model: Any, prefix: str) -> Callable:
@@ -319,6 +321,53 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
     return {"replay": sr, "linkage": lk.get("result")}
 
 
+def labels(reqs: list[dict[str, Any]]) -> dict[str, str]:
+    """Each request id's label in the Programs and the binding map (``r<index>``)."""
+    return {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
+
+
+def arrivals(s: Site, _rl: dict[str, str]) -> dict[str, int]:
+    """Each request's arrival step, on the schedule of record."""
+    from verity_vllm.check.replay import driver as SR
+
+    _arr = {_rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in s.reqs}
+    # [rev M-0570 (1), compiled f3fdaba37] ONE schedule of record for every consumer: when the population was placed on the ENGINE's
+    # committed-step axis (binding.coverage.schedule.use == observed), the replay's and the linkage's arrivals are the same observed ones
+    _sched_r = (((s.row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
+    _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
+    if _moved:
+        print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
+    return _arr
+
+
+def serving_rows(s: Site, weights: Callable[[str], Callable] | None = None) -> None:
+    """A deferred run's serving rows (`pipeline.serving_rows`), committed at the deferral site (`replay_bundle.defer`) as `evaluate`
+    commits them in process, before the replay's seed: the Programs of record, the binding map and the arrivals of record.
+    ``weights``: the weights provider by prefix once the GPU is given back (`replay_bundle.Started.weights`), else `s.weights_of`.
+    Whatever follows on `s` (the slim plan, or the replay in this process when the bundle is refused) commits none, nor does the
+    replay from the bundle.  A failure is written beside the rows and changes no verdict."""
+    if not s.args.serving_rows or s.serving_committed:
+        return
+    from verity_vllm.check.replay import driver as SR
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    s.serving_committed = True
+    try:
+        _rl = labels(s.reqs)
+        loaded, _digs = programs_of_record(s, _rl)
+        progs = {k: v["instances"] for k, v in loaded.items()}
+        k0 = next(iter(progs))
+        prefix = SR.ProgramIndex(progs[k0], program_dir=loaded[k0].get("dir")).prefix
+        bm = json.loads((s.out / f"binding_map_p{s.pair}.json").read_text())
+        arr = arrivals(s, _rl)
+    except Exception as e:  # noqa: BLE001
+        SRW.failed(s.args.serving_rows, e)
+        return
+    SRW.commit_request(s.args.serving_rows, s.com, s.rc, (weights or s.weights_of)(prefix), progs, bm, arr, loaded, s.manifest, s.args.label)
+    del loaded, progs, bm
+    gc.collect()
+
+
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
@@ -327,24 +376,18 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
-    _rl = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
+    _rl = labels(reqs)
     facts = planner.ready() if planner is not None else None
     held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl) if facts is None else ({}, {})
     held["progs"] = _progs = {k: v["instances"] for k, v in _loaded.items()}
-    _arr = {_rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in reqs}
-    # [rev M-0570 (1), compiled f3fdaba37] ONE schedule of record for every consumer: when the population was placed on the ENGINE's
-    # committed-step axis (binding.coverage.schedule.use == observed), the replay's and the linkage's arrivals are the same observed ones
-    _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-    _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
-    if _moved:
-        print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
+    _arr = arrivals(s, _rl)
     if facts is None:
         _k0 = next(iter(_progs))
         held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
         facts = linkage_facts(_loaded, _progs, _pi0)
     from verity_vllm.pipeline import serving_rows as SRW
-    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
-                                  _loaded, s.manifest, args.label)
+    _wp, held["rd"] = SRW.readers(None if s.serving_committed else args.serving_rows, s.com, rc,
+                                  s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr, _loaded, s.manifest, args.label)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
