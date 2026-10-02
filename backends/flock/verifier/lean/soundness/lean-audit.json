@@ -2706,6 +2706,23 @@
    "assumptions": [],
    "type_hash": "e895ff06bec97da55de2cc65c5def8c692c09183a67ab829ba6ab6f423276997"
   },
+  "FlockSoundness.Discharge.Aliased.srcKey_leaf": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.srcKey_leaf (c : Flock.Circuit) (h1 : Eq c.unit.inGroups.size 1)",
+    "  (hnd : (FlockSoundness.portBits c.unit.inGroups).Nodup) {x : Nat}",
+    "  (hm :",
+    "    List.instMembership.mem (FlockSoundness.portBits c.unit.inGroups)",
+    "      (instHMod.hMod x (instHMul.hMul c.unit.inWords Flock.WORD))) :",
+    "  Or (Eq (FlockSoundness.Discharge.Aliased.srcKey c x) FlockSoundness.Discharge.Aliased.Src.zero)",
+    "    (Exists fun q =>",
+    "      Exists fun byte =>",
+    "        Exists fun bit =>",
+    "          And (Eq (FlockSoundness.Discharge.Aliased.srcKey c x) (FlockSoundness.Discharge.Aliased.Src.msg q byte bit))",
+    "            (instLTNat.lt bit 8))"
+   ],
+   "assumptions": [],
+   "type_hash": "22ca0f9594c18349ec5523842a4d892e3d34e4c25c4ee4263de10e28e0676ac1"
+  },
   "FlockSoundness.Discharge.Aliased.zeroPos_block": {
    "signature": [
     "FlockSoundness.Discharge.Aliased.zeroPos_block {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
@@ -7145,23 +7162,6 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  },
-  "FlockSoundness.Discharge.Aliased.srcKey_leaf": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.srcKey_leaf (c : Flock.Circuit) (h1 : Eq c.unit.inGroups.size 1)",
-    "  (hnd : (FlockSoundness.portBits c.unit.inGroups).Nodup) {x : Nat}",
-    "  (hm :",
-    "    List.instMembership.mem (FlockSoundness.portBits c.unit.inGroups)",
-    "      (instHMod.hMod x (instHMul.hMul c.unit.inWords Flock.WORD))) :",
-    "  Or (Eq (FlockSoundness.Discharge.Aliased.srcKey c x) FlockSoundness.Discharge.Aliased.Src.zero)",
-    "    (Exists fun q =>",
-    "      Exists fun byte =>",
-    "        Exists fun bit =>",
-    "          And (Eq (FlockSoundness.Discharge.Aliased.srcKey c x) (FlockSoundness.Discharge.Aliased.Src.msg q byte bit))",
-    "            (instLTNat.lt bit 8))"
-   ],
-   "assumptions": [],
-   "type_hash": "22ca0f9594c18349ec5523842a4d892e3d34e4c25c4ee4263de10e28e0676ac1"
   }
  },
  "reads": {
@@ -9888,6 +9888,7 @@
     "FlockSoundness.Discharge.Aliased.keyIdx_eq",
     "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
+    "FlockSoundness.Discharge.Aliased.srcKey_leaf",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.aliased_keyProg",
     "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg_inst",
@@ -10502,6 +10503,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.srcKey_leaf",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
@@ -10658,6 +10660,7 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.srcKey_leaf",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
