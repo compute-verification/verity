@@ -189,6 +189,18 @@ src = "tools/research/console/util_collect.py"
 nodes = ["vy-nebius-1"]
 
 [[file]]
+path = "/etc/systemd/system/verity-console.service"
+src = "infra/nebius/verity-console.service"
+nodes = ["vy-nebius-1"]
+run = ["systemd:verity-console.timer"]
+
+[[file]]
+path = "/etc/systemd/system/verity-console.timer"
+src = "infra/nebius/verity-console.timer"
+nodes = ["vy-nebius-1"]
+run = ["systemd:verity-console.timer"]
+
+[[file]]
 path = "/etc/systemd/system/vy-disk-guard.service"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
 nodes = ["vy-nebius-1"]
