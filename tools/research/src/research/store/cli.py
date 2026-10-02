@@ -75,6 +75,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from ..secret_hint import lost
 from . import ids, vocab
 from .index import IGNORE_VERSION_ENV, CatalogVersionError, compact
 from .local import REFRESH_PAYLOAD_MAX, LocalStore, StoreError, store_root
@@ -172,7 +173,7 @@ def cmd_put(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
     art = st.put_artifact(ns.kind, _meta(ns.meta), _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
-    rep, why = None, None
+    rep, why, gone = None, None, ""
     if ns.preserve:
         rep = st.push(art, preserve=True)
     elif st.write_through:                                          # write-through (README §7.2): the local write stands whatever the upload does
@@ -181,7 +182,8 @@ def cmd_put(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001
             why = str(e)
     else:
-        why = "write-through off"
+        gone = lost("R2_ENDPOINT", "R2_BUCKET")
+        why = gone or "write-through off"
     if ns.json:
         _dump({"id": art, "preserve": rep, **({"pending": why} if why or (rep and not rep["preserved"]) else {})})
     else:
@@ -192,7 +194,7 @@ def cmd_put(argv: list[str]) -> int:
             why = why or "; ".join(rep["errors"])
             print(f"research data put: {'local only' if why == 'write-through off' else 'NOT preserved'} ({why}); pending: "
                   "`research data push --pending` uploads it", file=sys.stderr)
-    return 1 if ns.preserve and not rep["preserved"] else 0
+    return 1 if (ns.preserve and not rep["preserved"]) or gone else 0
 
 
 def cmd_show(argv: list[str]) -> int:
@@ -506,6 +508,8 @@ def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
+        if hint := lost("R2_ENDPOINT", "R2_BUCKET"):
+            return f"NOT preserved ({hint}); {pending}", True
         return f"local only (write-through off); {pending}", False
     if st.remote is None:
         return f"NOT preserved ({getattr(st, 'remote_error', None) or 'no remote configured'}); {pending}", True

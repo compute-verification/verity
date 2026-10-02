@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -52,6 +53,18 @@ def _read_json(path: str | Path) -> Any:
         return json.load(open(path))
     except (OSError, ValueError):
         return None
+
+
+def jit_cache(env: dict[str, str]) -> None:
+    """The CUDA driver's JIT cache on the host beside the tree's Triton cache (the template's ``TRITON_CACHE_DIR``), not in the pod's
+    home: vLLM's FA2 extension has no code for the RTX PRO 6000 (sm_120), so each pod's first launch of every attention kernel has the
+    driver compile its PTX on the CPU, about a minute of a held GPU, unless the compiled kernels outlive the pod."""
+    triton = env.get("TRITON_CACHE_DIR")
+    if not triton or env.get("CUDA_CACHE_PATH"):
+        return
+    path = os.path.join(os.path.dirname(os.path.dirname(triton)), "cuda", os.path.basename(triton))
+    os.makedirs(path, exist_ok=True)
+    env.update({"CUDA_CACHE_PATH": path, "CUDA_CACHE_MAXSIZE": str(4 << 30)})
 
 
 class Row:
@@ -92,6 +105,9 @@ class Row:
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
                     "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
+        jit_cache(env)
+        if GL.leased(env):
+            GL.hide_devices(env)
         self.child_env = env
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
@@ -205,6 +221,20 @@ class Row:
         self.tl(stage, "start", *extra)
         rc = self.run_to(to, lf, cmd)
         self.tl(stage, "end", ("rc", rc), *extra)
+        return rc
+
+    @property
+    def leased(self) -> bool:
+        """The item leases its GPU (`gpu_lease`): its pod has none of its own."""
+        return GL.leased(self.child_env)
+
+    def run_gpu(self, stage: str, to: int | str, lf: str, cmd: list[str]) -> int:
+        """``run_tl`` for the stage that needs the GPU: under a lease when the item is leased, else as any stage."""
+        if not self.leased:
+            return self.run_tl(stage, to, lf, cmd)
+        rc, rec = GL.run(self.d, lf, cmd, int(to), self.child_env, lambda t, argv: self.run_tl(stage, t, lf, argv))
+        self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']} after "
+                 f"{rec['released_at']}{' (kept: ' + rec['kept'] + ')' if rec.get('kept') else ''}, rc={rc}")
         return rc
 
     def gpu_exclusive(self, why: str) -> None:

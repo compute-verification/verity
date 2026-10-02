@@ -11,7 +11,7 @@ import Mathlib.Logic.Function.Basic
 The public-circuit proof (`docs/zk-proof-public.md` in the Project store) proves special honest-verifier zero knowledge
 of one masked table (Lemma B, §4.3) and witness indistinguishability of its pre-final messages (Lemma A, §4.2), each at a
 fixed coin vector `e`. This file is the spec-level model those lemmas are about, for one table: the paper's lemmas are per
-session of `J` tables, and the product over tables stays on paper.
+session of `J` tables, and the product over tables is `Session`'s.
 
 **The reference prover** is `Table.view`: a deterministic function of the statement and coins (`Table`), the witness `w`
 and the prover's randomness (`Table.Rand`), which returns every message the verifier sees, the final message included

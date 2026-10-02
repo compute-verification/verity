@@ -27,7 +27,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify_run.py` after the window: the first two must be accepted and the control rejected (the panel's rule of 11:50Z).
+  `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
+  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule of 11:50Z).
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -84,7 +85,7 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
-#: the verify's no-write controls, each a retained pass the verifier must reject: every commitment write omitted, and (under
+#: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
