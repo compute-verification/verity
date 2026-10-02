@@ -3638,7 +3638,9 @@ fn with_tail(text: &str) -> (String, String) {
 /// honest session's record and proofs re-verified offline under each, then with rep 0's lincheck `z_partial` or first round
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
-/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept.
+/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under `--zk`
+/// the zk verifier's `FC_ZK_LINCHECK` takes the same three modes (and is restored after), the proof keeps its inner proof, and
+/// an alteration is refused at the inner proof's batched constraint, which binds the lincheck's messages.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -3648,6 +3650,12 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     }
     let alter = |f: &dyn Fn(&mut R1csProofLigerito)| -> Vec<Vec<u8>> {
         let mut ps = proofs.clone();
+        if is_zk(st) {
+            let (c, mut p, i): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p, i)).unwrap();
+            return ps;
+        }
         let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
         f(&mut p);
         ps[0] = bincode::serialize(&(c, p)).unwrap();
@@ -3668,22 +3676,27 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         r
     };
     let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
-    let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
+    let zmodes = [zkv::ZkLincheck::Flat, zkv::ZkLincheck::Partial, zkv::ZkLincheck::Both];
+    let zk_was = zkv::ZkLincheck::get();
+    let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().zip(zmodes).map(|(&m, zm)| {
+        zm.set();
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { tabs: Tables::one(st, inst), lincheck: m, phases: Mutex::new(None) };
         match Server::from_record(config(st, inst), Box::new(ver), &rec_for(ps), map) {
             Ok(mut s) => {
                 let f = s.finish();
                 let reps = f["reps"].as_array().cloned().unwrap_or_default();
-                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "verify_s": f["verify_s"],
+                json!({"mode": format!("{m:?}"), "zk_mode": zm.name(), "accepted": f["accepted"], "why": f["why"], "verify_s": f["verify_s"],
                        "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
             }
-            Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
+            Err(e) => json!({"mode": format!("{m:?}"), "zk_mode": zm.name(), "accepted": false, "why": e}),
         }
     }).collect())).collect();
+    zk_was.set();
     let all = |what: &str, ok: &dyn Fn(&Value) -> bool| runs.iter().filter(|r| r.0 == what).all(|r| r.1.iter().all(ok));
     let same_why = runs.iter().all(|r| r.1.iter().all(|x| x["why"] == r.1[0]["why"]));
-    let lincheck_rejects = |x: &Value| x["accepted"] == false && x["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
+    let refusal = if is_zk(st) { "zk inner: the batched constraint fails" } else { "sumcheck-final" };
+    let lincheck_rejects = |x: &Value| x["accepted"] == false && x["why"].as_str().is_some_and(|w| w.contains(refusal));
     let pass = reencoded && same_why && all("honest", &|x| x["accepted"] == true) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
     json!({"case": "lincheck_modes_agree", "expect": "flat, partial and both: the same verdict on honest and altered lincheck proofs",
