@@ -151,7 +151,7 @@ def test_the_parts_come_from_the_sessions_draw(verdicts, name):
 
 
 def test_statements_without_several_tables_refuse_them(rope):
-    [v] = _verify(rope, 2, _session(rope, "j2"), statement="verity/flock-circuit+seed-injection")
-    assert not v["accepted"] and v["why"].startswith("setup: verity/flock-circuit+seed-injection: one table per session"), v["why"]
+    [v] = _verify(rope, 2, _session(rope, "j2"), statement="verity/flock-circuit@e51e2b86+seed-injection")
+    assert not v["accepted"] and v["why"].startswith("setup: verity/flock-circuit@e51e2b86+seed-injection: one table per session"), v["why"]
     [v] = _verify(rope, 65, _session(rope, "j2"))
     assert not v["accepted"] and v["why"].startswith("setup: tables: at most 64 per session"), v["why"]

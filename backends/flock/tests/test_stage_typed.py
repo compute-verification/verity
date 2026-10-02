@@ -1,6 +1,7 @@
 """Staging a typed statement (`typed_statement.stage`): the instance files name the typed statement and pin its digest and
-class, and their rows, salts, commit strings and outputs are the flat statement's byte for byte, since they depend on the
-rows and salts, never on the circuit's layout. The prover's copy of the rows sits beside the statement."""
+class, and their rows (the output rows too), salts and commit strings are the flat statement's byte for byte, since they
+depend on the rows and salts, never on the circuit's layout, and the public file holds nothing but roots, hiding leaves and
+structure. The prover's copy of the rows sits beside the statement."""
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ pytest.importorskip("verity_vllm.program.registry.prims")
 from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from test_circuit import assert_public_only  # noqa: E402
 
 KEY = bytes(range(32))
 
@@ -43,8 +45,8 @@ def test_typed_staging(sid, rows, tmp_path):
     h1, b1 = _split(typed)
     assert h1["statement"] == TS.STATEMENT and h1["circuit_sha512"] == FC.digest(text)
     assert h1["units"]["classes"] == [FC.class_digest(text)] * h1["instances"]
-    assert b1 == b0, "the rows, salts, commit strings and outputs are the flat statement's"
-    for k in ("set", "subcircuit", "content_digest", "range", "instances", "frame_v3", "rows"):
+    assert b1 == b0, "the rows (the output rows too), salts and commit strings are the flat statement's"
+    for k in ("set", "subcircuit", "range", "instances", "frame_v3", "rows"):
         assert h1[k] == h0[k]
     staged = {p.name for p in (typed.parent / "rows").iterdir()}
     if rows is not None:
@@ -55,3 +57,4 @@ def test_typed_staging(sid, rows, tmp_path):
     pub = typed.parent / f"pub-{h1['instances']}.bin"
     hp, bp = _split(pub)
     assert hp["rows"] is False and hp["statement"] == TS.STATEMENT and b1.endswith(bp)
+    assert_public_only(text, typed.read_bytes(), pub.read_bytes())

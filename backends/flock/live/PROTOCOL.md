@@ -400,7 +400,7 @@ and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
 1. **Extraction.** The honest prover on a dummy witness against V*: every private word zero, the public region words
-   written in (`Stmt::write_regions`: `b ‖ c` and the declared outputs), the mask slot uniform, fresh masks. Every message
+   written in (`Stmt::write_regions`: every row's `b ‖ c`, the output rows' included), the mask slot uniform, fresh masks. Every message
    before the proofs is masked, committed or public (§7, §5), and the region claims' `s_hat_v` are the public ones, so this
    run is distributed as a real one until the proofs, which follow the last coin. If it stops before the proofs (V*
    aborted or cheated, or the prover refused a degenerate coin), its view is the output.

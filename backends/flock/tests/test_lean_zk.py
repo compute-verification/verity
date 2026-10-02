@@ -1,4 +1,4 @@
-"""`verify --zk` (verifier PROTOCOL.md §16.13, `Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
+"""`verify --zk` (verifier PROTOCOL.md §16.14, `Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
 two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
