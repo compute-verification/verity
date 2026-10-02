@@ -617,6 +617,9 @@
   "Bf16ToF32_v1": {
    "and": 0
   },
+  "BitAnd_v1": {
+   "and": 1
+  },
   "BitAtx16_v1": {
    "and": 43
   },
@@ -652,6 +655,9 @@
   },
   "DivFullScaleA_v2": {
    "and": 1542
+  },
+  "E4m3ToF32_v1": {
+   "and": 47
   },
   "F2fpBf16_v1": {
    "and": 77
@@ -755,6 +761,9 @@
   "F32ToBf16Rn_v1": {
    "and": 77
   },
+  "F32ToE2m1Sat_v1": {
+   "and": 91
+  },
   "F32ToE4m3Sat_v1": {
    "and": 238
   },
@@ -850,6 +859,24 @@
   },
   "NvLogf_v2": {
    "and": 48616
+  },
+  "PouwBf16Neg_v1": {
+   "and": 0
+  },
+  "PouwETilde_v1": {
+   "and": 112
+  },
+  "PouwF32SqrtRn_v1": {
+   "and": 711
+  },
+  "PouwSqAcc_v1": {
+   "and": 2514
+  },
+  "PouwSqCeil_v1": {
+   "and": 22592
+  },
+  "PouwSqGe_v1": {
+   "and": 727
   },
   "RopeOutAdd_v1": {
    "and": 2998

@@ -369,6 +369,22 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     assert any(f["name"].startswith("correspondence/lowering-mismatch F32Mul_v1 [c-flock]") for f in e["failures"])
 
 
+def test_a_lowering_with_leaves_wider_than_64_bits_is_compared(monkeypatch):
+    """A 96-bit primitive's piece is lowered and compared as Python ints: one wrong only in bit 90 is caught."""
+    from verity.ir.defs import PrimitiveDefinition
+    from verity.ir.types import Value
+    from verity_flock import ir_lower as IL
+    from verity_flock.gf2 import NOT
+
+    prim = PrimitiveDefinition("CircuitCheckWide", 1, (("a", Value(96)),), Value(96), lambda a: a ^ (1 << 90), register=False)
+    pins = {"pieces": {prim.id: {"and": 0}}, "units": {}}
+    monkeypatch.setitem(IL.PIECES, prim.id, lambda C, a: list(a[:90]) + [NOT(a[90])] + list(a[91:]))
+    assert CK.check_definition(prim, OPTS, pins=pins)["failures"] == []
+    monkeypatch.setitem(IL.PIECES, prim.id, lambda C, a: list(a))
+    (f,) = CK.check_definition(prim, OPTS, pins=pins)["failures"]
+    assert f["name"].startswith("correspondence/lowering-mismatch CircuitCheckWide_v1 [c-flock]")
+
+
 def test_a_lowering_count_off_its_pin_is_named():
     from verity_vllm.program.registry import prims as P
 

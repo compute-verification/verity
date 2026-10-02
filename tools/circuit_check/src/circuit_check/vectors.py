@@ -101,9 +101,11 @@ def instance_args(params: Sequence[Type], arrays: Sequence[np.ndarray], i: int) 
 
 
 def flat(arrays: Sequence[np.ndarray]) -> np.ndarray:
-    """``(n, leaves)`` uint64: every instance's input leaves in parameter order (what a C-Flock lowering evaluates)."""
+    """``(n, leaves)`` uint64 (object, of ints, when a leaf is wider than 64 bits): every instance's input leaves in parameter
+    order (what a C-Flock lowering evaluates)."""
     n = arrays[0].shape[0] if arrays else 0
-    return np.concatenate([np.asarray(a, dtype=np.uint64).reshape(n, -1) for a in arrays], axis=1) if arrays else np.zeros((n, 0), np.uint64)
+    dt = object if any(np.asarray(a).dtype.kind == "O" for a in arrays) else np.uint64
+    return np.concatenate([np.asarray(a, dtype=dt).reshape(n, -1) for a in arrays], axis=1) if arrays else np.zeros((n, 0), np.uint64)
 
 
 __all__ = ["BF16", "E4M3", "E5M2", "FP16", "FP32", "FP64", "edge_count", "edges", "flat", "instance_args", "integer_edges", "vectors"]
