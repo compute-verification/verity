@@ -1,8 +1,8 @@
 """A unit class of any partition as a ``verity/flock-circuit`` statement (`verity_flock.class_statement`): on circuit-check's tiny
 Serve_v1 under `Q_word`, two table-free classes and the embedding gather compose with one row port per input source, their
 laid-out unit rows agree with the reference on synthetic lanes, a source read by several instances is one shared row (the
-gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`` names a built ``flock-circuit`` binary, a
-loopback session accepts each."""
+gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`` names a proving build of ``flock-circuit``, a
+loopback session accepts each, on the coins ``FC_COINS`` names."""
 from __future__ import annotations
 
 import hashlib
@@ -65,6 +65,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
+            assert live["coins"] == ("live-os" if os.environ.get("FC_COINS") == "os" else "os-seed-prf")
 
 
 def _fp_class(dtype: str, K: int):
@@ -541,6 +542,30 @@ def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0
         live = CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=3)
         assert (live["accepted"], live["why"]) == (accepted, why), (verdicts, rc)
         assert live["timed_runs"] == len(verdicts) - 1
+
+
+def test_a_live_statement_records_the_coins_its_sessions_ran_on(monkeypatch, tmp_path: Path):
+    (tmp_path / "circuit.txt").write_text("circuit")
+    seed, os_ = {"verdict": {"coin_seed": {"commitment": "ab"}}}, {"identity": {"coins": "live-os (every round's coins ...)"}}
+    tree = {"identity": {"hooks": {"zk": True}}}
+    st: dict = {}
+
+    class Prove:
+        def __init__(self, cmd, stdout, stderr):
+            if "-o" in cmd:
+                Path(cmd[cmd.index("-o") + 1]).write_text("1024\n")
+            stdout.write("".join(f"LIVE\t{json.dumps({'run': i, 'warm': i == 0, 'accepted': True, **x})}\n" for i, x in enumerate(st["live"])))
+            self.returncode = 0
+
+        def wait(self):
+            return 0
+
+    monkeypatch.delenv("FC_VERIFIERS", raising=False)
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"]))
+    monkeypatch.setattr(CS.subprocess, "Popen", Prove)
+    for live, coins in (([seed] * 2, "os-seed-prf"), ([os_] * 2, "live-os"), ([tree] * 2, None), ([seed, os_], None)):
+        st["live"] = live
+        assert CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=1)["coins"] == coins, live
 
 
 def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Path):
