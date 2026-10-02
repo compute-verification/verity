@@ -711,7 +711,10 @@ useful    U/(α_A·α_B), glue
     (`TileAnchors.public_inputs`, C-Flock's `verity/flock-public-inputs/v1`: a header line naming the ports, then each
     instance's regions), whose content for one unit is `TileAnchors.regions`: every value unpacked into u16 words (one
     per E2M1 code, two per FP32 word of G, low half first), each region whole 128-bit words, its bytes the words
-    little-endian. `tests/vectors/pouw_regions.json` pins both.
+    little-endian. `tests/vectors/pouw_regions.json` pins both. Each region is in the unit's parameter leaf order, not
+    the order its gates first read it (F_B is read transposed), and the order is part of what the verifier checks: a file
+    with the right values in another order, or with two instances swapped, is refused (`TileAnchors.check_public_inputs`,
+    as C-Flock's Lean verifier refuses it).
   - The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ from the plain ones only in the
     tile: `Pc4TileHidden` is `Pc4Tile` and its tile digest (`circuit.leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and
     U, on `hashes.KeccakP1600R12`), which it returns in place of C̃ and U. The weight's Program is `Pc4Weight` under

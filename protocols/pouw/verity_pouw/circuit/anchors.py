@@ -234,6 +234,32 @@ class TileAnchors:
         head = {"format": PUBLIC_INPUTS_FORMAT, "instances": len(units), "ports": ports}
         return json.dumps(head, sort_keys=True).encode() + b"\n" + b"".join(region_bytes(u[p]) for u in units for p in names)
 
+    def check_public_inputs(self, role: str, indexes: Sequence[int], data: bytes) -> None:
+        """Refuse a `--public-inputs` file that is not the verifier's own (`public_inputs`), as C-Flock's Lean verifier does
+        (`HmIn.checkOwn`): its header must be the verifier's, and every word its recomputation, each region in the unit's
+        parameter leaf order and the instances in ``indexes``' order.  So a region in another order (C-Flock's read order
+        of a transposed operand) or two instances swapped is refused, at the first word that differs."""
+        own_head, own_body = self.public_inputs(role, indexes).split(b"\n", 1)
+        head, sep, body = data.partition(b"\n")
+        try:
+            same = sep == b"\n" and json.loads(head) == json.loads(own_head)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            same = False
+        if not same:
+            raise DomainError("--public-inputs: its header (format, instances, ports) is not the verifier's")
+        if len(body) != len(own_body):
+            raise DomainError("--public-inputs: length")
+        if body == own_body:
+            return
+        ports = json.loads(own_head)["ports"]
+        w = next(j for j in range(0, len(body), 2) if body[j:j + 2] != own_body[j:j + 2]) // 2
+        instance, off = divmod(w, sum(p["words"] for p in ports))
+        for p in ports:
+            if off < p["words"]:
+                raise DomainError(f"public input {p['port']}: word {off} of instance {instance} is not the verifier's own "
+                                  f"recomputation (seed {p['seed']}, derivation {p['derivation']})")
+            off -= p["words"]
+
 
 def _check(fn, args, want: dict[str, list[int]]) -> None:
     params, _ = fn.signature()
