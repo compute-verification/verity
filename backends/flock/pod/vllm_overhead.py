@@ -11,7 +11,9 @@
     vllm_overhead.py rollup --counts counts.json [--counts-all ...] --timings PATH... --native native.json --row ROW --out vllm-overhead.json
         the weighted number for each prover mode (zk, m0): measured shapes at their seconds per unit times their row units, the
         rest priced at their Definition family's measured seconds per word gate (else the row's median), over the run's native
-        seconds; on --basis (default prove, Panel 1's prover seconds) with the other basis beside it (other_bases)
+        seconds; on --basis (default prove, Panel 1's prover seconds) with the other basis beside it (other_bases), and beside
+        the per-gate pricing the same sum with the rest priced per unit instead (per_unit_alternative: linear in word gates
+        between the family's measured shapes), since a shape's seconds per unit follow its statements and blocks, not its gates
     vllm_overhead.py point --rollup vllm-overhead.json --config vllm/<model>/<all|prefill|decode>/<zk|m0> --result result.json
         one config of the rollup as an attempt's result (measurement `overhead`, x-native)
 
@@ -248,14 +250,41 @@ def rollup(a) -> dict:
     for mode, m in modes.items():
         alt = ", ".join(f"{b} {v['overhead']:.4g}" for b, v in m["other_bases"].items())
         print(f"{mode}: {m['overhead']:.4g} x-native ({m['prover_s']:.4g} s / {nat['all_s']:.4g} s; {alt}), coverage "
-              f"{m['coverage_gates']:.4f} of gates in {m['shapes_measured']} shapes, extrapolated {m['extrapolated_s'] / m['prover_s']:.4f} of seconds")
+              f"{m['coverage_gates']:.4f} of gates in {m['shapes_measured']} shapes, extrapolated {m['extrapolated_s'] / m['prover_s']:.4f} of seconds; "
+              f"the rest per unit instead: {m['per_unit_alternative']['overhead']:.4g}")
         for fid, d in list(m["call_definitions"].items())[:10]:
             print(f"   {d['share']:.4f}  {d['seconds']:.4g} s  {fid[:100]}")
     return out
 
 
+def _per_unit(shapes: dict, best: dict[str, dict], basis: str):
+    """The per-unit alternative to per-gate pricing: an unmeasured shape's seconds per unit, linear in word gates between its
+    family's measured shapes (the mean where several share a word-gate count; clamped at the ends), else the measured median."""
+    pts: dict[str, dict[int, list]] = {}
+    for sh, t in best.items():
+        pts.setdefault(family(shapes[sh]["definition"]), {}).setdefault(shapes[sh]["word_gates"], []).append(t[f"{basis}_s_per_unit"])
+    curves = {f: sorted((w, statistics.fmean(v)) for w, v in p.items()) for f, p in pts.items()}
+    median = statistics.median(t[f"{basis}_s_per_unit"] for t in best.values())
+
+    def spu(s: dict) -> float:
+        cv = curves.get(family(s["definition"]))
+        if not cv:
+            return median
+        w = s["word_gates"]
+        if w <= cv[0][0]:
+            return cv[0][1]
+        for (w0, y0), (w1, y1) in zip(cv, cv[1:]):
+            if w <= w1:
+                return y0 + (y1 - y0) * (w - w0) / (w1 - w0)
+        return cv[-1][1]
+    return spu
+
+
 def _weigh(a, c: dict, sd: dict, shapes: dict, total: int, nat: dict, best: dict[str, dict], basis: str) -> dict:
-    """One mode's weighted seconds on one basis: measured shapes at their seconds per unit, the rest per word gate."""
+    """One mode's weighted seconds on one basis: measured shapes at their seconds per unit, the rest per word gate (and, beside
+    it as per_unit_alternative, the rest per unit)."""
+    spu = _per_unit(shapes, best, basis)
+    alt_s = sum(spu(s) * s["row_units"] for sh, s in shapes.items() if sh not in best)
     spg = {sh: t[f"{basis}_s_per_unit"] / shapes[sh]["word_gates"] for sh, t in best.items()}
     fam_spg: dict[str, list] = {}
     for sh in best:
@@ -300,12 +329,14 @@ def _weigh(a, c: dict, sd: dict, shapes: dict, total: int, nat: dict, best: dict
         phases[ph] = {"prover_s": sum(d["seconds"] * w[fid] for fid, d in defs.items()), "gates": g,
                       "coverage_gates": sum(d["measured_gates"] * w[fid] for fid, d in defs.items()) / g if g else None}
         phases[ph]["overhead"] = phases[ph]["prover_s"] / nat[f"{ph}_s"] if nat.get(f"{ph}_s") else None
+    meas_s = sum(p["seconds"] for p in per_shape.values() if p["how"] == "measured")
     return {
-        "prover_s": num, "measured_s": sum(p["seconds"] for p in per_shape.values() if p["how"] == "measured"), "phases": phases,
+        "prover_s": num, "measured_s": meas_s, "phases": phases,
         "extrapolated_s": sum(p["seconds"] for p in per_shape.values() if p["how"] != "measured"),
         "coverage_gates": meas_g / total, "shapes_measured": len(best),
         "extrapolated_by": {h: sum(shapes[sh]["gates"] for sh, p in per_shape.items() if p["how"] == h) / total for h in ("family", "median")},
         "overhead": num / nat["all_s"], "median_s_per_gate": median, "family_s_per_gate": fam_rate,
+        "per_unit_alternative": {"prover_s": meas_s + alt_s, "extrapolated_s": alt_s, "overhead": (meas_s + alt_s) / nat["all_s"]},
         "families": dict(sorted(fams.items(), key=lambda kv: -kv[1]["seconds"])),
         "call_definitions": dict(sorted(defs.items(), key=lambda kv: -kv[1]["seconds"])),
         "shapes_measured_detail": {sh: {k: t.get(k) for k in ("run", "definition", "word_gates", "row_units", "units_per_statement", "n", "tile",
