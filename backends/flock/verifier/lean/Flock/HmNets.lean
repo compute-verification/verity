@@ -407,14 +407,14 @@ start of the program. They are irreducible so that no proof's unfolding builds t
 set_option compiler.extract_closed false in
 /-- `sha512x3`: `compression(3)` with inputs `cv0, msg0, cv1, msg1, cv2, msg2` and outputs `out0, out1, out2`. -/
 @[irreducible] def shaLaid (_ : Unit) : Laid :=
-  let (r, st) := compression3.run St.empty
-  layout st SHA_IN SHA_OUT r.2.flatten.toArray
+  let p := compression3.run St.empty
+  layout p.2 SHA_IN SHA_OUT p.1.2.flatten.toArray
 
 set_option compiler.extract_closed false in
 /-- `hm96`: `hm96_row` under the default key, inputs `cv, pad, y`, output `bc`. -/
 @[irreducible] def hmLaid (_ : Unit) : Laid :=
-  let (r, st) := (hm96Row Hm96.Default512.key).run St.empty
-  layout st HM_IN HM_OUT r.2.2.2.toArray
+  let p := (hm96Row Hm96.Default512.key).run St.empty
+  layout p.2 HM_IN HM_OUT p.1.2.2.2.toArray
 
 def netOf (name : String) (l : Laid) : V Net := Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb
 
