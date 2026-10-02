@@ -18,3 +18,4 @@ import FlockSoundness.Discharge.Hm.Nets
 import FlockSoundness.Discharge.Hm.Place
 import FlockSoundness.Discharge.Hm.Accept
 import FlockSoundness.Discharge.Hm.Delta
+import FlockSoundness.Discharge.Hm.Copies
