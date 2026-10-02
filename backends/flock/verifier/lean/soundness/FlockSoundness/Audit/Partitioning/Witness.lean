@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.Partitioning.Guarantees
+import FlockSoundness.Audit.Partitioning.SecurityProofs.TwoStage
 
 /-!
 # The partitioning guarantees are not vacuous
@@ -134,6 +135,9 @@ theorem concentration :
 
 theorem nestedEscape :
     ((nested 2 2 1 1 2 (by norm_num)).escape {finProdFinEquiv (0, 0)}).toReal = 3 / 4 := by
-  sorry
+  have h0 : wrongIn (R := 2) (N := 2) {finProdFinEquiv (0, 0)} 0 = 1 := by decide
+  have h1 : wrongIn (R := 2) (N := 2) {finProdFinEquiv (0, 0)} 1 = 0 := by decide
+  rw [(SecurityProofs.NestedEscape 2 2 1 1 2 (by norm_num) (by norm_num) _).1, Fin.prod_univ_two, h0, h1]
+  norm_num [Nat.choose]
 
 end FlockSoundness.Audit.Partitioning.Witness
