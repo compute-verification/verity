@@ -43,6 +43,7 @@ from __future__ import annotations
 import bisect
 import functools
 import hashlib
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import reduce
@@ -88,7 +89,10 @@ SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
+FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "Attention_v10", "Attention_v11",
+                                      "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
+#: the parameters of a `registered_values` Program's supplied inputs (`Population.supplied`): `values`, and `run` / `run_<i>` per request
+SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 
 
 def collective_kind(family: str) -> str | None:
@@ -329,12 +333,19 @@ class Population:
             raise ValueError("Program has no sampling event: no step boundary")
         self.record_fields: dict[ValueRef, str] = {}
         self.record_params: list[InputView] = []
+        #: a `registered_values` Program's supplied inputs (its `values` and `run_<i>` fields): prescribed, never a weight, the prompt or a
+        #: committed word -- registration binds them (the build's supplied layout), so no identity of the manifest names them
+        self.supplied: dict[ValueRef, str] = {}
         for p in P.params:
+            if SUPPLIED_PARAM.match(p.name):
+                for port in p.port_table:
+                    self.supplied[ValueRef(p.id, port.name)] = port.name
+                continue
             if len(p.port_table) > 1 or p.type_repr[:1] == "{":
                 self.record_params.append(p)
                 for port in p.port_table:
                     self.record_fields[ValueRef(p.id, port.name)] = port.name
-        prescribed = frozenset(self.record_fields)
+        prescribed = frozenset(self.record_fields) | frozenset(self.supplied)
         self.world, self.rank = int((tp or {}).get("world") or 1), int((tp or {}).get("rank") or 0)
         self.collectives: dict[int, str] = {}              # collective Call -> "all_reduce" | "all_gather"
         self.operand: dict[int, ValueRef] = {}             # collective Call -> its rank-local operand
@@ -404,7 +415,7 @@ class Population:
                 kinds[c.family] = collective_kind(c.family)
             k = kinds[c.family]
             for r in param_reads(c):
-                if r not in self.record_fields:
+                if r not in self.record_fields and r not in self.supplied:
                     collective_only[r] = collective_only.get(r, True) and k is not None
             if k is None:
                 continue
@@ -599,7 +610,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             add("sampled_token_ids", step, 0, "runner.sampler", "sampled_token_ids", 0, n_seq, dtype="i64", spec=c.family)
             residual_counts["encoding:sampled_token_ids"] += 1
             for r in c.reads:                                   # the runtime inputs the selector consumes (seed, splits): the sampler's
-                if r.call < 0 and r not in record_fields:
+                if r.call < 0 and r not in record_fields and r not in pop.supplied:
                     pin = P.input(r.call)
                     add(f"sampler_{pin.name}", step, 0, "runner.sampler", pin.name, 0, n_seq, dtype=_dtype(pin.port_table[0].width), spec=c.family)
             continue
@@ -648,7 +659,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         if not m:
             continue
         # a non-weight prescribed input (the prompt ids) or a sampling event's output among the reads
-        if any(r not in record_fields and r not in non_ids for r in param_reads(c)) or reads_any_of(c, event_set):
+        if any(r not in record_fields and r not in non_ids and r not in pop.supplied for r in param_reads(c)) or reads_any_of(c, event_set):
             ids_rows[(step_of(c.id), m)] += 1
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")

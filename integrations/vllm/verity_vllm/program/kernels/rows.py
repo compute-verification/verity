@@ -27,6 +27,7 @@ import numpy as np
 from verity.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
+from verity_vllm.program.kernels import value_rows as VR
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
 EVALUATORS = {
@@ -75,6 +76,7 @@ EVALUATORS = {
                     "per-iteration Check_inf, registry.fa2_check_inf; targets.fa2_check_inf)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
+    **VR.EVALUATORS,
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
@@ -315,13 +317,15 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     # The AttnBlock INTERIORS inside the row (Q_fine_v1 units) live in the M1 export stream, which the replay does not read -- the
     # report names that mechanism with the row count (ATTENTION_INTERIOR_MECHANISM).
     T, NH, KVH, Dh, BN = (int(statics[k]) for k in ("T", "NH", "KVH", "D", "BN"))
-    if len(ops) != 3:                                                        # [R17-14] the Definition's arity (q, kc, vc): a row wiring another is by name
-        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes 3 (q, K history, V history)")
-    if family in ("Attention_v2", "Attention_v4", "Attention_v5"):
+    arity = 4 if family in VR.SCALE_INPUT else 3
+    if len(ops) != arity:                                                    # [R17-14] the Definition's arity (q, kc, vc[, scale_log2]): a row wiring another is by name
+        raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes {arity} (q, K history, V history{', scale_log2' * (arity == 4)})")
+    if family in ("Attention_v2", "Attention_v4", "Attention_v5", "Attention_v11"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
         dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
-    masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5") else None
+    masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5", "Attention_v11") else None
+    scale_bits = VR.word32(ops[3], family, "scale_log2") if arity == 4 else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
                        f"(twins: {sorted(D.TC_DOT16_BY_PRIM)} x {sorted(D.INV_SUM_BY_PRIM)})")
@@ -332,27 +336,26 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
         raise Declined(f"{family}: K history {kc.size} / V history {vc.size} words != T*KVH*D = {T}*{KVH}*{Dh}")
     try:
         out, nonfin = D.attention_rows(q, kc.reshape(T, KVH, Dh), vc.reshape(T, KVH, Dh), BN, dot_prim=dot_id, inv_prim=inv_id,
-                                       masked_from=masked_from, rescale_only=family == "Attention_v5")
+                                       masked_from=masked_from, rescale_only=family in ("Attention_v5", "Attention_v11"), scale_bits=scale_bits)
     except ValueError as e:                                                  # a geometry outside the registered relation: by name
         raise Declined(f"{family}: {e}") from None
     if nonfin.any():
         raise Declined(f"{family}: {int(nonfin.sum())} heads have a non-finite operand / accumulator (outside the vectorised twins' domain)")
-    out = np.asarray(out, dtype=np.uint16).reshape(NH * Dh)
-    return {"out": out}
+    return {"out": np.asarray(out, dtype=np.uint16).reshape(NH * Dh)}
 
 
-def rmsnorm_triton(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+def rmsnorm_triton(statics: dict[str, Any], ops: Sequence[np.ndarray], family: str = "RMSNormTriton_v1") -> dict[str, np.ndarray]:
     from verity_vllm.program.kernels import derived_rows as D
     N = int(statics["N"])
-    r = D.rmsnorm_triton_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(N), _eps(statics))
+    r = D.rmsnorm_triton_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(N), _eps(statics) if "EPS" in statics else VR.eps(ops, 2, family))
     return {"out": np.asarray(r["out"], dtype=np.uint16).reshape(N)}
 
 
-def rmsnorm_fused(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+def rmsnorm_fused(statics: dict[str, Any], ops: Sequence[np.ndarray], family: str = "RMSNormFusedCuda_v2") -> dict[str, np.ndarray]:
     from verity_vllm.program.kernels import derived_rows as D
     N = int(statics["N"])
     r = D.rmsnorm_fused_v2_rows(np.asarray(ops[0], dtype=np.uint16).reshape(1, N), np.asarray(ops[1], dtype=np.uint16).reshape(1, N),
-                                np.asarray(ops[2], dtype=np.uint16).reshape(1, N), _eps(statics))
+                                np.asarray(ops[2], dtype=np.uint16).reshape(1, N), _eps(statics) if "EPS" in statics else VR.eps(ops, 3, family))
     return {"0": np.asarray(r["normed"], dtype=np.uint16).reshape(N), "1": np.asarray(r["resid"], dtype=np.uint16).reshape(N)}
 
 
@@ -702,6 +705,7 @@ def _check_targets() -> dict[str, list]:
                          for m in (2, 0)],
         "RMSNormTriton_v1": [bind(b1.RMSNormTriton, N=16, EPS=1e-6)],
         "RMSNormFusedCuda_v2": [bind(b1.RMSNormFusedCuda, N=16, EPS=1e-6)],
+        **VR.check_targets(),
         "SiluMul_v1": [bind(b1.SiluMul, I=8)],
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
@@ -745,6 +749,10 @@ _row("Attention_v4", partial(attention, "Attention_v4"), ("out",))
 _row("Attention_v5", partial(attention, "Attention_v5"), ("out",))
 _row("RMSNormTriton_v1", rmsnorm_triton, ("out",))
 _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))
+_row("Attention_v10", partial(attention, "Attention_v10"), ("out",), VR.sample_value(_sample(), VR.scale_words))
+_row("Attention_v11", partial(attention, "Attention_v11"), ("out",), VR.sample_value(_sample(), VR.scale_words))
+_row("RMSNormTriton_v3", partial(rmsnorm_triton, family="RMSNormTriton_v3"), ("out",), VR.sample_value(_sample(), VR.eps_words))
+_row("RMSNormFusedCuda_v4", partial(rmsnorm_fused, family="RMSNormFusedCuda_v4"), ("0", "1"), VR.sample_value(_sample(), VR.eps_words))
 _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))

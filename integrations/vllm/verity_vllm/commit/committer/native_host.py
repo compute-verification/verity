@@ -50,6 +50,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
     torch = None  # type: ignore[assignment]
 
 from verity_vllm.commit import hiding, scheme
+from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
@@ -2483,7 +2484,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 mc = self._module_class(m.name)
                 compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdigit() and m.name[3] == "."   # R15 S3: c<piece>.<kernel>/<role>
                 if m.name.endswith("/in") or (compiled_kernel and m.name.endswith("/ids")):
-                    cls, fam = "input_token_ids", ("Input32_v1",)
+                    cls, fam = "input_token_ids", (TOKEN_IDS_INPUT,)
                 elif "sampled_token_ids" in m.name:
                     cls, fam = "sampled_token_ids", ("TokenSelect_v1",)
                 elif compiled_kernel:
@@ -2504,9 +2505,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             "covers_families": sorted(d["families"]), "acquisitions": ["naturally-materialized", "registered-input"],
                             "evidence": f"forward hooks on {sorted(d['modules'])}; pos_leaf chunk={self.chunk}; per-step bind_root; run root"})
         if self.weights:
-            classes.append({"class": "weights", "how": "registered-input", "covers_families": ["Input16_v1"], "acquisitions": ["registered-input"],
-                            "rule": "register_weights(): per-tensor chunked pos_leaf subtree, fold of subtree roots bound with names/dtypes/shapes (once per process)",
-                            "count": None, "bytes": self.weights["bytes"], "tensors": self.weights["tensors"], "evidence": f"root {self.weights['root'][:16]}"})
+            classes.append(weights_class(self.weights, getattr(self, "weights_tree", None)))
         # derived-from-bound classes whose SOURCE is a naturally-materialized word this committer binds (norm residual bf16 -> fp32 lift):
         # declared as covered ONLY through the derived-value rule (a protocol clause; cited), which the checker reports in its own status
         if "RMSNormFusedCuda_v2" in families and self.regen_row4:

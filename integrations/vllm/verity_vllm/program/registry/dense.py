@@ -168,9 +168,9 @@ def MeanTriton(B, S, x):
 
 @composite("AddScalarF32", 1, ["N", "C"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
            conformance="quarantine (lane dense): difftest vs aten.add(x, C) on the pod")
-def AddScalarF32(B, S, x):
-    """`out_j = RN32(x_j + f32(C))`."""
-    c = B.call(f32c(float(S.C)))
+def AddScalarF32(B, S, x, c=None):
+    """`out_j = RN32(x_j + f32(C))`; `c`: `AddScalarF32_v3`'s input (the f32 word `f32(C)`)."""
+    c = B.call(f32c(float(S.C))) if c is None else c
     return B.batch(P.F32Add, x, c, axes=(0, None))
 
 
@@ -183,10 +183,10 @@ def AddScalarF32(B, S, x):
 
 @composite("AddScalarBf16", 1, ["N", "C"], lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)),
            conformance="quarantine (lane dense): difftest vs aten.add(w.float(), C) on the pod")
-def AddScalarBf16(B, S, w):
-    """`out_j = RN32(f32(w_j) + f32(C))`."""
+def AddScalarBf16(B, S, w, c=None):
+    """`out_j = RN32(f32(w_j) + f32(C))`; `c`: `AddScalarBf16_v3`'s input (the f32 word `f32(C)`)."""
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
-    c = B.call(f32c(float(S.C)))
+    c = B.call(f32c(float(S.C))) if c is None else c
     return B.batch(P.F32Add, wf, c, axes=(0, None))
 
 
@@ -299,10 +299,10 @@ def reciprocal_bits(c: float) -> int:
 
 @composite("Bf16DivScalar", 1, ["N", "C"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
            conformance="quarantine (lane dense): difftest vs aten.div(x, C) on the pod")
-def Bf16DivScalar(B, S, x):
-    """`out_j = cvt.rn.bf16.f32(f32(x_j) * RN32(1 / C))`."""
+def Bf16DivScalar(B, S, x, inv=None):
+    """`out_j = cvt.rn.bf16.f32(f32(x_j) * RN32(1 / C))`; `inv`: `Bf16DivScalar_v3`'s input (the f32 word `RN32(1 / C)`)."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
-    inv = B.call(const(32, reciprocal_bits(float(S.C))))
+    inv = B.call(const(32, reciprocal_bits(float(S.C)))) if inv is None else inv
     return B.batch(P.F2fpBf16, B.batch(P.F32Mul, xf, inv, axes=(0, None)), axes=(0,))
 
 
@@ -375,10 +375,10 @@ def Bf16Tanh(B, S, x):
 
 @composite("Bf16MulScalar", 1, ["N", "C"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
            conformance="quarantine (lane dense): difftest vs aten.mul(x, C) on the pod")
-def Bf16MulScalar(B, S, x):
-    """`out_j = cvt.rn.bf16.f32(f32(x_j) * f32(C))`."""
+def Bf16MulScalar(B, S, x, c=None):
+    """`out_j = cvt.rn.bf16.f32(f32(x_j) * f32(C))`; `c`: `Bf16MulScalar_v3`'s input (the f32 word `f32(C)`)."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
-    c = B.call(f32c(float(S.C)))
+    c = B.call(f32c(float(S.C))) if c is None else c
     return B.batch(P.F2fpBf16, B.batch(P.F32Mul, xf, c, axes=(0, None)), axes=(0,))
 
 
@@ -505,16 +505,17 @@ def softcap_scale_log2_bits(CAP: float) -> int:
                         ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
            conformance="quarantine (lane gemma): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job 0917T223335-9ad747, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
-def AttnBlockSoftcap(B, S, q, k, v, m_prev, l_prev, o_prev):
+def AttnBlockSoftcap(B, S, q, k, v, m_prev, l_prev, o_prev, softcap_mul=None, scale_log2=None):
     """`AttnBlock_v3`'s body with FA2's softcap stage A' in front of the online softmax: `s'[c] = MufuTanh(F32MulFtz(s[c], SOFTCAP_MUL))`,
-    exp2 constant `CAP * log2e`.  One BN-key block of one query row; `NVIS` visible columns; `FIRST` = kernel `Is_first`."""
-    D, NVIS, FIRST, BN, CAP = S.D, S.NVIS, S.FIRST, S.BN, S.CAP
+    exp2 constant `CAP * log2e`.  One BN-key block of one query row; `NVIS` visible columns; `FIRST` = kernel `Is_first`.
+    `softcap_mul` / `scale_log2`: `AttnBlockSoftcap_v4`'s inputs (no `CAP`)."""
+    D, NVIS, FIRST, BN, CAP = S.D, S.NVIS, S.FIRST, S.BN, getattr(S, "CAP", None)
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"AttnBlockSoftcap_v1: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
-    if not (isinstance(CAP, (int, float)) and CAP > 0):
+    if softcap_mul is None and not (isinstance(CAP, (int, float)) and CAP > 0):
         raise ValueError(f"AttnBlockSoftcap_v1: CAP={CAP!r} must be a positive softcap (FA2 takes the Is_softcap path iff softcap > 0)")
     dot = bind(DotBf16, K=D)
-    softcap_mul = B.call(const(32, softcap_mul_bits(D, CAP)))
+    softcap_mul = B.call(const(32, softcap_mul_bits(D, CAP))) if softcap_mul is None else softcap_mul
     # A: S = Q K^T;  A' (NEW): S' = tanh.approx(S * softmax_scale / CAP), one MUFU.TANH per score, BEFORE the row max
     s = [B.call(P.MufuTanh, B.call(P.F32MulFtz, B.call(dot, q, k[c]), softcap_mul)) for c in range(NVIS)]
     bmax = s[0]
@@ -522,7 +523,8 @@ def AttnBlockSoftcap(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max (of the capped scores)
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, softcap_scale_log2_bits(CAP)))  # CAP * log2e, not D^-0.5 * log2e
+    if scale_log2 is None:
+        scale_log2 = B.call(const(32, softcap_scale_log2_bits(CAP)))  # CAP * log2e, not D^-0.5 * log2e
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -562,10 +564,11 @@ def AttnBlockSoftcap(B, S, q, k, v, m_prev, l_prev, o_prev):
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
                       Array(S.D, BF16)),
            conformance="quarantine (lane gemma): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job 0917T223335-9ad747, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
-def AttentionHeadSoftcap(B, S, q, k, v):
+def AttentionHeadSoftcap(B, S, q, k, v, *extra, block=AttnBlockSoftcap):
     """`AttentionHead_v3`'s body over `AttnBlockSoftcap_v1{..., BN, CAP}`: causal attention of one query at position T-1 over keys
-    0..T-1, ceil(T / BN) blocks visited last -> first; epilogue `Fa2InvSum` + `bf16(o * inv)` unchanged."""
-    T, D, BN, CAP = S.T, S.D, S.BN, S.CAP
+    0..T-1, ceil(T / BN) blocks visited last -> first; epilogue `Fa2InvSum` + `bf16(o * inv)` unchanged.  `extra` / `block`:
+    `AttentionHeadSoftcap_v4`'s."""
+    T, D, BN, CAP = S.T, S.D, S.BN, getattr(S, "CAP", None)
     nb = (T + BN - 1) // BN
     m = l = o = None
     zero_row = None
@@ -580,15 +583,15 @@ def AttentionHeadSoftcap(B, S, q, k, v):
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = bind(AttnBlockSoftcap, D=D, NVIS=nvis, FIRST=first, BN=BN, CAP=CAP)
+        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN, **({} if extra else {"CAP": CAP}))
         if first:
             z = B.call(ZERO32)
             m0 = z
             l0 = _Coll(Array(4, F32), concat([z.refs] * 4))
             o0 = _Coll(Array(D, F32), concat([z.refs] * D))
-            st = B.call(blk, q, kb, vb, m0, l0, o0)
+            st = B.call(blk, q, kb, vb, m0, l0, o0, *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(P.Fa2InvSum, total)
@@ -602,17 +605,18 @@ def AttentionHeadSoftcap(B, S, q, k, v):
                        ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
                       Array(S.NH, Array(S.D, BF16))),
            conformance="quarantine (lane gemma): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job 0917T223335-9ad747, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
-def AttentionSoftcap(B, S, q, kc, vc):
+def AttentionSoftcap(B, S, q, kc, vc, *extra, head=AttentionHeadSoftcap):
     """`Attention_v3`'s body over `AttentionHeadSoftcap_v1{T, D, BN, CAP}` (GQA: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]`).
     Gemma-2-2B: NH = 8, KVH = 4, D = 256, CAP = 50.0, BN = `fa2_kblock_n(256)`; sliding-window layers need nothing more below 4096
     tokens (FA2 `Is_local = false` there)."""
-    T, NH, KVH, D, BN, CAP = S.T, S.NH, S.KVH, S.D, S.BN, S.CAP
+    T, NH, KVH, D, BN = S.T, S.NH, S.KVH, S.D, S.BN
+    cap = {} if extra else {"CAP": S.CAP}
     G = NH // KVH
     outs = []
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
         vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(bind(AttentionHeadSoftcap, T=T, D=D, BN=BN, CAP=CAP), q[g * G:(g + 1) * G], kg, vg, axes=(0, None, None)))
+        outs.append(B.batch(bind(head, T=T, D=D, BN=BN, **cap), q[g * G:(g + 1) * G], kg, vg, *extra, axes=(0, None, None) + (None,) * len(extra)))
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 

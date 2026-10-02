@@ -310,8 +310,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
-    from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8
+    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import value_inputs as VI
+    from verity_vllm.program.registry import boolean_attention, boolean_fp8, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -336,6 +337,20 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Attention_v9", lambda: bind(boolean_attention.AttentionV9, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
                                       **boolean_attention.ATTENTION_FA3)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
+        # the Definitions whose program values are inputs (eps, the attention scale); the chain's second block rescales (T = BN + 1)
+        ("RMSNormTriton_v3", lambda: bind(VI.RMSNormTritonV3, N=64)),
+        ("RMSNormFusedCuda_v4", lambda: bind(VI.RMSNormFusedCudaV4, N=64)),
+        ("Attention_v10", lambda: bind(VI.AttentionV10, T=17, NH=1, KVH=1, D=16, BN=16)),
+        ("Attention_v11", lambda: bind(fa2_check_inf.AttentionV11, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                       DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
+        ("Attention_v12", lambda: bind(VI.AttentionV12, T=17, NH=1, KVH=1, D=16, BN=16, DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
+        ("Attention_v13", lambda: bind(VI.AttentionV13, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1, DOT=hopper.HopperBF16WgmmaDot16,
+                                       INV=hopper.Fa3InvSum)),
+        ("AttentionSoftcap_v4", lambda: bind(VI.AttentionSoftcapV4, T=17, NH=1, KVH=1, D=16, BN=16)),
+        ("AttentionSoftcap_v5", lambda: bind(VI.AttentionSoftcapV5, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                             DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
+        # the Definitions that read a registered table (`gelu_tanh_bf16`) through `TableRead16x1_v1`
+        ("GeluTanhMul_v3", lambda: bind(tables.GeluTanhMulV3, I=16)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
         ("AllGather_v1", lambda: b1_tp2.all_gather(4, 8)),
