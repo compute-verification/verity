@@ -972,14 +972,10 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 1
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "thanks")[0] == 0
     assert len(bells(fake, circuits)) == 1
-    posts = len(fake.messages[COORD])
-    for argv in (["reply", "--thread", root["ts"], "--text", "@circuits one more"], ["send", "--to", "@circuits", "--text", "x"],
-                 ["send", "--text", "@circuits x"], ["send", "--thread", root["ts"], "--text", "@circuits x"]):
-        rc, _, err = run(capsys, argv[0], "--as", "infra", "--quiet", *argv[1:])
-        assert rc == 2 and "@circuits would never see this" in err, argv                 # a quiet ask reaches no one
-    assert len(fake.messages[COORD]) == posts
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "@circuits started, no reply needed")[0] == 0
+    assert len(bells(fake, circuits)) == 2                                             # a quiet post still reaches the names it starts with
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
-    assert len(bells(fake, circuits)) == 2                                             # a status line reaches the root's poster
+    assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
 def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):

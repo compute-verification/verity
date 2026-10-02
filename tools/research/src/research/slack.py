@@ -120,7 +120,7 @@ LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
-QUIET = "(quiet)"                                                # in a post: ring no doorbell
+QUIET = "(quiet)"                                                # in a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 INBOX_HEAD = "Inbox for @"
@@ -557,18 +557,20 @@ def header_names(text: str, reg: dict) -> list[str]:
 def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset()) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
-    only the root's poster; a quiet post wakes no one; otherwise the names at the start, an announcement's audience (every
-    handle when it names none), and on a reply that names no one the root's poster or, when the poster replies, the names
-    the root addressed.  The author is never a target."""
+    only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
+    none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
+    A quiet post wakes only the names at its start.  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
-    if (thread or ts) in inboxes or QUIET in text or text.startswith(INBOX_HEAD) or \
+    if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
             (reply and root and root.get("bot_id") and (root.get("text") or "").startswith(INBOX_HEAD)):
         return []
     author, by = poster(msg, reg), poster(root, reg) if reply else None
     if author is None:
         return []                                                    # only our bot and the named humans route
-    if reply and is_status(text):
+    if QUIET in text:
+        out = [] if is_status(text) else lead_names(text, reg)       # people write (quiet) for "no reply needed"
+    elif reply and is_status(text):
         out = [by]
     else:
         out = lead_names(text, reg)
@@ -964,13 +966,6 @@ def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     return 0
 
 
-def _quiet_ok(ns: argparse.Namespace, reg: dict, body: str, to: list[dict] = ()) -> None:
-    """`--quiet` rings no doorbell, so on a post that names someone it would leave them unaware of it."""
-    names = [t["handle"] for t in to] + lead_names(body, reg)
-    if ns.quiet and names:
-        raise SlackError(f"--quiet rings no doorbell, so @{names[0]} would never see this: drop --quiet, or the names")
-
-
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
@@ -983,7 +978,6 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
-    _quiet_ok(ns, reg, body, to)
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
@@ -1068,9 +1062,7 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns)
-    _quiet_ok(ns, reg, body)
-    body += f" {QUIET}" if ns.quiet else ""
+    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1754,7 +1746,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
-    p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it); refused on a post that names someone")
+    p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed (digests still get it)")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True, url=True)
@@ -1780,7 +1772,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True, url=True)
-    p.add_argument("--quiet", action="store_true", help="ring no doorbell (an acknowledgment nobody must act on)")
+    p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
     p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list", url=True, aliases=("inbox",))
     p.add_argument("verb", choices=("open", "read", "close", "list"))
