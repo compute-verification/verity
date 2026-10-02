@@ -874,7 +874,7 @@ struct ZkRep {
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
     /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword; one copy, rep 0's)
-    level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
+    level0: Arc<Level0Hiding>,
     /// the pair of extra lanes this rep reads (`Level0Zk::rep`)
     l0_rep: usize,
 }
@@ -882,17 +882,35 @@ struct ZkRep {
 impl ZkRep {
     /// This rep's level-0 hiding as upstream's prover takes it: the session's, with this rep's pair (a copy for rep 1, CPU only).
     fn level0_own(&self) -> std::borrow::Cow<'_, flock_core::pcs::ligerito::zk::Level0Zk> {
-        if self.level0.rep == self.l0_rep {
-            std::borrow::Cow::Borrowed(&*self.level0)
+        if self.level0.z.rep == self.l0_rep {
+            std::borrow::Cow::Borrowed(&self.level0.z)
         } else {
-            std::borrow::Cow::Owned(flock_core::pcs::ligerito::zk::Level0Zk { rep: self.l0_rep, ..(*self.level0).clone() })
+            std::borrow::Cow::Owned(flock_core::pcs::ligerito::zk::Level0Zk { rep: self.l0_rep, ..self.level0.z.clone() })
         }
+    }
+}
+
+/// A session's Ligerito level-0 hiding (M1): upstream's form, and on the device the same words flattened once into mapped host
+/// memory, which both reps upload.
+struct Level0Hiding {
+    z: flock_core::pcs::ligerito::zk::Level0Zk,
+    #[cfg(feature = "gpu")]
+    flat: Option<flock_live::gpu_circuit::Level0Flat>,
+}
+
+impl Level0Hiding {
+    fn new(z: flock_core::pcs::ligerito::zk::Level0Zk, device: bool) -> Arc<Self> {
+        #[cfg(feature = "gpu")]
+        let flat = device.then(|| flock_live::gpu_circuit::Level0Flat::new(&z));
+        #[cfg(not(feature = "gpu"))]
+        let _ = device;
+        Arc::new(Level0Hiding { z, #[cfg(feature = "gpu")] flat })
     }
 }
 
 /// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
 #[allow(clippy::too_many_arguments)]
-fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
+fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &Arc<Level0Hiding>,
               points: &Arc<Mutex<zkv::MaskRank>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
     let tz0 = Instant::now();
     let lay = zk_layout(st);
@@ -917,7 +935,7 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
               points: &Arc<Mutex<zkv::MaskRank>>) -> (f64, [(ZkRep, u64); 2]) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
-    let level0 = Arc::new(level0_zk(st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper));
+    let level0 = Level0Hiding::new(level0_zk(st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper), plan.gpu);
     let t_level0 = tl0.elapsed().as_secs_f64();
     let trees = params(st.m, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
@@ -2163,7 +2181,7 @@ fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook
                  z: &ZkRep, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool)
                  -> (R1csProofLigerito, Commitment, Value) {
     use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
-    let live = Live::Zk { level0: &*z.level0, rep: z.l0_rep, rounds };
+    let live = Live::Zk { level0: &z.level0.z, flat: z.level0.flat.as_ref(), rep: z.l0_rep, rounds };
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, live, Some(salts), Reuse::None, native_sha));
     let bk = gpu_buckets(wt, ph, wph, hph, false, native_sha);
@@ -2596,7 +2614,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper));
             let root = level0_root(&tb.st, wits[j].1.as_ref().expect("a table's witness"), lig, l0.as_ref(), &salts_t[j]);
-            later.push((root, l0.map(Arc::new), tc.elapsed().as_secs_f64()));
+            later.push((root, l0.map(|z| Level0Hiding::new(z, false)), tc.elapsed().as_secs_f64()));
         }
         let later_roots: Vec<Vec<u8>> = later.iter().map(|x| x.0.clone()).collect();
         let mut later = later.into_iter();
@@ -2617,7 +2635,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             });
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
-            let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| Arc::new(level0_zk(st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper))) } else { table_level0 };
+            let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| Level0Hiding::new(level0_zk(st, &prng, plan.zk_zero_pads, plan.zk_l0_tamper), false)) } else { table_level0 };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
             let mut cached: Option<Vec<Vec<F128>>> = None;
             // M1 on the device: rep 0's replay and inner proof run beside rep 1's device run; rep 1's stream opens (its first round)
