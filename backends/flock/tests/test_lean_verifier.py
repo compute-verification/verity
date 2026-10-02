@@ -861,32 +861,36 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     """Two statements whose bit-row ports have every residue between them (length 0; length mod 8 of 0, 1 and 7; bytes mod
     128 of 0, 1, 111, 112 and 127) have the statement digests `flock-circuit statement` gives them under its build's identity
     `verity/flock-circuit` (its `row_leaf_in_circuit` naming `hm96-sha512/row/v2`; the output row a bit row of all its words'
-    bits, §16.13), so the two verifiers' Δ constants, forced-zero leaf bits, row wires and bit-row identity agree. A META
-    that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length (its prefix, or
-    its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2, a changed
-    padding, both row-schema keys, a v1 schema in `row_schemas`, a schema missing, no row with a compression, and a pinned
-    dummy ``b || c`` that is not the padding instance's row of the port's bits (here, a v1 row's of its words)."""
+    bits, §16.13), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
+    bit-row and hidden-output text), so the two verifiers' Δ constants, forced-zero leaf bits, row wires and identities
+    agree. A META that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length
+    (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,
+    a changed padding, both row-schema keys, a v1 schema in `row_schemas`, a schema missing, no row with a compression, and a
+    pinned dummy ``b || c`` that is not the padding instance's row of the port's bits (here, a v1 row's of its words)."""
     from verity.commitments import hm96
     from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import circuit as FC
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
-    def statement(d, text):
+    def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
         return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
-                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin")], capture_output=True, text=True)
+                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
 
     digests = {}
     for i, bits in enumerate([[0, 1, 881, 887, 889, 895], [1009, 1015, 1024, 1031, 2041, 1905]]):
         d = tmp_path / f"s{i}"
         text = _bit_row_toy(bits, d)
-        p = statement(d, text)
-        assert p.returncode == 0, p.stdout + p.stderr
-        digests[i] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
+        for coins in ("seed", "os"):
+            p = statement(d, text, "--coins", coins)
+            assert p.returncode == 0, p.stdout + p.stderr
+            digests[i, coins] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
     assert digests == {
-        0: "ec816457e07f36dfc5dfbad8aa070700ab04529cb7617992079365261c6e8c38a3fc3d4f338ef398e97615dbd98266230e5422c933d9058aef2ed9705ca5ee20",
-        1: "15296dad533cdc251ebc07816bb8d723bfdd56e535f1758faac4ce7a101107602511999a51f30e9adc7d9dd7f0fee55853d71df107753515ff515a52158b797d"}
+        (0, "seed"): "ec816457e07f36dfc5dfbad8aa070700ab04529cb7617992079365261c6e8c38a3fc3d4f338ef398e97615dbd98266230e5422c933d9058aef2ed9705ca5ee20",
+        (0, "os"): "848227d1e54b802ba9c32f0da36a538d2a6c29be7802695c2ed379b08f36088edac6923c1fb7555f72c8ecb234ff823bc70a237f9d00c4f32e4b6a02d97031c9",
+        (1, "seed"): "15296dad533cdc251ebc07816bb8d723bfdd56e535f1758faac4ce7a101107602511999a51f30e9adc7d9dd7f0fee55853d71df107753515ff515a52158b797d",
+        (1, "os"): "6ac4156572a422da1be1be1c91b66ecdf66aa949c5cf1ac36b759fcdbec355de60550d16706517fe7fc0c781ca984933866c216178c948eff1894f0f9b1410ca"}
 
     d = tmp_path / "s0"
     head, meta_line, rest = (d / "c.txt").read_text().split("\n", 2)
