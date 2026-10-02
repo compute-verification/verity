@@ -858,7 +858,8 @@ impl<C: flock_transcript::challenger::Challenger> flock_transcript::challenger::
     }
 }
 
-/// One rep's masking state (M1): the pads, their commitment, and the claim points of the reps so far (the rank check).
+/// One rep's masking state (M1): the pads, their commitment, and the rank check over the reps so far (their claim points and the
+/// rows that spanned them).
 struct ZkRep {
     lay: Layout,
     pads: zkv::Pads,
