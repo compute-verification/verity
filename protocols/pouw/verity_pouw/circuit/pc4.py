@@ -23,14 +23,15 @@ The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ
 The weight's Program is `Pc4Weight` under hiding too.  The hiding is C-Flock's: every row a unit reads or writes is a
 committed port, which C-Flock commits as an hm96-sha512 row and hashes in the proof, so these Programs hold no leaf and no
 value is computed in two units.  `PORTS` names each unit's committed rows by schema (`leaves.SCHEMAS`): a row unit's input
-row (bf16) and the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j), and a tile unit's TM + TN nvfp4-p rows and its
-tile digest.  A tile reads each row as its row unit wrote it, the same words under the same schema, so the units link by
-equal commit strings.  The rest is public: the anchored inputs and each row's ``ok``.
+row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (C-Flock commits every output,
+#757), and a tile unit's TM + TN nvfp4-p rows and its tile digest.  A tile reads each row as its row unit wrote it, the
+same words under the same schema, so the units link by equal commit strings.  The rest are the anchored inputs, each a
+public input region that `PORTS` names with its recomputation (`DERIVATIONS`).
 
 A row unit computes the row's statistics, its noise atoms, block scales and casts (the forming), Ẽ, and its half of the
 clean-up: P_A,i = [Ẽ_A,i ‖ RNE_bf16(A′_i·F_B)], P_B,j = [RNE_bf16(Ẽ_B,j·G − B̃_j·F_A) ‖ −Ẽ_B,j].  ``ok`` is the row's
-admission (`schemes.pearl_c4.row_passes`: every BF16 word finite and D-NF), one public bit per row that an honest prover's
-tile always sets.  Every operation is the scheme's own, in its order: core's FP32 add, mul, FMA and divide (``_v2``), its
+admission (`schemes.pearl_c4.row_passes`: every BF16 word finite and D-NF), one bit per row that an honest prover's tile
+always sets.  Every operation is the scheme's own, in its order: core's FP32 add, mul, FMA and divide (``_v2``), its
 casts and its sm_120 NVF4 and BF16 steps, and three PoUW primitives (`words`: sqrt.rn, Ẽ's exact decode, BF16 negation).
 Three of the scheme's integer operations are written as float operations they equal on every row that ``ok`` admits:
 ``max(ue4m3(v), 0x01)`` is ``ue4m3(fmaxf(v, 2^-9))`` (the cast is monotone and ue4m3(2^-9) = 0x01), a block's
@@ -38,9 +39,11 @@ Three of the scheme's integer operations are written as float operations they eq
 non-negative there).  ``max |x|`` stays the integer maximum, so a non-finite word reaches ``ok``.
 
 The noise lines (E_A, E_B, F_A, F_B) and G = F_Bᵀ·F_A (`pearl_c4.gram`) are verifier-derived public inputs, as `ncp2`'s
-anchored inputs are (`anchors.TileAnchors`, `Shape.anchored`): the lines are TurboSHAKE128 of the scheme's seeds, which read
+anchored inputs are (`anchors.TileAnchors`, `DERIVATIONS`): the lines are TurboSHAKE128 of the scheme's seeds, which read
 public values alone (seed_A the salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), so
-they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.
+they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.  In a unit's proof each is a C-Flock
+public input region, its values unpacked one u16 word each (G's FP32 words two, low half first), which the verifier takes
+from its own `--public-inputs` file (`TileAnchors.regions`).
 """
 from __future__ import annotations
 
@@ -48,7 +51,7 @@ import bisect
 import struct
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any, ClassVar
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ir import partition_object as PO
@@ -66,6 +69,7 @@ from verity.ml.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
 from ..protocol import DomainError
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c4 as S
+from . import anchors as A
 from . import leaves as L
 from . import words as W
 
@@ -267,16 +271,58 @@ Pc4TileHiddenDef = CompositeDefinition(
     conformance="protocol-defined")
 
 #: each unit's ports under hiding, by role: its C-Flock-committed rows, each (schema, role, ports) whose words are its ports'
-#: in order (`leaves.words_*`; parameters by name, outputs by index, row r of each where a tile reads TM or TN), its anchored
-#: inputs and its public outputs.  Every port is in exactly one of the three.
+#: in order (`leaves.words_*`; parameters by name, outputs by index, row r of each where a tile reads TM or TN), inputs and
+#: outputs alike, and its public input regions, each parameter's anchor (`DERIVATIONS`).  Every port is in exactly one.
 PORTS = {
-    "row_b": {"rows": (("bf16", ROLE_W, ("x",)), ("nvfp4-p", ROLE_W, (0, 1, 2))), "anchors": ("e", "fb", "fa", "g"),
-              "public": (3,)},
-    "row_a": {"rows": (("bf16", ROLE_X, ("x",)), ("nvfp4-p", ROLE_X, (0, 1, 2))), "anchors": ("e", "fa", "fb"),
-              "public": (3,)},
+    "row_b": {"rows": (("bf16", ROLE_W, ("x",)), ("nvfp4-p", ROLE_W, (0, 1, 2)), ("ok", ROLE_W, (3,))),
+              "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}},
+    "row_a": {"rows": (("bf16", ROLE_X, ("x",)), ("nvfp4-p", ROLE_X, (0, 1, 2)), ("ok", ROLE_X, (3,))),
+              "regions": {"e": "ea", "fa": "fa", "fb": "fb"}},
     "tile": {"rows": (("nvfp4-p", ROLE_X, ("ac", "as", "pa")), ("nvfp4-p", ROLE_W, ("bc", "bs", "pb")),
-                      ("tile", ROLE_X, (0,))), "anchors": (), "public": ()},
+                      ("tile", ROLE_X, (0,))), "regions": {}},
 }
+
+
+# ---- the anchors: public input regions, each with its recomputation ------------------------------------------------------
+
+def line_ea(shape, seed_a: bytes, i: int) -> list[int]:
+    """E_A's line for A's global row i: `pearl_c4.line(seed_A, ROLE_EA, i)`."""
+    return S.line(seed_a, S.ROLE_EA, i)
+
+
+def line_eb(shape, seed_b: bytes, j: int) -> list[int]:
+    """E_B's line for B's global row j: `pearl_c4.line(seed_B, ROLE_EB, j)`."""
+    return S.line(seed_b, S.ROLE_EB, j)
+
+
+def basis_fa(shape, seed_b: bytes, _i=None) -> list[int]:
+    """F_A, line t for position t < k: `pearl_c4.basis(seed_B, ROLE_FA, k)`."""
+    return [c for ln in S.basis(seed_b, S.ROLE_FA, shape.k) for c in ln]
+
+
+def basis_fb(shape, seed_b: bytes, _i=None) -> list[int]:
+    """F_B, line t for position t < k: `pearl_c4.basis(seed_B, ROLE_FB, k)`."""
+    return [c for ln in S.basis(seed_b, S.ROLE_FB, shape.k) for c in ln]
+
+
+def gram_g(shape, seed_b: bytes, _i=None) -> list[int]:
+    """G = F_Bᵀ·F_A by row p, then column q: `pearl_c4.gram(NVFP4, seed_B, k)`."""
+    return [w for row in S.gram(S.NVFP4, seed_b, shape.k) for w in row]
+
+
+_LINE = f"TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = {S.D_LINE:#04x}), 16 bytes, low nibble first; role "
+#: each anchor's recomputation from `pearl_c4`'s seeds (`noise`: seed_A = BLAKE3 keyed by blake3("pearl-c4/v0/seed-A") over
+#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c4/v0/seed-B") over salt ‖ root_B)
+DERIVATIONS = {
+    "ea": A.Derivation("seed_a", _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
+    "eb": A.Derivation("seed_b", _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
+    "fa": A.Derivation("seed_b", _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
+    "fb": A.Derivation("seed_b", _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
+    "g": A.Derivation("seed_b", f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
+                      f"byte UE4M3 1.0 ({S.NVFP4.one:#04x}); FP32 words", gram_g, 32),
+}
+#: each seed as a public input port names it: the scheme's label for it
+SEEDS = {"seed_a": S.LABELS["seed-A"].decode(), "seed_b": S.LABELS["seed-B"].decode()}
 
 
 @lru_cache(maxsize=16)
@@ -290,30 +336,22 @@ def templates(k: int, tile: tuple[int, int] = TILE, hidden: bool = False) -> dic
 
 @dataclass(frozen=True)
 class Shape:
-    """M rows of A and N rows of B at depth k, cut into tiles of ``tile`` (rows of A, rows of B; the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs."""
+    """    M rows of A and N rows of B at depth k, cut into tiles of ``tile`` (rows of A, rows of B; the scheme's is 64 x 64);
+    ``hidden``, the hiding Programs.  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
     n: int
     tile: tuple[int, int] = TILE
     hidden: bool = False
+    ports: ClassVar[dict] = PORTS
+    derivations: ClassVar[dict] = DERIVATIONS
+    seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
         tm, tn = self.tile
         if self.k % ATOM or min(self.m, self.k, self.n, tm, tn) <= 0 or self.m % tm or self.n % tn:
             raise DomainError(f"Pearl-C4's circuit needs 64 | k and whole tiles on each side: {self}")
-
-    def anchored(self, seed_a: bytes, seed_b: bytes, rows: Sequence[int], cols: Sequence[int],
-                 names: Sequence[str]) -> dict[str, list[int]]:
-        """The anchored inputs ``names`` by parameter, from the scheme's seeds (`pearl_c4`'s `noise`): E_A's lines for A's
-        rows ``rows``, E_B's for B's rows ``cols``, F_A, F_B and G."""
-        k, flat = self.k, lambda lines: [c for ln in lines for c in ln]                # noqa: E731
-        derive = {"ea": lambda: flat(S.line(seed_a, S.ROLE_EA, i) for i in rows),
-                  "eb": lambda: flat(S.line(seed_b, S.ROLE_EB, j) for j in cols),
-                  "fa": lambda: flat(S.basis(seed_b, S.ROLE_FA, k)), "fb": lambda: flat(S.basis(seed_b, S.ROLE_FB, k)),
-                  "g": lambda: flat(S.gram(S.NVFP4, seed_b, k))}
-        return {p: derive[p]() for p in names}
 
 
 def _weight_units(B, k: int, b, eb, fa, fb, g):
@@ -486,5 +524,5 @@ def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -
     return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "GRAM", "LINE", "PORTS", "P_ROW", "ROLES", "TILE", "Shape", "Unit", "call", "check", "query", "templates",
-           "unit_cut", "units", "weight"]
+__all__ = ["BASIS", "DERIVATIONS", "GRAM", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "Unit", "basis_fa",
+           "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates", "unit_cut", "units", "weight"]

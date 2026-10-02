@@ -1,13 +1,19 @@
 """The anchored inputs' anchors (`verity_pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
-and refuses a repeated call index in a window (the red team's X-SPC-72)."""
+and refuses a repeated call index in a window (the red team's X-SPC-72); a tile check's are public input regions, their
+values unpacked into whole words."""
 from __future__ import annotations
+
+import json
 
 import pytest
 
 import circuit_fixtures as F
+import pouw_regions_vectors as RV
+from verity.commitments.blake3 import blake3, keyed
+from verity.commitments.turboshake import turboshake128
 from verity_pouw.circuit import ncp2, traced_as
 from verity_pouw.circuit import reference as R
-from verity_pouw.circuit.anchors import Anchors, Ledger
+from verity_pouw.circuit.anchors import Anchors, Ledger, region_bytes, region_words
 from verity_pouw.protocol import DomainError
 
 SHAPE = ncp2.Shape(32, 64, 32)
@@ -46,6 +52,58 @@ def test_anchors_that_cannot_be_a_call_s_are_refused():
         Anchors(call.salt, 3, 5, 2, 11, tuple(call.rowids), tuple(call.colids)[:16]).check(SHAPE)
     with pytest.raises(DomainError):
         Anchors(bytes(31), 3, 5, 2, 11, tuple(call.rowids), tuple(call.colids)).check(SHAPE)
+
+
+def test_a_region_is_its_values_unpacked_into_whole_words():
+    """`region_words`: a value of at most 16 bits one u16 word, a 32-bit one two, low half first, little-endian bytes; values
+    wider than the region's, or a region short of a whole 128-bit word, are refused."""
+    assert region_words(list(range(8)), 4) == list(range(8))
+    assert region_words([0x12345678, 0x9ABCDEF0, 0, 1], 32) == [0x5678, 0x1234, 0xDEF0, 0x9ABC, 0, 0, 1, 0]
+    assert region_bytes([0x5678, 0x1234]) == bytes([0x78, 0x56, 0x34, 0x12])
+    for values, bits in (([16] + [0] * 7, 4), ([0] * 4, 4), ([0] * 3, 32), ([-1] + [0] * 7, 8)):
+        with pytest.raises(DomainError):
+            region_words(values, bits)
+
+
+def test_pinned_region_vectors():
+    """The regions vectors (`pouw_regions_vectors`) are what `TileAnchors.regions` gives; their seeds are keyed BLAKE3 of the
+    public values under the scheme's labels, and Pearl-C4's E line is TurboSHAKE128's nibbles, each one u16 word."""
+    pinned = json.loads(RV.OUT.read_text())
+    assert RV.vectors() == pinned
+    for c in pinned["cases"]:
+        label = "pearl-c4/v0" if c["circuit"] == "pc4" else "pearl-c/v0"
+        salt, ra, rb = (bytes.fromhex(c[p]) for p in ("salt", "root_a", "root_b"))
+        seed_a = keyed(blake3(f"{label}/seed-A".encode()), salt + ra + rb + c["matmul"].to_bytes(8, "little"))
+        assert (seed_a.hex(), keyed(blake3(f"{label}/seed-B".encode()), salt + rb).hex()) == (c["seed_a"], c["seed_b"])
+        if c["circuit"] == "pc4":
+            raw = turboshake128(seed_a + bytes([0]) + c["rows"][1].to_bytes(4, "little"), 0x24, 16)
+            e = next(r for r in c["units"][0]["regions"] if r["port"] == "e")
+            assert e["bytes"] == bytes(b for x in raw for n in (x & 0xF, x >> 4) for b in (n, 0)).hex()
+
+
+@pytest.mark.parametrize("case", RV.CASES, ids=[c[0] for c in RV.CASES])
+def test_the_public_inputs_file_is_c_flocks(case):
+    """`TileAnchors.public_inputs` is C-Flock's ``verity/flock-public-inputs/v1``: a key-sorted JSON header line naming each
+    port's words, seed (the scheme's label) and derivation function, as META does, then each instance's regions, u16 LE,
+    instance-major, the ports in the unit's parameter order; a tile, which has no region, or no instance is refused."""
+    t = RV.anchors(*case)
+    label = "pearl-c4/v0" if case[1] == "pc4" else "pearl-c/v0"
+    for role, indexes in RV.FILES:
+        head, body = t.public_inputs(role, indexes).split(b"\n", 1)
+        h = json.loads(head)
+        assert head == json.dumps(h, sort_keys=True).encode()
+        assert h["format"] == "verity/flock-public-inputs/v1" and h["instances"] == len(indexes)
+        names = list(t.shape.ports[role]["regions"])
+        assert [p["port"] for p in h["ports"]] == names
+        for p in h["ports"]:
+            d = t.shape.derivations[t.shape.ports[role]["regions"][p["port"]]]
+            assert p["seed"] == f"{label}/{'seed-A' if d.seed == 'seed_a' else 'seed-B'}"
+            assert p["derivation"] == f"verity_pouw.circuit.{case[1]}.{d.fn.__name__}"
+            assert p["words"] == len(t.regions(role, indexes[0])[p["port"]])
+        assert body == b"".join(region_bytes(t.regions(role, i)[p]) for i in indexes for p in names)
+    for role, indexes in (("tile", (0,)), ("row_a", ())):
+        with pytest.raises(DomainError):
+            t.public_inputs(role, indexes)
 
 
 def test_a_window_refuses_a_repeated_call_index():

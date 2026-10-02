@@ -24,7 +24,7 @@ from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.ml.tc import fp32
 from verity.randomness import derive
 from verity_pouw.circuit import pc4, plan
-from verity_pouw.circuit.anchors import TileAnchors
+from verity_pouw.circuit.anchors import TileAnchors, region_bytes
 from verity_pouw.circuit import words as W
 from verity_pouw.protocol import DomainError
 from verity_pouw.schemes import pearl_c4 as F
@@ -246,10 +246,30 @@ def test_the_hiding_programs_publish_only_admission_bits_and_tile_digests():
 @pytest.mark.parametrize("role", ["row_b", "row_a", "tile"])
 def test_the_ports_are_each_hiding_units_committed_rows(role):
     """`PORTS` lists every parameter and output of each hiding unit once, and each committed row is its schema's word count:
-    bf16 input rows, nvfp4-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j), and the tile digest."""
+    bf16 input rows, nvfp4-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j), ok rows and the tile digest; the anchored inputs are public
+    input regions, each its derivation's width and whole 128-bit words."""
     tm, tn = HIDDEN.tile
-    CF.check_ports(pc4.templates(K, HIDDEN.tile, True)[role], pc4.PORTS[role], K,
+    CF.check_ports(pc4.templates(K, HIDDEN.tile, True)[role], pc4.PORTS[role], pc4.DERIVATIONS, K,
                    {"ac": tm, "as": tm, "pa": tm, "bc": tn, "bs": tn, "pb": tn})
+
+
+def test_the_anchors_are_public_input_regions():
+    """`TileAnchors.regions` is a unit's `--public-inputs` content: for a row unit at its row of the block, each parameter
+    `PORTS` names as a region, in the unit's parameter order, as its anchored input's u16 words unpacked (an E2M1 code one
+    word, an FP32 word of G two, low half first); a tile unit has none, and a row outside the block is refused."""
+    shape, _ops, _a, ea, _b, eb, fa, fb, g = _pinned()
+    t = TileAnchors.of(*_pinned_ctx(), shape)
+    for i in (0, shape.m - 1):
+        assert t.regions("row_a", i) == {"e": ea[32 * i:32 * (i + 1)], "fa": fa, "fb": fb}
+    for j in (0, shape.n - 1):
+        r = t.regions("row_b", j)
+        assert list(r) == ["e", "fb", "fa", "g"] and r["e"] == eb[32 * j:32 * (j + 1)] and (r["fb"], r["fa"]) == (fb, fa)
+        assert r["g"] == [h for w in g for h in (w & 0xFFFF, w >> 16)]
+    assert region_bytes(t.regions("row_a", 1)["e"]) == bytes(b for c in ea[32:64] for b in (c, 0))
+    assert t.regions("tile") == {}
+    for bad in (None, -1, shape.m, True):
+        with pytest.raises(DomainError):
+            t.regions("row_a", bad)
 
 
 def test_the_verifier_derives_the_anchored_inputs():
