@@ -10,7 +10,8 @@ set_option Elab.async false
 
 * `siteAddr a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site`: in a satisfying witness, the 128 bytes at port `p`'s `hm96` output (`bcAddr`) are the population's `b ‖ c`
-  of the proved unit at rank `o · c.g + g` (`bc_drawn`, carried to `T`); `BcSite` bundles what it reads;
+  of the proved unit at rank `o · c.g + g` (`bc_drawn`, carried to `T`); `BcSite` bundles what it reads, whose regions
+  condition holds at `Refine.regionsOf st` (`regionsOf_mem`);
 * `copy_site`: in a satisfying witness, each of the VU's stacked unit inputs whose Δ key is message bit `bit` of byte
   `byte` of row port `q` (`Aliased.srcKey`) holds the witness's bit at that message column (`Typed.msgCol`), when the
   column is in the block (`Aliased.copyPos_block`, `Aliased.copyPos_key`).
@@ -62,6 +63,12 @@ theorem bc_site_of {a : Placed.Accepted T} {pop : Public} {o : Fin (2 ^ T.nbl)} 
       (pop.digest u p a.st.c.ports.size).data.toList := by
   obtain ⟨d, D, hd, hD, hlt, hregs, hpop, hpt, hg2, hu⟩ := hs
   exact bc_site a hd hregs hpop hpt hD hlt hz o hg hg2 hp hu
+
+/-- **`BcSite`'s regions at the executable's**: the model statement at `Refine.regionsOf st` (as `Refine.stmtOf` places
+it) has every region of `st`. -/
+theorem regionsOf_mem (st : Stmt) :
+    ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ Refine.regionsOf st :=
+  fun _ hr => List.mem_map_of_mem hr
 
 /-- **A drawn unit's message-keyed input holds its row's bit**: in a satisfying witness of an accepted statement, at
 block `o` and VU `g`, the VU's stacked unit input `x` whose Δ key is message bit `bit` of byte `byte` of row port `q`
