@@ -20,7 +20,10 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
   `δ`;
 * `detectionRisk N k p m = −ln(1 − p + p · C(N − m, k) / C(N, k))`, the detection risk of a replay unit holding `m` wrong
   proof units out of `N`, when the verifier draws the replay unit with probability `p` and then `k` of its proof units
-  uniformly.
+  uniformly;
+* `nested R N k a b`, the law that draws so: over `R` replay units of `N` proof units each, numbered as `R * N` proof
+  units, each replay unit with probability `a / b`, then `k` of its proof units uniformly; and `wrongIn B i`, the number
+  of proof units of `B` in replay unit `i`.
 -/
 
 namespace FlockSoundness.Audit.Partitioning
@@ -61,5 +64,18 @@ with probability `p`, then `k` of its proof units uniformly, and the replay unit
 `1 − p + p · C(N − m, k) / C(N, k)`. This is its negative logarithm. -/
 noncomputable def detectionRisk (N k : ℕ) (p : ℝ) (m : ℕ) : ℝ :=
   -Real.log (1 - p + p * ((N - m).choose k : ℝ) / (N.choose k : ℝ))
+
+/-- **The nested law** over `R` replay units of `N` proof units each, proof unit `j` of replay unit `i` being
+`finProdFinEquiv (i, j)`: each replay unit is drawn independently with probability `a / b` (`Law.bernoulli`), and inside
+each drawn one, `k` of its `N` proof units uniformly (`Law.subset`), independently across replay units. -/
+def nested (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) : Law (R * N) where
+  Ω := (Law.bernoulli R a b).Ω × (Fin R → (Law.subset N k hk).Ω)
+  draw ω := Finset.univ.filter fun v =>
+    (finProdFinEquiv.symm v).1 ∈ (Law.bernoulli R a b).draw ω.1 ∧
+      (finProdFinEquiv.symm v).2 ∈ (Law.subset N k hk).draw (ω.2 (finProdFinEquiv.symm v).1)
+
+/-- The number of proof units of `B` in replay unit `i`, numbered as in `nested`. -/
+def wrongIn {R N : ℕ} (B : Finset (Fin (R * N))) (i : Fin R) : ℕ :=
+  (Finset.univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card
 
 end FlockSoundness.Audit.Partitioning
