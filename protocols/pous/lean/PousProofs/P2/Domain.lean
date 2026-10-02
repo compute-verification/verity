@@ -569,7 +569,8 @@ theorem not_meets_m1p_b19_k85 (p b D Q : ℕ) :
   rw [hL, hR, ENNReal.ofReal_le_ofReal_iff (by positivity)] at h
   norm_num at h
 
-/-- **The family is not vacuous at `k = 85`**: its `2^19` instance fails `Meets` at `85` challenges, at every width. -/
+/-- **The family fails at `k = 85`**: its `2^19` instance fails `Meets` at `85` challenges, at every width and every
+`D` and `Q` (`not_meets_m1p_b19_k85`). -/
 theorem family_k85_fails : ∃ (B : ℕ) (_ : NeZero B), 2 ^ 8 ≤ B ∧ B ≤ 2 ^ 23 ∧
     ∀ b D Q, ¬ Meets (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential D Q 85 Params.εMax :=
   ⟨2 ^ 19, inferInstance, by norm_num, by norm_num, not_meets_m1p_b19_k85 _⟩

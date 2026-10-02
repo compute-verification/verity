@@ -77,6 +77,10 @@ a `sys.path` entry another test file added: every suite runs alone.
   reason how long it takes.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
+- **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is not
+  reachable`. Under a recorded `check` (`VERITY_STORE_REQUIRED=1`) the guard fails that skip instead, so `check` never passes
+  without it. Inside `check` the store is reachable only through the run's custody key (`$CHECK_STORE_CUSTODY`), so fetch
+  through a helper that hands it to the store CLI: integrations/vllm's `store_io`, or C-Flock's `verifier/ci.py` `fetch`.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
   every `--jobs` slot with pytest-xdist (`--dist worksteal`), and runs parallel suites first, one at a time. C-Flock does

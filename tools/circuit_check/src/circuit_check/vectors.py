@@ -9,13 +9,19 @@ ones, all ones but the sign).
 Instance ``j < E`` sets every leaf to the ``j``-th edge of its width (all-NaN, all-inf, ...), so a specials rule is hit on every
 operand at once; the random instances then draw each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
 floats only: arithmetic in the range serving sees) or a uniform word.
+
+A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is no vector: every instance reads the program's
+own table as one `verity.evaluation.RegisteredTable`, and the probes add instances that read its first and last entries and the
+first and last of each region (`probe_entries`), never all of them; the record says how many words the instances read.
 """
 from __future__ import annotations
 
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
+from verity.evaluation import RegisteredTable
 from verity.evaluation.batch import type_dtype, type_shape
 from verity.ir.types import Type
 
@@ -106,4 +112,61 @@ def flat(arrays: Sequence[np.ndarray]) -> np.ndarray:
     return np.concatenate([np.asarray(a, dtype=np.uint64).reshape(n, -1) for a in arrays], axis=1) if arrays else np.zeros((n, 0), np.uint64)
 
 
-__all__ = ["BF16", "E4M3", "E5M2", "FP16", "FP32", "FP64", "edge_count", "edges", "flat", "instance_args", "integer_edges", "vectors"]
+@dataclass(frozen=True)
+class TableProbe:
+    """The registered table a target takes as parameter ``param``: ``table`` holds the program's words, ``entry_words`` leaves to
+    an entry; ``regions`` are [lo, hi) entry ranges (the parts the table's words come from); ``reads(i)`` gives instances of the
+    target's other parameters (in order, the table left out) that read entry ``i``."""
+
+    param: int
+    table: RegisteredTable
+    entry_words: int
+    regions: tuple[tuple[int, int], ...]
+    reads: Callable[[int], Iterable[Sequence[Any]]]
+
+    @property
+    def entries(self) -> int:
+        return self.table.leaves // self.entry_words
+
+
+def probe_entries(entries: int, regions: Iterable[tuple[int, int]]) -> list[int]:
+    """The entries probed: the first, the last, and each region's first and last."""
+    out = {0, entries - 1}
+    for lo, hi in regions:
+        if not 0 <= lo < hi <= entries:
+            raise ValueError(f"region [{lo}, {hi}) is not within the table's {entries} entries")
+        out |= {lo, hi - 1}
+    return sorted(out)
+
+
+def table_instances(params: Sequence[Type], probe: TableProbe, n: int, seed: int) -> tuple[list[list], set[int], dict]:
+    """The instances of a target that reads a registered table: ``n`` edge and random ones of its other parameters (`vectors`),
+    then those that read each probed entry (`probe_entries`, `probe.reads`), all reading one `RegisteredTable` that records the
+    leaves read (the returned set, filled as the instances are evaluated); and the probe's record."""
+    other = [pt for j, pt in enumerate(params) if j != probe.param]
+    arrays = vectors(other, n, seed)
+    read: set[int] = set()
+    word = probe.table.word
+
+    def counted(j: int) -> int:
+        read.add(j)
+        return word(j)
+
+    table = RegisteredTable(probe.table.name, counted, probe.table.leaves, probe.table.declared_by)
+
+    def full(rest: Sequence[Any]) -> list:
+        args = list(rest)
+        args.insert(probe.param, table)
+        return args
+
+    out = [full(instance_args(other, arrays, i)) for i in range(n)]
+    probed = probe_entries(probe.entries, probe.regions)
+    for e in probed:
+        out += [full(r) for r in probe.reads(e)]
+    rec = {"name": probe.table.name, "param": probe.param, "entries": probe.entries, "leaves": probe.table.leaves,
+           "regions": [list(r) for r in probe.regions], "probed_entries": probed, "probe_instances": len(out) - n}
+    return out, read, rec
+
+
+__all__ = ["BF16", "E4M3", "E5M2", "FP16", "FP32", "FP64", "TableProbe", "edge_count", "edges", "flat", "instance_args", "integer_edges",
+           "probe_entries", "table_instances", "vectors"]

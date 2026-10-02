@@ -104,12 +104,12 @@ def _usage(free_gb: float):
     return lambda p: types.SimpleNamespace(free=int(free_gb * PF.GB))
 
 
-def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None):
+def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None, shared=False):
     cache = tmp_path / "cache"
     if warm:
         (cache / "lean-deps" / _key(tree)).mkdir(parents=True, exist_ok=True)
     (tmp_path / "cpuinfo").write_text(cpu)
-    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs)
+    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs, shared=shared)
 
 
 def test_a_prepared_pod_passes(tmp_path, path):
@@ -234,6 +234,8 @@ def test_the_floor_rises_to_what_the_recent_checks_here_took(tmp_path, path):
                                                    f"(1.25 x the 40 GB check r20260929-090000-aaaa took here)"), fails
     _, fails = _run(tmp_path, tree, **ok, free_gb=52, runs=runs)
     assert fails == []
+    facts, fails = _run(tmp_path, tree, **ok, free_gb=46, runs=runs, shared=True)     # check slots: the node's jobs wrote that drop
+    assert fails == [] and any("needs 45 GB (the warm floor: this machine's check slots share its disk" in f for f in facts), facts
     for i in range(PF.RECENT):                                                  # five newer checks, each small: the 40 GB one ages out
         _recorded(runs, f"r20260929-12000{i}-dddd", "check", [80, 70])
     _, fails = _run(tmp_path, tree, **ok, free_gb=46, runs=runs)

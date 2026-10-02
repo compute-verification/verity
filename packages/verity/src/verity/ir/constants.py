@@ -15,9 +15,10 @@ anywhere else is data the Program still holds, and `program_data` lists it by th
 
 * a constant of the root body is always data (the root is no operation): it becomes a run input;
 * a constant inside a Definition is data unless an enclosing Definition is an operation, which the caller names (`operation`).
-  `verity.ir` names no operations.
 
-A table a primitive's evaluator reads by index is not visible here.
+A table a primitive reads by index is no gate, so the primitive declares it (`PrimitiveDefinition.tables`): a ``library``
+table is an operation's own definition, and a ``registered`` one is the program's, which the primitive still holds. `verity.ir`
+names no operations and no library tables; the guard is `verity.ml.operations.program_data`, which passes in both.
 """
 from __future__ import annotations
 
@@ -53,16 +54,27 @@ def inputs(circuit: Circuit) -> dict[str, list[int]]:
     return out
 
 
-def program_data(root: Any, operation: Callable[[str], bool] = lambda _id: False) -> dict[str, list[tuple[int, str]]]:
-    """The constants `root` (a Program's root Definition) still holds as data, by the Definition that holds them: descriptor id
-    -> [(local gate, constant id)], each Definition once, in first-reached order. A Definition `operation(id)` names, and
-    everything inside it, holds none. Empty when the Program holds no data."""
+def held_tables(prim: Any, library: Callable[[str], bool] = lambda _name: False) -> list[str]:
+    """The tables a primitive declares and holds as data: every ``registered`` one, and a ``library`` one unless
+    `library(name)` names it."""
+    return [n for n, kind in getattr(prim, "tables", ()) if kind != "library" or not library(n)]
+
+
+def program_data(root: Any, operation: Callable[[Any], bool] = lambda _fn: False,
+                 library: Callable[[str], bool] = lambda _name: False) -> dict[str, list[tuple[int, str]]]:
+    """The data `root` (a Program's root Definition) still holds, by the Definition that holds it: descriptor id -> [(local
+    gate, constant id or table name)], each Definition once, in first-reached order. Empty when the Program holds no data.
+
+    A Definition `operation(fn)` names, and everything inside it when reached only through operations, holds none: a
+    Definition reached first under an operation is not visited there, nor marked seen, so a path to it outside any operation
+    still lists what it holds. A primitive reached outside any operation that holds a table (`held_tables`) is
+    listed under its own id, at its one gate, by the table's name."""
     out: dict[str, list[tuple[int, str]]] = {}
     seen: set[str] = set()
 
     def walk(fn: Any, is_root: bool) -> None:
         fid = fn.id
-        if fid in seen or (not is_root and operation(fid)):
+        if fid in seen or (not is_root and operation(fn)):
             return
         seen.add(fid)
         body = fn.body
@@ -73,6 +85,9 @@ def program_data(root: Any, operation: Callable[[str], bool] = lambda _id: False
                 mine.extend((body.offsets[k] + m, callee.id) for m in range(body.offsets[k + 1] - body.offsets[k]))
             elif getattr(callee, "body", None) is not None:
                 walk(callee, False)
+            elif callee.id not in seen and (held := held_tables(callee, library)):
+                seen.add(callee.id)
+                out[callee.id] = [(0, n) for n in held]
         if not mine:
             del out[fid]
 
@@ -80,4 +95,4 @@ def program_data(root: Any, operation: Callable[[str], bool] = lambda _id: False
     return out
 
 
-__all__ = ["BINDING_TIMES", "REGISTRATION", "RUN", "binding_time", "inputs", "is_constant", "program_data"]
+__all__ = ["BINDING_TIMES", "REGISTRATION", "RUN", "binding_time", "held_tables", "inputs", "is_constant", "program_data"]

@@ -35,6 +35,7 @@ check "a plain user name is allowed and kept" '[ $rc = 0 ] && [ "$(g remote get-
 g remote get-url nosuch 2>/dev/null; rc=$?
 check "git's exit status survives the filter" '[ $rc != 0 ]'
 check "other commands pass through" '[ "$(g -C "$t/r" rev-parse --is-inside-work-tree)" = true ]'
+check "even on a PATH without bash (a test's fake bin)" '[ "$(PATH=/nonexistent "$G" -C "$t/r" rev-parse --is-inside-work-tree)" = true ]'
 check "VERITY_GIT_GUARD=off disables it" 'VERITY_GIT_GUARD=off bash "$G" remote add o "http://u:pw@127.0.0.1:9/y.git" && "$REAL" remote remove o'
 
 [ $fails = 0 ] && echo "git guard: all checks pass" || { echo "git guard: $fails check(s) failed"; exit 1; }

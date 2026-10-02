@@ -1,9 +1,10 @@
+import Pous.P2.Cost
 import PousProofs.P2.Domain
 
 /-!
 # Slack rows: an adversary with `λ` extra state bits per block
 
-`MeetsWithSlack sch reveal λ D Q k ε` is `Meets` with the state bound `⌊ρ·|C|⌋` raised by `λ·B` bits. At `λ = 0` it is
+`MeetsWithSlack sch reveal λ D Q k ε` (`Pous/P2/Cost.lean`) is `Meets` with the state bound `⌊ρ·|C|⌋` raised by `λ·B` bits. At `λ = 0` it is
 `Meets` (`meetsWithSlack_zero`). The route is `meets_m1p_of_row`'s at a state of `⌊ρ·|C|⌋ + λ·B` bits and a target
 error `2^-e` (`P2RowE`, `slack_of_row`). The rows at `B = 2^19` are certified with the largest `g` the exact 1%
 inequality allows (`row_b19_*`), and the families with a uniform `g = ⌊c·B⌋ + 1` (`row_uniform_gen`). -/
@@ -12,12 +13,6 @@ namespace PousMargin
 
 open Pous Pous.Assumptions PousP2 PousP2p Finset
 open scoped ENNReal
-
-/-- **The requirement with `lam` bits of slack per block**: `Meets`, except that the adversary's state is
-`⌊ρ·|C|⌋ + lam·B` bits. -/
-def MeetsWithSlack {M : IdealModel} (sch : Scheme M) (reveal : Reveal) (lam D Q k : ℕ) (ε : ℝ≥0∞) : Prop :=
-  ε ≤ Params.εMax ∧ sch.Correct ∧ sch.CodeHoldsW ∧ sch.SpaceBound Params.expansion ∧
-    AuditSecure sch reveal (sch.stateBound Params.ρ + lam * sch.B) D Q k (ENNReal.ofReal Params.δ) ε
 
 theorem meetsWithSlack_zero {M : IdealModel} (sch : Scheme M) (reveal : Reveal) (D Q k : ℕ) (ε : ℝ≥0∞) :
     MeetsWithSlack sch reveal 0 D Q k ε ↔ Meets sch reveal D Q k ε := by

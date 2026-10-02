@@ -177,7 +177,7 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
     try:
         build = store.fetch(BUILD_101, to=tmp_path / "build")
     except store.StoreUnavailable as e:
-        pytest.skip(f"the store fetch of {BUILD_101} returned nothing: {e}"[:400])
+        pytest.skip(f"the evidence store is not reachable: the fetch of {BUILD_101} returned nothing: {e}"[:400])
     rec = tmp_path / "records"
     listing = store._cli("fetch", RECORDS_101, "--list", "--json", check=False)
     try:
@@ -187,12 +187,13 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
     capture = next((p for p in paths if p.endswith("match/capture/log.jsonl.gz")), None)
     compare = next((p for p in paths if p.rsplit("/", 1)[-1] == "match_compare.json"), None)
     if capture is None:
-        pytest.skip(f"the store lists no match/capture/log.jsonl.gz in {RECORDS_101} ({len(paths)} files, rc {listing.returncode}: "
-                    f"{listing.stderr.strip()[-200:]})")
+        pytest.skip(f"the evidence store is not reachable: it lists no match/capture/log.jsonl.gz in {RECORDS_101} ({len(paths)} files, "
+                    f"rc {listing.returncode}: {listing.stderr.strip()[-200:]})")
     p = store._cli("fetch", RECORDS_101, "--to", str(rec), *(x for q in (capture, compare) if q for x in ("--path", q)), check=False)
     log = rec / capture
     if p.returncode != 0 or not log.is_file():
-        pytest.skip(f"the store fetch of {capture} from {RECORDS_101} returned nothing (rc {p.returncode}: {p.stderr.strip()[-200:]})")
+        pytest.skip(f"the evidence store is not reachable: the fetch of {capture} from {RECORDS_101} returned nothing (rc {p.returncode}: "
+                    f"{p.stderr.strip()[-200:]})")
     if compare is not None and (rec / compare).is_file():
         assert json.load(open(rec / compare))["histogram_diff_T_normalised"] == {"GumbelTopPTokenSelectSharedGreedy_v1{V=128256}": [0, 32],
                                                                                    "GumbelTopPTokenSelect_v1{V=128256}": [32, 0]}

@@ -87,7 +87,7 @@ def _session(R: Path, monkeypatch, points: int, point_fc: list[dict]) -> list[di
     pk = _key(R / "out/preflight/key.json", {"FC_VERIFY_AHEAD": "10"})
     (R / ".research-source.json").write_text(json.dumps({"commit": "c" * 40, "dirty": False}))
     census = R / "hardware.json"
-    census.write_text(json.dumps([{"id": GH.PEAK_ID, "flop_per_second": 1.0e15, "device": "RTX PRO 6000"}]))
+    census.write_text(json.dumps([{"id": GH.DTYPES["bf16"][2], "flop_per_second": 1.0e15, "device": "RTX PRO 6000"}]))
     phases = ["job\tstart\t1000", "preflight\tstart\t1001", "preflight\tend\t1041"]
     for i in range(points):
         t = 1042 + 40 * i
@@ -99,7 +99,7 @@ def _session(R: Path, monkeypatch, points: int, point_fc: list[dict]) -> list[di
         P = R / f"out/p{i}"
         P.mkdir(parents=True)
         live = {"accepted": True, "instances": 2048, "prove_total_s": 1.0, "witness_s": 0.1, "statement_digest": "d" * 64, "dense_m": 35,
-                "k_log": 24, "buckets": []}
+                "k_log": 24, "buckets": [], "coins": "live-os"}
         (P / "results.jsonl").write_text(json.dumps({"definition": DEF2048, "shape": "s", "live": live, "stage": {"n": 2048},
                                                      "stage_cached": True, "domain": "total", "stage_s": 5.0}) + "\n")
         t = 1043 + 40 * i
@@ -126,6 +126,7 @@ def test_every_point_of_a_gpu_session_cites_its_one_preflight_check_and_shares_i
     pts = _session(tmp_path, monkeypatch, 3, [{"FC_VERIFY_AHEAD": "10"}] * 3)
     record = hashlib.sha256((tmp_path / "out/preflight/classes/results.jsonl").read_bytes()).hexdigest()
     assert [p["point"] for p in pts] == [{"index": i, "of": 3} for i in range(3)]
+    assert {(p["coins"], p["scheme"]) for p in pts} == {("live-os", "flock-i-v1+livecoins")}      # the sweep record's coins
     assert all(p["byte_identical"] and p["preflight"]["status"] == "passed" and p["preflight"]["key_matches"] is True
                and p["preflight"]["record_sha256"] == record for p in pts)
     # the session held its GPU from 1000 to the metrics at 1161; the points' sweeps were 30, 31 and 32 s, and the 68 s outside

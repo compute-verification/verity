@@ -3,6 +3,7 @@ report's engine-start / reuse accounting.  Torch-free (the worker itself is exer
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import subprocess
@@ -237,6 +238,14 @@ def test_the_commit_takes_hash_threads_from_the_job_s_environment():
     assert cli.parse("commit", ["--out", "o"], {"HASH_THREADS": "12"}).hash_threads == 12
     assert cli.parse("commit", ["--out", "o", "--hash-threads", "4"], {"HASH_THREADS": "12"}).hash_threads == 4
     assert "HASH_THREADS" in hc.ENV_PER_JOB
+
+
+def test_a_later_job_on_the_reused_engine_has_what_the_engines_build_wrote_into_the_environment():
+    """vLLM sets cuBLAS' batch-invariance switches in the process as it builds the engine; a job after the first, whose environment
+    the worker resets, records them (the engine facts of record) only if the worker puts them back."""
+    src = inspect.getsource(hc.serve)
+    assert 'cli.set_environment({**env0, **(job.get("env") or {}), **(getattr(cd._HOT.get("eng"), "environ", None) or {})})' in src
+    assert "os.environ.clear()" not in src
 
 
 @pytest.mark.parametrize("argv,env,unsafe", [

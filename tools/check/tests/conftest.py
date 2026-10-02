@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-CLEARED = ("AWS_", "R2_", "RESEARCH_")
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "CLOUD_AGENT_")      # the last: or, R2_ cleared, the store reads a VM's shell that lost its secrets
 SET_BY_CHECK = ("CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED")
 
 

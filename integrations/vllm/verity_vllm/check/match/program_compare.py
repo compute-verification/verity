@@ -34,7 +34,10 @@ import sys
 import time
 from dataclasses import dataclass
 
+from verity.ir.program import RUN, input_id
 from verity_vllm.check.match import split_selects
+from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
+from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
@@ -87,7 +90,7 @@ class Prog:
             from verity_vllm.program.compact import lean_root
             lr = lean_root(desc, _registry())
             for k, fid, form, args6, out, n in lr["nodes"]:
-                if form == "batch" and fid.startswith("Input"):
+                if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
                     continue
                 self.inst.append({"k": k, "spec": fid if form != "batch" else f"batch:{fid}", "form": form, "args": args6, "out": out})
@@ -103,7 +106,7 @@ class Prog:
             body = root.body if hasattr(root, "body") else root.defn.body
             for k, n in enumerate(body.nodes):
                 fid = _spec_id(n.fn)
-                if n.form == "batch" and fid.startswith("Input"):
+                if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
                     continue
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
@@ -123,7 +126,8 @@ class Prog:
         # `seed_<i>` per seeded request in request order, fold._header) are lowered to `Input64_v1` batch nodes of one 64-bit value
         # (the root's params are lowered to Input batches, `program._lower_root`; names are not kept).  They canonicalise as
         # ("SEED", lo, hi) on both sides; `seed_index[k]` = the ordinal of seed node k = the index of the request it belongs to.
-        seed_in = sorted(k for k, (fid, n) in self.inputs.items() if fid.startswith("Input64") and n == 1)
+        # A seed is bound per run: a `RegisteredInput64_v1` node is never one.
+        seed_in = sorted(k for k, (fid, n) in self.inputs.items() if input_id(fid) == (RUN, 64) and n == 1)
         self.seed_nodes = set(seed_in)
         self.seed_index = {k: i for i, k in enumerate(seed_in)}
         self.weight_fields = weight_fields  # input node index -> field name
@@ -134,6 +138,8 @@ class Prog:
         # `peers_layout`).  A read canonicalises as ("PEER", k, lo, hi) with lo/hi relative to the field on BOTH sides.  Set by the loaders.
         self.peer_fields: dict[int, list[tuple[int, int]]] = {}
         self.peer_index: dict[int, int] = {}       # fold side: peers Input node -> request index (batch_decomp ownership)
+        self.supplied_fields: dict[int, list[tuple[int, str, int]]] = {}   # `supplied_inputs`, set by the loaders
+        self.supplied_owner: dict[int, int | None] = {}
         self.split_statics = split_selects.as_fold_selects(self.inst)       # a select specialised on S compares as the fold's
         self.k2i = {r["k"]: i for i, r in enumerate(self.inst)}
         self.oracle_rows = oracle_rows
@@ -305,6 +311,8 @@ class Prog:
         if idx0 in self.inputs:
             if dI != 0:
                 return self._per_run(p, unfold)   # a window sliding over several parameters: never one kind
+            if idx0 in self.supplied_fields:
+                return SI.srcP(self, p, unfold)
             if idx0 == self.tok_node:
                 return [("TOK", (lo0, hi0), (dL, dH), c)]
             if idx0 in self.seed_nodes:
@@ -386,6 +394,8 @@ class Prog:
         if space != "n":
             return (space, idx, lo, hi)
         if idx in self.inputs:
+            if idx in self.supplied_fields:
+                return SI.src(self, idx, lo, hi)
             if idx == self.tok_node:
                 return ("TOK", lo, hi)
             if idx in self.seed_nodes:
@@ -440,8 +450,10 @@ def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fal
     # [R15 stoch] the stochastic wrapper's `prompt` + `seed`); a report without it is the one-input greedy wrapper
     user_inputs = src.get("example_inputs") or src.get("inputs") or [[0]]
     n_user = max(1, len(user_inputs))
-    fields = {n_user + w["field"]: w["name"] for w in prov["weights"]}  # derive: user inputs first, then one Input batch per field
+    reg = SI.derived_registration(prov, n_user, d)   # a `registered_values` derivation's `values`, between them
+    fields = {n_user + bool(reg) + w["field"]: w["name"] for w in prov["weights"]}  # derive: user inputs first, then one Input batch per field
     P = cls(label, desc, fields, tok_node=0, compact=compact)
+    SI.set_supplied(P, [(n_user, None, reg)] if reg else [], d)
     # [R17 D90] a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
     # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0).  Refused by name when the
     # link table and the report disagree on how many user inputs there are.
@@ -547,12 +559,14 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         p.peer_fields[node] = flds
         p.peer_index[node] = int(ent["request_index"])
     p.tp = pj.get("tp")
+    w_nodes = SI.load_oracle_supplied(p, pj, d)   # a `registered_values` fold's supplied parameters
     del pj, desc   # [R16 global] the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode
     # Input node -> offset of its first leaf inside the weights parameter (0 for a single homogeneous Record node -- the pre-R15 layout):
     # the codec emits the prompt parameters' nodes first (one each, `w_param` of them), then the Record's leaf batches in field order.
+    w_nodes = w_nodes if w_nodes is not None else {k for k in p.inputs if k >= w_param}
     base, acc = {}, 0
     for k in sorted(p.inputs):
-        if k >= w_param:
+        if k in w_nodes:
             base[k] = acc
             acc += int(p.inputs[k][1])
     p.input_base = base
@@ -592,40 +606,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     return p
 
 
-def _field_name(name: str) -> str:
-    """Module-path-normalised weight name: the derived wrapper holds the model as `model.` (so `model.model.layers...`),
-    the record's hints are relative to the model (`model.layers...`); strip ONE leading `model.` from the wrapper's names
-    only when a second `model.` follows or the rest is `lm_head`/`model...`.  [R17 tp D90] the tensor-parallel rank wrapper (derive_step
-    --tp: the TP stub holds the request wrapper as `inner`, the same convention as tp_links' `module_path` = `inner.model.<path> (<Class>)`)
-    adds one level: `inner.model.model.layers...` -> `model.layers...` (measured: the ONLY operand difference of the first TP2 B1 per-rank
-    compare was this prefix on every weight / cos-sin operand, 37,342 of 111,771; the collective and activation wiring was equal)."""
-    if name.startswith("inner."):
-        name = name[len("inner."):]
-    if name.startswith("model.model.") or name.startswith("model.lm_head."):
-        return name[len("model."):]
-    return name
-
-
 from verity_vllm.program.compact import expand_mixed as _expand_mixed, n_crosses_step as _n_crosses_step  # noqa: E402  [R17 mfast]
-
-
-def _asP(t: tuple) -> tuple:
-    """[R17 mfast] a record-form canonical tuple as a one-run progression `head + (base, zero delta, 1)`, with the head/base split the
-    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W -> head (W, name), base
-    (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi); a raw run -> base (idx, lo, hi)."""
-    k = t[0]
-    if k in ("N", "N-PAD"):
-        base = t[1:5]
-    elif k == "W":
-        base = t[2:4]
-    elif k in ("TOK", "SEED", "SPLITS"):
-        base = t[1:3]
-    elif k == "XREQ":
-        base = t[2:5]
-    else:   # W?, MUX-UNFOLD-FAILED, raw (space, idx, lo, hi)
-        base = t[-3:]
-    head = t[:len(t) - len(base)]
-    return head + (base, (0,) * len(base), 1)
 
 
 def _norm_T(spec: str) -> str:

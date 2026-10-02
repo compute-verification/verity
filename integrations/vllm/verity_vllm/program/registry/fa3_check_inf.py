@@ -45,10 +45,10 @@ def fa3_masked_from(T: int, BN: int, row: int, kBM: int, g: int) -> int:
                         ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
            conformance="not-yet-established")
-def AttnBlockV4(B, S, q, k, v, m_prev, l_prev, o_prev):
+def AttnBlockV4(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
     """`AttnBlock_v2` with FA3's per-iteration `Check_inf` as the static `CHECK`: with it the running max is guarded
     (`GuardNegInfZero`) before the rescale and `max * scale`, as in v2; without it (an unmasked iteration) both read the running max as
-    it is.  `FIRST` needs `CHECK` (the first iteration runs `Check_inf`)."""
+    it is.  `FIRST` needs `CHECK` (the first iteration runs `Check_inf`).  `scale_log2`: `AttnBlock_v13`'s input."""
     D, NVIS, FIRST, BN, DOT, CHECK = S.D, S.NVIS, S.FIRST, S.BN, S.DOT, S.CHECK
     if FIRST and not CHECK:
         raise ValueError("AttnBlock_v4: the first iteration runs Check_inf (FIRST needs CHECK)")
@@ -59,7 +59,7 @@ def AttnBlockV4(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new) if CHECK else m_new
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    scale_log2 = B.call(const(32, _scale_log2_bits(D))) if scale_log2 is None else scale_log2
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -96,10 +96,10 @@ def AttnBlockV4(B, S, q, k, v, m_prev, l_prev, o_prev):
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
                       Array(S.D, BF16)),
            conformance="not-yet-established")
-def AttentionHeadV4(B, S, q, k, v):
+def AttentionHeadV4(B, S, q, k, v, *extra, block=AttnBlockV4):
     """`AttentionHead_v2` over `AttnBlock_v4`: causal attention of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited
     last -> first, block b with `CHECK = b >= MASKED_FROM` (the FA3 tile's causal-masked iterations; `fa3_masked_from`); epilogue
-    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`."""
+    `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`.  `extra` / `block`: `AttentionHead_v13`'s."""
     T, D, BN, DOT, INV, MF = S.T, S.D, S.BN, S.DOT, S.INV, S.MASKED_FROM
     nb = (T + BN - 1) // BN
     if not 0 <= MF <= nb - 1:
@@ -117,12 +117,12 @@ def AttentionHeadV4(B, S, q, k, v):
             kb = _Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = bind(AttnBlockV4, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT, CHECK=b >= MF)
+        blk = bind(block, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=DOT, CHECK=b >= MF)
         if first:
             z = B.call(ZERO32)
-            st = B.call(blk, q, kb, vb, z, _Coll(Array(4, F32), concat([z.refs] * 4)), _Coll(Array(D, F32), concat([z.refs] * D)))
+            st = B.call(blk, q, kb, vb, z, _Coll(Array(4, F32), concat([z.refs] * 4)), _Coll(Array(D, F32), concat([z.refs] * D)), *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     inv = B.call(INV, total)
@@ -136,17 +136,17 @@ def AttentionHeadV4(B, S, q, k, v):
                        ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
                       Array(S.NH, Array(S.D, BF16))),
            conformance="not-yet-established")
-def AttentionV4(B, S, q, kc, vc):
+def AttentionV4(B, S, q, kc, vc, *extra, head=AttentionHeadV4):
     """`Attention_v2` over `AttentionHead_v4{T, D, BN, DOT, INV, MASKED_FROM}`: GQA, head h reads KV head h // (NH/KVH); every head of the
-    row shares its tile, so one MASKED_FROM."""
+    row shares its tile, so one MASKED_FROM.  `extra` / `head`: `Attention_v13`'s."""
     T, NH, KVH, D = S.T, S.NH, S.KVH, S.D
     G = NH // KVH
-    head = bind(AttentionHeadV4, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
+    head = bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
     outs = []
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
         vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(head, q[g * G:(g + 1) * G], kg, vg, axes=(0, None, None)))
+        outs.append(B.batch(head, q[g * G:(g + 1) * G], kg, vg, *extra, axes=(0, None, None) + (None,) * len(extra)))
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 
