@@ -182,6 +182,59 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", share_rows=True, outs=outs, tables=tables, refs={**refs, "x": [0, 1, 3, 1]})
 
 
+PUBLIC_CS = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
+
+
+def test_public_leaves_split_from_the_rows_and_lie_in_whole_words():
+    """A public input port's leaves leave the units' row leaf map (a zero leaf there) for the public one, indexed among the
+    public ports' words; the in region is the aligned power-of-two span of words holding them, and a row leaf inside it is
+    refused."""
+    owner, li, lp = FC._split_leaves([[0, 1, 2, 3, -1], [2, 3, 0, 1, -1]], [("x", 2), ("cs", 2)], {"cs": {}})
+    assert owner == [(False, 0), (False, 1), (True, 0), (True, 1)]
+    assert li == [[0, 1, -1, -1, -1], [-1, -1, 0, 1, -1]] and lp == [[-1, -1, 0, 1, -1], [0, 1, -1, -1, -1]]
+    # 16 leaves of 16 bits in 2 words: the public ones are word 1's eight leaves in every unit
+    li, lp = [list(range(8)) + [-1] * 8], [[-1] * 8 + list(range(8))]
+    assert FC.public_span((4, 2, [16] * 16), li, lp) == (5, 0)
+    with pytest.raises(ValueError, match="leaf 0 reads a row word inside the in region's words 4..6"):
+        FC.public_span((4, 2, [16] * 16), li, [[-1] * 7 + list(range(9))])
+    with pytest.raises(ValueError, match="no unit reads a public word"):
+        FC.public_span((4, 2, [16] * 16), li, [[-1] * 16])
+
+
+@pytest.mark.slow
+def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
+    """A public input port (PROTOCOL.md §16.10) is no row: META names it with its seed and derivation, its leaves are zero
+    leaves of ``leaves_in`` and public words of ``leaves_public`` in whole words of the leaf group, and the unit range is not
+    packed (the in region reads it). Both instance files end with its words; the verifier's own ``--public-inputs`` file holds
+    the same words under the same ports. A port naming no recomputation, no input port, or one sharing a word with a row's
+    leaf (RoPE's default lowering) is refused."""
+    from verity_flock.templates import rope_head as R
+
+    s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
+    with pytest.raises(ValueError, match="lay the public ports out as whole words"):
+        FC.compose(FC.lowering_for_set(s), s.subcircuit, public_inputs=PUBLIC_CS)
+    low = IL.lowering(R.definition(s.subcircuit), R.UNIT + "/x4", group=4)
+    for bad, why in (({"cs": {"seed": "", "derivation": "d"}}, "names its recomputation"), ({"cs": {"seed": "s"}}, "names its recomputation"),
+                     ({"q": {"seed": "s", "derivation": "d"}}, "not input ports")):
+        with pytest.raises(ValueError, match=why):
+            FC.compose(low, s.subcircuit, public_inputs=bad)
+    FC.stage(low, s, 0, 4, tmp_path / "st", public_inputs=PUBLIC_CS)
+    text = (tmp_path / "st" / "circuit.txt").read_text()
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    assert [p[0] for p in meta["ports"]] == ["x", "out"] and meta["input_ports"] == 1
+    assert meta["public_inputs"] == [{"port": "cs", "words": 64, **PUBLIC_CS["cs"]}]
+    assert not next(r for r in meta["ranges"] if r["net"] == "unit").get("packed")
+    assert all(a == -1 for li, lp in zip(meta["leaves_in"], meta["leaves_public"]) for a, b in zip(li, lp) if b >= 0)
+    assert sorted(b for lp in meta["leaves_public"] for b in lp if b >= 0) == list(range(64)), "each cs word read once"
+    prover, verifier = ((tmp_path / "st" / f).read_bytes() for f in ("inst-4.bin", "pub-4.bin"))
+    (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
+    assert json.loads(hp)["public_inputs"] == json.loads(hv)["public_inputs"] == meta["public_inputs"]
+    cs = np.asarray(s.port("cs", 0, 4), dtype="<u2").reshape(4, 64).tobytes()
+    assert bp.endswith(cs) and bv.endswith(cs) and len(bv) == 4 * 2 * FC.BC_BYTES + len(cs), "the b || c, then the public words"
+    own_head, own = (tmp_path / "st" / "public-inputs-4.bin").read_bytes().split(b"\n", 1)
+    assert json.loads(own_head) == {"format": FC.PUBLIC_INPUTS_FORMAT, "instances": 4, "ports": meta["public_inputs"]} and own == cs
+
+
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
     its display id: RMSNorm's EPS is its f64 hex."""

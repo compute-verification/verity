@@ -312,10 +312,10 @@ def public_span(group: tuple, li: list[list[int]], lp: list[list[int]]) -> tuple
     e = (a ^ b).bit_length()
     w0 = a >> e << e
     if w0 < col or w0 + (1 << e) > col + words:
-        raise ValueError(f"public inputs: the aligned span of words {w0}..{w0 + (1 << e)} leaves the unit's leaf group")
+        raise ValueError(f"public inputs: the in region's words {w0}..{w0 + (1 << e)} leave the unit's leaf group")
     for j in range(len(bits)):
         if w0 <= col + 16 * j // 128 < w0 + (1 << e) and any(lp[u][j] < 0 and li[u][j] >= 0 for u in range(len(li))):
-            raise ValueError(f"public inputs: leaf {j} reads a row word inside the public region's words {w0}..{w0 + (1 << e)}: "
+            raise ValueError(f"public inputs: leaf {j} reads a row word inside the in region's words {w0}..{w0 + (1 << e)}: "
                              f"lay the public ports out as whole words")
     return w0, e
 
@@ -688,7 +688,8 @@ def main(argv=None) -> int:
     """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR [--partition H --program H --unit-indices FILE]``:
     the composite circuit, then for each N the prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N),
     their global unit indices from FILE's JSON list, else [0, N)); prints the pin and the class. ``--class-only``: compose and
-    print only (the class a partition names). ``--typed``: the typed statement instead."""
+    print only (the class a partition names). ``--typed``: the typed statement instead. ``--public-input PORT SEED DERIVATION``
+    (repeatable): an input port the verifier recomputes from public data (:func:`compose`'s ``public_inputs``)."""
     import argparse
 
     from verity_numerical.bench.input_sets import InputSet
@@ -703,11 +704,16 @@ def main(argv=None) -> int:
     ap.add_argument("--class-only", action="store_true")
     ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
     ap.add_argument("--typed", action="store_true", help="the typed statement (verity_flock.typed_statement.stage)")
+    ap.add_argument("--public-input", nargs=3, action="append", default=[], metavar=("PORT", "SEED", "DERIVATION"),
+                    help="an input port the verifier recomputes from public data, naming its seed and derivation (PROTOCOL.md §16.10)")
     a = ap.parse_args(argv)
+    public_inputs = {p: {"seed": sd, "derivation": d} for p, sd, d in a.public_input} or None
+    if public_inputs and a.typed:
+        ap.error("--public-input: a typed statement's instance reads only rows")
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
     if a.class_only:
-        text = compose(low, s.subcircuit, partition=a.partition, program=a.program, statics=set_statics(s))
+        text = compose(low, s.subcircuit, partition=a.partition, program=a.program, statics=set_statics(s), public_inputs=public_inputs)
         print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "class_sha512": class_digest(text),
                           "program_sha512": program_sha512(s.subcircuit, set_statics(s))}))
         return 0
@@ -717,7 +723,7 @@ def main(argv=None) -> int:
     stage_ = typed_statement.stage if a.typed else stage
     for n in a.n:
         stage_(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
-               share_rows=a.share_rows)
+               share_rows=a.share_rows, **({"public_inputs": public_inputs} if public_inputs else {}))
     text = (Path(a.out) / "circuit.txt").read_text()
     print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest(text), "class_sha512": class_digest(text), "n": a.n}))
     return 0
