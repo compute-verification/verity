@@ -98,10 +98,12 @@ research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --
 ~~~
 
 `BAND_D=N` (`bench.py --band-d N`, band-gpu and side-by-side's band arm) runs the band at in-degree `d = N`, as
-`band-chain/dN/v1`, with no byte-format name registered for it. It is refused for `d < 5`, which has no certificate. For
-`d >= 5`, the certificate gate checks `Pous.Pinned.BandMultiMeetsFamily`, for any segment count, with the cliff at `d`. The pinned
-vector is still checked at the registered `d = 12`, and the reference gate checks the run's own `d`. `bench-result.json` records
-the run's `d` in `scheme` and `scheme_params`.
+`band-chain/dN/v1`, with no byte-format name registered for it. A timed run refuses `d < 5`, which has no certificate; an
+untimed one (`AUDITS=0`) runs any `d >= 0`. For `d >= 5`, the certificate gate checks `Pous.Pinned.BandMultiMeetsFamily`, for
+any segment count, with the cliff at `d`. `BAND_BLOCK=B` (`--band-block B`) makes the blocks `B` bytes (whole 16-byte words),
+untimed only: the certificate holds at 64 KiB blocks. The pinned vector is still checked at the registered geometry (`d = 12`,
+64 KiB), and the reference gate checks the run's own. `bench-result.json` records the run's `d` in `scheme` and
+`scheme_params`, and its block size (`m`, in bits) in `scheme_params`.
 
 `pod.sh` installs nothing on the system, so it runs as-is on a shared node. It builds with the toolkit already installed
 (`CUDA_HOME`, `/usr/local/cuda`, or `/usr/local/cuda-13.0`, `-12.9` or `-12.8`). With CUDA 13 it uses torch 2.14.0 cu130 wheels,

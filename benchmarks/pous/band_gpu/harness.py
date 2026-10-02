@@ -377,15 +377,15 @@ def vector_bytes(label: str, n: int) -> bytes:
 
 def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any] | None = None) -> dict[str, Any]:
     """The scheme's pinned vector, encoded on the device: its pinned blocks' digest, and one segment's encode time.  The vector
-    is pinned at the registered point, so a band run at another in-degree encodes it at the registered `d`
-    (`backend.encode_at`); the run's own `d` is gated against `verity_pous` by `reference_gate`."""
+    is pinned at the registered point, `params` (its `d` and block size), so a band run at another in-degree or block size
+    encodes it there (`backend.encode_at`); the run's own geometry is gated against `verity_pous` by `reference_gate`."""
     import torch
     from verity_pous import schemes
 
     vector, label, count = PINNED[name]
     pinned = pinned or json.loads(VECTORS.read_text())
     d = getattr(schemes.get(name).params, "d", None)
-    encode = backend.encode_at(d) if backend.encode_at is not None and d != getattr(params, "d", None) else backend.encode
+    encode = backend.encode_at(d) if backend.encode_at is not None and d is not None else backend.encode
     b, width = params.blocks_per_segment, params.block_bytes
     n = b if count is None else count
     w = vector_bytes(label, n * width) + bytes((b - n) * width)
@@ -402,17 +402,28 @@ MIN_BAND_D = 5
 count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
 
 
-def with_in_degree(base: Any, d: int, timed: bool = True) -> Any:
-    """The band's geometry at in-degree `d` (`--band-d`).  A timed run is refused below `MIN_BAND_D`: such a band has no
-    certificate.  An untimed run (`--audits 0`) claims no audit, so it measures the band at any in-degree the codec takes."""
+def with_in_degree(base: Any, d: int | None, timed: bool = True, block_bytes: int | None = None) -> Any:
+    """The band's geometry at in-degree `d` (`--band-d`; None keeps `base`'s) and, with `block_bytes` (`--band-block`), blocks
+    of that many bytes.  A timed run is refused below `MIN_BAND_D` or at another block size: such a band has no certificate.
+    An untimed run (`--audits 0`) claims no audit, so it measures the band at any in-degree the codec takes and any block of
+    whole 16-byte words (the GPU twin's loads)."""
     from verity_pous.band import BandParams
 
     if not isinstance(base, BandParams):
-        raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
+        raise ValueError(f"--band-d and --band-block set a band's geometry, and {type(base).__name__} is not a band's")
+    d = base.d if d is None else d
     if timed and d < MIN_BAND_D:
         raise ValueError(f"band in-degree d = {d} is refused: the band's certificate (Pous.Pinned.BandMultiMeetsFamily) holds "
                          f"for d >= {MIN_BAND_D} at D = 5 calls, with the cliff at d (an untimed run, --audits 0, measures it)")
-    return BandParams(base.blocks_per_segment, base.m, d, base.segments)
+    m = base.m
+    if block_bytes is not None:
+        if block_bytes < 16 or block_bytes % 16:
+            raise ValueError(f"--band-block {block_bytes}: a block is a positive whole number of 16-byte words")
+        if timed and 8 * block_bytes != base.m:
+            raise ValueError(f"band blocks of {block_bytes} bytes are refused: the band's certificate holds at "
+                             f"{base.block_bytes}-byte blocks (an untimed run, --audits 0, measures them)")
+        m = 8 * block_bytes
+    return BandParams(base.blocks_per_segment, m, d, base.segments)
 
 
 def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
@@ -763,14 +774,14 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     from .live import scheme_of
 
-    base = base or schemes.get(a.scheme).params
-    band_d = getattr(a, "band_d", None)
-    if band_d is not None:
-        base = with_in_degree(base, band_d, timed=bool(a.audits))
+    registered = base = base or schemes.get(a.scheme).params
+    band_d, band_block = getattr(a, "band_d", None), getattr(a, "band_block", None)
+    if band_d is not None or band_block is not None:
+        base = with_in_degree(base, band_d, timed=bool(a.audits), block_bytes=band_block)
     seg = base.segment_bytes
     total = -(-ws["bytes"] // seg)
     n = min(total, a.max_segments) if a.max_segments else total
-    scheme = scheme_of(schemes.Band(base).name if band_d is not None else a.scheme, base.with_segments(n))
+    scheme = scheme_of(schemes.Band(base).name if base is not registered else a.scheme, base.with_segments(n))
     p = scheme.params
     width = p.block_bytes
     used = min(ws["bytes"], n * seg)
@@ -786,7 +797,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     r = min(a.reference_segments, n)
     picks = sorted({round(i * (n - 1) / max(1, r - 1)) for i in range(r)}) if r else []
     take_decode_paths()
-    gates: dict[str, Any] = {"vector": vector_gate(a.scheme, backend, base.with_segments(1), vectors),
+    gates: dict[str, Any] = {"vector": vector_gate(a.scheme, backend, registered.with_segments(1), vectors),
                              "reference_encode": reference_gate(scheme, c_host, w_host, picks, a.workers) if picks
                              else {"passed": True, "segments": []},
                              "round_trip": {"passed": bool(torch.equal(backend.decode(c, tags), w))}}

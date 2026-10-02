@@ -99,7 +99,7 @@ def _backend(params, flip_last: bool = False):
     harness = _harness()
     from band_gpu.live import scheme_of
 
-    at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
+    at = lambda d, m=params.m: schemes.Band(type(params)(params.blocks_per_segment, m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
 
     def tags(salt, segs, device):
@@ -128,7 +128,7 @@ def _backend(params, flip_last: bool = False):
         return 1e-3
 
     return harness.Backend("cpu", encode, decode, tags, lambda salt, n: [tag(salt_value(salt), s).to_bytes(32, "little") for s in range(n)],
-                           lambda c, cpu: PyResponder(c), timer, encode_at=lambda d: encoder(at(d)))
+                           lambda c, cpu: PyResponder(c), timer, encode_at=lambda d: lambda w, t: encoder(at(d, w.shape[-1] * 8))(w, t))
 
 
 def _vectors(params):
@@ -298,6 +298,10 @@ def test_bench_refuses_a_band_d_without_a_certificate_and_on_another_impl(tmp_pa
         bench.main(["--impl", "band-gpu", "--band-d", "4", *common])
     with pytest.raises(SystemExit, match="band-gpu's, not reference's"):
         bench.main(["--impl", "reference", "--band-d", "6", *common])
+    with pytest.raises(SystemExit, match="blocks of 393216 bytes are refused"):
+        bench.main(["--impl", "band-gpu", "--band-block", "393216", *common])
+    with pytest.raises(SystemExit, match="band-gpu's, not reference's"):
+        bench.main(["--impl", "reference", "--band-block", "393216", *common])
 
 
 def test_an_untimed_run_measures_the_band_below_the_certified_in_degree(tmp_path):
@@ -311,6 +315,25 @@ def test_an_untimed_run_measures_the_band_below_the_certified_in_degree(tmp_path
                                   backend=_backend(harness.with_in_degree(params, 2, timed=False)), base=params,
                                   vectors=_vectors(params))
     assert body["scheme"] == "band-chain/d2/v1" and body["scheme_params"]["d"] == 2 and body["timed"] is False
+    assert all(g["passed"] for g in body["gates"].values()) and body["gates"]["vector"]["d"] == 12
+
+
+def test_an_untimed_run_measures_the_band_at_d0_and_another_block_size(tmp_path):
+    """`--audits 0 --band-d 0 --band-block 128`: one pad call per block, at twice the registered block size; a timed run
+    refuses another block size (the certificate holds at the registered one), and the pinned vector is still gated at the
+    registered geometry while the reference gate checks the run's own."""
+    harness = _harness()
+    params = _small()
+    with pytest.raises(ValueError, match="blocks of 128 bytes are refused"):
+        harness.with_in_degree(params, 12, block_bytes=128)
+    with pytest.raises(ValueError, match="whole number of 16-byte words"):
+        harness.with_in_degree(params, 0, timed=False, block_bytes=72)
+    long = harness.with_in_degree(params, 0, timed=False, block_bytes=128)
+    assert (long.blocks_per_segment, long.block_bytes, long.d) == (16, 128, 0)
+    body = _bench().BandGpu().run(_args(tmp_path, band_d=0, band_block=128, audits=0), WS, tmp_path,
+                                  backend=_backend(long), base=params, vectors=_vectors(params))
+    assert body["scheme"] == "band-chain/d0/v1" and body["timed"] is False
+    assert (body["scheme_params"]["m"], body["scheme_params"]["d"], body["segments"]) == (1024, 0, 2)
     assert all(g["passed"] for g in body["gates"].values()) and body["gates"]["vector"]["d"] == 12
 
 

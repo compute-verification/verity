@@ -506,6 +506,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--band-d", type=int, default=None,
                     help="band-gpu: the band's in-degree d (default: the registered scheme's, 12); d >= 5 where the "
                          "certificate holds with its cliff at d, any d the codec takes untimed (--audits 0)")
+    ap.add_argument("--band-block", type=int, default=None,
+                    help="band-gpu: the band's block size in bytes (default: the registered scheme's, 65536); another size "
+                         "has no certificate, so only an untimed run (--audits 0) takes it")
     ap.add_argument("--gates-only", action="store_true",
                     help="band-gpu, p2-v1-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
     a = ap.parse_args(argv)
@@ -517,13 +520,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu")):
         raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v1-gpu run untimed (--audits 0)")
-    if a.band_d is not None:
+    if a.band_d is not None or a.band_block is not None:
         if a.impl != "band-gpu":
-            raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")
+            raise SystemExit(f"--band-d and --band-block are band-gpu's, not {a.impl}'s")
         sys.path.insert(0, str(HERE))
         from band_gpu.harness import with_in_degree
         try:
-            with_in_degree(_schemes.get(a.scheme).params, a.band_d, timed=a.audits > 0)
+            with_in_degree(_schemes.get(a.scheme).params, a.band_d, timed=a.audits > 0, block_bytes=a.band_block)
         except ValueError as e:
             raise SystemExit(str(e)) from None
     impl = IMPLS[a.impl]()
