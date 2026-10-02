@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Integrate.Sites
 import FlockSoundness.Discharge.Integrate.Bridge
+import FlockSoundness.Discharge.Integrate.Accepted
 import FlockSoundness.Discharge.Integrate.Headline
 
 /-!
@@ -14,6 +15,9 @@ with every guarantee the merged branches prove discharged and every other one a 
 * `Bridge`: the statement `Placed.Accepted` reads (`Layout.model`) is the one the executable's refinement plays
   (`Refine.stmtOf`) for every statement `Stmt.setupH` accepts (`model_eq_stmtOf`), so a drawn table is `stmtOf` of its
   statement (`tableAt_stmtOf`), where `DecodesAll` is stated;
+* `Accepted`: a draw flock-verify accepts sets up (`drawSetup_of_accepts`) when the record's draw proves the drawn units
+  and its statement's link points are `mPts`, so there the table is `stmtOf` of the accepted statement
+  (`tableAt_of_accepts`);
 * `Headline`: `flock_headline_exec`, the headline at `Placed.keyProg c hU n` with `pp`, `hConst`, `hZero`, `lay` and
   `rs` built, and `hHm` (e2e-hm), `hdec` (e2e-exec) and the assumptions of record taken as hypotheses.
 -/
