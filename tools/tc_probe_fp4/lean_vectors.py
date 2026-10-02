@@ -1,7 +1,7 @@
 """Named NVFP4 conformance vectors from a generated Lean vector file, captured on the card (``probe.py --instruction
 nvf4_lean_vectors --vectors Fp4Vectors.lean``).
 
-The file is a ``Pouw.PearlC.Fp4Vectors`` module: ``Vec`` entries ⟨acc, a, b, sa, sb, d⟩, one output word of
+The file is a ``Pouw.Protocol.PearlC.Fp4Vectors`` module: ``Vec`` entries ⟨acc, a, b, sa, sb, d⟩, one output word of
 ``blackwell_sm120_nvf4_m16n8k64`` (the accumulator word, A's row and B's column as 64 codes packed little-endian four bits each,
 four UE4M3 bytes per side packed likewise, and the word the model predicts, ``none`` outside it), and ``ChainVec`` entries
 ⟨acc, n, a, b, sa, sb, d⟩ (``n`` firings, firing j on codes 64j..64j+63 and bytes 4j..4j+3, D fed back as C).

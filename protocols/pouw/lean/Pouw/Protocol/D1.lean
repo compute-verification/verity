@@ -1,4 +1,4 @@
-import Pouw.Game.Defs
+import Pouw.Protocol.Game.Defs
 
 /-!
 # Protocol D1: the [KW] transcript with low-rank integer noise (trusted; §3.2, §4.4, §6 D1)
