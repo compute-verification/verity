@@ -482,8 +482,9 @@ The weights are committed once and every later proof opens that root. The analys
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
-  - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved, 2^-70.2), and it
-    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4` to `2^90.4`, with `N` counting audits.
+  - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
+    for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`
+    to `2^90.4`, with `N` counting audits.
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
   weights.

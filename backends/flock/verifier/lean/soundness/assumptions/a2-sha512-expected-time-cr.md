@@ -8,6 +8,6 @@ The statement is in `../ASSUMPTIONS.md`.
   because a finder can gamble.
 - **Where it is used.** Only the link term, `t·Q_s(8N₀/e)/2^256` per audit, with `Q_s ≤ N_s` the commit strings
   the drawn units read (audit B `t·2^-209.4`, `2^-129.4` at `t = 2^80`). Under strict-time `cr/sha-512` alone it is
-  proved at `t^{2/3}·2^-123.5` (`2^-70.2` at `t = 2^80`; `FlockSoundness/CROnly/`), and the random oracle's
-  `t²/2^511` is a comparison (`../DESIGN.md` §3).
+  proved for the non-ZK session (not `--zk`'s, `../ASSUMPTIONS.md`) at `t^{2/3}·2^-123.5` (`2^-70.2` at
+  `t = 2^80`; `FlockSoundness/CROnly/`), and the random oracle's `t²/2^511` is a comparison (`../DESIGN.md` §3).
   The compiled theorem, `δ_tree` and the knowledge term's conflicts keep strict-time `cr/sha-512` (`../ASSUMPTIONS.md`).

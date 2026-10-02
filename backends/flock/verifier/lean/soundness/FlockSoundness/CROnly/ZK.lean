@@ -11,6 +11,10 @@ import FlockSoundness.ZK.AdaptivePrefinal
 bound `δ` on the gap (`session_shvzk_le`, `adaptive_prefinal_le`). For `hm96-sha512` the gap is at most `2^-193` at all
 but a `2^-64` fraction of the keys (`hm96_sha512_bad_keys`), so what remains is that the pinned key is uniform
 (`hash-derived-key`, a model fact of the common reference string).
+
+These are zero-knowledge statements, about what the prover's messages reveal (at fixed coins for Lemma B, against any
+`V*` for Lemma C), over any tables `T`. None is a soundness statement, so the `--zk` verifier's place for `final_c'`
+(#793) is outside them.
 -/
 
 namespace FlockSoundness.CROnly
