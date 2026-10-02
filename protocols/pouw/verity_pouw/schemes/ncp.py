@@ -243,7 +243,8 @@ class NCP:
                       "Pouw.SecurityProofs.NCP.YUChecked", "Pouw.SecurityProofs.NCP.Int7Int32UPos",
                       "Pouw.SecurityProofs.NCP.NCPWordFloorIndU", "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
                       "Pouw.SecurityProofs.NCP.WrapWordFloorIndU", "Pouw.SecurityProofs.Barrier.Generic",
-                      *(("Pouw.SecurityProofs.NCP.IndependentWitness",) if perm == "shift24" else ())),
+                      *(("Pouw.SecurityProofs.NCP.IndependentWitness", "Pouw.SecurityProofs.NCP.ShiftBy24Admissible")
+                        if perm == "shift24" else ())),
             hypotheses=("TTNCP_U(β, γ_0) in M_4090 under W1 with sub-word moves priced (Pouw.NCP.Assumptions.TTNCP_U)",
                         "AdmitsRef: H_ref runs within wref",
                         "Word.NzNCP of the wrapped route-U values (the word floors' hypothesis)",
