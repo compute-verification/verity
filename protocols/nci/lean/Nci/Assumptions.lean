@@ -10,10 +10,12 @@ own products alone, must read at least their combined width". The draft's proof 
 activations an IU uses, and for the weights it uses and the partial sums it receives. Each is a `Prop` about one
 declaration and one chain it runs, taken as a hypothesis by the guarantees that need it.
 
-Both are assumed only for chains whose weights depend on more than `Γ` work of training since the commitment (the
-draft, "Frontier training currently requires updated matrix multiplications"). Starting from a committed checkpoint,
-one IU could compute weights that depend on less from the training data itself. Frontier runs pass this threshold at
-once.
+Both are assumed only for chains whose weights and first inputs `x^{(0)}` depend on more than `Γ` work of training since
+the commitment (the draft, "Frontier training currently requires updated matrix multiplications"). Starting from a
+committed checkpoint, one IU could compute weights that depend on less from the training data itself. If the layers
+before the first multiplication are committed in `θ`, an IU computes `x^{(0)}` at many positions from `θ` alone, and
+activation incompressibility fails at the first multiplication. Frontier runs pass this threshold at once, since
+everything before the first multiplication is updated too.
 
 Both are assumed only for IUs that read at most `K` bits, which under the policy is `αΓ`. The draft states its
 assumption for every IU of at most `Γ` gates and uses it only for IUs that read at most `K`. Without the cap it fails for
@@ -32,7 +34,8 @@ at least `b_w` bits for each weight entry it uses and `b_a` bits for each input 
 linked to an entry whole in `R`, which `R` can compute from its own products alone:
 `b_w · #(weight entries R uses) + b_a · #(input entries R uses, not linked to an entry whole in R) ≤ width(in(R) \ θ)`.
 "Uses" means that `R` holds a product of the entry. `b_w` is the width of a weight entry and `b_a` that of an activation
-entry; at FP4 both are 4.25 bits, counting an entry's share of its block scale.
+entry; at FP4 both are 4 bits. An entry's share of its block scale is not counted, since an IU can use an entry without
+reading its scale and leave the scaling to another.
 
 The draft's rationale (Lemma 1's proof): `R` must read each input entry it uses, its linked output entry, or a partial
 sum of that output entry; these are distinct for distinct input entries, since the links are injective, and each is at
