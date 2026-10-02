@@ -10,7 +10,7 @@
 # hillclimb.json the step's verity/hillclimb-point/v0 record (declared in outputs.json, so the store keeps it as its own artifact).
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
-# env: K= (required: 2048, 4096, 8192 or 16384)  DTYPE=bf16 (or e4m3, nvf4, mxf4)  N= (instances; default BF16's
+# env: K= (required: 2048, 4096, 8192, 16384 or 32768)  DTYPE=bf16 (or e4m3, nvf4, mxf4)  N= (instances; default BF16's
 #      gemm_hill.INSTANCES[K], an FP8 / FP4 row's `gemm_hill.py fill` of the gate, m = 35; required with GATE=0 or SERVE_ONLY=1;
 #      an FP row's gate is always its N = 16 row)  CPUSET= (the cores to
 #      pin to, inside the job's affinity)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices; pass CPUS=16).
