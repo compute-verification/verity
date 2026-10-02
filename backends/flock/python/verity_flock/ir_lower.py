@@ -768,7 +768,12 @@ def _flat_ports(t) -> list[list[int]]:
 
 
 def slice_words(words, nbits: int) -> list[int]:
-    """Lane-major words -> bit-sliced ints: bit t of result[b] is bit b of words[t]."""
+    """Lane-major words -> bit-sliced ints: bit t of result[b] is bit b of words[t] (words over 64 bits as Python ints)."""
+    if nbits > 64:
+        nb = (nbits + 7) // 8
+        raw = np.frombuffer(b"".join(int(v).to_bytes(nb, "little") for v in words), dtype=np.uint8).reshape(-1, nb)
+        bits = np.unpackbits(raw, axis=1, bitorder="little")[:, :nbits]
+        return [int.from_bytes(np.packbits(bits[:, b], bitorder="little").tobytes(), "little") for b in range(nbits)]
     w = np.asarray(words, dtype=np.uint64)
     out = []
     for b in range(nbits):
@@ -778,8 +783,12 @@ def slice_words(words, nbits: int) -> list[int]:
 
 
 def unslice_words(sliced: Sequence[int], T: int) -> np.ndarray:
-    """Bit-sliced ints -> lane-major words (the inverse of :func:`slice_words`)."""
+    """Bit-sliced ints -> lane-major words (the inverse of :func:`slice_words`; over 64 bits, an object array of ints)."""
     nbytes = (T + 7) // 8
+    if len(sliced) > 64:
+        bits = np.stack([np.unpackbits(np.frombuffer(v.to_bytes(nbytes, "little"), dtype=np.uint8), bitorder="little")[:T]
+                         for v in sliced], axis=1)
+        return np.array([int.from_bytes(np.packbits(row, bitorder="little").tobytes(), "little") for row in bits], dtype=object)
     out = np.zeros(T, dtype=np.uint64)
     for b, v in enumerate(sliced):
         bits = np.unpackbits(np.frombuffer(v.to_bytes(nbytes, "little"), dtype=np.uint8), bitorder="little")[:T]

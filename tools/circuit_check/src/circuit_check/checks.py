@@ -363,8 +363,6 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
             if p not in bad_pieces:
                 _piece_status(p, opts, pins, memo if memo is not None else {})
     widths = [w for pt in params for w in pt.leaf_widths()]
-    if any(w > 64 for w in widths):
-        return {"lowered": False, "reason": "a leaf wider than 64 bits"}
     C = gf2.Circuit()
     ins = [C.input(f"in{j}", w) for j, w in enumerate(widths)]
     try:
@@ -381,7 +379,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if T:
         got_s, fail = C.evaluate({f"in{j}": IL.slice_words(fin[:, j], w) for j, w in enumerate(widths)}, T)
         got = np.stack([IL.unslice_words(got_s[f"out{k}"], T) for k in range(len(outs))], axis=1)
-        want = np.asarray([ref[i] for i in rows], dtype=np.uint64)
+        want = np.asarray([ref[i] for i in rows], dtype=object if any(len(o) > 64 for o in outs) else np.uint64)
         bad = np.flatnonzero((got != want).any(axis=1)).tolist()
         rec["mismatches"] = len(bad)
         if isinstance(t, PrimitiveDefinition):
