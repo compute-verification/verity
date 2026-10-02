@@ -75,6 +75,36 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a")
 
 
+def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
+    """Node 1's slot d (2 Oct 06:58Z) sat free behind the head of the line, a check that had read the slots file before d was in it."""
+    slots = tmp_path / "slots"
+    slots.write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", slots)
+    held = _hold(tmp_path / "check-a.lock")
+    ran = {}
+
+    tries = []
+
+    def add_d(_s):                                   # d appears on the first retry; a waiter that never rereads gives up at 5
+        tries.append(1)
+        assert len(tries) < 5, "the waiter never took the slot added while it waited"
+        slots.write_text("a 0\nd 1\n")
+
+    def execvpe(f, argv, env):
+        ran.update(env=env)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: ran.update(cpus=cpus))
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=add_d)
+    assert ran["env"]["CHECK_SLOT"] == "d" and ran["cpus"] == {1}
+    os.close(held)
+    assert SLOT.reread([{"name": "x"}]) == SLOT.parse("a 0\nd 1\n")
+    slots.write_text("# being rewritten\n")
+    assert SLOT.reread([{"name": "x"}]) == [{"name": "x"}]
+
+
 def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_ticket_is_cleared(tmp_path, monkeypatch, capsys):
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")

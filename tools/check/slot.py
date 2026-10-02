@@ -12,8 +12,8 @@ The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
-minutes: a check there would run into a whole-node timed measurement. With every slot busy it retries every POLL_S; with no
-slots file, CMD runs as it is. Stdlib only: it runs before uv.
+minutes: a check there would run into a whole-node timed measurement. With every slot busy it retries every POLL_S, reading
+SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
@@ -169,6 +169,15 @@ def ahead(ticket: Path) -> int:
     return n
 
 
+def reread(slots: list[dict]) -> list[dict]:
+    """The slots file as it is now, so a slot added while a check waits is one it can take; the last list it read when the file
+    can't be read or lists none (mid-rewrite)."""
+    try:
+        return parse(SLOTS.read_text()) or slots
+    except OSError:
+        return slots
+
+
 def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
     if argv[:1] == ["--status"]:
         if not SLOTS.exists():
@@ -189,6 +198,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     ticket, tfd = join(SLOTS.parent, priority="--priority" in opts)
     told = None
     while True:
+        slots = reread(slots)
         n = ahead(ticket)
         got = None if n else take(slots, SLOTS.parent, now())
         if got:
