@@ -22,12 +22,12 @@ scp tools/research/console/{verity_console.py,util_collect.py} research@vy-nebiu
 sudo cp infra/nebius/verity-console.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload
 ~~~
 
-Deploy to the control pod (`vy-control-verity`, `9tnzjcc6iygyv0`). The loop runs `verity_console.py` fresh each time, so the next
+Deploy to the control pod (`vy-control-verity`, `nv7h6w1pairkcu`). The loop runs `verity_console.py` fresh each time, so the next
 run picks up a copied file without a restart:
 
 ~~~sh
 for f in verity_console.py ovd.py console-loop.sh; do
-  research pods ssh 9tnzjcc6iygyv0 -- "cat > /workspace/console/$f" < tools/research/console/$f
+  research pods ssh nv7h6w1pairkcu -- "cat > /workspace/console/$f" < tools/research/console/$f
 done
 ~~~
 
