@@ -36,6 +36,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
@@ -211,6 +212,15 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
         _add_options(by_name[name], cls, environ)
     ns = parser.parse_args(argv)
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
+
+
+def set_environment(environ: Mapping[str, str], keep: tuple[str, ...] = ()) -> None:
+    """Make the process environment ``environ``, but for the ``keep`` keys the process has, which keep their values: each row of a grouped
+    Commit (`commit_group`) runs in its own row's environment, on the devices the lease of its first row set."""
+    held = {k: os.environ[k] for k in keep if k in os.environ}
+    os.environ.clear()
+    os.environ.update(environ)
+    os.environ.update(held)
 
 
 def process_settings(environ: MutableMapping[str, str]) -> None:

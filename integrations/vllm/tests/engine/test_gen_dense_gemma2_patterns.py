@@ -174,6 +174,17 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
     assert g.operands == (PerRow(v["gu"]),) and g.outputs == (PerRow(v["act"]),)
 
 
+def test_gelu_is_refused_by_name_under_registered_values_until_the_fold_supplies_its_table():
+    """`GeluTanhMul_v3` reads the registered `gelu_tanh_bf16`, which a fold does not supply yet: the fold refuses the op rather than
+    bind `GeluTanhMul_v1`, which a `registered_values` Build does not call."""
+    events, start, _ = gemma_step()
+    ctx = gemma_context(start)
+    ctx = dataclasses.replace(ctx, profile=dataclasses.replace(ctx.profile, registered_values=True))
+    res = resolve_step(step_events(events), ctx)
+    (u,) = [r for r in res if isinstance(r, Unsupported) and "gelu_tanh_and_mul" in r.op]
+    assert "gelu_tanh_bf16" in u.reason and not [k for k in by_spec(res) if k.startswith("GeluTanhMul")]
+
+
 @pytest.mark.parametrize("over, needle", [({"block": 512}, "BLOCK_SIZE"), ({"warps": 8}, "num_warps"), ({"k_n": 7}, "N")])
 def test_mean_kernel_pins_reject_a_foreign_launch(over, needle):
     events, start, _ = gemma_step(**over)

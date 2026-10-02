@@ -108,21 +108,21 @@ def outRegion (c : Circuit) (pub : Public) : V Region := do
 
 end Circuit
 
-/-- **The statement range the soundness bound covers** (the soundness package's `Stmt.InRange`): at most `2^26` witness
+/-- **The statement range the soundness bound covers** (the soundness package's `Stmt.InRange`): at most `2^27` witness
 bits per block, 1024 public regions, and 64 coordinates per link point. `setup` and `setupH` refuse a statement outside
 it, so the verifier accepts only statements the proved bound covers. -/
 def checkInRange (kLog nRegions mPts : Nat) : V Unit :=
-  if kLog ≤ 26 && nRegions ≤ 1024 && mPts ≤ 64 then pure ()
-  else throw s!"statement range: k_log {kLog}, {nRegions} regions, m_pts {mPts}; the soundness bound covers k_log ≤ 26, at most 1024 regions and m_pts ≤ 64"
+  if kLog ≤ 27 && nRegions ≤ 1024 && mPts ≤ 64 then pure ()
+  else throw s!"statement range: k_log {kLog}, {nRegions} regions, m_pts {mPts}; the soundness bound covers k_log ≤ 27, at most 1024 regions and m_pts ≤ 64"
 
 /-- `checkInRange` accepts exactly the soundness package's `Stmt.InRange`. -/
 theorem checkInRange_ok (kLog nRegions mPts : Nat) :
-    checkInRange kLog nRegions mPts = .ok () ↔ kLog ≤ 26 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64 := by
+    checkInRange kLog nRegions mPts = .ok () ↔ kLog ≤ 27 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64 := by
   unfold checkInRange
-  by_cases h : kLog ≤ 26 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64
+  by_cases h : kLog ≤ 27 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64
   · simp [h, pure, Except.pure]
   · simp only [h, iff_false]
-    have : (decide (kLog ≤ 26) && decide (nRegions ≤ 1024) && decide (mPts ≤ 64)) = false := by
+    have : (decide (kLog ≤ 27) && decide (nRegions ≤ 1024) && decide (mPts ≤ 64)) = false := by
       simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]; omega
     simp [this, throw, throwThe, MonadExceptOf.throw]
 
@@ -183,7 +183,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
   let m := c.kLog + nbl
-  if c.kLog > 26 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 26)"
+  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
   let pin ← c.pin leaf
   let (da, db) ← c.delta leaf pin
   let regions := (← leaf.regions c pub).push (← c.outRegion pub)
