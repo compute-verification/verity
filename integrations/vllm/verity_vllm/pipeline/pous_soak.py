@@ -558,18 +558,18 @@ def cmd_sample(a) -> int:
     ev_t, ev_irq, ev_cpu, ev_d = [], [], [], []
     soft_names: list[str] = []
     tick = time.monotonic()
-    k = 0
+    n_tick = 0
     while not stop[0]:
         triples.append(_clock_triple())
         t = triples[-1][1]
         freq.append([freq_khz(c) for c in cpus])
-        if nvml is not None and k % max(1, round(1.0 / a.period)) == 0:
+        if nvml is not None and n_tick % max(1, round(1.0 / a.period)) == 0:
             nv_rows.append(nvml.gpu())
-        if k % max(1, round(10.0 / a.period)) == 0:
+        if n_tick % max(1, round(10.0 / a.period)) == 0:
             gpus_t.append(t)
             gpus_util.append(nvml.utilization() if nvml is not None else [])
             loadavg.append(list(os.getloadavg()))
-        k += 1
+        n_tick += 1
         with open("/proc/softirqs") as f:
             f.readline()
             rows = [ln.split() for ln in f]
@@ -636,6 +636,7 @@ def cmd_sample(a) -> int:
                         nvml_error=np.array(nvml_error or ""), gpus_uuid=np.array(nvml.uuids if nvml else []),
                         gpus_t_ns=np.array(gpus_t, np.int64), gpus_util=np.array(gpus_util, np.int64).reshape(len(gpus_t), len(nvml.all) if nvml else 0),
                         loadavg=np.array(loadavg, np.float64).reshape(-1, 3),
+                        sampler_source_sha256=np.array(hashlib.sha256(Path(__file__).read_bytes()).hexdigest()),
                         softirq_names=np.array(soft_names), softirq=np.array(soft, np.int64),
                         cpustat=np.array(cpustat, np.int64), sched_targets=np.array(targets, np.int64).reshape(-1, 2),
                         schedstat=np.array(sched, np.int64).reshape(len(t_ns), len(targets), 3),
