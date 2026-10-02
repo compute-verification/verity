@@ -98,20 +98,27 @@ def public_header(stage_dir: Path, n: int) -> dict:
         return json.loads(f.readline())
 
 
+def hidden_outputs(meta: dict) -> bool:
+    """M0 from hidden outputs (META `input_ports`): every output port is a row after the input rows, and no domain binds the
+    set's unsalted content digest."""
+    return "input_ports" in meta
+
+
 def ports(meta: dict, n: int) -> dict[str, tuple[str, int]]:
-    """Each port the layout derives: its schema and leaf count."""
+    """Each port the layout derives: its schema and leaf count (before hidden outputs, each output port a tree of u16 words)."""
     out = {name: ("hm96-sha512/row/v1", n) for name, *_ in meta["ports"]}
-    out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
+    if not hidden_outputs(meta):
+        out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
     return out
 
 
 def stand_in_ports(name: str, content_digest: str, meta: dict, n: int) -> dict[str, dict]:
-    """The verifier's own derivation of the stand-in's domains: M0's frame domains bound to the set, the range, the port
-    and its schema."""
+    """The verifier's own derivation of the stand-in's domains: M0's frame domains bound to the set (before hidden outputs,
+    its content digest too), the range, the port and its schema."""
     out = {}
+    content = {} if hidden_outputs(meta) else {"content_digest": content_digest}
     for p, (schema, count) in ports(meta, n).items():
-        b = identity_digest(STAND_IN_BINDING, {"set": name, "content_digest": content_digest, "lo": 0, "hi": n, "port": p,
-                                               "schema": schema})
+        b = identity_digest(STAND_IN_BINDING, {"set": name, **content, "lo": 0, "hi": n, "port": p, "schema": schema})
         out[p] = {"leaves": count, "domain": CommitmentDomain(bytes.fromhex(b), -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
     return out
 
