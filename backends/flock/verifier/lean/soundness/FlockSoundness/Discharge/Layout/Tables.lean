@@ -6,11 +6,11 @@ set_option Elab.async false
 # A population without shared rows, from the statement's tag
 
 `bc_drawn`, `BcSite` and the headline's sites read the registered population's `b ‖ c` as `n · np` consecutive pieces
-of its public file, which holds for a file without shared rows (`pop.tables = none`). That is not a condition on the
-population: `HmRow.sharedRows` refuses a header's `shared_rows` unless the statement's tag has shared-row files, so
-under any tag without them every population `HmRow.loadPublic` accepts has no tables (`loadPublic_tables`). Of the
-known tags only `verity/flock-circuit@967b8d06` and the typed tags built on it have them; M0's untyped
-`verity/flock-circuit` and `@eb90718f` do not (`circuit_sharedRows`, `circuitEb90718f_sharedRows`, by `rfl`).
+of its public file, which holds for a file without shared rows (`pop.tables = none`). `HmRow.sharedRows` refuses a
+header's `shared_rows` unless the statement's tag has shared-row files, so under any tag without them every population
+`HmRow.loadPublic` accepts has no tables (`loadPublic_tables`; `@eb90718f` by `rfl`, `circuitEb90718f_sharedRows`).
+`verity/flock-circuit@967b8d06`, the tag M0's sessions on OS coins verify under, has them, so the headline takes
+`pub.tables = none` as a condition on the loaded file (`hpt`), which M0's per-instance public files meet.
 -/
 
 namespace FlockSoundness.Discharge.Layout
@@ -46,8 +46,6 @@ theorem loadPublic_tables {tags : Tags} {c : Circuit} {file : ByteArray} {pop : 
   all_goals first
     | rfl
     | exact absurd (sharedRows_none hs ‹HmRow.sharedRows _ _ _ = .ok (some _)›) (Option.some_ne_none _)
-
-theorem circuit_sharedRows : Tags.circuit.sharedRows = false := rfl
 
 theorem circuitEb90718f_sharedRows : Tags.circuitEb90718f.sharedRows = false := rfl
 

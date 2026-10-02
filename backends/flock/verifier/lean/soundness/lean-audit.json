@@ -5537,11 +5537,6 @@
    "assumptions": [],
    "type_hash": "dbf234e8054555699d2da52c094cc2cfb59494f9f240a2711826b588bfdc2338"
   },
-  "FlockSoundness.Discharge.Layout.circuit_sharedRows": {
-   "signature": ["FlockSoundness.Discharge.Layout.circuit_sharedRows : Eq Flock.Tags.circuit.sharedRows Bool.false"],
-   "assumptions": [],
-   "type_hash": "b1b8bb5f0346f08bca969e534e84b13814291ecb73e2759e03be5b2c229a3b9a"
-  },
   "FlockSoundness.Discharge.Layout.col_val_comp": {
    "signature": [
     "FlockSoundness.Discharge.Layout.col_val_comp {T : FlockSoundness.Model.Statement}",
