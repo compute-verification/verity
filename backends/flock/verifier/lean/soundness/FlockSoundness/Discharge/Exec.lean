@@ -35,18 +35,23 @@ import FlockSoundness.Discharge.Exec.LawDraw
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
 
+The acceptance lemmas (`accepts_*`) are about public-output statements only: each takes `hh : hiddenOutputs = false`,
+since with hidden outputs flock-verify sets up its tables with `setupHidden`, about which nothing here is proved.
+
 * `Event`: flock-verify's verdict on a session directory (`Accepts`), the live audit whose outcome carries it
   (`auditLive`), and R11 at one strategy pair (`ExecRefines`);
 * `SessionL`: the batched session under a leaf scheme (`tableAfterL`, `sessionBL`, `batchedSessionL`), and over any
   table run (`sessionG`, `batchedSessionG`);
-* `Setup`: flock-verify's acceptance sets up each table with `setupH` (`accepts_setupH`, `setupH_public`);
-* `Tables`: each accepted table is one accepting run of `tableAfterL` at `leaf512` (`accepts_tables_hm96`);
+* `Setup`: under a tag without hidden outputs, flock-verify's acceptance sets up each table with `setupH`
+  (`accepts_setupH`, `setupH_public`);
+* `Tables`: under such a tag, each accepted table is one accepting run of `tableAfterL` at `leaf512`
+  (`accepts_tables_hm96`);
 * `Merkle`: each table `setupH` accepts commits with the tags' leaf scheme (`setupH_find`), so with `hm96Sha512` under
   every `hm96Rows` tag pinned today (`setupH_hm96`), and `accepts_tables_hm96` without `hms`
-  (`accepts_tables_hm96_of_leaf`);
-* `Retained`: every `hm96Rows` tag pinned today retains round bytes, so every round of a record flock-verify accepts
-  carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every stream satisfies
-  `Refine/Frames.lean`'s `AllRetained` (`accepts_allRetained`);
+  (`accepts_tables_hm96_of_leaf`, without hidden outputs);
+* `Retained`: every `hm96Rows` tag pinned today retains round bytes, so, without hidden outputs, every round of a
+  record flock-verify accepts carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every
+  stream satisfies `Refine/Frames.lean`'s `AllRetained` (`accepts_allRetained`);
 * `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of
@@ -75,11 +80,11 @@ import FlockSoundness.Discharge.Exec.LawDraw
 * `Emit`, `FramesLigerito`, `FramesRep`: the frames a run emits, round by round (`Emitted`, `chunks`), for each phase
   of a rep and for the whole rep (`zerocheck_emitted`, `lincheck_emitted`, `ringSwitch_emitted`, `ligerito_frames`,
   `rep_rounds`), on streams whose rounds all retained their bytes;
-* `Rounds`: so, when flock-verify accepts under tags that retain rounds, round `k` of each rep's stream retained the
-  bytes of chunk `k` of the rep's frames (`RepRounds`, `accepts_rep_rounds`);
+* `Rounds`: so, when flock-verify accepts under tags that retain rounds and have no hidden outputs, round `k` of each
+  rep's stream retained the bytes of chunk `k` of the rep's frames (`RepRounds`, `accepts_rep_rounds`);
 * `Verdict`: the openings and salts the proof files decode to (`opnOf`), and the verdict part of `Decodes`: at
-  flock-verify's acceptance, each table's salted verdict at `capOfRoot root_B[j]` and `opnOf` accepts on the reps' runs
-  (`table_verdict_hm96`, `accepts_verdict_hm96`);
+  flock-verify's acceptance under a tag without hidden outputs, each table's salted verdict at `capOfRoot root_B[j]`
+  and `opnOf` accepts on the reps' runs (`table_verdict_hm96`, `accepts_verdict_hm96`);
 * `Shape`: where a rep's coins fall among its messages is the game's: every run of a rep follows a static spine read
   off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the
   same messages and coins are runs on the same tape (`repC_tape`);

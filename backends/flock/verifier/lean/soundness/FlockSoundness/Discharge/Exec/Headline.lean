@@ -22,7 +22,8 @@ verdict (`LiveAccepts I`), with the gap a named refinement `ExecRefines` (R11 at
 leaf `H(encode row)`. Every `hm96Rows` statement commits its proof rows with `hm96-sha512/v1` leaves, so flock-verify
 accepts an honest session that `batchedSession` rejects, and `hRef` against `batchedSession` holds only with a `bad`
 as likely as acceptance itself. For those statements the refinement targets `batchedSessionL H512 enc512 leaf512 plan`
-(`SessionL.lean`; each accepted table is one accepting run of `tableAfterL`, `accepts_tables_hm96`), and what is open
+(`SessionL.lean`; under a tag without hidden outputs, each accepted table is one accepting run of `tableAfterL`,
+`accepts_tables_hm96`), and what is open
 is the headline restated there: knowledge soundness and the link theorem over `Merkle.Leaf`, the bound
 `flock_headline_exec_L` takes as `hB`. The other open half of R11 is `hRef` itself: a strategy of the audit built from
 the live prover, the coin server's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.

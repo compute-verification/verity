@@ -5,8 +5,8 @@ import FlockSoundness.Refine.Frames
 
 A run of the replay transcript appends frames to its pending bytes, and each squeeze of at least one coin closes a
 round: the round retained the pending bytes and the squeeze's header, when the server retains round bytes (every
-`hm96Rows` tag pinned today does: `accepts_allRetained`). `Emitted t t' fs` says a run from `t` to `t'` absorbed and
-squeezed the frames `fs`, in order.
+`hm96Rows` tag pinned today does: `accepts_allRetained`, for public-output statements, `hiddenOutputs = false`).
+`Emitted t t' fs` says a run from `t` to `t'` absorbed and squeezed the frames `fs`, in order.
 
 * `chunks fs`: the rounds `fs` closes, each the frames up to and including its squeeze, and the frames after the last.
 * `Emitted`: the run consumed one round per chunk, each retaining its chunk's bytes (the first also `t`'s pending bytes),

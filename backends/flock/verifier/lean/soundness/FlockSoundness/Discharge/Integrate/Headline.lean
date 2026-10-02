@@ -94,10 +94,13 @@ that the unit net lowers its template's Definition. The tail stages of `tc_units
 rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds VUs that fail at their
 own committed values, and a VU reading its producers' outputs is carried by the copy constraints and the region pins,
 not by an edge of the program. The proof coins are the live coin server's per-round OS coins (A6): seed-derived coins
-are outside the headline, so an M0 session counts only under `FC_COINS=os`. Since #757, main's prover always writes the
-hidden-output statement (`verity/flock-circuit`, `hiddenOutputs = true`), which has no soundness theorem, so the
-headline covers only public-output `@967b8d06` sessions from builds before #757 and no session main's prover writes
-from now on. Sessions of more than one table are outside it (M0's default is one). -/
+are outside the headline, so an M0 session counts only under `FC_COINS=os`. The tag is whatever the verifier passes as
+`--statement`: a session counts when `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os`
+accepts it with one table, so the headline covers only public-output `@967b8d06` sessions, from builds before #757.
+Since #757, main's prover always writes the hidden-output statement (`verity/flock-circuit`, the default
+`--statement`, `hiddenOutputs = true`), under which `setupTables` calls `setupHidden`, which has no soundness theorem;
+the headline makes no claim about those sessions, which are every session main's prover writes from now on. Sessions
+of more than one table are outside it (M0's default is one). -/
 theorem flock_headline_exec
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
