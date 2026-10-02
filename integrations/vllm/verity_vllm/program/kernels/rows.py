@@ -784,6 +784,11 @@ EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
 _k = ROWS[softcap_rows.FAMILY] = RowKernel(softcap_rows.FAMILY, attention_softcap, ("out",))
 register(softcap_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=softcap_rows.check_targets)
 
+from verity_vllm.program.kernels import act_rows  # noqa: E402  -- SiluMul_v2's row
+EVALUATORS[act_rows.FAMILY] = act_rows.EVALUATOR
+_k = ROWS[act_rows.FAMILY] = RowKernel(act_rows.FAMILY, act_rows.silu_mul_expf, ("out",))
+register(act_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=act_rows.check_targets)
+
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 
 for _f in ir_rows.FAMILIES:

@@ -2562,7 +2562,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     # module (class-name) -> census root families whose NATURALLY-MATERIALIZED outputs the hook on that module binds
     FAMILY_OF_MODULE = {
         "Linear": ("Gemm_v1",), "RMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), "GemmaRMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
-        "SiluAndMul": ("SiluMul_v1",), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
+        "SiluAndMul": ("SiluMul_v1", "SiluMul_v2"), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
         "VocabParallelEmbedding": ("Embedding_v1",), "LogitsProcessor": ("Gemm_v1",), "Sampler": ("TokenSelect_v1",),
     }
 
