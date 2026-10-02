@@ -9,7 +9,9 @@ scheme's certified parameters.
   - Qwen2.5-0.5B: every linear weight and the tied head, 15,075 blocks of 64 KiB;
   - Qwen2.5-7B: layer 0 and the head, 23,744 blocks;
   - Llama-3.1-8B: layer 0 and the untied head, 22,688 blocks (band-gpu and the reference; not in `vllm-gpu`'s frozen
-    harness).
+    harness);
+  - Llama-3.1-8B: layers 0-8 and the untied head, 75,936 blocks (12,656 of 384 KiB, enough rows to fill an RTX PRO 6000
+    at long blocks; band-gpu and the reference).
 - `bench.py` is the harness: one command per (scheme, implementation, weight set, hardware). It writes `bench-result.json`
   (`verity-pous/bench-result/v1`), and `result.json` under `research run`.
   - Every implementation passes the same gates:
