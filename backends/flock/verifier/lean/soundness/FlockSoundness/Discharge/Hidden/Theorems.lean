@@ -1,4 +1,4 @@
-import FlockSoundness.Discharge.Hidden.Facts
+import FlockSoundness.Discharge.Hidden.Binding
 
 /-!
 # The soundness of a hidden-output statement (`Stmt.setupHidden`)
@@ -27,8 +27,8 @@ theorem public_exposes : PublicExposes := by sorry
 
 theorem outputs_committed : OutputsCommitted := by sorry
 
-theorem commitPair_spec : CommitPairSpec := by sorry
+theorem commitPair_spec : CommitPairSpec := commitPair_spec'
 
-theorem outputs_binding : OutputsBinding := by sorry
+theorem outputs_binding : OutputsBinding := outputs_binding_of outputs_committed
 
 end FlockSoundness.Discharge.Hidden
