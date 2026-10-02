@@ -15,8 +15,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.commit.committer import native_host as nh  # noqa: E402
-from verity_vllm.commit.committer.native_host import _PinnedPool  # noqa: E402
+from verity_vllm.commit.committer import pinned_pool as pp  # noqa: E402
+from verity_vllm.commit.committer.pinned_pool import PinnedPool  # noqa: E402
 
 GPU = torch.cuda.is_available()
 
@@ -32,7 +32,7 @@ def _rss_bytes() -> int:
 def test_exact_pool_rss_equals_its_accounting_and_is_released():
     torch.zeros(1, device="cuda")
     n = (1536 << 20) + 4097                       # 1.5 GiB + a page + 1 B: torch's allocator would take 2 GiB for this
-    pool = _PinnedPool(exact=True)
+    pool = PinnedPool(exact=True)
     r0 = _rss_bytes()
     v = pool.take(n)
     assert pool.mode == "exact-registered-shared"
@@ -77,7 +77,7 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
 
     torch.zeros(1, device="cuda")
     n = 1 << 30
-    pool = _PinnedPool(exact=True)
+    pool = PinnedPool(exact=True)
     v = pool.take(n)
     v.fill_(5)
     before = _cgroup_anon_shmem()
@@ -112,7 +112,7 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
 
 @pytest.mark.skipif(not GPU, reason="needs CUDA")
 def test_torch_mode_is_the_named_fallback():
-    pool = _PinnedPool(exact=False)
+    pool = PinnedPool(exact=False)
     v = pool.take(1 << 20)
     assert pool.mode == "torch-pinned-pow2" and v.is_pinned()      # torch's own blocks are the ones its is_pinned() knows
     pool.release()
@@ -121,7 +121,7 @@ def test_torch_mode_is_the_named_fallback():
 def test_pool_accounting_without_cuda_uses_torch_pinned_or_skips():
     if GPU:
         pytest.skip("covered above")
-    pool = _PinnedPool(exact=True)
+    pool = PinnedPool(exact=True)
     with pytest.raises(Exception):
         pool.take(1 << 16)                        # pin_memory without CUDA raises in torch; the mode is never claimed
     assert pool.mode is None
@@ -164,15 +164,14 @@ def fake_cuda(monkeypatch):
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "cudart", lambda: _FakeCudart(events))
-    monkeypatch.setattr(nh, "_POPULATE", {"ok": True, "madvise": madvise})
-    monkeypatch.setattr(nh, "POPULATE_THREADS", 4)
-    monkeypatch.setattr(nh, "_POPULATE_PIECE", MiB)
+    monkeypatch.setattr(pp, "_POPULATE", {"ok": True, "madvise": madvise, "pools": {}})
+    monkeypatch.setattr(pp, "_POPULATE_PIECE", MiB)
     pools: list = []
     yield events, pools
     for p in pools:
         p.release()
-    if "pool" in nh._POPULATE:
-        nh._POPULATE["pool"].shutdown()
+    for helpers in pp._POPULATE["pools"].values():
+        helpers.shutdown()
 
 
 def _of(events: list, kind: str) -> list:
@@ -181,14 +180,14 @@ def _of(events: list, kind: str) -> list:
 
 def test_a_fresh_block_is_faulted_in_by_helper_threads_before_the_caller_registers_it(fake_cuda):
     events, pools = fake_cuda
-    pools.append(pool := _PinnedPool(block_bytes=MiB, exact=True))
+    pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=4))
     v = pool.take(6 * MiB + 5)
     n = 6 * MiB + 4096
     (reg,) = _of(events, "register")
     assert reg[1:4] == (v.data_ptr(), n, n // 4096), "every page of the block is present when it is registered"
     assert reg[4] is threading.current_thread(), "only the caller makes the CUDA call"
     pieces = _of(events, "populate")
-    assert all(e[3] == nh._MADV_POPULATE_WRITE and e[2] <= MiB for e in pieces)
+    assert all(e[3] == pp._MADV_POPULATE_WRITE and e[2] <= MiB for e in pieces)
     assert sorted((e[1], e[2]) for e in pieces) == [(v.data_ptr() + o, min(MiB, n - o)) for o in range(0, n, MiB)]
     assert all(e[4] is not threading.current_thread() and e[4].name.startswith("pinned-populate") for e in pieces), \
         "the helpers make no CUDA call and the caller no page fault"
@@ -204,15 +203,15 @@ def test_a_kernel_without_populate_write_leaves_the_faults_to_the_registration(f
         ctypes.set_errno(errno.EINVAL)
         return -1
 
-    monkeypatch.setitem(nh._POPULATE, "madvise", no_populate)
-    pools.append(pool := _PinnedPool(block_bytes=MiB, exact=True))
+    monkeypatch.setitem(pp._POPULATE, "madvise", no_populate)
+    pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=4))
     pool.take(3 * MiB)
     pool.take(2 * MiB)
-    assert nh._POPULATE["ok"] is False and len(tried) == 3, "one refused block, then no more attempts"
+    assert pp._POPULATE["ok"] is False and len(tried) == 3, "one refused block, then no more attempts"
     assert [e[2:4] for e in _of(events, "register")] == [(3 * MiB, 0), (2 * MiB, 0)], "both blocks still registered"
 
 
-def _warm(pool: _PinnedPool) -> None:
+def _warm(pool: PinnedPool) -> None:
     """The state a priming finds: free blocks of mixed sizes and a partly used current block."""
     for n in (3 * MiB, MiB, 5 * MiB):
         pool.take(n)
@@ -226,7 +225,7 @@ SIZES = [2 * MiB, 2 * MiB + 100, 4 * MiB, 7 * MiB, 300, 6 * MiB + 1, MiB]
 
 def test_reserve_makes_exactly_the_blocks_the_takes_after_it_allocate(fake_cuda, monkeypatch):
     events, pools = fake_cuda
-    pools.extend([plain := _PinnedPool(block_bytes=MiB, exact=True), reserved := _PinnedPool(block_bytes=MiB, exact=True)])
+    pools.extend([plain := PinnedPool(block_bytes=MiB, exact=True, populate_threads=4), reserved := PinnedPool(block_bytes=MiB, exact=True, populate_threads=4)])
     _warm(plain)
     _warm(reserved)
     before = plain.bytes_total
@@ -243,8 +242,8 @@ def test_reserve_makes_exactly_the_blocks_the_takes_after_it_allocate(fake_cuda,
         "the burst's pages are faulted in together, across its blocks, before any registration"
 
     calls: list[int] = []
-    real = nh._pinned_block
-    monkeypatch.setattr(nh, "_pinned_block", lambda *a, **k: calls.append(a[0]) or real(*a, **k))
+    real = pp._pinned_block
+    monkeypatch.setattr(pp, "_pinned_block", lambda *a, **k: calls.append(a[0]) or real(*a, **k))
     views = [reserved.take(n) for n in SIZES]
     assert calls == [], "the takes find every block ready"
     assert [int(b.numel()) for b in reserved.in_use] == [int(b.numel()) for b in plain.in_use]
@@ -256,7 +255,7 @@ def test_reserve_makes_exactly_the_blocks_the_takes_after_it_allocate(fake_cuda,
 
 def test_reserved_blocks_no_take_asked_for_join_the_free_list_and_are_counted(fake_cuda):
     _events, pools = fake_cuda
-    pools.append(pool := _PinnedPool(block_bytes=MiB, exact=True))
+    pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=4))
     assert pool.reserve([2 * MiB, 3 * MiB]) == 5 * MiB
     pool.take(2 * MiB)
     pool.reset()
@@ -264,21 +263,38 @@ def test_reserved_blocks_no_take_asked_for_join_the_free_list_and_are_counted(fa
     assert pool.reserve([MiB]) == 0, "the free list covers it: nothing new"
 
 
-def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda, monkeypatch):
+def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda):
     _events, pools = fake_cuda
-    assert _PinnedPool(exact=False).reserve([MiB]) == 0
-    monkeypatch.setattr(nh, "POPULATE_THREADS", 0)
-    pools.append(pool := _PinnedPool(block_bytes=MiB, exact=True))
+    assert PinnedPool(exact=False).reserve([MiB]) == 0
+    pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=0))
     assert pool.reserve([MiB]) == 0 and pool.all == []
 
 
 @pytest.mark.parametrize("j", [0, 1, 3, 7, 12])
 def test_the_primed_level_sizes_are_begin_trees(j):
-    from verity_vllm.commit.committer.native_collect import _window_level_sizes
+    from verity_vllm.commit.native_ranges import level_sizes
 
     for n_total in [1, 2, 3, 5, 8, 127, 128, 129, 4097, 1 << 15]:
         height, m = 0, n_total
         while m > 1:
             m = (m + 1) // 2
             height += 1
-        assert _window_level_sizes(n_total, j) == [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
+        assert level_sizes(n_total, j) == [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
+
+
+def test_the_helper_threads_are_the_commit_commands_option_and_a_fresh_pool_keeps_them():
+    """`--pinned-populate-threads` (the CLI reads VERITY_PINNED_POPULATE_THREADS) is the committer's pool's, `POPULATE_THREADS` when
+    unset, and the fresh pool an openings replay gets has the same settings."""
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+    from verity_vllm.pipeline import cli
+
+    assert cli.parse("commit", ["--out", "o"], {"VERITY_PINNED_POPULATE_THREADS": "3"}).pinned_populate_threads == 3
+    assert cli.parse("commit", ["--out", "o", "--pinned-populate-threads", "0"], {}).pinned_populate_threads == 0
+    assert cli.parse("commit", ["--out", "o"], {}).pinned_populate_threads is None
+    default, three = NativeHostCommitter(None, run_id="d"), NativeHostCommitter(None, run_id="t", populate_threads=3)
+    assert default.pool.populate_threads == pp.POPULATE_THREADS and three.pool.populate_threads == 3
+    again = three.pool.fresh()
+    assert again is not three.pool and again.all == []
+    assert (again.block_bytes, again.exact, again.populate_threads) == (three.pool.block_bytes, three.pool.exact, 3)
+    default.close()
+    three.close()

@@ -76,6 +76,7 @@ from verity_vllm.commit.committer.native_host import (
 from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLIT_KERNELS, TOPP_SPLIT_MODULE, _SplitKernelProxy,  # noqa: F401
                                                       batch_top_p, install_split_kernel_proxies, split_count_of_launches, step_splits,
                                                       uninstall_split_kernel_proxies)
+from verity_vllm.commit.native_ranges import level_sizes
 
 _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -564,16 +565,6 @@ def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUN
         else:
             out.append((lo, hi, fam))
     return out
-
-
-def _window_level_sizes(n_total: int, j: int) -> list[int]:
-    """Nodes per level 0..n_levels-1 of a windowed step's host levels: n_L = ceil(n / 2^L), n_levels = min(j, height) + 1 (below the
-    window level the tree is a disjoint union of per-window subtrees)."""
-    height, m = 0, n_total
-    while m > 1:
-        m = (m + 1) // 2
-        height += 1
-    return [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
 
 
 class NativeCollectCommitter(NativeHostCommitter):
@@ -1280,7 +1271,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             """Pinned host buffers for levels 0..n_levels-1 of the WHOLE step (n_L = ceil(n / 2^L)); the per-window subtrees are copied
             straight into their slices (no host concat).  n_levels = min(j, height) + 1: below the window level the tree is a disjoint
             union of per-window subtrees; the upper tree is built over the per-window top nodes by `H.tree` afterwards."""
-            sizes = _window_level_sizes(n_total, j)
+            sizes = level_sizes(n_total, j)
             n_levels = len(sizes)
             buf = self.pool.take(sum(sizes) * 32) if self.retain_pinned else torch.empty(sum(sizes) * 32, dtype=torch.uint8)
             views, off = [], 0
@@ -1496,7 +1487,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 if self.retain == "host":
                     excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
                     parts = [p for kk in range(-(-padded // W)) for p in retained_parts(kk * W, kk * W + min(W, padded - kk * W))]
-                self.pool.reserve([32 * sum(_window_level_sizes(padded // C, j))] + [b - a for a, b in parts])
+                self.pool.reserve([32 * sum(level_sizes(padded // C, j))] + [b - a for a, b in parts])
                 begin_tree(padded // C)
                 state.clear()
                 for a, b in parts:
