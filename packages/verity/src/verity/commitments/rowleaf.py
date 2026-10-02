@@ -88,6 +88,7 @@ __all__ = [
     "sha512_row_seg_prefix",
     "sha512_row_seg_segment_prefix",
     "sha512_row_seg_segments",
+    "sha512_row_seg_word_digest",
     "sha512_row_v2_digest",
     "sha512_row_v2_layout",
     "sha512_row_v2_prefix",
@@ -293,6 +294,14 @@ def sha512_row_seg_digest(row: bytes, n_bits: int) -> bytes:
         start = j * ROW_SEG_BYTES
         outer.update(hashlib.sha512(sha512_row_seg_segment_prefix(j, s, m) + row[start:start + (m + 7) // 8]).digest())
     return outer.digest()
+
+
+def sha512_row_seg_word_digest(words: Sequence[int], word_bits: int) -> bytes:
+    """A word row (BF16 or FP32 elements, ...) under ``sha512/row-seg/v1``: the bit row ``bit_row((words, word_bits))``, whose
+    bytes are :func:`row_bytes` (the words little-endian) and whose length is ``word_bits * len(words)``.  No role or word
+    width enters the digest, so it differs from the word row's ``sha512/row/v1`` digest."""
+
+    return sha512_row_seg_digest(*bit_row((words, word_bits)))
 
 
 # --- blake3-keyed/row/v2 -----------------------------------------------------------------------------------------

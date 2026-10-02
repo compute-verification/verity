@@ -187,7 +187,7 @@ digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
   compressions plus 5 outer ones, 77 against `sha512/row/v2`'s 65, with a serial chain of 9 + 5 = 14 against 65.
 - **Hiding.** `hm96-sha512/row-seg/v1` is the hiding leaf over this digest, under unchanged `hm96-sha512/v1`.
 - **Reference and conformance.** `rowleaf.sha512_row_seg_segments`, `_prefix`, `_segment_prefix` and `_digest`, the last refusing a
-  nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536, with every
+  nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536 and word rows (BF16 k = 4096 and 5, FP32 k = 4096), with every
   segment's prefix and digest, and the 65,536-bit row's hiding leaf. `test_rowleaf_seg.py` checks them and the cost above.
 
 **Hiding rows.** A hiding row wraps its row digest in `hm96-sha512/v1` (`hm96/PROTOCOL.md`):
