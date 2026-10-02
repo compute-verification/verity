@@ -161,6 +161,12 @@ LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 SLOT_WRAP = ["python3", "tools/check/slot.py", "--"]
 
 
+def slot_wrap() -> list[str]:
+    """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows."""
+    by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
+    return [*SLOT_WRAP[:-1], *(["--by", by] if by else []), SLOT_WRAP[-1]]
+
+
 def take_lean_deps_urls(out: Path) -> Path | None:
     """The presigned URLs sent with the run, moved out of the run directory before any step starts: each grants a read until it
     expires, and the run's record keeps every file left there."""
@@ -397,7 +403,7 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    cmd += ["--", *(SLOT_WRAP if on else []), *tool.CHECK.command, *rest]
+    cmd += ["--", *(slot_wrap() if on else []), *tool.CHECK.command, *rest]
     try:
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
