@@ -115,22 +115,31 @@ theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires 
 
 end Bc
 
+/-- A unit that returns the outputs has a slot per VU at least: the check's power of two of unit slots. -/
+theorem upv_pos {c : Circuit} (C : CheckFacts c) (ho : c.outNet = c.unitNet) : 0 < c.upv := by
+  have h := C.unit_pow2 ho
+  rw [C.unit_range.2] at h
+  unfold isPow2 at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact Nat.pos_of_mul_pos_left h.1
+
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
 /-- **A row's `b ‖ c` at the untyped statement `Stmt.setupH` accepted**: in every block of a satisfying witness, VU `g`'s
 row `p`'s `hm96` slot outputs the commit string of the row prefix and message its `sha512x3` slots read, under the salt
-its `hm96` slot reads. `RowWires` is `HmRow.parse`'s wire check on the rows' nets; `0 < upv` gives the unit range the
-forced-zero row its constant bits read. -/
+its `hm96` slot reads, when the unit returns the outputs (`ho`). `RowWires` is `HmRow.parse`'s wire check on the rows'
+nets. -/
 theorem row_bc_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) (hrw : RowWires st.c)
-    (hupv : 0 < st.c.upv) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
+    (ho : st.c.outNet = st.c.unitNet) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
     {z : Model.Witness ((setupH_layout ht h).model regs).m} (hz : ((setupH_layout ht h).model regs).Satisfies z)
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g p : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) :
     bytesOf (blockBit ((setupH_layout ht h).model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       ((HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
         bytesOf (blockBit ((setupH_layout ht h).model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
       (bytesOf (blockBit ((setupH_layout ht h).model regs) z o) 192 (saltCol st.c g p)) :=
-  row_bc_flat (setupH_layout ht h) (Aliased.setupH_unitFacts ht h) (setupH_spec ht h).2.2.1 hrw hupv hz o hg hp
+  row_bc_flat (setupH_layout ht h) (Aliased.setupH_unitFacts ht h) (setupH_spec ht h).2.2.1 hrw
+    (upv_pos (Aliased.setupH_unitFacts ht h).check ho) hz o hg hp
 
 end FlockSoundness.Discharge.Hm
