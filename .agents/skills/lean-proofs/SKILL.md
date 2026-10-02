@@ -110,6 +110,11 @@ simp with that.
 - **A changed record needs a named statement reviewer.** The axiom checks and the replay pass a weakened definition
   (a vacuous theorem is still a theorem), so paste what `--update` printed into the PR, and ask someone other than the
   author to read it. The PR description names that reviewer.
+- **A move is not a change.** When you rename pins or move what they read (a package moving to the four names), write
+  the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
+  `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A pin that says what its record
+  says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each get
+  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map.
 
 ## Before the PR
 
