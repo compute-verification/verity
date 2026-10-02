@@ -1662,6 +1662,60 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
     assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
 
 
+def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
+    """Compute accounting (1 Oct 8:58 AM PDT): GPU 0's verifies go back on 0-47 yielding to slot d's train checks. A check runs in
+    a login session's cgroup, where nice 19 can't reach, so the runner starts none and pauses its running ones while the check
+    holds slot d's lock; an owner whose CPUs miss 0-47 runs on."""
+    fill = tmp_path / "fill"
+    for d in ("queue", "running", "logs", "done", "failed"):
+        (fill / d).mkdir(parents=True)
+    lock = tmp_path / "check-d.lock"
+    lock.touch()
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("GPU_LEASE_DIR", str(tmp_path / "leases"))
+    monkeypatch.setenv("FILL_YIELD_LOCK", str(lock))
+    spec = importlib.util.spec_from_file_location("fill_runner_yield", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr, "disk_pct", lambda path: 0.0)
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: None)
+    monkeypatch.setattr(fr, "scope", lambda j, *a: True)
+    monkeypatch.setattr(fr, "active_s", lambda j: 0.0)
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: pytest.fail(f"stopped {k}: {why}"))
+    signals = []
+    monkeypatch.setattr(fr.os, "killpg", lambda pid, sig: signals.append(sig))
+
+    def fake_start(p, h, backfill=False):
+        p.unlink()
+        fr.running[p.name] = {"h": h, "t0": 0.0, "pid": 0, "proc": type("P", (), {"poll": lambda self: None})(),
+                              "started": "t", "paused": False, "unit": None}
+
+    monkeypatch.setattr(fr, "start", fake_start)
+    (fill / "cpu-sets").write_text("bc-e 0-47 2 40\nbc-f 96-123 1\n")
+    for k in range(3):
+        (fill / "queue" / f"ver-{k}.sh").write_text("# fill: owner=bc-e gpus=0 cpus=4\n")
+    (fill / "queue" / "other.sh").write_text("# fill: owner=bc-f gpus=0 cpus=4\n")
+
+    def mine():
+        return sorted((k, j["paused"]) for k, j in fr.running.items() if j["h"]["owner"] == "bc-e")
+
+    check = open(lock)
+    fcntl.flock(check, fcntl.LOCK_EX)
+    fr.tick(0)
+    assert mine() == [] and "other.sh" in fr.running          # slot d is checking: none of 0-47's start, 96-123's does
+    check.close()
+    fr.tick(0)
+    assert mine() == [("ver-0.sh", False), ("ver-1.sh", False)]
+    check = open(lock)
+    fcntl.flock(check, fcntl.LOCK_EX)
+    fr.tick(0)
+    assert mine() == [("ver-0.sh", True), ("ver-1.sh", True)] and not fr.running["other.sh"]["paused"]
+    assert signals == [signal.SIGSTOP, signal.SIGSTOP]
+    check.close()
+    fr.tick(0)
+    assert mine() == [("ver-0.sh", False), ("ver-1.sh", False)] and signals[2:] == [signal.SIGCONT, signal.SIGCONT]
+
+
 @pytest.mark.skipif(not shutil.which("zstd"), reason="zstd")
 def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
     src, status = tmp_path / "pouw", tmp_path / "status.txt"
