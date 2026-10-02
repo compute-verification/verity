@@ -767,9 +767,12 @@ useful    U/(α_A·α_B), glue
     H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
   - A unit's C-Flock statement names its rows in META (`leaves.statement_rows` of its ports): ``row_schemas``, each
     row's [schema, bits] (the input rows, one per row a tile reads, then the output rows), and ``out_row_ports``, each
-    output row's run of output ports. A row unit writes A′_i ‖ P_A,i (or the fp8-p row) as three (two) output ports, the
-    codes, the scales and P, and C-Flock commits the run as one row-seg row of exactly their words (#849), so the writer's
-    leaf is the leaf of the tile that reads the row as one input port.
+    output row's run of output ports, which META names when an output row is row-seg or a run of several. Every output
+    row is a row of exactly its words, as every input row is. A row unit writes A′_i ‖ P_A,i (or the fp8-p row) as three
+    (two) output ports, the codes, the scales and P, which C-Flock commits as one row-seg row of exactly their words
+    (#849), and B̃_j ‖ P_B,j (or the registered fp8-p row) as one v2 row of them; the ok word and the tile digest are each
+    one port's v2 row, not padded to whole blocks (`cursor/row-v2-out-95d4`). So the writer's leaf is the leaf of the
+    unit that reads the row as one input port.
   - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
   - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, row digest,
     commit string and tree leaf in each role at k = 64 and 4,096 (a row-seg row's with each segment's length and digest),
@@ -777,12 +780,11 @@ useful    U/(α_A·α_B), glue
     spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit every row byte for byte:
     `backends/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
     rows and a tile through the Lean verifier's row constants; on C-Flock's writer/reader pairs (`ROW_SEG_PAIRS`: A′_i ‖
-    P_A,i at k = 4,096, the fp8-p row at k = 1,024) PoUW's commit string is the writer's and the reader's.
-  - Not in C-Flock yet (`test_pouw_rows.AWAITING`): an output row of exactly its words under v2. C-Flock commits a lone
-    output port as a v2 row zero-padded to whole SHA-512 blocks (64 words), so the ok row (1 word) and the tile digest
-    (16 words) a unit writes are not PoUW's v2 rows, and a run of output ports only as a row-seg row, so the registered
-    B̃_j ‖ P_B,j and fp8-p rows that `Pc4RowB` and `Pc8RowB` write are not either. A `--zk` proof of a unit that writes
-    one of them waits for it.
+    P_A,i at k = 4,096, the fp8-p row at k = 1,024; `ROW_V2_PAIRS`: an ok row, a tile digest, B̃_j ‖ P_B,j and the
+    registered fp8-p row at k = 1,024) PoUW's commit string is the writer's and the reader's. Each of the six units'
+    statement rows compose (a toy unit with the unit's ports): META is `statement_rows`', and every staged row's b ‖ c
+    is PoUW's commit string of its words. No C-Flock composer stages a PoUW unit's own gates with these rows yet
+    (`class_statement.stage` commits one output port for all of a unit's outputs), so neither does a `--zk` proof.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.

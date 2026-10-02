@@ -106,14 +106,16 @@ def test_a_units_statement_rows_are_its_ports_schemas(mod, role):
     """`statement_rows` of a unit's ports is its C-Flock META's ``row_schemas`` and ``out_row_ports``: each input row once
     per row a tile reads of it (a 2 × 3 tile: two A rows, three B rows), then each output row, every one under its
     (row, role)'s schema (`ROW_SCHEMA`, so the reader's and the writer's agree) and of its words' bits; the row a row unit
-    writes as its codes, scales and P (A′_i ‖ P_A,i, B̃_j ‖ P_B,j, the fp8-p rows) is one run of output ports.  Every
-    schema is one META's ``row_schemas`` accepts, v2 or row-seg."""
+    writes as its codes, scales and P (A′_i ‖ P_A,i, B̃_j ‖ P_B,j, the fp8-p rows) is one run of output ports, and META
+    names the runs only then: a tile's one output row, its digest, is one port's.  Every schema is one META's
+    ``row_schemas`` accepts, v2 or row-seg."""
     k, (tm, tn) = 128, (2, 3)
     reads = {p: tm for p in ("ac", "as", "pa")} | {p: tn for p in ("bc", "bs", "pb")}
     got = L.statement_rows(mod.PORTS[role], k, reads)
     ins, outs = STATEMENTS[mod, role]
     want = [[L.ROW_SCHEMA[r], 16 * L.ROW_WORDS[r[0]](k)] for r in ins + [r for r, _n in outs]]
-    assert got == {"row_schemas": want, "out_row_ports": [n for _r, n in outs]}
+    runs = {"out_row_ports": [n for _r, n in outs]} if role != "tile" else {}
+    assert got == {"row_schemas": want, **runs}
     assert {s for s, _bits in got["row_schemas"]} <= {SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG}
 
 

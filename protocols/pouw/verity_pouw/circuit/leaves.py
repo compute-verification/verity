@@ -43,12 +43,13 @@ and the row; the role byte that v2 drops is bound by the registration domain.  n
 
 Which unit ports make up each row is `pc4.PORTS` and `pc8.PORTS`, and `statement_rows` gives a unit's C-Flock rows from
 them: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
-output row's run of output ports, so a row a unit writes as several outputs (A′_i ‖ P_A,i: the codes, the scales and P)
-is one row of exactly their words, the row its readers commit.  `words_*` are each row's words from its elements, and
-`commit` and `tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's
-tests recompute every row's vector through its ports and commit a row-seg row written as several output ports as its
-reader does (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are public input regions
-(`anchors.region_words`).
+output row's run of output ports.  Every output row is a row of exactly its words, as every input row is: the ok word and
+the tile digest each one port's v2 row, not padded to whole blocks, and a row a unit writes as several outputs (A′_i ‖
+P_A,i or B̃_j ‖ P_B,j: the codes, the scales and P) one run's row-seg or v2 row, the row its readers commit.  `words_*`
+are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
+``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute every row's vector through its ports, commit
+each output row as its reader does, and compose each unit's statement rows (``backends/flock/tests/test_pouw_rows.py``).
+The anchored inputs are no row: they are public input regions (`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
@@ -190,8 +191,9 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     """A unit's committed rows as its C-Flock statement's META names them, from its ports (``unit``: `pc4.PORTS[role]` or
     `pc8.PORTS[role]`) at depth ``k``: ``row_schemas``, each row's [schema, bits] (`ROW_SCHEMA`, ``16 ROW_WORDS``), the input
     rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
-    then the output rows, and ``out_row_ports``, each output row's run of output ports.  The output rows' ports are the
-    unit's outputs, once each and in order."""
+    then the output rows, each a row of exactly its words, and ``out_row_ports``, each output row's run of output ports,
+    which META names when an output row is a row-seg row or a run of several (else every output row is one port's).  The
+    output rows' ports are the unit's outputs, once each and in order."""
     reads = reads or {}
     ins, outs, runs = [], [], []
     for row, role, ps in unit["rows"]:
@@ -208,7 +210,9 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
             raise ValueError(f"a {row} row is input ports or output ports, not {ps}")
     if [p for run in runs for p in run] != list(range(sum(map(len, runs)))):
         raise ValueError(f"the output rows' ports {runs} are not the unit's outputs, once each and in order")
-    return {"row_schemas": ins + outs, "out_row_ports": [len(run) for run in runs]}
+    counts = [len(run) for run in runs]
+    named = any(s == _SEG for s, _bits in outs) or max(counts, default=1) > 1
+    return {"row_schemas": ins + outs, **({"out_row_ports": counts} if named else {})}
 
 
 __all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
