@@ -22,9 +22,10 @@ vector:
   `W₀`, the pre-final views on two witnesses carrying the public region data agree along a translation of the blocks `u`,
   `R`, `h`, `μ` that reads only earlier blocks, so by `card_fiber_eq_of_triShift` they have the same distribution.
 
-Everything here is about one table. The paper's lemmas are per session of `J` tables; the product over tables (no claim
-or message reads two tables' witnesses or masks) stays on paper. So do Lemma A's cases where the coins make the prover
-refuse (a failing rank check, dependent `ρ^r`, `β = 0`), with the schedule, which T5 needs for Lemma C.
+Everything here is about one table, at coins where the prover refuses nothing. The paper's lemmas are per session of `J`
+tables: the product over tables (no claim or message reads two tables' witnesses or masks) is `Session`'s; Lemma A's
+cases where the coins make the prover refuse (a failing rank check, dependent `ρ^r`, `β = 0`), with the schedule, are
+`Refusal`'s; and Lemma C, which T5 builds from them, is `AdaptivePrefinal`'s.
 -/
 
 namespace FlockSoundness.ZK
@@ -338,7 +339,8 @@ theorem psi_simCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1
 
 /-- **Lemma A's translation at a non-degenerate coin vector** (§4.2), for one table: for witnesses `w`, `w'` that carry
 the public region data, a translation of the prover's randomness maps `w`'s pre-final view to `w'`'s. The coins pass
-every check the prover makes (`Rank`, `W^r` bijective, `β ≠ 0`); the cases where they don't stay on paper. Block by
+every check the prover makes (`Rank`, `W^r` bijective, `β ≠ 0`); the cases where they don't are
+`table_prefinal_translate_cut`'s, which uses the same amounts on what is sent before the prover refuses. Block by
 block, each amount reads only earlier blocks:
 
 1. the mask slot, `u' := u + Δ` with `Φ(Δ) = ν(w) − ν(w')`, which the rank check makes solvable (step 2);
@@ -455,7 +457,7 @@ omit [Fintype K] [DecidableEq K] in
 /-- **Lemma A at a non-degenerate coin vector** (§4.2, `card_fiber_eq_of_triShift` applied to its translation), for one
 table: in world `W₀`, the pre-final views on any two witnesses carrying the public region data take every value equally
 often. Lemma A needs no other property of the witnesses, so it holds for the dummy one. The coins where the prover refuses
-stay on paper. -/
+are `table_prefinal_indep_cut`'s. -/
 theorem table_prefinal_indep (hrank : T.Rank)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
     (w w' : W) (hreg : T.sReg w = T.pubReg) (hreg' : T.sReg w' = T.pubReg) :

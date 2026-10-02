@@ -10,6 +10,10 @@ after the commands ran, with no ``REJECT`` line naming it. A per-shape command t
 per-run command's exit code is recorded, and a nonzero one fails this step without voiding a transcript the verifier's own
 line accepted. Every command's output is kept under ``verify/`` in the run's directory.
 
+Every reference verifier an arm names today is a replay that opens the run's rows and words and recomputes the scheme in
+the clear, so an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).
+The records and `panel.py append`'s arguments keep the name ``verifier``.
+
   python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE]
       [--tier 2a|2b] [--hypothesis TEXT] [--parent ART|VARIANT] [--outcome O --reason TEXT] [--by LANE]
       [--publish [--push] [--store ROOT]] [--no-ledger]
@@ -23,7 +27,7 @@ A verifier that declares a ``control`` (arm interface v0.5) must reject the nega
 becomes the row's ``negative_control`` and `panel.py append`'s ``--negative-control``; an accepted control rejects the row.
 Per shape, the commands run again on the control, and their exit codes don't fail the step.
 
-Then every arm row of every shape, verified or not, becomes one attempt record (`ledger.py`, ``kernel-attempt/v1``) under
+Then every arm row of every shape, replay-verified or not, becomes one attempt record (`ledger.py`, ``kernel-attempt/v1``) under
 the run's ``ledger/``: ``--tier`` says what kind of run it was (2a a one-GPU screen, 2b a timed whole-node window; only 2b
 rows can stand on the panel's plots), ``--hypothesis`` is the attempt's one line, ``--parent`` the attempt it changes, and
 ``--outcome``/``--reason`` the lane's verdict when it already has one. γ is looked up from the Lean-pinned price twins on

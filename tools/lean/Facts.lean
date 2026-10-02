@@ -21,8 +21,16 @@ judgement; `audit.py` holds the policy.
   declares can change how its statements read.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
-before SHA-256. When `CONFIG` names a `canon` path, the pinned statements and the definitions they read are also written
+before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
 there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256.
+
+With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
+written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
+statement that is a `Prop` definition under `meaning` also with that definition unfolded, so that `audit.py` can compare
+them with records made before the move. `moved_conflicts` lists each constant of those texts (or pin) whose old name
+would be another one's too: there the comparison would not tell the two apart. A constant that keeps its name stands for
+itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a lemma) is no
+conflict.
 -/
 
 open Lean Meta
@@ -67,12 +75,24 @@ def kids : Expr → Array Expr
   | .proj _ _ e => #[e]
   | _ => #[]
 
-/-- One line of `canonText`, for a term whose children are the lines `ix`; `none` for metadata, which is its child. -/
-def nodeKey (e : Expr) (ix : Array Nat) : Option String :=
+/-- `n` under the name it had before a move: its longest prefix that `back` maps (a declaration or a namespace that
+moved) replaced by the name it moved from. -/
+def renameName (back : Std.HashMap Name Name) : Name → Name
+  | .anonymous => .anonymous
+  | n@(.str p s) => match back[n]? with
+    | some o => o
+    | none => let p' := renameName back p; if p' == p then n else .str p' s
+  | n@(.num p i) => match back[n]? with
+    | some o => o
+    | none => let p' := renameName back p; if p' == p then n else .num p' i
+
+/-- One line of `canonText`, for a term whose children are the lines `ix`; `none` for metadata, which is its child.
+Constant and structure names are written as `rn` maps them. -/
+def nodeKey (rn : Name → Name) (e : Expr) (ix : Array Nat) : Option String :=
   match e with
   | .bvar i => some s!"V{i}"
   | .sort l => some s!"S{levelKey l}"
-  | .const n ls => some s!"C{n} {",".intercalate (ls.map levelKey)}"
+  | .const n ls => some s!"C{rn n} {",".intercalate (ls.map levelKey)}"
   | .app .. => some s!"A{ix[0]!} {ix[1]!}"
   | .lam .. => some s!"L{ix[0]!} {ix[1]!}"
   | .forallE .. => some s!"P{ix[0]!} {ix[1]!}"
@@ -80,7 +100,7 @@ def nodeKey (e : Expr) (ix : Array Nat) : Option String :=
   | .lit (.natVal n) => some s!"N{n}"
   | .lit (.strVal s) => some s!"T{(toJson s).compress}"
   | .mdata .. => none
-  | .proj s i _ => some s!"J{s} {i} {ix[0]!}"
+  | .proj s i _ => some s!"J{rn s} {i} {ix[0]!}"
   | .fvar id => some s!"F{id.name}"
   | .mvar id => some s!"M{id.name}"
 
@@ -88,8 +108,8 @@ def nodeKey (e : Expr) (ix : Array Nat) : Option String :=
 numbers of earlier lines, then the root. It keeps what `Expr.hash` keeps (constant names, universe levels, bound variable
 indices, projections, literals) and drops what it drops (binder names and binder info, `let` names, metadata), so it tells
 two terms apart exactly when `Expr.hash` would, collisions aside. The walk is iterative: Mathlib's terms are too deep for
-recursion. -/
-def canonText (e : Expr) : String := Id.run do
+recursion. With `rn`, the text of `e` with its constants renamed by `rn`. -/
+def canonText (e : Expr) (rn : Name → Name := id) : String := Id.run do
   let mut lines : Array String := #[]
   let mut number : Std.HashMap String Nat := {}
   let mut seen : Std.HashMap Expr Nat := {}
@@ -106,7 +126,7 @@ def canonText (e : Expr) : String := Id.run do
           stack := stack.push (k, false)
     else
       let ix := ks.map (seen.getD · 0)
-      match nodeKey x ix with
+      match nodeKey rn x ix with
       | none => seen := seen.insert x ix[0]!
       | some key =>
         match number[key]? with
@@ -118,10 +138,20 @@ def canonText (e : Expr) : String := Id.run do
   return "\n".intercalate lines.toList ++ s!"\nR{seen.getD e 0}"
 
 /-- What a read definition contributes to what a statement means: its type, and a definition's value. -/
-def readCanon : ConstantInfo → String
-  | .defnInfo v => canonText v.type ++ "\n=\n" ++ canonText v.value
-  | .opaqueInfo v => canonText v.type ++ "\n=\n" ++ canonText v.value
-  | ci => canonText ci.type
+def readCanon (ci : ConstantInfo) (rn : Name → Name := id) : String :=
+  match ci with
+  | .defnInfo v => canonText v.type rn ++ "\n=\n" ++ canonText v.value rn
+  | .opaqueInfo v => canonText v.type rn ++ "\n=\n" ++ canonText v.value rn
+  | ci => canonText ci.type rn
+
+/-- When a statement is a `Prop` definition declared under `meaning` (a theorem `t : G` that proves a named statement),
+that definition and its value. -/
+def statementOf (env : Environment) (meaning : Array Name) (t : Expr) : Option (Name × Expr) := do
+  let .const g us := t.consumeMData | none
+  let .defnInfo v ← env.find? g | none
+  let i ← env.getModuleIdxFor? g
+  guard (v.type.isProp && under meaning env.header.moduleNames[i.toNat]!)
+  return (g, v.value.instantiateLevelParams v.levelParams us)
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
 def uses : ConstantInfo → Array Name
@@ -235,6 +265,12 @@ unsafe def main (args : List String) : IO UInt32 := do
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
   let out := (cfg.getObjValD "out").getStr?.toOption.getD "facts.json"
+  let str (j : Json) (i : Nat) : Option Name := ((j.getArrVal? i).toOption.bind (·.getStr?.toOption)).map String.toName
+  let back : Std.HashMap Name Name := ((cfg.getObjValD "moved").getArr?.toOption.getD #[]).foldl (init := {}) fun m j =>
+    match str j 0, str j 1 with
+    | some new, some old => m.insert new old
+    | _, _ => m
+  let rn := renameName back
   let env ← importModules (roots.map fun r => { module := r }) {} (loadExts := false)
   let mnames := env.header.moduleNames
   let mut modules := #[]
@@ -280,16 +316,38 @@ unsafe def main (args : List String) : IO UInt32 := do
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
     ctx { env }
+  let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write
     let mut done : NameSet := {}
+    let mut named : NameSet := {}
     for p in pins do
       let some ci := env.find? p | continue
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+      if !back.isEmpty then
+        let head := statementOf env meaning ci.type
+        named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
+        let unfolded := match head with
+          | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
+          | none => []
+        h.putStrLn (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
+          ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
       for (c, _, rci) in reads env meaning ci.type.getUsedConstants do
         if done.contains c then continue
         done := done.insert c
         h.putStrLn (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+        if !back.isEmpty then
+          named := (uses rci).foldl (·.insert ·) (named.insert c)
+          h.putStrLn (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
+            ("canon", toJson (readCanon rci rn))]).compress
+    let (kept, renamed) := (named.toArray.qsort Name.lt).partition fun c => rn c == c
+    let mut took : Std.HashMap Name Name := kept.foldl (fun m c => m.insert c c) {}
+    for c in renamed do
+      if let some d := took[rn c]? then
+        conflicts := conflicts.push <| Json.mkObj [("name", toJson c.toString), ("as", toJson (rn c).toString),
+          ("with", toJson d.toString)]
+      else
+        took := took.insert (rn c) c
   let mut oleans := #[]
   for m in mnames do
     oleans := oleans.push (toString (← findOLean m))
@@ -297,6 +355,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("oleans", toJson oleans),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
-    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("pins", Json.mkObj pinned.toList)]
+    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("pins", Json.mkObj pinned.toList),
+    ("moved_conflicts", toJson conflicts)]
   IO.FS.writeFile out doc.compress
   return 0
