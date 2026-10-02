@@ -235,8 +235,11 @@ def rollup(a) -> dict:
         if not best:
             continue
         m = {b: _weigh(a, c, sd, shapes, total, nat, best, b) for b in BASES}
-        modes[mode] = m[a.basis] | {"flags": FLAGS[mode], "other_bases": {b: {"prover_s": v["prover_s"], "overhead": v["overhead"],
-                                                                              "phases": v["phases"]} for b, v in m.items() if b != a.basis}}
+        # a tile statement is a cost, not the row's claim, until it is reviewed (gemm_hill.py's flag; red-team-proofs-554)
+        tiled = sorted(sh for sh, t in best.items() if t.get("tile"))
+        modes[mode] = m[a.basis] | {"flags": FLAGS[mode] + (["tile-statement-unreviewed"] if tiled else []), "tiled_shapes": tiled,
+                                    "other_bases": {b: {"prover_s": v["prover_s"], "overhead": v["overhead"],
+                                                        "phases": v["phases"]} for b, v in m.items() if b != a.basis}}
     out = {"schema": "vllm-overhead/v0", "row": a.row, "basis": a.basis, "label": labels[0], "labels": labels, "native": nat, "counts": a.counts,
            "gates": total, "shapes_n": len(shapes), "modes": modes,
            "flags": ["outputs-public"] + (a.flag or []), "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
@@ -249,6 +252,8 @@ def rollup(a) -> dict:
         alt = ", ".join(f"{b} {v['overhead']:.4g}" for b, v in m["other_bases"].items())
         print(f"{mode}: {m['overhead']:.4g} x-native ({m['prover_s']:.4g} s / {nat['all_s']:.4g} s; {alt}), coverage "
               f"{m['coverage_gates']:.4f} of gates in {m['shapes_measured']} shapes, extrapolated {m['extrapolated_s'] / m['prover_s']:.4f} of seconds")
+        if m["tiled_shapes"]:
+            print(f"   tile-statement-unreviewed: {', '.join(sh[:8] for sh in m['tiled_shapes'])}")
         for fid, d in list(m["call_definitions"].items())[:10]:
             print(f"   {d['share']:.4f}  {d['seconds']:.4g} s  {fid[:100]}")
     return out
