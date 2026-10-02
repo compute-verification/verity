@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Hidden.Wide.Defs
 import FlockSoundness.Discharge.Hidden.Wide.Tail
+import FlockSoundness.Discharge.Hidden.Wide.V2
 
 /-!
 # The widened hidden-output statements, one theorem each
@@ -15,9 +16,9 @@ theorem outputs_committed_tail : OutputsCommittedTail := outputs_committed_tail'
 
 theorem outputs_binding_tail : OutputsBindingTail := outputs_binding_tail_of outputs_committed_tail'
 
-theorem outputs_committed_v2 : OutputsCommittedV2 := sorry
+theorem outputs_committed_v2 : OutputsCommittedV2 := outputs_committed_v2'
 
-theorem outputs_binding_v2 : OutputsBindingV2 := sorry
+theorem outputs_binding_v2 : OutputsBindingV2 := outputs_binding_v2_of outputs_committed_v2'
 
 theorem outputs_committed_wide : OutputsCommittedWide := sorry
 

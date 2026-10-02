@@ -29,5 +29,10 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
 * `Theorems`: one theorem per frozen statement;
 * `Wide.Defs`, `Wide.Theorems`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs
   (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`);
-* `Wide.Tail`: the Tail statements (`outputs_committed_tail'`, `outputs_binding_tail_of`).
+* `Wide.Tail`: the Tail statements (`outputs_committed_tail'`, `outputs_binding_tail_of`);
+* `Wide.RowCommit`: a row's commit string under any 128-byte prefix, with or without compressions (`port_commit_rowsP`,
+  `port_commit_rows0`);
+* `Wide.Copies`: `HmRow.delta`'s Δ for any rows (`delta_flat_all`) and its copies at a row's own columns (`…_filterAll`);
+* `Wide.RowBc`: a row's `b ‖ c` under its own prefix for any rows (`row_bc_tgt`);
+* `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`).
 -/
