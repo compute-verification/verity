@@ -12,15 +12,21 @@ the 65,536 bf16 words.  An instance with a non-finite operand or result word is 
 `floor(|t| / U)` with `U = 2^(max nominal exponent - 24)`; their sum is an exact integer below 2^31; the step's word is that sum times
 `U` truncated to 24 significant bits.  A coordinate whose chain meets a non-finite operand, an f32-subnormal or an overflowing step
 result is recomputed by `derived_rows.dot_bf16`, so every word equals the int64 twin's.  `gemm_row` is the same chain under any
-k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products, a 26-bit adder and floor -133, so `U = 2^(e - 25)`).  The W side (values and exponents, transposed)
-is prepared once per weight buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place), and
-coordinates are split over up to `MAX_THREADS` threads; the words do not depend on the split.
+k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products, a 26-bit adder and floor -133, so `U = 2^(e - 25)`).
+`chain_rows` runs that chain for every row of a step against one W: `cpp/k16_chain.cpp` computes it in integers (the aligned terms
+are shifts of the 16-bit significand products, the same integers), reading each W row once for all the rows, with the GIL released;
+where it cannot be built, `_chain` computes it in numpy over a W side (values and exponents, transposed) prepared once per weight
+buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place).  Either hands back the same
+coordinates.  Coordinates are split over up to `MAX_THREADS` threads; the words do not depend on the split or the path.
 """
 from __future__ import annotations
 
+import ctypes
 import functools
 import os
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -149,7 +155,7 @@ def bf16_tanh(x, **_s):
     return _tanh_table()[np.asarray(x, dtype=np.uint16)]
 
 
-# ---- the Ampere k16 GEMM chain in float64 ------------------------------------------------------------------------------
+# ---- the k16 GEMM chain ---------------------------------------------------------------------------------------------------------
 
 class _Prepared:
     """One weight buffer's W side: f32 values and nominal exponent fields (`max(field, 1)`), both [K, N], and its non-finite
@@ -229,40 +235,89 @@ def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tu
 def dot_chain(x: np.ndarray, w: np.ndarray, dot_id: str, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """`DotBf16_v2{K, DOT=dot_id}` of the row `x` (K,) against every row of `w` (N, K), bf16 words: (f32 words, non-finite
     coordinates), equal to `derived_rows.dot_bf16_for(dot_id)` word for word."""
-    step, redo_dot = STEPS[dot_id], D.dot_bf16_for(dot_id)
-    x = np.asarray(x, dtype=np.uint16)
-    if x.shape[0] % 16 or w.shape[1] != x.shape[0]:
-        raise ValueError(f"a k16 chain needs K a multiple of 16 and W [N, K] (x {x.shape}, W {w.shape})")
-    p = prepared(w)
-    N = w.shape[0]
-    out = np.empty(N, dtype=np.uint32)
-    redo = p.bad | bool((((x >> 7) & 0xFF) == 0xFF).any())
-    n = n_threads or threads()
-    span = -(-N // n)
+    out, nonfin = chain_rows(np.asarray(x, dtype=np.uint16)[None, :], w, dot_id, n_threads)
+    return out[0], nonfin[0]
 
-    def job(lo: int) -> None:
-        hi = min(lo + span, N)
-        out[lo:hi], b = _chain(x, p, lo, hi, step)
-        redo[lo:hi] |= b
+
+_K16_SRC = Path(__file__).resolve().parent / "cpp" / "k16_chain.cpp"
+
+
+@functools.lru_cache(maxsize=1)
+def k16_lib() -> ctypes.CDLL | None:
+    """`cpp/k16_chain.cpp`, built by `_jit` on first use; None where it cannot be built (`_chain` then computes the same words)."""
+    from verity_vllm.program.kernels import _jit
+    try:
+        lib = ctypes.CDLL(str(_jit.atomic_build(_jit.lib_path("libk16_chain.so"), [_K16_SRC], lambda out: _jit.cxx_compile(out, _K16_SRC))))
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    lib.k16_chain.restype = ctypes.c_int
+    lib.k16_chain.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_long, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                              ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long]
+    return lib
+
+
+def _claimed(X: np.ndarray, w: np.ndarray, step: tuple[int, int, int], n: int) -> tuple[np.ndarray, np.ndarray]:
+    """The k16 chain of every row of `X` against every row of `w` over `n` coordinate spans: (f32 words [M, N], coordinates handed
+    back [M, N]), by `k16_lib` where it is built, else by `_chain`."""
+    (M, K), N = X.shape, w.shape[0]
+    span = -(-N // n)
+    lib = k16_lib()
+    if lib is None:
+        p = prepared(w)
+        out, back = np.empty((M, N), dtype=np.uint32), np.empty((M, N), dtype=bool)
+
+        def job(lo: int) -> None:
+            for i in range(M):
+                out[i, lo:lo + span], back[i, lo:lo + span] = _chain(X[i], p, lo, min(lo + span, N), step)
+    else:
+        w = np.ascontiguousarray(w, dtype=np.uint16)
+        out, back = np.empty((M, N), dtype=np.uint32), np.zeros((M, N), dtype=bool)
+
+        def job(lo: int) -> None:
+            if lib.k16_chain(X.ctypes.data, M, w[lo:].ctypes.data, min(span, N - lo), K, *step, out[:, lo:].ctypes.data,
+                             back[:, lo:].ctypes.data, N):
+                raise ValueError(f"k16_chain: no {step[0]}-product groups")
 
     with ThreadPoolExecutor(n) as ex:
         list(ex.map(job, range(0, N, span)))
-    nonfin = np.zeros(N, dtype=bool)
-    idx = np.flatnonzero(redo)
-    for i in range(0, idx.size, _REDO_CHUNK):
-        at = idx[i:i + _REDO_CHUNK]
-        out[at], nonfin[at] = redo_dot(x[None, :], w[at])
+    if lib is None:
+        back |= p.bad
+    return out, back
+
+
+def chain_rows(X: np.ndarray, w: np.ndarray, dot_id: str, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """`DotBf16_v2{K, DOT=dot_id}` of every row of `X` (M, K) against every row of `w` (N, K), bf16 words: (f32 words [M, N],
+    non-finite coordinates [M, N]), row i equal to `derived_rows.dot_bf16_for(dot_id)` of `X[i]` word for word.  A coordinate the
+    chain hands back, and every coordinate of a row with a non-finite word, is the int64 twin's."""
+    step, redo_dot = STEPS[dot_id], D.dot_bf16_for(dot_id)
+    X = np.ascontiguousarray(X, dtype=np.uint16)
+    if X.ndim != 2 or X.shape[1] % 16 or w.shape[1] != X.shape[1]:
+        raise ValueError(f"a k16 chain needs K a multiple of 16 and W [N, K] (X {X.shape}, W {w.shape})")
+    out, redo = _claimed(X, w, step, n_threads or threads())
+    redo |= (((X >> 7) & 0xFF) == 0xFF).any(axis=1, keepdims=True)
+    nonfin = np.zeros(out.shape, dtype=bool)
+    for r in range(len(X)):
+        idx = np.flatnonzero(redo[r])
+        for i in range(0, idx.size, _REDO_CHUNK):
+            at = idx[i:i + _REDO_CHUNK]
+            out[r, at], nonfin[r, at] = redo_dot(X[r][None, :], w[at])
     return out, nonfin
 
 
 def gemm_ampere_row(x: np.ndarray, w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`Gemm_v1{K,N}` of one token row by the float64 chain: (bf16 words [N], non-finite coordinates)."""
+    """`Gemm_v1{K,N}` of one token row by the k16 chain: (bf16 words [N], non-finite coordinates)."""
     return gemm_row(x, w, "AmpereBF16TcDot16_v2")
 
 
 def gemm_row(x: np.ndarray, w: np.ndarray, dot_id: str) -> tuple[np.ndarray, np.ndarray]:
-    """`Gemm_v2{K,N,DOT=dot_id}` of one token row by the float64 chain: (bf16 words [N], non-finite coordinates)."""
-    acc, nonfin = dot_chain(x, w, dot_id)
+    """`Gemm_v2{K,N,DOT=dot_id}` of one token row by the k16 chain: (bf16 words [N], non-finite coordinates)."""
+    out, nonfin = gemm_rows(np.asarray(x, dtype=np.uint16)[None, :], w, dot_id)
+    return out[0], nonfin[0]
+
+
+def gemm_rows(X: np.ndarray, w: np.ndarray, dot_id: str) -> tuple[np.ndarray, np.ndarray]:
+    """`Gemm_v2{K,N,DOT=dot_id}` of every token row of `X` (M, K) against one W: (bf16 words [M, N], non-finite coordinates)."""
+    acc, nonfin = chain_rows(X, w, dot_id)
     return D.f2fp_bf16(acc).astype(np.uint16), nonfin
 
 
@@ -309,5 +364,5 @@ def _register() -> None:
 
 _register()
 
-__all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "STEPS", "dot_ampere", "dot_chain", "gemm_ampere_row", "gemm_row",
-           "prepared", "threads"]
+__all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "STEPS", "chain_rows", "dot_ampere", "dot_chain", "gemm_ampere_row",
+           "gemm_row", "gemm_rows", "k16_lib", "prepared", "threads"]
