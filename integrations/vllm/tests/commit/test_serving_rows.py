@@ -32,8 +32,8 @@ def population(n0: int, n1: int) -> tuple[SR.Member, SR.Member]:
             SR.Member(TEMPLATES[1], (("in0", 128), ("in1", 64)), (("out.0", 128), ("out.1", 3)), n1, n0))
 
 
-def window(n0: int, n1: int, run: str = "r-test") -> SR.Window:
-    return SR.Window(PARTITION, "cd" * 64, n0 + n1, run, population(n0, n1))
+def window(n0: int, n1: int, run: str = "r-test", outputs: str = SR.ROW_SCHEMA) -> SR.Window:
+    return SR.Window(PARTITION, "cd" * 64, n0 + n1, run, population(n0, n1), outputs)
 
 
 def data(w: SR.Window, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
@@ -43,17 +43,19 @@ def data(w: SR.Window, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
 
 
 def reference(c: SR.Committed) -> dict[str, bytes]:
-    """Core's slow path: row_leaf over hm96.SHA512.tree_leaf(commit_string(...)), word leaves, FrameV3.root."""
+    """Core's slow path: row_leaf over hm96.SHA512.tree_leaf(commit_string(...)) (row ports, hidden output ports), word leaves
+    (u16 output ports), FrameV3.root."""
     inst, key = hm96.SHA512, hm96.SHA512.default_key
     roots = {}
-    for p, rows in c.rows.items():
+    hidden = c.window.outputs == SR.ROW_SCHEMA
+    for p, rows in (c.rows | c.outs if hidden else c.rows).items():
         words = rows.shape[1]
         fv = FrameV3({p: Port(c.domains[p], RowLeaf("sha512", ROLE_X, 16, words))})
         lay = sha512_row_layout(ROLE_X, 16, words)
         bcs = [inst.commit_string(key, lay.digest(rows[i].astype("<u2").tobytes()), c.salts[p][i * 192:(i + 1) * 192]) for i in range(len(rows))]
         assert b"".join(bcs) == c.bc[p]
         roots[p] = fv.root(p, [row_leaf(c.domains[p], i, inst.tree_leaf(key, bcs[i]), SR.ROW_SCHEMA) for i in range(len(rows))])
-    for p, outs in c.outs.items():
+    for p, outs in ({} if hidden else c.outs).items():
         fv = FrameV3({p: Port(c.domains[p], WordLeaf("u16", 2))})
         roots[p] = fv.root(p, [fv.tree_leaf(p, r, fv.leaf_layout(p, r).digest(int(v).to_bytes(2, "big"))) for r, v in enumerate(outs.reshape(-1).tolist())])
     return roots
@@ -82,9 +84,10 @@ def test_m0_serving_row_leaf_vector():
         assert bc["x"].hex() == "".join(r["b_c"] for r in VECTOR["rows"])
 
 
+@pytest.mark.parametrize("outputs", [SR.ROW_SCHEMA, SR.WORD_SCHEMA])
 @pytest.mark.parametrize("n0,n1,workers,chunk", [(1, 1, 1, SR.CHUNK), (37, 5, 1, SR.CHUNK), (37, 5, 2, 8), (64, 17, 3, 16)])
-def test_core_reference_on_the_batch_and_parallel_paths(n0, n1, workers, chunk):
-    w = window(n0, n1)
+def test_core_reference_on_the_batch_and_parallel_paths(n0, n1, workers, chunk, outputs):
+    w = window(n0, n1, outputs=outputs)
     c = SR.commit(w, data(w), salt_key=bytes(32), workers=workers, chunk=chunk)
     assert set(c.roots) == {f"{m.template}/{p}" for m in w.members for p, _ in m.rows + m.outs}
     assert c.roots == reference(c)
@@ -95,10 +98,28 @@ def test_salts_are_fresh_and_the_key_fixes_them():
     d = data(w)
     a = SR.commit(w, d, salt_key=b"k" * 32)
     ports = [m.port(p) for m in w.members for p, _ in m.rows]
-    assert [a.salts[p] for p in ports] == [SR.salts(b"k" * 32, i, len(a.rows[p])) for i, p in enumerate(ports)]
+    outs = [m.port(p) for m in w.members for p, _ in m.outs]
+    assert [a.salts[p] for p in ports + outs] == [SR.salts(b"k" * 32, i, len((a.rows | a.outs)[p])) for i, p in enumerate(ports + outs)]
     b, c = SR.commit(w, d), SR.commit(w, d)
+    assert b.salts != c.salts and b.roots[ports[0]] != c.roots[ports[0]] and b.roots[outs[0]] != c.roots[outs[0]]
+    u = window(5, 2, outputs=SR.WORD_SCHEMA)
+    b, c = SR.commit(u, d), SR.commit(u, d)
+    assert set(b.salts) == set(ports) and b.roots[outs[0]] == c.roots[outs[0]], "u16 outputs are bare words"
+
+
+def test_a_guessed_output_is_not_confirmed_without_its_salt():
+    """Hidden outputs: the root over an instance's output words does not confirm a guess of them, the bare u16 root does."""
+    w, u = window(3, 1), window(3, 1, outputs=SR.WORD_SCHEMA)
+    d = data(w)
+    guess = [{"rows": dk["rows"], "outs": {p: a.copy() for p, a in dk["outs"].items()}} for dk in d]
+    hid, bare = SR.commit(w, d), SR.commit(u, d)
     out = w.members[0].port("out")
-    assert b.salts != c.salts and b.roots[ports[0]] != c.roots[ports[0]] and b.roots[out] == c.roots[out]
+    assert SR.commit(u, guess).roots[out] == bare.roots[out]
+    assert SR.commit(w, guess).roots[out] != hid.roots[out]
+    assert hid.output_port(0) == hid.bc[out] and d[0]["outs"]["out"].astype("<u2").tobytes() not in hid.public_body(0)
+    assert d[0]["outs"]["out"].astype("<u2").tobytes() in hid.private_body(0) and hid.salts[out] in hid.private_body(0)
+    with pytest.raises(ValueError, match="output ports commit as"):
+        SR.Window.of({"partition": PARTITION, "partition_digest": "cd" * 64, "population": 4}, "r", population(3, 1), "u8")
 
 
 def test_population_is_fixed_before_serving():
@@ -120,21 +141,25 @@ def test_domains_follow_the_agreed_rule_from_registration_fields(tmp_path):
     assert set(rec) == {"format", "commitment", "roots", "leaves", "domains", "partition", "partition_digest", "population", "registered_utc"}
     assert rec["commitment"]["source"]["kind"] == "served" and rec["population"] == 13
     assert rec["commitment"]["source"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest()
+    assert rec["commitment"]["outputs"] == SR.ROW_SCHEMA
     for p, leaves in rec["leaves"].items():
-        schema = SR.WORD_SCHEMA if p.split("/", 1)[1].startswith("out") else SR.ROW_SCHEMA
+        schema = SR.ROW_SCHEMA
         binding = identity_digest("verity/one-stage/served-domain/v0", {"program": rec["partition"]["program"], "partition": rec["partition_digest"],
                                                                          "port": p, "schema": schema, "leaves": leaves,
                                                                          "run": rec["commitment"]["source"]["run"]})
         dom = CommitmentDomain(bytes.fromhex(binding), -1, RangeIndexedDomain(0, leaves), hash="sha512")
         assert dom.domain_id.hex() == rec["domains"][p]
-    assert rec["leaves"] == {"RoPEHead_v1{D=64}/x": 9, "RoPEHead_v1{D=64}/cs": 9, "RoPEHead_v1{D=64}/out": 9 * 64,
-                             "Norm_v1{N=128}/in0": 4, "Norm_v1{N=128}/in1": 4, "Norm_v1{N=128}/out.0": 4 * 128, "Norm_v1{N=128}/out.1": 4 * 3}
+    assert rec["leaves"] == {"RoPEHead_v1{D=64}/x": 9, "RoPEHead_v1{D=64}/cs": 9, "RoPEHead_v1{D=64}/out": 9,
+                             "Norm_v1{N=128}/in0": 4, "Norm_v1{N=128}/in1": 4, "Norm_v1{N=128}/out.0": 4, "Norm_v1{N=128}/out.1": 4}
+    u = SR.commit(window(9, 4, "r-dom", SR.WORD_SCHEMA), data(w), salt_key=bytes(32))
+    assert u.domains["Norm_v1{N=128}/out.1"].count == 4 * 3 and u.domains["Norm_v1{N=128}/out.1"] == SR.Window(
+        PARTITION, "cd" * 64, 13, "r-dom", w.members).domain("Norm_v1{N=128}/out.1", SR.WORD_SCHEMA, 12)
     other = SR.commit(window(9, 4, "r-other"), data(w), salt_key=bytes(32))
     assert all(other.domains[p].domain_id != c.domains[p].domain_id for p in c.domains)
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):
-    w = window(4, 3, "r-m0")
+    w = window(4, 3, "r-m0", SR.WORD_SCHEMA)
     d = data(w)
     c = SR.commit(w, d, salt_key=bytes(32))
     SR.write(c, tmp_path / "w", {"row": 101, "run": "r-m0"}, SR.index_doc(w.members, [[], []], "r-m0"))
@@ -158,6 +183,15 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     assert ph["circuit_sha512"] == hashlib.sha512(text.encode()).hexdigest()
     with pytest.raises(ValueError, match="ports"):
         SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1", "rope-head/d64")
+    h = SR.commit(window(4, 3, "r-m0"), d, salt_key=bytes(32))
+    SR.write(h, tmp_path / "h", {"row": 101, "run": "r-m0"}, SR.index_doc(w.members, [[], []], "r-m0"))
+    with pytest.raises(ValueError, match="M0's output port"):
+        SR.flock_input_files(tmp_path / "h", 1, text, tmp_path / "m2", "norm/n128")
+    hidden = text.replace('"program_sha512"', f'"outputs": "{SR.ROW_SCHEMA}", "program_sha512"')
+    pub = Path(SR.flock_input_files(tmp_path / "h", 1, hidden, tmp_path / "m2", "norm/n128")["pub"]).read_bytes()
+    assert json.loads(pub.split(b"\n", 1)[0])["frame_v3"]["schemas"]["out.1"] == SR.ROW_SCHEMA
+    major = lambda ports: np.concatenate([np.frombuffer(h.bc[m.port(p)], np.uint8).reshape(3, 128) for p in ports], axis=1).tobytes()  # noqa: E731
+    assert pub.split(b"\n", 1)[1] == major(("in0", "in1")) + major(("out.0", "out.1"))
 
 
 def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(tmp_path):
@@ -168,7 +202,9 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     refs = np.stack([j // 5, j % 5], axis=1)
     y = rng.integers(0, 1 << 16, size=(15, 1), dtype=np.uint16)
     m = SR.Member("GemmCoordinate_v2{K=64}", (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
-    w = SR.Window(PARTITION, "cd" * 64, 15, "r-g", (m,))
+    h = SR.commit(SR.Window(PARTITION, "cd" * 64, 15, "r-g", (m,)), [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
+    assert h.roots == reference(h) and h.domains[m.port("y")].count == 15 and h.output_port(0) == h.bc[m.port("y")]
+    w = SR.Window(PARTITION, "cd" * 64, 15, "r-g", (m,), SR.WORD_SCHEMA)
     c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
     assert c.domains[m.port("x")].count == 3 and c.domains[m.port("w")].count == 5 and c.domains[m.port("y")].count == 15
     assert c.roots == reference(c)

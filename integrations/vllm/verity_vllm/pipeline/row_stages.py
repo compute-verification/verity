@@ -559,8 +559,8 @@ class SingleRow(Row):
             cmd += ["--required-classes", ck.required_classes]
         if ck.vu_export != "0" and not self.config_run:
             cmd += ["--vu-export-dir", self.vu_export_dir()]
-        if ck.serving_rows:
-            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
+        if ck.serving_rows not in (None, "", "0") and not (ck.serving_rows == "auto" and self.config_run and ck.replay_deferred in ("1", "slim")):
+            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]       # a deferred replay has no C2 site to commit them at
         return cmd + R.tap_source_args(taps, self.env)
 
     def vu_export_dir(self) -> str:

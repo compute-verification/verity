@@ -106,6 +106,58 @@ def test_a_deferred_config_run_passes_the_flag_and_parses(tmp_path):
     assert cli.parse("commit", sc[sc.index("commit") + 1:], {}).replay_deferred == "slim"
 
 
+def test_a_row_commits_its_serving_rows_by_default_where_the_commit_has_a_c2_site(tmp_path):
+    from verity.ir import partition_object as PO
+    from verity_vllm.commit import serving_rows as CS
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    def cmd_of(d, *a):
+        r = _row(tmp_path / d, *a)
+        r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+        return r.commit_cmd([])
+
+    for cmd in (cmd_of("row"), cmd_of("config", "--config-run", "1")):
+        req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
+        assert req["partition"] == SRW.AUTO and "outputs" not in req, "auto partition, hidden outputs"
+    assert "--serving-rows" not in cmd_of("deferred", "--config-run", "1", "--replay-deferred", "1")
+    assert "--serving-rows" not in cmd_of("off", "--serving-rows", "0")
+    auto = SRW.auto_partition("ab" * 64)
+    assert SRW.templates(auto["partition"]) == ["RoPEHead_v1{D=64}"] and auto["partition_digest"] == PO.digest(auto["partition"])
+    assert CS.Window.of(auto | {"population": 0}, "r", ()).outputs == CS.ROW_SCHEMA
+
+
+def test_the_auto_partition_counts_its_population_from_the_programs_rows_and_skips_a_run_with_none(tmp_path, monkeypatch):
+    import numpy as np
+
+    from verity_vllm.commit import serving_rows as CS
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    monkeypatch.setattr(CS, "program_sha512", lambda d: "ab" * 64)
+    monkeypatch.setattr(SRW.CommittedStore, "of_record", staticmethod(lambda *a: None))
+    rng = np.random.default_rng(1)
+    head = lambda n: rng.integers(0, 1 << 16, (n, SRW.D), dtype=np.uint16)  # noqa: E731
+    monkeypatch.setattr(SRW, "read", lambda m, r, *a: ({"rows": {"x": head(m.n), "cs": head(m.n)}, "outs": {"out": head(m.n)}}, []))
+    kw = dict(partition_file=SRW.AUTO, programs={"0": {}}, bmap={}, committed=None, weights=None, manifest=None, run_root=bytes(32),
+              run="r-auto", program_dirs={"0": "/p"}, workers=1)
+
+    def no_rows(*a):
+        raise LookupError("no rows of RoPEHead_v1{D=64} in the run's Programs")
+
+    monkeypatch.setattr(SRW, "member_rows", no_rows)
+    assert SRW.after_commit(str(tmp_path / "none"), **kw) == {} and not (tmp_path / "none").exists()
+    monkeypatch.setattr(SRW, "member_rows", lambda *a: [["row"]])
+    monkeypatch.setattr(SRW, "members", lambda t, r: [CS.Member(t[0], (("x", SRW.D), ("cs", SRW.D)), (("out", SRW.D),), 5, 0)])
+    win = SRW.after_commit(str(tmp_path / "w"), **kw)
+    rec = json.loads((tmp_path / "w" / "registration.json").read_text())
+    assert win["population"] == rec["population"] == 5 and win["outputs"] == rec["commitment"]["outputs"] == CS.ROW_SCHEMA
+    assert rec["partition"] == SRW.auto_partition("ab" * 64)["partition"] and rec["leaves"]["RoPEHead_v1{D=64}/out"] == 5
+    with pytest.raises(LookupError):
+        monkeypatch.setattr(SRW, "member_rows", no_rows)
+        part = tmp_path / "partition.json"
+        part.write_text(json.dumps(SRW.auto_partition("ab" * 64) | {"population": 5}))
+        SRW.after_commit(str(tmp_path / "named"), **(kw | {"partition_file": str(part)}))
+
+
 def _pending_commit(r, *, bundles):
     (Path(r.d) / "commit").mkdir()
     (Path(r.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": None}))

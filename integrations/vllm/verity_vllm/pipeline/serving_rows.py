@@ -1,8 +1,11 @@
-"""The Commit stage's opt-in serving rows: the units of the verifier's partition, read exactly as the replay reads them (committed
+"""The Commit stage's serving rows: the units of the verifier's partition, read exactly as the replay reads them (committed
 members through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity_vllm.commit.serving_rows`.  Off unless the row stage writes a request (``commit --serving-rows``):
-``{"dir", "partition", "run", "committer"}``.  The partition file (``{partition, partition_digest, population, scope?}``) is the
-verifier's, fixed before serving; ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``).
+:mod:`verity_vllm.commit.serving_rows`.  On when the row stage writes a request (``commit --serving-rows``), which it does by default:
+``{"dir", "partition", "run", "committer", "outputs"?}``.  The partition file (``{partition, partition_digest, population, scope?}``)
+is the verifier's, fixed before serving; ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``).
+``partition: "auto"`` (the row stage's default) is every RoPE head of the served Program (`auto_partition`), its population counted
+from the Program's rows; a run with none commits nothing.  ``outputs``: how output ports commit (``commit.serving_rows.Window``),
+salted rows by default.
 
 Members come from the partition's query, in its order (``Q_template_instances``' ``params.templates``, or
 ``Q_template_instance``'s one ``template``), each named by its descriptor id:
@@ -31,12 +34,14 @@ from typing import Any
 
 import numpy as np
 
+from verity.ir import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.query.manifest import format as RM
 
 ROPE, ROPE_FAMILY, D = "RoPEHead_v1", "RoPE_v1", 64
+AUTO = "auto"
 GEMM, GEMM_FAMILY = "GemmCoordinate", "Gemm_v1"
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
@@ -54,12 +59,19 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
                          weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req["run"],
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
-                         committer=req.get("committer"))
+                         committer=req.get("committer"), outputs=req.get("outputs", CS.ROW_SCHEMA))
         except Exception as e:  # noqa: BLE001
             Path(req["dir"]).mkdir(parents=True, exist_ok=True)
             (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
             print(f"[serving-rows] FAILED (no verdict changes): {e!r}"[:400], flush=True)
     return weights, OpenedReader(com, rc)
+
+
+def auto_partition(program_sha512: str) -> dict[str, Any]:
+    """The partition file of ``partition: "auto"`` before its population: ``Q_template_instances`` v0 over every RoPE head of the
+    served Program."""
+    part = {"format": PO.FORMAT, "program": program_sha512, "query": PO.template_instances_query([f"{ROPE}{{D={D}}}"])}
+    return {"partition": part, "partition_digest": PO.digest(part)}
 
 
 def templates(partition: dict[str, Any]) -> list[str]:
@@ -256,26 +268,33 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
                  weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str, row: Any = None,
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None, committer: dict[str, Any] | None = None,
-                 workers: int | None = None) -> dict[str, Any]:
-    """The Commit stage's opt-in hook, after the vllm-v1 roots are final and before any challenge: commit the partition's units and
-    write the window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
+                 workers: int | None = None, outputs: str = CS.ROW_SCHEMA) -> dict[str, Any]:
+    """The Commit stage's hook, after the step roots are final and before any challenge: commit the partition's units and write the
+    window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     served = {CS.program_sha512(dirs[str(r)]) for r in programs}
     if len(served) != 1:
         raise NotImplementedError(f"serving rows register one served Program; this run has {len(served)}")
-    pf = json.loads(Path(partition_file).read_text())
+    auto = partition_file == AUTO
+    pf = auto_partition(next(iter(served))) if auto else json.loads(Path(partition_file).read_text())
     tmpls = templates(pf["partition"])
-    rows = member_rows(programs, tmpls, (pf.get("scope") or {}).get("op_path_prefix"), dirs)
+    try:
+        rows = member_rows(programs, tmpls, (pf.get("scope") or {}).get("op_path_prefix"), dirs)
+    except LookupError as e:
+        if not auto:
+            raise
+        print(f"[serving-rows] auto: nothing to commit ({e})", flush=True)
+        return {}
     ms = members(tmpls, rows)
-    window = CS.Window.from_file(partition_file, run, ms)
+    window = CS.Window.of(pf | ({"population": sum(m.n for m in ms)} if auto else {}), run, ms, outputs)
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = [read(m, r, store, weights, arrivals) for m, r in zip(ms, rows, strict=True)]
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
     source = {"row": row, "run": run, "committer": dict(committer or {}, module=CS.__name__), "served_program": served.pop(),
               "served_program_digest": sorted({str(i.get("digest")) for i in programs.values()}), "vllm_v1_run_root": bytes(run_root).hex(),
-              "scope": pf.get("scope")}
+              "scope": pf.get("scope"), **({"partition": "auto: every RoPE head of the served Program"} if auto else {})}
     c.seconds["read_s"] = round(t_read - t0, 3)
     res = CS.write(c, out_dir, source, CS.index_doc(ms, [g[1] for g in got], run))
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)

@@ -7,7 +7,8 @@
         --input-set DIR --input-set-art art:... --n 1024 [--reps 5] [--workers N]
 
 Per call: fresh salts (a new OS salt key), every row's ``sha512/row/v1`` digest, ``b || c`` and ``frame-v3-sha512`` leaf, every
-output word's leaf, and one tree per port (``serving_rows.commit``).  The rows are the set's own row ports, one row per instance
+instance's output row as one salted row the same way (``Window.outputs``, the hook's default; ``u16`` would be a bare leaf per output
+word), and one tree per port (``serving_rows.commit``).  The rows are the set's own row ports, one row per instance
 and port as M0's per-instance statement reads them (no shared rows); consecutive instances with the same row widths are one member
 (an attention class set spans key counts, so it is one member per T).  The first call is ``commit.cold_seconds``; ``commit.seconds``
 is the median of the next ``--reps`` (the renderer's ``views.COMMIT``).  The window's binding fields name the input set, not a
@@ -120,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
             "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
             "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "serving_commit_cost", "scheme": SR.SCHEME, "row_schema": SR.ROW_SCHEMA,
+                                     "outputs": window.outputs,
                                      "input_set": {"id": s.name, "art": ns.input_set_art, "content_digest": s.content_digest,
                                                    "manifest_sha256": s.manifest_sha256(), "subcircuit": s.subcircuit.id, "range": [0, ns.n]},
                                      "rows": "one row per instance and row port (M0's per-instance statement, no shared rows); one member "
