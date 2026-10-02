@@ -121,6 +121,11 @@ impl LeafSalts {
         self.level0
     }
 
+    /// The ids [`Self::next_id`] has issued: each once, in order, none of them level 0's.
+    pub fn issued(&self) -> std::ops::Range<u64> {
+        self.level0 + 1..self.next
+    }
+
     /// The id of the next tree after level 0.
     pub fn next_id(&mut self) -> u64 {
         assert!(self.next - self.level0 < 1 << TABLE_SHIFT, "a table's salt trees stay below the next table's level 0");
@@ -373,6 +378,29 @@ mod tests {
             let mut s = ProverRng::for_table(ProverSeed::injected([7; 32]), 1);
             assert_eq!(got, s.f128s(stream, index, n), "stream {stream} at {index}, {n} words");
         }
+    }
+
+    /// No salt tree id is issued twice in a session: a one-table session's ids and each table's of a session of several are
+    /// level 0's and then fresh ones, and no table's reach another's.
+    #[test]
+    fn no_salt_id_is_issued_twice() {
+        let seed = ProverSeed::injected([3; 32]);
+        let one = LeafSalts::for_seed(&seed);
+        let mut seen = std::collections::BTreeSet::new();
+        for j in 0..4u64 {
+            let mut s = if j == 0 { LeafSalts::for_seed(&seed) } else { one.table(j) };
+            assert!(seen.insert(s.level0_id()), "table {j}'s level-0 id is fresh");
+            for _ in 0..1000 {
+                let id = s.next_id();
+                assert!(seen.insert(id), "id {id} of table {j} issued once");
+            }
+            assert_eq!(s.issued(), s.level0_id() + 1..s.level0_id() + 1001);
+            assert_eq!(s.key(), one.key(), "every table of a session takes the session's key");
+        }
+        let mut last = one.table(1);
+        last.next = last.level0 + (1 << TABLE_SHIFT) - 1;
+        last.next_id();
+        assert!(std::panic::catch_unwind(move || last.next_id()).is_err(), "a table's ids stop below the next table's level 0");
     }
 
     #[test]
