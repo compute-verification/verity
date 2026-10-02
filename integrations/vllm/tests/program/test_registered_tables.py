@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.evaluation import evaluate
+from verity.evaluation import RegisteredTable, evaluate
 from verity.ir.codec import encode_program, program_digest
 from verity.ir.constants import REGISTRATION, inputs, program_data
 from verity.ir.defs import bind
@@ -62,6 +62,27 @@ def test_tanh_rn_entries_are_tanh_f32_rn_at_the_region_words_low_27_bits():
         assert e == D.tanh_f32_bits(w) and e < 1 << 31
     assert hi - lo < 1 << 27   # every region word has its own index
     assert T.tanh_rn_entry((lo - 1) & 0x7FFFFFF) == 0 == T.tanh_rn_entry(hi & 0x7FFFFFF)
+
+
+def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
+    """`TanhF32Rn_v2` reads `tanh_rn`'s 2^28 words lazily (`tanh_rn_table`), two per instance: on both signs of each rule's and
+    each region's edges, every exponent, and random words of the region and of all f32, it is `TanhF32Rn_v1`."""
+    rng = np.random.default_rng(15)
+    lo, hi = T.TANH_RN_LO, T.TANH_RN_HI
+    edges = [0, 1, 0x007FFFFF, 0x00800000, lo - 1, lo, lo + 1, 0x37FFFFFF, 0x38000000, 0x3F800000, 0x3FFFFFFF, 0x40000000, hi - 1,
+             hi, 0x41200000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF]
+    edges += [0x38000000 | e for r in T.TANH_RN_REGIONS for e in (r[0], r[1] - 1)] + [0x40000000 | e for r in T.TANH_RN_REGIONS for e in r]
+    exponents = [e << 23 | m for e in range(256) for m in (0, 1, 0x400000, 0x7FFFFF)]
+    words = edges + exponents + rng.integers(lo, hi, 2000).tolist() + rng.integers(0, 1 << 31, 1000).tolist()
+    words = [(w & 0x7FFFFFFF) | s for w in words for s in (0, 1 << 31)]
+    table, reads = T.tanh_rn_table(), []
+    assert (table.name, table.leaves, table.declared_by) == ("tanh_rn", T.TANH_RN_TABLE.leaves, D.TanhF32Rn)
+    counted = RegisteredTable("tanh_rn", lambda j: reads.append(j) or table.word(j), table.leaves, D.TanhF32Rn)
+    fn = bind(T.TanhF32RnV2)
+    assert fn.id == "TanhF32Rn_v2"
+    for w in words:
+        assert evaluate(fn, w, counted) == (D.TanhF32Rn.evaluate(w),), hex(w)
+    assert len(reads) == 2 * len(words)
 
 
 def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
