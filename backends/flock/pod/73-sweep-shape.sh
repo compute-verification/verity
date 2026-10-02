@@ -12,7 +12,8 @@
 #              and counts-all.json at once, in place of the one-process cut and its CUT_ALL re-cut
 #   MODE=shape VERIFIERS=DIR: the verifier in another pod, as 74-gemm-hill.sh's: SERVE_ONLY=1 (GPU=0 PIN=1) takes each shape from
 #              the cache and serves its WARM + RUNS sessions on this pod's address, published under DIR, one shape after another;
-#              the GPU job with VERIFIERS=DIR alone proves against them, so it starts once the first shape's address is published
+#              the GPU job with VERIFIERS=DIR alone proves against them, so it starts once the first shape's address is published,
+#              and before each shape waits for an address file it hasn't proved against
 # proofs-rows' copy of backends/flock/pod/73-sweep-shape.sh (backend-sweep-2's, at 70e99f57), with the (b) stage/prove split:
 #   MODE=shape STAGE_ONLY=1 ...   (no GPU) the chunk's statement exactly as its GPU job would stage it (the same settings, so the
 #              same FLOCK_STAGE_CACHE key), into the cache, and a marker $FLOCK_STAGE_CACHE/staged/<ident>.json with the files' sha256
@@ -120,6 +121,7 @@ stage|shape)
   [ -n "${VERIFIERS:-}" ] && [ $srv = 0 ] && export FC_VERIFIERS=$VERIFIERS
   if [ $so = 0 ] && [ -n "${BINARY:-}" ] && ldd $BINARY | grep 'not found'; then echo "BINARY can't load its libraries"; exit 1; fi
   MARK=("${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}" $HERE/stage_mark.py)
+  USED=()
   for SHAPE in ${SHAPES//,/ }; do
   k=$((k + 1)); O=$R/out/$k; mkdir -p $O
   $(command -v python3) - $D/counts.json $SHAPE $O/defs.json <<'EOF' || { rc=1; continue; }
@@ -139,6 +141,16 @@ EOF
   req=0; [ $so = 0 ] && [ "${REQUIRE_STAGED:-0}" = 1 ] && req=1
   [ $req = 1 ] && { "${MARK[@]}" pre $O $SHAPE || { rc=3; continue; }; }
   WR=; [ $so = 0 ] && [ $srv = 0 ] && WR="python3 $REPO/backends/flock/pod/gemm_hill.py stamp --out $O/stamps.tsv --"
+  # the pod publishes shape k's addresses only once shape k - 1's sessions are served: wait (up to FC_SERVE_WAIT_S) for an
+  # address file this job hasn't proved against
+  if [ $so = 0 ] && [ $srv = 0 ] && [ -n "${VERIFIERS:-}" ]; then
+    for _ in $(seq ${FC_SERVE_WAIT_S:-600}); do
+      new=$(ls $VERIFIERS 2>/dev/null | grep '\.json$' | grep -vxF -f <(printf '%s\n' "${USED[@]:-}"))
+      [ -n "$new" ] && break
+      sleep 1
+    done
+    USED+=($(ls $VERIFIERS 2>/dev/null | grep '\.json$'))
+  fi
   OUT=$O WRAP=$WR bash backends/flock/pod/70-class-sweep.sh DEFS=$O/defs.json SHAPES=$O/shapes.txt SELECT=${SELECT:-units} \
     SELFTEST=$st SELFTEST_LARGEST=0 STAGE_ONLY=$so SERVE_ONLY=$([ $srv = 1 ] && echo $VERIFIERS) || rc=1
   if [ $so = 1 ]; then "${MARK[@]}" write $O $SHAPE || rc=1
