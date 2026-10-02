@@ -176,8 +176,8 @@ def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_
     afd = _hold(ahead)
     real_join = SLOT.join
 
-    def join(d, who=None):
-        ticket, fd = real_join(d, who)
+    def join(d, priority=False, who=None):
+        ticket, fd = real_join(d, priority, who)
         later = line / f"{int(ticket.name.split('-')[0]) + 1:020d}-12"
         later.write_text(json.dumps({"pid": 12, "run": "r-later"}))
         fds.append(_hold(later))
