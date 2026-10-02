@@ -777,14 +777,16 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
     its reader.  One line per name saying what happened."""
     log = log or sys.stderr
-    if routes.server_delivers():
-        print("route: the router delivers it", file=log)
-        return []
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     root = api.root(ch, thread) if thread else None
     for n in lead_names(msg.get("text", ""), reg):
         routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
     inboxes = routes.inboxes()
+    if routes.server_delivers():
+        names = route_targets(msg, root, reg, inboxes)
+        print(f"route: the router rings {' '.join('@' + n for n in names)}" if names else
+              "route: this rings no one", file=log)
+        return []
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines = thread or msg.get("ts") or "", []
