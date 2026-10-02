@@ -194,7 +194,9 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
   `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
-  description names them.
+  description names them. A guarantee that only moved to another module or name needs no reviewer when `--update
+  --moved MOVES.json` (old names to new) prints it as the same statement under its old names: its statement and every
+  definition it reads match their records.
 - A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
   that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
   dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
