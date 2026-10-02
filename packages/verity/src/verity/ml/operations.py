@@ -1,9 +1,9 @@
 """The operations: the composite Definitions whose own definition is gates, and the guard that a Program holds no data.
 
-Daniel's ruling (1 Oct 2026, 3:06 PM PDT): an operation's own definition is gates (the floating-point formats' constants,
-SHA-512's, and the measured GPU tables of exp2, rcp and tanh in `verity.ml.library`), and everything a program or a request
-brings is a value, committed under a hiding leaf and always hidden (`verity.ir.constants`). `verity.ir` names no operations,
-so the list is here and the guard passes it in:
+Daniel's rulings (1 Oct 2026, PDT): an operation's own definition is gates (the floating-point formats' constants, the round
+constants of SHA-512 and Keccak-f, and every measured MUFU table in `verity.ml.library`: exp2, rcp, sqrt, rsq and tanh), and
+everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.ir.constants`).
+`verity.ir` names no operations, so the list is here and the guard passes it in:
 
     program_data(root) = verity.ir.constants.program_data(root, is_operation, is_library_table)
 
@@ -38,8 +38,9 @@ OPERATIONS: frozenset[str] = frozenset({
     # the tensor-core dot products and GEMM coordinates (`verity.ml.gemm`, `verity.ml.boolean.gemm`): the accumulator's +0
     "DotBf16_v2", "DotBf16_v3", "GemmCoordinate_v3", "GemmCoordinateE4m3_v1", "GemmCoordinateE4m3_v2",
     "GemmCoordinateMxf4_v1", "GemmCoordinateMxf4_v2", "GemmCoordinateNvf4_v1", "GemmCoordinateNvf4_v2",
-    # SHA-512's compression function, with its round constants (PoUW's circuit, `verity_pouw.circuit.hashes`)
-    "PouwSha512Compress_v1",
+    # SHA-512's compression function and the Keccak-f[1600] permutation, with their round constants (PoUW's circuit,
+    # `verity_pouw.circuit.hashes`)
+    "PouwKeccakF1600_v1", "PouwSha512Compress_v1",
 })
 
 _LIBRARY_TABLES = frozenset(t.name for t in library.TABLES)

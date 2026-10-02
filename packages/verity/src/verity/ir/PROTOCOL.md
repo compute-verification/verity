@@ -264,8 +264,8 @@ key, Input nodes, Input gate count and Calls); `binding_ids` (id, its binding ti
 
 ### 5.3 What a Program holds
 
-An operation's own definition is gates: the constants of the floating-point formats, SHA-512's, and the measured GPU tables of
-exp2, rcp and tanh. Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
+An operation's own definition is gates: the constants of the floating-point formats, the round constants of SHA-512 and
+Keccak-f, and every measured MUFU table (exp2, rcp, sqrt, rsq and tanh). Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
 epsilon, the attention scale, a softcap, `gelu_tanh_bf16`, `tanh_rn`) are registered inputs, and a request's data and parameters
 (temperature, top-p, the Philox positions) are run inputs. A constant primitive (`Const<w>[0x…]_v1`) is therefore an operation's
 own bits, and a Program holds no data.

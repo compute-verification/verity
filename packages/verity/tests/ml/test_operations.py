@@ -16,10 +16,10 @@ from verity.ml import prims as P
 from verity.ml.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
 
 #: `digest()` of VERSION 1. A change to the list needs a new VERSION, then this pin.
-DIGEST_V1 = ("960a1610e9d95f6e064636d12be258bdc91f801e42190cd97135afc31fb35702"
-             "2f15f5bc476f89de48a735c15cc29b8d3c77e288da94ff4261d0cdf7fe4433fb")
-#: the entry core does not define (PoUW's), which circuit-check's catalog loads and its suite checks
-ELSEWHERE = {"PouwSha512Compress_v1"}
+DIGEST_V1 = ("5ae1023cdd6929e320d1a4b986c44812aee59d6a66bfc68547d89774cce92693"
+             "b5ed77ef984a93a2b52b476e82d000ff0b0992b7360eb88f406f72c1f32b2ce9")
+#: the entries core does not define (PoUW's), which circuit-check's catalog loads and its suite checks
+ELSEWHERE = {"PouwKeccakF1600_v1", "PouwSha512Compress_v1"}
 
 A16 = Array(16, P.BF16)
 
