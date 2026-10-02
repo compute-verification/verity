@@ -34,7 +34,8 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     upstream crates would drop their integration tests."""
     script = (ROOT / "backends" / "flock" / "check_build.sh").read_text()
     mode = script[script.index('if [ "${1:-}" = test ]'):script.index("for features in")]
-    assert "cargo test --release -q -p flock-live --lib --features sha512,glue,seed-injection" in mode
+    assert "for features in sha512 sha512,glue,seed-injection; do" in mode, "the proving build's set, without seed-injection"
+    assert 'cargo test --release -q -p flock-live --lib --features "$features"' in mode
     patched = set()
     for p in sorted((ROOT / "backends" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}

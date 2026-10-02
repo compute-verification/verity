@@ -4,7 +4,8 @@
 # CPU feature set a pod builds: the class sweep's proving build (sha512), 60-circuit's (sha512, glue), and the selftests'
 # (sha512, glue, seed-injection). A proving build never has seed-injection, so code only that feature defines must stay behind it.
 # `check_build.sh test` (check's flock-rust-tests step) runs the Rust tests on the same checkout instead, in release as upstream's
-# CI does: flock-live's unit tests in the selftests' feature set, and every test of the five crates the patches change.
+# CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the five crates the
+# patches change (the live crate's features don't reach them, so one run).
 # env: FLOCK_CHECKOUT (default $HOME/.cache/verity/flock-b684b12, cloned when missing; its target/ is kept between runs)
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -25,8 +26,11 @@ ln -s "$ROOT/backends/flock/live" crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
 if [ "${1:-}" = test ]; then
   # --lib: the live crate's bins hold no tests, and flock-pure-gpu and flock-gpu-link predate the SHA-512 patch
-  echo "check_build: cargo test --release flock-live --lib --features sha512,glue,seed-injection"
-  cargo test --release -q -p flock-live --lib --features sha512,glue,seed-injection
+  # sha512 alone is the proving build: its refusals of a fixed seed only mean something without seed-injection
+  for features in sha512 sha512,glue,seed-injection; do
+    echo "check_build: cargo test --release flock-live --lib --features $features"
+    cargo test --release -q -p flock-live --lib --features "$features"
+  done
   echo "check_build: cargo test --release flock-core flock-prover flock-merkle flock-transcript flock-hash"
   cargo test --release -q -p flock-core -p flock-prover -p flock-merkle -p flock-transcript -p flock-hash
   exit
