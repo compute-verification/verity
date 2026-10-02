@@ -20,6 +20,7 @@ import FlockSoundness.Discharge.Exec.BindingE2EL
 import FlockSoundness.Discharge.Exec.HeadlineL
 import FlockSoundness.Discharge.Exec.Live
 import FlockSoundness.Discharge.Exec.Merkle
+import FlockSoundness.Discharge.Exec.Retained
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -33,6 +34,9 @@ import FlockSoundness.Discharge.Exec.Merkle
 * `Merkle`: each table `setupH` accepts commits with the tags' leaf scheme (`setupH_find`), so with `hm96Sha512` under
   every `hm96Rows` tag pinned today (`setupH_hm96`), and `accepts_tables_hm96` without `hms`
   (`accepts_tables_hm96_of_leaf`);
+* `Retained`: every `hm96Rows` tag pinned today retains round bytes, so every round of a record flock-verify accepts
+  carries its framed bytes (`accepts_retained`), and a squeeze at such a round compares them exactly
+  (`squeeze_retained`), as `liveTable`'s rounds do;
 * `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of
