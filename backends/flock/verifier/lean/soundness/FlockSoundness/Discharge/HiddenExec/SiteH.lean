@@ -87,9 +87,9 @@ theorem bytesAt_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) 
 /-! ## The registered `b ‖ c` at a site -/
 
 /-- **What `bc_site_ofH` reads at a site**: block `o` and VU `g` of an accepted statement whose draw `d` decodes to `D`,
-whose proved units are in its population; whose model statement's regions contain the executable's; whose public file
-`HmOut.loadPublic` loads to `pop`, without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank
-`o · c.g + g` is `u`. -/
+whose proved units are in its population; whose block R1CS's regions (`a.regs`) contain the executable's; whose
+public file `HmOut.loadPublic` loads to `pop`, without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved
+unit at rank `o · c.g + g` is `u`. -/
 def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
   ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
     (∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs) ∧
