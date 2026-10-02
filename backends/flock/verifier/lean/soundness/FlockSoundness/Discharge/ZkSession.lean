@@ -4,3 +4,4 @@ import FlockSoundness.Discharge.ZkSession.Level0
 import FlockSoundness.Discharge.ZkSession.Table
 import FlockSoundness.Discharge.ZkSession.Coins
 import FlockSoundness.Discharge.ZkSession.Session
+import FlockSoundness.Discharge.ZkSession.Numbers
