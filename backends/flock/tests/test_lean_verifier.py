@@ -849,7 +849,8 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4) -> str:
 def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_refused(tmp_path):
     """Two statements whose bit-row ports have every residue between them (length 0; length mod 8 of 0, 1 and 7; bytes mod
     128 of 0, 1, 111, 112 and 127) have the statement digests `flock-circuit statement` gives them under its build's identity
-    `verity/flock-circuit@967b8d06`, so the two verifiers' Δ constants, forced-zero leaf bits and row wires agree. A META
+    `verity/flock-circuit@967b8d06` (its `row_leaf_in_circuit` naming `hm96-sha512/row/v2`), so the two verifiers' Δ
+    constants, forced-zero leaf bits, row wires and bit-row identity agree. A META
     that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length (its prefix, or
     its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2, a changed
     padding, both row-schema keys, a v1 schema in `row_schemas`, a schema missing, no row with a compression, and a pinned
@@ -873,8 +874,8 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
         assert p.returncode == 0, p.stdout + p.stderr
         digests[i] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
     assert digests == {
-        0: "3e14322950843cf070267bfd5f939722f86238f9ad59eeb8dde1c71bba21a3394095da786fc185916dbaf43d377b82eb5dbdd6d87effb9f60f87b13db0d865a3",
-        1: "a24b8c7e093fa5c4b1394b8a2b1ac79452863d0d80d8eb02722bce4e23cc1b118b865efd1b79aa186fe20071cecec8fe58cb52f232ad24bff85fece6776131dc"}
+        0: "1eb4ebee73d82d27b8386eaf5c56d4c4f12c9bde6701e81340ca67a03af6d27362a1eded2c5cb96195485d106c93dfced170d6c439b12c98441aeda93a3583b8",
+        1: "51218788579123571a9339ac98bd0d6235dc763c1dcc4808978364374efd2469fc40e966403510ff059f722896309344df6d1d602f21713f86e14c0bdd39afa8"}
 
     d = tmp_path / "s0"
     head, meta_line, rest = (d / "c.txt").read_text().split("\n", 2)

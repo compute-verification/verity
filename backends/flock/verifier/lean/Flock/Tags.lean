@@ -182,6 +182,11 @@ def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) (statement 
       ("transcript", s "none (live verifier coins)"), ("row_leaf_in_circuit", s "hm96-sha512/row/v1 over sha512/row/v1")]),
     ("hooks", hooksNoMask)]
 
+/-- A bit-row statement's identity (META `row_schemas`): `row_leaf_in_circuit` names `hm96-sha512/row/v2`, as the prover's
+does; a `sha512/row/v1` statement keeps its identity unchanged. -/
+def rowV2Identity (id : Json) : Json :=
+  id.setObjVal! "hashes" ((id.getObjValD "hashes").setObjVal! "row_leaf_in_circuit" (s "hm96-sha512/row/v2 over sha512/row/v2"))
+
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=

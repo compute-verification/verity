@@ -1214,12 +1214,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   after it (one SHA-512 compression from the IV), and the padding block `0x80 ‖ 0 ‖ be128(8·(128 + 2·words))`, and refuses
   a META `rows` entry that differs, and a `row_key_sha512` other than SHA-512 of the default key.
 - **Bit rows (`hm96-sha512/row/v2`).** META may carry `row_schemas`, one `["hm96-sha512/row/v2", ℓ]` per port, for
-  `row_schema` (both, neither, or `row_schemas` when typed: refused). Port `p` is then core's bit row of `ℓ < 2^64` bits
-  (`sha512/row/v2`): `⌈ℓ/16⌉` u16 leaves, bits low first, `x = SHA-512(P(ℓ) ‖ bytes)` over `B = ⌈ℓ/8⌉` bytes. The verifier
-  derives from `ℓ` the words, `⌈(B + 17)/128⌉ − 1 ≤ 2^16` compressions, `P(ℓ)`'s midstate and the padding `0x80 ‖ 0* ‖
-  be128(8·(128 + B))`, refusing a differing META `ports` or `rows` entry and a statement with no compression. Message bit
-  `b` of byte `j` is a row bit if `8j + b < ℓ`, else a zero fill bit (`j < B`) or padding; so the hm96 `pad` may hold row
-  bytes, and a row of ≤ 111 bytes has no compression.
+  `row_schema` (refused: both, neither, or typed); the identity's `row_leaf_in_circuit` then names `hm96-sha512/row/v2`.
+  Port `p` is core's bit row of `ℓ < 2^64` bits (`sha512/row/v2`): `⌈ℓ/16⌉` u16 leaves, bits low first, `x = SHA-512(P(ℓ)
+  ‖ bytes)` over `B = ⌈ℓ/8⌉` bytes. The verifier derives from `ℓ` the words, `⌈(B + 17)/128⌉ − 1 ≤ 2^16` compressions,
+  `P(ℓ)`'s midstate and the padding `0x80 ‖ 0* ‖ be128(8·(128 + B))`, refusing a differing META `ports` or `rows` entry and
+  a statement with no compression. Message bit `b` of byte `j` is a row bit if `8j + b < ℓ`, else a zero fill bit (`j <
+  B`) or padding; so the hm96 `pad` may hold row bytes, and a row of ≤ 111 bytes has no compression.
 - **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
   1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
   ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,

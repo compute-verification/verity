@@ -214,6 +214,10 @@ fn identity(c: &Composite) -> Value {
         id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
         id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
     }
+    // only for bit rows (META `row_schemas`): a `sha512/row/v1` statement's digest must not move
+    if c.meta.get("row_schemas").is_some() {
+        id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
+    }
     id
 }
 
