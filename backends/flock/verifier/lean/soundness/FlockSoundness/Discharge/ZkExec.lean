@@ -7,3 +7,4 @@ import FlockSoundness.Discharge.ZkExec.Setup
 import FlockSoundness.Discharge.ZkExec.Refines
 import FlockSoundness.Discharge.ZkExec.Compiled
 import FlockSoundness.Discharge.ZkExec.Shape
+import FlockSoundness.Discharge.ZkExec.Coin
