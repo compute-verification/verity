@@ -19,8 +19,8 @@ gate. At [e2e-placed]'s places (`Placed.Sites.progPlaces_keyProg`):
 * `keyProg_bcPinned`: the rows' `b ‖ c` is the registration's, the population's public file (`bc_site`), at each drawn
   unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions);
 * `keyProg_valPinned`: the single gates hold the registration's bits: 1 at the constant, 0 at the zero, and at the units'
-  committed gates the registration's bit (`hout`, the returned outputs' pin), when every input's key is the zero or a
-  row bit (`KeysRow`).
+  committed gates the registration's bit (`hout`, the returned outputs' pin), when every input a computed row reads has
+  the zero or a row bit as its key (`KeysRow`).
 
 `keyLayout` and `keyRows` are `lay` and `rs` there.
 -/
@@ -247,13 +247,32 @@ theorem keyRowOf_ne_none {g : Fin (keyN c hU n)} (h2 : 2 ≤ g.val) (hlt : g.val
   simp only [h2, hlt, and_self, ↓reduceDIte, hk, hq, hw, hb]
   exact Option.some_ne_none _
 
-variable (c hU rowW) in
-/-- **Every input's key is the zero or a row bit**: message bit `bit < 8` of byte `byte` of a row port `q`, within the
-row's `rowW q` bits. A circuit condition: a unit input copied from another net's output (`Src.wire`), a fixed column
-(`Src.lit`) or an input padding row (`Src.pad`) has no registered commit string. -/
-def KeysRow : Prop :=
-  ∀ x < keyB c hU, Aliased.srcKey c x = .zero ∨ ∃ q byte bit, Aliased.srcKey c x = .msg q byte bit ∧
+variable (c rowW) in
+/-- **An input's key is the zero or a row bit**: message bit `bit < 8` of byte `byte` of a row port `q`, within the
+row's `rowW q` bits. -/
+def RowKey (x : ℕ) : Prop :=
+  Aliased.srcKey c x = .zero ∨ ∃ q byte bit, Aliased.srcKey c x = .msg q byte bit ∧
     ∃ hq : q < c.ports.size, 8 * byte + bit < rowW ⟨q, hq⟩ ∧ bit < 8
+
+variable (c hU rowW) in
+/-- **Every input a computed row reads has a row key** (`RowKey`). A circuit condition: a unit input copied from another
+net's output (`Src.wire`) or a fixed column (`Src.lit`) has no registered commit string. An input no row reads, such as
+an input padding row (`Src.pad`), is no committed wire and needs none. -/
+def KeysRow : Prop :=
+  ∀ (i : Fin (Placed.circuitRows c hU).nComp) (x : Fin (Placed.circuitRows c hU).w),
+    x ∈ (Placed.circuitRows c hU).a i ++ (Placed.circuitRows c hU).b i → x.val < (Placed.circuitRows c hU).nIn →
+      RowKey c rowW x.val
+
+/-- `KeysRow` at a unit of `keyProg`, whose rows are the circuit's. -/
+theorem keysRow_keyProg (hkeys : KeysRow c hU rowW) (u : Fin n) (i : Fin ((keyProg c hU n).rows u).nComp)
+    (x : Fin ((keyProg c hU n).rows u).w) (hx : x ∈ ((keyProg c hU n).rows u).a i ++ ((keyProg c hU n).rows u).b i)
+    (hxn : x.val < ((keyProg c hU n).rows u).nIn) : RowKey c rowW x.val := by
+  have e : (keyProg c hU n).rows u = Placed.circuitRows c hU :=
+    rows_circuitProg c hU n (keyB c hU) (Aliased.keyIdx c (keyB c hU)) u
+  revert i x
+  generalize (keyProg c hU n).rows u = R at e ⊢
+  subst e
+  exact hkeys
 
 /-- The constant's gate of `keyProg`. -/
 noncomputable def oneG : Fin (keyN c hU n) := Fin.castLE (Placed.le_gates _ _ n) (Placed.oneGate n (keyB c hU))
@@ -373,16 +392,20 @@ theorem keyProg_bcPinned
 theorem zeroG_ne_oneG : zeroG (c := c) (hU := hU) (n := n) ≠ oneG := fun h =>
   absurd (congrArg Fin.val h) (by simp [zeroG, oneG, Placed.zeroGate, Placed.oneGate])
 
-/-- **A single gate of a unit's own instance** is the zero, the constant, or one of the unit's computed gates, when
-every input's key is the zero or a row bit (`KeysRow`). -/
+/-- **A single committed gate of a unit's own instance** is the zero, the constant, or one of the unit's computed gates,
+when every input a row reads has a row key (`KeysRow`). -/
 theorem single_gate (outs : Finset (Fin (keyN c hU n))) (hkeys : KeysRow c hU rowW) {u : Fin n}
     {g : Fin (keyN c hU n)}
     (hgx : ∃ x : Fin ((keyProg c hU n).rows u).w, (Const.Prog.instC (keyProg c hU n) outs u).wire x = g)
-    (hr : keyRowOf c hU n rowW g = none) :
+    (hg : g ∈ ((keyProg c hU n).partition outs).io u) (hr : keyRowOf c hU n rowW g = none) :
     g = zeroG ∨ g = oneG ∨ ((keyProg c hU n).unit g = some u ∧ g ≠ oneG ∧ g ≠ zeroG) := by
   obtain ⟨x, rfl⟩ := hgx
   have e := congrArg FlockSoundness.Rows.nIn
     (rows_circuitProg c hU n (keyB c hU) (Aliased.keyIdx c (keyB c hU)) u)
+  have hgate_in : ∀ {g : Fin (keyN c hU n)}, g.val < 2 + n * keyB c hU → (keyProg c hU n).unit g = none :=
+    fun {g} hg => unit_uniform_input (k := Placed.inGates n (keyB c hU)) (R := Placed.circuitRows c hU)
+      (ins := Placed.insOf n (keyB c hU) (Aliased.keyIdx c (keyB c hU))) (one := Placed.oneGate n (keyB c hU))
+      (hone := Placed.insOf_ne_one n (keyB c hU) (Aliased.keyIdx c (keyB c hU))) n g hg
   by_cases hx : x.val < ((keyProg c hU n).rows u).nIn
   · have hxB : x.val < keyB c hU := lt_of_lt_of_eq hx e
     have hw : ((Const.Prog.instC (keyProg c hU n) outs u).wire x).val =
@@ -404,17 +427,25 @@ theorem single_gate (outs : Finset (Fin (keyN c hU n))) (hkeys : KeysRow c hU ro
       have hm : (2 + u.val * keyB c hU + b.val - 2) % keyB c hU = b.val := by
         rw [show 2 + u.val * keyB c hU + b.val - 2 = b.val + u.val * keyB c hU by omega,
           Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt b.isLt]
-      rcases hkeys x.val hxB with h0 | ⟨q, byte, bt, hk, hq, hlw, hlb⟩
-      · exact absurd h0 hnz
+      have hnone : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = none :=
+        hgate_in (by rw [hw]; exact Placed.source_lt n _ u.isLt b)
+      obtain ⟨i, c', hc', hwc⟩ := exists_read_of_io (Const.Prog.instC (keyProg c hU n) outs u) hg
+        (fun h => by
+          have h' : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u := h
+          rw [hnone] at h'
+          cases h')
+      have hc'n : c'.val < ((keyProg c hU n).rows u).nIn := by
+        rcases (Const.Prog.instC (keyProg c hU n) outs u).shared c' x hwc with rfl | ⟨h, -⟩
+        · exact hx
+        · exact h
+      have hkey' := Placed.keyProg_wire_key hU outs u x c' hx hc'n hwc.symm
+      rcases keysRow_keyProg hkeys u i c' hc' hc'n with h0 | ⟨q, byte, bt, hk, hq, hlw, hlb⟩
+      · exact absurd (hkey'.trans h0) hnz
       · refine absurd hr (keyRowOf_ne_none (by rw [hw]; omega) (by rw [hw]; exact Placed.source_lt n _ u.isLt b)
           (q := q) (byte := byte) (bit := bt) ?_ hq hlw hlb)
-        rw [hw, hm, keyIdx_some hb]
+        rw [hw, hm, keyIdx_some hb, hkey']
         exact hk
-  · have hgate_in : ∀ {g : Fin (keyN c hU n)}, g.val < 2 + n * keyB c hU → (keyProg c hU n).unit g = none :=
-      fun {g} hg => unit_uniform_input (k := Placed.inGates n (keyB c hU)) (R := Placed.circuitRows c hU)
-        (ins := Placed.insOf n (keyB c hU) (Aliased.keyIdx c (keyB c hU))) (one := Placed.oneGate n (keyB c hU))
-        (hone := Placed.insOf_ne_one n (keyB c hU) (Aliased.keyIdx c (keyB c hU))) n g hg
-    by_cases hone : x = ((keyProg c hU n).rows u).one
+  · by_cases hone : x = ((keyProg c hU n).rows u).one
     · refine .inr (.inl ?_)
       rw [hone, Const.Prog.instC_wire_one]
       exact Fin.ext (oneAt_uniform_val (k := Placed.inGates n (keyB c hU)) (R := Placed.circuitRows c hU)
@@ -441,7 +472,8 @@ theorem single_gate (outs : Finset (Fin (keyN c hU n))) (hkeys : KeysRow c hU ro
 include hparse in
 /-- **The single gates hold the registration's bits** at `keyProg`'s sites: 1 at the constant (`hc1`, [e2e-const]'s
 `hConst`), 0 at the zero (`hz1`, [e2e-zero]'s `hZero`), and at a unit's committed gate the registration's bit
-(`hout`), when every input's key is the zero or a row bit (`KeysRow`), so that no other input is a single gate. -/
+(`hout`), when every input a row reads has the zero or a row bit as its key (`KeysRow`), so that no other input is a
+committed single gate. -/
 theorem keyProg_valPinned (hkeys : KeysRow c hU rowW)
     (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
       {oneG (c := c) (hU := hU) (n := n)})
@@ -455,7 +487,7 @@ theorem keyProg_valPinned (hkeys : KeysRow c hU rowW)
   have hpub := gate_pub (keyPlace hparse outs) hc1 hz1 hu hM hg
   obtain ⟨x, hx⟩ := exists_col_of_io ((keyPlace hparse outs) S R u hu).inst hg
   change bit _ = keyGate outBit R g
-  rcases single_gate outs hkeys ⟨x, hx⟩ hr with rfl | rfl | ⟨hm, h1, h2⟩
+  rcases single_gate outs hkeys ⟨x, hx⟩ hg hr with rfl | rfl | ⟨hm, h1, h2⟩
   · rw [hpub.2 (Finset.mem_singleton_self _)]
     simp only [keyGate, zeroG_ne_oneG, ↓reduceIte]
   · rw [hpub.1 (Finset.mem_singleton_self _)]

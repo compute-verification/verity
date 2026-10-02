@@ -42,6 +42,21 @@ theorem exists_col_of_io {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R) {g : Fin 
     · exact ⟨c, rfl⟩
     · exact ⟨c, rfl⟩
 
+/-- **A committed wire outside a unit is read by one of its rows**: on a column some computed row of the instance
+reads. -/
+theorem exists_read_of_io {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R) {g : Fin C.N} (hg : g ∈ P.io u)
+    (hout : P.unit g ≠ some u) : ∃ i, ∃ c ∈ R.a i ++ R.b i, I.wire c = g := by
+  classical
+  simp only [Partition.io, Finset.mem_filter] at hg
+  rcases hg.2 with hu | ⟨h, hh, hgh⟩
+  · exact absurd hu hout
+  · obtain ⟨i, rfl⟩ := I.onto h hh
+    rw [I.op i] at hgh
+    simp only [Op.args, List.mem_append, List.mem_map] at hgh
+    rcases hgh with ⟨c, hc, rfl⟩ | ⟨c, hc, rfl⟩
+    · exact ⟨i, c, List.mem_append_left _ hc, rfl⟩
+    · exact ⟨i, c, List.mem_append_right _ hc, rfl⟩
+
 variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)
