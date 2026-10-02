@@ -105,17 +105,18 @@ def _pinned():
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, a, b, tile)
     fa, fb = F.basis(noise.seed_b, F.ROLE_FA, k), F.basis(noise.seed_b, F.ROLE_FB, k)
+    g = _flat(F.gram(F.NVFP4, noise.seed_b, k))
     words = lambda rows: [x >> 16 for row in rows for x in F.parse_row(row, k)]  # noqa: E731
-    return pc4.Shape(m, k, n, tile=(4, 8)), ops, words(a), _flat(ops.e_a), words(b), _flat(ops.e_b), _flat(fa), _flat(fb)
+    return pc4.Shape(m, k, n, tile=(4, 8)), ops, words(a), _flat(ops.e_a), words(b), _flat(ops.e_b), _flat(fa), _flat(fb), g
 
 
 def test_the_programs_evaluate_to_the_pinned_vector():
-    """`Pc4Weight` gives B̃'s codes, scale bytes and P_B as the scheme forms them, `Pc4Call` reads them and gives the
-    vector's C̃ and U, and `Pc4Check` is the two in one root; every row of the honest tile is admitted.  The 16 × 16 block
-    is cut into 4 × 8 tiles, so a word placed in the wrong tile or transposed within one changes the digests."""
-    shape, ops, a, ea, b, eb, fa, fb = _pinned()
+    """`Pc4Weight` gives B̃'s codes, scale bytes and P_B as the scheme forms them from the anchored G, `Pc4Call` reads them
+    and gives the vector's C̃ and U, and `Pc4Check` is the two in one root; every row of the honest tile is admitted.  The
+    16 × 16 block is cut into 4 × 8 tiles, so a word placed in the wrong tile or transposed within one changes the digests."""
+    shape, ops, a, ea, b, eb, fa, fb, g = _pinned()
     m, k, n = shape.m, shape.k, shape.n
-    wout = evaluate(pc4.weight(shape), b, eb, fa, fb)
+    wout = evaluate(pc4.weight(shape), b, eb, fa, fb, g)
     bc, bs = list(wout[:n * k]), list(wout[n * k:n * k + n * k // 16])
     pb, ok_b = list(wout[n * k + n * k // 16:-n]), list(wout[-n:])
     assert V.sha(bytes(bc)) == CASE["b_codes_sha256"] and V.sha(bytes(bs)) == CASE["b_scales_sha256"]
@@ -126,7 +127,7 @@ def test_the_programs_evaluate_to_the_pinned_vector():
     c, u = [cout[i * n:(i + 1) * n] for i in range(m)], [cout[mn + i * n:mn + (i + 1) * n] for i in range(m)]
     assert V.sha(V.words(c)) == CASE["c_sha256"] and V.sha(V.words(u)) == CASE["u_sha256"]
     assert list(cout[2 * mn:]) == [1] * m
-    assert evaluate(pc4.check(shape), a, ea, b, eb, fa, fb) == tuple(cout) + tuple(ok_b)
+    assert evaluate(pc4.check(shape), a, ea, b, eb, fa, fb, g) == tuple(cout) + tuple(ok_b)
     row_a = pc4.templates(k)["row_a"]
     outs = [evaluate(row_a, a[i * k:(i + 1) * k], ea[32 * i:32 * (i + 1)], fa, fb) for i in range(m)]
     assert V.sha(bytes(x for o in outs for x in o[:k])) == CASE["a_codes_sha256"]
@@ -188,13 +189,13 @@ def test_the_row_units_admission_is_row_passes_and_their_outputs_the_schemes(sid
 
 @pytest.mark.parametrize("side", ["check", "weight", "call"])
 def test_the_partition_computes_every_value_in_exactly_one_unit(side):
-    """One unit per column of F_B (G), per row of B and of A, and per tile; `validate_unit_cut` certifies every gate once
-    with no recompute, and the partition object verifies."""
+    """One unit per row of B and of A, and per tile (G is anchored, so no unit computes it); `validate_unit_cut` certifies
+    every gate once with no recompute, and the partition object verifies."""
     shape = pc4.Shape(4, 64, 6, tile=(2, 3))
     fn = {"check": pc4.check, "weight": pc4.weight, "call": pc4.call}[side](shape)
     prog, q = Program(fn), pc4.query(shape, side)
     us = pc4.units(fn)
-    full = {"gram": F.R, "row_b": shape.n, "row_a": shape.m, "tile": 2 * 2}
+    full = {"row_b": shape.n, "row_a": shape.m, "tile": 2 * 2}
     assert Counter(u.role for u in us) == {r: full[r] for r in pc4.ROLES[side]}
     part = PO.evaluate(prog, q)
     tp = pc4.templates(shape.k, shape.tile)

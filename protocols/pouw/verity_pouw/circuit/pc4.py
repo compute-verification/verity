@@ -2,15 +2,13 @@
 units, so sampled proofs can establish a drawn tile's checked words (C̃ and U) and its rows' admission without the verifier
 reading a row.
 
-A weight's side is formed once per job and weight, by `Pc4Weight{K,N}`, whose root body holds the `Pc4Gram` and `Pc4RowB`
-instances.  One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, scale bytes and P_B rows as
-committed inputs.  `Pc4Check{M,K,N,TM,TN}` is both in one root: the whole check of an M × N block, recompute-free.  Each
-root body holds only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`),
-and every value is computed in exactly one of them.
+A weight's side is formed once per job and weight, by `Pc4Weight{K,N}`, whose root body holds the `Pc4RowB` instances.
+One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, scale bytes and P_B rows as committed
+inputs.  `Pc4Check{M,K,N,TM,TN}` is both in one root: the whole check of an M × N block, recompute-free.  Each root body
+holds only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`), and every
+value is computed in exactly one of them.
 
     template          one instance per        reads                                    computes and returns
-    Pc4Gram{K}        column p of F_B         F_B[:, p], F_A                            G_p = (chain(F_B[:, p], F_A[:, q]))_q
-      (in Pc4Weight, once per job)
     Pc4RowB{K}        row j of B              B_j, E_B,j, F_B, F_A, G                   B̃_j's codes and scale bytes, P_B,j, ok
       (in Pc4Weight, once per job and weight)
     Pc4RowA{K}        row i of A              A_i, E_A,i, F_A, F_B                      A′_i's codes and scale bytes, P_A,i, ok
@@ -31,7 +29,9 @@ Three of the scheme's integer operations are written as float operations they eq
 non-negative there).  ``max |x|`` stays the integer maximum, so a non-finite word reaches ``ok``.
 
 The noise lines (E_A, E_B, F_A, F_B) are inputs, anchored like `ncp2`'s salt: they are TurboSHAKE128 of seeds the
-verifier derives from public values (the salt, the commitments' roots, the unit index), so they carry no row's value.
+verifier derives from public values (the salt, the commitments' roots, the unit index), so they carry no row's value.  G =
+F_Bᵀ·F_A (`pearl_c4.gram`) is a function of F_A and F_B alone, so it is anchored too: the verifier computes it, and no unit
+does.
 """
 from __future__ import annotations
 
@@ -66,6 +66,7 @@ DNF_LOW = 0x3C700000               # 7.5·2^-9: β at or above it casts to a UE4
 UE4M3_MIN_WORD = 0x3B000000        # 2^-9, whose UE4M3 byte is 0x01
 TILE = (64, 64)                    # the scheme's tile: rows of A, rows of B
 
+GRAM = Array(R, Array(R, F32))
 BASIS = lambda k: Array(k, LINE)                                                    # noqa: E731
 CODES = lambda n, k: Array(n, Array(k, E2M1))                                       # noqa: E731
 SCALES = lambda n, k: Array(n, Array(k // BLOCK, U8))                               # noqa: E731
@@ -165,18 +166,6 @@ def _e_tilde(e: _Emit, line, ae):
 
 # ---- the unit templates --------------------------------------------------------------------------------------------------
 
-def _gram_body(B, S_, fbp, fa):
-    e, k = _Emit(B), S_.K
-    ones = _ones(e, k)
-    return array_of([_chain(e, fbp, fa.take(1, q), ones, ones, k) for q in range(R)])
-
-
-Pc4GramDef = CompositeDefinition(
-    "Pc4Gram", 1, ("K",), lambda S_: ((("fbp", Array(S_.K, E2M1)), ("fa", Array(S_.K, LINE))), Array(R, F32)), _gram_body,
-    doc="Row p of G = F_Bᵀ·F_A: chain(F_B[:, p], F_A[:, q]) at scale 1.0 for every q (`pearl_c4.gram`); once per job.",
-    conformance="protocol-defined")
-
-
 def _row_sig(S_, second: str, extra: tuple = ()):
     k = S_.K
     first = "fb" if second == "fa" else "fa"
@@ -217,7 +206,7 @@ def _row_b_body(B, S_, x, line, fb, fa, g):
 
 
 Pc4RowBDef = CompositeDefinition(
-    "Pc4RowB", 1, ("K",), lambda S_: _row_sig(S_, "fa", (("g", Array(R, Array(R, F32))),)), _row_b_body,
+    "Pc4RowB", 1, ("K",), lambda S_: _row_sig(S_, "fa", (("g", GRAM),)), _row_b_body,
     doc="Row j of B: its admission, B̃_j's codes and scale bytes formed against F_B, and P_B,j = [RNE_bf16(Ẽ_B,j·G − "
         "B̃_j·F_A) ‖ −Ẽ_B,j] (Ẽ_B,j·G the FP32 FMA chain from +0 in p order); once per job and weight.",
     conformance="protocol-defined")
@@ -255,7 +244,7 @@ Pc4TileDef = CompositeDefinition(
 @lru_cache(maxsize=16)
 def templates(k: int, tile: tuple[int, int] = TILE) -> dict[str, SpecializedDefinition]:
     """The unit templates at depth ``k`` and tile ``tile`` (rows, columns), by role."""
-    return {"gram": bind(Pc4GramDef, K=k), "row_b": bind(Pc4RowBDef, K=k), "row_a": bind(Pc4RowADef, K=k),
+    return {"row_b": bind(Pc4RowBDef, K=k), "row_a": bind(Pc4RowADef, K=k),
             "tile": bind(Pc4TileDef, K=k, TM=tile[0], TN=tile[1])}
 
 
@@ -276,10 +265,8 @@ class Shape:
             raise DomainError(f"Pearl-C4's circuit needs 64 | k and whole tiles on each side: {self}")
 
 
-def _weight_units(B, k: int, b, eb, fa, fb):
-    tm = templates(k)
-    g = B.batch(tm["gram"], array_of([fb.take(1, p) for p in range(R)]), fa, axes=(0, None))
-    rows = B.batch(tm["row_b"], b, eb, fb, fa, g, axes=(0, 0, None, None, None))
+def _weight_units(B, k: int, b, eb, fa, fb, g):
+    rows = B.batch(templates(k)["row_b"], b, eb, fb, fa, g, axes=(0, 0, None, None, None))
     n = len(b)
     return [array_of([rows[j][f] for j in range(n)]) for f in range(4)]
 
@@ -303,13 +290,13 @@ def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb):
 
 def _weight_sig(S_):
     k, n = S_.K, S_.N
-    return ((("b", Array(n, Array(k, BF16))), ("eb", Array(n, LINE)), ("fa", BASIS(k)), ("fb", BASIS(k))),
+    return ((("b", Array(n, Array(k, BF16))), ("eb", Array(n, LINE)), ("fa", BASIS(k)), ("fb", BASIS(k)), ("g", GRAM)),
             Tuple(CODES(n, k), SCALES(n, k), Array(n, P_ROW), Array(n, BIT)))
 
 
 Pc4WeightDef = CompositeDefinition(
     "Pc4Weight", 1, ("K", "N"), _weight_sig, lambda B, S_, *a: tuple_of(*_weight_units(B, S_.K, *a)),
-    doc="A weight's side, once per job and weight: G, and per row B̃'s codes and scale bytes, P_B and its admission.",
+    doc="A weight's side, once per job and weight: per row B̃'s codes and scale bytes, P_B and its admission (G is anchored).",
     conformance="protocol-defined")
 
 
@@ -331,12 +318,12 @@ Pc4CallDef = CompositeDefinition(
 def _check_sig(S_):
     m, k, n = S_.M, S_.K, S_.N
     return ((("a", Array(m, Array(k, BF16))), ("ea", Array(m, LINE)), ("b", Array(n, Array(k, BF16))), ("eb", Array(n, LINE)),
-             ("fa", BASIS(k)), ("fb", BASIS(k))),
+             ("fa", BASIS(k)), ("fb", BASIS(k)), ("g", GRAM)),
             Tuple(Array(m, Array(n, F32)), Array(m, Array(n, F32)), Array(m, BIT), Array(n, BIT)))
 
 
-def _check_body(B, S_, a, ea, b, eb, fa, fb):
-    bc, bs, pb, ok_b = _weight_units(B, S_.K, b, eb, fa, fb)
+def _check_body(B, S_, a, ea, b, eb, fa, fb, g):
+    bc, bs, pb, ok_b = _weight_units(B, S_.K, b, eb, fa, fb, g)
     cw, uw, ok_a = _call_units(B, S_.K, (S_.TM, S_.TN), a, ea, fa, fb, bc, bs, pb)
     return tuple_of(cw, uw, ok_a, ok_b)
 
@@ -364,8 +351,8 @@ def check(shape: Shape) -> SpecializedDefinition:
 
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
-ROLES = {"weight": ("gram", "row_b"), "call": ("row_a", "tile"), "check": ("gram", "row_b", "row_a", "tile")}
-_ROLE_OF = {id(Pc4GramDef): "gram", id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile"}
+ROLES = {"weight": ("row_b",), "call": ("row_a", "tile"), "check": ("row_b", "row_a", "tile")}
+_ROLE_OF = {id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile"}
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
@@ -382,20 +369,22 @@ class Unit:
     member: int                 # its member of that batch node
 
 
-def units(fn: SpecializedDefinition) -> tuple[Unit, ...]:
-    """Every unit of a Program built from the unit templates, in the partition's numbering (node order, then member)."""
+def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[Unit, ...]:
+    """Every unit of a Program built from the unit templates, in the partition's numbering (node order, then member);
+    ``role_of`` maps each template's Definition (by id) to its role, Pearl-C4's by default."""
+    role_of = _ROLE_OF if role_of is None else role_of
     out: list[Unit] = []
     for j, nd in enumerate(fn.body.nodes):
         for m in range(nd.n if nd.form == "batch" else 1):
-            out.append(Unit(len(out), _ROLE_OF[id(nd.fn.defn)], j, m))
+            out.append(Unit(len(out), role_of[id(nd.fn.defn)], j, m))
     return tuple(out)
 
 
-def unit_cut(fn: SpecializedDefinition) -> tuple[CallGraph, list[int], CutVerdict]:
+def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[CallGraph, list[int], CutVerdict]:
     """The whole Program's cut with each computing gate owned by its root node's member, checked by `cut.check_cut`
     (every gate certified once, reads across units only through committed values, no value computed in two units), with no
     width rule: no unit here reaches a served output."""
-    body, us = fn.body, units(fn)
+    body, us = fn.body, units(fn, role_of)
     first, at = [], 0
     for nd in body.nodes:
         first.append(at)
@@ -411,5 +400,5 @@ def unit_cut(fn: SpecializedDefinition) -> tuple[CallGraph, list[int], CutVerdic
     return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "LINE", "P_ROW", "ROLES", "TILE", "Shape", "Unit", "call", "check", "query", "templates", "unit_cut",
+__all__ = ["BASIS", "GRAM", "LINE", "P_ROW", "ROLES", "TILE", "Shape", "Unit", "call", "check", "query", "templates", "unit_cut",
            "units", "weight"]
