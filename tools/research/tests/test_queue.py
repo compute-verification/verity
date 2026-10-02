@@ -91,6 +91,11 @@ class World:
         _git(self.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")         # the object on the origin, as a PR's head is
         return sha
 
+    def with_store_remote(self) -> None:
+        """Give `store` a remote (a directory): `StoreGrants` answers only from labels it pulled from one."""
+        (self.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{self.tmp / "vault"}"\n')
+        self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
+
     def queue(self, **kw) -> Queue:
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh, grants=lambda n, h: self.grants.get((n, h), set()),
                      ready=lambda n, h: (n, h) in self.gh.ready,
@@ -391,7 +396,9 @@ class _Unreachable:
         return fail
 
 
-def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_path, monkeypatch):
+def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
+    """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
+    answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
     from research.queue import StoreGrants
 
     head = "0123456789abcdef0123456789abcdef01234567"
@@ -406,11 +413,23 @@ def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_
     grants = StoreGrants(queue_host, log=logs.append)
     real = LocalStore.remote.fget
     monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
-    assert grants(12, head) == set() and grants.ready(12, head) is False, "a failed pull is never a grant"
-    assert len(logs) == 2 and all(x.startswith(f"research queue: labels of pr:12@{head}: pulling from fs:/unreachable failed (OSError")
-                                  for x in logs)
+    for read in (grants, grants.ready):
+        with pytest.raises(QueueError, match=rf"^STALE: the labels of pr:12@{head} weren't pulled from the store's remote "
+                                             r"\(pulling from fs:/unreachable failed \(OSError: injected"):
+            read(12, head)
     monkeypatch.setattr(LocalStore, "remote", property(real))
-    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and len(logs) == 2
+    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and logs == []
+    # the labels are on this machine now, and still don't answer without a pull
+    absent, unusable = tmp_path / "absent.toml", tmp_path / "s3.toml"
+    unusable.write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
+                        'access_key_id_env = "Q_AK_ABSENT"\nsecret_access_key_env = "Q_SK_ABSENT"\n')
+    with pytest.raises(QueueError, match=r"^STALE: .*\(no remote configured"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
+    with pytest.raises(QueueError, match=r"^STALE: .*Q_AK_ABSENT"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=unusable)).ready(12, head)
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", "R2_ENDPOINT,R2_BUCKET")
+    with pytest.raises(QueueError, match=r"^STALE: .*R2_ENDPOINT, R2_BUCKET not in this shell .*fresh tmux login shell"):
+        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
 
 
 def test_rules_refuse_what_they_cannot_place():
@@ -436,6 +455,7 @@ def test_until_the_move_the_rules_are_read_from_tools_check(world):
 def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(world, capsys):
     from research.queue import StoreGrants, ready
 
+    world.with_store_remote()
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     labels = StoreGrants(world.store, log=world.logs.append)
@@ -476,6 +496,7 @@ sys.exit(1 if fail else 0)
 def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_its_head_and_a_failure_refuses(world, monkeypatch, capsys):
     from research import queue as Q
 
+    world.with_store_remote()
     main = world.change({"tools/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})

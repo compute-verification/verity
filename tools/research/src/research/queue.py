@@ -20,8 +20,8 @@ on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules f
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
 (`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
-grants.  Grants and ready are read after pulling the target's labels from the store's remote; when that pull fails the local
-labels decide, so a grant only the remote has keeps the PR waiting.
+grants.  Grants and ready are read after pulling the target's labels from the store's remote; when that pull can't happen (no
+remote here, one that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
@@ -223,7 +223,8 @@ def grant_target(pr: int, head: str) -> str:
 
 
 class StoreGrants:
-    """Grants from the evidence store: `grant` labels on `pr:{n}@{head}`, pulled from the remote first when there is one."""
+    """Grants from the evidence store: `grant` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it raises:
+    a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
 
     def __init__(self, store, log: Callable[[str], None] = print):
         self.store, self.log = store, log
@@ -236,9 +237,14 @@ class StoreGrants:
 
     def _labels(self, pr: int, head: str, key: str) -> list:
         from .store import labels_sync
+        from .store.local import StoreError
 
         target = grant_target(pr, head)
-        labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"))
+        try:
+            labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"), strict=True)
+        except StoreError as e:
+            raise QueueError(f"STALE: the labels of {target} weren't pulled from the store's remote ({e}), so ready marks and grants "
+                             f"here may be old; not answering from them") from None
         return self.store.labels(target, key=key)
 
 
