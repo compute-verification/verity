@@ -4341,6 +4341,15 @@
    "assumptions": [],
    "type_hash": "9de588c14a395178dbed7e12043b3de35e3ce673d21c2c19488fb29d44aa4019"
   },
+  "FlockSoundness.Discharge.DrawWords.decodesWhere_of_on": {},
+  "FlockSoundness.Discharge.DrawWords.draw_card_rare": {},
+  "FlockSoundness.Discharge.DrawWords.execRefines_where": {},
+  "FlockSoundness.Discharge.DrawWords.fallback_rare": {},
+  "FlockSoundness.Discharge.DrawWords.headline_card": {},
+  "FlockSoundness.Discharge.DrawWords.mPts_at_card": {},
+  "FlockSoundness.Discharge.DrawWords.word_reject": {},
+  "FlockSoundness.Discharge.DrawWords.word_uniform": {},
+  "FlockSoundness.Discharge.DrawWords.words_run": {},
   "FlockSoundness.Discharge.Exec.Exact.kinds": {
    "signature": [
     "FlockSoundness.Discharge.Exec.Exact.kinds {α : Type} {g : FlockSoundness.Game α} {ts : List FlockSoundness.Game.Step}",
