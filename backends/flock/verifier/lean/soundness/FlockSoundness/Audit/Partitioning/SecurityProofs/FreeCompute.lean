@@ -210,8 +210,7 @@ theorem HeavyUnit : Guarantees.HeavyUnit := by
     ENNReal.toReal_one] at h
   linarith
 
-theorem UnequalDraws : Guarantees.UnequalDraws := by
-  sorry
+theorem UnequalDraws : Guarantees.UnequalDraws := Unequal.unequalDraws ConverseAsymptotic
 
 theorem UnequalCost : Guarantees.UnequalCost := by
   sorry
