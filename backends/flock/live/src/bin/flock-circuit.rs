@@ -2352,11 +2352,15 @@ fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool) {
 }
 
 /// The plan's controls a prebuilt witness and M1 draw read ([`wit`], [`witness_mode`], [`zk_prepare`]): a session takes them only
-/// under the same ones.
+/// under the same ones. Every field is named, so a new control doesn't compile until it is either in the key or bound to `_`
+/// (read only by the session after its witness and draw, never by the prebuild).
 fn prebuild_key(plan: &Plan) -> ([bool; 16], u8) {
-    ([plan.gpu, plan.fast, plan.message_flip, plan.input_flip, plan.unit_flip, plan.chain_forged, plan.salt_forged, plan.midstate_forged,
-      plan.pad_forged, plan.mask_random, plan.cut_flip, plan.tail_swapped, plan.zero_witness, plan.zk_zero_pads, plan.zk_pad_mismatch,
-      plan.zk_shared_pair], plan.zk_l0_tamper)
+    let Plan { gpu, fast, message_flip, input_flip, unit_flip, chain_forged, salt_forged, midstate_forged, pad_forged, mask_random,
+               cut_flip, tail_swapped, zero_witness, zk_zero_pads, zk_pad_mismatch, zk_shared_pair, zk_l0_tamper,
+               no_y: _, rep1_other_witness: _, skip_level0_check: _, ignore_draw: _, salt_flip: _, substitute: _, coin_nonce: _,
+               host_units: _, rep_reuse: _, native_sha: _, host_mapped: _, prebuilt: _, tables: _, split: _, early_proofs: _ } = plan;
+    ([*gpu, *fast, *message_flip, *input_flip, *unit_flip, *chain_forged, *salt_forged, *midstate_forged, *pad_forged, *mask_random,
+      *cut_flip, *tail_swapped, *zero_witness, *zk_zero_pads, *zk_pad_mismatch, *zk_shared_pair], *zk_l0_tamper)
 }
 
 /// A one-table session's witness, built ahead of it: for this statement and instances, seed, witness mode and plan controls only.
