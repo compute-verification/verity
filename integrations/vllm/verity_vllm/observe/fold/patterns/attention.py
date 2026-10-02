@@ -172,6 +172,7 @@ class AttentionScope:
             groups.setdefault((T, int(position) - first_pos[req] if check_inf or check_inf2 else None, own[req] if check_inf2 else None),
                               []).append(i)
         computes: list[Compute] = []
+        registered = getattr(ctx.profile, "registered_values", False)
         for (T, row_in_request, own_rows), rows in groups.items():
             try:
                 slots = tuple(kv_slots(ctx, ctx.start.rows[i][0], T, layer=layer_s) for i in rows)
@@ -183,10 +184,10 @@ class AttentionScope:
                 # the launch's `max_seqlen_q` (FA3's tile rule reads it): the most query rows any ONE request has in this step
                 max_seqlen_q = max(own.values())
                 spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request, own_rows=own_rows,
-                                                 scale_input=ctx.profile.registered_values)
+                                                 scale_input=registered)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
-            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1._scale_log2_bits(D)),) if ctx.profile.registered_values else ()
+            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1._scale_log2_bits(D)),) if registered else ()
             computes.append(Compute(spec, len(rows),
                                     (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale,
                                     (rows_operand(out, rows),), (), hint=hint_of(node, str(layer) if isinstance(layer, str) else "attn"),

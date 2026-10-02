@@ -67,7 +67,7 @@ class RMSNormTritonLaunch:
             return unsupported(node, "grid does not launch one program per row", grid=node.enter.grid, M=M)
         roots = ctx.roots_of(w)
         spec, operands = bind(b1.RMSNormTriton, N=n_cols, EPS=self.eps if self.eps is not None else eps), (PerRow(x), Shared(w))
-        if ctx.profile.registered_values:
+        if getattr(ctx.profile, "registered_values", False):
             spec, operands = bind(b1.RMSNormTritonV3, N=n_cols), operands + (eps_input(self.eps if self.eps is not None else eps),)
         return Compute(spec, M, operands, (PerRow(out),), (node.id,), hint=hint_of(node, roots[0].name if roots else "rms_norm"),
                        kernels=(self.kernel,), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
@@ -102,7 +102,7 @@ class FusedAddRMSNorm:
         M = x.shape[0]
         roots = ctx.roots_of(w)
         spec, operands = bind(b1.RMSNormFusedCuda, N=N, EPS=self.eps if self.eps is not None else eps), (PerRow(x), PerRow(res), Shared(w))
-        if ctx.profile.registered_values:
+        if getattr(ctx.profile, "registered_values", False):
             spec, operands = bind(b1.RMSNormFusedCudaV4, N=N), operands + (eps_input(self.eps if self.eps is not None else eps),)
         return Compute(spec, M, operands, (PerRow(x), PerRow(res)), (node.id,),
                        hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),

@@ -529,7 +529,7 @@ class TokenSelectGumbelTopP:
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []
-        run = ctx.profile.registered_values
+        run = getattr(ctx.profile, "registered_values", False)
         for r, (rid, pos, seed, T, p) in enumerate(s2["specs"]):
             pos_bits = int(pos) & 0xFFFFFFFFFFFFFFFF
             if run:     # the request's sampling values are inputs of its run, the Philox position one per sampled position
