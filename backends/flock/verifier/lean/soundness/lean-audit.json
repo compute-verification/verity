@@ -2512,6 +2512,887 @@
    "assumptions": [],
    "type_hash": "7972fc6f708df9d7d2b5ba2e176dd88e11d33607f9b3db16a2252cc5b96e1a6b"
   },
+  "FlockSoundness.Discharge.Aliased.aliased_of_copies": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
+    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) {g : Nat} (hg : instLTNat.lt g st.c.g)",
+    "  (hcp : FlockSoundness.Discharge.Aliased.Copies L regs F inst hg) (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) :",
+    "  L.Aliased regs inst o hg"
+   ],
+   "assumptions": [],
+   "type_hash": "f4ae61250311552f381552da7fc58d4faf0de6df976f144e06cc5a0420b07e87"
+  },
+  "FlockSoundness.Discharge.Aliased.copies_of_key": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.copies_of_key {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
+    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) {g : Nat} (hg : instLTNat.lt g st.c.g)",
+    "  (hk :",
+    "    ∀ (c c' : Fin ((FlockSoundness.unitRows st ⋯).stack st.c.upv).w),",
+    "      Eq (inst.wire c) (inst.wire c') →",
+    "        instLTNat.lt c.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
+    "          instLTNat.lt c'.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
+    "            Eq (FlockSoundness.Discharge.Aliased.srcKey st.c c.val)",
+    "              (FlockSoundness.Discharge.Aliased.srcKey st.c c'.val)) :",
+    "  FlockSoundness.Discharge.Aliased.Copies L regs F inst hg"
+   ],
+   "assumptions": [],
+   "type_hash": "ecd8ef5bfab3b1987cf6128c689a8beaf05731dcbdc026422d180dbcfaa036d8"
+  },
+  "FlockSoundness.Discharge.Aliased.copyPos_block": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.copyPos_block {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {g : Nat} (hg : instLTNat.lt g st.c.g)",
+    "  (x : Fin ((FlockSoundness.unitRows st ⋯).stackW st.c.upv))",
+    "  (hx : instLTNat.lt x.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn)",
+    "  {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)",
+    "  (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) :",
+    "  Eq",
+    "    ((L.model regs).block z o",
+    "      (FlockSoundness.stackPlace (L.model regs) (FlockSoundness.unitRows st ⋯) st.c.upv",
+    "        (fun u => st.c.unitRange.slot (instHAdd.hAdd (instHMul.hMul g st.c.upv) u)) ⋯ x))",
+    "    ((L.model regs).block z o (FlockSoundness.Discharge.Aliased.copyPos L regs F hg x.val))"
+   ],
+   "assumptions": [],
+   "type_hash": "eb6b7160aea42480d2003cbb22be66f6604f4614b24455e33da80e8642b12d68"
+  },
+  "FlockSoundness.Discharge.Aliased.copyPos_zero": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.copyPos_zero {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {g x : Nat} (hg : instLTNat.lt g st.c.g)",
+    "  (hx : instLTNat.lt x (instHMul.hMul st.c.upv (instHMul.hMul st.c.unit.inWords Flock.WORD)))",
+    "  (hz : Eq (FlockSoundness.Discharge.Aliased.srcKey st.c x) FlockSoundness.Discharge.Aliased.Src.zero) :",
+    "  FlockSoundness.Discharge.Aliased.IsZeroPos L regs F (FlockSoundness.Discharge.Aliased.copyPos L regs F hg x)"
+   ],
+   "assumptions": [],
+   "type_hash": "8d6e7d98024455732f9c3b03d6222164f9fce67754563bb72d71be3bcad06db7"
+  },
+  "FlockSoundness.Discharge.Aliased.flatSrc_key": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.flatSrc_key (c : Flock.Circuit) (s₀ p t : Nat) :",
+    "  Or",
+    "    (And",
+    "      (Eq (FlockSoundness.Discharge.Aliased.srcAt c (instHMod.hMod s₀ c.upv) p t)",
+    "        FlockSoundness.Discharge.Aliased.Src.zero)",
+    "      (Or (Eq (FlockSoundness.Flat.flatSrc c s₀ p t) (instHAdd.hAdd (c.unitRange.slot s₀) c.unit.useful))",
+    "        (Eq (FlockSoundness.Flat.flatSrc c s₀ p t) (instHAdd.hAdd (c.unitRange.slot 0) c.unit.useful))))",
+    "    (And",
+    "      (Ne (FlockSoundness.Discharge.Aliased.srcAt c (instHMod.hMod s₀ c.upv) p t)",
+    "        FlockSoundness.Discharge.Aliased.Src.zero)",
+    "      (Eq (FlockSoundness.Flat.flatSrc c s₀ p t)",
+    "        (FlockSoundness.Discharge.Aliased.realize c (instHDiv.hDiv s₀ c.upv)",
+    "          (FlockSoundness.Discharge.Aliased.srcAt c (instHMod.hMod s₀ c.upv) p t))))"
+   ],
+   "assumptions": [],
+   "type_hash": "b82e2439e962ddd482f9c6c0eb33f80acbe4ffddf1c5fe1459e22b27967b3265"
+  },
+  "FlockSoundness.Discharge.Aliased.keyIdx_eq": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq {c : Flock.Circuit} {n : Nat} {x x' : Fin n}",
+    "  (h : Eq (FlockSoundness.Discharge.Aliased.keyIdx c n x) (FlockSoundness.Discharge.Aliased.keyIdx c n x')) :",
+    "  Eq (FlockSoundness.Discharge.Aliased.srcKey c x.val) (FlockSoundness.Discharge.Aliased.srcKey c x'.val)"
+   ],
+   "assumptions": [],
+   "type_hash": "a10aa7a37d960d32ac94e968f7577b92a3b2da10ddbc7333ecbc349b766ce9be"
+  },
+  "FlockSoundness.Discharge.Aliased.keyIdx_eq_none": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none {c : Flock.Circuit} {n : Nat} (x : Fin n) :",
+    "  Iff (Eq (FlockSoundness.Discharge.Aliased.keyIdx c n x) Option.none)",
+    "    (Eq (FlockSoundness.Discharge.Aliased.srcKey c x.val) FlockSoundness.Discharge.Aliased.Src.zero)"
+   ],
+   "assumptions": [],
+   "type_hash": "6a61d7e8971177b52139dadb0f8bcc09b5f307aa49e7b1ed58e6e4398c343187"
+  },
+  "FlockSoundness.Discharge.Aliased.setupH_aliased": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.setupH_aliased {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
+    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st))",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  {C : FlockSoundness.Audit.Circuit} {n : Nat} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
+    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) (o : Fin (instHPow.hPow 2 (⋯.model regs).nbl))",
+    "  {g : Nat} (hg : instLTNat.lt g st.c.g) (hcp : FlockSoundness.Discharge.Aliased.Copies ⋯ regs ⋯ inst hg) :",
+    "  ⋯.Aliased regs inst o hg"
+   ],
+   "assumptions": [],
+   "type_hash": "af6d0a233dcfa3b63feb719a809f4dae65e21a9da7d5a94b7c38aecf1ed867ca"
+  },
+  "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
+    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st))",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  {C : FlockSoundness.Audit.Circuit} {n : Nat} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
+    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) (o : Fin (instHPow.hPow 2 (⋯.model regs).nbl))",
+    "  {g : Nat} (hg : instLTNat.lt g st.c.g)",
+    "  (hk :",
+    "    ∀ (c c' : Fin ((FlockSoundness.unitRows st ⋯).stack st.c.upv).w),",
+    "      Eq (inst.wire c) (inst.wire c') →",
+    "        instLTNat.lt c.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
+    "          instLTNat.lt c'.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
+    "            Eq (FlockSoundness.Discharge.Aliased.srcKey st.c c.val)",
+    "              (FlockSoundness.Discharge.Aliased.srcKey st.c c'.val)) :",
+    "  ⋯.Aliased regs inst o hg"
+   ],
+   "assumptions": [],
+   "type_hash": "08e069e0b1bf9a80093ed4532e838c76611483d8164b8141e722c8d3b3e5dbe6"
+  },
+  "FlockSoundness.Discharge.Aliased.setupH_unitFacts": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
+    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st)) :",
+    "  FlockSoundness.Discharge.Aliased.UnitFacts tags st"
+   ],
+   "assumptions": [],
+   "type_hash": "e895ff06bec97da55de2cc65c5def8c692c09183a67ab829ba6ab6f423276997"
+  },
+  "FlockSoundness.Discharge.Aliased.zeroPos_block": {
+   "signature": [
+    "FlockSoundness.Discharge.Aliased.zeroPos_block {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {s₀ : Nat} (hs₀ : instLTNat.lt s₀ st.c.unitRange.count)",
+    "  {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)",
+    "  (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) :",
+    "  Eq ((L.model regs).block z o (FlockSoundness.Discharge.Aliased.zeroPos L regs F hs₀)) 0"
+   ],
+   "assumptions": [],
+   "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
+  },
+  "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.Prog.instC_wire_input {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
+    "  (u : Fin n) (c : Fin (p.rows u).w) (hc : instLTNat.lt c.val (p.rows u).nIn) :",
+    "  Eq ((FlockSoundness.Discharge.Const.Prog.instC p outs u).wire c) (FlockSoundness.Discharge.Const.Prog.insAt p u c.val)"
+   ],
+   "assumptions": [],
+   "type_hash": "5d54d1280e714f364038d4eb06eff3deb02c706fa90efebd739949827624ee34"
+  },
+  "FlockSoundness.Discharge.Const.Prog.instC_wire_one": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.Prog.instC_wire_one {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
+    "  (u : Fin n) :",
+    "  Eq ((FlockSoundness.Discharge.Const.Prog.instC p outs u).wire (p.rows u).one)",
+    "    (FlockSoundness.Discharge.Const.Prog.oneAt p u)"
+   ],
+   "assumptions": [],
+   "type_hash": "1750aa2a1d554ef71a4f06d697168210d79e19ce323779a38e258d319f798231"
+  },
+  "FlockSoundness.Discharge.Const.UProg.constCols_toRows": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.UProg.constCols_toRows {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
+    "  (up : FlockSoundness.UProg k one outs) {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin up.n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin up.n)) → (R : Reg) → Fin up.n → Fin (plan S R).length} {os : Finset (Fin up.rowsN)}",
+    "  (pp : FlockSoundness.Audit.ProgPlaces (FlockSoundness.UProg.toRows hk up) os plan tab)",
+    "  (hinst :",
+    "    ∀ (u : Fin up.n),",
+    "      Eq (pp.inst u) (FlockSoundness.Discharge.Const.Prog.instC (FlockSoundness.UProg.toRows hk up) os u)) :",
+    "  ((FlockSoundness.UProg.toRows hk up).partition os).ConstCols plan tab pp.derived.place",
+    "    (Finset.instSingleton.singleton (FlockSoundness.UProg.oneOf hk up))"
+   ],
+   "assumptions": [],
+   "type_hash": "0a4deb649d6cd1d5d0c22b49c7792903f837893117467234cbc10e7f91cbeb48"
+  },
+  "FlockSoundness.Discharge.Const.UProg.toRows_oneGate": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.UProg.toRows_oneGate {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
+    "  (up : FlockSoundness.UProg k one outs) :",
+    "  FlockSoundness.Discharge.Const.Prog.OneGate (FlockSoundness.UProg.toRows hk up) (FlockSoundness.UProg.oneOf hk up)"
+   ],
+   "assumptions": [],
+   "type_hash": "e6c8978c63b64e4b3a0d5d77979944ef1d4b7f6fe87c668b9a3f6c6c0263fce5"
+  },
+  "FlockSoundness.Discharge.Const.constCols_of_instC": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.constCols_of_instC {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
+    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) {one : Fin N}",
+    "  (hp : FlockSoundness.Discharge.Const.Prog.OneGate p one)",
+    "  (hinst : ∀ (u : Fin n), Eq (pp.inst u) (FlockSoundness.Discharge.Const.Prog.instC p outs u)) :",
+    "  (p.partition outs).ConstCols plan tab pp.derived.place (Finset.instSingleton.singleton one)"
+   ],
+   "assumptions": [],
+   "type_hash": "c2710a59db90236f4da2e7b8650fb1743fabc2aa01f87260ad61e8ba55e594bd"
+  },
+  "FlockSoundness.Discharge.Const.constCols_of_oneGate": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.constCols_of_oneGate {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
+    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) {one : Fin N}",
+    "  (hp : FlockSoundness.Discharge.Const.Prog.OneGate p one)",
+    "  (hi : ∀ (u : Fin n), Eq ((pp.inst u).wire (p.rows u).one) (FlockSoundness.Discharge.Const.Prog.oneAt p u)) :",
+    "  (p.partition outs).ConstCols plan tab pp.derived.place (Finset.instSingleton.singleton one)"
+   ],
+   "assumptions": [],
+   "type_hash": "4aa1062b50585cc48588791a7ab3cc7e6139d26dc5c33854cba5138c3c8325a8"
+  },
+  "FlockSoundness.Discharge.Const.constCols_of_oneWire": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.constCols_of_oneWire {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
+    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) (one : Fin N)",
+    "  (h : ∀ (u : Fin n), Eq ((pp.inst u).wire (p.rows u).one) one) :",
+    "  (p.partition outs).ConstCols plan tab pp.derived.place (Finset.instSingleton.singleton one)"
+   ],
+   "assumptions": [],
+   "type_hash": "d1350c203b6a83987b8f9b7511464a247313bb311ff4dea1bff0c91e033ad998"
+  },
+  "FlockSoundness.Discharge.Const.image_oneWire": {
+   "signature": [
+    "FlockSoundness.Discharge.Const.image_oneWire {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
+    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) {one : Fin N}",
+    "  (h : ∀ (u : Fin n), Eq ((pp.inst u).wire (p.rows u).one) one) (hn : instLTNat.lt 0 n) :",
+    "  Eq (Finset.image (fun u => (pp.inst u).wire (p.rows u).one) Finset.univ) (Finset.instSingleton.singleton one)"
+   ],
+   "assumptions": [],
+   "type_hash": "9de588c14a395178dbed7e12043b3de35e3ce673d21c2c19488fb29d44aa4019"
+  },
+  "FlockSoundness.Discharge.Layout.bc_drawn": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.bc_drawn {tags : Flock.Tags} {circuitFile publicFile : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt}",
+    "  (h : Eq (Flock.Stmt.setupH tags circuitFile publicFile coins tables (Option.some d) partition program) (Except.ok st))",
+    "  {pop : Flock.Public} (hpop : Eq (Flock.HmRow.loadPublic tags st.c publicFile) (Except.ok pop))",
+    "  (hpt : Eq pop.tables Option.none) {D : Flock.Draw.UnitDraw} (hD : Eq (Flock.Draw.UnitDraw.ofJson d) (Except.ok D))",
+    "  (hlt : ∀ (u : Nat), Array.instMembership.mem D.proved u → instLTNat.lt u D.population) (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (hregs :",
+    "    ∀ (r : Flock.Region),",
+    "      List.instMembership.mem st.regions.toList r →",
+    "        List.instMembership.mem regs (FlockSoundness.Refine.regionOf st.c.kLog (instHSub.hSub st.m st.c.kLog) r))",
+    "  {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)",
+    "  (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) {g p : Nat} (hg : instLTNat.lt g st.c.g)",
+    "  (hg2 : instLTNat.lt g (instHPow.hPow 2 st.c.g.log2)) (hp : instLTNat.lt p st.c.ports.size)",
+    "  (hr : instLTNat.lt (instHAdd.hAdd (instHMul.hMul o.val st.c.g) g) D.proved.size) :",
+    "  Eq",
+    "    (FlockSoundness.Binding.bytesAt z fun j t =>",
+    "      (L.model regs).addr o",
+    "        (FlockSoundness.Discharge.Layout.inBlockOr st.c.kLog",
+    "          (FlockSoundness.Discharge.Layout.bcAddr st.c g p j.val t.val)))",
+    "    (pop.digest (Array.instGetElemNatLtSize.getElem D.proved (instHAdd.hAdd (instHMul.hMul o.val st.c.g) g) hr) p",
+    "          st.c.ports.size).data.toList"
+   ],
+   "assumptions": [],
+   "type_hash": "3ff51cefd498784169527b45fc9bdc2ab667ad34e937bdeae4545f0a5f9c3e82"
+  },
+  "FlockSoundness.Discharge.Layout.bc_pinned": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.bc_pinned {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
+    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
+    "  (hregs :",
+    "    ∀ (r : Flock.Region),",
+    "      List.instMembership.mem st.regions.toList r →",
+    "        List.instMembership.mem regs (FlockSoundness.Refine.regionOf st.c.kLog (instHSub.hSub st.m st.c.kLog) r))",
+    "  (hR : Eq (Flock.HmRow.regions st.c st.pub) (Except.ok st.regions)) {z : FlockSoundness.Model.Witness (L.model regs).m}",
+    "  (hz : (L.model regs).Satisfies z) (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) {g p : Nat}",
+    "  (hg : instLTNat.lt g st.c.g) (hg2 : instLTNat.lt g (instHPow.hPow 2 st.c.g.log2))",
+    "  (hp : instLTNat.lt p st.c.ports.size)",
+    "  (hsz :",
+    "    ∀ (g' : Nat), instLENat.le g' g → Eq (FlockSoundness.Discharge.Layout.bcChunk st.c st.pub o.val g' p).size 128) :",
+    "  Eq",
+    "    (FlockSoundness.Binding.bytesAt z fun j t =>",
+    "      (L.model regs).addr o",
+    "        (FlockSoundness.Discharge.Layout.inBlockOr st.c.kLog",
+    "          (FlockSoundness.Discharge.Layout.bcAddr st.c g p j.val t.val)))",
+    "    (FlockSoundness.Discharge.Layout.bcChunk st.c st.pub o.val g p).data.toList"
+   ],
+   "assumptions": [],
+   "type_hash": "ac54bc00f3a759998adaac72f01a6533a354e3b2d5ed1e8085e7b71c4bad1d6f"
+  },
+  "FlockSoundness.Discharge.Layout.bc_site": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.bc_site {T : FlockSoundness.Model.Statement}",
+    "  (a : FlockSoundness.Discharge.Placed.Accepted T) {d : Lean.Json} (hd : Eq a.draw (Option.some d))",
+    "  (hregs :",
+    "    ∀ (r : Flock.Region),",
+    "      List.instMembership.mem a.st.regions.toList r →",
+    "        List.instMembership.mem a.regs",
+    "          (FlockSoundness.Refine.regionOf a.st.c.kLog (instHSub.hSub a.st.m a.st.c.kLog) r))",
+    "  {pop : Flock.Public} (hpop : Eq (Flock.HmRow.loadPublic a.tags a.st.c a.pf) (Except.ok pop))",
+    "  (hpt : Eq pop.tables Option.none) {D : Flock.Draw.UnitDraw} (hD : Eq (Flock.Draw.UnitDraw.ofJson d) (Except.ok D))",
+    "  (hlt : ∀ (u : Nat), Array.instMembership.mem D.proved u → instLTNat.lt u D.population)",
+    "  {z : FlockSoundness.Model.Witness T.m} (hz : T.Satisfies z) (o : Fin (instHPow.hPow 2 T.nbl)) {g p u : Nat}",
+    "  (hg : instLTNat.lt g a.st.c.g) (hg2 : instLTNat.lt g (instHPow.hPow 2 a.st.c.g.log2))",
+    "  (hp : instLTNat.lt p a.st.c.ports.size)",
+    "  (hu :",
+    "    Eq (Array.instGetElem?NatLtSize.getElem? D.proved (instHAdd.hAdd (instHMul.hMul o.val a.st.c.g) g))",
+    "      (Option.some u)) :",
+    "  Eq",
+    "    (FlockSoundness.Binding.bytesAt z fun j t =>",
+    "      FlockSoundness.Discharge.Layout.siteAddr a o (FlockSoundness.Discharge.Layout.bcAddr a.st.c g p j.val t.val))",
+    "    (pop.digest u p a.st.c.ports.size).data.toList"
+   ],
+   "assumptions": [],
+   "type_hash": "9ee2c6c35e02fcacafebbd40ef6caade274414ee96aaa1bb866c71a7a0bcddd5"
+  },
+  "FlockSoundness.Discharge.Layout.bc_site_of": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.bc_site_of {T : FlockSoundness.Model.Statement}",
+    "  {a : FlockSoundness.Discharge.Placed.Accepted T} {pop : Flock.Public} {o : Fin (instHPow.hPow 2 T.nbl)} {g u : Nat}",
+    "  (hs : FlockSoundness.Discharge.Layout.BcSite a pop o g u) {z : FlockSoundness.Model.Witness T.m} (hz : T.Satisfies z)",
+    "  (hg : instLTNat.lt g a.st.c.g) {p : Nat} (hp : instLTNat.lt p a.st.c.ports.size) :",
+    "  Eq",
+    "    (FlockSoundness.Binding.bytesAt z fun j t =>",
+    "      FlockSoundness.Discharge.Layout.siteAddr a o (FlockSoundness.Discharge.Layout.bcAddr a.st.c g p j.val t.val))",
+    "    (pop.digest u p a.st.c.ports.size).data.toList"
+   ],
+   "assumptions": [],
+   "type_hash": "02fd6c7a34215bd83528ee260432a180e2774a1448159710334bbc6f36ef6611"
+  },
+  "FlockSoundness.Discharge.Layout.block_gateAt": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.block_gateAt {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : SetLike.instMembership.mem S u)",
+    "  {z : FlockSoundness.Model.Witness (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m}",
+    "  (hz : (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.Satisfies z) (c : Fin (place S R u hu).R.w) :",
+    "  Eq ((FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.block z (place S R u hu).o ((place S R u hu).col c))",
+    "    (z (FlockSoundness.Discharge.Layout.gateAt place S R u ((place S R u hu).inst.wire c)))"
+   ],
+   "assumptions": [],
+   "type_hash": "406bbc8a7d20f6fec79ba9d7fdad04f9bf0d4874d3abda3b32e9412b350f1948"
+  },
+  "FlockSoundness.Discharge.Layout.copy_site": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.copy_site {T : FlockSoundness.Model.Statement}",
+    "  (a : FlockSoundness.Discharge.Placed.Accepted T) {z : FlockSoundness.Model.Witness T.m} (hz : T.Satisfies z)",
+    "  (o : Fin (instHPow.hPow 2 T.nbl)) {g : Nat} (hg : instLTNat.lt g a.st.c.g) (x : Fin a.rows.w)",
+    "  (hx : instLTNat.lt x.val a.rows.nIn) {q byte bit : Nat}",
+    "  (hk : Eq (FlockSoundness.Discharge.Aliased.srcKey a.st.c x.val) (FlockSoundness.Discharge.Aliased.Src.msg q byte bit))",
+    "  (hin : instLTNat.lt (FlockSoundness.Typed.msgCol a.st.c g q byte bit) (instHPow.hPow 2 a.st.c.kLog)) :",
+    "  Eq (T.block z o (a.col hg x))",
+    "    (z (FlockSoundness.Discharge.Layout.siteAddr a o (FlockSoundness.Typed.msgCol a.st.c g q byte bit)))"
+   ],
+   "assumptions": [],
+   "type_hash": "2633463214aeea943045a2bcbab312fa06802a554b3b65b8bf5e93cb342d28e0"
+  },
+  "FlockSoundness.Discharge.Layout.decode_row_of_cols": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {Pos Val : Type} (pos : Fin C.N → Pos) (vbit : Val → Fin C.N → Bool)",
+    "  (rowOf : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → FlockSoundness.Binding.Msg plan tab S R u → Pos → Val)",
+    "  (h :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (hu : SetLike.instMembership.mem S u)",
+    "      (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        ∀ (c : Fin (place S R u hu).R.w),",
+    "          SetLike.instMembership.mem (P.io u) ((place S R u hu).inst.wire c) →",
+    "            Eq",
+    "              (FlockSoundness.bit",
+    "                ((FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.block",
+    "                  (FlockSoundness.Binding.wit plan tab S R u M) (place S R u hu).o ((place S R u hu).col c)))",
+    "              (vbit (rowOf S R u M (pos ((place S R u hu).inst.wire c))) ((place S R u hu).inst.wire c)))",
+    "  (S : Finset (Fin n)) (R : Reg) (u : Fin n) :",
+    "  SetLike.instMembership.mem S u →",
+    "    ∀ (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        ∀ (g : Fin C.N),",
+    "          SetLike.instMembership.mem (P.io u) g →",
+    "            Eq (P.placeDecoder plan tab place S R u M g) (vbit (rowOf S R u M (pos g)) g)"
+   ],
+   "assumptions": [],
+   "type_hash": "24e599109cb31b60ad5c2b05e7afb73f9b6e748c1d3469801f847d49d5e7cd0a"
+  },
+  "FlockSoundness.Discharge.Layout.drawn_digest": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.drawn_digest {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.Json}",
+    "  {D : Flock.Draw.UnitDraw} (h : Eq (Flock.HmRow.drawn c pop d) (Except.ok pub))",
+    "  (hD : Eq (Flock.Draw.UnitDraw.ofJson d) (Except.ok D)) (hpt : Eq pop.tables Option.none)",
+    "  (hsz : Eq pop.digests.size (instHMul.hMul pop.n c.ports.size))",
+    "  (hlt : ∀ (u : Nat), Array.instMembership.mem D.proved u → instLTNat.lt u D.population) {r p : Nat}",
+    "  (hr : instLTNat.lt r D.proved.size) (hp : instLTNat.lt p c.ports.size) :",
+    "  Eq (pub.digest r p c.ports.size) (pop.digest (Array.instGetElemNatLtSize.getElem D.proved r hr) p c.ports.size)"
+   ],
+   "assumptions": [],
+   "type_hash": "096d07f7d6334e2d32b8763118a9ead0d55427ac99a05fbead6e27497ac13950"
+  },
+  "FlockSoundness.Discharge.Layout.exists_read_of_io": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.exists_read_of_io {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {R : FlockSoundness.Rows} (I : P.IsRowsUnit u R) {g : Fin C.N}",
+    "  (hg : SetLike.instMembership.mem (P.io u) g) (hout : Ne (P.unit g) (Option.some u)) :",
+    "  Exists fun i =>",
+    "    Exists fun c => And (List.instMembership.mem (instHAppendOfAppend.hAppend (R.a i) (R.b i)) c) (Eq (I.wire c) g)"
+   ],
+   "assumptions": [],
+   "type_hash": "b941139de6b815b8c3c6c4a980d1ccd2a34b38d50f3f090fca1481b0b08d17cb"
+  },
+  "FlockSoundness.Discharge.Layout.gateAt_one": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.gateAt_one {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {ones : Finset (Fin C.N)} (hc : P.ConstCols plan tab place ones) {S : Finset (Fin n)} {R : Reg} {u : Fin n}",
+    "  (hu : SetLike.instMembership.mem S u)",
+    "  {z : FlockSoundness.Model.Witness (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m}",
+    "  (hz : (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.Satisfies z) {g : Fin C.N}",
+    "  (hg : SetLike.instMembership.mem (P.io u) g) (h1 : SetLike.instMembership.mem ones g) :",
+    "  Eq (z (FlockSoundness.Discharge.Layout.gateAt place S R u g)) 1"
+   ],
+   "assumptions": [],
+   "type_hash": "8d233d5100ab05f9d28ed1e3979cf24c46d3c82fbb314a386fd22181f990f30b"
+  },
+  "FlockSoundness.Discharge.Layout.gateAt_zero": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.gateAt_zero {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {zeros : Finset (Fin C.N)} (hZ : P.ZeroCols plan tab place zeros) {S : Finset (Fin n)} {R : Reg} {u : Fin n}",
+    "  (hu : SetLike.instMembership.mem S u)",
+    "  {z : FlockSoundness.Model.Witness (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m}",
+    "  (hz : (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.Satisfies z) {g : Fin C.N}",
+    "  (hg : SetLike.instMembership.mem (P.io u) g) (h0 : SetLike.instMembership.mem zeros g) :",
+    "  Eq (z (FlockSoundness.Discharge.Layout.gateAt place S R u g)) 0"
+   ],
+   "assumptions": [],
+   "type_hash": "becfa342b987af1ef183cdde99ad44e35de7a5e17d9f469fb306bb4e530938be"
+  },
+  "FlockSoundness.Discharge.Layout.gate_pub": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.gate_pub {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {ones zeros : Finset (Fin C.N)} (hc : P.ConstCols plan tab place ones) (hZ : P.ZeroCols plan tab place zeros)",
+    "  {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : SetLike.instMembership.mem S u)",
+    "  {M : FlockSoundness.Binding.Msg plan tab S R u} (hM : FlockSoundness.Binding.Sat plan tab S R u M) {g : Fin C.N}",
+    "  (hg : SetLike.instMembership.mem (P.io u) g) :",
+    "  And",
+    "    (SetLike.instMembership.mem ones g →",
+    "      Eq",
+    "        (FlockSoundness.bit",
+    "          (FlockSoundness.Binding.wit plan tab S R u M (FlockSoundness.Discharge.Layout.gateAt place S R u g)))",
+    "        Bool.true)",
+    "    (SetLike.instMembership.mem zeros g →",
+    "      Eq",
+    "        (FlockSoundness.bit",
+    "          (FlockSoundness.Binding.wit plan tab S R u M (FlockSoundness.Discharge.Layout.gateAt place S R u g)))",
+    "        Bool.false)"
+   ],
+   "assumptions": [],
+   "type_hash": "73d2dcd94d4c927c0d0a3b80ba47dd1c1f884a276d921e47740e9e104ac29518"
+  },
+  "FlockSoundness.Discharge.Layout.keyProg_bcPinned": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : Nat}",
+    "  {rowW : Fin c.ports.size → Nat} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  {si : FlockSoundness.Discharge.Placed.Sites plan tab}",
+    "  (hparse :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
+    "      Eq (Flock.HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables) (Except.ok c))",
+    "  (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n)))",
+    "  (saltCol : Flock.Circuit → Nat → Nat → Nat → Nat → Nat) (popOf : Reg → Flock.Public)",
+    "  (outBit : Reg → Fin (FlockSoundness.Discharge.Layout.keyN c hU n) → Bool)",
+    "  (hsite :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
+    "      FlockSoundness.Discharge.Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :",
+    "  (FlockSoundness.Discharge.Layout.keyReaders rowW hparse outs saltCol popOf outBit).BcPinned"
+   ],
+   "assumptions": [],
+   "type_hash": "8a192338c1363bfecfdd8254302e5bb672cc1f99938d750db3e7f757ad61bf95"
+  },
+  "FlockSoundness.Discharge.Layout.keyProg_copies": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.keyProg_copies {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : Nat}",
+    "  {rowW : Fin c.ports.size → Nat} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  {si : FlockSoundness.Discharge.Placed.Sites plan tab}",
+    "  (hparse :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
+    "      Eq (Flock.HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables) (Except.ok c))",
+    "  (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n)))",
+    "  (saltCol : Flock.Circuit → Nat → Nat → Nat → Nat → Nat) (popOf : Reg → Flock.Public)",
+    "  (outBit : Reg → Fin (FlockSoundness.Discharge.Layout.keyN c hU n) → Bool) :",
+    "  (FlockSoundness.Discharge.Layout.keyReaders rowW hparse outs saltCol popOf outBit).Copies",
+    "    (FlockSoundness.Discharge.Layout.keyPlace hparse outs)"
+   ],
+   "assumptions": [],
+   "type_hash": "873d77fceb2d6f4da6dd2afaddc49ff560e941d14303688847191655d533ad7d"
+  },
+  "FlockSoundness.Discharge.Layout.keyProg_valPinned": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : Nat}",
+    "  {rowW : Fin c.ports.size → Nat} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  {si : FlockSoundness.Discharge.Placed.Sites plan tab}",
+    "  (hparse :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
+    "      Eq (Flock.HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables) (Except.ok c))",
+    "  (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n)))",
+    "  (saltCol : Flock.Circuit → Nat → Nat → Nat → Nat → Nat) (popOf : Reg → Flock.Public)",
+    "  (outBit : Reg → Fin (FlockSoundness.Discharge.Layout.keyN c hU n) → Bool)",
+    "  (hkeys : FlockSoundness.Discharge.Layout.KeysRow c hU rowW)",
+    "  (hc1 :",
+    "    ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs).ConstCols plan tab",
+    "      (FlockSoundness.Discharge.Layout.keyPlace hparse outs)",
+    "      (Finset.instSingleton.singleton FlockSoundness.Discharge.Layout.oneG))",
+    "  (hz1 :",
+    "    ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs).ZeroCols plan tab",
+    "      (FlockSoundness.Discharge.Layout.keyPlace hparse outs)",
+    "      (Finset.instSingleton.singleton FlockSoundness.Discharge.Layout.zeroG))",
+    "  (hout :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n),",
+    "      SetLike.instMembership.mem S u →",
+    "        ∀ (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "          FlockSoundness.Binding.Sat plan tab S R u M →",
+    "            ∀ (g : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).circuit outs).N),",
+    "              SetLike.instMembership.mem (((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs).io u) g →",
+    "                Eq ((FlockSoundness.Discharge.Placed.keyProg c hU n).unit g) (Option.some u) →",
+    "                  Eq",
+    "                    (FlockSoundness.bit",
+    "                      (FlockSoundness.Binding.wit plan tab S R u M",
+    "                        (FlockSoundness.Discharge.Layout.gateAt (FlockSoundness.Discharge.Layout.keyPlace hparse outs) S",
+    "                          R u g)))",
+    "                    (outBit R g)) :",
+    "  (FlockSoundness.Discharge.Layout.keyReaders rowW hparse outs saltCol popOf outBit).ValPinned"
+   ],
+   "assumptions": [],
+   "type_hash": "612d929240a4b87aba46c2419ecf1b132b19a7025fce694a56e82cbfe48941e7"
+  },
+  "FlockSoundness.Discharge.Layout.keyRowOf_wire": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : Nat}",
+    "  {rowW : Fin c.ports.size → Nat} (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n))) {u u' : Fin n}",
+    "  (x : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).w) {q : Fin c.ports.size} {k : Fin (rowW q)}",
+    "  (h :",
+    "    Eq",
+    "      (FlockSoundness.Discharge.Layout.keyRowOf c hU n rowW",
+    "        ((FlockSoundness.Discharge.Const.Prog.instC (FlockSoundness.Discharge.Placed.keyProg c hU n) outs u).wire x))",
+    "      (Option.some { fst := u', snd := ⟨q, k⟩ })) :",
+    "  And (Eq u' u)",
+    "    (And (instLTNat.lt x.val ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).nIn)",
+    "      (Eq (FlockSoundness.Discharge.Aliased.srcKey c x.val)",
+    "        (FlockSoundness.Discharge.Aliased.Src.msg q.val (instHDiv.hDiv k.val 8) (instHMod.hMod k.val 8))))"
+   ],
+   "assumptions": [],
+   "type_hash": "7bcb203cdd3f1c81ecbac6230621271d632fec909a77a610fa97da08b33d0a1b"
+  },
+  "FlockSoundness.Discharge.Layout.keysRow_keyProg": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : Nat}",
+    "  {rowW : Fin c.ports.size → Nat} (hkeys : FlockSoundness.Discharge.Layout.KeysRow c hU rowW) (u : Fin n)",
+    "  (i : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).nComp)",
+    "  (x : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).w)",
+    "  (hx :",
+    "    List.instMembership.mem",
+    "      (instHAppendOfAppend.hAppend (((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).a i)",
+    "        (((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).b i))",
+    "      x)",
+    "  (hxn : instLTNat.lt x.val ((FlockSoundness.Discharge.Placed.keyProg c hU n).rows u).nIn) :",
+    "  FlockSoundness.Discharge.Layout.RowKey c rowW x.val"
+   ],
+   "assumptions": [],
+   "type_hash": "561f5615bee996f8f54528d87768fbe67c942b310f286250fb6c8704c82d70e7"
+  },
+  "FlockSoundness.Discharge.Layout.loadPublic_digests": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.loadPublic_digests {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray}",
+    "  {pop : Flock.Public} (h : Eq (Flock.HmRow.loadPublic tags c file) (Except.ok pop)) (ht : Eq pop.tables Option.none) :",
+    "  And (Eq pop.digests.size (instHMul.hMul pop.n c.ports.size))",
+    "    (∀ (x : ByteArray), Array.instMembership.mem pop.digests x → Eq x.size 128)"
+   ],
+   "assumptions": [],
+   "type_hash": "2553d603fe148a2478c34e951a85118a54f24ed0b7649981447413e9d121967a"
+  },
+  "FlockSoundness.Discharge.Layout.msgCol_lt_of_parse": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.msgCol_lt_of_parse {tags : Flock.Tags} {bytes : ByteArray}",
+    "  {tables : List (Prod String ByteArray)} {c : Flock.Circuit}",
+    "  (h : Eq (Flock.HmRow.parse tags bytes tables) (Except.ok c)) {g : Nat} (hg : instLTNat.lt g c.g) {p : Nat}",
+    "  (hp : instLTNat.lt p c.ports.size) (byte b : Nat) (hb : instLTNat.lt b 8) :",
+    "  instLTNat.lt (FlockSoundness.Typed.msgCol c g p byte b) (instHPow.hPow 2 c.kLog)"
+   ],
+   "assumptions": [],
+   "type_hash": "693535d400801ed5806627868bc55d8240eb16de09a815b75c312181593ffa85"
+  },
+  "FlockSoundness.Discharge.Layout.ofJson_lt": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.ofJson_lt {d : Lean.Json} {D : Flock.Draw.UnitDraw}",
+    "  (h : Eq (Flock.Draw.UnitDraw.ofJson d) (Except.ok D)) :",
+    "  And (∀ (u : Nat), Array.instMembership.mem D.units u → instLTNat.lt u D.population)",
+    "    (∀ (u : Nat), Array.instMembership.mem D.closure u → instLTNat.lt u D.population)"
+   ],
+   "assumptions": [],
+   "type_hash": "7026e1f193c307db95bec4a6bd3b3d9836325d31cc45bc27f9e21be69dced425"
+  },
+  "FlockSoundness.Discharge.Layout.ofRows_bcPinned": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {np W : Nat} {hN : instLTNat.lt 0 C.N} {rowW : Fin np → Nat} {hW : ∀ (q : Fin np), instLENat.le (rowW q) W}",
+    "  {h1 : instLENat.le 1 W} {rowOf : Fin C.N → Option (Prod (Fin n) ((q : Fin np) × Fin (rowW q)))}",
+    "  {rowAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) → Fin np → Nat → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {saltAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          Sum (Prod (Fin n) (Fin np)) (Fin C.N) →",
+    "            Fin 192 → Fin 8 → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {bcAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          Fin np → Fin 128 → Fin 8 → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {regBc : Reg → Fin n → Fin np → List UInt8} {regGate : Reg → Fin C.N → Bool}",
+    "  (hbc :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n),",
+    "      SetLike.instMembership.mem S u →",
+    "        ∀ (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "          FlockSoundness.Binding.Sat plan tab S R u M →",
+    "            ∀ (g : Fin C.N),",
+    "              SetLike.instMembership.mem (P.io u) g →",
+    "                ∀ (u' : Fin n) (q : Fin np) (k : Fin (rowW q)),",
+    "                  Eq (rowOf g) (Option.some { fst := u', snd := ⟨q, k⟩ }) →",
+    "                    Eq (FlockSoundness.Binding.bytesAt (FlockSoundness.Binding.wit plan tab S R u M) (bcAddr S R u q))",
+    "                      (regBc R u' q)) :",
+    "  (FlockSoundness.Discharge.Layout.Readers.ofRows place hN rowW hW h1 rowOf rowAddr saltAddr bcAddr regBc",
+    "      regGate).BcPinned"
+   ],
+   "assumptions": [],
+   "type_hash": "5e1bb9310057a6779e057f669013b579ab1a10e61bf86ae5f9e42d9adfe38668"
+  },
+  "FlockSoundness.Discharge.Layout.ofRows_copies": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.ofRows_copies {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {np W : Nat} {hN : instLTNat.lt 0 C.N} {rowW : Fin np → Nat} {hW : ∀ (q : Fin np), instLENat.le (rowW q) W}",
+    "  {h1 : instLENat.le 1 W} {rowOf : Fin C.N → Option (Prod (Fin n) ((q : Fin np) × Fin (rowW q)))}",
+    "  {rowAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) → Fin np → Nat → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {saltAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          Sum (Prod (Fin n) (Fin np)) (Fin C.N) →",
+    "            Fin 192 → Fin 8 → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {bcAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          Fin np → Fin 128 → Fin 8 → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {regBc : Reg → Fin n → Fin np → List UInt8} {regGate : Reg → Fin C.N → Bool}",
+    "  (hrow :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (hu : SetLike.instMembership.mem S u)",
+    "      (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "      FlockSoundness.Binding.Sat plan tab S R u M →",
+    "        ∀ (c : Fin (place S R u hu).R.w),",
+    "          SetLike.instMembership.mem (P.io u) ((place S R u hu).inst.wire c) →",
+    "            ∀ (u' : Fin n) (q : Fin np) (k : Fin (rowW q)),",
+    "              Eq (rowOf ((place S R u hu).inst.wire c)) (Option.some { fst := u', snd := ⟨q, k⟩ }) →",
+    "                Eq",
+    "                  ((FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.block",
+    "                    (FlockSoundness.Binding.wit plan tab S R u M) (place S R u hu).o ((place S R u hu).col c))",
+    "                  (FlockSoundness.Binding.wit plan tab S R u M (rowAddr S R u q k.val))) :",
+    "  (FlockSoundness.Discharge.Layout.Readers.ofRows place hN rowW hW h1 rowOf rowAddr saltAddr bcAddr regBc",
+    "        regGate).Copies",
+    "    place"
+   ],
+   "assumptions": [],
+   "type_hash": "d6a76a3684210a133a07c3aae555e1dc9d007fc1b7687a18eba7c11b100fab35"
+  },
+  "FlockSoundness.Discharge.Layout.ofRows_valPinned": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : Nat}",
+    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
+    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
+    "  (place :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          SetLike.instMembership.mem S u →",
+    "            FlockSoundness.UnitPlace P (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S u)",
+    "  {np W : Nat} {hN : instLTNat.lt 0 C.N} {rowW : Fin np → Nat} {hW : ∀ (q : Fin np), instLENat.le (rowW q) W}",
+    "  {h1 : instLENat.le 1 W} {rowOf : Fin C.N → Option (Prod (Fin n) ((q : Fin np) × Fin (rowW q)))}",
+    "  {rowAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) → Fin np → Nat → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {saltAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          Sum (Prod (Fin n) (Fin np)) (Fin C.N) →",
+    "            Fin 192 → Fin 8 → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {bcAddr :",
+    "    (S : Finset (Fin n)) →",
+    "      (R : Reg) →",
+    "        (u : Fin n) →",
+    "          Fin np → Fin 128 → Fin 8 → Fin (instHPow.hPow 2 (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)}",
+    "  {regBc : Reg → Fin n → Fin np → List UInt8} {regGate : Reg → Fin C.N → Bool}",
+    "  (hgate :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n),",
+    "      SetLike.instMembership.mem S u →",
+    "        ∀ (M : FlockSoundness.Binding.Msg plan tab S R u),",
+    "          FlockSoundness.Binding.Sat plan tab S R u M →",
+    "            ∀ (g : Fin C.N),",
+    "              SetLike.instMembership.mem (P.io u) g →",
+    "                Eq (rowOf g) Option.none →",
+    "                  Eq",
+    "                    (FlockSoundness.bit",
+    "                      (FlockSoundness.Binding.wit plan tab S R u M",
+    "                        (FlockSoundness.Discharge.Layout.gateAt place S R u g)))",
+    "                    (regGate R g)) :",
+    "  (FlockSoundness.Discharge.Layout.Readers.ofRows place hN rowW hW h1 rowOf rowAddr saltAddr bcAddr regBc",
+    "      regGate).ValPinned"
+   ],
+   "assumptions": [],
+   "type_hash": "ac0f2582c9518d13bc85abf5da169649e3a1e3e1fb38d3ff5e57b281a26da43b"
+  },
+  "FlockSoundness.Discharge.Layout.region_read": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.region_read {S : FlockSoundness.Model.Statement} {z : FlockSoundness.Model.Witness S.m}",
+    "  (hz : S.Satisfies z) {reg : Flock.Region}",
+    "  (hR : List.instMembership.mem S.regions (FlockSoundness.Refine.regionOf S.kLog (instHSub.hSub S.m S.kLog) reg))",
+    "  (o : Fin (instHPow.hPow 2 S.nbl)) (k : Nat)",
+    "  (hk :",
+    "    instLTNat.lt k (instHPow.hPow 2 (FlockSoundness.Refine.regionOf S.kLog (instHSub.hSub S.m S.kLog) reg).free.length))",
+    "  (ha :",
+    "    instLTNat.lt ((FlockSoundness.Refine.regionOf S.kLog (instHSub.hSub S.m S.kLog) reg).inBlock k)",
+    "      (instHPow.hPow 2 S.kLog)) :",
+    "  Eq",
+    "    (FlockSoundness.bit",
+    "      (S.block z o ⟨(FlockSoundness.Refine.regionOf S.kLog (instHSub.hSub S.m S.kLog) reg).inBlock k, ha⟩))",
+    "    (((reg.bytes o.val).get! (instHDiv.hDiv k 8)).toNat.testBit (instHMod.hMod k 8))"
+   ],
+   "assumptions": [],
+   "type_hash": "91459f6ba822fd848597b39b3739a99cda83fb4bbbbf4d35f8dca0cade729c20"
+  },
+  "FlockSoundness.Discharge.Layout.regionsOf_mem": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.regionsOf_mem (st : Flock.Stmt) (r : Flock.Region) :",
+    "  List.instMembership.mem st.regions.toList r →",
+    "    List.instMembership.mem (FlockSoundness.Refine.regionsOf st)",
+    "      (FlockSoundness.Refine.regionOf st.c.kLog (instHSub.hSub st.m st.c.kLog) r)"
+   ],
+   "assumptions": [],
+   "type_hash": "20c2762c65f3b8e9b875dd55c45a2af2003e5d5690b7bea8939009f9278aaa38"
+  },
+  "FlockSoundness.Discharge.Layout.setupH_drawn": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.setupH_drawn {tags : Flock.Tags} {circuitFile publicFile : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {d : Lean.Json} {partition : Option Lean.Json}",
+    "  {program : Option ByteArray} {st : Flock.Stmt}",
+    "  (h :",
+    "    Eq (Flock.Stmt.setupH tags circuitFile publicFile coins tables (Option.some d) partition program) (Except.ok st)) :",
+    "  Exists fun pop =>",
+    "    And (Eq (Flock.HmRow.loadPublic tags st.c publicFile) (Except.ok pop))",
+    "      (Eq (Flock.HmRow.drawn st.c pop d) (Except.ok st.pub))"
+   ],
+   "assumptions": [],
+   "type_hash": "4a6a603725a78c0eb58aa9b29cc6f0f8ce481cfcf30388c5c586fda4ab4add1c"
+  },
+  "FlockSoundness.Discharge.Layout.setupH_regions": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.setupH_regions {tags : Flock.Tags} {circuitFile publicFile : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json}",
+    "  {program : Option ByteArray} {st : Flock.Stmt}",
+    "  (h : Eq (Flock.Stmt.setupH tags circuitFile publicFile coins tables draw partition program) (Except.ok st)) :",
+    "  Eq (Flock.HmRow.regions st.c st.pub) (Except.ok st.regions)"
+   ],
+   "assumptions": [],
+   "type_hash": "edd9dd4ed5c614b5df7a8ba93246f03e1d8098e94466fd3e4fb316e5e3fbe2d6"
+  },
+  "FlockSoundness.Discharge.Layout.single_gate": {
+   "signature": [
+    "FlockSoundness.Discharge.Layout.single_gate {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : Nat}",
+    "  {rowW : Fin c.ports.size → Nat} (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n)))",
+    "  (hkeys : FlockSoundness.Discharge.Layout.KeysRow c hU rowW) {u : Fin n}",
+    "  {g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)}",
+    "  (hgx :",
+    "    Exists fun x =>",
+    "      Eq ((FlockSoundness.Discharge.Const.Prog.instC (FlockSoundness.Discharge.Placed.keyProg c hU n) outs u).wire x) g)",
+    "  (hg : SetLike.instMembership.mem (((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs).io u) g)",
+    "  (hr : Eq (FlockSoundness.Discharge.Layout.keyRowOf c hU n rowW g) Option.none) :",
+    "  Or (Eq g FlockSoundness.Discharge.Layout.zeroG)",
+    "    (Or (Eq g FlockSoundness.Discharge.Layout.oneG)",
+    "      (And (Eq ((FlockSoundness.Discharge.Placed.keyProg c hU n).unit g) (Option.some u))",
+    "        (And (Ne g FlockSoundness.Discharge.Layout.oneG) (Ne g FlockSoundness.Discharge.Layout.zeroG))))"
+   ],
+   "assumptions": [],
+   "type_hash": "82802a3f6ddbe46dd2082647a696f43a0cd8ff4244bcb07747f139db7ed280e3"
+  },
   "FlockSoundness.Discharge.Placed.Accepted.placement": {
    "signature": [
     "FlockSoundness.Discharge.Placed.Accepted.placement {T : FlockSoundness.Model.Statement}",
@@ -5454,259 +6335,6 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  },
-  "FlockSoundness.Discharge.Const.Prog.instC_wire_input": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.Prog.instC_wire_input {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
-    "  (u : Fin n) (c : Fin (p.rows u).w) (hc : instLTNat.lt c.val (p.rows u).nIn) :",
-    "  Eq ((FlockSoundness.Discharge.Const.Prog.instC p outs u).wire c) (FlockSoundness.Discharge.Const.Prog.insAt p u c.val)"
-   ],
-   "assumptions": [],
-   "type_hash": "5d54d1280e714f364038d4eb06eff3deb02c706fa90efebd739949827624ee34"
-  },
-  "FlockSoundness.Discharge.Const.Prog.instC_wire_one": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.Prog.instC_wire_one {N n : Nat} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N))",
-    "  (u : Fin n) :",
-    "  Eq ((FlockSoundness.Discharge.Const.Prog.instC p outs u).wire (p.rows u).one)",
-    "    (FlockSoundness.Discharge.Const.Prog.oneAt p u)"
-   ],
-   "assumptions": [],
-   "type_hash": "1750aa2a1d554ef71a4f06d697168210d79e19ce323779a38e258d319f798231"
-  },
-  "FlockSoundness.Discharge.Const.UProg.constCols_toRows": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.UProg.constCols_toRows {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
-    "  (up : FlockSoundness.UProg k one outs) {Reg : Type} {mPts : Nat}",
-    "  {plan : Finset (Fin up.n) → Reg → List (FlockSoundness.TabSpec mPts)}",
-    "  {tab : (S : Finset (Fin up.n)) → (R : Reg) → Fin up.n → Fin (plan S R).length} {os : Finset (Fin up.rowsN)}",
-    "  (pp : FlockSoundness.Audit.ProgPlaces (FlockSoundness.UProg.toRows hk up) os plan tab)",
-    "  (hinst :",
-    "    ∀ (u : Fin up.n),",
-    "      Eq (pp.inst u) (FlockSoundness.Discharge.Const.Prog.instC (FlockSoundness.UProg.toRows hk up) os u)) :",
-    "  ((FlockSoundness.UProg.toRows hk up).partition os).ConstCols plan tab pp.derived.place",
-    "    (Finset.instSingleton.singleton (FlockSoundness.UProg.oneOf hk up))"
-   ],
-   "assumptions": [],
-   "type_hash": "0a4deb649d6cd1d5d0c22b49c7792903f837893117467234cbc10e7f91cbeb48"
-  },
-  "FlockSoundness.Discharge.Const.UProg.toRows_oneGate": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.UProg.toRows_oneGate {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
-    "  (up : FlockSoundness.UProg k one outs) :",
-    "  FlockSoundness.Discharge.Const.Prog.OneGate (FlockSoundness.UProg.toRows hk up) (FlockSoundness.UProg.oneOf hk up)"
-   ],
-   "assumptions": [],
-   "type_hash": "e6c8978c63b64e4b3a0d5d77979944ef1d4b7f6fe87c668b9a3f6c6c0263fce5"
-  },
-  "FlockSoundness.Discharge.Const.constCols_of_instC": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.constCols_of_instC {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
-    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
-    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
-    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) {one : Fin N}",
-    "  (hp : FlockSoundness.Discharge.Const.Prog.OneGate p one)",
-    "  (hinst : ∀ (u : Fin n), Eq (pp.inst u) (FlockSoundness.Discharge.Const.Prog.instC p outs u)) :",
-    "  (p.partition outs).ConstCols plan tab pp.derived.place (Finset.instSingleton.singleton one)"
-   ],
-   "assumptions": [],
-   "type_hash": "c2710a59db90236f4da2e7b8650fb1743fabc2aa01f87260ad61e8ba55e594bd"
-  },
-  "FlockSoundness.Discharge.Const.constCols_of_oneGate": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.constCols_of_oneGate {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
-    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
-    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
-    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) {one : Fin N}",
-    "  (hp : FlockSoundness.Discharge.Const.Prog.OneGate p one)",
-    "  (hi : ∀ (u : Fin n), Eq ((pp.inst u).wire (p.rows u).one) (FlockSoundness.Discharge.Const.Prog.oneAt p u)) :",
-    "  (p.partition outs).ConstCols plan tab pp.derived.place (Finset.instSingleton.singleton one)"
-   ],
-   "assumptions": [],
-   "type_hash": "4aa1062b50585cc48588791a7ab3cc7e6139d26dc5c33854cba5138c3c8325a8"
-  },
-  "FlockSoundness.Discharge.Const.constCols_of_oneWire": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.constCols_of_oneWire {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
-    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
-    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
-    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) (one : Fin N)",
-    "  (h : ∀ (u : Fin n), Eq ((pp.inst u).wire (p.rows u).one) one) :",
-    "  (p.partition outs).ConstCols plan tab pp.derived.place (Finset.instSingleton.singleton one)"
-   ],
-   "assumptions": [],
-   "type_hash": "d1350c203b6a83987b8f9b7511464a247313bb311ff4dea1bff0c91e033ad998"
-  },
-  "FlockSoundness.Discharge.Const.image_oneWire": {
-   "signature": [
-    "FlockSoundness.Discharge.Const.image_oneWire {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
-    "  {Reg : Type} {mPts : Nat} {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
-    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
-    "  (pp : FlockSoundness.Audit.ProgPlaces p outs plan tab) {one : Fin N}",
-    "  (h : ∀ (u : Fin n), Eq ((pp.inst u).wire (p.rows u).one) one) (hn : instLTNat.lt 0 n) :",
-    "  Eq (Finset.image (fun u => (pp.inst u).wire (p.rows u).one) Finset.univ) (Finset.instSingleton.singleton one)"
-   ],
-   "assumptions": [],
-   "type_hash": "9de588c14a395178dbed7e12043b3de35e3ce673d21c2c19488fb29d44aa4019"
-  },
-  "FlockSoundness.Discharge.Aliased.aliased_of_copies": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.aliased_of_copies {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {C : FlockSoundness.Audit.Circuit} {n : Nat}",
-    "  {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
-    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) {g : Nat} (hg : instLTNat.lt g st.c.g)",
-    "  (hcp : FlockSoundness.Discharge.Aliased.Copies L regs F inst hg) (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) :",
-    "  L.Aliased regs inst o hg"
-   ],
-   "assumptions": [],
-   "type_hash": "f4ae61250311552f381552da7fc58d4faf0de6df976f144e06cc5a0420b07e87"
-  },
-  "FlockSoundness.Discharge.Aliased.copies_of_key": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.copies_of_key {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {C : FlockSoundness.Audit.Circuit} {n : Nat}",
-    "  {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
-    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) {g : Nat} (hg : instLTNat.lt g st.c.g)",
-    "  (hk :",
-    "    ∀ (c c' : Fin ((FlockSoundness.unitRows st ⋯).stack st.c.upv).w),",
-    "      Eq (inst.wire c) (inst.wire c') →",
-    "        instLTNat.lt c.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
-    "          instLTNat.lt c'.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
-    "            Eq (FlockSoundness.Discharge.Aliased.srcKey st.c c.val)",
-    "              (FlockSoundness.Discharge.Aliased.srcKey st.c c'.val)) :",
-    "  FlockSoundness.Discharge.Aliased.Copies L regs F inst hg"
-   ],
-   "assumptions": [],
-   "type_hash": "ecd8ef5bfab3b1987cf6128c689a8beaf05731dcbdc026422d180dbcfaa036d8"
-  },
-  "FlockSoundness.Discharge.Aliased.copyPos_block": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.copyPos_block {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {g : Nat} (hg : instLTNat.lt g st.c.g)",
-    "  (x : Fin ((FlockSoundness.unitRows st ⋯).stackW st.c.upv))",
-    "  (hx : instLTNat.lt x.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn)",
-    "  {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)",
-    "  (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) :",
-    "  Eq",
-    "    ((L.model regs).block z o",
-    "      (FlockSoundness.stackPlace (L.model regs) (FlockSoundness.unitRows st ⋯) st.c.upv",
-    "        (fun u => st.c.unitRange.slot (instHAdd.hAdd (instHMul.hMul g st.c.upv) u)) ⋯ x))",
-    "    ((L.model regs).block z o (FlockSoundness.Discharge.Aliased.copyPos L regs F hg x.val))"
-   ],
-   "assumptions": [],
-   "type_hash": "eb6b7160aea42480d2003cbb22be66f6604f4614b24455e33da80e8642b12d68"
-  },
-  "FlockSoundness.Discharge.Aliased.copyPos_zero": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.copyPos_zero {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {g x : Nat} (hg : instLTNat.lt g st.c.g)",
-    "  (hx : instLTNat.lt x (instHMul.hMul st.c.upv (instHMul.hMul st.c.unit.inWords Flock.WORD)))",
-    "  (hz : Eq (FlockSoundness.Discharge.Aliased.srcKey st.c x) FlockSoundness.Discharge.Aliased.Src.zero) :",
-    "  FlockSoundness.Discharge.Aliased.IsZeroPos L regs F (FlockSoundness.Discharge.Aliased.copyPos L regs F hg x)"
-   ],
-   "assumptions": [],
-   "type_hash": "8d6e7d98024455732f9c3b03d6222164f9fce67754563bb72d71be3bcad06db7"
-  },
-  "FlockSoundness.Discharge.Aliased.flatSrc_key": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.flatSrc_key (c : Flock.Circuit) (s₀ p t : Nat) :",
-    "  Or",
-    "    (And",
-    "      (Eq (FlockSoundness.Discharge.Aliased.srcAt c (instHMod.hMod s₀ c.upv) p t)",
-    "        FlockSoundness.Discharge.Aliased.Src.zero)",
-    "      (Or (Eq (FlockSoundness.Flat.flatSrc c s₀ p t) (instHAdd.hAdd (c.unitRange.slot s₀) c.unit.useful))",
-    "        (Eq (FlockSoundness.Flat.flatSrc c s₀ p t) (instHAdd.hAdd (c.unitRange.slot 0) c.unit.useful))))",
-    "    (And",
-    "      (Ne (FlockSoundness.Discharge.Aliased.srcAt c (instHMod.hMod s₀ c.upv) p t)",
-    "        FlockSoundness.Discharge.Aliased.Src.zero)",
-    "      (Eq (FlockSoundness.Flat.flatSrc c s₀ p t)",
-    "        (FlockSoundness.Discharge.Aliased.realize c (instHDiv.hDiv s₀ c.upv)",
-    "          (FlockSoundness.Discharge.Aliased.srcAt c (instHMod.hMod s₀ c.upv) p t))))"
-   ],
-   "assumptions": [],
-   "type_hash": "b82e2439e962ddd482f9c6c0eb33f80acbe4ffddf1c5fe1459e22b27967b3265"
-  },
-  "FlockSoundness.Discharge.Aliased.keyIdx_eq": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq {c : Flock.Circuit} {n : Nat} {x x' : Fin n}",
-    "  (h : Eq (FlockSoundness.Discharge.Aliased.keyIdx c n x) (FlockSoundness.Discharge.Aliased.keyIdx c n x')) :",
-    "  Eq (FlockSoundness.Discharge.Aliased.srcKey c x.val) (FlockSoundness.Discharge.Aliased.srcKey c x'.val)"
-   ],
-   "assumptions": [],
-   "type_hash": "a10aa7a37d960d32ac94e968f7577b92a3b2da10ddbc7333ecbc349b766ce9be"
-  },
-  "FlockSoundness.Discharge.Aliased.keyIdx_eq_none": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none {c : Flock.Circuit} {n : Nat} (x : Fin n) :",
-    "  Iff (Eq (FlockSoundness.Discharge.Aliased.keyIdx c n x) Option.none)",
-    "    (Eq (FlockSoundness.Discharge.Aliased.srcKey c x.val) FlockSoundness.Discharge.Aliased.Src.zero)"
-   ],
-   "assumptions": [],
-   "type_hash": "6a61d7e8971177b52139dadb0f8bcc09b5f307aa49e7b1ed58e6e4398c343187"
-  },
-  "FlockSoundness.Discharge.Aliased.setupH_aliased": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.setupH_aliased {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
-    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
-    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
-    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st))",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  {C : FlockSoundness.Audit.Circuit} {n : Nat} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
-    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) (o : Fin (instHPow.hPow 2 (⋯.model regs).nbl))",
-    "  {g : Nat} (hg : instLTNat.lt g st.c.g) (hcp : FlockSoundness.Discharge.Aliased.Copies ⋯ regs ⋯ inst hg) :",
-    "  ⋯.Aliased regs inst o hg"
-   ],
-   "assumptions": [],
-   "type_hash": "af6d0a233dcfa3b63feb719a809f4dae65e21a9da7d5a94b7c38aecf1ed867ca"
-  },
-  "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
-    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
-    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
-    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st))",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  {C : FlockSoundness.Audit.Circuit} {n : Nat} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}",
-    "  (inst : P.IsRowsUnit u ((FlockSoundness.unitRows st ⋯).stack st.c.upv)) (o : Fin (instHPow.hPow 2 (⋯.model regs).nbl))",
-    "  {g : Nat} (hg : instLTNat.lt g st.c.g)",
-    "  (hk :",
-    "    ∀ (c c' : Fin ((FlockSoundness.unitRows st ⋯).stack st.c.upv).w),",
-    "      Eq (inst.wire c) (inst.wire c') →",
-    "        instLTNat.lt c.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
-    "          instLTNat.lt c'.val ((FlockSoundness.unitRows st ⋯).stack st.c.upv).nIn →",
-    "            Eq (FlockSoundness.Discharge.Aliased.srcKey st.c c.val)",
-    "              (FlockSoundness.Discharge.Aliased.srcKey st.c c'.val)) :",
-    "  ⋯.Aliased regs inst o hg"
-   ],
-   "assumptions": [],
-   "type_hash": "08e069e0b1bf9a80093ed4532e838c76611483d8164b8141e722c8d3b3e5dbe6"
-  },
-  "FlockSoundness.Discharge.Aliased.setupH_unitFacts": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.setupH_unitFacts {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}",
-    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
-    "  {st : Flock.Stmt} (ht : Eq tags.typed Bool.false)",
-    "  (h : Eq (Flock.Stmt.setupH tags cf pf coins tables draw partition program) (Except.ok st)) :",
-    "  FlockSoundness.Discharge.Aliased.UnitFacts tags st"
-   ],
-   "assumptions": [],
-   "type_hash": "e895ff06bec97da55de2cc65c5def8c692c09183a67ab829ba6ab6f423276997"
-  },
-  "FlockSoundness.Discharge.Aliased.zeroPos_block": {
-   "signature": [
-    "FlockSoundness.Discharge.Aliased.zeroPos_block {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)",
-    "  (regs : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog)))",
-    "  (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st) {s₀ : Nat} (hs₀ : instLTNat.lt s₀ st.c.unitRange.count)",
-    "  {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)",
-    "  (o : Fin (instHPow.hPow 2 (L.model regs).nbl)) :",
-    "  Eq ((L.model regs).block z o (FlockSoundness.Discharge.Aliased.zeroPos L regs F hs₀)) 0"
-   ],
-   "assumptions": [],
-   "type_hash": "8be091f3d95f07de4c7cf133faf6b65a369b2a05104e15ff0d23d66aafcea58e"
   }
  },
  "reads": {
@@ -5947,7 +6575,7 @@
    ]
   },
   "Flock.Draw": {
-   "digest": "a6bc3159e023a197c1588375198247ba7f05981539bb94202d055615a4ad5f47",
+   "digest": "4423b43bee16088b49bdecd53290a22933531d4678987c88ecd78fcde300473a",
    "definitions": {
     "Flock.Draw.Law": "b12eff30800c1e9d28be153d2cb21219608dabe1da6d5c91a6a1f3c329c688ee",
     "Flock.Draw.Law.bernoulli": "74f514d660c8772abf134bce094e4bc4c8b12f30a7c18bcfcb3de380468388db",
@@ -5959,27 +6587,43 @@
     "Flock.Draw.Stratum.k": "37d45810ccea236b78bbb027ed7a13ac0f75f89398316d3d9310a0c2386734e2",
     "Flock.Draw.Stratum.need": "059401fb1c1c268c541cba770f329b23c9fc225df079ade55f81059fd085e2c6",
     "Flock.Draw.Stratum.size": "16711658cdd836cf6d0e9663608a92f67da56d85ed2c60e68165c379c727df0c",
+    "Flock.Draw.Stratum.template": "aa3fa326d3cf55dc3b623970322903d8b54d3eac616429f46389ea1524b10646",
     "Flock.Draw.Stratum.unit": "49c442c22e2fcdf2dd1c8d42263032e3a03d26a993a2e21870c759d380d2fd70",
     "Flock.Draw.Stratum.units": "6cb39eabc04d0183dd8cb498aa9c345c24f4f5d1d11d44c5b691c0a88cd080c7",
     "Flock.Draw.UnitDraw": "83415836d21d53b361887361dc10abc929ec0865a1092a862feb643877104154",
+    "Flock.Draw.UnitDraw.closure": "6577e6f6d70ce0695b6829c92c9ed56fdfe1be10c99cda64b9552e4510827c82",
+    "Flock.Draw.UnitDraw.ofJson": "3377649271eea60a0b1facde79ab06d0214536e4c42d812d8b385b207a551be7",
+    "Flock.Draw.UnitDraw.population": "b9851bf1fc555aaaf78b2fde9af0fb04882c2887d9efb63c4d7f606e1f459677",
+    "Flock.Draw.UnitDraw.proved": "19e596112d373c0843f28cb753c4773b5b49e393674399ded7189a19ef617e51",
     "Flock.Draw.UnitDraw.units": "12dc81197a13dcf593977fd0860c84a576f08289c414d1ba78185723904665ab",
     "Flock.Draw.WorkStratum": "c825a542c8ef60f327f4ce62ffe657f9ed9163339bd1d49c5614c672ef31304b",
+    "Flock.Draw.WorkStratum.floor": "c235e75613582f370c101dad10f5dc13bbf7acba7bb5a42d96505555cb59c897",
     "Flock.Draw.WorkStratum.toStratum": "1be491674fba2a0f01f671db5fe348c03f76fe4023d42306592040ca4117a752",
+    "Flock.Draw.WorkStratum.work": "eeee7219f73bfc21bdc0e819bc356be12e9950221a80b9b620b14c35ca1f8b35",
     "Flock.Draw.beNat": "f33b44ce3176ec4606668c2599a46d7d8983a16678aa2e21c506b543e62ca721",
     "Flock.Draw.bernoulli": "14cd4d5eebd87143635f7bfb5aa6f8fa0d5314eabf007818c138634031efc1df",
+    "Flock.Draw.closureMapOfJson": "ac62d41bc25bb09eb1c05966ebc65aa73e3db3a4cef97fcf2f7b778f96e9b120",
     "Flock.Draw.drawOS": "85717b249674ce3919a2ba231a24aba4eb07cb1d9e7b6eb989007f7f1b1a757d",
     "Flock.Draw.drawWith": "12e803815e4628fba57142905951414475505324c9e2f89d4bf48ac9e0cf70e4",
     "Flock.Draw.instInhabitedStratum": "84bfae5008c211276e37173a74dca9cc1eb81d5aa599b7b4049d08752f8ee8b6",
     "Flock.Draw.instInhabitedStratum.default": "3e1ea59d4c6c27f171beee6423e781fb37676836b298e5eefd6f27a19b7065aa",
+    "Flock.Draw.instInhabitedWorkStratum": "250f59f4d1e915aa9a9bfa3b4cd8f7ffa9ecd476ae5acd3d71b7c2c7434ea860",
+    "Flock.Draw.instInhabitedWorkStratum.default": "d46cb0f29a7e27a441d18c569a0ab8eb3021962bd07e1c9bb479bad9b8a79e8b",
     "Flock.Draw.onWith": "987dc554e6fcfebb01c1e79cabb529bf2749eb60a567dcf1152e3fe5574af2b8",
+    "Flock.Draw.strataProblem": "fa74f7bb073851b6cf7d8cce5b981434cdcf8d1dded22d33c62d9cb2ee7223a6",
     "Flock.Draw.stratified": "994cf1f686e0a3601bafc225d0601317b3237197ebe80e7f886bd2470f1b3f2c",
     "Flock.Draw.stratifiedWith": "27438dc7bc06d6f5d55a891addbaeda0c647b7ee9e7ff8616db51c8196d652a3",
     "Flock.Draw.stratumK": "30eec83966e6292ad4120b55dc8e02b63770e2f59f87ca616cdb9da952644c2b",
     "Flock.Draw.subset": "0fc9e572d0b4d8409cedc078bf52b63e6279a64d401dea42cd69525d95bfb335",
+    "Flock.Draw.totalWork": "651dbeeadb0c32f981cd7db2bfb4895ff5fda55a9845884927bc19afaf994ee4",
     "Flock.Draw.uniform": "1817d8be46815930147d46d70a731b71a18fa88bdebb880f99e4124286bcdfe1",
     "Flock.Draw.width": "80674d324269f3df3066a958d4159bf0d1321b5d14bfc80c928ca16a55aa77f4",
     "Flock.Draw.workK": "5c3c79eb2b5987210aebb3ee1917df08192782aca6b37463d87b2a544b69a2ca",
-    "Flock.Draw.workTableOfJson": "e1c5d286ad2918af56c64eb00aed16daa57590a93e7f925915ca8639130417cc"
+    "Flock.Draw.workProblem": "c5a7087c153bcdbd02a02bfb14a90fac1ebee2328636fa5e88169a80650e39f0",
+    "Flock.Draw.workTableOfJson": "12f68eeaf2d5fa82cdd46e59a1cc8f4ff50446164aff03c66b573dcae15783f0",
+    "_private.Flock.Draw.0.Flock.Draw.ratio": "bdf033aa025ddb4cf6660bcf7e9b250a6865af0d3107f63cb61ca122d031eec7",
+    "_private.Flock.Draw.0.Flock.Draw.stratumOfJson": "74dacaebc5695b756f19d0a083b9bfc1b803ab85693a5f4a8a78e11ff519452e",
+    "_private.Flock.Draw.0.Flock.Draw.workStratumOfJson": "5cad839e36fe00cc241399868793440ece4cd9d90015ce20cba8172b76884588"
    },
    "pins": [
     "FlockSoundness.Audit.Law.countRule_eq_draw",
@@ -6006,6 +6650,12 @@
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.drawn_digest",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofJson_lt",
     "FlockSoundness.Prog.flock_headline"
    ]
   },
@@ -6122,6 +6772,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6175,6 +6833,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6222,6 +6888,14 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
@@ -6257,6 +6931,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6315,6 +6997,14 @@
     "FlockSoundness.Binding.hm96Pair_spec",
     "FlockSoundness.Binding.hm96_treeLeaf",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6375,6 +7065,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6436,6 +7134,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6487,6 +7193,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6538,6 +7252,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6587,6 +7309,14 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased",
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
@@ -6616,6 +7346,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -6785,6 +7523,17 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Discharge.Placed.Sites.placed",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -6960,6 +7709,20 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.exists_read_of_io",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.UProg.rows_toRows",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
@@ -7073,6 +7836,17 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Discharge.Placed.Sites.placed",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -7181,6 +7955,7 @@
     "FlockSoundness.Binding.flock_e2e_count_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -7210,6 +7985,10 @@
     "FlockSoundness.Discharge.Const.constCols_of_instC",
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -7709,6 +8488,18 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_headline"
    ]
   },
@@ -7964,6 +8755,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -7990,12 +8789,229 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.Discharge.Aliased.Copies": {
+   "digest": "2b15111645576d246c904d1196bd7cfa3f1c9325f7be7e83cd8cc4a08d47770c",
+   "definitions": {
+    "FlockSoundness.Discharge.Aliased.Copies": "208a40bdc0f89e489454f675884a8d777a720f1fb72e3b359188fc6645a16003",
+    "FlockSoundness.Discharge.Aliased.IsZeroPos": "be0d43712235fc0824c9d0bcce587e0c18cab5c68c5d33d64416a4b02689c5e6",
+    "FlockSoundness.Discharge.Aliased.UnitFacts": "05eb1385af44d80040caf3f9a5318ab6c6d486225b3980025866bbb16774e079",
+    "FlockSoundness.Discharge.Aliased.copyAt": "8d595a2928162c80eef0585b9358095a5df372aaabc18d8ac04764704176a0a8",
+    "FlockSoundness.Discharge.Aliased.copyPos": "6a4748a9b6bb0493604399e1b00311f6bd261685d4dd04c2ed98cf2539b92cc4",
+    "FlockSoundness.Discharge.Aliased.zeroPos": "316cf24ce88617e1904a79de81af8dd40bc6d8253b582aec3d8afa4b85b618bb"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_block",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased",
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.zeroPos_block"
+   ]
+  },
+  "FlockSoundness.Discharge.Aliased.Keys": {
+   "digest": "d31924aab29150f79f17f5414039c6d06aa5e7b9cf21c4f1f15242e9766ca7c7",
+   "definitions": {
+    "FlockSoundness.Discharge.Aliased.Src": "f81afd0561fe868011a494376609b2293452d16566ce22af01d66b88dd0b2807",
+    "FlockSoundness.Discharge.Aliased.Src.lit": "2d3d0630107db25f74b9cd6e7d5e05b96958be589158214751c08b74b6c4a0c5",
+    "FlockSoundness.Discharge.Aliased.Src.msg": "79656706b1c929357b6dd462b4348bce2de8310d6e35615c91443e473f42098f",
+    "FlockSoundness.Discharge.Aliased.Src.pad": "81bdf25cadd0a124ef92466a91ed3bd6edfb137657c18ff6f49b5b7545828883",
+    "FlockSoundness.Discharge.Aliased.Src.wire": "130d570620b175cc3c193342ba57b43a26f555b1c878118c15dfecc74f986745",
+    "FlockSoundness.Discharge.Aliased.Src.zero": "86262691cada959e3d82d0ef427a618ea8825ef1f5cabda55f4f1e573e9d6737",
+    "FlockSoundness.Discharge.Aliased.instDecidableEqSrc": "534a687fd0f116f9297d0b1c69abf3193a25efc53c7fb0378af146736d9faf3a",
+    "FlockSoundness.Discharge.Aliased.instDecidableEqSrc.decEq": "cf0d50f55c1bff0ac70713589f8578d0911de827f50093892ece8c8ea4d61763",
+    "FlockSoundness.Discharge.Aliased.keyIdx": "f55863948d548711b8c53c55a1f4d496ecb2ba4f3a530cb49766069696ad79a0",
+    "FlockSoundness.Discharge.Aliased.realize": "35d834e98b6da70f166cc81ee60e65d0aaaf68c123d990198a15ca861a689dff",
+    "FlockSoundness.Discharge.Aliased.srcAt": "ec6bd4842e4461487da607f331ca2b4b4cda11fdcaeead9001fd6c47159d2c96",
+    "FlockSoundness.Discharge.Aliased.srcKey": "da7d260b5d53d2a57fe1aa3b87ad81803bd932a2147d955a1ccc655b3d2f6107"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.flatSrc_key",
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq",
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate"
+   ]
+  },
+  "FlockSoundness.Discharge.Const.Inst": {
+   "digest": "e8ab7faea21f3b315dc33919fdabf6fab8683b732b98cd81b6bfe4a1d40d7114",
+   "definitions": {
+    "FlockSoundness.Discharge.Const.Prog.OneGate": "0db4d6624a6c246e5ccad3d45a16ef4741230c96283a1bf337fa40298b9d4878",
+    "FlockSoundness.Discharge.Const.Prog.castW": "854c12b44e6fa85198ad0f4358bddf6393f3b98ac5642ec6d27f0500456a9ecd",
+    "FlockSoundness.Discharge.Const.Prog.insAt": "97e024c950554b0bff41ccff58caa0c067a000db40818a787efb0c239b6547a2",
+    "FlockSoundness.Discharge.Const.Prog.instC": "51e5b1716e1c68b0be6fd985a25cbb4daef192d982ba59dee0391d42e7e92bf6",
+    "FlockSoundness.Discharge.Const.Prog.oneAt": "4cdbc633c1ff6576686ec0867f1ed22dbcb0bcff942c8d3c932fbd9c73e3cead",
+    "FlockSoundness.Discharge.Const.Prog.rowsWireC": "9dbb5b0dddc8b50ee642561ebe6cce113b441334e422181a03da11367d707d7a"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Const.Prog.instC_wire_input",
+    "FlockSoundness.Discharge.Const.Prog.instC_wire_one",
+    "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
+    "FlockSoundness.Discharge.Const.UProg.toRows_oneGate",
+    "FlockSoundness.Discharge.Const.constCols_of_instC",
+    "FlockSoundness.Discharge.Const.constCols_of_oneGate",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.single_gate"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.HmRegion": {
+   "digest": "fe62e59bb103905f286f541870a644e9959ebca990774a1e1c107e8cf5f1fd70",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.bcAddr": "3e38f334d4f411cad0fbc47d7d864b6cfec0466f245134dd3b955d59df2ab847",
+    "FlockSoundness.Discharge.Layout.bcChunk": "4f1de1976143691ab34cdb6467c7e6ec8c864bd9d21f2a5f67765a8ee1913efd",
+    "FlockSoundness.Discharge.Layout.hmFixed": "0fe0bc46a5c53a30466489a9c87a0811f1540edd6687bc1d3300a151d59f2ce5",
+    "FlockSoundness.Discharge.Layout.inBlockOr": "796471326c0a4141ed0f649e5afb4ca16a24dc7bcb66847bc483bde39b7eddfe"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.KeyProg": {
+   "digest": "aa83b5fb98388c7b68c75e4fc3478307c710c0254c56ef539cfc738e40c8f790",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.KeysRow": "3b78a062498400e3eb6febfd902e5c8e6bdcbc2b6eae3e03d6bbacd62dcef27a",
+    "FlockSoundness.Discharge.Layout.RowKey": "03e60f683ad2f743a10c77afe4d70fbd8925c54b7c2f47aa08fc60cae7ce89a4",
+    "FlockSoundness.Discharge.Layout.keyB": "27978ed297c0b87b534bba24b2513348103a1666931eacfe0c6f4e72f75a0b82",
+    "FlockSoundness.Discharge.Layout.keyBcAddr": "69e128b8ed5cd517d8ac744163830d3095ce823ff999f43e334809145ea3c151",
+    "FlockSoundness.Discharge.Layout.keyGate": "43e582aa03946ae1081909a018c26832425f1bbe0bf5f9dadbd617da29fa1c18",
+    "FlockSoundness.Discharge.Layout.keyN": "7786dabbf54d0e749fb700260d82a2d2b9e6c963dae172dd969f3462aaa2a9e5",
+    "FlockSoundness.Discharge.Layout.keyPlace": "296f5812317d0b8834f72413b603d1421e66f5dd1c12b47ddb14a1f6d46b257b",
+    "FlockSoundness.Discharge.Layout.keyReaders": "05dd4f344080cccb5ea0719368058adb71ab85374f0739fc621082de448d0387",
+    "FlockSoundness.Discharge.Layout.keyRowAddr": "317f8cfa86de99d69c6495396dabb7a12e2c95d2d5b93be8d294f71029496484",
+    "FlockSoundness.Discharge.Layout.keyRowOf": "c802517bd184f5fb01df5d24df8bc0d54d8c01a5d3d4ce8059ddef35f0887167",
+    "FlockSoundness.Discharge.Layout.keySaltAddr": "b29d192ea94b2160300c1002d0e7fc0f9fdc1bf4a3a40a2bb21a4ac4835bb728",
+    "FlockSoundness.Discharge.Layout.oneG": "dc3395f222bd201bb36d1ccc48e0af0ab475a6f18feecebfb33aca8c5d9a2c8c",
+    "FlockSoundness.Discharge.Layout.zeroG": "45cb2aadfda5f30a87d0b37e244c49f2c310b13a1bc529bc667b0d18188fd3ca"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.OfRows": {
+   "digest": "5e47687253fe58f9728a87c4ef12b515730843921c8a2eef990f7db5ceaeae64",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.Readers.ofRows": "10d2dcf8912decad18d6eac9a13f4ac53de61f9352b2d9f50f872763119a3296",
+    "FlockSoundness.Discharge.Layout.gateAt": "cb3d642d67063a0ae2733f072b5fbb176d830c7cdabe4ef6f25e487db3d55402"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.Pins": {
+   "digest": "1a50d196342d67a11d3ddc4a7a100ea5363926ebc644d67132447f011707bdb9",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.Readers": "4e2f6f9dfe416a4c201e7f6450ef41096b732ee38c5f7e5cdbabf5ec0d4d9448",
+    "FlockSoundness.Discharge.Layout.Readers.BcPinned": "a7f9e58a1df9ce4ce2b1b84f2570d15212d1e42fbe2d8a7bb30ff46b64d70915",
+    "FlockSoundness.Discharge.Layout.Readers.Copies": "53314a2c301a66788d3978336de8b259062a17ff83a29f6fa2e6ac02b198c480",
+    "FlockSoundness.Discharge.Layout.Readers.Pos": "4b9e21d7c7b352c29533c8a8519cd7a10b6d006fc8eb0085a0a35dadd3f1c945",
+    "FlockSoundness.Discharge.Layout.Readers.ValPinned": "2a9a9f54b4cf0bdbd878f7e6d118e65d3d76a08730bf1663ce7bdfbca5f263f1",
+    "FlockSoundness.Discharge.Layout.Readers.W": "cb6cce7bc6d5632b1da70852a3b21bd2c7a13ca6e9d30d9dd40b2a1ac708bad1",
+    "FlockSoundness.Discharge.Layout.Readers.bcAt": "637d609e98bc2a251c861b093aff8e75de7c50a526442c040f4622d15e2b9dd1",
+    "FlockSoundness.Discharge.Layout.Readers.idx": "a2d91f626ddaf7f4744ed8a35227429802311a055d1e2bcb268df57b408166d4",
+    "FlockSoundness.Discharge.Layout.Readers.isRow": "e3ff8a0264c83e9e5ef1b2615e198d13fe1f6ea58c1b3da2ded930de26b746cb",
+    "FlockSoundness.Discharge.Layout.Readers.pos": "ffb6416fb0fc1123c61f95f9f205afc6033fa45ad980e92db8d27383b68b92b1",
+    "FlockSoundness.Discharge.Layout.Readers.regBc": "1aa31d8f94b2f5db6d4418704a14aa7c9899294008e8764cd310fbbfa9ebcc1b",
+    "FlockSoundness.Discharge.Layout.Readers.regVal": "18b50306b14b496e77be94dd23944981675f2b38ee23ffd3f3dd9490c58ab219",
+    "FlockSoundness.Discharge.Layout.Readers.rowAt": "476a02e363c5b2257ec814e79e11ad557a4f27e39b8062ed320ea8349d48fbc0",
+    "FlockSoundness.Discharge.Layout.Readers.rowBits": "3468477d98af9865b7ef09cd26ccf06307b60c61de8569189d657eea5f9285b2",
+    "FlockSoundness.Discharge.Layout.Readers.valAt": "1ccb6ab4492f06c3c630c085a3f68ad864c0699801eb2a913097740318c7cc9e"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.Readers": {
+   "digest": "5b7b6100912814d36f4e2c373feaa19bf9c083a1e59854d6e9bac823059e4230",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.padBits": "674e6c0a44dda58f679b946579dc6b2767f688dee5e2d52e57996bc016d26425"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned"
+   ]
+  },
+  "FlockSoundness.Discharge.Layout.Site": {
+   "digest": "961dde70870dc902a31e14f81f0fab5efa1f8318605091a7e0128b5a375c344f",
+   "definitions": {
+    "FlockSoundness.Discharge.Layout.BcSite": "f2f6d81072057a5ba32363d27c1e424492a4b33a53989e12d546ba5d919510c7",
+    "FlockSoundness.Discharge.Layout.siteAddr": "4290c174965ee8752263d3675e390943c8ce9ad06bac0b995664a418462b262a"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned"
+   ]
+  },
+  "FlockSoundness.Discharge.Placed.Keyed": {
+   "digest": "c2c38bf5d364ccf846a71d1f71e0162256f5abd26dee4eb0fbd8448a6f3a6e59",
+   "definitions": {
+    "FlockSoundness.Discharge.Placed.Sites.progPlaces_keyProg": "aa0bc4f773c681cb91fe89fd165db4013bc7c1b24b42c83f3e0d5aab9100aab6",
+    "FlockSoundness.Discharge.Placed.keyProg": "1e6d14ae0da7d8d09e033f920a397f218ddd7f54737886b5a69417791312a18f"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate"
+   ]
+  },
   "FlockSoundness.Discharge.Placed.Setup": {
-   "digest": "b7d505c870c39e87288db81cbf79c044a932c608bd62d0d475fae0cc23fd6792",
+   "digest": "91365c05697986b186ccf42f1de3ee1802f8b5997732ae85676d0533f3f06072",
    "definitions": {
     "FlockSoundness.Discharge.Placed.Accepted": "ec16515e7909d5871eb920dc707b2336094f628e52f5bac7f135561a8f7def23",
     "FlockSoundness.Discharge.Placed.Accepted.cf": "39c9f0d6aee5c8f9bc645eb4a22a9724dfaeef7706914bb73687fe9962dc3e3e",
+    "FlockSoundness.Discharge.Placed.Accepted.coins": "71c0e9375ca77e8c73ea5c934a39d5e3a1ddda25518e91fc983b4c117d2df97b",
     "FlockSoundness.Discharge.Placed.Accepted.col": "f3d0c59993a57edca1a2951d7b38b55c336dcafff8e1a6f67471e9fec8deb5d8",
+    "FlockSoundness.Discharge.Placed.Accepted.draw": "cd2bed415394a3e462b4f1a31662a078cc473bbdccf18fdb60d8b0421542f807",
+    "FlockSoundness.Discharge.Placed.Accepted.partition": "2af7219ebbe877db44ac4eb214c80519c632d8f682960f6dbf71a05c5c5ef565",
+    "FlockSoundness.Discharge.Placed.Accepted.pf": "acd93b2f9e6f278bc9e35a81c560622e1fdd1fd4b611e399ed9e664224b05573",
+    "FlockSoundness.Discharge.Placed.Accepted.program": "bef7edb454e0e9f323fcca5fe4bf5346f3e2241af208d7b71beebf844571ca4a",
     "FlockSoundness.Discharge.Placed.Accepted.regs": "59dcb4bd96942bf3236d9b56e2f1327af6408bf0822019929f6d0b06fd703ddd",
     "FlockSoundness.Discharge.Placed.Accepted.rows": "160c394d442aa12f1c165fc4aac5303dfc8545f1931d6ec10f51d097bc1370c7",
     "FlockSoundness.Discharge.Placed.Accepted.st": "38abc98c31480569067986c9dd4375723f5e195a1a0da9d8a71f36d00ae419da",
@@ -8005,16 +9021,47 @@
     "FlockSoundness.Discharge.Placed.Sites.RowsOf": "87ccc97d74505fc0c0f54f2e5b10274907da63fb45fe2ad5e4a5a8a142ff40af",
     "FlockSoundness.Discharge.Placed.Sites.acc": "d27fea1821cf54a405dc6bf12997f7befa3b11e27df702b07812bb963dbaa851",
     "FlockSoundness.Discharge.Placed.Sites.col": "fb849ae6b95c3fcfc10bf0c8235112ca17a6b2e8a8bd4d6ed3ae8b6e4fde53ba",
+    "FlockSoundness.Discharge.Placed.Sites.o": "b68a7e5a0e469db657f9c560f87556286818bfe2a06c80c40ba36f7c37971a0c",
     "FlockSoundness.Discharge.Placed.Sites.vu": "83725235a960c0acf0b81edcd8a224da2503ab3ba27c8218d798e94a05e7d813",
     "FlockSoundness.Discharge.Placed.circuitRows": "9a73797cf46e900e54dacb68f5b473f4138f9a5f3dcc9ab6a29f7e2842ddb0a2",
     "FlockSoundness.Discharge.Placed.gates": "bc895c8c5f4b47348a2e78f79ede0718f90132a0435361576d615a476a87a58f",
+    "FlockSoundness.Discharge.Placed.progPlaces": "d6086693397e4a8ee8f4dbc32fe65ac3291c5c19aebf912887de7a6afb9c44c8",
+    "FlockSoundness.Discharge.Placed.progPlaces_of_layout": "8341655642a49478709b26b56e2202d4ba9aba9d1931d7e7ba60c51cbca2a716",
     "FlockSoundness.Discharge.Placed.uniform": "65281c0d07e03bc97cfeb4962d95824fd69807a0d84420348f1c8283f4bb3eaa"
    },
    "pins": [
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform"
+   ]
+  },
+  "FlockSoundness.Discharge.Placed.Wiring": {
+   "digest": "d8a7616d6bd8731a76cd545cdc179cf74d64b4f70370b5a9ebfc4c01d3bee744",
+   "definitions": {
+    "FlockSoundness.Discharge.Placed.circuitProg": "f59b5b355961b2e6466554c936393b68eaa658d8e88ee384704e8f03bd1c46b7",
+    "FlockSoundness.Discharge.Placed.inGates": "896558ace85d87d03fc3d03d90e28b701b489a2af26f1daa535c24196386482c",
+    "FlockSoundness.Discharge.Placed.insOf": "5d1666027d77bd8166ee39c7093ab592bd11be747d12a1330bbe87f56b70b459",
+    "FlockSoundness.Discharge.Placed.oneGate": "edb0ffad264a60ea87ecf28add27cffad3f2696ec480ad336c0c5df5f6f91513",
+    "FlockSoundness.Discharge.Placed.srcGate": "547d987229dfb599f3681be0a8c4e45da55d9d473b95b7df977149e5269d87d1",
+    "FlockSoundness.Discharge.Placed.zeroGate": "2470ebd857a4c6e4738c56913eb4e8b62dba2dfa558a218702dd87ab05a1c05e"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate"
    ]
   },
   "FlockSoundness.E2E": {
@@ -8043,6 +9090,9 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -8051,6 +9101,36 @@
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
     "FlockSoundness.UProg.rowsL1"
+   ]
+  },
+  "FlockSoundness.ExecCheck": {
+   "digest": "ab4701500e1edfcacef25a2da533aecc4d3dce8645caf36431f73e72603a40d9",
+   "definitions": {
+    "FlockSoundness.CheckFacts": "11a0fcf87f3ff87e4fb47aff97dd0fb66de8eee4fe7638a62f148ef4133754e9"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_block",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased",
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.zeroPos_block"
+   ]
+  },
+  "FlockSoundness.ExecCircuit": {
+   "digest": "811794a8ee9a22e5f9c7fc0bb9be6fd6fcffb5ecb89fc85c3d5cf0f8dfdb2f63",
+   "definitions": {
+    "FlockSoundness.ParseFacts": "cc617dd53b75a93428fc91b6e157b9bb5b3bb110d577d2b7ed978993abef9c88"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_block",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased",
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.zeroPos_block"
    ]
   },
   "FlockSoundness.ExecDraw": {
@@ -8097,6 +9177,47 @@
     "FlockSoundness.Prog.flock_headline"
    ]
   },
+  "FlockSoundness.ExecFlatCopies": {
+   "digest": "144231b4cb22cb568e6c0365d37410a47d707d7cf1511e4f03159cd26d0c1551",
+   "definitions": {
+    "FlockSoundness.Flat.RowBit": "dead0c812f85b7147fe63e0da16e65609df6ba1bdfd4287d9dd4d2375d49b56a",
+    "FlockSoundness.Flat.cutCol": "ee4c88e5edc7edd0a7de30f88202aca54f4782a5a165581ca6fb5100c290f63f",
+    "FlockSoundness.Flat.cutPairs": "c23632dcb3e46a6bf401ba41f390758eac428d969dd329db69e5649172a265f3",
+    "FlockSoundness.Flat.cutSrc": "0ea962244b26aa4c8c8dfd6761641b3c8138e967254ff7e68af1a0227886cb93",
+    "FlockSoundness.Flat.flatSrc": "07a6fa80ee15b2ab8a2da27053289e3acb6456b9d17643ff09e8d578a6d8d6bf",
+    "FlockSoundness.Flat.leafCol": "2da1dfa1548624101c2ca801d54884594e3392a2c1bf117bf3ae7709a7df2e23",
+    "FlockSoundness.Flat.leafPairs": "c61bf10e159c597eed66f5cb95adaf756c8a3142707763e077bc7b81c29f5062",
+    "FlockSoundness.Flat.leafSrc": "77d4682c30293a9302723b673d6edbbf50cd555f0614d276d7c5560b59adf454",
+    "FlockSoundness.Flat.wireDst": "d3877df592e18a499708813b2ae4b173bd5d13cffbf966da171fd9fbbe1d8bab",
+    "FlockSoundness.Flat.wirePairs": "4f54f046cdca7e38685d324fc9341c79f634a4a038ad0320f5b5914c6aa97b03",
+    "FlockSoundness.Flat.wireSrc": "10ba242f1e2ab9c0181776c8df5fd07aeed640840dad66eca071bbcccc3c5b1c",
+    "FlockSoundness.Flat.wireWidth": "3b5d55214b48bed752f3cdd56acfbd037fab3738496920a733c41a16bfcc543f",
+    "FlockSoundness.FlatDelta": "e26610bc110974d04e4ea11ddbe6b29a87f0880c92c91b6d10c1cab1ecdfd3be",
+    "FlockSoundness.flatSrcAt": "7e35eaedbe9ee8378b3cbdb6584d7db382cdf9bcc297d0052da4b2e809d03e71",
+    "FlockSoundness.portBits": "87a62dace7413f5fb73d60eff42d7f61d9185268a739c2883f3dd551066e3bba",
+    "FlockSoundness.portOf": "b8c65ec2ea12ae713c17294933f906e1fa465ba7337185ce7445b0169ff3b85b"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_block",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.flatSrc_key",
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq",
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate"
+   ]
+  },
   "FlockSoundness.ExecPlacement": {
    "digest": "fc1d523d24b3980f421815aace99c8e6812ade3e2a326d9264add1b153db5340",
    "definitions": {
@@ -8120,6 +9241,14 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
@@ -8149,6 +9278,17 @@
     "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
     "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
     "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
@@ -8173,6 +9313,34 @@
     "FlockSoundness.Binding.flock_e2e_count_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Prog.flock_headline"
+   ]
+  },
+  "FlockSoundness.ExecTyped": {
+   "digest": "f32c1e6c57c05880c575b4a3951abaf2281f30e672201bb802c213e9decafdf3",
+   "definitions": {
+    "FlockSoundness.Typed.msgCol": "5900119eabf6c2a64a37addc77312e13cf7986cdb8886a8b41f395fbc54935b0",
+    "FlockSoundness.Typed.starts": "1e4b3378bcc0ab7e6bb2d562ba84d6923853bd201b4d09cedb724ceb084b781b"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
+    "FlockSoundness.Discharge.Aliased.copies_of_key",
+    "FlockSoundness.Discharge.Aliased.copyPos_block",
+    "FlockSoundness.Discharge.Aliased.copyPos_zero",
+    "FlockSoundness.Discharge.Aliased.flatSrc_key",
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq",
+    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased",
+    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
+    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
+    "FlockSoundness.Discharge.Aliased.zeroPos_block",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.msgCol_lt_of_parse",
+    "FlockSoundness.Discharge.Layout.single_gate"
    ]
   },
   "FlockSoundness.Extract": {
@@ -8746,6 +9914,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -8880,6 +10056,17 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Discharge.Placed.Sites.placed",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -8981,6 +10168,27 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.exists_read_of_io",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.keyRowOf_wire",
+    "FlockSoundness.Discharge.Layout.keysRow_keyProg",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.Layout.region_read",
+    "FlockSoundness.Discharge.Layout.single_gate",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
@@ -9110,6 +10318,14 @@
     "FlockSoundness.Binding.flock_e2e_drawn_exec_hm96",
     "FlockSoundness.Binding.flock_e2e_drawn_hm96",
     "FlockSoundness.Binding.registered_weights_extracted",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Prog.flock_e2e_count",
     "FlockSoundness.Prog.flock_e2e_drawn",
     "FlockSoundness.Prog.flock_headline",
@@ -9533,6 +10749,24 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.copy_site",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.Layout.region_read",
+    "FlockSoundness.Discharge.Layout.regionsOf_mem",
     "FlockSoundness.Discharge.Placed.Accepted.placement",
     "FlockSoundness.Discharge.Placed.Accepted.rows_eq",
     "FlockSoundness.Discharge.Placed.Sites.placed",
@@ -9877,6 +11111,13 @@
     "FlockSoundness.Refine.regionsOf": "64a77bb4527c2fa7b43f0591444fc7f6078ac344e7fe2e7f6b50972318acd3ae"
    },
    "pins": [
+    "FlockSoundness.Discharge.Layout.bc_drawn",
+    "FlockSoundness.Discharge.Layout.bc_pinned",
+    "FlockSoundness.Discharge.Layout.bc_site",
+    "FlockSoundness.Discharge.Layout.bc_site_of",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.region_read",
+    "FlockSoundness.Discharge.Layout.regionsOf_mem",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.setupH_wf",
     "FlockSoundness.Refine.stmtOf_linkLayout",
@@ -10315,6 +11556,17 @@
     "FlockSoundness.Discharge.Const.constCols_of_oneGate",
     "FlockSoundness.Discharge.Const.constCols_of_oneWire",
     "FlockSoundness.Discharge.Const.image_oneWire",
+    "FlockSoundness.Discharge.Layout.block_gateAt",
+    "FlockSoundness.Discharge.Layout.decode_row_of_cols",
+    "FlockSoundness.Discharge.Layout.gateAt_one",
+    "FlockSoundness.Discharge.Layout.gateAt_zero",
+    "FlockSoundness.Discharge.Layout.gate_pub",
+    "FlockSoundness.Discharge.Layout.keyProg_bcPinned",
+    "FlockSoundness.Discharge.Layout.keyProg_copies",
+    "FlockSoundness.Discharge.Layout.keyProg_valPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
+    "FlockSoundness.Discharge.Layout.ofRows_copies",
+    "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Discharge.Placed.Sites.placed",
     "FlockSoundness.Discharge.Placed.Sites.rowsOf_uniform",
     "FlockSoundness.Prog.flock_e2e_count",
@@ -10864,154 +12116,6 @@
     "FlockSoundness.ZK.Table.table_shvzk_hm96",
     "FlockSoundness.ZK.padOnto_M1",
     "FlockSoundness.ZK.padsOnto_monomial"
-   ]
-  },
-  "FlockSoundness.Discharge.Const.Inst": {
-   "digest": "e8ab7faea21f3b315dc33919fdabf6fab8683b732b98cd81b6bfe4a1d40d7114",
-   "definitions": {
-    "FlockSoundness.Discharge.Const.Prog.OneGate": "0db4d6624a6c246e5ccad3d45a16ef4741230c96283a1bf337fa40298b9d4878",
-    "FlockSoundness.Discharge.Const.Prog.castW": "854c12b44e6fa85198ad0f4358bddf6393f3b98ac5642ec6d27f0500456a9ecd",
-    "FlockSoundness.Discharge.Const.Prog.insAt": "97e024c950554b0bff41ccff58caa0c067a000db40818a787efb0c239b6547a2",
-    "FlockSoundness.Discharge.Const.Prog.instC": "51e5b1716e1c68b0be6fd985a25cbb4daef192d982ba59dee0391d42e7e92bf6",
-    "FlockSoundness.Discharge.Const.Prog.oneAt": "4cdbc633c1ff6576686ec0867f1ed22dbcb0bcff942c8d3c932fbd9c73e3cead",
-    "FlockSoundness.Discharge.Const.Prog.rowsWireC": "9dbb5b0dddc8b50ee642561ebe6cce113b441334e422181a03da11367d707d7a"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Const.Prog.instC_wire_input",
-    "FlockSoundness.Discharge.Const.Prog.instC_wire_one",
-    "FlockSoundness.Discharge.Const.UProg.constCols_toRows",
-    "FlockSoundness.Discharge.Const.UProg.toRows_oneGate",
-    "FlockSoundness.Discharge.Const.constCols_of_instC",
-    "FlockSoundness.Discharge.Const.constCols_of_oneGate"
-   ]
-  },
-  "FlockSoundness.Discharge.Aliased.Copies": {
-   "digest": "2b15111645576d246c904d1196bd7cfa3f1c9325f7be7e83cd8cc4a08d47770c",
-   "definitions": {
-    "FlockSoundness.Discharge.Aliased.Copies": "208a40bdc0f89e489454f675884a8d777a720f1fb72e3b359188fc6645a16003",
-    "FlockSoundness.Discharge.Aliased.IsZeroPos": "be0d43712235fc0824c9d0bcce587e0c18cab5c68c5d33d64416a4b02689c5e6",
-    "FlockSoundness.Discharge.Aliased.UnitFacts": "05eb1385af44d80040caf3f9a5318ab6c6d486225b3980025866bbb16774e079",
-    "FlockSoundness.Discharge.Aliased.copyAt": "8d595a2928162c80eef0585b9358095a5df372aaabc18d8ac04764704176a0a8",
-    "FlockSoundness.Discharge.Aliased.copyPos": "6a4748a9b6bb0493604399e1b00311f6bd261685d4dd04c2ed98cf2539b92cc4",
-    "FlockSoundness.Discharge.Aliased.zeroPos": "316cf24ce88617e1904a79de81af8dd40bc6d8253b582aec3d8afa4b85b618bb"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
-    "FlockSoundness.Discharge.Aliased.copies_of_key",
-    "FlockSoundness.Discharge.Aliased.copyPos_block",
-    "FlockSoundness.Discharge.Aliased.copyPos_zero",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased",
-    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
-    "FlockSoundness.Discharge.Aliased.zeroPos_block"
-   ]
-  },
-  "FlockSoundness.Discharge.Aliased.Keys": {
-   "digest": "d31924aab29150f79f17f5414039c6d06aa5e7b9cf21c4f1f15242e9766ca7c7",
-   "definitions": {
-    "FlockSoundness.Discharge.Aliased.Src": "f81afd0561fe868011a494376609b2293452d16566ce22af01d66b88dd0b2807",
-    "FlockSoundness.Discharge.Aliased.Src.lit": "2d3d0630107db25f74b9cd6e7d5e05b96958be589158214751c08b74b6c4a0c5",
-    "FlockSoundness.Discharge.Aliased.Src.msg": "79656706b1c929357b6dd462b4348bce2de8310d6e35615c91443e473f42098f",
-    "FlockSoundness.Discharge.Aliased.Src.pad": "81bdf25cadd0a124ef92466a91ed3bd6edfb137657c18ff6f49b5b7545828883",
-    "FlockSoundness.Discharge.Aliased.Src.wire": "130d570620b175cc3c193342ba57b43a26f555b1c878118c15dfecc74f986745",
-    "FlockSoundness.Discharge.Aliased.Src.zero": "86262691cada959e3d82d0ef427a618ea8825ef1f5cabda55f4f1e573e9d6737",
-    "FlockSoundness.Discharge.Aliased.instDecidableEqSrc": "534a687fd0f116f9297d0b1c69abf3193a25efc53c7fb0378af146736d9faf3a",
-    "FlockSoundness.Discharge.Aliased.instDecidableEqSrc.decEq": "cf0d50f55c1bff0ac70713589f8578d0911de827f50093892ece8c8ea4d61763",
-    "FlockSoundness.Discharge.Aliased.keyIdx": "f55863948d548711b8c53c55a1f4d496ecb2ba4f3a530cb49766069696ad79a0",
-    "FlockSoundness.Discharge.Aliased.realize": "35d834e98b6da70f166cc81ee60e65d0aaaf68c123d990198a15ca861a689dff",
-    "FlockSoundness.Discharge.Aliased.srcAt": "ec6bd4842e4461487da607f331ca2b4b4cda11fdcaeead9001fd6c47159d2c96",
-    "FlockSoundness.Discharge.Aliased.srcKey": "da7d260b5d53d2a57fe1aa3b87ad81803bd932a2147d955a1ccc655b3d2f6107"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Aliased.copies_of_key",
-    "FlockSoundness.Discharge.Aliased.copyPos_zero",
-    "FlockSoundness.Discharge.Aliased.flatSrc_key",
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq",
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key"
-   ]
-  },
-  "FlockSoundness.ExecCheck": {
-   "digest": "ab4701500e1edfcacef25a2da533aecc4d3dce8645caf36431f73e72603a40d9",
-   "definitions": {
-    "FlockSoundness.CheckFacts": "11a0fcf87f3ff87e4fb47aff97dd0fb66de8eee4fe7638a62f148ef4133754e9"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
-    "FlockSoundness.Discharge.Aliased.copies_of_key",
-    "FlockSoundness.Discharge.Aliased.copyPos_block",
-    "FlockSoundness.Discharge.Aliased.copyPos_zero",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased",
-    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
-    "FlockSoundness.Discharge.Aliased.zeroPos_block"
-   ]
-  },
-  "FlockSoundness.ExecCircuit": {
-   "digest": "811794a8ee9a22e5f9c7fc0bb9be6fd6fcffb5ecb89fc85c3d5cf0f8dfdb2f63",
-   "definitions": {
-    "FlockSoundness.ParseFacts": "cc617dd53b75a93428fc91b6e157b9bb5b3bb110d577d2b7ed978993abef9c88"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
-    "FlockSoundness.Discharge.Aliased.copies_of_key",
-    "FlockSoundness.Discharge.Aliased.copyPos_block",
-    "FlockSoundness.Discharge.Aliased.copyPos_zero",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased",
-    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
-    "FlockSoundness.Discharge.Aliased.zeroPos_block"
-   ]
-  },
-  "FlockSoundness.ExecFlatCopies": {
-   "digest": "144231b4cb22cb568e6c0365d37410a47d707d7cf1511e4f03159cd26d0c1551",
-   "definitions": {
-    "FlockSoundness.Flat.RowBit": "dead0c812f85b7147fe63e0da16e65609df6ba1bdfd4287d9dd4d2375d49b56a",
-    "FlockSoundness.Flat.cutCol": "ee4c88e5edc7edd0a7de30f88202aca54f4782a5a165581ca6fb5100c290f63f",
-    "FlockSoundness.Flat.cutPairs": "c23632dcb3e46a6bf401ba41f390758eac428d969dd329db69e5649172a265f3",
-    "FlockSoundness.Flat.cutSrc": "0ea962244b26aa4c8c8dfd6761641b3c8138e967254ff7e68af1a0227886cb93",
-    "FlockSoundness.Flat.flatSrc": "07a6fa80ee15b2ab8a2da27053289e3acb6456b9d17643ff09e8d578a6d8d6bf",
-    "FlockSoundness.Flat.leafCol": "2da1dfa1548624101c2ca801d54884594e3392a2c1bf117bf3ae7709a7df2e23",
-    "FlockSoundness.Flat.leafPairs": "c61bf10e159c597eed66f5cb95adaf756c8a3142707763e077bc7b81c29f5062",
-    "FlockSoundness.Flat.leafSrc": "77d4682c30293a9302723b673d6edbbf50cd555f0614d276d7c5560b59adf454",
-    "FlockSoundness.Flat.wireDst": "d3877df592e18a499708813b2ae4b173bd5d13cffbf966da171fd9fbbe1d8bab",
-    "FlockSoundness.Flat.wirePairs": "4f54f046cdca7e38685d324fc9341c79f634a4a038ad0320f5b5914c6aa97b03",
-    "FlockSoundness.Flat.wireSrc": "10ba242f1e2ab9c0181776c8df5fd07aeed640840dad66eca071bbcccc3c5b1c",
-    "FlockSoundness.Flat.wireWidth": "3b5d55214b48bed752f3cdd56acfbd037fab3738496920a733c41a16bfcc543f",
-    "FlockSoundness.FlatDelta": "e26610bc110974d04e4ea11ddbe6b29a87f0880c92c91b6d10c1cab1ecdfd3be",
-    "FlockSoundness.flatSrcAt": "7e35eaedbe9ee8378b3cbdb6584d7db382cdf9bcc297d0052da4b2e809d03e71",
-    "FlockSoundness.portBits": "87a62dace7413f5fb73d60eff42d7f61d9185268a739c2883f3dd551066e3bba",
-    "FlockSoundness.portOf": "b8c65ec2ea12ae713c17294933f906e1fa465ba7337185ce7445b0169ff3b85b"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
-    "FlockSoundness.Discharge.Aliased.copies_of_key",
-    "FlockSoundness.Discharge.Aliased.copyPos_block",
-    "FlockSoundness.Discharge.Aliased.copyPos_zero",
-    "FlockSoundness.Discharge.Aliased.flatSrc_key",
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq",
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
-    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
-    "FlockSoundness.Discharge.Aliased.zeroPos_block"
-   ]
-  },
-  "FlockSoundness.ExecTyped": {
-   "digest": "f32c1e6c57c05880c575b4a3951abaf2281f30e672201bb802c213e9decafdf3",
-   "definitions": {
-    "FlockSoundness.Typed.msgCol": "5900119eabf6c2a64a37addc77312e13cf7986cdb8886a8b41f395fbc54935b0",
-    "FlockSoundness.Typed.starts": "1e4b3378bcc0ab7e6bb2d562ba84d6923853bd201b4d09cedb724ceb084b781b"
-   },
-   "pins": [
-    "FlockSoundness.Discharge.Aliased.aliased_of_copies",
-    "FlockSoundness.Discharge.Aliased.copies_of_key",
-    "FlockSoundness.Discharge.Aliased.copyPos_block",
-    "FlockSoundness.Discharge.Aliased.copyPos_zero",
-    "FlockSoundness.Discharge.Aliased.flatSrc_key",
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq",
-    "FlockSoundness.Discharge.Aliased.keyIdx_eq_none",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased",
-    "FlockSoundness.Discharge.Aliased.setupH_aliased_of_key",
-    "FlockSoundness.Discharge.Aliased.setupH_unitFacts",
-    "FlockSoundness.Discharge.Aliased.zeroPos_block"
    ]
   }
  },
