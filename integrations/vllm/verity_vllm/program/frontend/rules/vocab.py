@@ -57,9 +57,9 @@ class Vocabulary:
         return d
 
 
-def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM=None):
-    if FA2_MASKED_FROM is None:
-        raise TypeError("off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11)")
+def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
+    """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
+    `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
     from verity_vllm.program.registry import fa2_check_inf as _f2v  # noqa: PLC0415
     return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
