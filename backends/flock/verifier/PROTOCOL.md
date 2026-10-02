@@ -1328,9 +1328,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
   whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
   and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
-  failing cut refuses the partition, naming the Call and its codes.
-  For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an audit reports
-  as a gap.
+  failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
+  is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
   The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
   read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
