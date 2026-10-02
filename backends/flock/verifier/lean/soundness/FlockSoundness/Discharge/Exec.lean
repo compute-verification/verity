@@ -9,6 +9,9 @@ import FlockSoundness.Discharge.Exec.SessionSoundL
 import FlockSoundness.Discharge.Exec.SessionAccL
 import FlockSoundness.Discharge.Exec.SessionBatchL
 import FlockSoundness.Discharge.Exec.SessionBatchAccL
+import FlockSoundness.Discharge.Exec.FlockBatchedL
+import FlockSoundness.Discharge.Exec.FlockBatchedAccL
+import FlockSoundness.Discharge.Exec.StrictCRL
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -26,6 +29,10 @@ import FlockSoundness.Discharge.Exec.SessionBatchAccL
 * `SessionSoundL`, `SessionAccL`, `SessionBatchL`, `SessionBatchAccL`: `Session.lean`, `SessionAcc.lean`,
   `SessionBatch.lean` and `SessionBatchAcc.lean` over a leaf scheme: each table of the salted batched session is
   knowledge sound (`session_knowledge_soundL`, `session_knowledge_sound_accL`, `joint_le_BL`, `joint_le_accBL`);
+* `FlockBatchedL`, `FlockBatchedAccL`: the batched audit's analysis over the salted session (`analysisBL`,
+  `analysisBEL`), its knowledge term discharged (`flock_batched_knowledgeSoundEL`);
+* `StrictCRL`: the salted finders under `SHA512CRStrict`: the compiled theorem (`table_sound_compiled_strictL`) and the
+  knowledge term, at most `StrictCR.ksAvgStrict`, the unsalted closed form (`ksAvgBE_le_strictL`);
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
   `flock_headline_exec_L`).
 -/
