@@ -193,6 +193,9 @@ then names the mode, and `flock-verify verify --coins os` binds that identity (`
 from one OS seed through a SHA-256 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
 That rests on `prf/sha-256` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
 only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
+The identity and a bench point's `coins` say which mode ran. flock-verify replays the recorded coins, so that they were
+the verifier's own OS draws, each drawn after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
+A6, which no check of the record establishes.
 
 ## Other named assumptions
 

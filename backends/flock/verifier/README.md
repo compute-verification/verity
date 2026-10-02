@@ -34,8 +34,8 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
   statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10). Runs
   staged at `68ae79f2` or later use this name. The unsuffixed name stays `e51e2b86`'s statement for the runs staged before.
-  A proving build's session on per-round OS coins (`FC_COINS=os`) is verified with `--coins os`, which binds the identity
-  that mode writes (PROTOCOL.md §7.1); a seeded one with `--coins seed`, the default.
+  A proving build's session on per-round OS coins (`FC_COINS=os`) needs `--coins os`, which binds the identity that mode
+  writes, not who drew the coins (PROTOCOL.md §7.1, §17.2); a seeded one needs `--coins seed`, the default.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
 
