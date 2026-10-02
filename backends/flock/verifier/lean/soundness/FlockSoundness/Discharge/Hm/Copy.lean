@@ -168,84 +168,119 @@ theorem wireF_mem {c : Circuit} {g p : ℕ} {e : ℕ × ℕ} (he : e ∈ wireF c
   · exact Or.inl ⟨1 + 1 * i, by omega, by omega, t, ht, rfl⟩
   · exact Or.inr ⟨t, ht, rfl⟩
 
-section Loc
+/-- What the rows' slots need of an accepted statement's circuit, a typed template's (`ofT`) or an untyped one's
+(`ofL`): its ranges (disjoint, in the block, of their nets' slots, `G · per_vu` slots each, one per net), its nets'
+constants inside their slots, the rows' nets (the verifier's, `HmNets.check`) and their `per_vu`. -/
+structure RowRanges (c : Circuit) : Prop where
+  disj : c.ranges.toList.Pairwise Apart
+  bound : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog
+  slotLog : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → r.slotLog = (c.nets.getD i default).2.unitLog
+  count : ∀ r ∈ c.ranges.toList, ∀ n, r.kind = .net n → r.count = c.g * c.perVu.getD n 0
+  one_range : ∀ n < c.nets.size, (c.ranges.filter (·.kind == Kind.net n)).size = 1
+  fit : ∀ i, (c.nets.getD i default).2.constPos < 2 ^ (c.nets.getD i default).2.unitLog
+  shaNet : c.shaNet < c.nets.size
+  hmNet : c.hmNet < c.nets.size
+  perVu_sha : c.perVu.getD c.shaNet 0 = (HmRow.rowSlots c.ports).1
+  perVu_hm : c.perVu.getD c.hmNet 0 = nextPow2 c.ports.size
+  rowNets : HmNets.check c = .ok ()
+  kLog : c.kLog ≤ 32
 
-variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
-  {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
+theorem RowRanges.ofT {st : Stmt} {tb : TypedBlock} {words : String → Option (Array ℕ)} {done : Array D} {u : D}
+    {tags : Tags} {t : Typed.Template} (T : TemplateLayout st tb words done u) (C : CheckFactsT st.c tb)
+    (P : ParseFactsT tags t st.c) : RowRanges st.c :=
+  ⟨T.disj, T.bound, T.slotLog, T.count, T.one_range, T.fit, T.shaNet.1, T.hmNet.1, C.perVu_sha, C.perVu_hm, P.rowNets,
+    T.kLog⟩
 
-set_option hygiene false in
-local notation "𝒖" => done.getD unit default
+theorem RowRanges.ofL {st : Stmt} {tags : Tags} (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c) :
+    RowRanges st.c :=
+  ⟨L.disj, L.bound, L.slotLog, C.count, C.one_range, fun i => (L.fit i).1, P.shaNet, P.hmNet, C.perVu_sha, C.perVu_hm,
+    P.rowNets, L.kLog⟩
 
-theorem net_off_lt (T : TemplateLayout st tb words done 𝒖) {n : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
-    {l : Flock.HmNets.Laid} {name : String}
-    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
-    {off : ℕ} (ho : off < (st.c.nets.getD n default).2.inWords * Flock.WORD) : off < 2 ^ (st.c.rangeOf n).slotLog := by
+namespace RowRanges
+
+variable {c : Circuit} (R : RowRanges c)
+include R
+
+theorem range {n : ℕ} (hn : n < c.nets.size) :
+    c.rangeOf n ∈ c.ranges.toList ∧ (c.rangeOf n).kind = .net n ∧ (c.rangeOf n).count = c.g * c.perVu.getD n 0 ∧
+      (c.rangeOf n).slotLog = (c.nets.getD n default).2.unitLog := by
+  obtain ⟨hm, hk, -⟩ := rangeOf_spec (R.one_range n hn)
+  exact ⟨hm, hk, R.count _ hm _ hk, R.slotLog _ hm _ hk⟩
+
+theorem rowNet_lt {n : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) : n < c.nets.size := by
+  rcases hn with rfl | rfl
+  · exact R.shaNet
+  · exact R.hmNet
+
+theorem slot_lt_count {n g i : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) (hg : g < c.g) (hi : i < c.perVu.getD n 0) :
+    g * c.perVu.getD n 0 + i < (c.rangeOf n).count := by
+  rw [(R.range (R.rowNet_lt hn)).2.2.1]
+  calc g * c.perVu.getD n 0 + i < g * c.perVu.getD n 0 + c.perVu.getD n 0 := by omega
+    _ = (g + 1) * c.perVu.getD n 0 := (Nat.succ_mul _ _).symm
+    _ ≤ c.g * c.perVu.getD n 0 := Nat.mul_le_mul_right _ hg
+
+theorem net_off_lt {n : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) {l : Flock.HmNets.Laid} {name : String}
+    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (c.nets.getD n default).2)
+    {off : ℕ} (ho : off < (c.nets.getD n default).2.inWords * Flock.WORD) : off < 2 ^ (c.rangeOf n).slotLog := by
   obtain ⟨-, -, -, -, hcp, -, -, hin, -⟩ := Net.ofRows_ok hl
-  rw [(T.range (rowNet_lt T hn)).2.2.2]
-  have := T.fit n
+  rw [(R.range (R.rowNet_lt hn)).2.2.2]
+  have := R.fit n
   omega
 
 /-- Bit `t` of port `p`'s compression `k`'s `cv` input, at VU `g`: in the `sha512x3` slot `(at_p + k) / 3`, at
 `1536 · ((at_p + k) % 3) + t`. -/
-theorem shaIn_at (T : TemplateLayout st tb words done 𝒖) (C : CheckFactsT st.c tb) (hck : HmNets.check st.c = .ok ())
-    {g p k t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (hk : k < st.c.ports[p]!.chunks) (ht : t < 512) :
-    AtSlot st.c st.c.shaNet (g * st.c.perVu.getD st.c.shaNet 0 + ((HmRow.rowSlots st.c.ports).2[p]!)[k]!.1)
-      (1536 * shaSub st.c p k + t) (shaBase st.c g p k + shaIn st.c (2 * shaSub st.c p k) + t) := by
+theorem shaIn_at {g p k t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks) (ht : t < 512) :
+    AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + ((HmRow.rowSlots c.ports).2[p]!)[k]!.1)
+      (1536 * shaSub c p k + t) (shaBase c g p k + shaIn c (2 * shaSub c p k) + t) := by
   have hs := rowSlot_lt hp hk
-  refine ⟨slot_lt_count T (Or.inl rfl) hg (by rw [C.perVu_sha]; exact hs.1),
-    net_off_lt T (Or.inl rfl) (shaNet_ofRows hck) (by rw [shaNet_inRows hck]; unfold shaSub; omega), ?_⟩
-  rw [(shaIn_eq hck (shaSub st.c p k) hs.2).1, shaBase, Circuit.slotCol, Nat.add_assoc]
+  refine ⟨R.slot_lt_count (Or.inl rfl) hg (by rw [R.perVu_sha]; exact hs.1),
+    R.net_off_lt (Or.inl rfl) (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; unfold shaSub; omega), ?_⟩
+  rw [(shaIn_eq R.rowNets (shaSub c p k) hs.2).1, shaBase, Circuit.slotCol, Nat.add_assoc]
 
 /-- Bit `off` of port `p`'s `hm96` slot's inputs, at VU `g`. -/
-theorem hmIn_at (T : TemplateLayout st tb words done 𝒖) (C : CheckFactsT st.c tb) (hck : HmNets.check st.c = .ok ())
-    {g p off : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (ho : off < 4096) :
-    AtSlot st.c st.c.hmNet (g * st.c.perVu.getD st.c.hmNet 0 + p) off (st.c.slotCol st.c.hmNet g p + off) :=
-  ⟨slot_lt_count T (Or.inr rfl) hg (by rw [C.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _)),
-    net_off_lt T (Or.inr rfl) (hmNet_ofRows hck) (by rw [hmNet_inRows hck]; exact ho), rfl⟩
+theorem hmIn_at {g p off : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ho : off < 4096) :
+    AtSlot c c.hmNet (g * c.perVu.getD c.hmNet 0 + p) off (c.slotCol c.hmNet g p + off) :=
+  ⟨R.slot_lt_count (Or.inr rfl) hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _)),
+    R.net_off_lt (Or.inr rfl) (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; exact ho), rfl⟩
 
-theorem sha_dec (T : TemplateLayout st tb words done 𝒖) (C : CheckFactsT st.c tb) (hck : HmNets.check st.c = .ok ())
-    {g p k t g' p' k' t' : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (hk : k < st.c.ports[p]!.chunks)
-    (ht : t < 512) (hg' : g' < st.c.g) (hp' : p' < st.c.ports.size) (hk' : k' < st.c.ports[p']!.chunks)
-    (ht' : t' < 512)
-    (h : shaBase st.c g p k + shaIn st.c (2 * shaSub st.c p k) + t =
-      shaBase st.c g' p' k' + shaIn st.c (2 * shaSub st.c p' k') + t') :
+theorem sha_dec {g p k t g' p' k' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks)
+    (ht : t < 512) (hg' : g' < c.g) (hp' : p' < c.ports.size) (hk' : k' < c.ports[p']!.chunks) (ht' : t' < 512)
+    (h : shaBase c g p k + shaIn c (2 * shaSub c p k) + t = shaBase c g' p' k' + shaIn c (2 * shaSub c p' k') + t') :
     g = g' ∧ p = p' ∧ k = k' ∧ t = t' := by
-  have hn := T.range T.shaNet.1
-  obtain ⟨-, hs, ho⟩ := (shaIn_at T C hck hg hp hk ht).inj T.disj hn.1 hn.2.1 hn.1 hn.2.1
-    (by rw [h]; exact shaIn_at T C hck hg' hp' hk' ht')
+  have hn := R.range R.shaNet
+  obtain ⟨-, hs, ho⟩ := (R.shaIn_at hg hp hk ht).inj R.disj hn.1 hn.2.1 hn.1 hn.2.1
+    (by rw [h]; exact R.shaIn_at hg' hp' hk' ht')
   have h1 := rowSlot_lt hp hk
   have h2 := rowSlot_lt hp' hk'
-  obtain ⟨rfl, hs⟩ := slot_inj (by rw [C.perVu_sha]; exact h1.1) (by rw [C.perVu_sha]; exact h2.1) hs
+  obtain ⟨rfl, hs⟩ := slot_inj (by rw [R.perVu_sha]; exact h1.1) (by rw [R.perVu_sha]; exact h2.1) hs
   unfold shaSub at ho
   rw [rowSlots_entry hp hk, rowSlots_entry hp' hk'] at hs ho
   simp only at hs ho
-  have : atOf st.c.ports p + k = atOf st.c.ports p' + k' := by omega
+  have : atOf c.ports p + k = atOf c.ports p' + k' := by omega
   obtain ⟨rfl, rfl⟩ := at_inj hp hp' hk hk' this
   exact ⟨rfl, rfl, rfl, by omega⟩
 
-theorem hm_dec (T : TemplateLayout st tb words done 𝒖) (C : CheckFactsT st.c tb) (hck : HmNets.check st.c = .ok ())
-    {g p off g' p' off' : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (ho : off < 4096) (hg' : g' < st.c.g)
-    (hp' : p' < st.c.ports.size) (ho' : off' < 4096)
-    (h : st.c.slotCol st.c.hmNet g p + off = st.c.slotCol st.c.hmNet g' p' + off') :
+theorem hm_dec {g p off g' p' off' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ho : off < 4096) (hg' : g' < c.g)
+    (hp' : p' < c.ports.size) (ho' : off' < 4096) (h : c.slotCol c.hmNet g p + off = c.slotCol c.hmNet g' p' + off') :
     g = g' ∧ p = p' ∧ off = off' := by
-  have hn := T.range T.hmNet.1
-  obtain ⟨-, hs, rfl⟩ := (hmIn_at T C hck hg hp ho).inj T.disj hn.1 hn.2.1 hn.1 hn.2.1
-    (by rw [h]; exact hmIn_at T C hck hg' hp' ho')
-  have hpv : ∀ q, q < st.c.ports.size → q < st.c.perVu.getD st.c.hmNet 0 := fun q hq => by
-    rw [C.perVu_hm]; exact lt_of_lt_of_le hq (le_nextPow2 _)
+  have hn := R.range R.hmNet
+  obtain ⟨-, hs, rfl⟩ := (R.hmIn_at hg hp ho).inj R.disj hn.1 hn.2.1 hn.1 hn.2.1
+    (by rw [h]; exact R.hmIn_at hg' hp' ho')
+  have hpv : ∀ q, q < c.ports.size → q < c.perVu.getD c.hmNet 0 := fun q hq => by
+    rw [R.perVu_hm]; exact lt_of_lt_of_le hq (le_nextPow2 _)
   obtain ⟨rfl, rfl⟩ := slot_inj (hpv p hp) (hpv p' hp') hs
   exact ⟨rfl, rfl, rfl⟩
 
-theorem sha_ne_hm_col (T : TemplateLayout st tb words done 𝒖) (C : CheckFactsT st.c tb)
-    (hck : HmNets.check st.c = .ok ()) {g p k t g' p' off' : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
-    (hk : k < st.c.ports[p]!.chunks) (ht : t < 512) (hg' : g' < st.c.g) (hp' : p' < st.c.ports.size)
-    (ho' : off' < 4096) :
-    shaBase st.c g p k + shaIn st.c (2 * shaSub st.c p k) + t ≠ st.c.slotCol st.c.hmNet g' p' + off' := by
+theorem sha_ne_hm_col {g p k t g' p' off' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks)
+    (ht : t < 512) (hg' : g' < c.g) (hp' : p' < c.ports.size) (ho' : off' < 4096) :
+    shaBase c g p k + shaIn c (2 * shaSub c p k) + t ≠ c.slotCol c.hmNet g' p' + off' := by
   intro h
-  have hn := T.range T.shaNet.1
-  have hm := T.range T.hmNet.1
-  exact sha_ne_hm hck ((shaIn_at T C hck hg hp hk ht).inj T.disj hn.1 hn.2.1 hm.1 hm.2.1
-    (by rw [h]; exact hmIn_at T C hck hg' hp' ho')).1
+  have hn := R.range R.shaNet
+  have hm := R.range R.hmNet
+  exact sha_ne_hm R.rowNets ((R.shaIn_at hg hp hk ht).inj R.disj hn.1 hn.2.1 hm.1 hm.2.1
+    (by rw [h]; exact R.hmIn_at hg' hp' ho')).1
+
+end RowRanges
 
 theorem blockBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) {y : ℕ}
     (hy : y < 2 ^ S.kLog) : blockBit S z o y = FlockSoundness.bit (S.block z o ⟨y, hy⟩) := by
@@ -254,61 +289,32 @@ theorem blockBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2
   · rfl
   · exact absurd hy ‹_›
 
-/-- **An input bit of a row net's slot holds its one copy.** At a self row `x` of a `sha512x3` or `hm96` slot below the
-net's input rows, where Δ's copies (`rowCopies`, `wireCopies`) write exactly one `(x, src)`, every block of a satisfying
-witness holds at `x` what it holds at `src`. -/
-theorem inBit_copy (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
-    (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (hleaf : Flat.leafPairs st.c = [])
-    (hcut : Flat.cutPairs st.c = []) (hda : st.da = (HmRow.delta st.c st.pin).1)
-    (hdb : st.db = (HmRow.delta st.c st.pin).2)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
-    (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {n s off x src : ℕ}
-    (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
+/-- **The block rows at an input bit of a row net's slot** with one copy `(x, src)`: at a self row `x` of a
+`sha512x3` or `hm96` slot below the net's input rows, where Δ_A and Δ_B write `(x, x)` and `(x, src)` and nothing else,
+the level-0 rows are `[src]`, in A and in B. -/
+theorem inBit_rows {st : Stmt} (R : RowRanges st.c) {n s off x src : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
+    (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
-    (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
-    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hsrc : src < 2 ^ st.c.kLog)
-    (hf : (rowCopies st.c st.pin ++ wireCopies st.c).filter (fun e => e.1 = x) = [(x, src)]) :
-    blockBit (T.model regs) z o x = blockBit (T.model regs) z o src := by
-  have hnn := rowNet_lt T hn
-  obtain ⟨hm, hk, -, hsl⟩ := T.range hnn
+    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hx : x < 2 ^ st.c.kLog)
+    (hsrc : src < 2 ^ st.c.kLog)
+    (hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
+      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2))
+    (j : Fin (2 ^ st.c.kLog)) :
+    placedA st ⟨x, hx⟩ j = (if j = ⟨src, hsrc⟩ then 1 else 0) ∧
+      placedB st ⟨x, hx⟩ j = (if j = ⟨src, hsrc⟩ then 1 else 0) := by
+  have hnn := R.rowNet_lt hn
+  obtain ⟨hm, hk, -, hsl⟩ := R.range hnn
   have h32 : (st.c.nets.getD n default).2.unitLog ≤ 32 := by
-    rw [← hsl]; exact le_trans (hat.slotLog_le T.bound hm) T.kLog
+    rw [← hsl]; exact le_trans (hat.slotLog_le R.bound hm) R.kLog
   have hw : 2 ^ (st.c.nets.getD n default).2.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) h32
-  obtain ⟨-, ha, hb, -, hcp, -, -, hin, -, -, -, -, hlk, -⟩ := Net.ofRows_ok hl
-  have hy : ∀ g' < st.c.g, ∀ u, InUnit done 𝒖 u → NotConst 𝒖 u → Typed.col st.c tb g' u ≠ x := by
-    intro g' hg' u hu _ hux
-    rcases T.at_inUnit hd hg' hu with ⟨-, hat'⟩ | ⟨i, hi, hiu, -, -, -, hat'⟩
-    · obtain ⟨h1, -⟩ := hat'.inj T.disj (T.range T.unitNet).1 (T.range T.unitNet).2.1 hm hk (hux ▸ hat)
-      rcases hn with rfl | rfl
-      · exact T.shaNet.2 h1.symm
-      · exact T.hmNet.2 h1.symm
-    · obtain ⟨-, hpn, -, hps, hph, -⟩ := T.part i hi hiu
-      obtain ⟨h1, -⟩ := hat'.inj T.disj (T.range hpn).1 (T.range hpn).2.1 hm hk (hux ▸ hat)
-      rcases hn with rfl | rfl
-      · exact hps h1
-      · exact hph h1
-  have hC : ∀ j, (constPairs st.c st.pin).count (x, j) = 0 := fun j => by
-    rw [constPairs_count T.disj T.slotLog T.fit hm hk hat j, ite_eq_right (fun h => by have := h.1; omega)]
-  have hF : ∀ j, (flatPairs st.c st.pin).count (x, j) = (if j = x then 1 else 0) + (if j = src then 1 else 0) := by
-    intro j
-    simp only [flatPairs, rowPairs_eq, wirePairs_eq, hleaf, hcut, List.append_nil, List.count_append, hC,
-      Nat.zero_add]
-    rw [← List.count_append, ← List.flatMap_append, count_pair2, hf]
-    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-  have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
-      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
-    intro j
-    obtain ⟨h1, h2⟩ := delta_rows st.c st.pin T.typed
-    rw [deltaEntry_eq_count, deltaEntry_eq_count, hda, hdb, h1, h2, List.count_append, List.count_append, hF,
-      T.tail_zero hd hul U hy true, T.tail_zero hd hul U hy false, Nat.add_zero]
-    exact ⟨rfl, rfl⟩
+  obtain ⟨-, ha, hb, -, -, -, -, -, -, -, -, -, hlk, -⟩ := Net.ofRows_ok hl
   have hxe := hat.2.2
   have hE : ∀ j, rangesEntry st (slotEntryA st) x j + deltaEntry st.da x j =
         (([x].count j + ((if j = x then 1 else 0) + (if j = src then 1 else 0)) : ℕ) : ZMod 2) ∧
       rangesEntry st (slotEntryB st) x j + deltaEntry st.db x j =
         (([x].count j + ((if j = x then 1 else 0) + (if j = src then 1 else 0)) : ℕ) : ZMod 2) := by
     intro j
-    have hre := fun e => rangesEntry_at T.disj hm hk hat e j
+    have hre := fun e => rangesEntry_at R.disj hm hk hat e j
     have hla := ofRows_cols_lt ha off
     have hlb := ofRows_cols_lt hb off
     have hxa : [x] = (l.ra.getD off #[]).toList.map ((st.c.rangeOf n).slot s + ·) := by rw [hself.1, hxe]; rfl
@@ -325,22 +331,81 @@ theorem inBit_copy (hd : deriveChecked types ls info words unit = .ok done) (hul
       show (if _ then sparseEntry (st.c.nets.getD n default).2.b off _ + 0 else 0) + _ = _
       rw [add_zero, sparseEntry_ofRows hb, ofRows_row hb hw, count_slot _ (by rw [hsl]; exact hlb) j]
       push_cast; ring
-  have hval : ∀ j : Fin (2 ^ (T.model regs).kLog),
-      (([x].count j.val + ((if j.val = x then 1 else 0) + (if j.val = src then 1 else 0)) : ℕ) : ZMod 2) =
-        if j = (⟨src, hsrc⟩ : Fin (2 ^ (T.model regs).kLog)) then 1 else 0 := by
-    intro j
-    have hj : (j = (⟨src, hsrc⟩ : Fin (2 ^ (T.model regs).kLog))) ↔ j.val = src := Fin.ext_iff
+  have hval : (([x].count j.val + ((if j.val = x then 1 else 0) + (if j.val = src then 1 else 0)) : ℕ) : ZMod 2) =
+      if j = (⟨src, hsrc⟩ : Fin (2 ^ st.c.kLog)) then 1 else 0 := by
+    have hj : (j = (⟨src, hsrc⟩ : Fin (2 ^ st.c.kLog))) ↔ j.val = src := Fin.ext_iff
     by_cases h1 : j.val = x <;> by_cases h2 : j.val = src
     · rw [ite_eq_left (hj.2 h2), ite_eq_left h1, ite_eq_left h2, h1, List.count_singleton_self]; decide
     · rw [ite_eq_right (fun h => h2 (hj.1 h)), ite_eq_left h1, ite_eq_right h2, h1, List.count_singleton_self]
       decide
-    · rw [ite_eq_left (hj.2 h2), ite_eq_right h1, ite_eq_left h2,
-        List.count_eq_zero.2 (by simpa using h1)]; decide
+    · rw [ite_eq_left (hj.2 h2), ite_eq_right h1, ite_eq_left h2, List.count_eq_zero.2 (by simpa using h1)]; decide
     · rw [ite_eq_right (fun h => h2 (hj.1 h)), ite_eq_right h1, ite_eq_right h2,
         List.count_eq_zero.2 (by simpa using h1)]; decide
+  exact ⟨(hE j.val).1.trans hval, (hE j.val).2.trans hval⟩
+
+/-- Δ's flat pairs at an input bit of a row net's slot with one copy `(x, src)`: `(x, x)` and `(x, src)`, when the slot
+constants' pairs, the leaf pairs and the cut pairs write nothing there. -/
+theorem flatPairs_count {c : Circuit} {pin x src : ℕ} (hC : ∀ j, (constPairs c pin).count (x, j) = 0)
+    (hleaf : ∀ j, (Flat.leafPairs c).count (x, j) = 0) (hcut : ∀ j, (Flat.cutPairs c).count (x, j) = 0)
+    (hf : (rowCopies c pin ++ wireCopies c).filter (fun e => e.1 = x) = [(x, src)]) (j : ℕ) :
+    (flatPairs c pin).count (x, j) = (if j = x then 1 else 0) + (if j = src then 1 else 0) := by
+  simp only [flatPairs, rowPairs_eq, wirePairs_eq, List.count_append, hC, hleaf, hcut, Nat.zero_add, Nat.add_zero]
+  rw [← List.count_append, ← List.flatMap_append, count_pair2, hf]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+
+section Loc
+
+variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+  {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
+
+set_option hygiene false in
+local notation "𝒖" => done.getD unit default
+
+/-- **An input bit of a row net's slot holds its one copy**, in a typed template's statement. At a self row `x` of a
+`sha512x3` or `hm96` slot below the net's input rows, where Δ's copies (`rowCopies`, `wireCopies`) write exactly one
+`(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
+theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
+    (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
+    (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb) (hda : st.da = (HmRow.delta st.c st.pin).1)
+    (hdb : st.db = (HmRow.delta st.c st.pin).2)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {n s off x src : ℕ}
+    (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
+    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
+    (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
+    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off]) (hsrc : src < 2 ^ st.c.kLog)
+    (hf : (rowCopies st.c st.pin ++ wireCopies st.c).filter (fun e => e.1 = x) = [(x, src)]) :
+    blockBit (T.model regs) z o x = blockBit (T.model regs) z o src := by
+  have R := RowRanges.ofT T C P
+  have hnn := R.rowNet_lt hn
+  obtain ⟨hm, hk, -, -⟩ := R.range hnn
+  obtain ⟨-, -, -, -, hcp, -, -, hin, -⟩ := Net.ofRows_ok hl
+  have hy : ∀ g' < st.c.g, ∀ u, InUnit done 𝒖 u → NotConst 𝒖 u → Typed.col st.c tb g' u ≠ x := by
+    intro g' hg' u hu _ hux
+    rcases T.at_inUnit hd hg' hu with ⟨-, hat'⟩ | ⟨i, hi, hiu, -, -, -, hat'⟩
+    · obtain ⟨h1, -⟩ := hat'.inj T.disj (T.range T.unitNet).1 (T.range T.unitNet).2.1 hm hk (hux ▸ hat)
+      rcases hn with rfl | rfl
+      · exact T.shaNet.2 h1.symm
+      · exact T.hmNet.2 h1.symm
+    · obtain ⟨-, hpn, -, hps, hph, -⟩ := T.part i hi hiu
+      obtain ⟨h1, -⟩ := hat'.inj T.disj (T.range hpn).1 (T.range hpn).2.1 hm hk (hux ▸ hat)
+      rcases hn with rfl | rfl
+      · exact hps h1
+      · exact hph h1
+  have hC : ∀ j, (constPairs st.c st.pin).count (x, j) = 0 := fun j => by
+    rw [constPairs_count T.disj T.slotLog T.fit hm hk hat j, ite_eq_right (fun h => by have := h.1; omega)]
+  have hF := flatPairs_count hC (fun j => by rw [leafPairs_nil P.leavesIn P.upv]; rfl)
+    (fun j => by rw [cutPairs_nil P.leafCuts]; rfl) hf
+  have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
+      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
+    intro j
+    obtain ⟨h1, h2⟩ := delta_rows st.c st.pin T.typed
+    rw [deltaEntry_eq_count, deltaEntry_eq_count, hda, hdb, h1, h2, List.count_append, List.count_append, hF,
+      T.tail_zero hd hul U hy true, T.tail_zero hd hul U hy false, Nat.add_zero]
+    exact ⟨rfl, rfl⟩
   have hx : x < 2 ^ (T.model regs).kLog := hat.lt T.bound hm
   have hcopy : CopyRow (T.model regs) ⟨x, hx⟩ ⟨src, hsrc⟩ :=
-    ⟨fun j => (hE j.val).1.trans (hval j), fun j => (hE j.val).2.trans (hval j)⟩
+    ⟨fun j => (inBit_rows R hn hat hl hself hx hsrc hδ j).1, fun j => (inBit_rows R hn hat hl hself hx hsrc hδ j).2⟩
   rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq hz o]
 
 end Loc
