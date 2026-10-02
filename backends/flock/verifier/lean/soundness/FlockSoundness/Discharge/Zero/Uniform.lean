@@ -1,6 +1,6 @@
 import FlockSoundness.Discharge.Zero.Cols
 import FlockSoundness.Discharge.Zero.Stack
-import FlockSoundness.Discharge.Aliased.Copies
+import FlockSoundness.Discharge.Aliased.Keys
 import FlockSoundness.Discharge.Placed.Wiring
 import FlockSoundness.Discharge.Const.Inst
 
@@ -16,6 +16,8 @@ The untyped statement `Stmt.setupH` accepted places a VU (`upv` stacked copies o
   unit's instance the program's own (`Const.Prog.instC`), when every input the program wires to its zero gate reads the
   zero. `zeroCols_circuitProg`: the same on source-indexed input gates (`Placed.circuitProg`), when every input with no
   source reads the zero.
+- `srcKey_zero_iff`: Δ's source key (`Aliased.srcKey`) at a stacked input is the zero exactly when the input reads the
+  zero, so `zeroCols_keyIdx`, on the gates indexed by those keys (`Aliased.keyIdx`), assumes nothing about the wiring.
 -/
 
 open Flock FlockLevel3
@@ -77,6 +79,53 @@ theorem accepted_c_eq {T : Model.Statement} (a : Placed.Accepted T) {c : Flock.C
   have := (setupH_spec a.ht a.h).1
   rw [hp] at this
   exact (Except.ok.inj this).symm
+
+/-! ## Δ's source keys at the zero -/
+
+/-- **Δ's source key at a port bit is the zero exactly when the bit reads the zero** (`ZeroPort`). -/
+theorem srcAt_zero_iff (c : Flock.Circuit) (s₀ p t : ℕ) : Aliased.srcAt c (s₀ % c.upv) p t = .zero ↔ ZeroPort c s₀ p t := by
+  unfold Aliased.srcAt ZeroPort
+  by_cases hp : p < (c.unit.inGroups.getD 0 default).bits.size
+  · have hp' : ¬ (c.unit.inGroups.getD 0 default).bits.size ≤ p := by omega
+    simp only [hp, hp', ↓reduceIte, true_and, false_and, or_false]
+    split <;> simp_all
+  · have hp' : (c.unit.inGroups.getD 0 default).bits.size ≤ p := by omega
+    rw [ite_eq_right hp]
+    have hR : ∀ (P Q : Prop), ((p < (c.unit.inGroups.getD 0 default).bits.size ∧ P) ∨
+        ((c.unit.inGroups.getD 0 default).bits.size ≤ p ∧ Q ∧ 16 ≤ t)) ↔ (Q ∧ 16 ≤ t) :=
+      fun _ _ => ⟨fun h => h.elim (fun h => absurd h.1 hp) (fun h => h.2), fun h => Or.inr ⟨hp', h⟩⟩
+    rw [hR]
+    split
+    next e l hf =>
+      have hmem : e ∈ c.leafCuts.toList.filter (fun e => decide (e.1 = s₀ % c.upv ∧ e.2.1 = p)) := by
+        rw [hf]
+        exact List.mem_cons_self
+      obtain ⟨he, hpred⟩ := List.mem_filter.1 hmem
+      simp only [decide_eq_true_eq] at hpred
+      have hex : ∃ e ∈ c.leafCuts.toList, e.1 = s₀ % c.upv ∧ e.2.1 = p := ⟨e, he, hpred⟩
+      by_cases ht : t < 16
+      · exact iff_of_false (fun h => by simp [ht] at h) (fun h => by omega)
+      · exact iff_of_true (by simp [ht]) ⟨hex, by omega⟩
+    next hf =>
+      have hne : ¬ ∃ e ∈ c.leafCuts.toList, e.1 = s₀ % c.upv ∧ e.2.1 = p := by
+        rintro ⟨e, he, h1, h2⟩
+        have := List.filter_eq_nil_iff.1 hf e he
+        simp [h1, h2] at this
+      refine iff_of_false ?_ fun h => hne h.1
+      split <;> simp
+
+/-- **Δ's source key at a stacked input is the zero exactly when the input reads the zero** (`ZeroIn`). -/
+theorem srcKey_zero_iff {c : Flock.Circuit} {x : ℕ} (hx : x < c.upv * (c.unit.inWords * WORD)) :
+    Aliased.srcKey c x = .zero ↔ ZeroIn c x := by
+  have hn : 0 < c.unit.inWords * WORD := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
+  have hk : x / (c.unit.inWords * WORD) < c.upv := (Nat.div_lt_iff_lt_mul hn).2 hx
+  have hmod : x / (c.unit.inWords * WORD) % c.upv = x / (c.unit.inWords * WORD) := Nat.mod_eq_of_lt hk
+  unfold Aliased.srcKey ZeroIn InPort ZeroAt
+  by_cases hm : x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups
+  · rw [ite_eq_left hm, ← srcAt_zero_iff, hmod]
+    exact ⟨fun h => ⟨hm, h⟩, fun h => h.2⟩
+  · rw [ite_eq_right hm]
+    exact iff_of_false (fun h => by cases h) (fun h => hm h.1)
 
 /-! ## The program of `n` units -/
 
@@ -188,6 +237,27 @@ theorem zeroCols_circuitProg {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn 
       {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n B)} :=
   zeroCols_uniform si hrows hparse pp hinst ho hcol (fun h => by simp [Placed.zeroGate, Placed.oneGate, Fin.ext_iff] at h)
     fun u x hx => hsrc x ((Placed.insOf_eq_zero_iff u.isLt x).1 hx)
+
+/-- **`hZero` for the circuit's program with its input gates indexed by Δ's source keys** (`Aliased.keyIdx`, the wiring
+that gives `pp.aliased`): an input's key is the zero exactly when it reads the zero (`srcKey_zero_iff`), so nothing is
+left to assume about the wiring. -/
+theorem zeroCols_keyIdx (si : Placed.Sites plan tab)
+    (hrows : si.RowsOf (Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
+      (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)))
+    (hparse : ∀ S R u (h : u ∈ S),
+      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+    {outs : Finset (Fin (Placed.gates (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU) n))}
+    (pp : ProgPlaces (Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
+      (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)) outs plan tab)
+    (hinst : ∀ u, pp.inst u = Const.Prog.instC _ outs u) (ho : ∀ S R u h, pp.o S R u h = si.o S R u h)
+    (hcol : ∀ S R u h, pp.col S R u h = si.col hrows S R u h) :
+    ((Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
+        (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)).partition outs).ZeroCols plan tab pp.derived.place
+      {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
+  zeroCols_circuitProg si hrows hparse pp hinst ho hcol fun x hx => by
+    have h1 : x.val < c.upv * min (c.unit.inWords * WORD) c.unit.constPos := x.isLt
+    exact (srcKey_zero_iff (lt_of_lt_of_le h1 (Nat.mul_le_mul_left _ (Nat.min_le_left _ _)))).1
+      ((Aliased.keyIdx_eq_none x).1 hx)
 
 end circuit
 
