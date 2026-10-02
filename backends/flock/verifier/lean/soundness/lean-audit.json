@@ -4341,6 +4341,9 @@
    "assumptions": [],
    "type_hash": "9de588c14a395178dbed7e12043b3de35e3ce673d21c2c19488fb29d44aa4019"
   },
+  "FlockSoundness.Discharge.DecodeZL.decodeProof_sizes": {},
+  "FlockSoundness.Discharge.DecodeZL.decodesOn_exec": {},
+  "FlockSoundness.Discharge.DecodeZL.zl_carries": {},
   "FlockSoundness.Discharge.Exec.Exact.kinds": {
    "signature": [
     "FlockSoundness.Discharge.Exec.Exact.kinds {α : Type} {g : FlockSoundness.Game α} {ts : List FlockSoundness.Game.Step}",

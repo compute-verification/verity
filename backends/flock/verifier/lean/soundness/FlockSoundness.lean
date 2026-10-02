@@ -150,4 +150,5 @@ import FlockSoundness.Discharge.Placed
 import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
+import FlockSoundness.Discharge.DecodeZL
 import FlockSoundness.ZK.GK
