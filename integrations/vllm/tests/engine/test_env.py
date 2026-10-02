@@ -44,6 +44,28 @@ def test_a_target_profile_replaces_the_pin(clean) -> None:
     assert env.apply_engine(None)["VLLM_BATCH_INVARIANT"] == "0"
 
 
+def test_set_since_is_what_the_process_set_or_changed_after_the_snapshot(monkeypatch) -> None:
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    monkeypatch.setenv("KEPT", "1")
+    monkeypatch.delenv("CUBLASLT_WORKSPACE_SIZE", raising=False)
+    before = env.snapshot()
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
+    monkeypatch.setenv("CUBLASLT_WORKSPACE_SIZE", "1")
+    assert env.set_since(before) == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
+
+
+def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
+    import dataclasses
+    import inspect
+
+    from verity_vllm.engine import build
+
+    src = inspect.getsource(build.build_engine)
+    assert src.index("env0 = engine_env.snapshot()") < src.index("engine_kwargs_for(") < src.index("llm = LLM(**kw)")
+    assert "engine_env.set_since(env0))" in src.split("llm = LLM(**kw)")[1].split("eng.effective")[0]
+    assert [f.name for f in dataclasses.fields(build.Engine)][-1] == "environ"
+
+
 def test_the_engine_profile_reads_this_table() -> None:
     from verity_vllm.engine import engine_profile as prof
 

@@ -530,7 +530,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep)
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values))
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
@@ -543,7 +543,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         else:
             from verity.ir.codec import canonical_json, encode_program
             from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
-            program = rep.program
+            program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
             desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
             digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
             # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
@@ -558,7 +558,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                               "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                               "correspondence_digest": corr_digest,
                               "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
-                                                 "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None}
+                                                 "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
             res["spec_histogram"] = _spec_histogram(program)
             res["rules_applied"] = rep.provenance["rules_applied"]
             res["n_applications"] = len(rep.provenance["applications"])
@@ -574,7 +574,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
             _write_instances_file(os.path.join(out, "instances.json.gz"),
                                   {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
-                                   "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None},
+                                   "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
                                   _instance_rows(program))
             # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
             art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,

@@ -204,6 +204,8 @@ def test_strict_class_is_generated_not_authored_and_originals_untouched():
     # an Input is the Program's boundary, produced by no body: it owns no enable and lifts as before
     from verity.ir.program import input_prim
     assert L.lifted_prim(input_prim(32)) is input_prim(33) and not L.has_enable(L.lifted_prim(input_prim(32)))
+    # a registered input lifts to a registered input: widening keeps its binding time
+    assert L.lifted_prim(input_prim(32, "registration")) is input_prim(33, "registration")
     # a specified lifted-v1 member is not lifted AGAIN by the v1 factory; the v2 factory gives it its enabled form (v0.6 B7: a select or a
     # ⊥ constant INSIDE a disabled body is ⊥ -- `Lifted[LBot32_v1]_v2(enable)`), which is itself final
     with pytest.raises(TypeError):

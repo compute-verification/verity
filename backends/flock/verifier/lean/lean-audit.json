@@ -7,7 +7,6 @@
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it",
-  "Flock.Qcall.cut": "partial def: call_units, recursing through a Call's pieces (Q_call v1, PROTOCOL.md 16.7); no proof is about it, and qcall_agree.py covers it",
   "Flock.Qword.DCut.units": "partial def: a cut's unit count, recursing through its nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
   "Flock.Qword.DCut.gates": "partial def: a cut's gate count, recursing through its nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
   "Flock.Qword.DCut.owner": "partial def: the owner of every computing gate, recursing through a cut's nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
@@ -29,7 +28,8 @@
   "_private.Flock.Program.0.Flock.Program.composite": "partial def: a composite definition's body, decoding its callees first (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.staticFns": "partial def: static_of, decoding the functions a static value names (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
-  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
+  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Qcall.cut": "partial def: call_units, recursing through a Call's pieces (Q_call v1, PROTOCOL.md 16.7); no proof is about it, and qcall_agree.py covers it"
  },
  "pins": {
   "Flock.CircuitType.check_ok": {
@@ -199,24 +199,25 @@
     "            Exists fun p =>",
     "              And (instLTNat.lt p c.ports.size)",
     "                (And (Eq (Array.instGetElem?NatLtSize.getElem! c.ports p).name reg.name)",
-    "                  (∀ (i : Nat),",
-    "                    instLTNat.lt i pub.n →",
-    "                      Exists fun pos =>",
-    "                        Exists fun path =>",
-    "                          And",
-    "                            (Eq (Array.instGetElem?NatLtSize.getElem? reg.reads (indices.getD i 0))",
-    "                              (Option.some (Option.some pos)))",
-    "                            (And (instLTNat.lt pos reg.leaves)",
-    "                              (And (Eq path.size (instHMul.hMul 64 (Flock.log2ceil reg.leaves)))",
-    "                                (Eq",
-    "                                  (Flock.Registered.climb reg.domain",
-    "                                    (Flock.Registered.rowLeaf reg.domain pos",
-    "                                      (Flock.Hm96.Default512.treeLeaf (pub.digest i p c.ports.size)))",
-    "                                    pos (Flock.log2ceil reg.leaves) path)",
-    "                                  reg.root)))))))"
+    "                  (And (Eq (reg.fits (Array.instGetElem?NatLtSize.getElem! c.ports p).words) Bool.true)",
+    "                    (∀ (i : Nat),",
+    "                      instLTNat.lt i pub.n →",
+    "                        Exists fun pos =>",
+    "                          Exists fun path =>",
+    "                            And",
+    "                              (Eq (Array.instGetElem?NatLtSize.getElem? reg.reads (indices.getD i 0))",
+    "                                (Option.some (Option.some pos)))",
+    "                              (And (instLTNat.lt pos reg.leaves)",
+    "                                (And (Eq path.size (instHMul.hMul 64 (Flock.log2ceil reg.leaves)))",
+    "                                  (Eq",
+    "                                    (Flock.Registered.climb reg.domain",
+    "                                      (Flock.Registered.rowLeaf reg.domain pos",
+    "                                        (Flock.Hm96.Default512.treeLeaf (pub.digest i p c.ports.size)))",
+    "                                      pos (Flock.log2ceil reg.leaves) path)",
+    "                                    reg.root))))))))"
    ],
    "assumptions": [],
-   "type_hash": "67e0c9fb7ef4391fe0e25171c943a6b204702a2de4161399a6f62a54a7477d86"
+   "type_hash": "9746a5ead66a31d5f755d98154ca292fbfb42b0387637c705015ee96e1eb4cd9"
   },
   "Flock.Registered.opensLeaf_binding": {
    "signature": [
@@ -232,10 +233,10 @@
    "signature": [
     "Flock.checkInRange_ok (kLog nRegions mPts : Nat) :",
     "  Iff (Eq (Flock.checkInRange kLog nRegions mPts) (Except.ok Unit.unit))",
-    "    (And (instLENat.le kLog 26) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
+    "    (And (instLENat.le kLog 27) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
    ],
    "assumptions": [],
-   "type_hash": "d5dcd8085aa57cab5902afcdcac2168de7effb6cd18839f7dc05a34e9a72dda8"
+   "type_hash": "7f9f16bbfe2b5a1faaa5eac26c8bedd237ea33f613a35a11f9aa76b84b8b94b0"
   },
   "Flock.climb_binding": {
    "signature": [
@@ -581,19 +582,22 @@
    "pins": ["Flock.CircuitType.check_ok", "Flock.Layout.check_ok"]
   },
   "Flock.Registered": {
-   "digest": "38d363a4b99f016d03c74d47f5bb1b98d9a1b7c54d2e5a8f7bcbade84aa20f7e",
+   "digest": "4fa9efbeec757d859a1925ec2e59a453afa0c2ad9d8b499fcda0b627b6c53f0d",
    "definitions": {
-    "Flock.Registered.Port": "070386269871dc7e8ab3b53959683f17e126302fbebd97ae53c53effe7a13791",
-    "Flock.Registered.Port.domain": "50fcc1375236ab2c2d5397566f8372dfc5f73a027f1f9da4d30af0c297e8ed38",
+    "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
+    "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
+    "Flock.Registered.Port.fits": "3dd9451a297f3aa8b2bb8bed3f3e22a35671f3f7f2e5b65e2a258811ae9f3784",
     "Flock.Registered.Port.leaves": "65e6bd2e8184b32403e5bba84aa86f792f6390d4787a536a31e65ce3a35734ea",
     "Flock.Registered.Port.name": "bafef2d520e061a0246f94bea19b3469ed4b17794bbe83577f1c4572f28e7e78",
-    "Flock.Registered.Port.reads": "efa64fbba2e7a9d9e4f30471b17132adc1e0778ea9e029a2ba812e58c36a1a3a",
+    "Flock.Registered.Port.reads": "93dda85ea53a144e77d23ad68ffd55fcfa0577c9fd42d27b0aba23a97548e20b",
     "Flock.Registered.Port.root": "5b039065ec2ac549a0ec03978131b61a66233f4c2084bffca01b6399c02dc326",
     "Flock.Registered.Port.value": "0e786a8a95f5c0b0ce5d90c31260b5db6e8b19aa1f9bd5873b687a82c52d937a",
+    "Flock.Registered.Port.wordBits": "4153e5bcb6e701f20eb95adeb2852736654025c5aa1b3e4fff9c50e2cb8f42a6",
+    "Flock.Registered.Port.words": "3e8bba1c473fc079f1865b6c9d8e96d04528b0fdfdb23931fde1226a46b491a3",
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
-    "Flock.Registered.checkPort": "40119eac722871aee35edde15a18dc3e55ad3d131df33ba0bce58e1d1f5a31eb",
+    "Flock.Registered.checkPort": "012528371c5394748a6b8317cf18acc05b1dd837d043cdf15f20d39751d67beb",
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.entry": "33679b79172b2252c0e954b11fd386a06a136aa56539287c7e076683f87af733",
@@ -603,6 +607,7 @@
     "Flock.Registered.opensLeaf": "ecf8fe6e15980b34f94dae4bce4bae8f95596159d411b66002135b0c976475f8",
     "Flock.Registered.ref": "3570ae9fa17ad0da292a0118d7dc56baeddc733f7213a7c46b8420a04a958420",
     "Flock.Registered.rowLeaf": "09ceb544a5a4910cbbfa21ac341e5fdcf6b3fd232451f5f63fb7d9ff9ea64cde",
+    "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
     "Flock.Registered.sibs": "b434bb6941f9571a60856e1147aa3dae7ad6ff6fef41efb6677b956aa8e4b147",
     "Flock.Registered.tableRow": "d282b834f17e1c68b1a02f3e11d6eccad176108d6236f9ee3bd6bf55eb99b8ec",
     "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22"

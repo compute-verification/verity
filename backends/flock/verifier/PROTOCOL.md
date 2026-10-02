@@ -273,6 +273,8 @@ bytes for the link points after recording `Commit`. Each 16-byte group is one F1
 `hi = le64(bytes[8..16])`). Soundness assumes only that these bytes are uniform and unknown to the prover before it sent
 the round.
 
+M0 draws `os` coins under `FC_COINS=os`; `verify --coins os` binds its live-OS identity (`Tags.withCoins`).
+
 ### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`, `coin-commit/sha256`, `coin-commit/sha512`)
 
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
@@ -298,10 +300,10 @@ handled them. The verdict reveals `seed`, `nonce`, `commitment` and the request 
 
 For the verifier of record the seed changes nothing it checks: the coins are still read from the record. It adds two
 optional checks that a prover (or an auditor) runs: the commitment opens to the revealed seed and nonce, and each
-round's coins equal `coins_q`. The second needs the global request index `q` of every round, which the record does not
-store (rounds are grouped by stream, and interleaved reps are allowed). Recommendation for PR #83: record `q` per round.
-Until then an auditor recomputes `q` only for sessions whose reps ran sequentially (points, then all of rep 0, then all
-of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
+round's coins equal `coins_q`. The second needs every round's global request index `q`: M0's records carry it as `g`
+since `34c3d0815`, and `flock-circuit replay-coins` runs both checks. Older ones lack it (rounds are grouped by stream,
+and reps may interleave), so an auditor recomputes `q` only if the reps ran sequentially (points, then all of rep 0,
+then all of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
 pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
 
 ### 7.3 The unit draw
@@ -1087,10 +1089,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   digests and outputs, and META's pinned padding values.
 - Coins: `seed` mode at the PR's tip (its `Hello` carries `"coins":"coin-commit/sha256/v1"`); the stored loopback sessions
   predate it and use `os` coins.
-- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 26`, `m = k_log + nbl`; the spec rejects
+- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 27`, `m = k_log + nbl`; the spec rejects
   `m > 35` (no Fast100 schedule exists above it).
 - **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
-  soundness package's `Stmt.InRange`: `k_log ≤ 26`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
+  soundness package's `Stmt.InRange`: `k_log ≤ 27`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
   and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
   check accepts exactly that range.
 
@@ -1326,14 +1328,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
   whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
   and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
-  failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
-  is `as stated`, with the reason in `note`, which an audit reports as a gap.
-- **Registered reads** (`Flock.Registered`). A shared-row header may name `registered`, `{port: {value, positions,
-  paths}}`: rows of a value committed at registration. The verifier then needs its own `--registered F`
-  (`verity/registered-reads/v0`: per port the value, root, leaf count, domain, and each unit's read position). Every table
-  row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, and every instance's ref must name the
-  position the verifier's program reads for its unit, so units must be `derived`. A port named on one side only refuses.
-  Verdicts report `registered`.
+  failing cut refuses the partition, naming the Call and its codes.
+  For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an audit reports
+  as a gap.
+- **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
+  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
+  u16 words, padded. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, each
+  instance's ref name its unit's read position in the verifier's program (units `derived`). A port on one side only
+  refuses; verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.

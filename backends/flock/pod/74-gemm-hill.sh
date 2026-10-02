@@ -11,7 +11,7 @@
 # store keeps it as its own artifact).
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
-# env: K= (required: 2048, 4096, 8192 or 16384)  DTYPE=bf16 (or e4m3, nvf4, mxf4)  N= (instances; default BF16's
+# env: K= (required: 2048, 4096, 8192, 16384 or 32768)  DTYPE=bf16 (or e4m3, nvf4, mxf4)  N= (instances; default BF16's
 #      gemm_hill.INSTANCES[K], an FP8 / FP4 row's `gemm_hill.py fill` of the preflight check, m = 35; required with PREFLIGHT=0
 #      or SERVE_ONLY=1)  CPUSET= (the cores to pin to, inside the job's affinity)  CPUS=48 (without CPUSET: the first CPUS cores
 #      of free 16-core slices; pass CPUS=16).
@@ -72,6 +72,8 @@ else echo "DTYPE=$DTYPE with PREFLIGHT=0: N= is required"; exit 1; fi
 # the job template's cargo target dir is shared; the builds here keep their own
 unset CARGO_TARGET_DIR
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+# K = 32768's coordinate (16,860,955 ANDs, k_log 27) is past the class sweep's default cap of 2^24 ANDs a shape
+export MAX_ANDS=${MAX_ANDS:-33554432}
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done

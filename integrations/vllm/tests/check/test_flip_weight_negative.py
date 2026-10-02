@@ -50,7 +50,7 @@ def test_commit_delta_declares_flip_weight_and_applies_it_before_register_weight
     # order in the source of main(): record initialised -> flip applied (named_parameters, before register_weights) -> verdict.json carries it
     i_init = src.index("flip_weight_rec: dict | None = None")
     i_flip = src.index("_pmap = dict(eng.model.named_parameters())")
-    i_reg = src.index("w = com.register_weights()")
+    i_reg = src.index("w = GR.register_weights(_HOT, com, args.weights_hash)")
     i_verdict = src.index('"negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None)')
     assert i_init < i_flip < i_reg < i_verdict
     # the flip refuses to be a no-op (an unchanged element would make the negative un-failable)
