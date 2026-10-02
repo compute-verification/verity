@@ -192,9 +192,10 @@ def _kept_by(args: Any, com: Any) -> str | None:
             f"{on_device >> 20} MiB of committed bytes or tree levels are on the device" if on_device else None)
 
 
-def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[str, str]) -> str | None:
+def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[str, str], *, bundle: bool) -> str | None:
     """Why the Commit keeps its GPU to its exit after its last run, or None when nothing after that run reads the device: the C2
-    replay deferred to its bundle (whose device-resident tensors ``replay_bundle.start`` has read), and for every committer the
+    replay deferred to its bundle, whose write ``replay_bundle.start`` began (``bundle``) after reading its device-resident tensors
+    (otherwise `defer` reads them at the C2 site, or the replay runs in this process), and for every committer the
     openings after release opened from host and the committed bytes and tree levels in host memory that outlives the CUDA context
     (the pool's registered shared mappings; torch's pinned blocks die with it); one GPU, and vLLM's engine core in this process (its
     shutdown frees it)."""
@@ -202,6 +203,8 @@ def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[st
     gpus = [d for d in environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d]
     return ("the C2 replay runs in this process, on the engine's weights (no --replay-deferred)" if not getattr(args, "replay_deferred", False) else
             "the replay bundle reads the model's buffers at the C2 site (--replay-bundle-overlap 0)" if not getattr(args, "replay_bundle_overlap", 1) else
+            "the replay bundle is written at the C2 site or the C2 replay runs in this process (replay_bundle.start began no write: a slim "
+            "bundle, a live-only replay, a retention other than host, or a store over the cap)" if not bundle else
             "--tensor-digests reads the retained bytes after the run" if getattr(args, "tensor_digests", False) else
             next((why for why in (_kept_by(args, c) for c in coms) if why), None) or
             ("vLLM's engine core is not in this process" if getattr(core, "engine_core", None) is None else
@@ -309,16 +312,17 @@ def _no_device() -> Any:
     return hooks.patch(torch.cuda, "is_available", lambda: False)
 
 
-def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after: str, wait: Callable[[float], Any] = time.sleep) -> bool:
+def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after: str, bundle: bool,
+            wait: Callable[[float], Any] = time.sleep) -> bool:
     """Give a leased Commit's GPU back once ``last`` (the run of stage ``after`` was its last device work): the engine shut down,
     the device's context reset, nothing left on the leased GPU, then the lease's locks closed, the holder told (EOF) and waited for,
     and ``gpu_lease.released`` written with the time and ``after``. Kept to the exit (``kept_reason``, or a context that did not go)
-    the file names why instead. Returns whether the GPU was released."""
+    the file names why instead. ``bundle``: ``replay_bundle.start`` began the bundle's write. Returns whether the GPU was released."""
     if not _HELD or not last:
         return False
     holder, ours, fds, started, environ = _HELD[0]
     tl.start("gpu_lease.release", after=after)
-    why, err, drv = kept_reason(args, coms, eng, environ), None, None
+    why, err, drv = kept_reason(args, coms, eng, environ, bundle=bundle), None, None
     spans: dict[str, float] = {}
     if why is None:
         t0 = time.perf_counter()

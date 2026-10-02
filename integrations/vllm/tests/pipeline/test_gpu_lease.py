@@ -222,26 +222,27 @@ ENG = SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(engine_core
 ONE = {"CUDA_VISIBLE_DEVICES": "5", "GPU_LEASE_UUID": "GPU-5"}
 
 
-@pytest.mark.parametrize("args,com,eng,env,why", [
-    (_args(replay_deferred=False), _com(), ENG, ONE, "no --replay-deferred"),
-    (_args(replay_bundle_overlap=0), _com(), ENG, ONE, "--replay-bundle-overlap 0"),
-    (_args(tensor_digests=True), _com(), ENG, ONE, "--tensor-digests"),
-    (_args(), _com(retain="none"), ENG, ONE, "replay the run on the engine"),
-    (_args(), _com(retain_exclude={"fa3_hidden_m1"}), ENG, ONE, "replay the run on the engine"),
-    (_args(replay_openings="always"), _com(), ENG, ONE, "replay the run on the engine"),
-    (_args(), _com(pool=SimpleNamespace(mode="torch-pinned-pow2")), ENG, ONE, "torch's pinned host memory"),
-    (_args(), _com(_retained_device_bytes=lambda: 3 << 20), ENG, ONE, "3 MiB of committed bytes"),
-    (_args(), _com(), SimpleNamespace(llm=None), ONE, "engine core is not in this process"),
-    (_args(), _com(), ENG, {"CUDA_VISIBLE_DEVICES": "4,5"}, "a lease of 2 GPUs"),
+@pytest.mark.parametrize("args,com,eng,env,why,bundle", [
+    (_args(replay_deferred=False), _com(), ENG, ONE, "no --replay-deferred", False),
+    (_args(replay_bundle_overlap=0), _com(), ENG, ONE, "--replay-bundle-overlap 0", False),
+    (_args(), _com(), ENG, ONE, "replay_bundle.start began no write", False),
+    (_args(tensor_digests=True), _com(), ENG, ONE, "--tensor-digests", True),
+    (_args(), _com(retain="none"), ENG, ONE, "replay the run on the engine", True),
+    (_args(), _com(retain_exclude={"fa3_hidden_m1"}), ENG, ONE, "replay the run on the engine", True),
+    (_args(replay_openings="always"), _com(), ENG, ONE, "replay the run on the engine", True),
+    (_args(), _com(pool=SimpleNamespace(mode="torch-pinned-pow2")), ENG, ONE, "torch's pinned host memory", True),
+    (_args(), _com(_retained_device_bytes=lambda: 3 << 20), ENG, ONE, "3 MiB of committed bytes", True),
+    (_args(), _com(), SimpleNamespace(llm=None), ONE, "engine core is not in this process", True),
+    (_args(), _com(), ENG, {"CUDA_VISIBLE_DEVICES": "4,5"}, "a lease of 2 GPUs", True),
 ])
-def test_a_commit_that_still_needs_the_device_after_its_last_run_keeps_its_lease_and_says_why(args, com, eng, env, why):
-    assert why in GL.kept_reason(args, [_com(), com], eng, env)
+def test_a_commit_that_still_needs_the_device_after_its_last_run_keeps_its_lease_and_says_why(args, com, eng, env, why, bundle):
+    assert why in GL.kept_reason(args, [_com(), com], eng, env, bundle=bundle)
 
 
 def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_release():
-    assert GL.kept_reason(_args(), [_com()], ENG, ONE) is None
-    assert GL.kept_reason(_args(open_after_release=False), [_com(retain="none")], ENG, ONE) is None    # no openings after release
-    assert GL.kept_reason(_args(), [_com(pool=SimpleNamespace(mode=None))], ENG, ONE) is None          # a pool that never allocated
+    assert GL.kept_reason(_args(), [_com()], ENG, ONE, bundle=True) is None
+    assert GL.kept_reason(_args(open_after_release=False), [_com(retain="none")], ENG, ONE, bundle=True) is None    # no openings after release
+    assert GL.kept_reason(_args(), [_com(pool=SimpleNamespace(mode=None))], ENG, ONE, bundle=True) is None          # a pool that never allocated
 
 
 def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
@@ -256,6 +257,7 @@ def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_
     assert at == sorted(at) and main.count("GL.release(") == 1, dict(zip(marks, at))
     call = main[at[5]:main.index("\n", at[5])]
     assert "last=pair == args.pairs - 1 and k == len(order) - 1 and _HOT is None" in call and "after=_wstage" in call
+    assert "bundle=_rb_started is not None" in call
     after = main[main.index("\n", at[5]):]
     assert not re.search(r"torch\.cuda|\.cuda\(|nvidia_smi|synchronize\(|empty_cache", after)
 
@@ -291,7 +293,7 @@ def _release_kept(tmp_path, monkeypatch, active, on):
     monkeypatch.setattr(GL, "_shut_down", lambda eng: None)
     waits: list[float] = []
     tl = SimpleNamespace(start=lambda *a, **k: None, end=lambda *a, **k: None)
-    assert GL.release(tl, ENG, [_com()], _args(), last=True, after="work.pair0.instrumented", wait=waits.append) is False
+    assert GL.release(tl, ENG, [_com()], _args(), last=True, after="work.pair0.instrumented", bundle=True, wait=waits.append) is False
     assert not GL._RELEASED.is_set() and len(GL._HELD) == 1 and waits == [0.5] * 9
     return json.loads((tmp_path / "gpu_lease.released").read_text())
 
@@ -313,9 +315,9 @@ def test_the_commit_gives_its_gpu_back_after_its_last_run_and_ends_with_its_comm
                  f"atexit.register(lambda: open({str(exited)!r}, 'w').write('ran'))\n"
                  "tl = types.SimpleNamespace(start=lambda n, **k: calls.append(n), end=lambda n, **k: calls.append(k.get('released')))\n"
                  "from tests.pipeline.test_gpu_lease import ENG, _args, _com\n"
-                 "first = GL.release(tl, ENG, [_com()], _args(), last=False, after='work.pair0.control')\n"
+                 "first = GL.release(tl, ENG, [_com()], _args(), last=False, after='work.pair0.control', bundle=True)\n"
                  "com = _com(_stop_worker=lambda: calls.append('worker stopped'))\n"
-                 "ok = GL.release(tl, ENG, [com], _args(), last=True, after='work.pair0.instrumented', wait=lambda s: None)\n"
+                 "ok = GL.release(tl, ENG, [com], _args(), last=True, after='work.pair0.instrumented', bundle=True, wait=lambda s: None)\n"
                  f"free = subprocess.run(['flock', '-n', {str(lock)!r}, 'true']).returncode == 0\n"
                  f"json.dump(dict(first=first, ok=ok, free=free, calls=calls, held=len(GL._HELD)), open({str(seen)!r}, 'w'))\n"
                  "GL.run_main(lambda: sys.exit(3))\n")
