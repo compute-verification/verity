@@ -88,10 +88,17 @@ theorem decode_row_of_cols {Pos Val : Type} (pos : Fin C.N → Pos) (vbit : Val 
 /-- A bit string of width `W` read from `k ≤ W` bits, `false` past them. -/
 def padBits {W k : ℕ} (b : Fin k → Bool) : Fin W → Bool := fun i => if h : i.val < k then b ⟨i.val, h⟩ else false
 
+/-- **A value of at most `W` bits, with its width**: `sha512/row/v1` hashes a row's word count with its bytes, so the
+value carries it. -/
+abbrev BitVal (W : ℕ) : Type := Fin (W + 1) × (Fin W → Bool)
+
+/-- Width `k`, capped at `W`. -/
+def widthOf (W k : ℕ) : Fin (W + 1) := ⟨min k W, Nat.lt_succ_of_le (Nat.min_le_right k W)⟩
+
 /-- **A layout of bit-string values**, from the decoder that reads each drawn unit from its place. Each commit string
-`q` holds a value of `rowBits q ≤ W` bits, read at the fixed addresses `rowAt` (its salt at `saltAt`), and wire `g` is
-bit `idx g` of its commit string's value. `copy`, the one fact: in a satisfying witness, each column of a drawn unit on
-a committed wire `g` holds the witness's bit at `rowAt` of `g`'s commit string and bit. -/
+`q` holds a value of `rowBits q ≤ W` bits with that width (`BitVal`), read at the fixed addresses `rowAt` (its salt at
+`saltAt`), and wire `g` is bit `idx g` of its commit string's value. `copy`, the one fact: in a satisfying witness, each
+column of a drawn unit on a committed wire `g` holds the witness's bit at `rowAt` of `g`'s commit string and bit. -/
 noncomputable def ofBits (Pos : Type) [Fintype Pos] [DecidableEq Pos] [Inhabited Pos] (W : ℕ) (pos : Fin C.N → Pos)
     (idx : Fin C.N → Fin W) (regLeaf : Reg → Pos → Refine.Dig) (rowBits : Pos → ℕ)
     (hidx : ∀ g, (idx g).val < rowBits (pos g))
@@ -105,17 +112,17 @@ noncomputable def ofBits (Pos : Type) [Fintype Pos] [DecidableEq Pos] [Inhabited
           ⟨idx ((place S R u hu).inst.wire c), hidx _⟩)) :
     Binding.Layout P plan tab (P.placeDecoder plan tab place) where
   Pos := Pos
-  Val := Fin W → Bool
+  Val := BitVal W
   pos := pos
-  bit v g := v (idx g)
+  bit v g := v.2 (idx g)
   regLeaf := regLeaf
   rowBits := rowBits
-  rowOf _ b := padBits b
+  rowOf q b := (widthOf W (rowBits q), padBits b)
   rowAt := rowAt
   saltAt := saltAt
   decode_row := by
-    refine decode_row_of_cols place pos (fun v g => v (idx g))
-      (fun S R u M q => padBits (bitsAt (Binding.wit plan tab S R u M) (rowAt S R u q))) ?_
+    refine decode_row_of_cols place pos (fun v g => v.2 (idx g))
+      (fun S R u M q => (widthOf W (rowBits q), padBits (bitsAt (Binding.wit plan tab S R u M) (rowAt S R u q)))) ?_
     intro S R u hu M hM c hc
     simp only [padBits, hidx, ↓reduceDIte, bitsAt]
     rw [copy S R u hu M hM c hc]

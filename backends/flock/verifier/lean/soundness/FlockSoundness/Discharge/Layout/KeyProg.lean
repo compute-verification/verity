@@ -558,7 +558,7 @@ theorem keyProg_valPinned (hkeys : KeysRow c hU rowW)
 
 variable (rowW) in
 /-- **`lay` at `keyProg`'s places**: the readers' layout (`Readers.layout`), with Δ's copies from `keyProg_copies`. -/
-noncomputable def keyLayout (encO : (Fin (Finset.univ.sup rowW + 1) → Bool) → List UInt8) :
+noncomputable def keyLayout (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8) :
     Binding.Layout ((keyProg c hU n).partition outs) plan tab
       (((keyProg c hU n).partition outs).placeDecoder plan tab (keyPlace hparse outs)) :=
   (keyReaders rowW hparse outs saltCol popOf outBit).layout (keyPlace hparse outs) encO
@@ -567,8 +567,8 @@ noncomputable def keyLayout (encO : (Fin (Finset.univ.sup rowW + 1) → Bool) �
 variable (rowW) in
 /-- **`rs` at `keyProg`'s places**: the readers' rows (`Readers.rows`), from `keyProg_copies`, `keyProg_bcPinned` and
 `keyProg_valPinned`. -/
-noncomputable def keyRows (enc : (Fin (Finset.univ.sup rowW + 1) → Bool) → List UInt8)
-    (enc_inj : Function.Injective enc) (encO : (Fin (Finset.univ.sup rowW + 1) → Bool) → List UInt8)
+noncomputable def keyRows (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
+    (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (encO_inj : Function.Injective encO)
     (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW)

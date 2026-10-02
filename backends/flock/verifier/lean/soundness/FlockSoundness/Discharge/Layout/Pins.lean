@@ -88,21 +88,22 @@ def ValPinned : Prop :=
     rd.valAt S R u M (rd.pos g) = rd.regVal R (rd.pos g)
 
 /-- **The registered leaves**: `SHA-512(leaf_prefix ‖ b ‖ c)` of the registration's `b ‖ c` at a row, the leaf the
-verifier computes from the public `b ‖ c`; `SHA-512(encO v)` of the registration's value `v` elsewhere. -/
-def regLeaf (encO : (Fin rd.W → Bool) → List UInt8) (R : Reg) (q : rd.Pos) : Refine.Dig :=
-  if rd.isRow q then Refine.H512 (Refine.K512.leafPrefix ++ rd.regBc R q) else Refine.H512 (encO (rd.regVal R q))
+verifier computes from the public `b ‖ c`; `SHA-512(encO v)` of the registration's value `v`, at its width, elsewhere. -/
+def regLeaf (encO : BitVal rd.W → List UInt8) (R : Reg) (q : rd.Pos) : Refine.Dig :=
+  if rd.isRow q then Refine.H512 (Refine.K512.leafPrefix ++ rd.regBc R q)
+  else Refine.H512 (encO (widthOf rd.W (rd.rowBits q), rd.regVal R q))
 
 /-- **The layout** of the readers' bit-string values, for the decoder that reads each drawn unit from its place, from
 Δ's copies. -/
-noncomputable def layout (encO : (Fin rd.W → Bool) → List UInt8) (hcopy : rd.Copies place) :
+noncomputable def layout (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) :
     Binding.Layout P plan tab (P.placeDecoder plan tab place) :=
   ofBits place rd.Pos rd.W rd.pos rd.idx (rd.regLeaf encO) rd.rowBits rd.hidx
     (fun S R u q k => rd.rowAt S R u q k.val) rd.saltAt hcopy
 
 /-- **The layout's rows**: `hm96-sha512/row/v1` at the readers' rows, with `enc` the bytes `sha512/row/v1` hashes, and a
 plain leaf `SHA-512(encO v)` elsewhere. `bc_registered` is `BcPinned` and `other_registered` is `ValPinned`. -/
-noncomputable def rows (enc : (Fin rd.W → Bool) → List UInt8) (enc_inj : Function.Injective enc)
-    (encO : (Fin rd.W → Bool) → List UInt8) (encO_inj : Function.Injective encO) (hcopy : rd.Copies place)
+noncomputable def rows (enc : BitVal rd.W → List UInt8) (enc_inj : Function.Injective enc)
+    (encO : BitVal rd.W → List UInt8) (encO_inj : Function.Injective encO) (hcopy : rd.Copies place)
     (hbc : rd.BcPinned (P := P)) (hval : rd.ValPinned (P := P)) : Binding.HmRows (rd.layout place encO hcopy) where
   isRow := rd.isRow
   decRow := rd.decRow
@@ -121,17 +122,23 @@ noncomputable def rows (enc : (Fin rd.W → Bool) → List UInt8) (enc_inj : Fun
   other_registered := by
     intro S R u hu M hM g hg hrow
     have hv : rd.valAt S R u M (rd.pos g) = rd.regVal R (rd.pos g) := hval S R u hu M hM g hg hrow
-    show Refine.H512 (encO (rd.valAt S R u M (rd.pos g))) = rd.regLeaf encO R (rd.pos g)
+    show Refine.H512 (encO (widthOf rd.W (rd.rowBits (rd.pos g)), rd.valAt S R u M (rd.pos g))) =
+      rd.regLeaf encO R (rd.pos g)
     rw [hv]
     simp only [regLeaf, show ¬ rd.isRow (rd.pos g) from hrow, ↓reduceIte]
 
 /-- The layout's commit string of a wire is the readers'. -/
-theorem layout_pos (encO : (Fin rd.W → Bool) → List UInt8) (hcopy : rd.Copies place) (g : Fin C.N) :
+theorem layout_pos (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (g : Fin C.N) :
     (rd.layout place encO hcopy).pos g = rd.pos g := rfl
 
 /-- The layout's registered leaf is the readers'. -/
-theorem layout_regLeaf (encO : (Fin rd.W → Bool) → List UInt8) (hcopy : rd.Copies place) (R : Reg) (q : rd.Pos) :
+theorem layout_regLeaf (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (R : Reg) (q : rd.Pos) :
     (rd.layout place encO hcopy).regLeaf R q = rd.regLeaf encO R q := rfl
+
+/-- **The value a message holds at a commit string** is the readers' `valAt`, at the commit string's width. -/
+theorem layout_row (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (S : Finset (Fin n)) (R : Reg)
+    (u : Fin n) (M : Binding.Msg plan tab S R u) (q : rd.Pos) :
+    (rd.layout place encO hcopy).row S R u M q = (widthOf rd.W (rd.rowBits q), rd.valAt S R u M q) := rfl
 
 end Readers
 

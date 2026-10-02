@@ -218,8 +218,8 @@ variable (rowW : Fin c.ports.size → ℕ) (saltCol : Flock.Circuit → ℕ → 
 variable (outs popOf) in
 /-- **`rs` at `keyProg`'s places, with the returned outputs**: `keyRows` with the registration's bit `outBitOf`, its
 `hout` from `keyProg_hout`. -/
-noncomputable def keyRowsOut (enc : (Fin (Finset.univ.sup rowW + 1) → Bool) → List UInt8)
-    (enc_inj : Function.Injective enc) (encO : (Fin (Finset.univ.sup rowW + 1) → Bool) → List UInt8)
+noncomputable def keyRowsOut (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
+    (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (encO_inj : Function.Injective encO) (ho : c.outNet = c.unitNet) (hshape : OutShape c)
     (hsite : ∀ S R u (h : u ∈ S), BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
