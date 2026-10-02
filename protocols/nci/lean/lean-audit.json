@@ -34,6 +34,20 @@
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   }
  },
+ "upstream": {
+  "imports": ["Mathlib"],
+  "watch": {
+   "loomis-whitney": {
+    "about": "Nci.SecurityProofs.loomis_whitney: the discrete Loomis-Whitney inequality, proved by hand",
+    "mentions": ["Finset.card", "Finset.image", "HPow.hPow"],
+    "ack": [
+     "Finset.card_pow_quotient_mul_pow_inter_subgroup_le",
+     "Finset.le_card_quotient_mul_sq_inter_subgroup",
+     "Finset.prod_comp"
+    ]
+   }
+  }
+ },
  "pins": {
   "Nci.SecurityProofs.Inference": {
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
@@ -80,6 +94,19 @@
    ],
    "assumptions": [],
    "type_hash": "d5d11e43644ce9e4ad964bfcda1cf765924fc720b505c56993f236f058d9d693"
+  },
+  "Nci.SecurityProofs.loomis_whitney": {
+   "signature": [
+    "Nci.SecurityProofs.loomis_whitney.{u_1, u_2, u_3} {α : Type u_1} {β : Type u_2} {γ : Type u_3} [DecidableEq α]",
+    "  [DecidableEq β] [DecidableEq γ] (T : Finset (Prod α (Prod β γ))) :",
+    "  instLENat.le (instHPow.hPow T.card 2)",
+    "    (instHMul.hMul",
+    "      (instHMul.hMul (Finset.image (fun x => { fst := x.fst, snd := x.snd.fst }) T).card",
+    "        (Finset.image (fun x => { fst := x.fst, snd := x.snd.snd }) T).card)",
+    "      (Finset.image (fun x => { fst := x.snd.fst, snd := x.snd.snd }) T).card)"
+   ],
+   "assumptions": [],
+   "type_hash": "699c0e8c25ebd5e02db7990880c2aab5edf63a3a632f092488b8826906380abe"
   },
   "Nci.SecurityProofs.other_positions": {
    "signature": [
