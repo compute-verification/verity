@@ -36,29 +36,30 @@ SAMPLER = re.compile(r"^(GumbelTopPTokenSelect|GumbelTokenSelect|TokenSelect|Top
 
 
 def graph_calls(g: dict, modules: str | None = None) -> dict[str, int]:
-    """A program graph's Call count per Call Definition (descriptor id); a varying group (attention over key counts, and under
-    `Attention_v5` over MASKED_FROM too) expanded to one id per value: `varying_calls` keys are the values comma-joined in
-    `varying`'s order. ``modules``: a module-path prefix to keep."""
+    """A program graph's Call count per Call Definition (descriptor id); a varying group (attention over key counts) expanded to
+    one id per value. A group varying over several statics (FA2's ``MASKED_FROM`` and ``T``) keys ``varying_calls`` by their
+    values joined with commas, in the order of ``varying``. ``modules``: a module-path prefix to keep."""
     calls: dict[str, int] = collections.Counter()
     for x in g["groups"]:
         if modules and not x["module"].startswith(modules):
             continue
         if x.get("varying"):
             axes = list(x["varying"])
-            per = x.get("varying_calls")
-            if not per:
-                if len(axes) != 1:
-                    raise ValueError(f"group {x.get('id')} varies over {axes} without varying_calls")
-                (lo, hi), = x["varying"].values()
+            if x.get("varying_calls"):
+                per = x["varying_calls"]
+            else:
+                (_, (lo, hi)), = x["varying"].items()
                 per = {str(v): 1 for v in range(int(lo), int(hi) + 1)}
             base = (x.get("definition_ids") or [None])[0]
             if base is None:
                 continue
             scale = x["calls"] // max(1, sum(int(c) for c in per.values()))
-            for vk, n in per.items():
+            for v, n in per.items():
+                vals = v.split(",")
+                assert len(vals) == len(axes), (axes, v)
                 fid = base
-                for axis, v in zip(axes, vk.split(","), strict=True):
-                    fid = re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(v)}", fid)
+                for axis, val in zip(axes, vals):
+                    fid = re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(val)}", fid)
                 calls[fid] += int(n) * scale
         elif x.get("spec"):
             calls[x["spec"]] += x["calls"]
