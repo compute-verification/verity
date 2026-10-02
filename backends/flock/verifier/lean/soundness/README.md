@@ -119,7 +119,8 @@ link term per audit.
   prover the bound is `⊤` (`linkBoundCR`). A2 is not asked of every prover at once: a prover can hard-code a collision.
   It dominates the audit's hash term.
 - **The value binding** (`Binding/`). `ValueBinding` is built from the serving rows' `hm96-sha512/row/v1` leaves
-  (`HmRows.binding`): a commit string's commitment is its leaf `SHA-512(leaf_prefix ‖ b ‖ c)` under the executable's
+  (`HmRows.binding`; a bit row's `/row/v2` leaves through `HmRows.v2`, whose `enc_inj` is `FlockLevel3.RowV2.enc_inj`):
+  a commit string's commitment is its leaf `SHA-512(leaf_prefix ‖ b ‖ c)` under the executable's
   key, and `collide` is an explicit extractor (`ExplicitLeaf.hm96`, `hm96Pair_spec`): two different rows with one leaf
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the

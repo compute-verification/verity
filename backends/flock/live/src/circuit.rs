@@ -5,14 +5,18 @@
 //! files.
 //!
 //! A row is an `hm96-sha512/row/v1` leaf: `x = SHA-512(sha512_row_prefix || row)`, `b = x XOR M(key) y`, `c = SHA-512(salt_prefix
-//! || y)` for its 192-byte salt `y`; the frame leaf binds `hm96.SHA512.tree_leaf(key, b || c)`. A block holds whole instances
-//! (VUs) in aligned ranges of slots: `sha512x3` (three SHA-512 compressions, 2^18 bits: a row's blocks after its constant
-//! first block), `hm96` (one per row: the padding compression, then `b || c` from the salt), the template's units
-//! (2^unit_log bits), the tail's slots, and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0 places each
-//! slot type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
-//! - each row's first compression read the prefix's midstate and its hm96 slot the padding block (constants);
+//! || y)` for its 192-byte salt `y`; the frame leaf binds `hm96.SHA512.tree_leaf(key, b || c)`. Or (META `row_schemas`, per port)
+//! an `hm96-sha512/row/v2` leaf, a bit row of `l` bits: `x = SHA-512(P(l) || ceil(l / 8) bytes)`, the row's bits least
+//! significant first, its u16 leaves the same bits (an output row's `l` its words' bits). A block holds whole instances (VUs)
+//! in aligned ranges of slots: `sha512x3` (three SHA-512 compressions, 2^18 bits: a row's message blocks after its constant
+//! first block but the last), `hm96` (one per row: the last block's compression, then `b || c` from the salt), the template's
+//! units (2^unit_log bits), the tail's slots, and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0
+//! places each slot type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
+//! - each row's first compression (its hm96 slot, a row of no other compression) read the prefix's midstate, and every
+//!   message bit at or past the row's length (a bit row's fill bits, then SHA-512's padding) its constant;
 //! - every later compression read the previous one's output, and the hm96 slot the last one's (the row's wires);
-//! - every unit's leaf input bits copies of the message bits that hash them, and a zero leaf a copy of a forced-zero row;
+//! - every unit's leaf input bits copies of the message bits that hash them, and a zero leaf (or a bit row's leaf bit past
+//!   its length) a copy of a forced-zero row;
 //! - every output row's message bits copies of the returned output bits, and its padding words copies of a forced-zero row;
 //! - every other wire of the template's slots, and every slot's constant a copy of the pinned column.
 //!
@@ -70,6 +74,8 @@ pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
+/// a bit row's leaf (`sha512/row/v2`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
+pub const ROW_SCHEMA_V2: &str = "hm96-sha512/row/v2";
 pub const SHA_NET: &str = "sha512x3";
 pub const HM_NET: &str = "hm96";
 /// compressions per `sha512x3` slot
@@ -145,7 +151,10 @@ pub const PARTITION_PROVISIONAL: &str = "flock-circuit/unit-cover/v0";
 pub const SALT_BYTES: usize = 192;
 pub const BC_BYTES: usize = 128;
 const SHA512_ROW_TAG: &[u8] = b"verity/sha512-row/v1\0";
+const SHA512_ROW_V2_TAG: &[u8] = b"verity/sha512-row/v2\0";
 const ROLE_X: u8 = 1;
+/// a port's compressions, at most: each reads 1024 message columns of a block of at most 2^IN_RANGE_K_LOG
+const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
@@ -212,16 +221,61 @@ impl Range {
 pub struct Port {
     pub name: String,
     pub words: usize,
-    /// compressions after the constant first block (the padding block is the hm96 slot's)
+    /// compressions after the constant first block (the last block, the row's last bytes and SHA-512's padding, is the hm96
+    /// slot's)
     pub comps: usize,
+    /// the row's length in bits: `16 * words` (`sha512/row/v1`), or a bit row's own (`v2`)
+    pub bits: usize,
+    /// a bit row (`sha512/row/v2`, its leaf `hm96-sha512/row/v2`)
+    pub v2: bool,
 }
 
-/// A row's constants (`sha512/row/v1`): its first block, the chaining value after it, the padding block's message words.
+impl Port {
+    /// The row bytes its digest hashes after the prefix: `2 * words`, a bit row's `ceil(bits / 8)`.
+    pub fn bytes(&self) -> usize {
+        if self.v2 { self.bits.div_ceil(8) } else { 2 * self.words }
+    }
+
+    pub fn schema(&self) -> &'static str {
+        if self.v2 { ROW_SCHEMA_V2 } else { ROW_SCHEMA }
+    }
+}
+
+/// A row's constants: its first block, the chaining value after it, and SHA-512's padding after its bytes (a whole block for
+/// `sha512/row/v1`).
 #[derive(Clone, Debug)]
 pub struct RowConsts {
     pub prefix: Vec<u8>,
     pub midstate: [u64; 8],
-    pub pad: [u64; 16],
+    pub tail: Vec<u8>,
+}
+
+impl RowConsts {
+    /// The message after the prefix: the row's first `bytes` bytes (zeros past `row`), then the padding.
+    pub fn message(&self, row: &[u8], bytes: usize) -> Vec<u8> {
+        let mut m = row[..bytes.min(row.len())].to_vec();
+        m.resize(bytes, 0);
+        m.extend_from_slice(&self.tail);
+        m
+    }
+}
+
+/// Column `t` of a message block's 1024 (word `t / 64`, its bit `t % 64`; the block's bytes big-endian per word) as the
+/// block's byte and the byte's bit.
+pub fn block_bit(t: usize) -> (usize, usize) {
+    (8 * (t / 64) + 7 - (t % 64) / 8, t % 8)
+}
+
+/// Bit `t` (a block column) of block `k` of port `port`'s message after the prefix: `None` for a row bit (`8 j + b < bits`),
+/// else the constant there (a fill bit of the last row byte, zero, or SHA-512's padding).
+pub fn const_bit(port: &Port, rc: &RowConsts, k: usize, t: usize) -> Option<bool> {
+    let (o, b) = block_bit(t);
+    let j = 128 * k + o;
+    if 8 * j + b < port.bits {
+        return None;
+    }
+    let bytes = port.bytes();
+    Some(j >= bytes && (rc.tail[j - bytes] >> b) & 1 == 1)
 }
 
 /// A copy of every bit of output port `src_port` of slot `(src_net, src_idx)` into input port `dst_port` of slot
@@ -377,11 +431,28 @@ pub fn row_prefix(words: usize) -> Vec<u8> {
     v
 }
 
+/// `sha512/row/v2`'s first block `P(bits)`: `"verity/sha512-row/v2\0" || u64be bits`, zero padded
+/// (`verity.commitments.rowleaf.sha512_row_v2_prefix`).
+pub fn row_prefix_v2(bits: u64) -> Vec<u8> {
+    let mut v = SHA512_ROW_V2_TAG.to_vec();
+    v.extend(bits.to_be_bytes());
+    v.resize(128, 0);
+    v
+}
+
 /// The padding block after `total` bytes (a multiple of 128): 0x80, zeros, the 128-bit bit length.
 pub fn pad_block(total: usize) -> [u8; 128] {
     let mut b = [0u8; 128];
     b[0] = 0x80;
     b[112..].copy_from_slice(&(8 * total as u128).to_be_bytes());
+    b
+}
+
+/// SHA-512's padding after a message of `total` bytes: 0x80, zeros to 112 mod 128, the 128-bit bit length.
+pub fn pad_tail(total: usize) -> Vec<u8> {
+    let mut b = vec![0x80];
+    b.resize(1 + (128 - (total + 17) % 128) % 128, 0);
+    b.extend((8 * total as u128).to_be_bytes());
     b
 }
 
@@ -400,7 +471,8 @@ pub fn row_slots(ports: &[Port]) -> (usize, Vec<Vec<(usize, usize)>>) {
     (at.div_ceil(PER_SLOT), where_)
 }
 
-/// Each row's chain (compression k's `cv` from compression k-1's `out`) and its hm96 slot's `cv` (from the last).
+/// Each row's chain (compression k's `cv` from compression k-1's `out`) and its hm96 slot's `cv` (from the last; a row of
+/// no compression gives its hm96 slot the midstate, a Δ constant).
 fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
     let (_, where_) = row_slots(ports);
     let mut out = Vec::new();
@@ -408,8 +480,9 @@ fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
         for k in 1..w.len() {
             out.push(Wire { dst: (sha, w[k].0, 2 * w[k].1), src: (sha, w[k - 1].0, w[k - 1].1) });
         }
-        let last = w[w.len() - 1];
-        out.push(Wire { dst: (hm, p, 0), src: (sha, last.0, last.1) });
+        if let Some(last) = w.last() {
+            out.push(Wire { dst: (hm, p, 0), src: (sha, last.0, last.1) });
+        }
     }
     out
 }
@@ -511,32 +584,66 @@ impl Composite {
                 lookups_fast.push((nets.len() - 1, fast));
             }
         }
-        if meta["scheme"] != SCHEME || meta["row_schema"] != ROW_SCHEMA {
-            return Err(format!("META: rows are not {SCHEME} ({ROW_SCHEMA}) leaves"));
+        // one sha512/row/v1 schema for every port, or (`row_schemas`) each port's bit row and its length in bits
+        let v2 = meta.get("row_schemas").is_some();
+        if meta["scheme"] != SCHEME || v2 == meta.get("row_schema").is_some() || (!v2 && meta["row_schema"] != ROW_SCHEMA) {
+            return Err(format!("META: rows are not {SCHEME} ({ROW_SCHEMA}, or {ROW_SCHEMA_V2} per port) leaves"));
         }
-        let ports: Vec<Port> = meta["ports"].as_array().ok_or("META: ports")?.iter().map(|p| Port {
-            name: p[0].as_str().unwrap_or("").into(), words: p[1].as_u64().unwrap_or(0) as usize, comps: p[2].as_u64().unwrap_or(0) as usize,
-        }).collect();
-        for p in &ports {
-            if p.words == 0 || (2 * p.words) % 128 != 0 || p.comps != 2 * p.words / 128 {
-                return Err(format!("port {}: not whole SHA-512 blocks", p.name));
-            }
+        if v2 && typed {
+            return Err(format!("META: a typed statement's rows are {ROW_SCHEMA} leaves"));
         }
         let n_in = us(&meta, "input_ports")?;
-        // each row's constants, recomputed here from the scheme (never taken from META)
+        let listed_ports = meta["ports"].as_array().ok_or("META: ports")?;
+        let lengths: Vec<Option<u64>> = if v2 {
+            let s = meta["row_schemas"].as_array().filter(|s| s.len() == listed_ports.len())
+                .ok_or("META: row_schemas is not one [schema, bits] per port")?;
+            s.iter().map(|x| match x.as_array().map(|a| a.as_slice()) {
+                Some([schema, bits]) if schema == ROW_SCHEMA_V2 => bits.as_u64().map(Some).ok_or_else(|| "META: a bit row's length is not a u64".to_string()),
+                _ => Err(format!("META: row_schemas: each port's is [{ROW_SCHEMA_V2:?}, bits]")),
+            }).collect::<Result<_, _>>()?
+        } else {
+            vec![None; listed_ports.len()]
+        };
+        let mut ports = Vec::new();
+        for (p, bits) in listed_ports.iter().zip(&lengths) {
+            let (name, words, comps) = (p[0].as_str().unwrap_or("").to_string(), p[1].as_u64().unwrap_or(0) as usize, p[2].as_u64().unwrap_or(0) as usize);
+            let port = match *bits {
+                None => {
+                    if words == 0 || (2 * words) % 128 != 0 || comps != 2 * words / 128 {
+                        return Err(format!("port {name}: not whole SHA-512 blocks"));
+                    }
+                    Port { name, words, comps, bits: 16 * words, v2: false }
+                }
+                Some(l) => {
+                    // every count derived from the length: its leaves, and its message's blocks after the prefix but the last
+                    let bytes = l.div_ceil(8);
+                    let want = (l.div_ceil(16) as usize, ((bytes + 17).div_ceil(128) - 1) as usize);
+                    if want.1 > MAX_COMPS || (words, comps) != want {
+                        return Err(format!("port {name}: a row of {l} bits is {} u16 leaves and {} compressions, not META's {words} and {comps}",
+                                           want.0, want.1));
+                    }
+                    Port { name, words, comps, bits: l as usize, v2: true }
+                }
+            };
+            ports.push(port);
+        }
+        // each row's constants, recomputed here from its schema and length (never taken from META)
         let rows: Vec<RowConsts> = ports.iter().map(|p| {
-            let prefix = row_prefix(p.words);
+            let prefix = if p.v2 { row_prefix_v2(p.bits as u64) } else { row_prefix(p.words) };
             let mut midstate = SHA512_IV;
             compress(&mut midstate, &prefix);
-            RowConsts { prefix, midstate, pad: words_be(&pad_block(128 + 2 * p.words)) }
+            RowConsts { prefix, midstate, tail: pad_tail(128 + p.bytes()) }
         }).collect();
         let listed = meta["rows"].as_array().ok_or("META: rows")?;
         if listed.len() != ports.len() || listed.iter().zip(&rows).any(|(m, r)| {
             m["prefix"].as_str() != Some(crate::hex(&r.prefix).as_str())
                 || m["midstate"] != json!(r.midstate.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>())
-                || m["pad"].as_str() != Some(crate::hex(&r.pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>()).as_str())
+                || m["pad"].as_str() != Some(crate::hex(&r.tail).as_str())
         }) {
-            return Err("META: a row's constants are not sha512/row/v1's".into());
+            return Err(format!("META: a row's constants are not {}'s", if v2 { "sha512/row/v2" } else { "sha512/row/v1" }));
+        }
+        if v2 && ports.iter().all(|p| p.comps == 0) {
+            return Err(format!("META: no row has a compression before its last block (the {SHA_NET} range, the pin's, holds no slot)"));
         }
         if meta["row_key_sha512"].as_str() != Some(crate::hex(&Sha512::digest(hm96_sha512_default_key())).as_str()) {
             return Err("META: the rows' hm96 key is not hm96-sha512/v1's default key".into());
@@ -660,9 +767,10 @@ impl Composite {
         let mut names: Vec<&str> = self.ports.iter().map(|p| p.name.as_str()).collect();
         names.sort_unstable();
         if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_words.len() || names.windows(2).any(|w| w[0] == w[1])
-            || self.out_rows().iter().zip(&self.out_words).zip(&out_names).any(|((p, &w), &nm)| p.name != nm || p.words != w.div_ceil(64) * 64)
+            || self.out_rows().iter().zip(&self.out_words).zip(&out_names)
+                .any(|((p, &w), &nm)| p.name != nm || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words)
         {
-            return Err("the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks), each name once".into());
+            return Err("the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits), each name once".into());
         }
         let (sha, hm) = (&self.nets[self.sha_net].1, &self.nets[self.hm_net].1);
         if port_cols(&sha.in_groups) != (0..2 * PER_SLOT).map(|i| (port_cols(&sha.in_groups)[i].0, if i % 2 == 0 { 512 } else { 1024 })).collect::<Vec<_>>()
@@ -912,14 +1020,18 @@ impl Composite {
     }
 
     /// `(g, p, byte, t)`: bit `t` of row byte `byte` of VU `g`'s port `p` as a column, a message bit of its compression (the
-    /// block's bytes big-endian per word).
+    /// block's bytes big-endian per word): a `sha512x3` slot's message, or for the last block the hm96 slot's `pad`.
     pub fn msg_col(&self) -> impl Fn(usize, usize, usize, usize) -> usize + '_ {
         let (_, where_) = row_slots(&self.ports);
         let sin = port_cols(&self.nets[self.sha_net].1.in_groups);
+        let hin = port_cols(&self.nets[self.hm_net].1.in_groups);
         move |g, p, byte, t| {
             let (k, o) = (byte / 128, byte % 128);
-            let (slot, sub) = where_[p][k];
-            self.slot_col(self.sha_net, g, slot) + sin[2 * sub + 1].0 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+            let at = 64 * (o / 8) + 56 - 8 * (o % 8) + t;
+            match where_[p].get(k) {
+                Some(&(slot, sub)) => self.slot_col(self.sha_net, g, slot) + sin[2 * sub + 1].0 + at,
+                None => self.slot_col(self.hm_net, g, p) + hin[1].0 + at,
+            }
         }
     }
 
@@ -976,13 +1088,29 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let zero = c.unit_range().slot(0) + c.unit().useful;
     for g in 0..c.g {
         for (p, w) in where_.iter().enumerate() {
-            let cv = c.slot_col(c.sha_net, g, w[0].0) + sin[2 * w[0].1].0;
+            let (port, rc) = (&c.ports[p], &c.rows[p]);
+            let cv = match w.first() {
+                Some(&(slot, sub)) => c.slot_col(c.sha_net, g, slot) + sin[2 * sub].0,
+                None => c.slot_col(c.hm_net, g, p) + hin[0].0,
+            };
             for t in 0..512 {
-                both(&mut da, &mut db, cv + t, if (c.rows[p].midstate[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
+                both(&mut da, &mut db, cv + t, if (rc.midstate[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
             }
+            // the last block's constant bits (a sha512/row/v1 row's: all of it), then those of the blocks before it from the
+            // first that holds a bit at or past the row's length
             let pad = c.slot_col(c.hm_net, g, p) + hin[1].0;
             for t in 0..1024 {
-                both(&mut da, &mut db, pad + t, if (c.rows[p].pad[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
+                if let Some(v) = const_bit(port, rc, port.comps, t) {
+                    both(&mut da, &mut db, pad + t, if v { pin } else { zero });
+                }
+            }
+            for k in port.bits / 1024..port.comps {
+                let msg = c.slot_col(c.sha_net, g, w[k].0) + sin[2 * w[k].1 + 1].0;
+                for t in 0..1024 {
+                    if let Some(v) = const_bit(port, rc, k, t) {
+                        both(&mut da, &mut db, msg + t, if v { pin } else { zero });
+                    }
+                }
             }
         }
     }
@@ -998,12 +1126,14 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
         let base = ur.slot(k);
         for (j, &leaf) in c.leaves_in[u].iter().enumerate() {
             for t in 0..16 {
+                // a zero leaf, or a bit row's leaf bit past its length: the slot's forced-zero row
                 let src = if leaf < 0 {
                     base + unit.useful
                 } else {
                     let leaf = leaf as usize;
                     let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
-                    msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8)
+                    let i = 16 * (leaf - starts[p]) + t;
+                    if i < c.ports[p].bits { msg_col(g, p, i / 8, i % 8) } else { base + unit.useful }
                 };
                 both(&mut da, &mut db, base + leaf_cols[j] + t, src);
             }
@@ -1015,7 +1145,8 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
             let dst = c.slot_col(c.unit_net, g, u) + pc[j].0;
             for t in 0..pc[j].1 {
-                both(&mut da, &mut db, dst + t, if t < 16 { msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8) } else { zero });
+                let i = 16 * (leaf - starts[p]) + t;
+                both(&mut da, &mut db, dst + t, if t < 16 && i < c.ports[p].bits { msg_col(g, p, i / 8, i % 8) } else { zero });
             }
         }
     }
@@ -1371,11 +1502,14 @@ pub fn row_tree_leaf(bc: &[u8; BC_BYTES]) -> [u8; 64] {
     h.finalize().into()
 }
 
-/// A row's `b || c` under a zero salt (its words u16 LE): `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix || 0^192)`.
-pub fn row_bc_zero_salt(row: &[u8]) -> [u8; BC_BYTES] {
+/// Port `port`'s row `row` (its words u16 LE) under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix
+/// || 0^192)`; `x` is the port's row digest (`sha512/row/v1` of its words, or a bit row of its length: the row's first bytes).
+pub fn row_bc_zero_salt(port: &Port, row: &[u8]) -> [u8; BC_BYTES] {
     let mut h = Sha512::new();
-    h.update(row_prefix(row.len() / 2));
-    h.update(row);
+    h.update(if port.v2 { row_prefix_v2(port.bits as u64) } else { row_prefix(port.words) });
+    let mut m = row[..port.bytes().min(row.len())].to_vec();
+    m.resize(port.bytes(), 0);
+    h.update(m);
     let x = h.finalize();
     let mut h = Sha512::new();
     h.update(hm96_prefixes().0);
@@ -1401,10 +1535,10 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         }
     }
     for (p, port) in c.ports.iter().enumerate() {
-        if fv["schemas"][&port.name] != ROW_SCHEMA {
-            return Err(format!("row {}: schema is not {ROW_SCHEMA}", port.name));
+        if fv["schemas"][&port.name] != port.schema() {
+            return Err(format!("row {}: schema is not {}", port.name, port.schema()));
         }
-        if row_bc_zero_salt(&c.dummy_row(p)) != c.dummy_bc[p] {
+        if row_bc_zero_salt(port, &c.dummy_row(p)) != c.dummy_bc[p] {
             return Err(format!("the pinned dummy b || c of row {} is not the padding instance's row under a zero salt", port.name));
         }
     }
@@ -1430,7 +1564,7 @@ pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 
             Some(t) => (t.counts[p], Box::new(move |r| t.start(p) + r)),
             None => (n, Box::new(move |i| i * np + p)),
         };
-        let leaves = (0..count).into_par_iter().map(|r| fv3_leaf(&dom, r, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[row(r)]))).collect();
+        let leaves = (0..count).into_par_iter().map(|r| fv3_leaf(&dom, r, port.schema().as_bytes(), &row_tree_leaf(&bcs[row(r)]))).collect();
         out.push((port.name.clone(), fv3_root(&dom, leaves)));
     }
     Ok(out)
@@ -1588,13 +1722,16 @@ impl LincheckCircuit for BlockCircuit {
 }
 
 /// A dishonest prover's row witness (VU 0 of block 0): a compression's chaining value, the first chaining value (not the
-/// midstate), the padding block, or a salt, each followed consistently downstream.
+/// midstate), the last block, a salt, a bit row's first fill bit, or its padding's 0x80 bit in a block it shares with the
+/// row's bytes, each followed consistently downstream.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RowTamper {
     pub cv_flip: bool,
     pub midstate_flip: bool,
     pub pad_flip: bool,
     pub salt_flip: bool,
+    pub fill_flip: bool,
+    pub mixed_pad_flip: bool,
 }
 
 /// Block `b`'s row slots' input words (`Stmt::row_inputs`), as a witness source hands them over.
@@ -2019,6 +2156,10 @@ impl Stmt {
             }
         };
         let chained = c.ports.iter().position(|p| p.comps > 1);
+        // a bit row's first message bit past its length (its last byte's fill bit), and its padding's first bit in a block with
+        // its bytes (bit 7 of the 0x80 byte)
+        let filled = c.ports.iter().position(|p| p.v2 && p.bits % 8 != 0);
+        let mixed = c.ports.iter().position(|p| p.v2 && p.bytes() % 128 != 0);
         for g in 0..c.g {
             let inst = self.inst_of(b, g);
             let first = b == 0 && g == 0;
@@ -2027,6 +2168,13 @@ impl Stmt {
                 let n = 2 * port.words;
                 let row: Vec<u8> = match (rows, inst) { (Some(r), Some(i)) => r[i * rb + off..i * rb + off + n].to_vec(), _ => c.dummy_row(p) };
                 off += n;
+                let mut msg = c.rows[p].message(&row, port.bytes());
+                if t.fill_flip && first && filled == Some(p) {
+                    msg[port.bits / 8] ^= 1 << (port.bits % 8);
+                }
+                if t.mixed_pad_flip && first && mixed == Some(p) {
+                    msg[port.bytes()] ^= 0x80;
+                }
                 let mut cv = c.rows[p].midstate;
                 if t.midstate_flip && first && p == 0 {
                     cv[0] ^= 1;
@@ -2036,13 +2184,13 @@ impl Stmt {
                         cv[0] ^= 1;
                     }
                     let (slot, sub) = where_[p][k];
-                    let blk = &row[128 * k..128 * k + 128];
+                    let blk = &msg[128 * k..128 * k + 128];
                     let w = &mut si[g * n_sha + slot];
                     put(w, sin[2 * sub].0, &cv);
                     put(w, sin[2 * sub + 1].0, &words_be::<16>(blk));
                     compress(&mut cv, blk);
                 }
-                let mut pad = c.rows[p].pad;
+                let mut pad = words_be::<16>(&msg[128 * port.comps..]);
                 if t.pad_flip && first && p == 0 {
                     pad[0] ^= 1;
                 }
@@ -2889,5 +3037,41 @@ mod tests {
             n += 1;
         }
         assert!(n >= 8, "{n} vectors");
+    }
+
+    /// A bit row's message as the Δ constants leave it (`const_bit`, else the row's bit at `block_bit`'s byte and bit),
+    /// compressed from the chaining value after `P(bits)`, is SHA-512 of `P(bits)` and the row's bytes (`sha512/row/v2`) at
+    /// every residue of the length: `bits` mod 8 of 0, 1 and 7, and its bytes mod 128 of 0, 1, 111, 112 and 127.
+    #[test]
+    fn bit_row_constants_complete_sha512_of_the_prefix_and_bytes() {
+        let mut s = 0x2545_f491_4f6c_dd1du64;
+        let mut lengths = vec![0usize, 8, 1024, 2048];
+        for bytes in [1usize, 111, 112, 127, 128, 129, 239, 240, 255, 256] {
+            lengths.extend([8 * bytes - 7, 8 * bytes - 1]);
+        }
+        for bits in lengths {
+            let bytes = bits.div_ceil(8);
+            let port = Port { name: "p".into(), words: bits.div_ceil(16), comps: (bytes + 17).div_ceil(128) - 1, bits, v2: true };
+            let prefix = row_prefix_v2(bits as u64);
+            let mut midstate = SHA512_IV;
+            compress(&mut midstate, &prefix);
+            let rc = RowConsts { prefix: prefix.clone(), midstate, tail: pad_tail(128 + bytes) };
+            let mut row: Vec<u8> = (0..bytes).map(|_| { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s as u8 }).collect();
+            if bits % 8 != 0 {
+                row[bytes - 1] &= (1u8 << (bits % 8)) - 1;
+            }
+            let mut cv = rc.midstate;
+            for k in 0..=port.comps {
+                let mut blk = [0u8; 128];
+                for t in 0..1024 {
+                    let (o, b) = block_bit(t);
+                    let v = const_bit(&port, &rc, k, t).unwrap_or_else(|| (row[128 * k + o] >> b) & 1 == 1);
+                    blk[o] |= (v as u8) << b;
+                }
+                compress(&mut cv, &blk);
+            }
+            let got: Vec<u8> = cv.iter().flat_map(|w| w.to_be_bytes()).collect();
+            assert_eq!(got, Sha512::digest([prefix, row].concat()).to_vec(), "bits {bits}");
+        }
     }
 }

@@ -7,7 +7,8 @@ release stay deactivated (spec.active=false), new arrivals included. It reactiva
   - at most MAX_BIG (4) Commits at batch 8 or more are unfinished (released or admitted),
   - node 1's unreplayed replay bundles (jobs/cov, jobs/probe-jit), plus the estimated bundles of the unfinished Commits and of
     the candidate, stay under the cap: what is left under CAP_ROOM_PCT (75) of /workspace after everything that is not a bundle,
-    at most CAP_GB (2000), recomputed every tick; 150 GB once the disk has reached 78%. The estimate is infra's 120 GB x batch/8 x (input + output tokens)/1152
+    at most CAP_GB (2000), recomputed every tick; 150 GB once the disk has reached 78%. A model's estimate is learned from its
+    finished bundles (the largest GB per batch x tokens seen, x1.25; bundle-sizes.json). Until then it is infra's 120 GB x batch/8 x (input + output tokens)/1152
     for Phi-3-mini, scaled by the model's hidden size x layers against Phi-3-mini's and at least 10 GB (it stays above every bundle
     measured on Sep 30: Phi-3-mini, Mistral-7B, TinyLlama, Llama-3.2-1B, Qwen2.5-0.5B and -1.5B),
   - node 1's /workspace is under DISK_PAUSE_PCT (80, as df reports it): at or over it nothing is released (infra, 4:46 PM PDT).
@@ -36,7 +37,8 @@ WAVES = ["cov-n082", "cov-n083", "cov-n084", "cov-n085", "cov-n087", "cov-n088",
 KEEP = {"cov-n133", "cov-g108", "cov-n002", "cov-g019", "cov-g061", "cov-n158", "cov-g084", "cov-g128"}
 BIG_MODELS = ("mistral-7b", "qwen25-7b", "qwen3-30b", "olmoe", "llama31-8b", "gemma2-9b")
 CIRCUITS = ("vllm-epoch-run/", "n2-build/", "vllm-coverage-defs/")
-MAX_INFLIGHT, MAX_BIG, DISK_PAUSE_PCT = 6, 4, 80   # circuits, 6:09 PM PDT: 6 in flight, 4 at batch 8+ (was 3 and 2)
+MAX_INFLIGHT, MAX_BIG, DISK_PAUSE_PCT = 6, 6, 80   # circuits, 2:04 AM PDT Oct 2: batch 8+ as many as in flight (was 4, a
+                                                   # disk guard the disk-following cap and the 80% pause now cover)
 BOOST_UNTIL, BOOST_INFLIGHT, BOOST_BIG = 1790866200, 8, 6   # circuits, 6:22 AM PDT Oct 1: 8 and 6 until 7:50 AM PDT (14:50Z)
 
 
@@ -106,11 +108,66 @@ HIDDEN_X_LAYERS = {"smollm2-135m": 576 * 30, "smollm2-360m": 960 * 32, "qwen25-0
 REF = HIDDEN_X_LAYERS["phi3-mini"]          # unknown models are estimated as Phi-3-mini
 
 
-def estimate_gb(row):
+SIZES = ROOT / "bundle-sizes.json"    # learned: per model, the largest succeeded Commit's bundle in GB per (batch x tokens)
+TRACK = ROOT / "bundle-track.json"    # per Commit in flight: the most its bundle has held, and its Job
+LEARN_MARGIN = 1.25
+_learned: dict[str, float] | None = None
+
+
+def tokens(row):
     m = re.search(r"__i(\d+)__o(\d+)__", row)
-    tokens = int(m.group(1)) + int(m.group(2)) if m else 1152
+    return int(m.group(1)) + int(m.group(2)) if m else 1152
+
+
+def model(row):
+    return row.split("__", 1)[0]
+
+
+def learned():
+    global _learned
+    if _learned is None:
+        try:
+            _learned = {k: float(v) for k, v in json.loads(SIZES.read_text()).items()}
+        except (OSError, ValueError):
+            _learned = {}
+    return _learned
+
+
+def learn(flying, written, jobs):
+    """Track the most each in-flight Commit's bundle has held (written), and once its workload has finished, record its model's
+    GB per (batch x tokens) if its Job succeeded. A bundle on disk is no measure: its replay deletes it and may keep leaves, and
+    a failed Commit's is partial."""
+    try:
+        track = json.loads(TRACK.read_text())
+    except (OSError, ValueError):
+        track = {}
+    for w in flying:
+        t = track.setdefault(w["row"], {"gb": 0.0, "job": w.get("job", "")})
+        t["gb"] = max(t["gb"], written.get(w["name"], 0.0))
+    table, changed, live = learned(), False, {w["row"] for w in flying}
+    for row in [r for r in track if r not in live]:
+        st = (jobs.get(track[row]["job"]) or {}).get("status") or {}
+        if st.get("succeeded") and batch(row) > 0 and track[row]["gb"] > 0:
+            rate = track[row]["gb"] / (batch(row) * tokens(row))
+            if rate > table.get(model(row), 0.0):
+                table[model(row)], changed = rate, True
+        if st.get("succeeded") or st.get("failed") or track[row]["job"] not in jobs:
+            del track[row]
+    if not DRY:
+        TRACK.parent.mkdir(parents=True, exist_ok=True)
+        TRACK.write_text(json.dumps(track, indent=1, sort_keys=True) + "\n")
+        if changed:
+            SIZES.write_text(json.dumps(table, indent=1, sort_keys=True) + "\n")
+
+
+def estimate_gb(row):
+    """A Commit's bundle, GB: from the largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else
+    infra's formula scaled from Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
+    rate = learned().get(model(row))
+    if rate:
+        return max(10.0, rate * max(batch(row), 1) * tokens(row) * LEARN_MARGIN)
     size = next((v for k, v in HIDDEN_X_LAYERS.items() if row.startswith(k + "__")), REF) / REF
-    return max(10.0, 120 * max(batch(row), 1) / 8 * tokens / 1152 * size)
+    return max(10.0, 120 * max(batch(row), 1) / 8 * tokens(row) / 1152 * size)
 
 
 def kept(cov, row):
@@ -168,7 +225,7 @@ def tick():
             continue
         env = {e["name"]: e.get("value") or "" for c in w["spec"]["podSets"][0]["template"]["spec"]["containers"] for e in c.get("env", [])}
         ws.append({"name": w["metadata"]["name"], "cov": key.split("/", 1)[1], "row": env.get("ROW", ""), "sweep": env.get("SWEEP_DIR", ""),
-                   "active": w["spec"].get("active", True), "admitted": bool(st.get("admission"))})
+                   "active": w["spec"].get("active", True), "admitted": bool(st.get("admission")), "job": own[0] if own else ""})
     live = {w["name"] for w in ws}
     released = {w["name"] for w in ws if w["name"] in released and w["active"]}   # finished or re-held releases drop out
     seen = (seen & live) | {w["name"] for w in ws if not w["active"]}
@@ -191,7 +248,9 @@ def tick():
     latched = CAP_LATCH.exists() or disk >= CAP_DROP_PCT
     cap = CAP_LOW_GB if latched else room_cap(gb)
     flying = [w for w in ws if w["admitted"] or w["name"] in released]
-    rest = {w["name"]: max(estimate_gb(w["row"]) - written_gb(w), 0) for w in flying}   # a Commit's bundle so far is already in gb
+    written = {w["name"]: written_gb(w) for w in flying}
+    learn(flying, written, jobs)
+    rest = {w["name"]: max(estimate_gb(w["row"]) - written[w["name"]], 0) for w in flying}   # a Commit's bundle so far is already in gb
     projected = gb + sum(rest.values())
     order = {c: i for i, c in enumerate(WAVES)}
     cands = sorted((w for w in ws if not w["active"] and not w["admitted"] and not kept(w["cov"], w["row"])),

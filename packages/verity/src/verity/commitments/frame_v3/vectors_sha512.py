@@ -4,7 +4,8 @@
     python -m verity.commitments.frame_v3.vectors_sha512 --check  # exit 1 if it is stale
 
 The same framing as ``vectors.json`` through SHA-512: domain ids, leaves, pads, nodes and roots are 64 bytes, and row leaves
-are ``sha512/row/v1`` digests.  Every byte is spelled out.
+are ``sha512/row/v1`` digests or ``sha512/row/v2`` (bit row) digests, the latter also as hiding (``hm96-sha512/row/v2``)
+leaves.  Every byte is spelled out.
 """
 
 from __future__ import annotations
@@ -15,14 +16,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .. import hm96
 from ..indexed import RangeIndexedDomain
 from ..merkle import CommitmentDomain, _hash, _uint
-from ..rowleaf import ROLE_W, ROLE_X
-from . import NAME_SHA512, FrameV3, Port, RowLeaf, WordLeaf
+from ..rowleaf import ROLE_W, ROLE_X, bit_row, row_leaf
+from . import NAME_SHA512, BitRowLeaf, FrameV3, Port, RowLeaf, WordLeaf
 from .vectors import expand, row_words
 
 VECTORS = Path(__file__).with_name("vectors_sha512.json")
 ROW_CASES = [(role, bits, n) for role in (ROLE_X, ROLE_W) for bits in (8, 16) for n in (1, 5, 33)] + [(ROLE_X, 16, 1536), (ROLE_W, 8, 1536)]
+#: sha512/row/v2 rows of every bit random, by length in bits: empty; under a byte and a fill; the second block's last length
+#: whose SHA-512 padding fits it (888: 111 bytes) and the first that needs a third block (896); a byte, a bit, none and a bit
+#: past one row block (1016, 1023, 1024, 1025); several blocks with a fill (3172) and without (8192)
+BIT_ROW_CASES = (0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172, 8192)
+#: sha512/row/v2 rows of elements at a small K, ``(name, ((element bits, count), ...))``; the name is a label, never hashed
+FORMAT_ROW_CASES = (("nvfp4/k32", ((4, 32), (8, 2))), ("mxfp4/k64", ((4, 64), (8, 2))), ("e4m3/k5", ((8, 5),)),
+                    ("bf16/k3", ((16, 3),)), ("e2m1/k3", ((4, 3),)))
 
 
 def domain(n: int, label: str = "frame-v3-sha512/vectors") -> CommitmentDomain:
@@ -61,6 +70,70 @@ def _tree_vectors() -> list[dict[str, Any]]:
     return out
 
 
+def random_bits(label: str, n_bits: int) -> bytes:
+    """A row of ``n_bits`` random bits: ``ceil(n_bits / 8)`` bytes, the fill bits of the last zero."""
+    raw = bytearray(expand(label, (n_bits + 7) // 8))
+    if n_bits % 8:
+        raw[-1] &= (1 << n_bits % 8) - 1
+    return bytes(raw)
+
+
+def elements(label: str, bits: int, n: int) -> list[int]:
+    raw = int.from_bytes(expand(label, (bits * n + 7) // 8), "little")
+    return [raw >> bits * i & (1 << bits) - 1 for i in range(n)]
+
+
+def format_row(name: str, spec: tuple[tuple[int, int], ...]) -> tuple[list[tuple[list[int], int]], bytes, int]:
+    parts = [(elements(f"bit-row-sha512/{name}/{j}", bits, n), bits) for j, (bits, n) in enumerate(spec)]
+    return (parts, *bit_row(*parts))
+
+
+def _bit_row_vectors() -> list[dict[str, Any]]:
+    out = []
+    rows = [(f"bits/{n}", None, random_bits(f"bit-row-sha512/bits/{n}", n), n) for n in BIT_ROW_CASES]
+    rows += [(name, *format_row(name, spec)) for name, spec in FORMAT_ROW_CASES]
+    for name, parts, value, n_bits in rows:
+        layout = BitRowLeaf(n_bits).layout()
+        doc = {"schema": BitRowLeaf.schema, "name": name, "n_bits": n_bits, "prefix": layout.prefix.hex(), "row_bytes": value.hex(),
+               "digest": layout.digest(value).hex()}
+        if parts is not None:
+            doc["parts"] = [{"bits": bits, "values": values} for values, bits in parts]
+        out.append(doc)
+    return out
+
+
+def _bit_row_tree_vectors() -> list[dict[str, Any]]:
+    n, n_bits = 3, 144
+    d = domain(n, "frame-v3-sha512/vectors/bit-rows")
+    scheme = FrameV3({"rows": Port(d, BitRowLeaf(n_bits))})
+    rows = [format_row(f"tree/{r}", ((4, 32), (8, 2)))[1] for r in range(n)]
+    digests = [scheme.leaf_layout("rows", r).digest(v) for r, v in enumerate(rows)]
+    leaves = [scheme.tree_leaf("rows", r, dg) for r, dg in enumerate(digests)]
+    return [{"schema": BitRowLeaf.schema, "n_bits": n_bits, "domain": _domain_doc(d, n), "rows": [v.hex() for v in rows],
+             "digests": [x.hex() for x in digests], "leaves": [x.hex() for x in leaves],
+             "pads": [_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, 4)],
+             "root": scheme.root("rows", leaves).hex(), "paths": [[p.hex() for p in scheme.path("rows", leaves, r)] for r in range(n)]}]
+
+
+def _bit_row_hiding_vectors() -> list[dict[str, Any]]:
+    """A bit row's hiding leaf under ``hm96.SHA512``'s default key: the row digest, a salt, ``b || c`` and the frame leaf with
+    ``hm96-sha512/row/v2``."""
+    inst, out = hm96.SHA512, []
+    for name, value, n_bits in (("bits/1023", random_bits("bit-hiding-sha512/bits/1023", 1023), 1023),
+                                ("nvfp4/k32", format_row("hiding/nvfp4/k32", ((4, 32), (8, 2)))[1], 144)):
+        d = domain(2, f"frame-v3-sha512/vectors/hiding/{name}")
+        leaf = BitRowLeaf(n_bits)
+        salt = expand(f"bit-hiding-sha512/{name}/salt", inst.salt_bytes)
+        digest = leaf.layout().digest(value)
+        bc = inst.commit_string(inst.default_key, digest, salt)
+        proven = inst.tree_leaf(inst.default_key, bc)
+        out.append({"schema": leaf.hiding_schema, "inner": leaf.schema, "name": name, "n_bits": n_bits, "domain": _domain_doc(d, 2),
+                    "rank": 1, "row_bytes": value.hex(), "digest": digest.hex(), "salt": salt.hex(),
+                    "key_sha512": hashlib.sha512(inst.default_key).hexdigest(), "bc": bc.hex(), "hm96_leaf": proven.hex(),
+                    "leaf": row_leaf(d, 1, proven, leaf.hiding_schema).hex()})
+    return out
+
+
 def _word_vectors() -> list[dict[str, Any]]:
     d = domain(3, "frame-v3-sha512/vectors/words")
     scheme = FrameV3({"y": Port(d, WordLeaf("u16", 2))})
@@ -79,11 +152,15 @@ def build() -> dict[str, Any]:
         "scheme": NAME_SHA512,
         "generator": "python -m verity.commitments.frame_v3.vectors_sha512",
         "encoding": ("lowercase hex; frame-v3 with SHA-512 for every hash (frame, tags and part framing unchanged); row_bytes are the "
-                     "row's words little-endian; a row digest is SHA-512(prefix || row_bytes)"),
+                     "row's words little-endian; a bit row's (sha512/row/v2) are its n_bits bits, each element least significant "
+                     "bit first, eight a byte, the last byte's fill zero; a row digest is SHA-512(prefix || row_bytes)"),
         "sample": expand("frame-v3-sha512/sample", 8).hex(),
         "empty_root": {"domain": _domain_doc(empty, 0), "root": empty.empty_root().hex()},
         "row_leaves": _row_vectors(),
         "row_trees": _tree_vectors(),
+        "bit_row_leaves": _bit_row_vectors(),
+        "bit_row_trees": _bit_row_tree_vectors(),
+        "bit_row_hiding_leaves": _bit_row_hiding_vectors(),
         "word_leaves": _word_vectors(),
     }
 

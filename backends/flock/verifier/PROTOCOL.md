@@ -1206,6 +1206,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   row's 192-byte salt `y` under `hm96-sha512/v1`'s default key. The verifier recomputes each row's `prefix`, the midstate
   after it (one SHA-512 compression from the IV), and the padding block `0x80 ‖ 0 ‖ be128(8·(128 + 2·words))`, and refuses
   a META `rows` entry that differs, and a `row_key_sha512` other than SHA-512 of the default key.
+- **Bit rows (`hm96-sha512/row/v2`).** META may carry `row_schemas`, one `["hm96-sha512/row/v2", ℓ]` per port, for
+  `row_schema` (refused: both, neither, or typed); the identity's `row_leaf_in_circuit` then names `hm96-sha512/row/v2`.
+  Port `p` is core's bit row of `ℓ < 2^64` bits (`sha512/row/v2`): `⌈ℓ/16⌉` u16 leaves, bits low first, `x = SHA-512(P(ℓ)
+  ‖ bytes)` over `B = ⌈ℓ/8⌉` bytes. The verifier derives from `ℓ` the words, `⌈(B + 17)/128⌉ − 1 ≤ 2^16` compressions,
+  `P(ℓ)`'s midstate and the padding `0x80 ‖ 0* ‖ be128(8·(128 + B))`, refusing a differing META `ports` or `rows` entry and
+  a statement with no compression. Message bit `b` of byte `j` is a row bit if `8j + b < ℓ`, else a zero fill bit (`j <
+  B`) or padding; so the hm96 `pad` may hold row bytes, and a row of ≤ 111 bytes has no compression.
 - **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
   1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
   ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
@@ -1221,7 +1228,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
   bit `t % 8` (compression `B / 128`, word `o / 8`, bit `56 − 8·(o % 8) + t % 8` for `o = B % 128`; a zero leaf from its own
-  forced-zero row); every wire.
+  forced-zero row); every wire. For a bit row: the first `cv` (with no compression, the unwired hm96
+  slot's) from the midstate; every constant message bit as `pad`'s are; a leaf or cut bit at row bit `16·leaf + t ≥ ℓ`
+  from the forced-zero row (no leaf reads a fill bit), one in the last block from the hm96 `pad`.
 - **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
   `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
 - **The region-word check** (`HmRow.checkRegionWords`).
@@ -1239,8 +1248,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
   `SHA-512(canon(header, rows = false) ‖ body)`. The frame-v3-sha512 roots (§16.6 with SHA-512) are over the population:
-  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))`, output leaves `u16` words. Each port's
-  `dummy.bc` must be the zero row's: `SHA-512(prefix ‖ 0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)`.
+  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))` (a bit row's under
+  `hm96-sha512/row/v2`), output leaves `u16` words. Each port's `dummy.bc` must be the zero row's: `SHA-512(prefix ‖
+  0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)` (a bit row's with `P(ℓ)` and `0^B`).
 - **The drawn statement.** For a record with a `unit_draw` over the population's `N` instances, instance `i` is population
   position `units[i]`; the header is the population's with `unit_draw`, `instances = K`, `population = N` and the drawn
   units' indices in `units`; the public digest covers that header and the population's body, so the roots stay the
@@ -1301,8 +1311,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
   whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
   and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
-  failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
-  audit reports as a gap.
+  failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
+  is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads** (`Flock.Registered`). A shared-row header may name `registered`, `{port: {value, positions,
   paths}}`: rows of a value committed at registration. The verifier then needs its own `--registered F`
   (`verity/registered-reads/v0`: per port the value, root, leaf count, domain, and each unit's read position). Every table
@@ -1402,9 +1412,9 @@ selftest build. `Flock.HmOut` (`Stmt.setupHidden`, no soundness theorem yet: §1
 row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
 (`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
 
-- **Rows.** META `ports`: the `input_ports` input rows, then one `hm96-sha512/row/v1` row per `out_ports` entry (its name,
-  its `w` words zero-padded to `⌈w / 64⌉ · 64`), each with its own salt, `rows` entry and compressions after the input
-  rows'. `per_vu[hm96] = next_pow2(rows)`.
+- **Rows.** META `ports`: the `input_ports` input rows, then one `hm96-sha512/row/v1` row (`v2` of all its bits under
+  `row_schemas`) per `out_ports` entry (its name, its `w` words zero-padded to `⌈w / 64⌉ · 64`), each with its own salt,
+  `rows` entry and compressions after the input rows'. `per_vu[hm96] = next_pow2(rows)`.
 - **Δ** then copies, per VU, output word `k`'s bit `t` (of the returning unit, the last tail stage's port or a typed
   root's output group) to its row's message bit `t % 8` of byte `2k + t / 8`; past `w` words, the forced-zero row.
   Unit leaves and leaf cuts read input rows only; `HmRow.checkTyped` puts a template's output rows after its input rows.
@@ -1543,7 +1553,6 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
     - for `hm96-sha512/v1`, `Hm96.leafPair` gives the outer inputs, or the salt digest's (`leafPair_collides`), or the rows'
       when their row hashes are one.
   - The propositions `merkle_binding_collision` and `MerkleScheme.collision_hash` are corollaries.
-  - A test evaluates the extractor on a toy scheme with 1-byte digests, whose accepted checks do collide.
   - The executable only ever hashes digest-width children: `merkleCheck` refuses a sibling or cap entry of another width,
     and the running digests are hash outputs.
   - Nodes and leaves are not tag-separated in the unsalted schemes, and binding doesn't need it. Both openings climb from
@@ -1589,8 +1598,6 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
     rows, and `KONST` is 2^48 − 1.
   - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
-- Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
-  `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
 ## 18. Test vectors
 
@@ -1610,7 +1617,7 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
   including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. It checks the transcript and
   the layout, not the verifier's equations.
 - **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
-  bytes. Phase 2 generates both.
+  bytes.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 

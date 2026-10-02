@@ -15,3 +15,4 @@ import FlockLevel3.FoldStmt
 import FlockLevel3.Folded
 import FlockLevel3.LookupRows
 import FlockLevel3.Placed
+import FlockLevel3.RowV2
