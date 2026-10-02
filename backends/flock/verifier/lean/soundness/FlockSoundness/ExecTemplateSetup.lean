@@ -753,7 +753,7 @@ theorem templateLayout_of {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     (hheld : ∀ h ∈ held.toList, h.words = (Array.range (h.bytes.size / 4)).map fun i => rd32 h.bytes (4 * i))
     {st : Stmt} (hst : st.c = c)
     (hpin : HmRow.pin c = .ok st.pin) (hda : st.da = (HmRow.delta c st.pin).1) (hdb : st.db = (HmRow.delta c st.pin).2)
-    (hm : st.m = c.kLog + st.nbl) (hk : c.kLog ≤ 26) :
+    (hm : st.m = c.kLog + st.nbl) (hk : c.kLog ≤ 27) :
     TemplateLayout st (HmRow.blockOf t) (Typed.wordsIn held) done (done.getD unit default) := by
   subst hst
   obtain ⟨digests, -, hroot, hown, hinc, -, -, hbind, hcross, hparts, hmem, hsize, -⟩ := Typed.templateOf_spec htm

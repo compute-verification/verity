@@ -1090,10 +1090,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   digests and outputs, and META's pinned padding values.
 - Coins: `seed` mode at the PR's tip (its `Hello` carries `"coins":"coin-commit/sha256/v1"`); the stored loopback sessions
   predate it and use `os` coins.
-- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 26`, `m = k_log + nbl`; the spec rejects
+- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 27`, `m = k_log + nbl`; the spec rejects
   `m > 35` (no Fast100 schedule exists above it).
 - **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
-  soundness package's `Stmt.InRange`: `k_log ≤ 26`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
+  soundness package's `Stmt.InRange`: `k_log ≤ 27`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
   and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
   check accepts exactly that range.
 

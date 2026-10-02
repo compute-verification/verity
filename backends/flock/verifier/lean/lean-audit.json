@@ -94,10 +94,10 @@
    "signature": [
     "Flock.checkInRange_ok (kLog nRegions mPts : Nat) :",
     "  Iff (Eq (Flock.checkInRange kLog nRegions mPts) (Except.ok Unit.unit))",
-    "    (And (instLENat.le kLog 26) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
+    "    (And (instLENat.le kLog 27) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
    ],
    "assumptions": [],
-   "type_hash": "d5dcd8085aa57cab5902afcdcac2168de7effb6cd18839f7dc05a34e9a72dda8"
+   "type_hash": "7f9f16bbfe2b5a1faaa5eac26c8bedd237ea33f613a35a11f9aa76b84b8b94b0"
   },
   "Flock.climb_binding": {
    "signature": [
