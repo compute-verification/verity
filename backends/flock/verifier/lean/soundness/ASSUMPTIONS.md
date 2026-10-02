@@ -53,6 +53,9 @@ hash, nor false of every hash.
   - `qF ≥ 2t′ + 2v`, for the rewinding finders (two runs after a cap, and the two conflicting openings verified);
   - `qS ≥ t′ + v`, for the self-clash finder (one run, one further verification);
   - `qT ≥ 2t′ + 2v`, for `tr`'s finder (`TreeRewind.finder`: two runs after the registration).
+  - `qG ≥ (1 + 5M)·t′ + 2k·v`, for zero knowledge's simulator finder (`ZK.GK.Model.finder`: the GK simulator with cap
+    `M`, at most `1 + 5M` runs of `V*` on every outcome by `sim_runs_le`, then T6's extraction, which re-verifies the
+    two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`).
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
   is unsupported. Tying the three to one per-run count in the signatures would check this in Lean; it is a follow-up.
@@ -61,6 +64,9 @@ hash, nor false of every hash.
   two runs after the level-0 cap), and the serving roots' Merkle binding (`δ_tree`: two continuations after the
   registration), at the budgets above. `FlockSoundness/StrictCR.lean` restates each term at those finders (What is
   restated over the two forms, below).
+  Zero knowledge's `⊥_bind` term takes it for the simulator finder at `qG` (`ZK.GK.Model.gk_simulate`,
+  `gk_simulate_hm96`, `gk_simulate_avg`): `V*` opening a coin of its committed tree two ways is a SHA-512 collision,
+  computed (`bindColl_isColl`, `bindCollKeyed_isColl`).
 
 **`SHA512CRExpected`. Expected-time collision resistance of SHA-512** (A2, `ecr/sha-512`; in CDGSY24's expected-time
 sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant corrected the same day).
@@ -355,6 +361,11 @@ as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
 `expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
 and the certificate's `IsRowsUnit.computes_of_cert`.
+Zero knowledge's Theorem GK is pinned (`FlockSoundness/ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
+`Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
+`Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
+`rewindClose_hm96`, and T6's extraction (`coinColl_isColl`, `coinCollKeyed_isColl`, `bindColl_isColl`,
+`bindCollKeyed_isColl`, and its cost `coinPairs_length_le`).
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
