@@ -39,11 +39,16 @@ def zk(tmp_path_factory):
     return root
 
 
-def _verify(root: Path, *sessions: Path, public: str = "pub-16.bin", tables: int = 1, zk: bool = True) -> list[dict]:
-    p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
-                        "--public", str(root / "stage" / public), "--session-tables", str(tables), *(["--zk"] if zk else []),
-                        "--session", *map(str, sessions)], capture_output=True, text=True, check=False)
-    return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+def _run(root: Path, *sessions: Path, public: str = "pub-16.bin", tables: int = 1, zk: bool = True,
+         extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
+    return subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
+                           "--public", str(root / "stage" / public), "--session-tables", str(tables), *(["--zk"] if zk else []),
+                           *extra, "--session", *map(str, sessions)], capture_output=True, text=True, check=False)
+
+
+def _verify(root: Path, *sessions: Path, **kw) -> list[dict]:
+    return [json.loads(line.split(" ", 1)[1]) for line in _run(root, *sessions, **kw).stdout.splitlines()
+            if line.startswith("VERDICT ")]
 
 
 def _one(root: Path, name: str, k: int = 0) -> Path:
@@ -102,6 +107,16 @@ def test_zk_is_the_verifiers_setting(zk):
     """Without `--zk` the statement is the plain one: another identity, so another digest and another `Hello` (S2)."""
     [v] = _verify(zk, zk / "sessions" / "selftest" / "honest", zk=False)
     assert not v["accepted"] and v["why"].startswith("S2"), v["why"]
+
+
+@pytest.mark.slow
+def test_zk_takes_no_coins_flag(zk):
+    """A `--zk` session's coins are its keyed coin tree, never `os` or `seed` coins (the live build reads no `FC_COINS` under
+    `--zk`, and its identity never names live-OS coins), so `--zk` with either `--coins` is refused before any setup."""
+    for coins in ("os", "seed"):
+        p = _run(zk, zk / "sessions" / "selftest" / "honest", extra=("--coins", coins))
+        assert p.returncode == 2 and "VERDICT" not in p.stdout, (coins, p.stdout)
+        assert p.stderr.startswith("verify --zk: a --zk session's coins are its keyed coin tree"), (coins, p.stderr)
 
 
 @pytest.mark.slow
