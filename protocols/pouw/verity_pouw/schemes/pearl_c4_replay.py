@@ -1,6 +1,7 @@
-"""Pearl-C4's reference replay: the verifier's check of a device run's own transcript under the work law
-(`pearl_c_work.audit`), with the domain and the debit of research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
-§1 and §2.
+"""Pearl-C4's reference replay of a device run's own transcript under the work law (`pearl_c_work.audit`), with the domain
+and the debit of research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §1 and §2.  It opens rows and words
+and recomputes them in the clear, so its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK
+proof, PROTOCOL.md), never the protocol's verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
 the unit's m rows with its zero filler) and B's, the device's A and B roots (`audit.commit_rows`, SHA-256 whole-row leaves),
@@ -66,6 +67,8 @@ SHORTCUTS = (
     "the epoch beacon is a label of the benchmark's operand set, not a public beacon round after the weights",
     "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
     "timing",
+    "verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
+    "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)",
 )
 
 
@@ -292,7 +295,8 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
 
 
 def accept_line(report: dict, transcript: str, sha: str, commit: str) -> str:
-    """One line: ACCEPT or REJECT, the scheme, the transcript checked, what was opened, the largest debit/cap, the commit."""
+    """One line: ACCEPT (replay-verified) or REJECT, the scheme, the transcript checked, what was opened, the largest
+    debit/cap, and the replay's commit."""
     m, k, n = report["shape"]
     verdict = "ACCEPT" if report["accepted"] else "REJECT"
     tail = (f"opened={report.get('opened', 0)} t={report['t']} max_debit_over_cap={report.get('max_debit_over_cap')}"
