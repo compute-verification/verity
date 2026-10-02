@@ -165,4 +165,45 @@ theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement
   · simp only [hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
     exact ⟨hok₀, hok₁⟩
 
+/-- **flock-verify refines each table of the session it accepts, under `hm96-sha512/v1`** (§5, §9–§14, §16.12). When
+`Accepts I t`, the record decodes against the session's spec, and each table `j` is `setupH`'s statement. For a table
+whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the model statement `stmtOf sts[j]` read off its
+layout and the record's link points, one run of the salted table game `tableAfterL` on the table's two streams' coins,
+with the proof files' openings and salts, accepts. -/
+theorem accepts_tables_hm96 {I : Inputs} {t : Transcript} (h : Accepts I t) :
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+      Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
+      ∀ (j : ℕ) (hj : j < sts.size),
+        (∃ d, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition
+          I.program = .ok sts[j] ∧ (I.count ≤ 1 → d = recordDraw t.record)) ∧
+        ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧ 22 ≤ sts[j].m ∧
+          ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m)
+            (hms : sts[j].merkle = MerkleScheme.hm96Sha512),
+          ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (ms : List Msg) (out : OutCL 𝔽 Dig (List UInt8)),
+            decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ ∧
+            decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ ∧
+            sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+            sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+            Plays fOf (tableAfterL execArith H512 enc512 leaf512 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+                PT_LOCAL sts[j].mPts (capDig p₀.cap) (ptsOf sts[j].mPts sess.points)) ms
+              (s₀.rounds.toList.map (·.coins) ++ s₁.rounds.toList.map (·.coins)) out ∧
+            out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch ∧ out.salts = saltsOf p₀ p₁ sch := by
+  obtain ⟨spec, sts, hs, hv⟩ := h
+  obtain ⟨sess, schs, hsess, hsz, hpos, hschsz, hall⟩ := verify_ok_tables hv
+  obtain ⟨-, hsetup⟩ := setupTables_setupH hs
+  obtain ⟨hp2, hmp⟩ := setupTables_points hs
+  have hpts := decode_points hsess
+  rw [Array.size_map] at hsz hpos hschsz
+  refine ⟨spec, sts, sess, hs, hsess, hsz, hpos, fun j hj => ⟨hsetup j hj, ?_⟩⟩
+  obtain ⟨hs', c, hf, h0, h1⟩ := hall j (by rw [Array.size_map]; exact hj)
+  simp only [Array.getElem_map] at hf h0 h1
+  refine ⟨schs[j], hf, exec_fast100_ge hf, fun hwf hr hm hms => ?_⟩
+  have hext := ofCircuit_extra sts[j] hwf hr sess.points (by rw [hpts.1, hp2])
+    (fun p hp => (hpts.2 p hp).trans (hmp j hj).symm)
+  exact table_tableAfterL spec (Setup.ofCircuit sts[j]) (stmtOf sts[j] hwf (regionsOf sts[j])) hm rfl rfl
+    (ofCircuit_fold sts[j] hwf _) hms PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points) sess hext
+    (decode_roundsWF hsess) schs[j] hf j _ _ c h0 h1
+
 end FlockSoundness.Discharge.Exec
