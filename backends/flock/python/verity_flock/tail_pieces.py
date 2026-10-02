@@ -1,7 +1,8 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
 `verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
-numerator scaling) and the sampler lane's compare, selects and integer add. Each is its IR primitive bit for bit
+numerator scaling), the sampler lane's compare, selects and integer add, and PoUW's row units (`verity_pouw.circuit.pc4`: the
+NVFP4 casts, ρ's ``sqrt.rn``, Ẽ and its negation, the admission bit's and). Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
@@ -15,11 +16,13 @@ from __future__ import annotations
 from verity.ml.boolean.scalar import f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
                                        f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
+from verity.ml.prims import E2M1_NAN_CODE
+from verity.ml.tc.cast import E2M1_UP
 
 from . import fp
 from . import gf2
 from . import unit_fp4
-from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, const, const_bits, lzc, maj, multiply, mux, or_reduce, sub
 
 #: table name -> index bits (the MUFU tables' sha256 is ir_lower.TABLES[name], the others' TABLE_SHA256[name])
 TABLE_BITS = {"rsq": 24, "sqrt": 24, "rcp": 23, "ex2": 23, "tanh_mufu": 27, "tanh_rn": 27, "gelu_tanh_bf16": 16}
@@ -539,6 +542,91 @@ def topp_numkeep(C, nd, q):
     return [C.AND(nz, b) for b in r]
 
 
+# --- PoUW's row units (`verity_pouw.circuit.pc4`): the NVFP4 casts, rho's root, E-tilde -------------------------------------
+
+E4M3_NAN_F32 = 0x7FFFE000
+#: ``E2M1_UP``'s boundaries on X = |x|'s bits [20, 31) over OR(bits [0, 20)) (every boundary's low 20 bits are zero): |x| passes
+#: a boundary b iff X >= 2 (b >> 20) + 1, or X >= 2 (b >> 20) where a tie rounds up; last, NaN's: |x| > 0x7F800000
+E2M1_X_BOUNDS = tuple((b >> 19) | (not up) for b, up in E2M1_UP) + ((0x7F800000 >> 19) | 1,)
+assert all(not b & 0xFFFFF for b, _ in E2M1_UP) and list(E2M1_X_BOUNDS) == sorted(E2M1_X_BOUNDS)
+
+
+def _ge_consts(C, x, ts):
+    """``[x >= t for t in ts]`` for an unsigned word and constants: the carry out of x + ~t + 1, whose chain up to bit i reads
+    only t's low i bits, so constants that agree there share it."""
+    chain: dict = {}
+
+    def carry(t: int, i: int):
+        key = (i, t & ((1 << i) - 1))
+        if key not in chain:
+            chain[key] = ONE if i == 0 else maj(C, x[i - 1], const(not t >> (i - 1) & 1), carry(t, i - 1))
+        return chain[key]
+
+    return [carry(t, len(x)) for t in ts]
+
+
+def f32_to_e2m1_sat(C, x):
+    """``F32ToE2m1Sat_v1`` (``cast.f32_to_e2m1_sat_word``): the code is how many of the seven boundaries |x| passes, a thermometer
+    read as binary; the sign kept, a NaN gives ``E2M1_NAN_CODE``."""
+    *g, nan = _ge_consts(C, [or_reduce(C, x[:20])] + list(x[20:31]), E2M1_X_BOUNDS)
+    code = [g[0] ^ g[1] ^ g[2] ^ g[3] ^ g[4] ^ g[5] ^ g[6], g[1] ^ g[3] ^ g[5], g[3], x[31]]
+    return mux(C, nan, const_bits(E2M1_NAN_CODE, 4), code)
+
+
+def e4m3_to_f32(C, b):
+    """``E4m3ToF32_v1`` (``cast.e4m3_to_f32_word``): sig 2^(e_eff - 10) from `fp4.decode_scale_total`'s fields, sig shifted up by its
+    leading zeros (a subnormal's) under the field e_eff + 120 - lz; ±0 keep their sign, a NaN gives ``E4M3_NAN_F32``."""
+    sig, e_eff, _ = unit_fp4.decode_scale_total(C, b)
+    zero, lz = lzc(C, sig)
+    field = sub(C, add(C, e_eff, const_bits(120, 8), width=8), lz, 8)[0]
+    word = [ZERO] * 20 + fp.shl(C, sig, lz)[:3] + [C.AND(NOT(zero), f) for f in field] + [b[7]]
+    return mux(C, and_reduce(C, b[:7]), const_bits(E4M3_NAN_F32, 32), word)
+
+
+def pouw_e_tilde(C, e, ae):
+    """``PouwETilde_v1``: E's magnitude in halves times a_E's 4-bit significand (`fp4.decode_code`, `fp4.decode_scale_total`) is
+    an 8-bit N, and E a_E 2^-4 = N 2^(e_eff - 15) is a normal bf16 (field e_eff + 119 - lz) whose mantissa holds all of N; the sign
+    is a_E's bit 7 or E's, E's alone on a zero product; a_E's low seven bits 0x7F give 0x7FFF."""
+    halves, es, _ = unit_fp4.decode_code(C, e)
+    sig, e_eff, _ = unit_fp4.decode_scale_total(C, ae)
+    N = multiply(C, halves, sig)
+    zero, lz = lzc(C, N)
+    field = sub(C, add(C, e_eff, const_bits(119, 8), width=8), lz, 8)[0]
+    word = fp.shl(C, N, lz)[:7] + [C.AND(NOT(zero), f) for f in field] + [OR(C, es, C.AND(NOT(zero), ae[7]))]
+    return mux(C, and_reduce(C, ae[:7]), const_bits(0x7FFF, 16), word)
+
+
+def _isqrt(C, x):
+    """``(floor(sqrt(x)), x is not its square)`` for an unsigned word of even width: non-restoring square root two bits a step,
+    R <- 4R + the next two bits, less 4Q + 1 when R >= 0, else plus 4Q + 3, in two's complement two bits wider than the root Q
+    (R lies in [-(2Q + 1), 2Q]); a final negative R is the remainder less 2Q + 1, so x is a square iff R is 0 or -(2Q + 1)."""
+    rem, root = [ZERO, ZERO], []
+    for i in reversed(range(len(x) // 2)):
+        w, s = len(root) + 3, NOT(rem[-1])
+        t = [ONE, rem[-1]] + root
+        rem = add(C, ([x[2 * i], x[2 * i + 1]] + rem)[:w], [b ^ s for b in t + [ZERO]], cin=s, width=w)
+        root = [NOT(rem[-1])] + root
+    odd = [ONE] + [NOT(q) for q in root] + [ONE]
+    return root, mux(C, rem[-1], [NOT(and_reduce(C, [NOT(r ^ o) for r, o in zip(rem, odd)]))], [or_reduce(C, rem)])[0]
+
+
+def pouw_f32_sqrt_rn(C, a):
+    """``PouwF32SqrtRn_v1`` (``sqrt.rn.f32``, `verity.ml.tc.fp32.sqrt`): the significand, normalized and doubled when its exponent
+    is even, times 2^27 has a 26-bit root with its top bit set; the root's low two bits and the remainder round it to nearest even
+    under the field (e_eff - lz + odd + 126) / 2, always normal. ±0 give themselves, +inf +inf, a NaN, -inf or a negative 0x7FFFFFFF."""
+    A = fp.unpack(C, a)
+    _, lz = lzc(C, [ZERO] * 8 + A.sig)
+    sig = fp.shl(C, [ZERO] * 8 + A.sig, lz)[8:]
+    odd = A.e_eff[0] ^ lz[0]
+    root, rem_nz = _isqrt(C, [ZERO] * 27 + mux(C, odd, sig + [ZERO], [ZERO] + sig))
+    rnd = C.AND(root[1], OR(C, OR(C, root[0], rem_nz), root[2]))
+    t = sub(C, add(C, A.e_eff, const_bits(126, 10), cin=odd, width=10), lz, 10)[0]
+    word = add(C, root[2:25] + t[1:9], [rnd], width=31) + [ZERO]
+    word = mux(C, A.zero, list(a), word)
+    word = mux(C, A.inf, const_bits(INF, 32), word)
+    return mux(C, OR(C, A.nan, C.AND(A.s, NOT(A.zero))), const_bits(QNAN_MUFU, 32), word)
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -603,6 +691,12 @@ PIECES = {
     "MufuTanh_v1": mufu_tanh,
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
+    "BitAnd_v1": lambda C, a, b: [C.AND(a[0], b[0])],
+    "E4m3ToF32_v1": e4m3_to_f32,
+    "F32ToE2m1Sat_v1": f32_to_e2m1_sat,
+    "PouwF32SqrtRn_v1": pouw_f32_sqrt_rn,
+    "PouwETilde_v1": pouw_e_tilde,
+    "PouwBf16Neg_v1": lambda C, a: list(a[:15]) + [NOT(a[15])],
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}

@@ -315,6 +315,63 @@ def test_bit_at_selects_the_bit_or_zero():
     assert [int(x) for x in IL.unslice_words(outs["o"], len(vecs))] == [bit_at(W).evaluate(*v) for v in vecs]
 
 
+# --- PoUW's row units (verity_pouw.circuit.pc4): the NVFP4 casts, rho's root, E-tilde, the admission bit's and -------------
+
+#: (id, operand widths, result width) of the primitives whose whole domain runs
+POUW_WHOLE = [("BitAnd_v1", (1, 1), 1), ("E4m3ToF32_v1", (8,), 32), ("PouwETilde_v1", (4, 8), 16), ("PouwBf16Neg_v1", (16,), 16)]
+
+
+def _pouw(name: str):
+    import verity.ml.prims  # noqa: F401  (registers the casts)
+    import verity_pouw.circuit.words  # noqa: F401  (registers PoUW's primitives)
+
+    return REGISTRY[name]
+
+
+@pytest.mark.parametrize("name,widths,out", POUW_WHOLE, ids=[p[0] for p in POUW_WHOLE])
+def test_the_small_pouw_pieces_match_the_ir_on_every_encoding(name, widths, out):
+    """Every operand encoding: both E4M3 NaNs, the signed zeros and the subnormal bytes; every E2M1 code against every a_E byte,
+    a_E's NaNs, its sign bit and zero products of either sign included."""
+    vecs = [list(v) for v in itertools.product(*[range(1 << w) for w in widths])]
+    ref = _pouw(name).evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, out, vecs)) if g != ref(*v)] == []
+
+
+def test_the_e2m1_cast_matches_the_ir_on_every_class_and_boundary():
+    """``F32ToE2m1Sat``: each rounding boundary of ``cast.E2M1_UP`` and the two words either side of it (the ties down and up),
+    signed zeros, subnormals, every exponent's mantissa edges, the infinities (saturated to ±6), NaNs of any payload (code 7, the
+    sign dropped), each of both signs, and random words; every code is reached."""
+    from verity.ml.tc.cast import E2M1_UP
+
+    rng = random.Random(41)
+    mags = [b + d for b, _ in E2M1_UP for d in range(-2, 3)] + [0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF]
+    mags += [(e << 23) | m for e in range(255) for m in (0, 1, 0x400000, 0x7FFFFF, rng.getrandbits(23))]
+    mags += [rng.randrange(0x3E000000, 0x40C00000) for _ in range(4000)]
+    vecs = [[m | s] for m in mags for s in (0, 0x80000000)] + [[rng.getrandbits(32)] for _ in range(4000)]
+    ref = _pouw("F32ToE2m1Sat_v1").evaluate
+    want = [ref(*v) for v in vecs]
+    assert set(want) == set(range(16))
+    assert [(v, g, w) for v, g, w in zip(vecs, run_piece(IL.PIECES["F32ToE2m1Sat_v1"], (32,), 4, vecs), want) if g != w] == []
+
+
+def test_the_sqrt_rn_piece_matches_the_ir():
+    """``PouwF32SqrtRn``: every exponent field of both signs with the mantissa's edges and random mantissas, random subnormals,
+    perfect squares (exact roots), and the two adjacent f32 words around the square of a rounding midpoint (r + 1/2) 2^k at both
+    exponent parities, whose roots round apart, to r and r + 1; the specials: ±0, ±inf, NaNs and negatives (0x7FFFFFFF)."""
+    rng = random.Random(43)
+    words = [(s << 31) | (e << 23) | m for e in range(256) for s in (0, 1)
+             for m in (0, 1, 2, 0x400000, 0x7FFFFF, *(rng.getrandbits(23) for _ in range(8)))]
+    words += [rng.randrange(1, 1 << 23) for _ in range(2000)]
+    words += [int(np.float32(k * k).view(np.uint32)) for k in range(1, 4097)]
+    for _ in range(3000):
+        n = (2 * rng.randrange(1 << 23, 1 << 24) + 1) ** 2               # (r + 1/2)^2 = n / 4
+        lo = (rng.randrange(2, 252, 2) + (n.bit_length() & 1)) << 23 | (n >> (n.bit_length() - 24)) & 0x7FFFFF
+        words += [lo, lo + 1]
+    vecs = [[w] for w in words]
+    ref = _pouw("PouwF32SqrtRn_v1").evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["PouwF32SqrtRn_v1"], (32,), 32, vecs)) if g != ref(*v)] == []
+
+
 #: the pinned rcp table read inline: 16,712 + 584 decoder rows (14 low and 9 high index bits), 9,753 nonempty product rows and
 #: 24 copy rows, its 7 constant value bits wired to the constant; its 93,528,819 set bits
 READ_ROWS, READ_NNZ = 27_073, 93_528_819
