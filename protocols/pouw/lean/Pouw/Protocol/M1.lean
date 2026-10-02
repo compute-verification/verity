@@ -1,4 +1,4 @@
-import Pouw.Game.Params
+import Pouw.Protocol.Game.Params
 import Pouw.Protocol.D1
 import Mathlib.Data.Fintype.Sum
 

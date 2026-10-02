@@ -3,7 +3,7 @@
 `stackY` (retired, kept for comparison).  The pinned result is ``tests/vectors/ncp_lean.json``.
 
     python protocols/pouw/tests/ncp_lean.py write DIR        # DIR: a copy of protocols/pouw/lean (Mathlib built)
-    (cd DIR && lake build Pouw.NCP.RouteU && lake env lean NcpCheck.lean > ncp_lean.out)
+    (cd DIR && lake build Pouw.Protocol.NCP.RouteU && lake env lean NcpCheck.lean > ncp_lean.out)
     python protocols/pouw/tests/ncp_lean.py pin DIR/ncp_lean.out DIR
 
 Inputs are derived here (SHAKE256 of fixed labels), so only Lean's output is pinned.
@@ -20,7 +20,7 @@ from verity_pouw.schemes import ncp
 
 PINNED = Path(__file__).with_name("vectors") / "ncp_lean.json"
 K, M, N = 64, 2, 2
-SOURCES = ("Pouw/NCP/Defs.lean", "Pouw/Basic/Mat.lean", "Pouw/NCP/RouteU.lean")
+SOURCES = ("Pouw/Protocol/NCP/Defs.lean", "Pouw/Protocol/Basic/Mat.lean", "Pouw/Protocol/NCP/RouteU.lean")
 
 
 def draws(label: str, n: int, lo: int, span: int) -> list[int]:
@@ -74,7 +74,7 @@ def lean_arr(rows: list[list[int]]) -> str:
 
 
 def lean_source() -> str:
-    out = ["import Pouw.NCP.RouteU", "open Pouw Pouw.NCP", "",
+    out = ["import Pouw.Protocol.NCP.RouteU", "open Pouw Pouw.NCP", "",
            "def ofRows (xs : Array (Array Int)) : Mat := fun i j => (xs.getD i #[]).getD j 0",
            "def ofCols (xs : Array (Array Int)) : Mat := fun l j => (xs.getD j #[]).getD l 0",
            "def signedPerm (pi : Array Nat) (sg : Array Int) : Mat := fun i j => if j < pi.size ∧ i = pi.getD j 0 then sg.getD j 0 else 0",
