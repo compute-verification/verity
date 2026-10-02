@@ -643,7 +643,7 @@ theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types 
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
     intro j
-    obtain ⟨h1, h2⟩ := delta_rows st.c st.pin T.typed hv1 P.portWords
+    obtain ⟨h1, h2⟩ := delta_rows st.c st.pin T.typed hv1 fun p hp hv => (P.portWords p hp hv).1
     rw [deltaEntry_eq_count, deltaEntry_eq_count, hda, hdb, h1, h2, List.count_append, List.count_append, hF,
       T.tail_zero hd hul U hy true, T.tail_zero hd hul U hy false, Nat.add_zero]
     exact ⟨rfl, rfl⟩

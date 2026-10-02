@@ -113,8 +113,8 @@ theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c
   have R := RowRanges.ofL L F.parse F.check
   obtain ⟨hcv0, hchain, hcvh, hpad⟩ := row_copies_flat L F hda hupv hv1 hz o hg hp
   obtain ⟨hv, -, hn⟩ := hv1 _ (getElem_mem_toList' hp)
-  refine port_commit_rows st.c _ g p hn (F.parse.portWords _ (getElem_mem_toList' hp) hv) (rowSlots_size hp).ge R.rowNets
-    (fun k hk => (rowSlot_lt hp hk).2) (fun k hk => ?_) ?_ hcv0 hchain hcvh hpad
+  refine port_commit_rows st.c _ g p hn (F.parse.portWords _ (getElem_mem_toList' hp) hv).1 (rowSlots_size hp).ge
+    R.rowNets (fun k hk => (rowSlot_lt hp hk).2) (fun k hk => ?_) ?_ hcv0 hchain hcvh hpad
   · exact shaSlot_flat L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)
   · exact hmSlot_flat L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
 

@@ -404,7 +404,8 @@ theorem inBit_copyL (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits 
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
     intro j
-    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords, hF]
+    rw [L.delta_b, deltaEntry_eq_count, hda,
+      delta_flat_eq _ _ F.parse.typed hv1 (fun p hp hv => (F.parse.portWords p hp hv).1), hF]
     exact ⟨rfl, rfl⟩
   have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
   exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
