@@ -218,20 +218,33 @@ def main() -> int:
             "timing": {key: live.get(key) for key in ("e2e_s", "witness_s", "prove_s", "prove_total_s", "tp_s", "proof_bytes", "k_log",
                                                       "dense_m", "units", "instances", "wire_sent", "wire_recv")},
             "m0_verify_s": ((record or {}).get("verdict") or {}).get("verify_s"), "lean_verify_s": lean_v.get("verify_s"),
-            "negatives": negatives(a, st, n, wd, result, law, reg, program, query, values, rec, want, leaf_layer, log) if registered and w == 0 else None,
+            "negatives": (negatives(a, st, n, wd, result, law, reg, program, query, values, rec, want, leaf_layer, log) if registered and w == 0
+                          else {"lean-weights-committed-afresh-read-as-registered": lean_refuses(
+                              a.lean, {**st, "registered_file": st_dir / "registered.json"}, n, wd, "afresh-as-registered")}
+                          if w == a.windows else None),
         })
         (out / "summary.json").write_text(json.dumps({**summary, "windows": windows}, indent=1, sort_keys=True, default=str))
         print(f"A4 {name} " + json.dumps(windows[-1], sort_keys=True, default=str), flush=True)
         os.remove(st["dir"] / f"inst-{n}.bin")
     summary["windows"] = windows
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    ok = all(x.get("accepted") for x in windows) and all(all(x["negatives"].values()) for x in windows if x.get("negatives"))
+    ok = all(x.get("accepted") for x in windows) and all(v["refused"] for x in windows for v in (x.get("negatives") or {}).values())
     print("A4 " + json.dumps({"ok": ok}), flush=True)
     return 0 if ok else 1
 
 
+def lean_refuses(lean: str, st: dict, n: int, wd: Path, name: str) -> dict:
+    """The Lean verifier's replay of the window's own session (`wd/session/sessions`, linked) under `st`'s files."""
+    d = wd / f"neg-{name}"
+    d.mkdir(parents=True, exist_ok=True)
+    if not (d / "sessions").exists():
+        (d / "sessions").symlink_to(wd / "session" / "sessions")
+    v = a0.lean_verify(lean, st, n, d)
+    return {"refused": v["accepted"] is False and bool(v.get("why")) and v["why"] != "no session recorded", "why": v.get("why")}
+
+
 def negatives(a, st: dict, n: int, wd: Path, result: dict, law, reg: G.Registered, program, query, values, rec, want, leaf_layer,
-              log) -> dict[str, bool]:
+              log) -> dict[str, dict]:
     """Each must be refused: the Lean verifier's replay of the session against a reads file holding another root of W (a
     second registration of the same columns under fresh salts), or moving one unit's position; a later window that
     registers W under another root (R7-held); the audit record with the reads opened against another root."""
@@ -244,13 +257,12 @@ def negatives(a, st: dict, n: int, wd: Path, result: dict, law, reg: G.Registere
         edit(doc["ports"])
         f = wd / f"own-{name}.json"
         f.write_text(json.dumps(doc))
-        v = a0.lean_verify(a.lean, {**st, "registered_file": f}, n, wd / f"neg-{name}")
-        neg[name] = v["accepted"] is False
+        neg[name] = lean_refuses(a.lean, {**st, "registered_file": f}, n, wd, name)
     later = R.record(program, query, law, SCHEME, rec["roots"], {**rec["window"], "window": 99}, leaf_layer=leaf_layer,
                      previous=R.digest(rec), registered=[other.entry()])
-    neg["registration-re-registers-W-under-another-root (R7-held)"] = "R7-held" in R.check(
-        later, program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[*log], registered=values).codes
-    neg.update({k: v["refused"] for k, v in a0.audit_negatives(result, law, a.delta, {r["port"]: r["root"] for r in rec["roots"]}).items()
+    codes = R.check(later, program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[*log], registered=values).codes
+    neg["registration-re-registers-W-under-another-root (R7-held)"] = {"refused": "R7-held" in codes, "codes": list(codes)}
+    neg.update({k: v for k, v in a0.audit_negatives(result, law, a.delta, {r["port"]: r["root"] for r in rec["roots"]}).items()
                 if k.startswith("registered") or k.startswith("session-root")})
     return neg
 
