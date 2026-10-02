@@ -481,6 +481,45 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
     assert 'vllm_bootstrap.sh" --cpu --out' in capture and "pod-$(hostname)" in capture     # no native taps; $CMD gets its own copy
 
 
+def test_a_per_pod_copy_goes_once_research_run_exits(tmp_path):
+    """prover-bench, prover-dev and port-capture run $CMD in a copy of the tree of their own (it writes there), ~4.7k inodes each that
+    nothing reads once the pod is gone: node 1 held ~690 of them on Oct 2. The run step removes its copy after `research run` exits,
+    keeps that exit status, and leaves the copy in place while research run runs from it. port-capture keeps the shared copy."""
+    import os
+    import shutil
+    import subprocess
+    import textwrap
+
+    jobs, synced = tmp_path / "jobs", tmp_path / "synced"
+    (synced / "tools/research/src/research/pods/nebius/sky").mkdir(parents=True)
+    shutil.copy(SKY / "job_tree.sh", synced / "tools/research/src/research/pods/nebius/sky/job_tree.sh")
+    (synced / "marker").write_text("x\n")
+    (jobs / "bin").mkdir(parents=True)
+    (jobs / "bin" / "uv").write_text('#!/bin/sh\n[ -f "$SRC/marker" ] && [ "$(pwd)" = "$SRC" ] || exit 99\nexit "$RC"\n')
+    (jobs / "bin" / "uv").chmod(0o755)
+    host = subprocess.run(["hostname"], capture_output=True, text=True, check=True).stdout.strip()
+    env = {**os.environ, "SRC": str(synced), "VY_JOB_TREES": str(jobs / "src"), "CUDA_HOME": str(tmp_path / "cuda"), "CAMPAIGN": "c",
+           "CMD": "true"}
+    shared = subprocess.run(["bash", str(SKY / "job_tree.sh"), str(synced)], capture_output=True, text=True, env=env, check=True).stdout.strip()
+
+    def step(doc: dict, key: str, rc: int) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", "-c", doc[key].replace("/workspace/jobs", str(jobs))], capture_output=True, text=True,
+                              env={**env, "RC": str(rc)}, cwd=tmp_path)
+
+    for name, copy in (("prover-bench", jobs / "src" / host), ("prover-dev", jobs / "src" / host),
+                       ("port-capture", jobs / "src" / f"pod-{host}")):
+        text = (SKY / "jobs" / f"{name}.yaml").read_text()
+        doc = {"setup": textwrap.dedent(text.split("\nsetup: |\n", 1)[1].split("\n\nrun: |\n", 1)[0]),
+               "run": textwrap.dedent(text.split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0])}
+        for rc in (0, 3):
+            if name != "port-capture":
+                assert step(doc, "setup", 0).returncode == 0 and (copy / "marker").is_file(), name
+            r = step(doc, "run", rc)
+            assert r.returncode == rc, (name, rc, r.stderr)
+            assert not copy.exists(), (name, rc)
+            assert (Path(shared) / "marker").is_file(), name
+
+
 def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_lock(tmp_path):
     """job_tree.sh: two pods with the same synced tree get the same copy, made once; a changed file makes a new one. vllm_bootstrap.sh:
     the second call with the same tree, arguments and venv skips pod_bootstrap.sh without opening the host-wide lock."""
@@ -518,6 +557,49 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     assert (jobs / "count").read_text() == "run\n" and not (jobs / ".vllm-bootstrap.lock").exists()      # no rerun, no lock taken
     other = subprocess.run(["bash", str(boot), "--cases", "B1", "--cpu", "--out", str(jobs / "b")], env=env, capture_output=True, text=True, check=True)
     assert "cached" not in other.stdout and (jobs / "count").read_text() == "run\nrun\n"                  # another role bootstraps
+
+
+def test_a_leased_bootstrap_takes_its_gpu_before_the_host_lock_so_others_bootstrap_while_it_waits(tmp_path):
+    """A leased job's pod (GPU_LEASE set) has no GPU of its own: a real GPU-mode bootstrap runs under the lease tool, which it calls
+    before it opens the host-wide lock. The fake lease tool stands for a pool with no GPU free yet: when called it finds the lock free
+    and runs another job's CPU bootstrap to completion, then grants GPU 3. Taking the lease inside the lock (Oct 1 22:13-23:02Z on
+    vy-nebius-1) finds it held instead. A cached bootstrap and a --cpu one never call the tool."""
+    import os
+    import shutil
+    import subprocess
+    tree = tmp_path / "tree"
+    sky = tree / "tools/research/src/research/pods/nebius/sky"
+    sky.mkdir(parents=True)
+    shutil.copy(SKY / "vllm_bootstrap.sh", sky / "vllm_bootstrap.sh")
+    ops = tree / "integrations/vllm/verity_vllm/ops"
+    ops.mkdir(parents=True)
+    (ops / "pod_bootstrap.sh").write_text('echo "$2 cvd=${CUDA_VISIBLE_DEVICES-unset}" >> "$WORK/seen"; echo BOOTSTRAP-OK\n')
+    jobs = tmp_path / "jobs"
+    (jobs / "venv312/lib/python3.12/site-packages").mkdir(parents=True)
+    lease = tmp_path / "gpu-lease"
+    lease.write_text(
+        '#!/usr/bin/env bash\necho "$*" >> "$VY_JOBS/lease"\n'
+        'if flock -n "$VY_JOBS/.vllm-bootstrap.lock" true; then\n'
+        '  echo free >> "$VY_JOBS/lock"\n'
+        '  env -u VY_BOOTSTRAP_LEASED bash "$OTHER" --cases B1 --cpu --out "$VY_JOBS/b" >> "$VY_JOBS/other"\n'
+        'else\n  echo held >> "$VY_JOBS/lock"\nfi\n'
+        'while [ "$1" != -- ]; do shift; done; shift\nexport CUDA_VISIBLE_DEVICES=3\nexec "$@"\n')
+    lease.chmod(0o755)
+    env = {**os.environ, "VY_JOBS": str(jobs), "HF_HOME": str(tmp_path / "hf"), "GPU_LEASE": str(lease), "CUDA_VISIBLE_DEVICES": "",
+           "OTHER": str(sky / "vllm_bootstrap.sh")}
+    env.pop("VY_BOOTSTRAP_LEASED", None)
+
+    def boot(*args: str) -> str:
+        return subprocess.run(["bash", str(sky / "vllm_bootstrap.sh"), *args, "--out", str(jobs / "b")], env=env, capture_output=True,
+                              text=True, check=True).stdout
+
+    assert boot("--cases", "B0").strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "lease").read_text() == f"1 --wait --max-min 60 --mem-gb 0 -- bash {sky / 'vllm_bootstrap.sh'} --cases B0 --out " \
+        f"{jobs / 'b'}\n"
+    assert (jobs / "lock").read_text() == "free\n" and (jobs / "other").read_text().strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "seen").read_text() == "B1 cvd=\nB0 cvd=3\n"         # the other job's bootstrap ran while this one waited
+    assert "cached" in boot("--cases", "B0") and (jobs / "lease").read_text().count("\n") == 1
+    assert "cached" in boot("--cases", "B1", "--cpu") and (jobs / "lease").read_text().count("\n") == 1
 
 
 def test_submit_names_the_tools_it_is_missing(tmp_path):
@@ -661,3 +743,39 @@ def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
     (tmp_path / "calls").write_text("0\n")
     rc, row_log = watch(f"cat {fifo}", CALLS=str(tmp_path / "calls"), FIFO=str(fifo), COMMIT_STALL_GRACE_S="0")
     assert rc == "rc=0" and row_log == "" and not called.exists()
+
+
+def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fails_on_a_tool_error(tmp_path):
+    """vy-store-evict: cluster_up.sh installs it hourly as ubuntu (the job store's owner); it runs `research data evict --runs`
+    against the job store and runs dir toward its free-space mark, logs one line, treats a mark it can't reach as done (nothing
+    more is preserved), and fails only when the tool's output isn't its JSON."""
+    import subprocess
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "store_evict.sh\" /usr/local/bin/vy-store-evict" in up and "User=ubuntu" in up and "OnUnitActiveSec=1h" in up
+    tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
+    (tool / "research").mkdir(parents=True)
+    bin_dir.mkdir()
+    (tool / "research" / "__init__.py").write_text("")
+    (tool / "research" / "__main__.py").write_text(
+        "import json, os, sys\n"
+        "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps({'argv': sys.argv[1:], 'store': os.environ.get('RESEARCH_STORE')}))\n"
+        "mode = os.environ['FAKE_MODE']\n"
+        "if mode == 'error':\n    print('research data evict: [Errno 1] Operation not permitted'); sys.exit(1)\n"
+        "print(json.dumps({'store': {'evicted_bytes': 184.6e9, 'reached_target': mode == 'reached'}, 'runs': {'evicted_bytes': 3e9}}))\n"
+        "sys.exit(0 if mode == 'reached' else 1)\n")
+    (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 2161"\n')
+    (bin_dir / "df").chmod(0o755)
+
+    def run(mode: str):
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_MODE": mode, "FAKE_ARGV": str(tmp_path / "argv.json")}
+        return subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
+
+    r = run("reached")
+    assert r.returncode == 0 and "evicted 184.6 GB of store blobs, 3.0 GB of run files; target reached: True" in r.stdout
+    seen = json.loads((tmp_path / "argv.json").read_text())
+    assert seen["store"] == "/workspace/jobs/store"
+    assert seen["argv"] == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir", "/workspace/jobs/runs", "--json"]
+    r = run("short")
+    assert r.returncode == 0 and "target reached: False" in r.stdout
+    r = run("error")
+    assert r.returncode == 1 and "Operation not permitted" in r.stderr

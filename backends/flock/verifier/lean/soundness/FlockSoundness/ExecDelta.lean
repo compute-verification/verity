@@ -7,8 +7,9 @@ import Flock.HmRow
 Δ is the list of `(row, column)` pairs the statement XORs into the level-0 matrices (PROTOCOL.md
 §16.1). `delta_rows`: every row it writes has one of six forms, one per loop of `HmRow.delta`:
 - a slot's constant, other than the pin (rewired to read the pin);
-- a row slot's first `cv` bit;
-- an hm96 slot's `pad` bit;
+- a bit of a row's chain (`ShaRowBit`): a `cv` or message bit of one of its `sha512x3` slots (its first `cv`, and its
+  message's constant bits past the row's length);
+- a bit of a row's hm96 slot (`HmRowBit`): its `cv` (a row of no compression's midstate) or `pad`;
 - a unit's leaf bit;
 - a unit's leaf-cut bit;
 - a wire's destination bit.
@@ -61,17 +62,26 @@ theorem RowsIn.push2 {Q : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d
 theorem RowsIn.mono {Q Q' : ℕ → Prop} {d : Array (ℕ × ℕ)} (h : RowsIn Q d) (hQ : ∀ x, Q x → Q' x) :
     RowsIn Q' d := fun p hp => hQ _ (h p hp)
 
+/-- **A bit of a row's chain**: in VU `g`, input `i` (`0` its `cv`, 512 bits; `1` its message, 1024) of row `p`'s `k`-th
+`sha512x3` slot. -/
+def ShaRowBit (c : Circuit) (x : ℕ) : Prop :=
+  ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ k < ((HmRow.rowSlots c.ports).2[p]!).size, ∃ i < 2,
+    ∃ t < 512 * (i + 1), x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1 +
+      (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i]!.1 + t
+
+/-- **A bit of a row's hm96 slot**: in VU `g`, input `i` (`0` its `cv`, 512 bits; `1` its `pad`, 1024) of row `p`'s
+`hm96` slot. -/
+def HmRowBit (c : Circuit) (x : ℕ) : Prop :=
+  ∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ i < 2, ∃ t < 512 * (i + 1),
+    x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[i]!.1 + t
+
 /-- **The rows Δ writes**, one form per loop of `HmRow.delta`: a slot's constant (not the pin), a
-row slot's first `cv` bit, an hm96 slot's `pad` bit, a unit's leaf bit, a unit's leaf-cut bit, or a
+bit of a row's chain, a bit of a row's hm96 slot, a unit's leaf bit, a unit's leaf-cut bit, or a
 wire's destination bit. -/
 def DeltaRow (c : Circuit) (pin x : ℕ) : Prop :=
   (∃ r ∈ c.ranges.toList, ∃ i, r.kind = Kind.net i ∧ ∃ s < r.count,
       x = r.slot s + (c.nets.getD i default).2.constPos ∧ x ≠ pin) ∨
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 512,
-      x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[0]!.1 +
-        (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2]!.1 + t) ∨
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 1024,
-      x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1 + t) ∨
+  ShaRowBit c x ∨ HmRowBit c x ∨
   (∃ k < c.unitRange.count, ∃ j < (c.leavesIn.getD (k % c.upv) #[]).size, ∃ t < 16,
       x = c.unitRange.slot k + ((portCols #[c.unit.inGroups.getD 0 default]).map (·.1)).getD j 0 + t) ∨
   (∃ g < c.g, ∃ e ∈ c.leafCuts.toList, ∃ t < (portCols c.unit.inGroups)[e.2.1]!.2,
@@ -101,13 +111,21 @@ theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (Del
       · exact ⟨_, rfl, hd⟩
     · exact ⟨_, rfl, hd⟩
   intro d hd
-  -- the rows' cv and pad bits
+  -- the rows' constant bits: each row's first cv, its hm96 pad's, its chain's message bits past its length
   refine RowsIn_run_bind (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_range _ (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) hd) ?_
-  · refine forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩)
-      (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd)
-    · exact Or.inr (Or.inr (Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩))
-    · exact Or.inr (Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩)
+  · refine forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl, forIn_id_inv_range _ (fun t _ ht d hd => ?_) hd⟩)
+      (forIn_id_inv_range _ (fun t _ ht d hd => ?_)
+        (forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2 ?_⟩) hd))
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩))⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact ⟨_, rfl, hd.push2 (Or.inr (Or.inr (Or.inl ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)))⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact Or.inr (Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩))
   intro d hd
   -- the units' leaf bits
   refine RowsIn_run_bind (forIn_id_inv_range _ (fun k _ hk d hd => ⟨_, rfl,

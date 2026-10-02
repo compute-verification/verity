@@ -121,7 +121,7 @@ BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
 QUIET = "(quiet)"                                                # in a post: ring no doorbell
-CAP_PER_HOUR = 6                                                 # doorbells into one inbox from one author in one thread
+CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 INBOX_HEAD = "Inbox for @"
 TAG_SEP = " \u00b7 "
@@ -234,7 +234,16 @@ def key_of(reg: dict, cid: str) -> str | None:
 
 
 def tag(h: dict) -> str:
+    if h.get("slack_user"):
+        return f"<@{h['slack_user']}>"                              # a person: a real mention, so Slack notifies them
     return f"<!subteam^{h['usergroup']}|@{h['handle']}>" if h.get("usergroup") else f"@{h['handle']}"
+
+
+def human_entry(reg: dict, name: str) -> dict | None:
+    """A named human as an addressee: `daniel` (first name, lower case), with the Slack user id that notifies them."""
+    name = name.lstrip("@").lower()
+    return next(({"handle": name, "slack_user": p["slack_user"]} for p in reg.get("humans", [])
+                 if p.get("slack_user") and p["name"].split()[0].lower() == name), None)
 
 
 # --- the Web API ------------------------------------------------------------------------------------------------------------
@@ -768,14 +777,16 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
     its reader.  One line per name saying what happened."""
     log = log or sys.stderr
-    if routes.server_delivers():
-        print("route: the router delivers it", file=log)
-        return []
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     root = api.root(ch, thread) if thread else None
     for n in lead_names(msg.get("text", ""), reg):
         routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
     inboxes = routes.inboxes()
+    if routes.server_delivers():
+        names = route_targets(msg, root, reg, inboxes)
+        print(f"route: the router rings {' '.join('@' + n for n in names)}" if names else
+              "route: this rings no one", file=log)
+        return []
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines = thread or msg.get("ts") or "", []
@@ -898,12 +909,14 @@ def routes_of(ns: argparse.Namespace) -> Routes:
     return ns._routes
 
 
-def name_entry(ns: argparse.Namespace, reg: dict, name: str) -> dict:
+def name_entry(ns: argparse.Namespace, reg: dict, name: str, person_ok: bool = False) -> dict:
     """A registry handle, or a name with an inbox that this checkout's registry predates: who may post (`--as`) and be
     addressed (`--to`)."""
     try:
         return entry(reg, name)
     except SlackError:
+        if person_ok and (person := human_entry(reg, name)):
+            return person
         name = name.lstrip("@")
         if routes_of(ns).get_route(name):
             return {"handle": name}
@@ -944,11 +957,18 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
 
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
-    to = [name_entry(ns, reg, t) for t in ns.to]
+    to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
     _post(client(ns), ch, h["handle"], announcement(h, to, _body(ns), ns.verify, ns.ships),
           route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
+
+
+def _quiet_ok(ns: argparse.Namespace, reg: dict, body: str, to: list[dict] = ()) -> None:
+    """`--quiet` rings no doorbell, so on a post that names someone it would leave them unaware of it."""
+    names = [t["handle"] for t in to] + lead_names(body, reg)
+    if ns.quiet and names:
+        raise SlackError(f"--quiet rings no doorbell, so @{names[0]} would never see this: drop --quiet, or the names")
 
 
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
@@ -956,13 +976,14 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
     and with no `--to` it is for every handle."""
     h = name_entry(ns, reg, ns.handle)
-    to = [name_entry(ns, reg, t) for t in ns.to]
+    to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    _quiet_ok(ns, reg, body, to)
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
@@ -1047,7 +1068,9 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
+    body = _body(ns)
+    _quiet_ok(ns, reg, body)
+    body += f" {QUIET}" if ns.quiet else ""
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1534,6 +1557,8 @@ def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
     if not ns.link.startswith("https://"):
         raise SlackError(f"--link {ns.link!r}: an https URL to the full context")
     url = ns.agent_url or os.environ.get("RESEARCH_AGENT_URL")
+    if not url and not ns.dry_run and (me := self_agent_id()):
+        url = f"https://cursor.com/agents/{me}"
     if not url:
         raise SlackError("no --agent-url (or $RESEARCH_AGENT_URL): every card links the agent that asked it")
     return {"kind": ns.kind, "question": question, "why": ns.why.strip(), "options": options, "default": ns.default,
@@ -1674,6 +1699,15 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("the route's answer has no id or ts")
     ch = out.get("channel") or channel_id_for(reg, ASK_CHANNEL)
     print(f"{cid} {ts} {permalink(reg, ch, ts)}")
+    deciders = " ".join(f"<@{p['slack_user']}>" for p in reg.get("humans", []) if p.get("slack_user"))
+    when = pacific(datetime.fromisoformat(body["deadline"]))
+    rec = next((o["label"] for o in body["options"] if o.get("recommended")), "")
+    ping = (f"{deciders} a decision for you: {body['question']} I recommend: {rec}. "
+            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when})."))
+    try:                                                             # the card alone notifies nobody; a mention does
+        client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
+    except SlackError as e:
+        print(f"the card is up, but the mention didn't post ({e}): mention Daniel on it yourself", file=sys.stderr)
     shape = "the old shape (the route predates the card's fields)" if fell_back else "the card's fields"
     print(f"posted as {shape}; now subscribe_slack_thread(channelId={ch}, threadTs={ts}, expiresInSeconds={EXPIRES_S})", file=sys.stderr)
     if fell_back and body["kind"] == "default":
@@ -1714,13 +1748,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     cmd("handles", "the registry").add_argument("--json", action="store_true")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True, url=True)
-    p.add_argument("--to", nargs="+", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
+    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
                    help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
-    p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it)")
+    p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it); refused on a post that names someone")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True, url=True)
@@ -1741,7 +1775,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
-    p.add_argument("--to", nargs="+", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
+    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")

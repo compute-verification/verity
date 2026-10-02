@@ -1,15 +1,16 @@
-import NetTiming.Model.Run
+import NetTiming.Protocol
 
 /-!
 # The trusted layer: the warden assumptions and the Program's dataflow conditions
 
 Each assumption is a named `Prop`, taken as a hypothesis by the theorems that use it, never an `axiom`. The names follow
-`docs/network-transparency/timing-channel.md` §1.2 and §2.4. `NetTiming.Sanity` gives a satisfiability witness for each.
+`docs/network-transparency/timing-channel.md` §1.2 and §2.4. `NetTiming.SecurityProofs.Sanity` gives a satisfiability
+witness for each.
 
 **W1 (fixed parameters) has no `Prop`,** because it is structural here. The grid shape (`L`, `K`, `S`), the window
 structure (`winEnd`), the frame length `B`, the jitter bound `D` and the emission map `view` are arguments fixed before
 any run. The `Warden` type has no input for the secret, and `view` reads only the step and the observation. So nothing
-in the model can make them depend on the secret or on traffic. A reviewer checks this by reading `NetTiming.Model`.
+in the model can make them depend on the secret or on traffic. A reviewer checks this by reading `NetTiming.Protocol`.
 -/
 
 namespace NetTiming

@@ -1,4 +1,4 @@
-"""The reference verifier on pearlc_arm's transcripts: `verity_pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
+"""The reference replay on pearlc_arm's transcripts: `verity_pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
 Sampled(t), source)`, #449's `pearl_c` audit, unchanged.  The epoch is re-started from the transcript's beacon and weight root
 (the salt is the verifier's own); the transcript is A's root and the tile tree's commitment; the draw's source is
 `os.urandom(32)`, drawn here, after the transcript is fixed.  The prover only opens: each opening's value and path are read
@@ -10,8 +10,9 @@ CPU (about 11 s per tile per 1,024 of k).
 
 Prints one line per transcript under RUN_DIR/transcripts/*/*/manifest.json and per negative control under
 RUN_DIR/negative/*/*/manifest.json (the arm's dump of the call that writes none of the commitment into its poisoned
-buffers), `ACCEPT ...` or `REJECT ...`, and writes RUN_DIR/verify.json.  Exit 0 only if at least one transcript was found,
-every one was accepted, and each has a negative control beside it that was rejected; otherwise a `REJECT` line names the
+buffers), `ACCEPT ...` or `REJECT ...`, and writes RUN_DIR/verify.json.  An ACCEPT is replay-verified (development shortcut;
+the protocol's check is a ZK proof, PROTOCOL.md).  Exit 0 only if at least one transcript was found, every one was
+accepted, and each has a negative control beside it that was rejected; otherwise a `REJECT` line names the
 transcript's SHA-256 with the reason.  --commit (default RESEARCH_SOURCE_SHA) names the verifier's tree and --run (default
 RESEARCH_RUN_ID, else RUN_DIR's name) the run, in every line.
 """

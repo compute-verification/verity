@@ -28,7 +28,8 @@
   "_private.Flock.Program.0.Flock.Program.composite": "partial def: a composite definition's body, decoding its callees first (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.staticFns": "partial def: static_of, decoding the functions a static value names (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
-  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
+  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Qcall.cut": "partial def: call_units, recursing through a Call's pieces (Q_call v1, PROTOCOL.md 16.7); no proof is about it, and qcall_agree.py covers it"
  },
  "pins": {
   "Flock.CircuitType.check_ok": {

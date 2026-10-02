@@ -7,6 +7,9 @@
     dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
 Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/python`) and research's kubeconfig.
+Every invocation reads its settings (the VY_* and PACK_* below) from `$VY_DISPATCH_ROOT/dispatch.env` (`KEY=VALUE` lines, `#`
+comments), under any the caller's environment sets: a one-off `submit`, such as n2_build.sh's and n2_commit.sh's over ssh from
+node 2, renders its Job with the loop's CPU slices and lease pools, not the defaults.
 
 **Templates.** Each task of `sky/jobs/<TEMPLATE>.yaml` becomes one batch/v1 Job labelled `kueue.x-k8s.io/queue-name` (Kueue admits
 it by quota and requeues it itself when it is preempted). The Job runs the task's `setup` then `run` with the task's envs, as the
@@ -43,10 +46,12 @@ VY_LEASE_MAX_MIN, 120), which sets CUDA_VISIBLE_DEVICES. `"lease": "self"` sets 
 the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can release the GPU for a CPU phase and lease one again.
 At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
 A leased pod's GPUs come from its queue's pool: VY_LEASE_HOSTDIRS (`QUEUE=DIR,...`, one n1_lease.py per pool) names the host
-directory mounted at `/run/gpu-lease`, e.g. `deployments-gpu=/run/gpu-lease-circuits` so circuits' Commits lease from holders in
-their own quota; any other queue mounts /run/gpu-lease, the `provers` pool.
+directory mounted at `/run/gpu-lease`, by default `deployments-gpu=/run/gpu-lease-circuits` so circuits' Commits lease from holders
+in their own quota; any other queue mounts /run/gpu-lease, the `provers` pool. The default holds for every caller (the loop, a
+`dispatch.py submit` over ssh, a script that imports this module); set the variable empty to map no queue.
 
-**Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
+**Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall), and an `exists` line when the
+task's Job was already created, as this task and try, by another path; `done.jsonl` one per ended item.
 Both are append-only: a wrong outcome is corrected by a later `done.jsonl` line for the key (and an `ev: correct` log line) that
 names the line it corrects in `corrects` and cites its evidence; an item's outcome is its last `done.jsonl` line (`status`).
 Inside the Job, the template's own `research run` writes the Attempt.
@@ -56,7 +61,9 @@ PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Py
 be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
 off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 during node 1's storage emergency; infra 3:36 PM PDT)
 `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml, its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its
-one GPU under MPS. With /workspace at PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
+one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle cap with every claimed entry counted as
+running, since a pod that can claim nothing idles 3 min and exits (66 of them ran no Commit on Oct 1). With /workspace at
+PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
 out as a normal Job), and the pilot claims nothing. Their `results/` come back into the
 chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
 resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
@@ -105,6 +112,7 @@ import ast
 import calendar
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -122,6 +130,21 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
+
+
+def load_settings(path: Path) -> None:
+    """`KEY=VALUE` lines of `path` into os.environ, each only where the caller's environment doesn't set it; no file, no change."""
+    try:
+        lines = path.read_text().splitlines()
+    except FileNotFoundError:
+        return
+    for line in lines:
+        k, sep, v = line.strip().partition("=")
+        if sep and k and not k.startswith("#"):
+            os.environ.setdefault(k.strip(), v.strip())
+
+
+load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
@@ -136,7 +159,8 @@ DEFAULT_PRIORITY = {"backfill": "backfill"}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
 LEASE_DIR = "/run/gpu-lease"
-LEASE_HOSTDIRS = dict(kv.split("=", 1) for kv in os.environ.get("VY_LEASE_HOSTDIRS", "").split(",") if "=" in kv)
+LEASE_HOSTDIRS = dict(kv.split("=", 1) for kv in os.environ.get("VY_LEASE_HOSTDIRS", "deployments-gpu=/run/gpu-lease-circuits")
+                      .split(",") if "=" in kv)
 LEASE_BIN = os.environ.get("VY_GPU_LEASE", "/workspace/verity-guest/bin/gpu-lease")
 PACK_COMMITS = os.environ.get("PACK_COMMITS", "0") == "1"
 PACK_ADOPT = os.environ.get("PACK_ADOPT", "1") == "1"
@@ -424,6 +448,18 @@ def place(item: dict, key: str, job: dict) -> dict:
     return row
 
 
+def submitted(name: str, key: str, idx: int, tries: int) -> bool:
+    """Whether Job `name` is already this item's task `idx`, try `tries`: submitted by another path (by hand, or a feeder) before the
+    tick routed the task before it. Without this, the tick's `create` fails on every pass and nothing after that Job is handled."""
+    try:
+        meta = json.loads(kubectl("get", "job", name, "-o", "json"))["metadata"]
+    except (RuntimeError, ValueError, KeyError):
+        return False
+    labels = meta.get("labels") or {}
+    return ((meta.get("annotations") or {}).get("verity.dev/item"), labels.get("verity.dev/task"), labels.get("verity.dev/try")) \
+        == (key, str(idx), str(tries))
+
+
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
     item = pin(item, dry)
     job = render(item, key, idx, tries)
@@ -431,7 +467,14 @@ def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False
     if dry:
         print(json.dumps(job, indent=1))
         return name
-    kubectl("create", "-f", "-", stdin=json.dumps(job))
+    try:
+        kubectl("create", "-f", "-", stdin=json.dumps(job))
+    except RuntimeError as e:
+        if "AlreadyExists" not in str(e) or not submitted(name, key, idx, tries):
+            raise
+        append("log.jsonl", {"ev": "exists", "job": name, "key": key, "task": idx, "try": tries})
+        print(f"{name} ({key} task {idx} try {tries}) already exists: counted as submitted")
+        return name
     c = job["spec"]["template"]["spec"]["containers"][0]
     append("log.jsonl", {"ev": "submit", "job": name, "key": key, "task": idx, "try": tries,
                          "queue": job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"],
@@ -806,14 +849,49 @@ def pack_hold(jobs: list[dict], dry: bool = False) -> None:
 
 
 def pack_pods(jobs: list[dict], dry: bool = False) -> None:
-    """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots."""
+    """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots and a new pod could
+    claim one of its entries."""
     if quiet() or held() or disk_full():
         return
     active = active_pack_jobs(jobs)
     claimed = len(list(PACK.glob("claimed/*/*.json")))
     queued = len(list(PACK.glob("queue/*.json")))
     if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
+        if not pack_fits():
+            if dry:
+                print("would start no pack pod: no queued entry fits the replay-bundle cap")
+            return
         submit_pack_pod(dry=dry)
+
+
+def read_entries(pattern: str) -> list[dict]:
+    out = []
+    for f in PACK.glob(pattern):
+        try:
+            out.append(json.loads(f.read_text()))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def pack_fits() -> bool:
+    """Whether some queued entry passes the pilot's own claim rule (sky/commit_pack.py's bundle_ok), on the bundles waiting now
+    and with every claimed entry counted as running."""
+    spec = importlib.util.spec_from_file_location("dispatch_commit_pack", HERE / "sky" / "commit_pack.py")
+    pilot = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = pilot     # its dataclass looks its module up by name while the module runs
+    try:
+        spec.loader.exec_module(pilot)
+    finally:
+        sys.modules.pop(spec.name, None)
+    running, waiting = read_entries("claimed/*/*.json"), None
+    for entry in read_entries("queue/*.json"):
+        if pilot.batch(entry) < pilot.BUNDLE_BATCH:
+            return True
+        waiting = pilot.bundle_bytes(pilot.BUNDLE_GLOBS) if waiting is None else waiting
+        if pilot.bundle_ok(entry, waiting, running):
+            return True
+    return False
 
 
 def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
@@ -1415,6 +1493,7 @@ def main(argv: list[str]) -> int:
     s.add_argument("--task", type=int, default=0, help="start the chain at this task (resume after an earlier task succeeded)")
     s.add_argument("--try", dest="tries", type=int, default=0, help="the try number in the Job name (a resubmission)")
     s.add_argument("--template-sha", help="render from this pinned template (resume a chain on the template it started on)")
+    s.add_argument("--lease", choices=("wrap", "self"), help="the item's \"lease\" (the docstring's GPU leases)")
     s.add_argument("--dry-run", action="store_true")
     sp = sub.add_parser("spool", help="queue one item's task for a commit-pack pod now, whatever PACK_COMMITS says")
     sp.add_argument("template")
@@ -1442,7 +1521,7 @@ def main(argv: list[str]) -> int:
         item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
                 "env": dict(e.split("=", 1) for e in ns.env)}
         for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources),
-                     ("template_sha", ns.template_sha)):
+                     ("template_sha", ns.template_sha), ("lease", ns.lease)):
             if v:
                 item[k] = v
         submit(item, ns.key, ns.task, ns.tries, dry=ns.dry_run)

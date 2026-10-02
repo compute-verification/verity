@@ -7,7 +7,9 @@ scheme's certified parameters.
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
   - Qwen2.5-0.5B: every linear weight and the tied head, 15,075 blocks of 64 KiB;
-  - Qwen2.5-7B: layer 0 and the head, 23,744 blocks.
+  - Qwen2.5-7B: layer 0 and the head, 23,744 blocks;
+  - Llama-3.1-8B: layer 0 and the untied head, 22,688 blocks (band-gpu and the reference; not in `vllm-gpu`'s frozen
+    harness).
 - `bench.py` is the harness: one command per (scheme, implementation, weight set, hardware). It writes `bench-result.json`
   (`verity-pous/bench-result/v1`), and `result.json` under `research run`.
   - Every implementation passes the same gates:

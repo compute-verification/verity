@@ -724,8 +724,23 @@ def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, regis
                     "options": [{"value": "yes", "label": "Looks right", "recommended": True}, {"value": "no", "label": "Needs changes"}],
                     "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": "https://github.com/x/note.md", "requested_by": "infra",
                     "agent_url": "https://cursor.com/agents/bc-test"}
-    assert route.identity["seen"] == [("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})]
+    assert route.identity["seen"][0] == ("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})
     assert "the card's fields" in err and f"threadTs=1790800000.000100" in err and OIDC not in out + err
+
+
+def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, registry, capsys):
+    rc, _, err = run(capsys, *card_argv())
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    (ping,) = [m for m in fake.messages.get(ASK, []) if m.get("thread_ts") == "1790800000.000100"]
+    assert rc == 0 and ping["username"] == "infra" and ping["text"].startswith(f"<@{human}> a decision for you: Test: does the")
+    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"]
+
+
+def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, capsys):
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@daniel", "--text", "node 2 or node 3? I recommend node 3; node 3 by 5 PM PDT")
+    assert rc == 0 and posted(fake, out)["text"].startswith(f"<@{human}> node 2 or node 3?")
+    assert run(capsys, "send", "--as", "daniel", "--to", "@infra", "--text", "x")[0] == 2
 
 
 def test_a_route_without_the_fields_gets_the_old_shape_with_the_card_in_its_text(route, registry, capsys):
@@ -880,6 +895,10 @@ def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits #712 is ready")
     rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "@proofs see this")
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs see this")
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "both")
+    assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs both")
+    assert run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
+    assert fake.messages[COORD][-1]["text"].split("\n")[0].endswith("to @circuits @proofs")
 
 
 def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs, capsys):
@@ -953,24 +972,30 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 1
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "thanks")[0] == 0
     assert len(bells(fake, circuits)) == 1
+    posts = len(fake.messages[COORD])
+    for argv in (["reply", "--thread", root["ts"], "--text", "@circuits one more"], ["send", "--to", "@circuits", "--text", "x"],
+                 ["send", "--text", "@circuits x"], ["send", "--thread", root["ts"], "--text", "@circuits x"]):
+        rc, _, err = run(capsys, argv[0], "--as", "infra", "--quiet", *argv[1:])
+        assert rc == 2 and "@circuits would never see this" in err, argv                 # a quiet ask reaches no one
+    assert len(fake.messages[COORD]) == posts
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
     assert len(bells(fake, circuits)) == 2                                             # a status line reaches the root's poster
 
 
-def test_one_author_rings_one_inbox_from_a_thread_at_most_six_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
+def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
-    for i in range(8):
+    for i in range(slack.CAP_PER_HOUR + 2):
         assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", f"point {i}")[0] == 0
     rung = bells(fake, box)
-    assert sum(m["text"].startswith("from infra,") for m in rung) == 6 and sum("paused" in m["text"] for m in rung) == 1
+    assert sum(m["text"].startswith("from infra,") for m in rung) == slack.CAP_PER_HOUR and sum("paused" in m["text"] for m in rung) == 1
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
     for who in ("proofs", "lean", "console", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
-    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == 13
+    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 
 
 def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
@@ -981,7 +1006,10 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}   # no inbox
     (routes_dirs[1] / "router.json").write_text(json.dumps(router))                    # published, not yet in the clone
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "again")
-    assert rc == 0 and "route: the router delivers it" in err and len(bells(fake, box)) == 1
+    assert rc == 0 and "route: the router rings @circuits" in err and len(bells(fake, box)) == 1
+    t = fake.messages[COORD][-1]["ts"]
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", t, "--quiet", "--text", "thanks")
+    assert rc == 0 and "route: this rings no one" in err
     (routes_dirs[0] / "router.json").write_text(json.dumps(router))
     rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "and again")
     assert rc == 0 and "rang" not in err and len(bells(fake, box)) == 1

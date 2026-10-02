@@ -22,6 +22,13 @@ class Exec(Exception):
     pass
 
 
+@pytest.fixture(autouse=True)
+def any_core(monkeypatch):
+    """main() keeps only slots within the process's own cores; these tests name cores the machine running them may not give
+    this process (a check slot pins it), so they see every core. The real-exec test runs a fresh slot.py and sees its own."""
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
+
+
 def _hold(path: Path) -> int:
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -75,6 +82,85 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a")
 
 
+def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
+    """Node 1's slot d (2 Oct 06:58Z) sat free behind the head of the line, a check that had read the slots file before d was in it."""
+    slots = tmp_path / "slots"
+    slots.write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", slots)
+    held = _hold(tmp_path / "check-a.lock")
+    ran = {}
+
+    tries = []
+
+    def add_d(_s):                                   # d appears on the first retry; a waiter that never rereads gives up at 5
+        tries.append(1)
+        assert len(tries) < 5, "the waiter never took the slot added while it waited"
+        slots.write_text("a 0\nd 1\n")
+
+    def execvpe(f, argv, env):
+        ran.update(env=env)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: ran.update(cpus=cpus))
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=add_d)
+    assert ran["env"]["CHECK_SLOT"] == "d" and ran["cpus"] == {1}
+    os.close(held)
+    assert SLOT.reread([{"name": "x"}]) == SLOT.parse("a 0\nd 1\n")
+    slots.write_text("# being rewritten\n")
+    assert SLOT.reread([{"name": "x"}]) == [{"name": "x"}]
+
+
+def test_a_slot_outside_the_processs_cores_is_skipped_never_pinned_onto(tmp_path, monkeypatch, capsys):
+    """Node 1's slot d (128-159) killed every check that took it: a `research run` session there is held to cores 0-127."""
+    (tmp_path / "slots").write_text("d 128-159\na 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(128)))
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(env=env)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: ran.update(cpus=cpus))
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW)
+    assert ran["env"]["CHECK_SLOT"] == "a" and ran["cpus"] == {0}
+    assert "skipping d (128-159): outside this process's cores" in capsys.readouterr().err
+    (tmp_path / "slots").write_text("d 128-159\n")
+    with pytest.raises(SystemExit, match="none of .* slots is within this process's cores"):
+        SLOT.main(["--", "true"], now=lambda: NOW)
+
+
+def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_ticket_is_cleared(tmp_path, monkeypatch, capsys):
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    (line / f"{1:020d}-1").write_text("")                                    # a waiter that died: nobody holds its ticket
+    first = _hold(line / f"{2:020d}-2")                                      # a live one that came first; slot a is free
+    seen, ran = [], {}
+
+    def sleep(_s):
+        seen.append(sorted(p.name for p in line.iterdir()))
+        (line / f"{2:020d}-2").unlink()                                      # it takes its slot and runs
+        os.close(first)
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=sleep)
+    assert len(seen) == 1 and seen[0][0] == f"{2:020d}-2" and len(seen[0]) == 2, seen     # the dead ticket gone, ours behind
+    assert ran == {"slot": "a"} and list(line.iterdir()) == []
+    assert "slot: 1 check(s) ahead in line; retrying every 20 s" in capsys.readouterr().err
+
+
 def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
 
@@ -102,6 +188,39 @@ def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
     assert f"check slot a (cores {cpu})" in out.stderr
 
 
+def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
+    """Who holds check-a/b/c and since when, without `fuser` on the lock files (old-circuits-and-proofs, 1 Oct)."""
+    w = tmp_path / "windows"
+    w.write_text("2026-10-01T09:20Z 30\n")
+    slots = SLOT.parse(f"a 32-63\nb 64-95\nd 0-47 windows={w}\n")
+    held = _hold(tmp_path / "check-a.lock")
+    a, b, d = SLOT.status(slots, tmp_path, NOW)
+    me = Path(f"/proc/{os.getpid()}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()[:200]
+    assert a.startswith(f"a  cores 32-63  held by pid {os.getpid()} since ") and a.endswith(f": {me}")
+    assert b == "b  cores 64-95  free"
+    assert d.startswith("d  cores 0-47  free; blocked: window 2026-10-01T09:20Z")
+    os.close(held)
+    assert SLOT.status(slots[:1], tmp_path, NOW) == ["a  cores 32-63  free"]
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    assert SLOT.main(["--status"], now=lambda: NOW) == 0
+
+
+def test_a_waiters_line_in_proc_locks_is_not_the_holder(tmp_path):
+    lock = tmp_path / "check-a.lock"
+    lock.touch()
+    st = lock.stat()
+    dev = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "locks").write_text(f"1: FLOCK  ADVISORY  WRITE 4242 {dev} 0 EOF\n1: -> FLOCK  ADVISORY  WRITE 777 {dev} 0 EOF\n"
+                                f"2: POSIX  ADVISORY  WRITE 99 00:01:1 0 EOF\n")
+    assert SLOT.holder(lock, proc) == 4242
+    (proc / "locks").write_text(f"1: -> FLOCK  ADVISORY  WRITE 777 {dev} 0 EOF\n")
+    assert SLOT.holder(lock, proc) is None
+    assert SLOT.holder(tmp_path / "absent.lock", proc) is None
+
+
 def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
@@ -118,3 +237,64 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     remote = calls[-1][calls[-1].index("--") + 1:]
     assert remote[:3] == check.SLOT_WRAP[:3] == ["python3", "tools/check/slot.py", "--"] and remote[3:5] == ["uv", "run"]
     assert check.record([]) == 0 and "slot.py" not in " ".join(calls[-1])
+
+
+def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
+    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside backends/flock/ still runs
+    the agreement step, with the pinned build and inputs as the run's inputs."""
+    spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    import research.store.local as local
+
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    class Store:
+        def fetch(self, art):
+            f = tmp_path / art.replace(":", "_")
+            f.write_bytes(b"")
+            return f
+
+    monkeypatch.setattr(check.subprocess, "run", run)
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(local, "LocalStore", Store)
+    assert check.record(["--on", "vy-nebius-1", "--base", "HEAD"]) == 0
+    assert "--input" not in calls[-1]
+    assert check.record(["--on", "vy-nebius-1", "--base", "HEAD", "--agreement"]) == 0
+    cmd = calls[-1]
+    assert [cmd[i + 1].split("=")[0] for i, x in enumerate(cmd) if x == "--input"] == ["flock_upstream", "flock_inputs"]
+    assert "--agreement" not in cmd
+
+
+def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
+    """Merges unblock everyone (root, 2 Oct): the lander's train check takes the next slot that frees ahead of lane checks
+    already waiting, never one a check is running in, and priority waiters keep their own arrival order."""
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    lane = _hold(line / f"{1:020d}-1")                                       # a lane check that has waited longest
+    train, tfd = SLOT.join(tmp_path, priority=True)
+    assert train.name.startswith(SLOT.PRIORITY) and SLOT.ahead(train) == 0  # the lane waiter is no obstacle
+    lane2, lfd = SLOT.join(tmp_path)
+    assert SLOT.ahead(lane2) == 2                                            # behind the train and the older lane waiter
+    train2, t2 = SLOT.join(tmp_path, priority=True)
+    assert SLOT.ahead(train2) == 1                                           # behind the older train only
+    for fd in (lane, tfd, lfd, t2):
+        os.close(fd)
+
+
+def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
+    spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    calls = []
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
+    remote = calls[-1][calls[-1].index("--") + 1:]
+    assert remote[:4] == ["python3", "tools/check/slot.py", "--priority", "--"] and "--priority" not in remote[4:]
+    with pytest.raises(SystemExit):
+        SLOT.main(["--fast", "--", "true"])

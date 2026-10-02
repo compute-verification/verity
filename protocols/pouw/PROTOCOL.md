@@ -651,6 +651,11 @@ useful    U/(α_A·α_B), glue
   sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
   and the transcript tree and the records are built on the host after timing.
+
+  Its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof). The replay opens rows and
+  words and recomputes them in the clear. The protocol keeps every value hidden: it checks a drawn tile by a ZK proof of
+  its units under sampled proofs, which opens nothing (research store `internal/pouw/hidden-check-design.md`). So no
+  report cites the replay's ACCEPT as the protocol's verdict.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format

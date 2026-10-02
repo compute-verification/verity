@@ -731,13 +731,13 @@ class SingleRow(Row):
         cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
         t0 = int(time.time())
-        if ck.hot_engine == "1":
+        if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log",
                               self.cli("hot", "submit", "--root", self.env.hot_root, "--idle", self.env.hot_idle, "--", *cmd[4:]))
         else:
             self.gpu_exclusive("commit-cold")
-            rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
+            rck = self.run_gpu("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
         if self.config_run:
             self.replay_pending = RC.commit_verdict(self, rck, wall)

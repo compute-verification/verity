@@ -72,7 +72,7 @@ import torch  # noqa: E402
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -974,7 +974,7 @@ class Options:
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     openings: int = option("--openings", type=int, default=64)
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
@@ -1157,6 +1157,29 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
+    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
+    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
+    # (a control-only process has no committer at all: nothing installed, nothing compiled in)
+    kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
+    multi = bool(args.arms)
+    coms: dict[str, Any] = {}
+    # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
+    # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
+    # at their first consumer's input, not the module's forward output (oracle_compare.promote_handed_down); form (B) reads them every pair
+    oracle_producers: tuple[dict | None, dict] | None = None
+    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
+    if required_manifest is not None and kinds:
+        from verity_vllm.check import oracle_compare as _OCP
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, wl["requests"], wl["sampling"], tl=TL)
+        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
+        if oracle_producers[0]:
+            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
+            oracle_producers[1]["handed_down"] = _hd
+            if _hd["rows"]:
+                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
+                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
+                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
+    GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
                 target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=args.protocols_config or wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
@@ -1268,34 +1291,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
 
     run_id = f"{Path(args.workload).stem}"
-    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
-    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
-    kinds = [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
-    multi = bool(args.arms)
-    coms: dict[str, Any] = {}
-    if args.only_arm == "control":
-        kinds = []                                           # control-only process: no committer at all (nothing installed, nothing compiled in)
     if os.environ.get("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
         import sys as _sys
 
         _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
         print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
-    # the Programs' producer facts for a v2-query manifest (which carries none), derived once BEFORE the committer is armed: the members
-    # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
-    # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
-    oracle_producers: tuple[dict | None, dict] | None = None
-    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
-    if required_manifest is not None and kinds:
-        from verity_vllm.check import oracle_compare as _OCP
-        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling, tl=TL)
-        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
-        if oracle_producers[0]:
-            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
-            oracle_producers[1]["handed_down"] = _hd
-            if _hd["rows"]:
-                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
-                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
-                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
@@ -1843,8 +1843,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
                 "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
-                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30,
-                            "nvidia_smi_used_mib": nvidia_smi_used_mib()},
+                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
@@ -1920,6 +1919,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # R14 BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
+                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and _HOT is None, after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))

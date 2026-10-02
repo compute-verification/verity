@@ -250,12 +250,18 @@ prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `FlockSound
 - **Split out of A4** at the red team's request: it is a property of what produces the secret, not of SHA-256.
 - **Upstream:** watch entry `A5-uniform-secret`.
 
-**`HmRowComputes`. The circuit's row hashing computes the `hm96-sha512/row/v1` commit string** (`circuit/hm96-sha512-row`;
-not cryptographic, and to be proved: verified-lowering design, phase 2i).
+**`HmRowComputes`. The circuit's row hashing computes the `hm96-sha512/row/v1` or `hm96-sha512/row/v2` commit string**
+(`circuit/hm96-sha512-row`; not cryptographic, and to be proved: verified-lowering design, phase 2i).
 
 - **Statement.** At every witness the circuit's constraints accept, the `b ‖ c` a serving row's `hm96` slot outputs is
   `(SHA-512(row) ⊕ M·y) ‖ SHA-512(salt_prefix ‖ y)` for the row's bytes and the salt `y` that its `sha512x3` and `hm96`
   slots read. `HmRows.Computes` instantiates it at the drawn units' rows, with SHA-512 and the executable's key.
+- **Bit rows (`sha512/row/v2`).** For a row of `ℓ` bits (`FlockLevel3.RowV2.enc`), it covers the constants the verifier
+  derives from `ℓ` alone and Δ pins: the prefix `P(ℓ)`'s midstate as the first `cv` (in the row's first compression, or
+  in its `hm96` slot when it has no compression before its last block); every message bit at or past `ℓ` (the last
+  byte's zero fill bits and SHA-512's padding, in a block with row bytes or in a block of its own); and a unit's leaf bit
+  past `ℓ`, read from its slot's forced-zero row. That these constants are SHA-512's padding of `P(ℓ)` and the row's
+  bytes is part of what it assumes. `HmRows.v2` takes `enc_inj` from `FlockLevel3.RowV2.enc_inj`.
 - **What it gives.** With the layout's facts (`Binding.Layout`, `Binding.HmRows`), the registration fact: a satisfying
   witness's rows have the registered leaves. Then `ValueBinding` (`HmRows.binding`) and `registered_weights` hold with
   `SHA512CRExpected` as the only cryptographic assumption, and `collide` an explicit SHA-512 collision
@@ -298,9 +304,10 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
   - A unit's input columns on one gate also carry one value in every satisfying witness (`UnitPlace.aliased`): they
     copy one source's position, or forced-zero rows.
-  - **Proved from the executable's accept step** for `hm96-sha512/row/v1` statements (`placement_of_setupH`,
-    `unitPlace_of_setupH`; `README.md` §1.5). Open: which instance a drawn unit is (its block and VU), and `aliased`
-    from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis (`Layout.Aliased`).
+  - **Proved from the executable's accept step** for `hm96-sha512/row/v1` and `/row/v2` statements
+    (`placement_of_setupH`, `unitPlace_of_setupH`; `README.md` §1.5). Open: which instance a drawn unit is (its block
+    and VU), and `aliased` from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis
+    (`Layout.Aliased`).
 
 **The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
 `FlockSoundness/Audit/README.md`):
