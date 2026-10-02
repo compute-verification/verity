@@ -1,27 +1,27 @@
 /-
-What the builder's rows force (`Builder`): a Hoare-style judgement `Sound m P` (whenever every row of the final state
-holds, the result satisfies `P`) and the primitive gadgets' rules: a fresh bit, AND, majority, commit.
+What the rows of the verifier's builder (`Flock.HmNets`) force: a Hoare-style judgement `Sound m P` (whenever every row of
+the final state holds, the result satisfies `P`) and the primitive gadgets' rules: a fresh bit, AND, majority, commit.
 -/
 import Mathlib.Tactic
-import FlockSoundness.Discharge.Hm.Builder
+import Flock.HmNets
 
 namespace FlockSoundness.Discharge.Hm
 
-namespace Lin
+open Flock.HmNets hiding and round Regs
 
-/-- Its value under the committed bits `z`. -/
-def eval (z : Var → Bool) (f : Lin) : Bool := f.s.foldr (fun v b => z v ^^ b) f.c
+/-- A form's value under the committed bits `z`. -/
+def ev (z : ℕ → Bool) (f : Lin) : Bool := f.s.foldr (fun v b => z v ^^ b) f.c
 
-theorem foldr_xor (z : Var → Bool) (l : List Var) (c d : Bool) :
+theorem foldr_xor (z : ℕ → Bool) (l : List ℕ) (c d : Bool) :
     l.foldr (fun v b => z v ^^ b) (c ^^ d) = (l.foldr (fun v b => z v ^^ b) c ^^ d) := by
   induction l with
   | nil => rfl
   | cons v l ih => simp only [List.foldr_cons, ih, Bool.xor_assoc]
 
-theorem foldr_symmDiff (z : Var → Bool) (s t : List Var) :
-    (symmDiff s t).foldr (fun v b => z v ^^ b) false =
+theorem foldr_symm (z : ℕ → Bool) (s t : List ℕ) :
+    (symm s t).foldr (fun v b => z v ^^ b) false =
       (s.foldr (fun v b => z v ^^ b) false ^^ t.foldr (fun v b => z v ^^ b) false) := by
-  fun_induction symmDiff s t with
+  fun_induction symm s t with
   | case1 t => simp
   | case2 a s => simp
   | case3 a s b t h ih => simp only [List.foldr_cons, ih, Bool.xor_assoc]
@@ -33,51 +33,48 @@ theorem foldr_symmDiff (z : Var → Bool) (s t : List Var) :
       simp only [List.foldr_cons, ih]
       cases z a <;> simp
 
-theorem eval_eq (z : Var → Bool) (f : Lin) : f.eval z = (f.s.foldr (fun v b => z v ^^ b) false ^^ f.c) := by
-  rw [eval, ← foldr_xor, Bool.false_xor]
+theorem ev_eq (z : ℕ → Bool) (f : Lin) : ev z f = (f.s.foldr (fun v b => z v ^^ b) false ^^ f.c) := by
+  rw [ev, ← foldr_xor, Bool.false_xor]
 
-@[simp] theorem eval_xor (z : Var → Bool) (f g : Lin) : (f ^^^ g).eval z = (f.eval z ^^ g.eval z) := by
-  show (xor f g).eval z = _
-  rw [eval_eq, eval_eq z f, eval_eq z g]
-  simp only [xor, foldr_symmDiff]
+@[simp] theorem ev_xor (z : ℕ → Bool) (f g : Lin) : ev z (f ^^^ g) = (ev z f ^^ ev z g) := by
+  show ev z (Lin.xor f g) = _
+  rw [ev_eq, ev_eq z f, ev_eq z g]
+  simp only [Lin.xor, foldr_symm]
   cases f.c <;> cases g.c <;> simp
 
-@[simp] theorem eval_zero (z : Var → Bool) : zero.eval z = false := rfl
-@[simp] theorem eval_one (z : Var → Bool) : one.eval z = true := rfl
-@[simp] theorem eval_var (z : Var → Bool) (v : Var) : (var v).eval z = z v := by simp [var, eval]
-@[simp] theorem eval_const (z : Var → Bool) (b : Bool) : (const b).eval z = b := rfl
+@[simp] theorem ev_zero (z : ℕ → Bool) : ev z zero = false := rfl
+@[simp] theorem ev_one (z : ℕ → Bool) : ev z one = true := rfl
+@[simp] theorem ev_var (z : ℕ → Bool) (v : ℕ) : ev z (var v) = z v := by simp [var, ev]
 
-theorem eval_of_isConst {f : Lin} (h : f.isConst = true) (z : Var → Bool) : f.eval z = f.c := by
+theorem ev_of_isConst {f : Lin} (h : f.isConst = true) (z : ℕ → Bool) : ev z f = f.c := by
   obtain ⟨s, c⟩ := f
-  simp only [isConst, List.isEmpty_iff] at h
+  simp only [Lin.isConst, List.isEmpty_iff] at h
   subst h
   rfl
 
-theorem eval_of_s_eq {f g : Lin} (h : f.s = g.s) (z : Var → Bool) : f.eval z = (g.eval z ^^ f.c ^^ g.c) := by
-  rw [eval_eq z f, eval_eq z g, h]
+theorem ev_of_s_eq {f g : Lin} (h : f.s = g.s) (z : ℕ → Bool) : ev z f = (ev z g ^^ f.c ^^ g.c) := by
+  rw [ev_eq z f, ev_eq z g, h]
   cases f.c <;> cases g.c <;> simp
 
-end Lin
-
 /-- A row holds under `z`. -/
-def Row.Holds (z : Var → Bool) (r : Row) : Prop := z r.out = (r.a.eval z && r.b.eval z)
+def rowHolds (z : ℕ → Bool) (r : Row) : Prop := z r.out = (ev z r.a && ev z r.b)
 
 /-- Every row holds under `z`. -/
-def St.Holds (z : Var → Bool) (s : St) : Prop := ∀ r ∈ s.rows, r.Holds z
+def stHolds (z : ℕ → Bool) (s : St) : Prop := ∀ r ∈ s.rows, rowHolds z r
 
 /-- **What a builder program guarantees**: its rows only grow, and whenever every row of its final state holds under
 `z`, its result satisfies `P z`. No freshness is needed: if the rows hold, they hold. -/
-def Sound {α : Type} (m : M α) (P : (Var → Bool) → α → Prop) : Prop :=
-  ∀ s : St, (∀ r ∈ s.rows, r ∈ (m.run s).2.rows) ∧ ∀ z, (m.run s).2.Holds z → P z (m.run s).1
+def Sound {α : Type} (m : M α) (P : (ℕ → Bool) → α → Prop) : Prop :=
+  ∀ s : St, (∀ r ∈ s.rows, r ∈ (m.run s).2.rows) ∧ ∀ z, stHolds z (m.run s).2 → P z (m.run s).1
 
 namespace Sound
 
 variable {α β : Type}
 
-theorem pure' {a : α} {P : (Var → Bool) → α → Prop} (h : ∀ z, P z a) : Sound (pure a) P :=
+theorem pure' {a : α} {P : (ℕ → Bool) → α → Prop} (h : ∀ z, P z a) : Sound (pure a) P :=
   fun _ => ⟨fun _ hr => hr, fun z _ => h z⟩
 
-theorem bind' {m : M α} {f : α → M β} {P : (Var → Bool) → α → Prop} {Q : (Var → Bool) → β → Prop}
+theorem bind' {m : M α} {f : α → M β} {P : (ℕ → Bool) → α → Prop} {Q : (ℕ → Bool) → β → Prop}
     (hm : Sound m P) (hf : ∀ a, Sound (f a) fun z b => P z a → Q z b) : Sound (m >>= f) Q := by
   intro s
   obtain ⟨hs1, hs2⟩ := hm s
@@ -85,10 +82,10 @@ theorem bind' {m : M α} {f : α → M β} {P : (Var → Bool) → α → Prop} 
   refine ⟨fun r hr => hf1 r (hs1 r hr), fun z hz => ?_⟩
   exact hf2 z hz (hs2 z fun r hr => hz r (hf1 r hr))
 
-theorem mono {m : M α} {P Q : (Var → Bool) → α → Prop} (hm : Sound m P) (h : ∀ z a, P z a → Q z a) :
+theorem mono {m : M α} {P Q : (ℕ → Bool) → α → Prop} (hm : Sound m P) (h : ∀ z a, P z a → Q z a) :
     Sound m Q := fun s => ⟨(hm s).1, fun z hz => h z _ ((hm s).2 z hz)⟩
 
-theorem ite' {c : Prop} [Decidable c] {m₁ m₂ : M α} {P : (Var → Bool) → α → Prop} (h₁ : c → Sound m₁ P)
+theorem ite' {c : Prop} [Decidable c] {m₁ m₂ : M α} {P : (ℕ → Bool) → α → Prop} (h₁ : c → Sound m₁ P)
     (h₂ : ¬ c → Sound m₂ P) : Sound (if c then m₁ else m₂) P := by
   split_ifs with hc
   · exact h₁ hc
@@ -96,53 +93,74 @@ theorem ite' {c : Prop} [Decidable c] {m₁ m₂ : M α} {P : (Var → Bool) →
 
 end Sound
 
-theorem sound_fresh (a b : Lin) : Sound (fresh a b) fun z r => r.eval z = (a.eval z && b.eval z) := by
+theorem run_fresh (a b : Lin) (s : St) :
+    (fresh a b).run s = (var s.next, { next := s.next + 1, rows := s.rows.push ⟨s.next, a, b⟩ }) := rfl
+
+theorem sound_fresh (a b : Lin) : Sound (fresh a b) fun z r => ev z r = (ev z a && ev z b) := by
   intro s
-  refine ⟨fun r hr => List.mem_cons_of_mem _ hr, fun z hz => ?_⟩
-  have := hz ⟨s.next, a, b⟩ List.mem_cons_self
-  simp only [Row.Holds] at this
-  simpa [fresh, StateT.run] using this
+  rw [run_fresh]
+  refine ⟨fun r hr => Array.mem_push_of_mem _ hr, fun z hz => ?_⟩
+  have := hz ⟨s.next, a, b⟩ (Array.mem_push_self ..)
+  simpa [rowHolds] using this
+
+theorem run_input (n : ℕ) (s : St) :
+    (input n).run s = ((List.range n).map (var <| s.next + ·), { s with next := s.next + n }) := rfl
 
 theorem sound_input (n : ℕ) : Sound (input n) fun _ l => l.length = n := by
   intro s
-  exact ⟨fun r hr => hr, fun z _ => by simp [input, StateT.run]⟩
+  rw [run_input]
+  exact ⟨fun r hr => hr, fun z _ => by simp⟩
 
-theorem sound_and (a b : Lin) : Sound (and a b) fun z r => r.eval z = (a.eval z && b.eval z) := by
-  unfold and
+theorem sound_and (a b : Lin) : Sound (Flock.HmNets.and a b) fun z r => ev z r = (ev z a && ev z b) := by
+  unfold Flock.HmNets.and
   refine Sound.ite' (fun ha => Sound.pure' fun z => ?_) fun ha => Sound.ite' (fun hb => Sound.pure' fun z => ?_)
     fun hb => Sound.ite' (fun he => Sound.pure' fun z => ?_) fun _ => sound_fresh a b
-  · rw [Lin.eval_of_isConst ha z]; cases a.c <;> simp
-  · rw [Lin.eval_of_isConst hb z]; cases b.c <;> simp
-  · have hab := Lin.eval_of_s_eq he z
+  · rw [ev_of_isConst ha z]; cases a.c <;> simp
+  · rw [ev_of_isConst hb z]; cases b.c <;> simp
+  · have hab := ev_of_s_eq (beq_iff_eq.mp he) z
     by_cases hc : a.c = b.c
     · simp only [hc] at hab
       simp [hc, hab]
-    · simp only [hc, ite_false, Lin.eval_zero, hab]
+    · simp only [beq_iff_eq, hc, ite_false, ev_zero, hab]
       cases ha' : a.c <;> cases hb' : b.c <;> simp_all
 
 /-- The majority of three bits. -/
 def maj3 (a b c : Bool) : Bool := (a && b) ^^ (a && c) ^^ (b && c)
 
-theorem sound_maj (x y w : Lin) : Sound (maj x y w) fun z r => r.eval z = maj3 (x.eval z) (y.eval z) (w.eval z) := by
-  unfold maj
-  dsimp only
-  split_ifs with h2 hs0 hs2
+@[simp] theorem isConst_zero : zero.isConst = true := rfl
+@[simp] theorem isConst_one : one.isConst = true := rfl
+
+/-- A form that is constant is `zero` or `one`. -/
+theorem eq_of_isConst {f : Lin} (h : f.isConst = true) : f = zero ∨ f = one := by
+  obtain ⟨s, c⟩ := f
+  simp only [Lin.isConst, List.isEmpty_iff] at h
+  subst h
+  cases c
+  · exact Or.inl rfl
+  · exact Or.inr rfl
+
+set_option linter.unusedSimpArgs false in
+theorem sound_maj (x y w : Lin) :
+    Sound (Flock.HmNets.maj x y w) fun z r => ev z r = maj3 (ev z x) (ev z y) (ev z w) := by
+  have key : ∀ f : Lin, f.isConst = false ∨ f = zero ∨ f = one := fun f => by
+    cases h : f.isConst
+    · exact Or.inl rfl
+    · exact Or.inr (eq_of_isConst h)
+  rcases key x with hx | hx | hx <;> rcases key y with hy | hy | hy <;> rcases key w with hw | hw | hw
+  all_goals
+    unfold Flock.HmNets.maj
+    simp (config := { decide := true }) only [List.filter, hx, hy, hw, isConst_zero, isConst_one, Bool.not_true,
+      Bool.not_false, List.length_cons, List.length_nil, ↓reduceIte]
   all_goals first
     | (refine Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => ?_
-       simp only [Lin.eval_xor, hr]
-       cases x.eval z <;> cases y.eval z <;> cases w.eval z <;> rfl)
+       simp only [ev_xor, hr]
+       cases ev z x <;> cases ev z y <;> cases ev z w <;> rfl)
     | (refine Sound.pure' fun z => ?_
-       have ex := fun h => Lin.eval_of_isConst (f := x) h z
-       have ey := fun h => Lin.eval_of_isConst (f := y) h z
-       have ew := fun h => Lin.eval_of_isConst (f := w) h z
-       cases hx : x.isConst <;> cases hy : y.isConst <;> cases hw : w.isConst <;>
-         simp only [hx, hy, hw, List.filter, Bool.not_true, Bool.not_false, List.length_cons, List.length_nil,
-           List.map_cons, List.map_nil, List.sum_cons, List.sum_nil] at * <;>
-         cases hxc : x.c <;> cases hyc : y.c <;> cases hwc : w.c <;>
-         simp_all [maj3])
+       simp only [ev_zero, ev_one, maj3]
+       cases ev z x <;> cases ev z y <;> cases ev z w <;> rfl)
 
-theorem sound_commit (f : Lin) : Sound (commit f) fun z r => r.eval z = f.eval z := by
-  unfold commit
+theorem sound_commitBit (f : Lin) : Sound (commitBit f) fun z r => ev z r = ev z f := by
+  unfold commitBit
   refine Sound.ite' (fun _ => Sound.pure' fun _ => rfl) fun _ => Sound.mono (sound_fresh _ _) fun z r h => ?_
   simp [h]
 
