@@ -17,6 +17,7 @@ import FlockSoundness.Discharge.Layout.KeysRow
 import FlockSoundness.Discharge.Layout.Outs
 import FlockSoundness.Discharge.Layout.Keyed
 import FlockSoundness.Discharge.Layout.Tables
+import FlockSoundness.Discharge.Layout.Scope
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -66,5 +67,7 @@ from the decoder's places and the executable's regions:
   `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates; `rs.Computes`
   there is [e2e-hm]'s `Discharge.Hm.keyedRowsOuts_computes`;
 * `Tables`: a population without shared rows (`pop.tables = none`, which `bc_drawn` and `BcSite` read) under any tag
-  without shared-row files, M0's `verity/flock-circuit` among them (`loadPublic_tables`, `circuit_sharedRows`).
+  without shared-row files, M0's `verity/flock-circuit` among them (`loadPublic_tables`, `circuit_sharedRows`);
+* `Scope`: `rs`'s circuit conditions (`h1`, `ho`, `PortReads`) as one check on the parsed circuit that runs
+  (`scopeOk`, `scopeOk_spec`).
 -/
