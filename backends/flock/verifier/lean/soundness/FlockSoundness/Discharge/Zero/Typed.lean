@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Zero.Cols
 import FlockSoundness.Discharge.Zero.Flat
+import FlockSoundness.Discharge.Zero.Uniform
 import FlockSoundness.Discharge.Placed.Typed
 import FlockSoundness.Types.ProgramE2E
 
@@ -14,6 +15,8 @@ On a typed flat-class statement, `Placed.UProg.progPlaces_of_classes` places eac
   slot offset reads the zero (`ZeroAt`) copies a forced-zero row (`flatCopyPos_mem_zeros`).
 - `UProg.zeroCols_progPlaces_of_setupH`: so `hZero` at `Placed.UProg.progPlaces_of_setupH`, when each unit input that the
   program wires to `zer` is one whose slot offset reads the zero in its table's circuit (`hza`).
+- `flatKey_zero_iff`: a flat class's unit input key (`Aliased.flatKey`) is the zero exactly when its slot offset reads the
+  zero, so `UProg.zeroCols_progPlaces_of_setupH_key` states `hza` on the keys `Aliased.flatCopies_of_key` reads.
 -/
 
 open Flock FlockLevel3
@@ -107,6 +110,38 @@ theorem zeroCols_progPlaces_of_setupH
       {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩} :=
   zeroCols_progPlaces_of_classes hk p plan tab (fun S R u h => (acc S R u h).cls) slot o hr hcp hzk hz1
     fun S R u h i hi hs => typedAccepted_copyPos_mem_zeros (acc S R u h) (slot S R u h) i (hza S R u h i hi hs)
+
+end UProg
+
+/-- **A flat class's unit input key is the zero exactly when its slot offset reads the zero**: input `i` (port bit
+`inCols[i]`) at slot `g`, whose copy index is `g % upv`. -/
+theorem flatKey_zero_iff (c : Flock.Circuit) (inCols : Array ℕ) (g i : ℕ) :
+    Aliased.flatKey c inCols (g % c.upv) i = .zero ↔ ZeroAt c g (inCols.getD i 0) :=
+  srcAt_zero_iff c g _ _
+
+namespace UProg
+
+variable {k one : ℕ} (hk : one < k) {outs : List ℕ} (p : FlockSoundness.UProg k one outs) {Reg : Type} {mPts : ℕ}
+  (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
+  (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
+
+/-- **`hZero` at the typed path's places, on Δ's keys**: `zeroCols_progPlaces_of_setupH`, with each unit input that the
+program wires to `zer` one whose key at its slot's copy index is the zero (`Aliased.flatKey`). -/
+theorem zeroCols_progPlaces_of_setupH_key
+    (acc : ∀ S R u, u ∈ S → Placed.TypedAccepted (Partition.tabOf plan tab S R u).S)
+    (slot : ∀ S R u (h : u ∈ S), Fin (acc S R u h).cls.slots)
+    (o : ∀ S R u, u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl))
+    (hr : ∀ S R u (h : u ∈ S), (p.spec hk u).Reads (acc S R u h).cls)
+    (hcp : ∀ S R u (h : u ∈ S), (acc S R u h).cls.Copies (slot S R u h) (p.srcOf u))
+    {zer : ℕ} (hzk : zer < k) (hz1 : zer ≠ one)
+    (hkey : ∀ S R u (h : u ∈ S) (i : ℕ), i < (p.spec hk u).t.inBits → p.srcOf u i = .input zer →
+      Aliased.flatKey (acc S R u h).st.c ((acc S R u h).k.done.getD (acc S R u h).k.unit default).inCols
+        ((slot S R u h).val % (acc S R u h).st.c.upv) i = .zero) :
+    ((p.toRows hk).partition p.outsC).ZeroCols plan tab
+      (Placed.UProg.progPlaces_of_setupH hk p plan tab acc slot o hr hcp).derived.place
+      {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩} :=
+  zeroCols_progPlaces_of_setupH hk p plan tab acc slot o hr hcp hzk hz1
+    fun S R u h i hi hs => (flatKey_zero_iff _ _ _ _).1 (hkey S R u h i hi hs)
 
 end UProg
 
