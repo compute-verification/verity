@@ -42,7 +42,7 @@ theorem Plays.toT {α : Type} {g : Game α} {ms : List Msg} {cs : List (Array W)
       · rw [List.filterMap_cons, Sum.getLeft?_inl, h1]
       · rw [List.filterMap_cons, Sum.getRight?_inl]
         exact h2
-  | coinVec c hc _ ih =>
+  | coinVec c hc _ _ ih =>
       obtain ⟨ts, hp, h1, h2⟩ := ih
       subst hc
       refine ⟨.inr ⟨_, fun i => ι c[i.val]!⟩ :: ts, .coin _ hp, ?_, ?_⟩
@@ -118,14 +118,16 @@ theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) 
       decodeProof (shapeOf st sch (extra sess).length) proofs[0]! = .ok p₀ ∧
       capDig p₀.cap = capOfRoot sess.rootB[0]! := by
   obtain ⟨sess, sch, c, hsess, hf, h0, -⟩ := verify_one_ok h
-  have h14 : 14 ≤ S.m := by have := exec_fast100_ge hf; omega
+  have h15 : 15 ≤ S.m := by have := exec_fast100_ge hf; omega
   have hwf := decode_roundsWF hsess
   obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
   have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
     fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hα1 : ∀ i < sch.levels.size, Accounting.ceilLog2 (sch.levels.getD i default).q ≠ 1 := fun i hi =>
+    fast100_alpha st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
   have hschm : sch.m = S.m := hsm.trans hmS
-  obtain ⟨-, p₀, -, hp₀, hc₀, hroot, -, hw₀, -⟩ := rep_refines (D := Dig) spec st S hm h14 sch hmS hkS hfold
-    (extra sess) sess (hext sess hsess) hdim hlv hschm hwf 0 0 _ _ h0
+  obtain ⟨-, p₀, -, hp₀, hc₀, hroot, -, hw₀, -⟩ := rep_refines (D := Dig) spec st S hm h15 sch hmS hkS hfold
+    (extra sess) sess (hext sess hsess) hdim hlv hα1 hschm hwf 0 0 _ _ h0
   rw [hms] at hw₀
   exact ⟨sess, sch, p₀, hsess, hf, hp₀, (capOfRoot_eq hw₀ (hc₀.symm.trans (bytes_eq_of_beq hroot))).symm⟩
 
