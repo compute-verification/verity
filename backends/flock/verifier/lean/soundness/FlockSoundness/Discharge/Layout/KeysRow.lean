@@ -263,6 +263,10 @@ theorem keysRow_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   split
   · exact Or.inl rfl
   · rename_i hneg
+    dsimp only
+    split
+    swap
+    · exact Or.inl rfl
     refine Or.inr ⟨_, _, _, rfl, ?_⟩
     have hget : c.leavesIn.getD u #[] = c.leavesIn[u]! := by
       rw [Array.getD_eq_getD_getElem?, getElem!_pos c.leavesIn u (by rw [C.leaves.1]; exact hu),

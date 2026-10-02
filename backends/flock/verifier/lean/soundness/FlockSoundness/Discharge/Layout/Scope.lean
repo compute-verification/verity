@@ -12,7 +12,9 @@ code that runs, and `scopeOk_spec` gives them; so the headline's circuit conditi
 file whose result the compiled code establishes.
 
 `scopeOk` also checks the unit's `unitLog ≤ 32`, under which the net's sparse rows are `Rows.ofNet`'s
-(`Rows.ofNet_a`). Every accepted statement has it (`Layout.unitLog_le`), so it narrows nothing.
+(`Rows.ofNet_a`). Every accepted statement has it (`Layout.unitLog_le`), so it narrows nothing. And it checks that every
+row is a `sha512/row/v1` row of `16 · words` bits in at least one chunk (`scopeOk_ports`): `rowEnc` is that row's bytes,
+and a bit row (`sha512/row/v2`) commits other bytes.
 -/
 
 namespace FlockSoundness.Discharge.Layout
@@ -26,10 +28,14 @@ def portReadsB (net : Net) : Bool :=
         (net.b.row (min (net.inWords * WORD) net.constPos + i)).toList).all fun x =>
       decide (x < min (net.inWords * WORD) net.constPos → x ∈ portBits net.inGroups)
 
+/-- **Every row is a `sha512/row/v1` row**: `16 · words` bits in at least one chunk. -/
+def v1Ports (c : Circuit) : Bool :=
+  c.ports.all fun p => !p.v2 && p.bits == 16 * p.words && 0 < p.chunks
+
 /-- **The circuits `rs` covers**: the unit reads only its leaf group, returns the outputs, and reads only port bits among
-its inputs. -/
+its inputs, and every row is a `sha512/row/v1` row. -/
 def scopeOk (c : Circuit) : Bool :=
-  c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit
+  c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit && v1Ports c
 
 theorem portReads_of_portReadsB {c : Circuit} (hU : Built c.unit) (hu : c.unit.unitLog ≤ 32)
     (h : portReadsB c.unit = true) : PortReads c hU := by
@@ -52,7 +58,15 @@ theorem scopeOk_spec {c : Circuit} (hU : Built c.unit) (h : scopeOk c = true) :
     c.unit.inGroups.size = 1 ∧ c.outNet = c.unitNet ∧ PortReads c hU := by
   unfold scopeOk at h
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨h1, ho⟩, hu⟩, hpr⟩ := h
+  obtain ⟨⟨⟨⟨h1, ho⟩, hu⟩, hpr⟩, -⟩ := h
   exact ⟨h1, ho, portReads_of_portReadsB hU hu hpr⟩
+
+/-- **`scopeOk` gives `sha512/row/v1` rows**: no bit row, `16 · words` bits, at least one chunk. -/
+theorem scopeOk_ports {c : Circuit} (h : scopeOk c = true) :
+    ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks := by
+  unfold scopeOk v1Ports at h
+  simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
+  intro p hp
+  exact and_assoc.1 (h.2 p (Array.mem_toList_iff.1 hp))
 
 end FlockSoundness.Discharge.Layout
