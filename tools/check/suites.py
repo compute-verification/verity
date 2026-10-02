@@ -3,6 +3,7 @@
     uv run tools/check/suites.py                     every suite whose inputs changed since it last passed here
     uv run tools/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one)
     uv run tools/check/suites.py --quick             without the tests marked `slow`
+    uv run tools/check/suites.py --changed REV       only the suites the change from REV touches (`touched`)
     uv run tools/check/suites.py --fresh             run even where a pass is cached
     uv run tools/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
@@ -236,11 +237,14 @@ def object_ids(tree: str, paths: list[str]) -> dict[str, str]:
     return {p: ("absent" if line.endswith(" missing") else line) for p, line in zip(paths, out)}
 
 
-def locked() -> dict[str, dict]:
-    """{distribution: sha256 of its entries in uv.lock, and the names they depend on (dependencies, extras, groups)}."""
+def locked(text: str | None = None) -> dict[str, dict]:
+    """{distribution: sha256 of its entries in uv.lock, and the names they depend on (dependencies, extras, groups)}; of ``text``,
+    another revision's lock, when given."""
     lock = ROOT / "uv.lock"
+    if text is None:
+        text = lock.read_text() if lock.exists() else ""
     by: dict[str, list] = {}
-    for p in tomllib.loads(lock.read_text()).get("package", []) if lock.exists() else []:
+    for p in tomllib.loads(text).get("package", []):
         by.setdefault(_norm(p["name"]), []).append(p)
     out = {}
     for n, entries in by.items():
@@ -306,6 +310,21 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 
 def _under(path: str, prefixes: list[str]) -> bool:
     return any(p == "." or path == p or path.startswith(p.rstrip("/") + "/") for p in prefixes)
+
+
+def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock: dict[str, dict]) -> list[Suite]:
+    """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
+    own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
+    (`used`) is left out, so a suite this skips can still miss its cached pass."""
+    files = _git("diff", "--name-only", rev, tree).split()
+    if any(f in RUNNER for f in files):
+        return list(suites)
+    before = lock
+    if "uv.lock" in files:
+        r = subprocess.run(["git", "show", f"{rev}:uv.lock"], cwd=ROOT, capture_output=True, text=True)
+        before = locked(r.stdout if r.returncode == 0 else "")
+    return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files)
+            or resolved(roots(s, pkgs), before) != resolved(roots(s, pkgs), lock)]
 
 
 def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
@@ -1020,6 +1039,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="suites", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("suites", nargs="*", help="suites to run (default: all)")
     ap.add_argument("--quick", action="store_true", help="deselect the tests marked slow")
+    ap.add_argument("--changed", metavar="REV", help="of those, only the suites the change from REV to the tree touches (`touched`)")
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
     ap.add_argument("--list", action="store_true", help="list the suites, their inputs, and whether a pass is cached")
     ap.add_argument("--skip", action="append", default=[], metavar="SUITE", help="leave this suite out (repeatable)")
@@ -1044,6 +1064,9 @@ def main(argv: list[str] | None = None) -> int:
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
     tree, env = worktree(), environment()
+    if a.changed:
+        chosen = touched(chosen, pkgs, a.changed, tree, locked())
+        print(f"suites: the change from {a.changed[:12]} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     inputs = {s: inputs_of(s, pkgs) for s in chosen}
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
@@ -1182,6 +1205,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.json:
         a.json.write_text(json.dumps([{"suite": r.suite.path, "name": r.suite.name, "status": r.status, "key": r.key,
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,
+                                       "failed_tests": r.failed_tests, "log": str(r.log) if r.log else None,
                                        "outside": r.outside, "unguarded": r.unguarded, "since": r.since, "reused": r.reused,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
