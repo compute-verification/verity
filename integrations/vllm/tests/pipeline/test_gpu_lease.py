@@ -7,6 +7,7 @@ import ast
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -206,6 +207,86 @@ def test_the_cuda_jit_cache_persists_beside_the_trees_triton_cache(tmp_path):
     none: dict[str, str] = {}
     RD.jit_cache(none)
     assert none == {}
+
+
+PRO = "pleias-350m__bf16__rtxpro6000__tp1__b16__i256__o32__mixed__greedy__bi-eager"
+
+
+def _toolchain(tmp_path: Path) -> tuple[str, str, Path]:
+    """A venv with triton, torch and vllm, a CUDA toolkit, and `job_tree.sh`'s copy of a tree with one Triton kernel -> (the venv's
+    python, CUDA_HOME, the copy's integrations/vllm)."""
+    for d in ("triton-3.7.1", "torch-2.13.0+cu129", "vllm-0.28.1"):
+        info = tmp_path / "venv" / "lib" / "python3.12" / "site-packages" / f"{d}.dist-info"
+        info.mkdir(parents=True)
+        (info / "RECORD").write_text(f"{d.split('-')[0]}/__init__.py,sha256=x,1\n")
+    (tmp_path / "cuda" / "include").mkdir(parents=True)
+    (tmp_path / "cuda" / "include" / "cuda.h").write_text("#define CUDA_VERSION 12090\n")
+    tree = tmp_path / "src" / "0123456789abcdef" / "integrations" / "vllm"
+    (tree / "verity_vllm" / "acquire").mkdir(parents=True)
+    (tree / "verity_vllm" / "acquire" / "tap.py").write_text("import triton\n\n\n@triton.jit\ndef k(x):\n    pass\n")
+    (tree / "verity_vllm" / "row.py").write_text("STAGES = 1\n")
+    return str(tmp_path / "venv" / "bin" / "python"), str(tmp_path / "cuda"), tree
+
+
+def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kernels(tmp_path):
+    py, cuda, a = _toolchain(tmp_path)
+    k = RD.jit_key(py, cuda, PRO, str(a))
+    assert re.fullmatch(r"[0-9a-f]{16}", k)
+    b = tmp_path / "src" / "fedcba9876543210" / "integrations" / "vllm"
+    shutil.copytree(a, b)
+    (b / "verity_vllm" / "row.py").write_text("STAGES = 2\n")
+    assert RD.jit_key(py, cuda, PRO, str(b)) == k                                  # another sync, its change outside the kernels
+    assert RD.jit_key(py, cuda, PRO.replace("rtxpro6000", "l40s"), str(a)) not in (k, None)
+    (b / "verity_vllm" / "acquire" / "tap.py").write_text("import triton\n\n\n@triton.jit\ndef k(x):\n    return x\n")
+    assert RD.jit_key(py, cuda, PRO, str(b)) not in (k, None)
+    (tmp_path / "cuda" / "include" / "cuda.h").write_text("#define CUDA_VERSION 13000\n")
+    assert RD.jit_key(py, cuda, PRO, str(a)) not in (k, None)
+    rec = next((tmp_path / "venv").rglob("torch-*.dist-info/RECORD"))
+    rec.write_text("torch/__init__.py,sha256=y,1\n")
+    k2 = RD.jit_key(py, cuda, PRO, str(a))
+    assert k2 not in (k, None)
+    assert RD.jit_key(py, cuda, "r", str(a)) is None                               # no device class, no key
+    rec.unlink()
+    assert RD.jit_key(py, cuda, PRO, str(a)) is None
+
+
+def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_other_directory_is_kept(tmp_path):
+    tree, c, k = str(tmp_path / "src" / "0123456789abcdef" / "integrations" / "vllm"), tmp_path / "cache", "00ff00ff00ff00ff"
+    env = {"TRITON_CACHE_DIR": str(c / "triton" / "0123456789abcdef"), "VLLM_CACHE_ROOT": str(c / "vllm" / "0123456789abcdef")}
+    RD.jit_cache(env, tree, lambda: k)
+    assert env == {"TRITON_CACHE_DIR": str(c / "triton" / f"k-{k}"), "VLLM_CACHE_ROOT": str(c / "vllm" / f"k-{k}"),
+                   "CUDA_CACHE_PATH": str(c / "cuda" / f"k-{k}"), "CUDA_CACHE_MAXSIZE": str(4 << 30)}
+    own = {"TRITON_CACHE_DIR": str(c / "triton" / "0123456789abcdef")}
+    RD.jit_cache(own, tree, lambda: None)                                           # a compiled row, or an input that can't be read
+    assert own["TRITON_CACHE_DIR"] == str(c / "triton" / "0123456789abcdef") and own["CUDA_CACHE_PATH"] == str(c / "cuda" / "0123456789abcdef")
+
+    def never() -> str:
+        raise AssertionError("a key for a directory that isn't the job tree's")
+    scratch = {"TRITON_CACHE_DIR": str(tmp_path / "scratch" / "rk" / "triton")}    # `research run --scratch triton`: cold on purpose
+    RD.jit_cache(scratch, tree, never)
+    assert scratch["TRITON_CACHE_DIR"] == str(tmp_path / "scratch" / "rk" / "triton")
+    checkout = {"TRITON_CACHE_DIR": str(c / "triton" / "verity")}                 # a checkout, not `job_tree.sh`'s copy
+    RD.jit_cache(checkout, str(tmp_path / "verity" / "integrations" / "vllm"), never)
+    assert checkout["TRITON_CACHE_DIR"] == str(c / "triton" / "verity")
+
+
+@pytest.mark.parametrize("row,workload,eager", [
+    (PRO, {"sweep": {"execution": "bi-eager", "row_id": PRO}}, True),
+    (PRO, {"sweep": {"row_id": PRO}}, True),
+    (PRO, {"execution": "bi-compiled", "sweep": {"row_id": PRO}}, False),
+    (PRO.replace("bi-eager", "bi-compiled"), {"sweep": {"row_id": PRO.replace("bi-eager", "bi-compiled")}}, False),
+    (PRO.replace("bi-eager", "bi-eager-fa2"), {"sweep": {"execution": "bi-eager-fa2"}}, False),
+    (PRO, None, False),
+])
+def test_only_a_bi_eager_row_shares_jit_caches(tmp_path, row, workload, eager):
+    from verity_vllm.pipeline import cli
+    o = cli.parse("row", ["run", row, "R", "o/r", "x", "--sweep-dir", str(tmp_path), "--py", sys.executable], {})
+    r = RD.Row(row=row, role="R", repo="o/r", rev="x", stages="build", env=o.env, proc="row_pod")
+    r.tree = str(tmp_path)
+    if workload is not None:
+        (tmp_path / "workloads").mkdir()
+        (tmp_path / "workloads" / f"{row}.json").write_text(json.dumps(workload))
+    assert r.bi_eager() is eager
 
 
 def _args(**kw):
