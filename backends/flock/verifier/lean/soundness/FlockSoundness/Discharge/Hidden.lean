@@ -28,5 +28,6 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
   its VU computes (`outputs_committed'`);
 * `Theorems`: one theorem per frozen statement;
 * `Wide.Defs`, `Wide.Theorems`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs
-  (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`).
+  (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`);
+* `Wide.Tail`: the Tail statements (`outputs_committed_tail'`, `outputs_binding_tail_of`).
 -/
