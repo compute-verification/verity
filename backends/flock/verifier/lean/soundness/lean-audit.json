@@ -1518,28 +1518,278 @@
    "assumptions": [],
    "type_hash": "a18dc784017e3b94477da672babfcf9242d36aa68ea80950d29818886ed5bc75"
   },
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost": {},
-  "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws": {},
-  "FlockSoundness.Audit.Partitioning.Witness.achievability": {},
-  "FlockSoundness.Audit.Partitioning.Witness.concentration": {},
-  "FlockSoundness.Audit.Partitioning.Witness.converse": {},
-  "FlockSoundness.Audit.Partitioning.Witness.exfiltration": {},
-  "FlockSoundness.Audit.Partitioning.Witness.granularity": {},
-  "FlockSoundness.Audit.Partitioning.Witness.heavyUnit": {},
-  "FlockSoundness.Audit.Partitioning.Witness.refinement": {},
-  "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two": {},
-  "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p": {},
-  "FlockSoundness.Audit.Partitioning.Witness.unequal": {},
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.Achievability"
+   ],
+   "assumptions": [],
+   "type_hash": "60fb96d0183b822919f56a0a610920e58afc18ae0083ae684f4cfe2f9080bf85"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.Concentration"
+   ],
+   "assumptions": [],
+   "type_hash": "4039b9bdd00d8746a37a4f6bd7719858b393f4442bde59a4d89aa1b89537c7c6"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ConverseAsymptotic"
+   ],
+   "assumptions": [],
+   "type_hash": "e6eadc009ea09027842074bf4e581bc11f2e79906064cacb5b93a212c3bfa47d"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ConverseExact"
+   ],
+   "assumptions": [],
+   "type_hash": "d4dbf44cd5d1e3a390839d9d3804c56a1c6bb0c4e2fe573b01673680a0c13338"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ExfiltrationOptimum"
+   ],
+   "assumptions": [],
+   "type_hash": "1c42bd8b54776d07b850501577adba62de7e66c941f4de461c04eb751a0c56cd"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.GranularityChoice"
+   ],
+   "assumptions": [],
+   "type_hash": "db08e61b74ae5d61a6127e2ddcd463881a8afd7110c8520a011d65d75413694b"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.GranularityOptimum"
+   ],
+   "assumptions": [],
+   "type_hash": "2536aa7c8c38892d4950d16cba4d605d92f0143e4c9e66cab8eed71e3b06738a"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit : FlockSoundness.Audit.Partitioning.Guarantees.HeavyUnit"
+   ],
+   "assumptions": [],
+   "type_hash": "e1766f5c1f709cfb2e05c9d4e410b503b3c6919382fd53e245f2a223fc56c36f"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.RefinementRule"
+   ],
+   "assumptions": [],
+   "type_hash": "a1d43244ea573d8b11abaf56bbb4232ab1a3c37ae018157bf55d76d39c62f90e"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave : FlockSoundness.Audit.Partitioning.Guarantees.RiskConcave"
+   ],
+   "assumptions": [],
+   "type_hash": "c4b6ffe60172f35c4d4e6cadfba6f2ff28af8d2b78c6a3f352a30e4f0aab684b"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost : FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost"
+   ],
+   "assumptions": [],
+   "type_hash": "c7a368d1bac1e7b8583b2e10c4cda4fdbbb698b9e44b72256a22b734d1c4a629"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.UnequalDraws"
+   ],
+   "assumptions": [],
+   "type_hash": "bce414b751f17b213e264719865c2d042504824c6da38405f483a541dbeaa25f"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.achievability": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.achievability :",
+    "  Real.instLT.lt",
+    "    (instHAdd.hAdd (Real.instMin.min 1 (instHMul.hMul (instHDiv.hDiv (Real.log (Real.instInv.inv (1 / 2))) 2) 1))",
+    "      (1 / 4))",
+    "    1"
+   ],
+   "assumptions": [],
+   "type_hash": "c524ded6c6b546a5baa16389539eb1564f64b1f8af3bc2a2d97ab8420230c59b"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.concentration": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.concentration :",
+    "  Real.instLT.lt",
+    "    (instHAdd.hAdd (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 2)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 0))",
+    "    (instHAdd.hAdd (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 1)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 2 (1 / 2) 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "7a6c679e3ee822d0ebb1d19d206ace9325be5667268eee858ead97aa65f37213"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.converse": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.converse :",
+    "  And (Real.instLE.le ((FlockSoundness.Audit.Law.subset 4 2 ⋯).miss 2).toReal (1 / 6))",
+    "    (And",
+    "      (Real.instLT.lt 1",
+    "        (instHMul.hMul (instHAdd.hAdd (instHSub.hSub 4 2) 1)",
+    "          (instHSub.hSub 1 (instHPow.hPow (1 / 6) (Real.instInv.inv 2)))))",
+    "      (Real.instLT.lt 0",
+    "        (instHMul.hMul",
+    "          (instHMul.hMul (instHDiv.hDiv (instHAdd.hAdd (instHSub.hSub 4 2) 1) 2) (Real.log (Real.instInv.inv (1 / 6))))",
+    "          (instHSub.hSub 1 (instHDiv.hDiv (Real.log (Real.instInv.inv (1 / 6))) (instHMul.hMul 2 2))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "f27bb9a37b9ec6fd6b91e32386242fac22141d098c10a6f61d472ee193d0f447"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.exfiltration": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration :",
+    "  And (Real.instLE.le (instHAdd.hAdd (instHMul.hMul 1 1) (FlockSoundness.Audit.Partitioning.locBits 4 1)) 4)",
+    "    (And",
+    "      (Real.instLT.lt 4",
+    "        (instHAdd.hAdd (instHMul.hMul 1 (instHAdd.hAdd 1 1))",
+    "          (FlockSoundness.Audit.Partitioning.locBits 4 (instHAdd.hAdd 1 1))))",
+    "      (And",
+    "        (FlockSoundness.Audit.Partitioning.CertifiesLeak (FlockSoundness.Audit.Law.subset 4 4 ⋯) (fun x => 1) (1 / 2) 4)",
+    "        (And",
+    "          (Real.instLT.lt 0",
+    "            (instHMul.hMul (instHSub.hSub 4 1)",
+    "              (instHSub.hSub 1 (instHPow.hPow (1 / 2) (Real.instInv.inv (instHAdd.hAdd 1 1))))))",
+    "          (Real.instLT.lt",
+    "            (instHMul.hMul (instHSub.hSub 4 1)",
+    "              (instHSub.hSub 1 (instHPow.hPow (1 / 2) (Real.instInv.inv (instHAdd.hAdd 1 1)))))",
+    "            (instHDiv.hDiv (instHMul.hMul 4 (Real.log (Real.instInv.inv (1 / 2)))) (instHAdd.hAdd 1 1))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "853dec893f40dcce3d2882fcd1e4aedb8609e88b1c6e5265aa9a9d18f967a154"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.granularity": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.granularity :",
+    "  And",
+    "    (FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 1000 1000 ⋯) (fun x => 1) 10",
+    "      (1 / 2))",
+    "    (And",
+    "      (FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 500 500 ⋯) (fun x => 2) 10",
+    "        (1 / 2))",
+    "      (And",
+    "        (Real.instLT.lt 0",
+    "          (instHSub.hSub (instHSub.hSub (instHSub.hSub 1 (1 / 10)) (instHDiv.hDiv 10 (instHMul.hMul 1000 1)))",
+    "            (instHDiv.hDiv (instHMul.hMul 1 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))",
+    "        (Real.instLT.lt 0",
+    "          (instHSub.hSub (instHSub.hSub (instHSub.hSub 1 (2 / 10)) (instHDiv.hDiv 10 (instHMul.hMul 500 2)))",
+    "            (instHDiv.hDiv (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "cae6de3addaf622605dc7f90cd4bd440df28a3c68baf78027b64a0a68a5587e1"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.heavyUnit": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit :",
+    "  FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 1 1 ⋯) (fun x => 1) 1 (1 / 2)"
+   ],
+   "assumptions": [],
+   "type_hash": "9e99a5ac4b3a3d42fce00985d7ae730b052f1a62f0b69005194a28bd89de7032"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.refinement": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.refinement :",
+    "  And (instLENat.le (instHMul.hMul 2 (instHAdd.hAdd 1 1)) 4)",
+    "    (And (Real.instLE.le (instHAdd.hAdd (instHMul.hMul 16 1) (FlockSoundness.Audit.Partitioning.locBits 4 1)) 20)",
+    "      (And",
+    "        (Real.instLT.lt 20",
+    "          (instHAdd.hAdd (instHMul.hMul 16 (instHAdd.hAdd 1 1))",
+    "            (FlockSoundness.Audit.Partitioning.locBits 4 (instHAdd.hAdd 1 1))))",
+    "        (And",
+    "          (Real.instLE.le (instHAdd.hAdd 16 (instHDiv.hDiv (Real.logb 2 (instHAdd.hAdd 1 2)) (instHAdd.hAdd 1 1)))",
+    "            (instHAdd.hAdd 16 (Real.logb 2 2)))",
+    "          (And",
+    "            (FlockSoundness.Audit.Partitioning.CertifiesLeak",
+    "              (FlockSoundness.Audit.Law.subset (instHMul.hMul 2 4) (instHMul.hMul 2 4) ⋯) (fun x => 16) (1 / 2) 20)",
+    "            (Real.instLT.lt 0",
+    "              (instHMul.hMul",
+    "                (instHMul.hMul (instHSub.hSub 1 (1 / 4))",
+    "                  (instHSub.hSub 1",
+    "                    (instHDiv.hDiv (Real.log (Real.instInv.inv (1 / 2))) (instHMul.hMul 2 (instHAdd.hAdd 1 1)))))",
+    "                (instHMul.hMul (FlockSoundness.Audit.Partitioning.unitCost 0 1 1)",
+    "                  (instHDiv.hDiv (instHMul.hMul 4 (Real.log (Real.instInv.inv (1 / 2)))) (instHAdd.hAdd 1 1)))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "d06faf16d4ce169a13f45527ee74a5b83ef99120fbf0f33981079b03ebf812e5"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two :",
+    "  Real.instLT.lt",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 1)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 0))",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 2)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 2 1 (1 / 2) 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "52e2bfe7535498a346efdbb8250b099a2c9726c4b87ee2868c73be89baf09c4f"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p :",
+    "  Real.instLT.lt",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 1)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 0))",
+    "    (instHSub.hSub (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 2)",
+    "      (FlockSoundness.Audit.Partitioning.detectionRisk 3 2 (4 / 5) 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "8f720ad3c0c3871dd0cf50ea5d00c6ebd34108f6caa3a902611a332e42b45f5d"
+  },
+  "FlockSoundness.Audit.Partitioning.Witness.unequal": {
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.Witness.unequal :",
+    "  And",
+    "    (∀ (u : Fin 100),",
+    "      And (Real.instLE.le 1 (ite (instLTNat.lt u.val 50) 1 2)) (Real.instLE.le (ite (instLTNat.lt u.val 50) 1 2) 2))",
+    "    (And (Real.instLE.le (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) 10)",
+    "      (And",
+    "        (FlockSoundness.Audit.Partitioning.MeetsTarget (FlockSoundness.Audit.Law.subset 100 100 ⋯)",
+    "          (fun u => ite (instLTNat.lt u.val 50) 1 2) 10 (1 / 2))",
+    "        (And",
+    "          (Real.instLT.lt 0",
+    "            (instHMul.hMul",
+    "              (instHMul.hMul (Real.log (Real.instInv.inv (1 / 2)))",
+    "                (instHSub.hSub 1",
+    "                  (instHDiv.hDiv (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))",
+    "              (instHSub.hSub",
+    "                (instHMul.hMul",
+    "                  (instHDiv.hDiv (Finset.univ.sum fun u => ite (instLTNat.lt u.val 50) 1 2) (instHMul.hMul 2 10))",
+    "                  (instHSub.hSub 1 (2 / 10)))",
+    "                (instHAdd.hAdd (Nat.floor (Real.logb 2 (2 / 1))).cast 1))))",
+    "          (Real.instLT.lt 0",
+    "            (instHMul.hMul",
+    "              (instHMul.hMul (Real.log (Real.instInv.inv (1 / 2)))",
+    "                (instHSub.hSub 1",
+    "                  (instHDiv.hDiv (instHMul.hMul 2 (Real.log (Real.instInv.inv (1 / 2)))) (instHMul.hMul 2 10))))",
+    "              (instHSub.hSub",
+    "                (instHMul.hMul",
+    "                  (instHDiv.hDiv",
+    "                    (Finset.univ.sum fun u =>",
+    "                      instHMul.hMul (ite (instLTNat.lt u.val 50) 1 2)",
+    "                        (FlockSoundness.Audit.Partitioning.unitCost 0 1 (ite (instLTNat.lt u.val 50) 1 2)))",
+    "                    (instHMul.hMul (instHPow.hPow 2 2) 10))",
+    "                  (instHSub.hSub 1 (2 / 10)))",
+    "                (instHMul.hMul (instHAdd.hAdd (Nat.floor (Real.logb 2 (2 / 1))).cast 1)",
+    "                  (FlockSoundness.Audit.Partitioning.unitCost 0 1 2))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6546b6c89d3d2a2ff02a4aa2f881aa4601822708516f6145c056e0d3d03aab72"
+  },
   "FlockSoundness.Audit.audit_window": {
    "signature": [
     "FlockSoundness.Audit.audit_window {n m : Nat} {σ : Fin n → Fin m} {k : Fin m → Nat}",
@@ -9458,7 +9708,11 @@
    },
    "pins": [
     "FlockSoundness.Audit.Partition.audit_exfiltration",
-    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm"
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement"
    ]
   },
   "FlockSoundness.Audit.Influence": {
@@ -9584,6 +9838,22 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
+    "FlockSoundness.Audit.Partitioning.Witness.converse",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.granularity",
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement",
+    "FlockSoundness.Audit.Partitioning.Witness.unequal",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
@@ -9705,6 +9975,71 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero"
+   ]
+  },
+  "FlockSoundness.Audit.Partitioning.Guarantees": {
+   "digest": "67f157f4a738f64072656db66a5709e2989b52959a98ece822796783bb3bea85",
+   "definitions": {
+    "FlockSoundness.Audit.Partitioning.Guarantees.Achievability": "9e37a388e95a5cb246f7d564bcb23224666809059af20b755d16ebc7395f13cd",
+    "FlockSoundness.Audit.Partitioning.Guarantees.Concentration": "d6b5c57356f7ad8772fe535a77b9a6f4ba12b52802bb8e0b4054392f083a5e09",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ConverseAsymptotic": "846bf163521f89dd33e17972d347a9af6659817f713f1b7eb90d052ff59ac9d9",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ConverseExact": "7f657fc3ed62dc3ecb555ac5757da8d3a0f233f3bb19fa9a3d155c78d8312a77",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ExfiltrationOptimum": "630d254c622a6d1ca3c72f9af6ceb72d4e782e321a4124f2256e3a6ee58216b2",
+    "FlockSoundness.Audit.Partitioning.Guarantees.GranularityChoice": "391327afcb7797a68b8336cab73d0236dcc3d3d8567c5a9fb8a8ac64e508a59d",
+    "FlockSoundness.Audit.Partitioning.Guarantees.GranularityOptimum": "cdaf885db38847c3530c046efa90cbc4df9b051883a4a2ed026054312e8408bb",
+    "FlockSoundness.Audit.Partitioning.Guarantees.HeavyUnit": "b5528cf0e2b65976aab0af4c08d9ddc4838bb2e4d987adea605e89759a354a7f",
+    "FlockSoundness.Audit.Partitioning.Guarantees.RefinementRule": "9a15ae2f648b879b982b13eb503cc85e5728a070b210befb00abf4626f4f4af5",
+    "FlockSoundness.Audit.Partitioning.Guarantees.RiskConcave": "8d27ceab664e271c5c036cb611ac232e2f085c7a8369e49b40f23e8b46f1d01c",
+    "FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost": "621b92ddb4620199a6d7d4096974efe6e2c95aec9e607402018fc5649f4fccbe",
+    "FlockSoundness.Audit.Partitioning.Guarantees.UnequalDraws": "fe02f8114d672999bdca769ff25b6d441fa5748ecd8522342d827d914c1625c0"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws"
+   ]
+  },
+  "FlockSoundness.Audit.Partitioning.Model": {
+   "digest": "707a996d36cf681211d3c059b933c3991e7d1e0e21023aef323e66bb8611dab5",
+   "definitions": {
+    "FlockSoundness.Audit.Partitioning.CertifiesLeak": "e1952e657e35e728f4488f99aac3507dfab51043842e6359fd04deeaf3dbc85d",
+    "FlockSoundness.Audit.Partitioning.MeetsTarget": "fe87f160d3239722cdcc7e6ddd2b3553bafcdc45eda3b810c60d1f3e954fd243",
+    "FlockSoundness.Audit.Partitioning.cost": "225d10dc5f434353ab89b2a035a0124813829e69b79d5955d2decb54efcde4bf",
+    "FlockSoundness.Audit.Partitioning.detectionRisk": "92f53e27b3ec4ecd71bf61b202bbf8f1ff48de3f67c7b2723f0767b42d2367a2",
+    "FlockSoundness.Audit.Partitioning.locBits": "d2441943f874af777526fbc5f489647ae668f613258e8ddb957bdb36d7c7dd43",
+    "FlockSoundness.Audit.Partitioning.meanDraws": "03e73d38d92b40f50fcd9c37f193aee776ba915b48923cf1c1f26027b8575b46",
+    "FlockSoundness.Audit.Partitioning.unitCost": "46cdfe75b4586b0d2116f244519a9b4212d044a0bdfd7ced3c807b43aa6cc07c"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
+    "FlockSoundness.Audit.Partitioning.Witness.concentration",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.granularity",
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement",
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_k_two",
+    "FlockSoundness.Audit.Partitioning.Witness.riskConcave_needs_small_p",
+    "FlockSoundness.Audit.Partitioning.Witness.unequal"
    ]
   },
   "FlockSoundness.Audit.RegDraw": {
@@ -11261,6 +11596,22 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseExact",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ExfiltrationOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.GranularityOptimum",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
+    "FlockSoundness.Audit.Partitioning.Witness.converse",
+    "FlockSoundness.Audit.Partitioning.Witness.exfiltration",
+    "FlockSoundness.Audit.Partitioning.Witness.granularity",
+    "FlockSoundness.Audit.Partitioning.Witness.heavyUnit",
+    "FlockSoundness.Audit.Partitioning.Witness.refinement",
+    "FlockSoundness.Audit.Partitioning.Witness.unequal",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
     "FlockSoundness.Audit.audit_window_of_le_slack",
