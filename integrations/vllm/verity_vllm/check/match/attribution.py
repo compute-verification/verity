@@ -5,6 +5,7 @@ import collections
 import dataclasses
 
 from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 
 
@@ -47,11 +48,12 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     shared_nodes: set[int] = set()            # node ids of the weight-only instances (an operand source `is_weight_only` accepts)
     shared_idx: list[tuple[int, int]] = []    # (instance index, engine step)
     _compact = getattr(B, "compact", False)
+    shared_inputs = weights_nodes | SI.values_nodes(B)
     for i, r in enumerate(B.inst):
         o = meta_of.get(r["k"])
         rid = o.get("request") if o else None
         if rid is None and o is not None:
-            if BD.is_weight_only(r, weights_nodes, shared_nodes, _compact):
+            if BD.is_weight_only(r, shared_inputs, shared_nodes, _compact):
                 shared_nodes.add(r["k"])
                 shared_idx.append((i, int(o["step"])))
                 continue

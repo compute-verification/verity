@@ -752,6 +752,8 @@ def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fai
     import subprocess
     up = (SKY / "cluster_up.sh").read_text()
     assert "store_evict.sh\" /usr/local/bin/vy-store-evict" in up and "User=ubuntu" in up and "OnUnitActiveSec=1h" in up
+    assert "vy-store-evict-research.timer" in up and "User=research" in up
+    assert "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in up
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
     (tool / "research").mkdir(parents=True)
     bin_dir.mkdir()
@@ -766,8 +768,9 @@ def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fai
     (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 2161"\n')
     (bin_dir / "df").chmod(0o755)
 
-    def run(mode: str):
-        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_MODE": mode, "FAKE_ARGV": str(tmp_path / "argv.json")}
+    def run(mode: str, **extra):
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_MODE": mode, "FAKE_ARGV": str(tmp_path / "argv.json"),
+               **extra}
         return subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
 
     r = run("reached")
@@ -779,3 +782,6 @@ def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fai
     assert r.returncode == 0 and "target reached: False" in r.stdout
     r = run("error")
     assert r.returncode == 1 and "Operation not permitted" in r.stderr
+    r = run("reached", VY_EVICT_STORE="/workspace/research/store", VY_EVICT_RUNS="/workspace/research/runs")   # research's own instance
+    seen = json.loads((tmp_path / "argv.json").read_text())
+    assert r.returncode == 0 and seen["store"] == "/workspace/research/store" and seen["argv"][6] == "/workspace/research/runs"

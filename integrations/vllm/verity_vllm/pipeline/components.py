@@ -67,6 +67,30 @@ def recorded_component_digest(d: str) -> str | None:
     return None
 
 
+def recorded_registration(d: str) -> dict | None:
+    """What a component registers (result.json `program.supplied`, a registered_values derive's): its `values` fields with their bits
+    and its tables' names; None for a component that holds its values as constants. Parameter positions are left out: they shift with
+    the request-local parameters before them."""
+    try:
+        sup = (json.load(open(os.path.join(d, "result.json"))).get("program") or {}).get("supplied") or {}
+    except (OSError, ValueError):
+        return None
+    out = {}
+    if sup.get("registration"):
+        out["values"] = sup["registration"].get("fields")
+    if sup.get("tables"):
+        out["tables"] = [t["name"] for t in sup["tables"]]
+    return out or None
+
+
+def registration_refusal(dirs: list[str]) -> str | None:
+    """Why the components cannot share one registration (`Workload_v1`'s `shared.values` and tables), or None: each registers the same
+    fields with the same bits and the same tables, or none does."""
+    regs = {json.dumps(recorded_registration(d), sort_keys=True) for d in dirs}
+    return None if len(regs) <= 1 else (f"the components register different values (result.json program.supplied, {len(regs)} distinct): "
+                                        "not one program's registration")
+
+
 def component_provenance(d: str, desc: dict) -> dict:
     """[rev-pm M-0123 E] the component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
     result.json/artifact.json's program_digest.  `refusal` names the mismatch (fail closed); a component dir with no recorded digest is

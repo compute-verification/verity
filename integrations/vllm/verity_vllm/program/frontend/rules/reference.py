@@ -16,7 +16,7 @@ from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 
 aten = torch.ops.aten
 
@@ -310,8 +310,8 @@ class LayerNormRefRule(OpRule):
         DT = _dt_of(ctx, xn)
         rows, lead = rows_of(x)
         N = ns[0]
-        fn = ctx.kind("layer_norm", node, N=N, EPS=eps, DT=DT)
-        outs = [ctx.call(fn, r, g, b, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        fn, value = norm_kind(ctx, "layer_norm", node, N, eps, DT=DT)
+        outs = [ctx.call(fn, r, g, b, *value, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         y = from_rows(outs, lead)
         if node.target is aten.native_layer_norm.default:
             # (y, mean, rstd): mean/rstd are internal to the kind; only y is a value of the program
@@ -361,8 +361,8 @@ class RMSNormRefRule(OpRule):
         x, w = ctx.coll(xn), ctx.coll(wn)
         DT = _dt_of(ctx, xn)
         rows, lead = rows_of(x)
-        fn = ctx.kind("rmsnorm", node, N=ns[0], EPS=eps, DT=DT)
-        outs = [ctx.call(fn, r, w, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        fn, value = norm_kind(ctx, "rmsnorm", node, ns[0], eps, DT=DT)
+        outs = [ctx.call(fn, r, w, *value, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
         ctx.bind_weight_role(wn, self, "rmsnorm.weight", N=ns[0])
         ctx.record(self, node, {"N": ns[0], "EPS": eps, "DT": DT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
