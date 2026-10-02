@@ -42,6 +42,16 @@ def leaf_scheme_of(record: dict | None) -> str:
     return str((record or {}).get("leaf_scheme") or vllm_v1.NAME)
 
 
+def require_padded_finalize(required_manifest: str | None, leaf_scheme: str) -> None:
+    """`--padded-finalize`'s preconditions, before any engine: a required manifest, and the vllm-v1 leaves its padding blocks are."""
+    if not required_manifest:
+        raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record "
+                         "(B9.1); nothing to pad without it")
+    if leaf_scheme != vllm_v1.NAME:
+        raise SystemExit(f"--padded-finalize needs --leaf-scheme {vllm_v1.NAME}: the padding steps are position-leaf blocks, not defined "
+                         f"under {leaf_scheme} leaves")
+
+
 class HidingLeaves:
     """The batch path of one hm96 instance (``hm96.SHA256`` by default, the committer's opt-in; ``hm96.SHA512`` for the
     benchmark until the re-baseline wires SHA-512 trees) under ``key`` (the instance's pinned key by default)."""

@@ -156,6 +156,14 @@ def test_unsupported_configurations_are_refused():
         c.add_padding_steps([object()])
 
 
+def test_padded_finalize_is_refused_before_the_engine_under_the_default_leaves():
+    with pytest.raises(SystemExit, match="--leaf-scheme vllm-v1"):
+        hiding.require_padded_finalize("manifest.json", hiding.DEFAULT_LEAF_SCHEME)
+    with pytest.raises(SystemExit, match="--required-manifest"):
+        hiding.require_padded_finalize(None, scheme.NAME)
+    hiding.require_padded_finalize("manifest.json", scheme.NAME)
+
+
 def test_a_committer_whose_steps_take_another_leaf_path_is_refused():
     class Elsewhere(NativeHostCommitter):
         def _commit_step(self, job):
