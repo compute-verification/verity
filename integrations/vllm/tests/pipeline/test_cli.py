@@ -4,10 +4,14 @@
 * the options come from flags, then the environment variable an option names, then its default;
 * a command run as the process sees ``sys.argv`` as ``python -m <module>`` gave it (its run records store it); a call
   with an explicit argv leaves ``sys.argv`` alone;
-* a ``UsageError`` from ``main`` exits 2.
+* a ``UsageError`` from ``main`` exits 2;
+* a command needs no core: ``row stage build`` with ``VERITY_DENSE_THREADS`` set runs where ``verity`` can't be imported, as in
+  a Build's top-level process.
 """
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 import types
 from dataclasses import dataclass
@@ -78,3 +82,28 @@ def test_a_usage_error_from_main_exits_2(probe):
     with pytest.raises(SystemExit) as e:
         cli.main(["probe", "--n", "-1"])
     assert e.value.code == 2
+
+
+#: a Build's top-level process: the template puts the integration and the runner on its path, and the row adds the core only for the
+#: stage processes it starts
+_WITHOUT_CORE = """
+import sys
+
+class NoCore:
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] == "verity":
+            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+
+sys.meta_path.insert(0, NoCore())
+from verity_vllm.pipeline import cli, row
+row.main = lambda o: print(type(o).__name__)
+cli.main(["row", "stage", "build", "cov-gm128-r2", "GEMMA2_9B", "google/gemma-2-9b-it", "main"])
+print(sorted(m for m in sys.modules if m.split(".")[0] == "verity"))
+"""
+
+
+def test_a_dense_threads_cap_needs_no_core():
+    r = subprocess.run([sys.executable, "-c", _WITHOUT_CORE], env={**os.environ, "VERITY_DENSE_THREADS": "16"},
+                       capture_output=True, text=True, check=False)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split("\n")[:2] == ["Stage", "[]"]

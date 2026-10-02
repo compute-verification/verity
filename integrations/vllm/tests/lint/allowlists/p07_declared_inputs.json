@@ -289,6 +289,7 @@
     {"file": "verity_vllm/program/kernels/compiled_norm_literal.py", "kind": "broad-except", "symbol": "_scan_executed", "detail": "except Exception"},
     {"file": "verity_vllm/program/kernels/compiled_norm_literal.py", "kind": "broad-except", "symbol": "literal_variants", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/program/kernels/compiled_relations.py", "kind": "broad-except", "symbol": "_silu_mul_triton", "detail": "except Exception", "count": 2},
+    {"file": "verity_vllm/program/kernels/dense_rows.py", "kind": "environ", "symbol": "<module>", "detail": "VERITY_DENSE_THREADS"},
     {"file": "verity_vllm/program/kernels/fa2_relation.py", "kind": "optional-import", "symbol": "register_with_w2", "detail": "except ImportError"},
     {"file": "verity_vllm/program/kernels/gemm_relation.py", "kind": "optional-import", "symbol": "register_with_w2", "detail": "except ImportError"},
     {"file": "verity_vllm/program/kernels/rms_relation.py", "kind": "optional-import", "symbol": "register_with_w2", "detail": "except ImportError"},

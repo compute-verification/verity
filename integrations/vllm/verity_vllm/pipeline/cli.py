@@ -207,17 +207,6 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
 
 
-#: the environment variable that caps the float64 dense chain's threads (`dense_rows.use_threads`; the words do not depend on it)
-DENSE_THREADS_ENV = "VERITY_DENSE_THREADS"
-
-
-def process_settings(environ: Mapping[str, str]) -> None:
-    """The process-wide settings every command takes from the environment: the dense chain's threads."""
-    if environ.get(DENSE_THREADS_ENV):
-        from verity_vllm.program.kernels import dense_rows
-        dense_rows.use_threads(environ[DENSE_THREADS_ENV])
-
-
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
     argv = sys.argv[1:] if process else list(argv)
@@ -228,7 +217,6 @@ def main(argv: list[str] | None = None) -> Any:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
     parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
-    process_settings(os.environ)
     if process:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
         sys.argv[:] = [mod.__file__ or sys.argv[0], *argv[1:]]
