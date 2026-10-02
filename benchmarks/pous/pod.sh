@@ -20,7 +20,7 @@
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
-# run of record's kernels.
+# run of record's kernels. STEP_REPS (band-gpu) is the step floor's calls per kernel variant (bench.py --step-reps, default 200).
 #
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
@@ -159,7 +159,8 @@ elif [ "$IMPL" = band-gpu ]; then
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
     --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$WORKERS" --verifier-cpu "$VCPU" \
     --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO \
-    ${BAND_D:+--band-d "$BAND_D"} ${BAND_BLOCK:+--band-block "$BAND_BLOCK"} ${KERNELS:+--kernels "$KERNELS"}
+    ${BAND_D:+--band-d "$BAND_D"} ${BAND_BLOCK:+--band-block "$BAND_BLOCK"} ${KERNELS:+--kernels "$KERNELS"} \
+    ${STEP_REPS:+--step-reps "$STEP_REPS"}
   RC=$?
   clocks after
   exit $RC
