@@ -17,7 +17,8 @@ The audit record carries the registration and its receipt, the draw, the proved 
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
 the record incomplete. The record is accepted, and the profiles are present, only when there is a verifier of record
 (`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
-units, the served draw and the sessions' roots passed their checks.
+units, the served draw, the sessions' roots and, for registered values, the roots their reads were opened against passed
+their checks.
 """
 from __future__ import annotations
 
@@ -89,7 +90,9 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
             "registration": registration_digest(registration), "scheme": registration["scheme"],
             "roots": [{"port": r["port"], "root": r["root"], "leaves": r["leaves"]} for r in registration["roots"]],
             "law": registration["law"], "drawn": list(draw["units"]),
-            "inputs": {"anchored": list(registration["anchors"]), "linked": []},
+            "inputs": {"anchored": list(registration["anchors"]), "linked": [],
+                       **({"registered": [{k: e[k] for k in ("value", "root", "leaves", "domain")} for e in registration["registered"]]}
+                          if "registered" in registration else {})},
             "budget_log2_t": None, "terms": None, "epsilon_log2": None,
             "evidence": {"receipt": _sha512(dict(receipt)), "draw": _sha512(dict(draw)), "sessions": list(sessions),
                          "verdict": verdict}}
@@ -98,10 +101,12 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
-                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
+                 session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`draw` is the verifier's own draw. `served`: the units the sessions were served, when the draw was handed to them
     (each must serve exactly the draw). `session_roots`: `{registered port: root}` from the sessions' statements (each
-    must be the registered root)."""
+    must be the registered root). `session_registered`: `{value: root}`, the registered roots the verifier of record
+    opened the sessions' reads against; a registration with registered values needs it, each the registered root."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -113,6 +118,12 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         wrong = sorted(p for p, r in session_roots.items() if registered.get(p) != r)
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
+    if "registered" in registration or session_registered is not None:
+        want = {e["value"]: e["root"] for e in registration.get("registered", [])}
+        if dict(session_registered or {}) != want:
+            checks["registered"] = {"ok": False, "codes": ["registered"],
+                                    "detail": {"registered": sorted(want), "opened": sorted(session_registered or {}),
+                                               "wrong": sorted(v for v in want if (session_registered or {}).get(v) != want[v])}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)

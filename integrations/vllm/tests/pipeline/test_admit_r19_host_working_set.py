@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import gc
 import os
+import signal
 
 import numpy as np
 import pytest
@@ -88,6 +89,26 @@ def test_parent_unfreezes_even_when_the_pool_fails(monkeypatch):
 
     with pytest.raises(RuntimeError):
         SR._parallel_replay(boom, [{"i": 0}], workers=2)
+    assert gc.get_freeze_count() == 0
+
+
+def _killed_child(vu: dict) -> tuple[dict, dict, float]:
+    if vu["i"] == 0:
+        os.kill(os.getpid(), signal.SIGKILL)
+    return vu, {"result": True}, 0.0
+
+
+@pytest.mark.parametrize("ooms, why", [((0, 0), "exited mid-task"), ((3, 4), "OOM-KILLED (cgroup memory.events oom_kill 3 -> 4; 2 workers")])
+def test_a_worker_killed_mid_task_is_reported_by_name_not_waited_out(monkeypatch, capsys, ooms, why):
+    """A SIGKILLed worker (the cgroup's OOM killer) loses its task: the pool says so, OOM-killed when memory.events counted it, at once
+    rather than after its timeout."""
+    counts = iter([ooms[0], *[ooms[1]] * 10**6])
+    monkeypatch.setattr(SR, "_oom_kills", lambda: next(counts))
+    monkeypatch.setattr(SR, "POOL_POLL_S", 0.01)
+    picked = [{"i": i} for i in range(4)]
+    with pytest.raises(SR.WorkerDied, match=why.replace("(", r"\(")):
+        SR._parallel_replay(_killed_child, picked, workers=2)
+    assert why in capsys.readouterr().err
     assert gc.get_freeze_count() == 0
 
 

@@ -183,9 +183,29 @@ def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
 
+def _from_harness_tool(rec: dict) -> bool:
+    """`research` resolved from the harness's own snapshot (`research run` puts `<root>/tool/<RESEARCH_TOOL_SNAPSHOT>` first on
+    PYTHONPATH), not from the tree under test."""
+    snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
+    path = rec.get("resolved_path")
+    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
+
+
+def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):
+    shipped = {"resolved_path": "/workspace/research/tool/ab12/research/__init__.py"}
+    monkeypatch.delenv("RESEARCH_TOOL_SNAPSHOT", raising=False)
+    assert not _from_harness_tool(shipped)
+    monkeypatch.setenv("RESEARCH_TOOL_SNAPSHOT", "ab12")
+    assert _from_harness_tool(shipped)
+    assert not _from_harness_tool({"resolved_path": "/elsewhere/ab12/research/__init__.py"})
+    assert not _from_harness_tool({"resolved_path": str(REPO / "tools" / "research" / "src" / "research" / "__init__.py")})
+    assert not _from_harness_tool({"resolved_path": None})
+
+
 def test_in_process_check_and_loaded_module_guard(tmp_path):
     other = _other_tree(tmp_path)
     ids = sid.resolve(str(REPO))
+    ids = {k: v for k, v in ids.items() if not (k == "research" and _from_harness_tool(v))}
     assert gsid.check(ids, str(REPO)) == []
     leaked = dict(ids["verity"], resolved_path=str(other / "verity" / "__init__.py"), repo_root=str(other), git_sha="deadbeef")
     mm = gsid.check({**ids, "verity": leaked}, str(REPO))

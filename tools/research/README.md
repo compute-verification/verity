@@ -123,10 +123,13 @@ the target's checkout): when the merge's diff touches a prefix, only an attempt 
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
 needs.
 
+**Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
+label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
+
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`, which replaces the merge-request note), and has the grants the rules file
+ready PR`, a `ready` label on `pr:{n}@{head}`, which will replace the merge request once the queue lands trains), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.

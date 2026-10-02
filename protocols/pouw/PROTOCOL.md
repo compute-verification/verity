@@ -519,7 +519,7 @@ useful    U/(α_A·α_B), glue
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
   §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
-  - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
+  - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.18% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
   - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
     fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
   - β is measured, not derived. It is the worst net saving that annealing plus exact block optimisation found over the
@@ -527,8 +527,9 @@ useful    U/(α_A·α_B), glue
   - It is measured on each bucket's own R1 admission boundary at k = 1,024, where the cap is largest, and at 0.005,
     0.01 and 0.015 inside it, since the worst family can sit there (at n = 256 and 2,048 it does). The need is
     1.5× the mean over 8 draws of the best search. Each bucket takes the largest of that need, the assessor's
-    boundary check (2.23% at n = 256) and the earlier grid table (0.17% stands at n = 2,048).
-  - The evidence is `art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e` (`beta_final.py`, the
+    boundary check (2.23% at n = 256), the earlier grid's cells under the same cap (0.18% at n = 2,048, from its
+    L = 0, p = 0.40 cell) and the grid's table.
+  - The evidence is `art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca` (`beta_final.py`, the
     boundary run and its sources). The grid before it is research store `cheap-binding/pearlc4-fix/beta_table.py
     --mu 1.5` on `strong.jsonl` and `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256
     and 512 (`exact256.jsonl`).
@@ -640,7 +641,8 @@ useful    U/(α_A·α_B), glue
   row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
-    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SB's range;
+    per-row rules or R1 (`r1_row`, row by row over its workers), the draws and their openings, and a count of device
+    scale bytes outside D-SB's range;
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
@@ -648,8 +650,7 @@ useful    U/(α_A·α_B), glue
   once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
   sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
-  the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
-  not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).
+  and the transcript tree and the records are built on the host after timing.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format

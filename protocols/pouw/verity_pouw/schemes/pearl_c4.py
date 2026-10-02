@@ -292,8 +292,10 @@ def seed_b(salt: bytes, root_b: bytes) -> bytes:
     return keyed(blake3(LABELS["seed-B"]), salt + root_b)
 
 
+@lru_cache(maxsize=4)
 def basis(seed_b: bytes, role: int, k: int) -> tuple[tuple[int, ...], ...]:
-    """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t."""
+    """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t.  Cached: one costs about three rows'
+    F1′ to derive at k = 4,096, and `r1_row` forms one row at a time."""
     return tuple(tuple(line(seed_b, role, t)) for t in range(k))
 
 
@@ -662,11 +664,11 @@ F1_B_OVERFIT = 10
 #: annealed and block-optimised after the salt, over the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ,
 #: with a 1.5× margin on the measured gain and made non-increasing in n.  It is taken on each bucket's own R1 admission
 #: boundary at k = 1,024 (``k_min``), where the cap is largest, and just inside it (the worst family can sit there): the larger of
-#: that need and the assessor's boundary check, never below the earlier grid table (condition 7; research store
-#: art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e, beta_final.py; the grid's beta_table.py on
-#: strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+#: that need, the assessor's boundary check and the earlier grid's cells under the same cap, never below the grid's
+#: table (condition 7; research store art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca,
+#: beta_final.py; the grid's beta_table.py on strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
 B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
-         (1024, Fraction(50, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+         (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
 #: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
 B_OVF_MIN_N = B_OVF[0][0]
 
@@ -1231,19 +1233,21 @@ class PearlC4:
 
     def r1_rows(self, ctx: Context, a_rows: Sequence[bytes], b_rows: Sequence[bytes], k_kept: int) -> tuple[set[int], set[int]]:
         """R1 over a whole unit, for an honest prover's declaration (`pearl_c_work.declare`): the A rows and the weight's
-        B rows that pass the per-row rules but whose F1′ per word passes ρ·(their cell credit)."""
-        noise, k, n = self.noise(ctx), ctx.matmul.shape.k, ctx.matmul.shape.n
-        cap = self._r1_cap(k_kept, n)
-        out: tuple[set[int], set[int]] = (set(), set())
-        for label, rows, role_e, role_f, seed_e, dest in (("A", a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
-                                                          ("B", b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
-            live = [i for i, row in enumerate(rows) if row_passes(self.fmt, parse_row(row, k))]
-            if not live:
-                continue
-            side, e = self._side([rows[i] for i in live], live, role_e, role_f, seed_e, noise.seed_b, k)
-            memo: RowTerms = {}
-            dest.update(i for p, i in enumerate(live) if row_terms(self.fmt, memo, label, side, e, p, self.f1)[1] > cap)
-        return out
+        B rows that pass the per-row rules but whose F1′ per word passes ρ·(their cell credit) (`r1_row`)."""
+        k = ctx.matmul.shape.k
+        a, b = ({i for i, row in enumerate(rows)
+                 if row_passes(self.fmt, parse_row(row, k)) and self.r1_row(ctx, side, i, row, k_kept)}
+                for side, rows in (("A", a_rows), ("B", b_rows)))
+        return a, b
+
+    def r1_row(self, ctx: Context, side: str, index: int, row: bytes, k_kept: int) -> bool:
+        """R1 on one row that passes the per-row rules, row `index` of the unit's A ("A") or of its weight's B ("B"):
+        whether its F1′ per word, formed under the unit's noise, passes ρ·(its cell credit).  A row's term reads only that
+        row, its index and the side's basis, so a prover may map it over the rows in any order and in any process."""
+        noise, k = self.noise(ctx), ctx.matmul.shape.k
+        role_e, role_f, seed_e = (ROLE_EA, ROLE_FA, noise.seed_a) if side == "A" else (ROLE_EB, ROLE_FB, noise.seed_b)
+        formed, e = self._side([row], [index], role_e, role_f, seed_e, noise.seed_b, k)
+        return row_terms(self.fmt, {}, side, formed, e, 0, self.f1)[1] > self._r1_cap(k_kept, ctx.matmul.shape.n)
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
               k: int) -> tuple[Formed, list[list[int]]]:
