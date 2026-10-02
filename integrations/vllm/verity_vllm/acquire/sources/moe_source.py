@@ -37,7 +37,7 @@ from verity_vllm.engine import hooks
 
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 TENSORS_PER_LAYER = 6
-COVERS_FAMILIES = ["MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeExpertGemm_v2", "SiluMul_v1", "MoeExpertGemmW_v1", "MoeExpertGemmW_v2", "MoeSum_v1"]
+COVERS_FAMILIES = ["MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeExpertGemm_v2", "SiluMul_v1", "SiluMul_v2", "MoeExpertGemmW_v1", "MoeExpertGemmW_v2", "MoeSum_v1"]
 
 
 def moe_layers_of(model: Any) -> dict[str, int]:
