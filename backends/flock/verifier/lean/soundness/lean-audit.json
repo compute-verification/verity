@@ -3129,20 +3129,6 @@
    "assumptions": [],
    "type_hash": "71b0248fea95742cbe07b4d4366056b392c330205f9d014a97c57300645e4d2d"
   },
-  "FlockSoundness.Discharge.Hm.portCommits": {
-   "signature": [
-    "FlockSoundness.Discharge.Hm.portCommits {c : Flock.Circuit} {n : Nat} {Reg : Type} {mPts : Nat}",
-    "  {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}",
-    "  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}",
-    "  {si : FlockSoundness.Discharge.Placed.Sites plan tab}",
-    "  (hparse :",
-    "    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : SetLike.instMembership.mem S u),",
-    "      Eq (Flock.HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables) (Except.ok c))",
-    "  (ho : Eq c.outNet c.unitNet) : FlockSoundness.Discharge.Layout.PortCommits c si FlockSoundness.Discharge.Hm.saltCol"
-   ],
-   "assumptions": [],
-   "type_hash": "b044e44cfd2b49b86144195828b8cb2762de9b19a83b2245feb590c82eab7052"
-  },
   "FlockSoundness.Discharge.Hm.port_commit": {
    "signature": [
     "FlockSoundness.Discharge.Hm.port_commit (c : Flock.Circuit) (w : Nat → Bool) (g p : Nat) {words n : Nat}",
