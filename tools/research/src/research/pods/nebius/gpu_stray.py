@@ -10,7 +10,7 @@ probe checks that it does. A compute process (`nvidia-smi --query-compute-apps`)
     it U (its NVIDIA_VISIBLE_DEVICES is `void`; the devices come by CDI, so the variable names none); or
   - a lease (a held lock that isn't n1_lease.py's fence) on lock i in any pool dir of `$GPU_POOL_DIRS` has an owner pid in the
     process's pod (the cgroup's pod uid), or that is one of the process's ancestors.
-Any other is a stray. Each is a line in `$GPU_STRAY_LOG`, and when its pod mounts a pool dir (its `gpu-lease` hostPath volume)
+Only a process listed both before and after the leases are read is judged. Any other is a stray. Each is a line in `$GPU_STRAY_LOG`, and when its pod mounts a pool dir (its `gpu-lease` hostPath volume)
 that dir's `blocked` file is written, which stops the pool's new grants (n1_lease.py). The block stays until a person removes
 the file, once the stray is understood; a stray still running then blocks the pool again on the next pass.
 """
@@ -148,6 +148,10 @@ def check(t: float) -> list[dict]:
         return []
     table = gpu_table()
     held = leases()
+    # A lease's owner releases only after its CUDA context is gone, so a process whose lease ended before leases() read the
+    # locks is off a listing taken after it; one that took a GPU since the first listing isn't on it.
+    again = set(compute_apps())
+    apps = [a for a in apps if a in again]
     pods = pods_by_uid()
     strays = []
     for pid, uuid in apps:

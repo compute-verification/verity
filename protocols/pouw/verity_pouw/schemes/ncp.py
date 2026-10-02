@@ -19,8 +19,8 @@ row-major within a step (the order an accumulator produces them).
 inside each, so forming E₂ is a free word move under W1 with byte moves priced).  The red team certified it independently
 (independence rank T − 1, λ₃ = 32, MinRank 16 at k = 1,088, 2,048, 4,096 and 11,008); ``tests/test_pouw_word_p.py``
 re-checks the rejection rule, minrank.md's hypotheses and λ₃ ≥ 16 at the k the MVP uses.  ``ncp-v1-shift24`` uses the shift by 24, admissible with
-independent checkpoints for every k >= 1024 with 16 | k (Lean `shiftBy24_admissible`, `independentWitness`), which the
-Lean calls a witness, not a proposal.
+independent checkpoints for every k >= 1024 with 16 | k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`,
+`Pouw.SecurityProofs.NCP.IndependentWitness`), which the Lean calls a witness, not a proposal.
 """
 
 from __future__ import annotations
@@ -243,7 +243,8 @@ class NCP:
                       "Pouw.SecurityProofs.NCP.YUChecked", "Pouw.SecurityProofs.NCP.Int7Int32UPos",
                       "Pouw.SecurityProofs.NCP.NCPWordFloorIndU", "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
                       "Pouw.SecurityProofs.NCP.WrapWordFloorIndU", "Pouw.SecurityProofs.Barrier.Generic",
-                      *(("Pouw.SecurityProofs.NCP.IndependentWitness",) if perm == "shift24" else ())),
+                      *(("Pouw.SecurityProofs.NCP.IndependentWitness", "Pouw.SecurityProofs.NCP.ShiftBy24Admissible")
+                        if perm == "shift24" else ())),
             hypotheses=("TTNCP_U(β, γ_0) in M_4090 under W1 with sub-word moves priced (Pouw.NCP.Assumptions.TTNCP_U)",
                         "AdmitsRef: H_ref runs within wref",
                         "Word.NzNCP of the wrapped route-U values (the word floors' hypothesis)",

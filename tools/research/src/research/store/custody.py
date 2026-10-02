@@ -96,6 +96,9 @@ def _sha256(p: Path) -> str:
 #: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`--declared-output GLOB`).
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
                        "result.json", "launch.json", "remote.json", "refused.json"})
+#: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
+#: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
+LAUNCHER_RECORD = "remote.json"
 #: Undeclared files are uploaded (in path order) while their total stays within this; the rest are trimmed.  0 = never upload undeclared.
 UNDECLARED_CAP_BYTES = 256 << 20
 #: A trimmed listing bigger than this goes in the record's tree: a manifest's meta is capped at 256 KiB (model.META_MAX_BYTES), and a
@@ -275,6 +278,8 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
     t0 = time.time()
     have: dict[str, list[Any]] = {}
     for rel in run_files(d):
+        if rel == LAUNCHER_RECORD:
+            continue
         p = d / rel
         have[rel] = [p.stat().st_size, _sha256(p)]
     extra = sorted(set(have) - set(want))
