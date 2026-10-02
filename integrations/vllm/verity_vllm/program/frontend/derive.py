@@ -47,6 +47,7 @@ from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
+from verity_vllm.program.frontend.registration import Registration
 from verity_vllm.program.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
@@ -180,17 +181,13 @@ class Ctx:
 
     def __init__(self, *, mode: str, profile: str | None, config: dict | None, allowed_dims: dict, name: str, ruleset: RuleSet,
                  vocab, module, ep, B: Builder, user_inputs: dict[str, Coll], weights_coll: Coll | None, weights: list[WeightLeaf],
-                 placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], values_param: int | None = None,
-                 weights_param: int | None = None, tables: dict[str, int] | None = None) -> None:
+                 placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], registration: Registration | None = None,
+                 weights_param: int | None = None) -> None:
         self.mode, self.profile, self.config, self.allowed_dims, self.name = mode, profile, dict(config or {}), dict(allowed_dims or {}), name
         self.ruleset, self.vocab, self.module, self.ep, self.B = ruleset, vocab, module, ep, B
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
-        #: the registered `values` parameter (`registered_values`): its index and fields in first-read order ({name, width, bits, offset})
-        self.values_param, self.weights_param = values_param, weights_param
-        self.values_fields: list[dict] = []
-        #: the registered tables the rules declared (`Rule.registered_tables`): name -> parameter index
-        self.tables: dict[str, int] = dict(tables or {})
+        self.registration, self.weights_param = registration, weights_param   # the registered inputs (`registered_values`)
         self.env: dict[Any, Any] = {}
         self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
@@ -348,42 +345,25 @@ class Ctx:
 
     @property
     def registered_values(self) -> bool:
-        return self.values_param is not None
+        return self.registration is not None
 
     def supplied(self, name: str, width: int, bits: int, node=None) -> Coll:
-        """The field `name` of the registered `values` parameter, allocated at its first read: a program value (eps, the attention
-        scale) that the Definition reading it takes as an input.  Every read of one name is the same `width`-bit word."""
-        node = node or self.current
-        if self.values_param is None:
-            refuse("numerics_unregistered", node, self.module_path(node), f"value {name!r} read as an input outside a registered_values derivation")
-        f = next((f for f in self.values_fields if f["name"] == name), None)
-        if f is None:
-            f = {"name": name, "width": int(width), "bits": int(bits), "offset": len(self.values_fields)}
-            self.values_fields.append(f)
-        elif (f["width"], f["bits"]) != (int(width), int(bits)):
-            refuse("numerics_unregistered", node, self.module_path(node), f"value {name!r} is {width}-bit 0x{int(bits):x} here and "
-                   f"{f['width']}-bit 0x{f['bits']:x} at its first read")
-        return Coll(Value(int(width)), Affine("p", self.values_param, f["offset"], 1))
+        """The field `name` of the registered `values` parameter (`Registration.value`): a program value (eps, the attention scale)
+        that the Definition reading it takes as an input."""
+        return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits)))
 
     def table(self, name: str, node=None) -> Coll:
-        """The registered table `name` (`verity_vllm.program.registry.tables`): the parameter a rule declared for it."""
-        node = node or self.current
-        if name not in self.tables:
-            refuse("numerics_unregistered", node, self.module_path(node), f"table {name!r} read but no rule declared it "
-                   "(`Rule.registered_tables`), or outside a registered_values derivation")
-        from verity_vllm.program.registry.tables import table_type
-        t = table_type(name)
-        return Coll(t, Affine("p", self.tables[name], 0, t.leaves))
+        """The registered table `name` (`verity_vllm.program.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
+        return self._registered(node, f"table {name!r}", lambda r: r.table(name))
 
-    def supplied_layout(self) -> dict:
-        """The registered `values` as the record states them (the fold's `FoldResult.supplied` layout): parameter index, name and every
-        field with its leaf offset and bits (hex); {} without registered values."""
-        if self.values_param is None:
-            return {}
-        return {"registration": {"param": self.values_param, "name": "values",
-                                 "fields": [{"name": f["name"], "width": f["width"], "bits": f"0x{f['bits']:0{f['width'] // 4}x}",
-                                             "offset": f["offset"]} for f in self.values_fields]},
-                "run": [], **({"tables": [{"param": i, "name": n} for n, i in self.tables.items()]} if self.tables else {})}
+    def _registered(self, node, what: str, read) -> Coll:
+        node = node or self.current
+        try:
+            if self.registration is None:
+                raise ValueError(f"{what} read as an input outside a registered_values derivation")
+            return read(self.registration)
+        except ValueError as e:
+            refuse("numerics_unregistered", node, self.module_path(node), str(e))
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:
         node = node or self.current
@@ -554,7 +534,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         prov["returned_inputs"] = ctx.returned_inputs
         prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
         if ctx.registered_values:
-            prov["supplied"] = ctx.supplied_layout()
+            prov["supplied"] = ctx.registration.layout()
         # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
         # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
         from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
@@ -562,7 +542,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
         corr_digest = correspondence_digest(corr_doc)
         flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
-                               registered=("values", *ctx.tables) if ctx.registered_values else ())
+                               registered=ctx.registration.names if ctx.registered_values else ())
         check_identity(flat_program, check_registry=check_registry)
         flat_digest = program_digest(flat_desc := encode_program(flat_program))
         program, family_report = flat_program, None
@@ -723,16 +703,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
         if not isinstance(v, torch.Tensor):
             refuse("dynamic_control_flow", ph_nodes[un], None, f"input {un} is not a tensor (symbolic scalar inputs are not static structure)")
         params.append((un, type_of_tensor(v)))
-    values_param, tables = None, {}
-    if registered_values:
-        values_param = len(params)
-        params.append(("values", Record()))
-        from verity_vllm.program.registry.tables import table_type
-        for r in ruleset.rules:
-            for tn in (r.registered_tables(ep, mode) if r.modes is None or mode in r.modes else ()):
-                if tn not in tables:
-                    tables[tn] = len(params)
-                    params.append((tn, table_type(tn)))
+    registration = Registration.declare(params, ruleset, ep, mode) if registered_values else None
     wrec_t = Record(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
         params.append(("weights", wrec_t))
@@ -743,14 +714,15 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
               ep=ep, B=B, user_inputs=user_inputs, weights_coll=weights_coll, weights=leaves, placeholder_to_weight=placeholder_to_weight,
-              lifted_constants=lifted, values_param=values_param, weights_param=len(params) - 1 if wrec_t is not None else None, tables=tables)
+              lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
     out = _translate(ctx)
-    if values_param is not None:
-        if not ctx.values_fields:
-            refuse("numerics_unregistered", None, None, "registered_values: no Definition read a program value; the `values` parameter would be empty")
-        params[values_param] = ("values", Record(*[(f["name"], Value(f["width"])) for f in ctx.values_fields]))
+    if registration is not None:
+        try:
+            registration.finish(params)
+        except ValueError as e:
+            refuse("numerics_unregistered", None, None, str(e))
         B.params = tuple(params)
     B.ret_type = out.type
     body = B.finish(out)
