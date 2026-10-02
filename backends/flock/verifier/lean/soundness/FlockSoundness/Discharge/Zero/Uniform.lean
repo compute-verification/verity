@@ -87,33 +87,25 @@ theorem accepted_c_eq {T : Model.Statement} (a : Placed.Accepted T) {c : Flock.C
 
 /-- **Δ's source key at a port bit is the zero exactly when the bit reads the zero** (`ZeroPort`). -/
 theorem srcAt_zero_iff (c : Flock.Circuit) (s₀ p t : ℕ) : Aliased.srcAt c (s₀ % c.upv) p t = .zero ↔ ZeroPort c s₀ p t := by
-  unfold Aliased.srcAt ZeroPort PastBits
+  unfold Aliased.srcAt ZeroPort
   by_cases hp : p < (c.unit.inGroups.getD 0 default).bits.size
   · have hp' : ¬ (c.unit.inGroups.getD 0 default).bits.size ≤ p := by omega
     simp only [hp, hp', ↓reduceIte, true_and, false_and, or_false]
-    split
-    · simp_all
-    · rename_i hn
-      split
-      · exact iff_of_false (fun h => by cases h) (fun h => h.elim hn (by omega))
-      · exact iff_of_true rfl (Or.inr (by omega))
+    split <;> simp_all
   · have hp' : (c.unit.inGroups.getD 0 default).bits.size ≤ p := by omega
-    simp only [hp, hp', ↓reduceIte, false_and, true_and, false_or]
-    generalize c.leafCuts.toList.filter (fun e => decide (e.1 = s₀ % c.upv ∧ e.2.1 = p)) = l
-    cases l with
-    | nil =>
-      refine iff_of_false ?_ (fun ⟨_, h, _⟩ => by cases h)
-      repeat' split
-      all_goals simp_all
-    | cons e r =>
-      simp only [List.head?_cons, Option.mem_def, Option.some.injEq, exists_eq_left']
-      split
-      · rename_i ht
-        simp only [Bool.and_eq_true, decide_eq_true_eq] at ht
-        exact iff_of_false (fun h => by cases h) (fun h => by omega)
-      · rename_i ht
-        simp only [Bool.and_eq_true, decide_eq_true_eq, not_and, Nat.not_lt] at ht
-        exact iff_of_true rfl (by omega)
+    rw [ite_eq_right hp]
+    have hR : ∀ (P Q : Prop), ((p < (c.unit.inGroups.getD 0 default).bits.size ∧ P) ∨
+        ((c.unit.inGroups.getD 0 default).bits.size ≤ p ∧ Q)) ↔ Q :=
+      fun _ _ => ⟨fun h => h.elim (fun h => absurd h.1 hp) (fun h => h.2), fun h => Or.inr ⟨hp', h⟩⟩
+    rw [hR]
+    split
+    next e l hf =>
+      simp only [hf, List.head?_cons, Option.mem_def, Option.some.injEq, exists_eq_left', Bool.and_eq_true,
+        decide_eq_true_eq]
+      split <;> simp_all
+    next hf =>
+      refine iff_of_false ?_ (by rw [hf]; simp)
+      split <;> simp
 
 /-- **Δ's source key at a stacked input is the zero exactly when the input reads the zero** (`ZeroIn`). -/
 theorem srcKey_zero_iff {c : Flock.Circuit} {x : ℕ} (hx : x < c.upv * (c.unit.inWords * WORD)) :

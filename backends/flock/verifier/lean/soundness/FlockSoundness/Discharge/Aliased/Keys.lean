@@ -62,11 +62,16 @@ def realize (c : Circuit) (g : ℕ) : Src → ℕ
   | _ => 0
 
 theorem srcAt_ne_pad (c : Circuit) (k p t k' off : ℕ) : srcAt c k p t ≠ .pad k' off := by
-  intro h
-  unfold srcAt at h
-  dsimp only at h
-  repeat' split at h
-  all_goals cases h
+  unfold srcAt
+  split
+  · split
+    · simp
+    · simp only
+      split <;> simp
+  · split
+    · simp only
+      split <;> simp
+    · split <;> simp
 
 /-- **Δ's source is its key's column, or a forced-zero row at the zero key.** -/
 theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
@@ -81,7 +86,7 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
     by_cases hl : (c.leavesIn.getD (s₀ % c.upv) #[])[p]! < 0
     · refine Or.inl ⟨?_, Or.inl ?_⟩ <;> simp only [hl, ↓reduceIte]
     · simp only [hl, ↓reduceIte]
-      split_ifs
+      split
       · exact Or.inr ⟨Src.noConfusion, rfl⟩
       · exact Or.inl ⟨rfl, Or.inl rfl⟩
   · simp only [hp, ↓reduceIte]
@@ -94,7 +99,7 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
         · omega
     · unfold Flat.cutSrc
       simp only [hf]
-      split_ifs
+      split
       · exact Or.inr ⟨Src.noConfusion, rfl⟩
       · exact Or.inl ⟨rfl, Or.inr rfl⟩
 
