@@ -1160,6 +1160,10 @@ def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
+    if ns.thread and (ns.since or ns.handle):
+        raise SlackError("read: --thread reads one thread; it takes neither --since nor --as")
+    if not (ns.thread or ns.since or ns.handle):
+        raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -1284,18 +1288,23 @@ def seen_path(name: str) -> Path:
     return Path(os.environ.get("RESEARCH_SLACK_SEEN") or Path.home() / ".research" / "slack-seen") / name
 
 
-def unread(api: Slack, r: dict) -> list[dict]:
+def unread(api: Slack, r: dict, since: str | None = None) -> list[dict]:
+    """The doorbells after `since`, else after the last one this machine marked read."""
     p = seen_path(r["name"])
-    seen = p.read_text().strip() if p.is_file() else "0"
+    seen = since or (p.read_text().strip() if p.is_file() else "0")
     msgs = api.paged("conversations.replies", "messages", channel=r.get("channel"), ts=r["inbox_ts"], oldest=seen)
     return [m for m in msgs if m.get("ts") not in (r["inbox_ts"], seen) and float(m["ts"]) > float(seen)]
 
 
 def mark_read(name: str, msgs: list[dict]) -> None:
+    """Only ever forward: a read from an older --since leaves the newer mark."""
     if msgs:
         p = seen_path(name)
+        new = max((m["ts"] for m in msgs), key=float)
+        if p.is_file() and float(p.read_text().strip() or 0) >= float(new):
+            return
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(max((m["ts"] for m in msgs), key=float) + "\n")
+        p.write_text(new + "\n")
 
 
 def render_unread(name: str, msgs: list[dict]) -> str:
@@ -1310,8 +1319,9 @@ def render_unread(name: str, msgs: list[dict]) -> str:
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
-    msgs = unread(api, r)
-    dig = digest(api, reg, routes_of(ns), r) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
+    since = getattr(ns, "since", None)
+    msgs = unread(api, r, since)
+    dig = digest(api, reg, routes_of(ns), r, since) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
     if ns.json:
         print(json.dumps(msgs if dig is None else {"doorbells": msgs, "digest": dig}, indent=2, ensure_ascii=False))
     else:
@@ -1350,10 +1360,11 @@ DIGEST_FIRST_H = 24                                              # a first diges
 DIGEST_THREADS_D = 7                                             # replies count in threads started this recently
 
 
-def digest(api: Slack, reg: dict, routes: Routes, r: dict) -> list[dict]:
-    """The posts since `r`'s last digest that its `digest` subscriptions match (what's addressed to it came as doorbells)."""
+def digest(api: Slack, reg: dict, routes: Routes, r: dict, since_ts: str | None = None) -> list[dict]:
+    """The posts since `since_ts`, else since `r`'s last digest, that its `digest` subscriptions match (what's addressed to it
+    came as doorbells)."""
     p = seen_path(f"{r['name']}.digest")
-    since = float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
+    since = float(since_ts) if since_ts else float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
     ch, inboxes, book = r["channel"], routes.inboxes(), {r["name"]: r}
     picked = []
 
@@ -1804,11 +1815,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
     p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
-    p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read")
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--thread", default=None, metavar="TS")
-    g.add_argument("--since", default=None, metavar="TS")
-    g.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
+    p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
+    p.add_argument("--thread", default=None, metavar="TS")
+    p.add_argument("--since", default=None, metavar="TS", help="the channel since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
