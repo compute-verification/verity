@@ -171,4 +171,5 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   included. `test_lean_hidden_outputs.py` verifies four of each set's cases (the honest session and the three false
   statements) from a fetched fixture (`backends/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable
   set needs a pinned upstream build with `flock-circuit replay` (the selftest's `record_replays_offline` already replays
-  in process).
+  in process). `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit
+  (`statement`, and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06`.

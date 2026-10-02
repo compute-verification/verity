@@ -54,6 +54,12 @@ secrets) the environment stands in:
 No value is ever printed. `research data mint-credential` already read the
 same variables.
 
+On a cloud VM a long-lived shell can lose the injected secrets that a fresh
+tmux login shell still has. When a secret named in
+`$CLOUD_AGENT_INJECTED_SECRET_NAMES` is missing from the shell, the store,
+`research queue ready`, node ssh and the Nebius scripts fail and say `rerun
+from a fresh tmux login shell` (`secret_hint.py`).
+
 ## Commands
 
 ~~~text
@@ -381,6 +387,38 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
+
+### Retention of node data: `research keep`, `research retention`
+
+`src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data: `path`
+(relative to the root), `node`, `owner` (a lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority`
+(`low|normal|high|keep`), `preserved` (an art id or null), `regenerate` (a command or null), `why`. It covers everything beneath its
+path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
+gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
+campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
+is written for it, and a sidecar wins.
+
+~~~text
+research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
+research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
+research retention report [--root /workspace] [--depth 2] [--json]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+~~~
+
+`--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
+a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
+path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
+
+Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
+then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
+expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
+`/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are
+read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
+count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
+for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
+no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
+unowned, unpreserved bitsets that nobody could decide to delete.
 
 ### Slack
 

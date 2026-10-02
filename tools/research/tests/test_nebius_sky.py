@@ -481,6 +481,45 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
     assert 'vllm_bootstrap.sh" --cpu --out' in capture and "pod-$(hostname)" in capture     # no native taps; $CMD gets its own copy
 
 
+def test_a_per_pod_copy_goes_once_research_run_exits(tmp_path):
+    """prover-bench, prover-dev and port-capture run $CMD in a copy of the tree of their own (it writes there), ~4.7k inodes each that
+    nothing reads once the pod is gone: node 1 held ~690 of them on Oct 2. The run step removes its copy after `research run` exits,
+    keeps that exit status, and leaves the copy in place while research run runs from it. port-capture keeps the shared copy."""
+    import os
+    import shutil
+    import subprocess
+    import textwrap
+
+    jobs, synced = tmp_path / "jobs", tmp_path / "synced"
+    (synced / "tools/research/src/research/pods/nebius/sky").mkdir(parents=True)
+    shutil.copy(SKY / "job_tree.sh", synced / "tools/research/src/research/pods/nebius/sky/job_tree.sh")
+    (synced / "marker").write_text("x\n")
+    (jobs / "bin").mkdir(parents=True)
+    (jobs / "bin" / "uv").write_text('#!/bin/sh\n[ -f "$SRC/marker" ] && [ "$(pwd)" = "$SRC" ] || exit 99\nexit "$RC"\n')
+    (jobs / "bin" / "uv").chmod(0o755)
+    host = subprocess.run(["hostname"], capture_output=True, text=True, check=True).stdout.strip()
+    env = {**os.environ, "SRC": str(synced), "VY_JOB_TREES": str(jobs / "src"), "CUDA_HOME": str(tmp_path / "cuda"), "CAMPAIGN": "c",
+           "CMD": "true"}
+    shared = subprocess.run(["bash", str(SKY / "job_tree.sh"), str(synced)], capture_output=True, text=True, env=env, check=True).stdout.strip()
+
+    def step(doc: dict, key: str, rc: int) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", "-c", doc[key].replace("/workspace/jobs", str(jobs))], capture_output=True, text=True,
+                              env={**env, "RC": str(rc)}, cwd=tmp_path)
+
+    for name, copy in (("prover-bench", jobs / "src" / host), ("prover-dev", jobs / "src" / host),
+                       ("port-capture", jobs / "src" / f"pod-{host}")):
+        text = (SKY / "jobs" / f"{name}.yaml").read_text()
+        doc = {"setup": textwrap.dedent(text.split("\nsetup: |\n", 1)[1].split("\n\nrun: |\n", 1)[0]),
+               "run": textwrap.dedent(text.split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0])}
+        for rc in (0, 3):
+            if name != "port-capture":
+                assert step(doc, "setup", 0).returncode == 0 and (copy / "marker").is_file(), name
+            r = step(doc, "run", rc)
+            assert r.returncode == rc, (name, rc, r.stderr)
+            assert not copy.exists(), (name, rc)
+            assert (Path(shared) / "marker").is_file(), name
+
+
 def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_lock(tmp_path):
     """job_tree.sh: two pods with the same synced tree get the same copy, made once; a changed file makes a new one. vllm_bootstrap.sh:
     the second call with the same tree, arguments and venv skips pod_bootstrap.sh without opening the host-wide lock."""
