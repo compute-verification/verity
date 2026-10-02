@@ -21,6 +21,8 @@ messages, cut at the coins of the rep's spine, must be the decoder's groups.
 * `DecodesOfRuns`, `DecodesAllOfRuns`, `DecodesOnOfRuns`: `Decodes`, `DecodesAll` and `DecodesOn` at
   `one := fun _ => true`, from each rep's `RepRun`: a run on its rounds' coins whose messages, cut at its spine's coins,
   are the decoder's groups of the rounds and then `fin`'s messages.
+* `DecodesOfRunsAt`: `DecodesOfRuns` for a game with no spine, such as one that goes on past a reject: each rep's spine
+  is chosen at the outcome and holds along the runs that end where its `RepRun` ends (`SpineAt`).
 -/
 
 namespace FlockSoundness.Discharge.PlaysCoin
@@ -74,6 +76,11 @@ def RepRun {P : Type} (g : Game P) (σ : List Exec.Kind) (dec : ℕ → ByteArra
   (∀ rd ∈ rs, rd.coins.size = rd.n) ∧ ∃ ms : List Msg, Plays fOf g ms (rs.map (·.coins)) p ∧
     cut (σ.take (ms.length + rs.length)) ms = roundGroups dec 0 rs ++ [tail]
 
+/-- **A spine at an end.** Every run of `g` that ends in `p` takes steps of the kinds of `σ`, in order: `Spine g σ`
+along the runs that end in `p` only. -/
+def SpineAt {P : Type} (g : Game P) (σ : List Exec.Kind) (p : P) : Prop :=
+  ∀ ts : List Step, PlaysT g ts p → ts.map kindOf <+: σ
+
 /-- A rep's spine at table `T` and link points `pts`: `repShape` at `T`'s dimensions, extra claims and schedule. -/
 noncomputable abbrev repSpine (D : Type) {mPts : ℕ} (T : TabSpec mPts) (pts : Fin 2 → Fin mPts → 𝔽) : List Exec.Kind :=
   repShape 𝔽 𝕂 D T.S.m T.S.kLog (extraClaims T.S T.ptLocal mPts pts).length T.sch
@@ -120,6 +127,18 @@ def DecodesOfRuns : Prop :=
     (∀ pts r, Spine (G pts r) (σ pts r)) →
     (∀ o, pL o → ∃ pend : P × P, RepRun (G o.pts 0) (σ o.pts 0) dec o.rep0 (fin 0 o.proofs) pend.1 ∧
       RepRun (G o.pts 1) (σ o.pts 1) dec o.rep1 (fin 1 o.proofs) pend.2 ∧
+      pg (out (capOf o.rootB) pend (opn o.proofs))) →
+    Decodes out pL pg opn dec (fun _ => true) fin capOf G
+
+/-- **`Decodes` from the reps' runs, with spines at their ends.** `DecodesOfRuns` with each rep's spine chosen at the
+outcome and needed only along the runs that end where its `RepRun` ends (`SpineAt`), not along every run of its game. -/
+def DecodesOfRunsAt : Prop :=
+  ∀ {P OutT Cp Op : Type} [Nonempty Op] {mPts : ℕ} (out : Cp → P × P → Op → OutT) (pL : LiveOut mPts → Prop)
+    (pg : OutT → Prop) (opn : Array ByteArray → Op) (dec : ℕ → ByteArray → List Msg)
+    (fin : Fin 2 → Array ByteArray → List Msg) (capOf : ByteArray → Cp) (G : (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P),
+    (∀ o, pL o → ∃ pend : P × P, ∃ σ₀ σ₁ : List Exec.Kind,
+      SpineAt (G o.pts 0) σ₀ pend.1 ∧ RepRun (G o.pts 0) σ₀ dec o.rep0 (fin 0 o.proofs) pend.1 ∧
+      SpineAt (G o.pts 1) σ₁ pend.2 ∧ RepRun (G o.pts 1) σ₁ dec o.rep1 (fin 1 o.proofs) pend.2 ∧
       pg (out (capOf o.rootB) pend (opn o.proofs))) →
     Decodes out pL pg opn dec (fun _ => true) fin capOf G
 
