@@ -48,7 +48,7 @@ systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q git rsync fio jq python3-venv util-linux
+apt-get install -y -q git rsync fio jq python3-venv util-linux ripgrep
 command -v uv > /dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 if [ ! -x /usr/local/bin/nebius ]; then
   curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | env HOME=/opt/nebius bash
