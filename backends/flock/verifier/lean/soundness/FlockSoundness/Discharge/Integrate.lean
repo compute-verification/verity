@@ -17,7 +17,8 @@ with every guarantee the merged branches prove discharged and every other one a 
   statement (`tableAt_stmtOf`), where `DecodesAll` is stated;
 * `Accepted`: a draw flock-verify accepts sets up (`drawSetup_of_accepts`) when the record's draw proves the drawn units
   and its statement's link points are `mPts`, so there the table is `stmtOf` of the accepted statement
-  (`tableAt_of_accepts`);
-* `Headline`: `flock_headline_exec`, the headline at `Placed.keyProg c hU n` with `pp`, `hConst`, `hZero`, `lay` and
-  `rs` built, and `hHm` (e2e-hm), `hdec` (e2e-exec) and the assumptions of record taken as hypotheses.
+  (`tableAt_of_accepts`); setupH's link points are a function of the draw's size (`setupH_mPts`);
+* `Headline`: `flock_headline_exec`, the headline at `Placed.keyProg c hU n` with `pp`, `hConst`, `hZero`, `lay`, `rs`
+  and `hHm` (`rsAt_computes`, e2e-hm's `keyedRowsOuts_computes`) built, and `hdec` (e2e-exec), the circuit conditions
+  `rs` takes and the assumptions of record taken as hypotheses.
 -/
