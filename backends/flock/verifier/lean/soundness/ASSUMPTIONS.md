@@ -106,9 +106,10 @@ coins.
   a byte source, which the model doesn't have.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
-- **Seed coins are outside it.** M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
+- **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.randomness.derive`). Those sessions also rest on `prf/sha-256` (A4's claim)
-  and on the seed commitment's hiding, and no headline covers them (The headline, its coins).
+  and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
+  coins as above (The headline, its coins).
 
 ## What is restated over the two forms
 
@@ -171,11 +172,14 @@ Once every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane pr
 Boolean-semantics lemma replaces the per-template `RowsCert`.
 
 **Its coins.** The statement is for live uniform OS coins drawn each round: the model's proof coins are uniform and
-drawn after the prover's message, as the coin server's `os` coins are under A6. M0 does not use them today: the non-ZK
-session derives every coin from one OS seed through a SHA-256 PRF (`live/src/bin/flock-circuit.rs`, `config_with` sets
-`cfg.coin_seed = true`; `live/src/coin_seed.rs`), which rests on `prf/sha-256` and the seed commitment's hiding, and the
-headline takes neither. Moving M0 to per-round OS coins is lane proofs-verify-overlap's. Until then the headline is cited
-only for runs that use per-round OS coins.
+drawn after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session draws them under
+`FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
+then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
+`PROTOCOL.md` §7.1). The benches run M0 so by default (`backends/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
+`61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
+from one OS seed through a SHA-256 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
+That rests on `prf/sha-256` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
+only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
 
 ## Other named assumptions
 
@@ -327,7 +331,7 @@ before the session's first coin, not bounds state by state.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
   come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit draw it is
   A3. The theorems, the headline among them, are for these coins.
-- **`seed` coins** (PR #83, `coin-commit/sha256/v1`; M0's non-ZK session today, `cfg.coin_seed`, `coin-commit/sha512`)
+- **`seed` coins** (PR #83, `coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins).
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
