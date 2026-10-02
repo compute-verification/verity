@@ -40,21 +40,22 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   imports it;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
-  its file as it was reviewed. No listed module may declare a pinned theorem or a definition a pinned statement reads.
+  its file as it was reviewed. No listed module may declare a pin or a definition a pin reads.
   The package has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
 - the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
-- the pinned theorems say what their records say (below);
+- the pins say what their records say (below);
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
-- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
-  that skipped the kernel shows no axiom, and only the replay catches it. The replay also walks the environment it
-  checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
-  No `#print axioms` output is parsed anywhere. A replay killed by a signal (out of memory) is reported as a kill, not
-  as a verdict;
+- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
+  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS`, checked against the import and the
+  declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
+  The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
+  from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
+  (out of memory) is reported as a kill, not as a verdict;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below);
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
@@ -69,7 +70,8 @@ through the kernel into an empty environment. It needs one module per root and a
 every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
 ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
-`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain (`--build`
+`--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/lean` suite runs them, only
+when `tools/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
 installs it first, so a machine without elan works), must pass clean and fail once for each violation in
 `tests/fixtures/violations.json`. Among them:
 
@@ -110,21 +112,21 @@ installs it first, so a machine without elan works), must pass clean and fail on
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
-- `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
+- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pin: its named assumptions.
+- `meaning` (default `roots`): the modules whose definitions a pin's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
   adds the `digest` of the module's file. Any later edit of the file fails the audit until someone has reviewed its
   compile-time code and `--update` records the new digest, and `--update` lists the module among what a reviewer reads.
-  No listed module may declare a pinned theorem or a definition a pinned statement reads: a term elaborator, a notation
+  No listed module may declare a pin or a definition a pin reads: a term elaborator, a notation
   or a macro there could change what a statement means. A proof-only tactic belongs in a module of its own.
 - `dependency_unchecked`: the modules of fetched packages (for a lakefile, `<package>/lakefile.lean`) whose source may
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
-  build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
-  definitions the pinned statements read, with a hash each, the pins that read them, and a `digest` of those hashes (which
+- `pins`: the guarantees, the theorems a document or a PR cites as proved (README "Glossary"), and any lemma pinned
+  beside them. `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions
+  among the hypotheses, a hash of the type, and for each module the definitions the pins read, with a hash each, the pins that read them, and a `digest` of those hashes (which
   the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
   it depends on, cannot change without a visible diff of this file. A record holds the statement, not the proof: pin a
   `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
@@ -137,16 +139,29 @@ installs it first, so a machine without elan works), must pass clean and fail on
 
 **A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
 and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
-a Merkle binding theorem vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
+a Merkle binding guarantee vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
 change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
-pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The merge handoff
+pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The PR description
 names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
 and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
-reviewer.
+reviewer. Definitions are compared by name, so one read from another module with the same content is counted on one line.
+
+**A move is not a change.** When declarations move (pins renamed, the definitions they read renamed or moved to other
+namespaces, a statement restated as a `def G : Prop` that a theorem `t : G` proves), write the moves as a JSON object of
+old names to new ones, each a declaration or a namespace (the longest prefix applies), and run
+`audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's pins are renamed, and
+`Facts.lean` writes each pin's statement and each definition it reads once more with the build's names mapped back to
+the old ones, a statement whose type is a `Prop` definition under `meaning` also with that definition unfolded. The review
+compares those texts with the records of the old names: a pin that says what its record says gets one line, "the same
+statement under its old names" (moved from its old name, or restated as `G`, which then needs no reading of its own), and the
+definitions the same under their old names are counted on one line; neither needs a reviewer. Everything else prints as
+without the map. A map whose new names nest differently from its old ones is refused, and so is one under which two
+constants of those texts (or two pins) would have one old name, since the comparison could not tell them apart; an old
+theorem kept under its old name as the lemma behind a new pin is no conflict.
 
 ## Merging records: `merge.py`
 
-Two branches that each pin theorems both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
+Two branches that each pin guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a pin, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
@@ -164,9 +179,12 @@ side's new pin reads it) fails there. `merge.py --normalize FILE` recomputes a r
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
-A named assumption, or a lemma we prove by hand, may be proved upstream one day, and the proof may arrive as a different
-theorem, with a different constant, under a name nobody watches. So the watch list names what a statement is about, and
-the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
+A named assumption, or a lemma we prove by hand, may be proved upstream one day if its statement can be written in a
+dependency's constants, and the proof may arrive as a different theorem, with a different constant, under a name nobody
+watches. One stated over the package's own definitions has no entry, since no upstream theorem can mention them, and
+neither has one about a single number (PoUS's `PrimeP16448`: `Nat.Prime (2 ^ 16448 - 21065)`), since its entry could
+mention only `Nat.Prime` and would match every theorem about primes. So the
+watch list names what a statement is about, and the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
 
 ~~~json
 "upstream": {

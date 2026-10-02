@@ -35,12 +35,28 @@ import agree  # noqa: E402
 SLOTS = threading.Semaphore(1)
 
 
+def store_env():
+    """The store CLI's environment. Inside a recorded check's steps, which carry no store credentials, it is given the run's
+    custody key that `$CHECK_STORE_CUSTODY` names (`tools/check/check.py`, "The evidence store"), when no store config is set
+    here, as integrations/vllm's `store_io` does: the key goes into that subprocess's environment only."""
+    env = dict(os.environ)
+    custody = Path(env["CHECK_STORE_CUSTODY"]) if env.get("CHECK_STORE_CUSTODY") else None
+    if (custody is None or env.get("RESEARCH_STORE_CONFIG") or (Path.home() / ".research" / "store.toml").is_file()
+            or not ((custody / "store.toml").is_file() and (custody / "cred.json").is_file())):
+        return env
+    cred = json.loads((custody / "cred.json").read_text())
+    env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+    env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
+    return env
+
+
 def fetch(art, store):
     """`art:<id>[/path]` under store/<id>/ (fetched from the evidence store unless present); a file artifact is its one file."""
     ref, _, path = art.partition("/")
     d = store / ref.split(":", 1)[1]
     if not d.exists():
-        subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], check=True, capture_output=True)
+        subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], check=True, capture_output=True,
+                       env=store_env())
     if path:
         return d / path
     files = list(d.iterdir())
