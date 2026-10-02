@@ -11,22 +11,23 @@ K_BITS = 9.12e7  # the inference-only policy's budget per isolation unit: α·Γ
 
 
 def free_patterns(buckets: int, allocation: int) -> int:
-    """Lean `card_free`: occupancies if the sender could pick slots within a bucket, `2^(T·r)`."""
+    """Lean `SecurityProofs.CardFree`: occupancies if the sender could pick slots within a bucket, `2^(T·r)`."""
     return 2 ** (buckets * allocation)
 
 
 def left_packed_patterns(buckets: int, allocation: int) -> int:
-    """Lean `card_leftPacked`: left-packed occupancies, `(r + 1)^T`."""
+    """Lean `SecurityProofs.CardLeftPacked`: left-packed occupancies, `(r + 1)^T`."""
     return (allocation + 1) ** buckets
 
 
 def all_released_patterns(buckets: int, frames: int) -> int:
-    """Lean `card_counts_eq_le`: at most `binom(T + M − 1, M)` count vectors release exactly M frames."""
+    """Lean `SecurityProofs.CardCountsEqLe`: at most `binom(T + M − 1, M)` count vectors release exactly M frames."""
     return math.comb(buckets + frames - 1, frames) if buckets else int(frames == 0)
 
 
 def available_patterns(buckets: int, frames: int) -> int:
-    """Lean `encard_fifoGrids_le_of_available`: at most `binom(T + M, M)` grids when at most M frames are enqueued."""
+    """Lean `SecurityProofs.EncardFifoGridsLeOfAvailable`: at most `binom(T + M, M)` grids when at most M frames are
+    enqueued."""
     return math.comb(buckets + frames, frames)
 
 
@@ -45,8 +46,9 @@ def unbound_bits(buckets: int, allocation: int, frame_bits: int) -> float:
 
 def accepted_bound_bits(content_bits: float, sync_bits: float, windows: int, jitter_classes: int = 1,
                         steps: int = 0) -> float:
-    """Lean `encard_accSeqs_le_sync`: accepted sequences number at most `#Ac · #Sync^W · D^n`, which is
-    `A_c + W·log2 #Sync + n·log2 D` bits. It is 0 for a fixed clock and J (`encard_accSeqs_le_fixedClock`)."""
+    """Lean `SecurityProofs.EncardAccSeqsLeSync`: accepted sequences number at most `#Ac · #Sync^W · D^n`, which is
+    `A_c + W·log2 #Sync + n·log2 D` bits. It is 0 for a fixed clock and J
+    (`SecurityProofs.EncardAccSeqsLeFixedClock`)."""
     return content_bits + windows * sync_bits + steps * math.log2(jitter_classes)
 
 

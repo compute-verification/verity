@@ -1,7 +1,7 @@
-"""Pearl-C4's reference verifier on real activations (CPU), per linear of a `pearlc_capture.py` directory: X, the linear's
-input rows (float32 holding BF16 exactly), and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture`
-npz file (X and W of each linear as float32 holding BF16), judged as the verifier (`verity_pouw.schemes.pearl_c4`) judges
-a unit:
+"""Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
+PROTOCOL.md), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
+and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture` npz file (X and W of each linear as
+float32 holding BF16), judged in the clear as the scheme (`verity_pouw.schemes.pearl_c4`) judges a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);

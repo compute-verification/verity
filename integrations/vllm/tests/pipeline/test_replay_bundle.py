@@ -118,6 +118,31 @@ def test_a_store_written_beside_the_checks_is_the_store_defer_writes(tmp_path):
     assert {k: v for k, v in ctx.items() if k != "engine_of_record"} == {k: v for k, v in ctx0.items() if k != "engine_of_record"}
 
 
+def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_returns(tmp_path, monkeypatch):
+    """A leased Commit gives its GPU back right after `start` (`gpu_lease.release`): nothing the bundle carries is read from the
+    model or the engine after it returns."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+    from tests.commit.test_store_dump import STEPS
+    from verity_vllm.check.replay import driver
+    from verity_vllm.pipeline.timeline import Timeline
+
+    com, rc = commit_steps(STEPS)
+    com.model = torch.nn.Module()
+    com.model.register_buffer("cos", torch.arange(4, dtype=torch.int32))
+    com.weights_tree = {"root": (rc.weight_registration or {}).get("root"), "names": [["w", "bfloat16", [2], 4], ["cos", "int32", [4], 16]]}
+    args = SimpleNamespace(replay_deferred="full", replay_bundle_overlap=1, retain="host", required_manifest=None, openings=64)
+    started, row, deferred = RB.start(tmp_path, 1, com, rc, args, None), {"commit": {}}, {}
+    com.model = None
+    monkeypatch.setattr(driver, "engine_facts_of_record", lambda: pytest.fail("the engine's facts were read after start"))
+    assert RB.defer(tmp_path, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={},
+                    stop_of_record=None, ids_full=None, declaration=None, required_classes=[], row=row, deferred=deferred, started=started)
+    w = RB.partial(tmp_path, 1) / "weights"
+    assert deferred[1]["engine_of_record"] == started.engine and started.engine
+    assert (w / "extra" / "1.bin").read_bytes() == torch.arange(4, dtype=torch.int32).numpy().tobytes()
+    assert json.loads((w / "tree.json").read_text())["extra"] == {"cos": 1}
+
+
 @pytest.mark.parametrize("kw", [{"replay_deferred": None}, {"replay_deferred": "slim"}, {"replay_bundle_overlap": 0}, {"retain": "device"},
                                 {"replay_bundle_cap_gb": 0}])
 def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_full(kw):
