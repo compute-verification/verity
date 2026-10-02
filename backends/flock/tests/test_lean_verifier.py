@@ -810,10 +810,11 @@ def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     assert p.stdout.splitlines() == want
 
 
-def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4) -> str:
+def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset = frozenset()) -> str:
     """A statement of bit-row ports of lengths ``bits``, staged in ``d`` (``circuit.txt``, ``pub.bin``): one unit reads every
     leaf, its output the XOR of all leaves with AND(bit 0, bit 1) of the first added at bit 0; the rows random below their
-    lengths (seed 0), the salts under key ``k`` × 32. ``edit`` changes META before the public file is staged for it."""
+    lengths (seed 0), the salts under key ``k`` × 32. The ports named in ``seg`` are `hm96-sha512/row-seg/v1` rows. ``edit``
+    changes META before the public file is staged for it."""
     import numpy as np
 
     from verity_flock import circuit as FC
@@ -835,7 +836,7 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4) -> str:
                       IL.layout(C, [f"in{j}" for j in range(len(ins))], ["out0"]))
     CS.cache_slot_circuits()
     sub, iset = CS._shims("toy", json.dumps(bits).encode(), len(bits))
-    text = FC.compose(low, sub, port_bits=bits)
+    text = FC.compose(low, sub, port_bits=bits, seg_ports=seg)
     if edit is not None:
         head, meta_line, rest = text.split("\n", 2)
         meta = json.loads(meta_line[5:])
@@ -851,7 +852,7 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4) -> str:
     assert int(ok) == (1 << n) - 1
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, None, d / "pub.bin", b"k" * 32, rows=rows, outs={"out": got.astype(np.uint16)})
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs={"out": got.astype(np.uint16)})
     return text
 
 
@@ -910,15 +911,15 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
             m[k] = m[k][:4]
 
     cases = {
-        "a wrong length, its prefix": (at(["row_schemas", 2, 1], 882), "META: a row's constants are not sha512/row/v2's"),
+        "a wrong length, its prefix": (at(["row_schemas", 2, 1], 882), "META: a row's constants are not sha512/row/v2 or sha512/row-seg/v1's"),
         "a wrong length, its words": (at(["row_schemas", 2, 1], 897),
                                       "port p2: a row of 897 bits is 57 u16 leaves and 1 compressions, not META's 56 and 0"),
         "2^64": (at(["row_schemas", 2, 1], 1 << 64), "META: a bit row's length is not a u64"),
         "past MAX_COMPS": (at(["row_schemas", 2, 1], (1 << 64) - 1), "port p2: a row of 18446744073709551615 bits is"),
         "v1 prefix": (lambda m: m["rows"][2].update(prefix=v1["prefix"], midstate=v1["midstate"]),
-                      "META: a row's constants are not sha512/row/v2's"),
+                      "META: a row's constants are not sha512/row/v2 or sha512/row-seg/v1's"),
         "padding": (at(["rows", 2, "pad"], lambda s: s[:-1] + format(int(s[-1], 16) ^ 1, "x")),
-                    "META: a row's constants are not sha512/row/v2's"),
+                    "META: a row's constants are not sha512/row/v2 or sha512/row-seg/v1's"),
         "both keys": (at(["row_schema"], "hm96-sha512/row/v1"), "META: rows are not frame-v3-sha512/hm96-sha512"),
         "v1 entry": (at(["row_schemas", 2, 0], "hm96-sha512/row/v1"), "META: row_schemas: each port's is"),
         "one short": (at(["row_schemas"], lambda s: s[:-1]), "META: row_schemas is not one [schema, bits] per port"),
@@ -934,6 +935,56 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     d = tmp_path / "dummy"
     p = statement(d, _bit_row_toy([0, 1, 881, 887, 889, 895], d, edit=at(["dummy", "bc", 2], v1_zero)))
     assert p.returncode != 0 and "the pinned dummy b || c of row p2 is not the padding instance's row" in p.stdout + p.stderr, p.stdout + p.stderr
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_refused(tmp_path):
+    """Statements of `hm96-sha512/row-seg/v1` ports beside v2 ones (lengths 8193 and 65,536 with 881; and 0, 1, 8192 and 24,581
+    all segmented) have the statement digests a proving build of `flock-circuit statement` gives them, seeded and under
+    `FC_COINS=os`, so the two verifiers' segment chains, outer messages, row wires and the per-port `row_leaf_in_circuit`
+    identity agree. A META that differs is refused with the Rust verifier's message: a segmented row's length (its prefix, or
+    its words), a seg port read as v2 or a v2 port as seg (their compressions), its outer padding or midstate."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def statement(d, text, *extra):
+        (d / "c.txt").write_text(text)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
+
+    digests = {}
+    for i, (bits, seg) in enumerate([([8193, 881, 65536], {"p0", "p2"}), ([0, 1, 8192, 24581], {"p0", "p1", "p2", "p3"})]):
+        d = tmp_path / f"s{i}"
+        text = _bit_row_toy(bits, d, seg=frozenset(seg))
+        for coins in ("seed", "os"):
+            p = statement(d, text, "--coins", coins)
+            assert p.returncode == 0, p.stdout + p.stderr
+            digests[i, coins] = json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"]
+    assert digests == {
+        (0, "seed"): "b9b762a000220467da92cb032c3f0059193c196340d784b1dfd8fbde9f6e67d03fae2d72a8ac6f4f068f94abfe09030cb17d66e10a85ec1f80d0b1793ad21b09",
+        (0, "os"): "1bede19b999228b0515cd7def8b7e62a97e003af303cec10ed1415496970b170d1a3479333ea9dc1ad238ac653707b6b91947b6984fa7b8798c322b77bcb8f3b",
+        (1, "seed"): "44bcf81c104d03f26ededccce2df199f2185f433867c9396f700f29ea1637f6bc9257014aa9a07862904b59953cd775833aa794c6d18dcdb81f50679e2c645a6",
+        (1, "os"): "92071601dd7ca72a7e31105e5df1290b99a86cea829843b4a900b08424b531ecd8484e146e757c756eb4439999895026fad85dfebd7c529e739ad1fc7380f028"}
+
+    d = tmp_path / "s0"
+    head, meta_line, rest = (d / "c.txt").read_text().split("\n", 2)
+    bad = "META: a row's constants are not sha512/row/v2 or sha512/row-seg/v1's"
+    cases = {
+        "a wrong length, its prefix": (lambda m: m["row_schemas"][0].__setitem__(1, 8194), bad),
+        "a wrong length, its words": (lambda m: m["row_schemas"][0].__setitem__(1, 8209),
+                                      "port p0: a row of 8209 bits is 514 u16 leaves and 11 compressions, not META's 513 and 11"),
+        "seg read as v2": (lambda m: m["row_schemas"][0].__setitem__(0, "hm96-sha512/row/v2"),
+                           "port p0: a row of 8193 bits is 513 u16 leaves and 8 compressions, not META's 513 and 11"),
+        "v2 read as seg": (lambda m: m["row_schemas"][1].__setitem__(0, "hm96-sha512/row-seg/v1"),
+                           "port p1: a row of 881 bits is 56 u16 leaves and 1 compressions, not META's 56 and 0"),
+        "outer padding": (lambda m: m["rows"][0].__setitem__("pad", m["rows"][0]["pad"][:-1] + "1"), bad),
+        "outer midstate": (lambda m: m["rows"][0]["midstate"].__setitem__(0, "0" * 16), bad),
+    }
+    for name, (change, why) in cases.items():
+        meta = json.loads(meta_line[5:])
+        change(meta)
+        p = statement(d, f"{head}\nMETA {json.dumps(meta)}\n{rest}")
+        assert p.returncode != 0 and why in p.stdout + p.stderr, (name, p.stdout + p.stderr)
 
 
 TOY_EXTRACTOR = r"""import FlockProofs

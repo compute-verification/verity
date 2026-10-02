@@ -2349,6 +2349,9 @@ impl Stmt {
                     let (mut k, mut digests) = (0, Vec::new());
                     let mut chain = |cv: &mut [u64; 8], msg: &[u8], blocks: usize, k: &mut usize| {
                         for blk in msg.chunks(128).take(blocks) {
+                            if t.cv_flip && first && *k == 1 && chained == Some(p) {
+                                cv[0] ^= 1;
+                            }
                             let (slot, sub) = where_[p][*k];
                             let w = &mut si[g * n_sha + slot];
                             put(w, sin[2 * sub].0, &cv[..]);
@@ -2361,6 +2364,9 @@ impl Stmt {
                         let at = j * (ROW_SEG_BITS / 8);
                         let msg = [&row[at..at + m.div_ceil(8)], &rc.segs[j].tail[..]].concat();
                         let mut cv = rc.segs[j].midstate;
+                        if t.midstate_flip && first && p == 0 && j == 0 {
+                            cv[0] ^= 1;
+                        }
                         chain(&mut cv, &msg, nb, &mut k);
                         digests.extend(cv.iter().flat_map(|x| x.to_be_bytes()));
                     }
