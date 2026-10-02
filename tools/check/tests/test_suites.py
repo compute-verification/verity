@@ -162,6 +162,32 @@ def test_a_lock_or_metadata_change_rekeys_only_the_suites_it_resolves_to(tmp_pat
     assert all(_keys(S)[n] != after[n] for n in ("a", "b"))
 
 
+def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_path, monkeypatch):
+    """`--changed REV`, the quick tier `research queue ready` runs: a suite whose inputs, runner or resolution the change moves."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    assert touched() == []
+    (tmp_path / "a" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")      # uncommitted, and it counts
+    assert touched() == ["a"]
+    (tmp_path / "a" / "tests" / "test_a.py").unlink()
+    _lock(tmp_path, numpy="2.1", pytest="8.0")                     # only a resolves to numpy
+    assert touched() == ["a"]
+    _lock(tmp_path, numpy="2.0", pytest="8.1")                     # every suite runs with pytest
+    assert touched() == ["a", "b"]
+    _lock(tmp_path, numpy="2.0", pytest="8.0")
+    assert touched() == []
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "suites.py").write_text("# the runner\n")
+    assert touched() == ["a", "b"]
+
+
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
     _workspace(tmp_path)
     S = _suites(monkeypatch, tmp_path)

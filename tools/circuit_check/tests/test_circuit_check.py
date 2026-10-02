@@ -53,6 +53,19 @@ def test_every_registered_definition_is_checked():
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
 
+def test_every_operation_is_checked_and_reaches_no_table_outside_the_library():
+    """The guard does not visit an operation (`verity.ml.operations`), so a table an operation reached would be hidden: every
+    listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
+    from verity.ir import constants as K
+    from verity.ml import operations as O
+
+    ops = [fn for fn in SUITE.values() if O.is_operation(fn)]
+    assert {fn.base_id for fn in ops} == O.OPERATIONS
+    for fn in ops:
+        held = sorted(p.id for p in TG.reachable([fn]).values() if K.held_tables(p, O.is_library_table))
+        assert not held, (fn.id, held)
+
+
 def test_every_template_is_checked():
     from verity_numerical.bench import templates as TM
 

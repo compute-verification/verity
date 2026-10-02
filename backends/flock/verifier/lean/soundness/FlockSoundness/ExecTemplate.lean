@@ -20,8 +20,8 @@ namespace FlockSoundness
 structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop where
   pre : ∃ more, c.nets.toList = (#[("root", t.root)] ++ t.layouts.map fun (e : String × Net × ℕ) => (e.1, e.2.1)).toList ++ more ∧
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
-  portWords : ∀ p ∈ c.ports.toList, 2 * p.words = 128 * p.chunks
+  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
+  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
@@ -93,19 +93,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   simp (config := { zeta := false }) only [jpL] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨s2, hlook, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets2 at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpS at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpS] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨ports, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, hpcheck, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨listed, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpR] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨ports, hrp, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h
   replace h := ite_throw_ok h
@@ -266,18 +254,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
         cases hw
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
-  -- the ports
-  have hports : ∀ p ∈ ports.toList, 0 < p.chunks ∧ 2 * p.words = 128 * p.chunks := by
-    intro p hp
-    have := forIn_array_yield_ok (fun a s hs => by
-      split at hs
-      · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
-      · cases hs; rfl) hpcheck p hp
-    split at this
-    · obtain ⟨_, hx, -⟩ := except_bind_ok this; cases hx
-    · rename_i hbad
-      simp only [Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, not_or, not_not] at hbad
-      omega
   -- the ranges' nets
   have hkinds : ∀ r ∈ ranges.toList, ∀ i, r.kind = .net i → i < nets2.size := by
     intro r hr i hi
@@ -318,7 +294,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          ports := fun p hp => (hports p hp).1, portWords := fun p hp => (hports p hp).2, unitNet := findIdx?_lt hunit
+          portWords := rowPorts_words hrp, unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
