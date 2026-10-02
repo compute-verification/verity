@@ -1111,14 +1111,23 @@ def idle_readings(minutes: dict, now: datetime, spans: dict | None = None) -> li
 
 COV_TIMELINES = Path("/workspace/jobs/cov")  # <key>/<row>/timeline.jsonl: circuits' rows on node 1 (verity-sweep/timeline/v1)
 LEASE_PHASES = ("engine.build", "prep.warmup_instrumented", "validate.weights_of_record_digests")
+#: a lease open longer than this is a Commit that died holding it, and counts no further
+LEASE_OPEN_MAX_S = 4 * 3600
 
 
-def commit_leases(paths) -> list[tuple[float, float, list[tuple[str, float, float]]]]:
+def _lease(spans: dict, a: float, b: float) -> tuple[float, float, list[tuple[str, float, float]]]:
+    return (a, b, [("work" if s.startswith("work.") else s, x, y) for s, xs in spans.items() for x, y in xs
+                   if s in LEASE_PHASES or s.startswith("work.")])
+
+
+def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str, float, float]]]]:
     """(start, end, [(phase, a, b)...]) for every Commit's GPU lease in these timelines.
 
     circuits' definition (`/workspace/research/circuits-held-idle/hi-lease.py`): inside a `stage.commit` window the lease runs
     from the end of `gpu_lease.wait` to the end of `gpu_lease.release`, and its phases are LEASE_PHASES plus `work` (every
-    `work.*` span). Every Commit attempt in a timeline counts, not only its last."""
+    `work.*` span). Every Commit attempt in a timeline counts, not only its last.  An hour's line is written once, as the hour
+    ends, so a lease still open at `now` runs to `now` (up to LEASE_OPEN_MAX_S), its open phases with it: a Commit writes nothing
+    while a work phase runs (gm176's took 2,077 s)."""
     out = []
     for p in paths:
         try:
@@ -1127,17 +1136,13 @@ def commit_leases(paths) -> list[tuple[float, float, list[tuple[str, float, floa
             continue
         opened: dict = {}
         spans: dict = {}
-        inside = False
+        inside = released = False
         for e in evs:
             stage, ev, t = e.get("stage"), e.get("ev"), e.get("t")
             if stage == "stage.commit":
-                inside, opened = ev == "start", {}
+                inside, opened, released = ev == "start", {}, False
                 if inside:
                     spans = {}
-                elif ev == "end" and "gpu_lease.wait" in spans and "gpu_lease.release" in spans:
-                    a, b = spans["gpu_lease.wait"][0][1], spans["gpu_lease.release"][0][1]
-                    phases = [(s, x, y) for s, xs in spans.items() for x, y in xs if s in LEASE_PHASES or s.startswith("work.")]
-                    out.append((a, b, [("work" if s.startswith("work.") else s, x, y) for s, x, y in phases]))
                 continue
             if not inside or not isinstance(t, (int, float)):
                 continue
@@ -1145,6 +1150,16 @@ def commit_leases(paths) -> list[tuple[float, float, list[tuple[str, float, floa
                 opened[(e.get("pid"), stage)] = t
             elif ev == "end" and (e.get("pid"), stage) in opened:
                 spans.setdefault(stage, []).append((opened.pop((e.get("pid"), stage)), t))
+                if stage == "gpu_lease.release" and "gpu_lease.wait" in spans and not released:
+                    out.append(_lease(spans, spans["gpu_lease.wait"][0][1], t))
+                    released = True
+        if inside and not released and "gpu_lease.wait" in spans:
+            a = spans["gpu_lease.wait"][0][1]
+            b = max(a, min(now, a + LEASE_OPEN_MAX_S))
+            live = {s: list(xs) for s, xs in spans.items()}
+            for (_, s), x in opened.items():
+                live.setdefault(s, []).append((x, b))
+            out.append(_lease(live, a, b))
     return out
 
 
@@ -1174,7 +1189,7 @@ def add_phases(readings: list[dict], now: datetime, root: Path = COV_TIMELINES, 
     `outside_leases`: the lane's held GPU-hours no Commit lease covers (a whole-GPU pod, a job that isn't a Commit)."""
     since = now.timestamp() - (hours + 1) * 3600
     paths = [p for p in root.glob("*/*/timeline.jsonl") if p.stat().st_mtime >= since]
-    by_hour = phases_by_hour(commit_leases(paths))
+    by_hour = phases_by_hour(commit_leases(paths, now.timestamp()))
     for r in readings:
         if r["node"] == "node 1" and r["lane"] == "circuits":
             p = dict(by_hour.get(r["hour"]) or {"leases": 0, **{s: 0.0 for s in (*LEASE_PHASES, "work", "other")}})
