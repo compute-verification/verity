@@ -1441,9 +1441,13 @@ every row and leaves them as they are.
   output commits that row under that salt, so its input leaf `b ‖ c` is the producer's output leaf: a consumer links the two
   statements by equal leaves, without opening either. The verifier checks each statement alone.
 - **Agreement.** Upstream's pinned build (PR #83) has no hidden-output statement, so the replayed sets (§18) stay on the
-  statements they were recorded under. The hidden-output statements agree with M0 on its live selftest records: of each
-  set's recorded sessions the verifier accepts the honest ones (so its statement digest and Σ are the prover's) and refuses
-  every negative, `output_row_committed_false` (an output row's committed `b ‖ c` not the circuit's outputs) included.
+  statements they were recorded under, and check's agreement step replays none of these. The hidden-output statements agree
+  with M0 on its live selftest records (`vectors.json` `live.sets` 2 to 5, `ci.py --live`): of each set's recorded sessions
+  the verifier accepts the honest ones (so its statement digest and Σ are the prover's) and refuses every negative,
+  `output_row_committed_false` (an output row's committed `b ‖ c` not the circuit's outputs) included. `check` verifies four
+  cases of each set (`test_lean_hidden_outputs.py`). A replayable set needs an upstream build that replays these sessions
+  offline (`flock-circuit replay`; the selftest's `record_replays_offline` already does so in process), pinned in
+  `upstream.json`.
 
 ## 17. Acceptance, assumptions and trust
 
