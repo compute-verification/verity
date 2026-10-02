@@ -280,7 +280,8 @@ Pc4TileHiddenDef = CompositeDefinition(
 #: each unit's ports under hiding, by role: its C-Flock-committed rows, each (schema, role, ports) whose words are its ports'
 #: in order (`leaves.words_*`; parameters by name, outputs by index, row r of each where a tile reads TM or TN), inputs and
 #: outputs alike, and its public input regions, each parameter's anchor (`DERIVATIONS`).  Every port is in exactly one.  A
-#: row's role is its tree's, which the row's registration domain binds: its leaf (`leaves.commit`) does not name it.
+#: row's role is its tree's, which the row's registration domain binds and which picks its schema (`leaves.ROW_SCHEMA`: a
+#: per-call row is a row-seg row): its digest (`leaves.commit`) does not name it.
 PORTS = {
     "row_b": {"rows": (("bf16", ROLE_W, ("x",)), ("nvfp4-p", ROLE_W, (0, 1, 2)), ("ok", ROLE_W, (3,))),
               "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}},

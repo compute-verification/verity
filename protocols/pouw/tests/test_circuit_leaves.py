@@ -1,9 +1,12 @@
 """The tile checks' committed rows and tile digest (`verity_pouw.circuit.leaves`): the row schemas' words and commit strings
 are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor's memory, a row's commit string is core's
-over `sha512/row/v1` (role X) or `sha512/row/v2` at every padding edge, and the tile digest in gates is the pinned one and
-`pearl_c.leaf`.  C-Flock's tests recompute the vectors through its own ports (``backends/flock/tests/test_pouw_rows.py``)."""
+over `sha512/row-seg/v1`, `sha512/row/v1` (role X) or `sha512/row/v2` at every padding and segment edge, the pinned row-seg
+rows are rebuilt from the spec and core's own row-seg vectors are PoUW's rows, and the tile digest in gates is the pinned
+one and `pearl_c.leaf`.  C-Flock's tests recompute the serial rows' vectors through its own ports
+(``backends/flock/tests/test_pouw_rows.py``)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import types
@@ -11,8 +14,10 @@ import types
 import pytest
 
 import pouw_rows_vectors as V
-from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, bit_row, nvfp4_row_bytes, row_bytes, sha512_row_digest,
-                                        sha512_row_v2_digest)
+from verity.commitments.frame_v3 import vectors_sha512 as FV
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, bit_row,
+                                        nvfp4_row_bytes, row_bytes, sha512_row_digest, sha512_row_seg_digest,
+                                        sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.evaluation import evaluate
 from verity.ml.scalar import BitAnd, SelectBf16
 
@@ -55,19 +60,87 @@ def test_the_rows_are_the_tensors_bytes():
     assert bit_row((c8, 8), (p, 16)) == (rows["fp8-p"][1], 16 * L.ROW_WORDS["fp8-p"](k))
 
 
-@pytest.mark.parametrize("row, sizes", [("bf16", (64, 128, 192)), ("nvfp4-p", (2, 16, 54, 56, 118, 120)),
-                                        ("tile", (16,))], ids=["v1", "v2", "tile"])
-def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, sizes):
-    """`commit` is `hm96.SHA512.commit_string` of the row's `sha512/row/v1` digest (role X, whole blocks) or its
-    `sha512/row/v2` digest: v2 rows that pad into one block after the prefix (54 words), into two (56), and across the next
-    edge (118, 120)."""
-    rng = random.Random(len(row))
+@pytest.mark.parametrize("row, role, sizes", [("bf16", ROLE_W, (64, 128, 192)), ("nvfp4-p", ROLE_W, (2, 16, 54, 56, 118, 120)),
+                                              ("tile", ROLE_X, (16,)), ("bf16", ROLE_X, (1, 64, 511, 512, 513, 1024, 1025)),
+                                              ("nvfp4-p", ROLE_X, (82, 1216))], ids=["v1", "v2", "tile", "seg", "seg-packed"])
+def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
+    """`commit` is `hm96.SHA512.commit_string` of the row's `sha512/row/v1` digest (role X, whole blocks), its
+    `sha512/row/v2` digest, or its `sha512/row-seg/v1` digest of the words' bit row: v2 rows that pad into one block after
+    the prefix (54 words), into two (56), and across the next edge (118, 120); row-seg rows of one short segment, one
+    full one (512 words), a full one and one word (513), two full and two and a word, and nvfp4-p's at k = 64 and 4,096."""
+    rng = random.Random(len(row) + role)
     for n in sizes:
         words, y = [rng.getrandbits(16) for _ in range(n)], bytes(rng.getrandbits(8) for _ in range(192))
-        x = (sha512_row_digest(words, 16, ROLE_X) if L.ROW_SCHEMA[row] == SCHEMA_HM96_SHA512_ROW
+        schema = L.ROW_SCHEMA[row, role]
+        x = (sha512_row_digest(words, 16, ROLE_X) if schema == SCHEMA_HM96_SHA512_ROW
+             else sha512_row_seg_digest(row_bytes(words, 16), 16 * n) if schema == SCHEMA_HM96_SHA512_ROW_SEG
              else sha512_row_v2_digest(row_bytes(words, 16), 16 * n))
-        assert L.row_digest(row, words) == x, n
-        assert L.commit(row, words, y) == L.INST.commit_string(L.KEY, x, y), n
+        assert L.row_digest(row, role, words) == x, n
+        assert L.commit(row, role, words, y) == L.INST.commit_string(L.KEY, x, y), n
+
+
+def test_every_per_call_row_but_ok_and_the_tile_is_a_row_seg_row():
+    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`) are exactly the rows with a schema, and the row-seg ones are
+    the per-call rows (role X) but ok and the tile digest: A_i and A′_i ‖ P_A,i of both checks.  Every registered row
+    (role W) keeps its serial schema."""
+    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS) for unit in ports.values() for row, role, _ in unit["rows"]}
+    assert used == set(L.ROW_SCHEMA)
+    assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_SEG} == {
+        (row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")}
+
+
+SEG_TAG, SEGMENT_TAG = b"verity/sha512-row-seg/v1\0", b"verity/sha512-row-seg/v1/segment\0"
+
+
+def _block(tag: bytes, *fields: tuple[int, int]) -> bytes:
+    return (tag + b"".join(v.to_bytes(n, "big") for v, n in fields)).ljust(128, b"\0")
+
+
+@pytest.mark.parametrize("case", [c for c in PINNED["cases"] if c["row_schema"] == SCHEMA_HM96_SHA512_ROW_SEG],
+                         ids=lambda c: c["case"])
+def test_the_pinned_row_seg_rows_are_the_spec_by_hand(case):
+    """A per-call row's pinned vector is frame-v3's `sha512/row-seg/v1` (its PROTOCOL.md) built by hand: the words' bytes
+    in 1 KiB segments, each segment's length and d_j = SHA-512(S(j, s, m_j) ‖ segment j) as pinned, x = SHA-512(Q(ℓ) ‖
+    d_0 ‖ … ‖ d_(s-1)), which is core's digest of the words as a word row (an fp32 row's also of its 32-bit words), and
+    the commit string and tree leaf over it."""
+    x = V.inputs(case["case"], case["row"], case["k"])
+    words = V.words(case["row"], x)
+    raw, n_bits = row_bytes(words, 16), 16 * len(words)
+    s = -(-n_bits // 8192)
+    ms = [min(8192, n_bits - 8192 * j) for j in range(s)]
+    assert [g["n_bits"] for g in case["segments"]] == ms
+    ds = [hashlib.sha512(_block(SEGMENT_TAG, (j, 8), (s, 8), (m, 8)) + raw[1024 * j:1024 * j + m // 8]).digest()
+          for j, m in enumerate(ms)]
+    assert [d.hex() for d in ds] == [g["digest"] for g in case["segments"]]
+    want = hashlib.sha512(_block(SEG_TAG, (n_bits, 8), (s, 8), (1024, 4)) + b"".join(ds)).digest()
+    assert case["x"] == want.hex() == sha512_row_seg_word_digest(words, 16).hex()
+    if case["row"] == "fp32":
+        assert want == sha512_row_seg_word_digest(x["x"], 32)
+    bc = L.INST.commit_string(L.KEY, want, V.shake(case["case"], "salt", L.INST.salt_bytes))
+    assert (bc.hex(), L.tree_leaf(bc).hex()) == (case["bc"], case["tree_leaf"])
+
+
+CORE_SEG = FV.load()["row_seg_leaves"]
+
+
+@pytest.mark.parametrize("case", [c for c in CORE_SEG if "words" in c or "hiding" in c], ids=lambda c: c["name"])
+def test_cores_row_seg_vectors_are_pouws_per_call_rows(case):
+    """Core's pinned `sha512/row-seg/v1` word rows (`row_seg_leaves` in `vectors_sha512.json`: an A_i BF16 row, a Pearl-C
+    FP32 row and a short odd BF16 row) are PoUW's per-call bf16 and fp32 rows of the same elements, and core's 8 KiB hiding
+    row's commit string and hm96 leaf are PoUW's of the row's words."""
+    if "words" in case:
+        w = case["words"]
+        elems = FV.elements(w["label"], w["bits"], w["n"])
+        row, words = ("bf16", L.words_bf16(elems)) if w["bits"] == 16 else ("fp32", L.words_fp32(elems))
+    else:
+        raw = bytes.fromhex(case["row_bytes"])
+        row, words = "bf16", [int.from_bytes(raw[i:i + 2], "little") for i in range(0, len(raw), 2)]
+    assert L.row_digest(row, ROLE_X, words).hex() == case["digest"]
+    if "hiding" in case:
+        h = case["hiding"]
+        assert h["key_sha512"] == hashlib.sha512(L.KEY).hexdigest()
+        bc = L.commit(row, ROLE_X, words, bytes.fromhex(h["salt"]))
+        assert (bc.hex(), L.tree_leaf(bc).hex()) == (h["bc"], h["hm96_leaf"])
 
 
 @pytest.mark.parametrize("tm, tn", [(1, 1), (2, 3), (3, 33), (2, 64)])
@@ -80,11 +153,16 @@ def test_the_tile_digest_is_pearl_cs_leaf(tm, tn):
 
 
 def test_out_of_schema_rows_are_refused():
+    """A registered v1 row of part of a block, an empty row and a row in a tree it never sits in are refused; a per-call
+    row of the same words is a row-seg row, of any length."""
     for row, words in (("bf16", 32), ("fp32", 96)):
         with pytest.raises(ValueError, match="whole SHA-512 blocks"):
-            L.commit(row, [0] * words, bytes(192))
+            L.commit(row, ROLE_W, [0] * words, bytes(192))
+        assert L.row_digest(row, ROLE_X, [0] * words) == sha512_row_seg_word_digest([0] * words, 16)
     with pytest.raises(ValueError, match="positive number of words"):
-        L.row_leaf("tile", 0)
+        L.commit("tile", ROLE_X, [], bytes(192))
+    with pytest.raises(ValueError, match="no tile row sits in a tree of role"):
+        L.commit("tile", ROLE_W, [0] * 16, bytes(192))
     with pytest.raises(ValueError):
         L.words_nvfp4_p([0] * 64, [0] * 3, [0] * L.P_WORDS)
     with pytest.raises(ValueError):
@@ -101,12 +179,13 @@ def test_an_ok_row_with_a_bit_set_above_bit_0_is_refused(case):
     vector's word (`ok_of`) and refuses it with any one of bits 1-15 set, and so does `commit`, as it refuses a row of two
     words or none."""
     words, salt = V.words("ok", V.inputs(case["case"], "ok", case["k"])), V.shake(case["case"], "salt", L.INST.salt_bytes)
-    assert L.ok_of(words) == words[0] and L.commit("ok", words, salt).hex() == case["bc"]
+    role = V.ROLES[case["role"]]
+    assert L.ok_of(words) == words[0] and L.commit("ok", role, words, salt).hex() == case["bc"]
     for bad in [[words[0] | 1 << b] for b in range(1, 16)] + [[words[0], 0], []]:
         with pytest.raises(ValueError, match="an ok row is one word"):
             L.ok_of(bad)
         with pytest.raises(ValueError, match="an ok row is one word"):
-            L.commit("ok", bad, salt)
+            L.commit("ok", role, bad, salt)
 
 
 ROW_UNITS = ([pc4.templates(64)[r] for r in ("row_a", "row_b")]

@@ -1,9 +1,10 @@
-"""PoUW's tile-check rows (`verity_pouw.circuit.leaves`) are C-Flock's rows byte for byte: every vector of
+"""PoUW's tile-check rows (`verity_pouw.circuit.leaves`) are C-Flock's rows byte for byte: every serial row's vector of
 ``protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port C-Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a `sha512/row/v1` row of whole blocks under ``hm96-sha512/row/v1`` or
 a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2``), gives the pinned row bytes, digest, commit string
 (`circuit._commit_strings`) and tree leaf; and one vector of each row version and a tile's give the same commit string and
-tree leaf from the Lean verifier's own row constants (`Flock.HmRow`)."""
+tree leaf from the Lean verifier's own row constants (`Flock.HmRow`).  The per-call rows under ``hm96-sha512/row-seg/v1``
+wait for C-Flock's segmented port (`AWAITING`)."""
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.commitments import hm96
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity_flock import circuit as FC
 from verity_pouw.circuit import leaves as L
 
@@ -26,6 +27,8 @@ _spec = importlib.util.spec_from_file_location("pouw_rows_vectors", POUW_TESTS /
 V = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(V)
 PINNED = json.loads((POUW_TESTS / "vectors" / "pouw_rows.json").read_text())
+#: row schemas C-Flock has no port for yet: the segmented rows (proofs' stage 2 of `sha512/row-seg/v1`, after #757)
+AWAITING = {SCHEMA_HM96_SHA512_ROW_SEG: "awaiting C-Flock's hm96-sha512/row-seg/v1 port (proofs' row-seg stage 2)"}
 
 
 def _case(case: dict) -> tuple[list[int], bytes]:
@@ -41,19 +44,22 @@ def _flock_port(case: dict) -> FC.Port:
 
 
 def test_every_schema_has_a_flock_row():
-    assert {c["row"] for c in PINNED["cases"]} == set(L.SCHEMAS) == set(L.ROW_SCHEMA)
-    assert set(L.ROW_SCHEMA.values()) <= {SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2}
+    """Every row and role of PoUW's has a pinned vector, and its schema is a C-Flock port's or one `AWAITING` names."""
+    assert {(c["row"], V.ROLES[c["role"]]) for c in PINNED["cases"]} == set(L.ROW_SCHEMA)
+    assert {row for row, _role in L.ROW_SCHEMA} == set(L.SCHEMAS)
+    assert set(L.ROW_SCHEMA.values()) <= {SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, *AWAITING}
     assert PINNED["key_sha256"] == hashlib.sha256(hm96.SHA512.default_key).hexdigest()
 
 
-@pytest.mark.parametrize("case", PINNED["cases"], ids=lambda c: c["case"])
+@pytest.mark.parametrize("case", [pytest.param(c, marks=pytest.mark.skip(reason=AWAITING[c["row_schema"]]))
+                                  if c["row_schema"] in AWAITING else c for c in PINNED["cases"]], ids=lambda c: c["case"])
 def test_pouw_rows_are_flock_rows(case):
     """C-Flock's port for the row commits exactly the pinned leaf: its schema is the vector's ``row_schema``, its leaves'
     bytes hash to ``row_bytes_sha256``, its row digest is ``x``, its ``b || c`` is ``bc``, and hm96's tree leaf over that
     is ``tree_leaf``."""
     words, salt = _case(case)
     port = _flock_port(case)
-    assert case["row_schema"] == L.ROW_SCHEMA[case["row"]] == port.schema
+    assert case["row_schema"] == L.ROW_SCHEMA[case["row"], V.ROLES[case["role"]]] == port.schema
     assert len(words) == case["n_words"] == port.words and port.n_bits == 16 * len(words)
     rows = np.array([words], dtype="<u2")
     raw = rows[0].tobytes()[:port.bytes]
@@ -92,8 +98,9 @@ def leafOf (v2 : Bool) (words : Nat) (row salt : String) : String := Id.run do
   return hexOf bc ++ " " ++ hexOf (Hm96.Default512.treeLeaf bc)
 """
 
-#: a v1 row, a packed v2 row whose bytes end inside a block, and a tile digest (a v2 row of no compression)
-LEAN_CASES = ("bf16-x-64", "nvfp4-p-x-64", "tile-2x33")
+#: a v1 row, a packed v2 row whose bytes end inside a block, and a tile digest (a v2 row of no compression); the Lean
+#: verifier has no row-seg row yet either
+LEAN_CASES = ("bf16-w-64", "nvfp4-p-w-64", "tile-2x33")
 
 
 @pytest.mark.slow

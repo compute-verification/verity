@@ -60,9 +60,9 @@ def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int
     listed = [p for _schema, _role, ps in ports["rows"] for p in ps] + list(ports["regions"])
     assert Counter(listed) == Counter([name for name, _t in params] + list(range(len(outs)))), fn.id
     types_ = dict(params) | dict(enumerate(outs))
-    for schema, _role, ps in ports["rows"]:
+    for schema, role, ps in ports["rows"]:
         bits = sum(sum(types_[p].leaf_widths()) // reads.get(p, 1) for p in ps)
-        assert bits == 16 * L.ROW_WORDS[schema](k), (fn.id, schema)
+        assert bits == 16 * L.ROW_WORDS[schema](k) and (schema, role) in L.ROW_SCHEMA, (fn.id, schema, role)
     assert list(ports["regions"]) == [name for name, _t in params if name in ports["regions"]], fn.id
     for port, anchor in ports["regions"].items():
         widths = types_[port].leaf_widths()

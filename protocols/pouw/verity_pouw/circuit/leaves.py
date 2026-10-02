@@ -7,10 +7,12 @@ in gates is the work's own digest:
   it in place of its checked words.
 
 The rows (`SCHEMAS`), each a row of 16-bit words with every narrower element packed low bits first (flock-fp's packed
-rows), so the row's bytes are the tensor's memory.  Each is the row C-Flock's port of its words commits (`ROW_SCHEMA`): an
-`hm96-sha512/row/v1` row (`sha512/row/v1`, role X and 16-bit words, as every C-Flock v1 port is, of whole SHA-512 blocks)
-or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a word, any length).  Neither digest names the role or the
-schema, so the registration domain of the tree a row sits in binds the schema id, the word count and the role:
+rows), so the row's bytes are the tensor's memory.  Each is committed under its row's and role's frame-leaf schema
+(`ROW_SCHEMA`): an `hm96-sha512/row-seg/v1` row (`sha512/row-seg/v1`: the bit row, 16 bits a word, any length, in 1 KiB
+segments that hash in parallel), an `hm96-sha512/row/v1` row (`sha512/row/v1`, role X and 16-bit words, as every C-Flock
+v1 port is, of whole SHA-512 blocks) or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a word, any length).  No
+digest names the row's role or schema, so the registration domain of the tree a row sits in binds the schema id, the word
+count and the role:
 
     row (schema id)               words                                              n words            role
     bf16 (pouw/row-bf16/v1)       k BF16 words                                       k                  X (A_i) or W (B_j)
@@ -25,12 +27,14 @@ schema, so the registration domain of the tree a row sits in binds the schema id
     tile (pouw/tile-h0/v1)        the 32-byte tile digest (`PearlTileDigest`), two   16                 X
                                   bytes per word, low byte first
 
-bf16 and fp32 are v1 rows (whole blocks: 64 | k and 32 | k), nvfp4-p, fp8-p, ok and tile v2 rows.  nvfp4-p's codes and
+Every per-call row (role X) but ok and the tile digest is a row-seg row, so decode's serial hash chain is a segment's, not
+the row's (Daniel's ruling, card 637f70c6).  The registered rows (role W) keep the serial layout: bf16 and fp32 v1 rows
+(whole blocks: 64 | k and 32 | k), nvfp4-p and fp8-p v2 rows; ok and tile are v2 rows in either role.  nvfp4-p's codes and
 scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its elements.  Which unit
 ports make up each row is `pc4.PORTS` and `pc8.PORTS`.  `words_*` are each row's words from its elements, and `commit` and
 `tree_leaf` a row's commit string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute
-every vector through its ports (``backends/flock/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are
-public input regions (`anchors.region_words`).
+every serial row's vector through its ports (``backends/flock/tests/test_pouw_rows.py``; its row-seg port is still to
+come).  The anchored inputs are no row: they are public input regions (`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
@@ -42,8 +46,9 @@ from functools import lru_cache
 from typing import Sequence
 
 from verity.commitments import hm96
-from verity.commitments.frame_v3 import BitRowLeaf, RowLeaf
-from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, row_bytes
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG,
+                                        SCHEMA_HM96_SHA512_ROW_V2, row_bytes, sha512_row_digest, sha512_row_seg_word_digest,
+                                        sha512_row_v2_digest)
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.types import Array, Value
 
@@ -63,10 +68,12 @@ SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "p
            "fp8-p": "pouw/row-fp8-p/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1"}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "ok": lambda k: 1, "tile": lambda k: 16}
-#: each row's frame-leaf schema as C-Flock commits it: rows of 16-bit elements v1, packed rows, the admission bit and the
-#: tile digest v2
-ROW_SCHEMA = {"bf16": SCHEMA_HM96_SHA512_ROW, "fp32": SCHEMA_HM96_SHA512_ROW, "nvfp4-p": SCHEMA_HM96_SHA512_ROW_V2,
-              "fp8-p": SCHEMA_HM96_SHA512_ROW_V2, "ok": SCHEMA_HM96_SHA512_ROW_V2, "tile": SCHEMA_HM96_SHA512_ROW_V2}
+_V1, _V2, _SEG = SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
+#: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, the registered rows
+#: (role W) of 16-bit elements v1 and the packed ones v2, and the admission bit and the tile digest v2
+ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V1, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V1,
+              ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
+              ("ok", ROLE_X): _V2, ("ok", ROLE_W): _V2, ("tile", ROLE_X): _V2}
 
 
 def _tile_digest_body(B, S_, c, u):
@@ -139,29 +146,30 @@ def words_tile(digest: bytes) -> list[int]:
     return [int.from_bytes(digest[2 * i:2 * i + 2], "little") for i in range(16)]
 
 
-def row_leaf(row: str, n_words: int) -> RowLeaf | BitRowLeaf:
-    """The leaf kind of a ``row`` row of ``n_words`` 16-bit words, as C-Flock's port of ``n_words`` u16 leaves holds it: a
-    `sha512/row/v1` row of role X and whole SHA-512 blocks, or a `sha512/row/v2` bit row of 16 ``n_words`` bits."""
-    if n_words <= 0:
-        raise ValueError(f"a {row} row is a positive number of words, not {n_words}")
-    if ROW_SCHEMA[row] == SCHEMA_HM96_SHA512_ROW_V2:
-        return BitRowLeaf(16 * n_words)
-    if 2 * n_words % 128:
-        raise ValueError(f"a {row} row ({SCHEMA_HM96_SHA512_ROW}) is whole SHA-512 blocks, not {2 * n_words} bytes")
-    return RowLeaf("sha512", ROLE_X, 16, n_words)
-
-
-def row_digest(row: str, words: Sequence[int]) -> bytes:
-    """x, the ``row`` row's digest of its 16-bit ``words`` (`row_leaf`'s layout); an ok row's words pass `ok_of`."""
+def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
+    """x, the digest of a ``row`` row of 16-bit ``words`` in a tree of ``role``, under its schema (`ROW_SCHEMA`): core's
+    `sha512/row-seg/v1` digest of the words as a bit row, its `sha512/row/v1` digest (role X, whole SHA-512 blocks) or its
+    `sha512/row/v2` digest of 16 bits a word; an ok row's words pass `ok_of`."""
+    schema = ROW_SCHEMA.get((row, role))
+    if schema is None:
+        raise ValueError(f"no {row} row sits in a tree of role {role}")
     if row == "ok":
         ok_of(words)
-    return row_leaf(row, len(words)).layout().digest(row_bytes(words, 16))
+    if not words:
+        raise ValueError(f"a {row} row is a positive number of words, not 0")
+    if schema == _SEG:
+        return sha512_row_seg_word_digest(words, 16)
+    if schema == _V2:
+        return sha512_row_v2_digest(row_bytes(words, 16), 16 * len(words))
+    if 2 * len(words) % 128:
+        raise ValueError(f"a {row} row ({schema}) is whole SHA-512 blocks, not {2 * len(words)} bytes")
+    return sha512_row_digest(words, 16, ROLE_X)
 
 
-def commit(row: str, words: Sequence[int], salt: bytes) -> bytes:
-    """b ‖ c of the ``row`` row of 16-bit ``words`` under ``salt``: hm96-sha512 over its `row_digest`, as C-Flock commits
-    the row's port."""
-    return INST.commit_string(KEY, row_digest(row, words), salt)
+def commit(row: str, role: int, words: Sequence[int], salt: bytes) -> bytes:
+    """b ‖ c of a ``row`` row of 16-bit ``words`` in a tree of ``role`` under ``salt``: hm96-sha512 over its `row_digest`,
+    as C-Flock commits the row's port."""
+    return INST.commit_string(KEY, row_digest(row, role, words), salt)
 
 
 def tree_leaf(bc: bytes) -> bytes:
@@ -170,5 +178,5 @@ def tree_leaf(bc: bytes) -> bytes:
 
 
 __all__ = ["DIGEST", "INST", "KEY", "OK", "PearlTileDigestDef", "P_WORDS", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "commit",
-           "digest_bytes", "ok_of", "row_digest", "row_leaf", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
+           "digest_bytes", "ok_of", "row_digest", "tile_digest", "tree_leaf", "words_bf16", "words_fp32",
            "words_fp8_p", "words_nvfp4_p", "words_ok", "words_tile"]

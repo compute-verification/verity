@@ -737,33 +737,40 @@ useful    U/(α_A·α_B), glue
     unit's committed rows: a row unit's input row (bf16), the nvfp4-p row it writes and its ``ok`` row (every output is
     committed, #757), and a tile's TM + TN nvfp4-p rows and its tile digest. A tile reads each row as its row unit wrote
     it (the same words, schema and salt), so the units link by equal commit strings b ‖ c.
-  - The rows are rows of 16-bit words, each the row C-Flock's port of its words commits (`leaves.ROW_SCHEMA`): an
-    `hm96-sha512/row/v1` row (`sha512/row/v1`, role X and word width 16, as every C-Flock v1 port is, of whole SHA-512
-    blocks) or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a word). Neither digest names the role or the
-    schema, so the registration domain of the tree a row sits in binds the schema id, the word count and the role. Every
-    narrower element is packed low bits first, so a row's bytes are the tensor's memory (`rowleaf.bit_row`'s of its
-    elements):
+  - The rows are rows of 16-bit words, each committed under the schema of its row and its tree's role
+    (`leaves.ROW_SCHEMA`): an `hm96-sha512/row-seg/v1` row (`sha512/row-seg/v1`: the words' bit row in 1 KiB segments that
+    hash in parallel, frame-v3's PROTOCOL.md), an `hm96-sha512/row/v1` row (`sha512/row/v1`, role X and word width 16, as
+    every C-Flock v1 port is, of whole SHA-512 blocks) or an `hm96-sha512/row/v2` bit row (`sha512/row/v2`, 16 bits a
+    word). No digest names the role or the schema, so the registration domain of the tree a row sits in binds the schema
+    id, the word count and the role. Every narrower element is packed low bits first, so a row's bytes are the tensor's
+    memory (`rowleaf.bit_row`'s of its elements):
 
     ~~~text
-    schema id            words                                                     count             role               row
-    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   v1
-    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               v1
-    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  v2
+    schema id            words                                                     count             role               row (X / W)
+    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   seg / v1
+    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               seg / v1
+    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  seg / v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
-    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               v2
-    pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2
+    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               seg / v2
+    pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2 / v2
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     ~~~
 
-    Whole blocks hold a bf16 row when 64 | k and an fp32 row when 32 | k (`leaves.row_leaf` refuses the rest).
-    nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
+    Every per-call row (role X) but ok and the tile digest is a row-seg row, so decode's serial hash chain is a
+    segment's, not the row's (Daniel's ruling, card 637f70c6): A_i (bf16, 8 KiB at k = 4,096, 8 segments), A′_i ‖ P_A,i
+    (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments) and fp8-p row (5 segments). The registered rows (role W),
+    the tile digest and ok keep the serial layout. Whole blocks hold a registered bf16 row when 64 | k and an fp32 row
+    when 32 | k (`leaves.row_digest` refuses the rest); a row-seg row is any length. nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
     that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
     computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
   - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
   - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, row digest,
-    commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute. C-Flock's
-    ports commit them byte for byte: `backends/flock/tests/test_pouw_rows.py` recomputes every vector through C-Flock's
-    port for the row, and one v1 row, one v2 row and a tile through the Lean verifier's row constants.
+    commit string and tree leaf in each role at k = 64 and 4,096 (a row-seg row's with each segment's length and digest),
+    and the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
+    spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit the serial rows byte for
+    byte: `backends/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and one
+    v1 row, one v2 row and a tile through the Lean verifier's row constants. C-Flock has no row-seg port yet (proofs'
+    stage 2), so the row-seg vectors and a `--zk` proof of a unit with a per-call row wait for it.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
