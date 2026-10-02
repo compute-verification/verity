@@ -94,6 +94,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  package (`lean/`, whose `Pouw.Proofs.endToEnd` is the guarantee); see its `PROTOCOL.md`.
  `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
  channel: the warden, its audit and calibration, and its Lean package (`lean/`).
+ `protocols/nci` is novel communication intensity, the policy that throttles frontier training
+ and leaves inference alone; so far only its Lean package (`lean/`).
  Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
@@ -173,11 +175,17 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
   `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), `protocols/pouw/lean/` (PoUW's games,
   named assumptions and the proofs behind its γ, Mathlib), `protocols/network_warden/lean/` (the network
-  warden's timing-channel statements and proofs, Mathlib), and `packages/verity/lean/` (core's own
-  proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation, no dependencies). New Lean goes into the
-  package whose dependencies it needs, in a subdirectory and namespace of its own; a core-only proof goes into core's
-  package, never a backend's. All packages share one toolchain and
+  warden's timing-channel statements and proofs, Mathlib), `protocols/nci/lean/` (NCI's policy and guarantees, on
+  core's), and `packages/verity/lean/` (the model every protocol states its guarantees in: circuits, partitions,
+  declarations and games; and core's own proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation;
+  Mathlib only). New Lean goes into the package whose dependencies it needs, in a subdirectory and namespace of its own;
+  a core-only proof goes into core's package, never a backend's. A protocol's package may require core's and other
+  protocols' packages, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
+- Core's and NCI's packages are laid out under four names: `Protocol` (definitions), `Assumptions` (named `Prop`s) and
+  `Guarantees` (each a `def G : Prop`) are the trusted text, importing only one another, core's trusted text and
+  Mathlib (`layers` in `lean-audit.json`); `SecurityProofs` holds every proof and lemma, with `SecurityProofs.G : G` for
+  each guarantee proved. The other packages move to this layout one at a time.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
