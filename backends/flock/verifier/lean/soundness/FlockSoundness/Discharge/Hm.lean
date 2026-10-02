@@ -7,3 +7,4 @@ import FlockSoundness.Discharge.Hm.Exec
 import FlockSoundness.Discharge.Hm.Top
 import FlockSoundness.Discharge.Hm.Hash
 import FlockSoundness.Discharge.Hm.Salt
+import FlockSoundness.Discharge.Hm.Slot
