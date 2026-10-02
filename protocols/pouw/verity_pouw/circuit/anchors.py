@@ -14,6 +14,11 @@ The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
 call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`.
 
+The tile checks' (`pc4`, `pc8`) anchored inputs are derived values, not ids: the noise lines E_A, E_B, F_A, F_B and
+G = F_Bᵀ·F_A, which the verifier derives from the scheme's seeds (`TileAnchors`, from `noise(ctx)`: seed_A reads the salt,
+A's root, B's registered root and the matmul index, seed_B the salt and B's root).  The call's Program and the weight's both
+read F_A and F_B; E_A is the call's alone, E_B and G the weight's.
+
 A window's `Receipt` lists every call of the window, each with its anchors, shape and commitment, complete and immutable
 before any key exists. `Ledger.open` derives the window's key from it alone, a fresh source under the receipt's digest,
 and admits only the calls it lists; `Traced.draw` draws only under that key. So the key comes after every call's
@@ -86,6 +91,47 @@ class Anchors:
 
     def check_weight(self, fn, args: Sequence[Sequence[int]]) -> None:
         _check(fn, args, self.weight_inputs())
+
+
+#: the tile checks' anchored parameters, by name in their Programs
+ANCHORED = ("ea", "eb", "fa", "fb", "g")
+
+
+@dataclass(frozen=True)
+class TileAnchors:
+    """One tile check's anchored inputs, as the verifier derives them: the scheme's seeds (`noise(ctx)`) and the global
+    indices of the block's rows of A (``rows``) and of B (``cols``), by which each E line is drawn.  ``shape`` is the
+    check's `pc4.Shape` or `pc8.Shape`, whose `anchored` derives the lines and G on its own record."""
+
+    shape: Any
+    seed_a: bytes
+    seed_b: bytes
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.seed_a) != 32 or len(self.seed_b) != 32:
+            raise DomainError("the seeds are 32 bytes")
+        for name, ids, count in (("row", self.rows, self.shape.m), ("column", self.cols, self.shape.n)):
+            if len(ids) != count or len(set(ids)) != count or not all(0 <= v <= M32 for v in ids):
+                raise DomainError(f"the {name} ids are {count} distinct 32-bit global indices")
+
+    @classmethod
+    def of(cls, scheme, ctx, shape, rows: Sequence[int] | None = None, cols: Sequence[int] | None = None) -> "TileAnchors":
+        """The anchors of ``ctx``'s block under ``scheme`` (rows and columns 0.. by default)."""
+        noise = scheme.noise(ctx)
+        rows = tuple(range(shape.m)) if rows is None else tuple(rows)
+        cols = tuple(range(shape.n)) if cols is None else tuple(cols)
+        return cls(shape, noise.seed_a, noise.seed_b, rows, cols)
+
+    def inputs(self, fn) -> dict[str, list[int]]:
+        """``fn``'s anchored inputs, by parameter: those of `ANCHORED` it takes."""
+        names = [name for name, _t in fn.signature()[0] if name in ANCHORED]
+        return self.shape.anchored(self.seed_a, self.seed_b, self.rows, self.cols, names)
+
+    def check_inputs(self, fn, args: Sequence[Sequence[int]]) -> None:
+        """Refuse ``fn``'s flat input leaves whose anchored inputs are not the verifier's."""
+        _check(fn, args, self.inputs(fn))
 
 
 def _check(fn, args, want: dict[str, list[int]]) -> None:
@@ -267,4 +313,4 @@ def replay_key(record: dict[str, str]):
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
-__all__ = ["Anchors", "Ledger", "Receipt", "replay_key"]
+__all__ = ["ANCHORED", "Anchors", "Ledger", "Receipt", "TileAnchors", "replay_key"]

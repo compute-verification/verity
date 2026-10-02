@@ -1,12 +1,11 @@
-"""Pinned vectors for the tile checks' hiding rows (`verity_pouw.circuit.leaves`): ``uv run python
+"""Pinned vectors for the tile checks' committed rows (`verity_pouw.circuit.leaves`), against which C-Flock's ports are
+mapped: ``uv run python
 protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.json``.  A change to that file is a change to
 a row schema and needs a reason in the PR.
 
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
 read as the schema's elements (16-bit and 32-bit words little-endian, codes one per byte masked to their width), and the salt
-is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
-leaf is the row C-Flock commits from its words and salt (`leaves.ROW_SCHEMA`); a case's name says which tree (x or w) the
-row sits in, which its registration domain binds and its leaf does not."""
+is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`."""
 
 from __future__ import annotations
 
@@ -15,15 +14,17 @@ import json
 import types
 from pathlib import Path
 
-from verity.commitments.rowleaf import row_bytes
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, row_bytes, sha512_row_digest
 from verity_pouw.circuit import leaves as L
 from verity_pouw.schemes import pearl_c as C
 
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
-#: (case, row, k or (TM, TN))
-CASES = (("bf16-x-64", "bf16", 64), ("bf16-w-4096", "bf16", 4096), ("fp32-x-64", "fp32", 64), ("fp32-w-4096", "fp32", 4096),
-         ("nvfp4-p-x-64", "nvfp4-p", 64), ("nvfp4-p-w-4096", "nvfp4-p", 4096), ("fp8-p-x-64", "fp8-p", 64),
-         ("fp8-p-w-4096", "fp8-p", 4096), ("tile-2x33", "tile", (2, 33)), ("tile-64x64", "tile", (64, 64)))
+#: (case, row, k or (TM, TN), role)
+CASES = (("bf16-x-64", "bf16", 64, ROLE_X), ("bf16-w-4096", "bf16", 4096, ROLE_W),
+         ("fp32-x-64", "fp32", 64, ROLE_X), ("fp32-w-4096", "fp32", 4096, ROLE_W),
+         ("nvfp4-p-x-64", "nvfp4-p", 64, ROLE_X), ("nvfp4-p-w-4096", "nvfp4-p", 4096, ROLE_W),
+         ("fp8-p-x-64", "fp8-p", 64, ROLE_X), ("fp8-p-w-4096", "fp8-p", 4096, ROLE_W),
+         ("tile-2x33", "tile", (2, 33), ROLE_X), ("tile-64x64", "tile", (64, 64), ROLE_X))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -74,12 +75,12 @@ def sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def case_vector(case: str, row: str, k) -> dict:
+def case_vector(case: str, row: str, k, role: int) -> dict:
     w, salt = words(row, inputs(case, row, k)), shake(case, "salt", L.INST.salt_bytes)
-    bc = L.commit(row, w, salt)
-    out = {"case": case, "row": row, "schema": L.SCHEMAS[row], "row_schema": L.ROW_SCHEMA[row],
-           "k": list(k) if row == "tile" else k, "n_words": len(w), "row_bytes_sha256": sha(row_bytes(w, 16)),
-           "x": L.row_digest(row, w).hex(), "salt_sha256": sha(salt), "bc": bc.hex(), "tree_leaf": L.tree_leaf(bc).hex()}
+    bc = L.commit(role, w, salt)
+    out = {"case": case, "row": row, "schema": L.SCHEMAS[row], "k": list(k) if row == "tile" else k, "role": role,
+           "n_words": len(w), "row_bytes_sha256": sha(row_bytes(w, 16)), "x": sha512_row_digest(w, 16, role).hex(),
+           "salt_sha256": sha(salt), "bc": bc.hex(), "tree_leaf": L.tree_leaf(bc).hex()}
     if row == "tile":
         out["tile_digest"] = bytes(v for x in w for v in x.to_bytes(2, "little")).hex()
     else:
@@ -88,8 +89,8 @@ def case_vector(case: str, row: str, k) -> dict:
 
 
 def vectors() -> dict:
-    return {"schema": "verity-pouw/rows-vectors/v1", "word_bits": 16, "key_sha256": sha(L.KEY),
-            "cases": [case_vector(*c) for c in CASES]}
+    return {"schema": "verity-pouw/rows-vectors/v1", "row_schema": "hm96-sha512/row/v1", "word_bits": 16,
+            "key_sha256": sha(L.KEY), "cases": [case_vector(*c) for c in CASES]}
 
 
 if __name__ == "__main__":

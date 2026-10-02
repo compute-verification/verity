@@ -1,8 +1,9 @@
 """Pearl-C4's tile check as a Program (`verity_pouw.circuit.pc4`): its primitives and float forms are the scheme's operations
 on the domain the row's admission bit admits, its units evaluate to `schemes.pearl_c4`'s forming, clean-up and checked
 words (the pinned ``test-16-nvfp4`` vector), its admission bit is `row_passes` on every row, and its partition computes
-every value in exactly one unit; its hiding Programs publish only admission bits and commit strings, and only those are
-computed twice."""
+every value in exactly one unit; its hiding Programs publish only admission bits and tile digests, their units' ports are
+`PORTS`, the verifier derives the anchored inputs (`anchors.TileAnchors`), and `plan.tile_layout` draws a tile with its
+rows."""
 from __future__ import annotations
 
 import hashlib
@@ -17,13 +18,13 @@ import circuit_fixtures as CF
 import pearl_c4_vectors as V
 from verity.evaluation import evaluate
 from verity.ir import partition_object as PO
-from verity.ir.cut import RECOMPUTE, check_cut
 from verity.ir.program import Program
 from verity.ml.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
 from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.ml.tc import fp32
-from verity_pouw.circuit import leaves as L
-from verity_pouw.circuit import pc4
+from verity.randomness import derive
+from verity_pouw.circuit import pc4, plan
+from verity_pouw.circuit.anchors import TileAnchors
 from verity_pouw.circuit import words as W
 from verity_pouw.protocol import DomainError
 from verity_pouw.schemes import pearl_c4 as F
@@ -102,8 +103,12 @@ def test_core_bf16_step_is_the_schemes_peel_step():
 
 # ---- the units against the scheme -------------------------------------------------------------------------------------
 
+def _pinned_ctx():
+    return V.scheme("nvfp4", True), V.ctx_of(CASE["case"], tuple(CASE["shape"]), CASE["index"], CASE["weight"])
+
+
 def _pinned():
-    s, ctx = V.scheme("nvfp4", True), V.ctx_of(CASE["case"], tuple(CASE["shape"]), CASE["index"], CASE["weight"])
+    s, ctx = _pinned_ctx()
     m, k, n = CASE["shape"]
     tile = s.tiles(ctx.matmul.shape)[0]
     a, b = V.rows(CASE["case"], "A", m, k), V.rows(CASE["case"], "B", n, k)
@@ -192,19 +197,21 @@ def test_the_row_units_admission_is_row_passes_and_their_outputs_the_schemes(sid
 
 # ---- the partition ----------------------------------------------------------------------------------------------------
 
+@pytest.mark.parametrize("hidden", [False, True], ids=["plain", "hidden"])
 @pytest.mark.parametrize("side", ["check", "weight", "call"])
-def test_the_partition_computes_every_value_in_exactly_one_unit(side):
+def test_the_partition_computes_every_value_in_exactly_one_unit(side, hidden):
     """One unit per row of B and of A, and per tile (G is anchored, so no unit computes it); `validate_unit_cut` certifies
-    every gate once with no recompute, and the partition object verifies."""
-    shape = pc4.Shape(4, 64, 6, tile=(2, 3))
+    every gate once with no recompute, and the partition object verifies.  So do the hiding Programs': their rows are
+    committed ports, so no unit recomputes another's value, and only the tile changes (its digest)."""
+    shape = pc4.Shape(4, 64, 6, tile=(2, 3), hidden=hidden)
     fn = {"check": pc4.check, "weight": pc4.weight, "call": pc4.call}[side](shape)
     prog, q = Program(fn), pc4.query(shape, side)
     us = pc4.units(fn)
     full = {"row_b": shape.n, "row_a": shape.m, "tile": 2 * 2}
     assert Counter(u.role for u in us) == {r: full[r] for r in pc4.ROLES[side]}
     part = PO.evaluate(prog, q)
-    tp = pc4.templates(shape.k, shape.tile)
-    assert [t for _k, t, _a, n in part.ranges for _ in range(n)] == [tp[u.role].id for u in us]
+    tp = pc4.templates(shape.k, shape.tile, hidden)
+    assert [t for _k, t, _a, n in part.ranges for _ in range(n)] == [tp[u.role].id for u in us] == [u.template for u in us]
     assert PO.verify(PO.build(prog, q), prog).ok
     _g, _owner, verdict = pc4.unit_cut(fn)
     assert verdict.ok, verdict.codes
@@ -216,10 +223,9 @@ def test_the_partition_computes_every_value_in_exactly_one_unit(side):
 HIDDEN = pc4.Shape(4, 64, 6, tile=(2, 3), hidden=True)
 
 
-def test_the_hiding_programs_publish_the_commit_strings_of_every_row_and_tile():
-    """`Pc4WeightHidden`, `Pc4CallHidden` and `Pc4CheckHidden` return the admission bits and `leaves.commit` of every row a
-    unit reads or writes (A_i and B_j as bf16 rows, A′_i ‖ P_A,i and B̃_j ‖ P_B,j as nvfp4-p rows, each tile's reads equal to
-    its row units') and of every tile digest (`pearl_c.leaf` of the plain units' C̃ and U), and no checked word."""
+def test_the_hiding_programs_publish_only_admission_bits_and_tile_digests():
+    """Under hiding the weight's Program is `Pc4Weight`, and `Pc4CallHidden` and `Pc4CheckHidden` return each tile's digest
+    (`pearl_c.leaf` of the plain call's C̃ and U, by tile row and column) and the admission bits, and no checked word."""
     m, k, n = HIDDEN.m, HIDDEN.k, HIDDEN.n
     a = [w for i in range(m) for w in V.row_codes("pc4-hidden", "A", i, k)]
     b = [w for j in range(n) for w in V.row_codes("pc4-hidden", "B", j, k)]
@@ -227,46 +233,68 @@ def test_the_hiding_programs_publish_the_commit_strings_of_every_row_and_tile():
     ea, eb = (_flat(F.line(SEED_B, role, i) for i in range(c)) for role, c in ((F.ROLE_EA, m), (F.ROLE_EB, n)))
     g = _flat(F.gram(F.NVFP4, SEED_B, k))
     plain = replace(HIDDEN, hidden=False)
+    assert pc4.weight(HIDDEN).id == pc4.weight(plain).id
     wout = evaluate(pc4.weight(plain), b, eb, fa, fb, g)
     bc, bs, pb, ok_b = wout[:n * k], wout[n * k:n * k + n * k // 16], wout[n * k + n * k // 16:-n], wout[-n:]
     cout = evaluate(pc4.call(plain), a, ea, fa, fb, bc, bs, pb)
     c, u = ([cout[f * m * n + i * n:f * m * n + (i + 1) * n] for i in range(m)] for f in range(2))
-    outs = [evaluate(pc4.templates(k)["row_a"], a[i * k:(i + 1) * k], ea[32 * i:32 * (i + 1)], fa, fb) for i in range(m)]
-    mids_a = [L.words_nvfp4_p(o[:k], o[k:k + k // 16], o[k + k // 16:-1]) for o in outs]
-    mids_b = [L.words_nvfp4_p(bc[j * k:(j + 1) * k], bs[j * k // 16:(j + 1) * k // 16], pb[64 * j:64 * (j + 1)])
-              for j in range(n)]
-    rows = lambda x, r: [L.words_bf16(x[i * k:(i + 1) * k]) for i in range(r)]   # noqa: E731
-    s = CF.salts(m, n, HIDDEN.tile)
-    want_call, want_weight = CF.hidden_outputs(HIDDEN.tile, ("bf16", "nvfp4-p"), cout[2 * m * n:], rows(a, m), mids_a,
-                                               ok_b, rows(b, n), mids_b, c, u, s)
-    y = CF.salt_args(s)
-    assert evaluate(pc4.weight(HIDDEN), b, eb, fa, fb, g, y["yb"], y["ybm"]) == want_weight
-    assert evaluate(pc4.call(HIDDEN), a, ea, fa, fb, bc, bs, pb, y["ya"], y["yam"], y["ybm"], y["yt"]) == want_call
-    got = evaluate(pc4.check(HIDDEN), a, ea, b, eb, fa, fb, g, y["ya"], y["yam"], y["yb"], y["ybm"], y["yt"])
-    assert got == want_call + want_weight
+    want = CF.tile_digests(HIDDEN.tile, c, u) + tuple(cout[2 * m * n:])
+    assert evaluate(pc4.call(HIDDEN), a, ea, fa, fb, bc, bs, pb) == want
+    assert evaluate(pc4.check(HIDDEN), a, ea, b, eb, fa, fb, g) == want + tuple(ok_b)
 
 
-@pytest.mark.parametrize("side", ["check", "weight", "call"])
-def test_the_hiding_partition_computes_only_commit_strings_twice(side):
-    """The hiding Programs have the plain ones' units, each its plain unit and its leaves, and the partition object
-    verifies.  A row's commit string is computed in its row unit and again in each tile that reads the row (the units link
-    by b ‖ c), so `Q_word` v1 refuses the cut for exactly that and v2's report passes it; every value two units compute is a
-    leaf's gate."""
-    fn = {"check": pc4.check, "weight": pc4.weight, "call": pc4.call}[side](HIDDEN)
-    prog, q = Program(fn), pc4.query(HIDDEN, side)
-    us = pc4.units(fn)
-    full = {"row_b": HIDDEN.n, "row_a": HIDDEN.m, "tile": 2 * 2}
-    assert Counter(u.role for u in us) == {r: full[r] for r in pc4.ROLES[side]}
-    tp = pc4.templates(HIDDEN.k, HIDDEN.tile, True)
-    assert [t for _k, t, _a, n in PO.evaluate(prog, q).ranges for _ in range(n)] == [PO.template_id(tp[u.role]) for u in us]
-    assert PO.verify(PO.build(prog, q), prog).ok
-    g, owner, v1 = pc4.unit_cut(fn)
-    across, outside = CF.recomputed_across(g, owner)
-    assert outside == []
-    assert v1.codes == (("gate-recomputed",) if side != "weight" else ()) and (across > 0) == (side != "weight")
-    v2 = check_cut(g, owner, limits=None, recompute=RECOMPUTE[2])
-    assert v2.ok and v2.detail["recomputed_across"]["n"] == across
-    assert v2.detail["certified"] == v2.detail["computed_gates"]
+@pytest.mark.parametrize("role", ["row_b", "row_a", "tile"])
+def test_the_ports_are_each_hiding_units_committed_rows(role):
+    """`PORTS` lists every parameter and output of each hiding unit once, and each committed row is its schema's word count:
+    bf16 input rows, nvfp4-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j), and the tile digest."""
+    tm, tn = HIDDEN.tile
+    CF.check_ports(pc4.templates(K, HIDDEN.tile, True)[role], pc4.PORTS[role], K,
+                   {"ac": tm, "as": tm, "pa": tm, "bc": tn, "bs": tn, "pb": tn})
+
+
+def test_the_verifier_derives_the_anchored_inputs():
+    """`TileAnchors.of` derives the pinned vector's E_A, E_B, F_A, F_B and G from the scheme's seeds, and gives each Program
+    the ones it reads (F_A and F_B both, E_A the call, E_B and G the weight); other inputs, the wrong arity and the wrong
+    row ids are refused."""
+    shape, _ops, a, ea, b, eb, fa, fb, g = _pinned()
+    t = TileAnchors.of(*_pinned_ctx(), shape)
+    weight, call = pc4.weight(shape), pc4.call(shape)
+    assert t.inputs(weight) == {"eb": eb, "fa": fa, "fb": fb, "g": g}
+    assert t.inputs(call) == {"ea": ea, "fa": fa, "fb": fb}
+    t.check_inputs(weight, [b, eb, fa, fb, g])
+    t.check_inputs(call, [a, ea, fa, fb, [], [], []])
+    for bad in ([b, eb, fa, fb, g[:-1] + [g[-1] ^ 1]], [b, eb, fb, fa, g], [b, eb, fa, fb]):
+        with pytest.raises(DomainError):
+            t.check_inputs(weight, bad)
+    with pytest.raises(DomainError):
+        t.check_inputs(call, [a, ea[32:] + ea[:32], fa, fb, [], [], []])
+    for rows in (t.rows[:-1], (0,) * shape.m, (1 << 32,) + t.rows[1:]):
+        with pytest.raises(DomainError):
+            TileAnchors(shape, t.seed_a, t.seed_b, rows, t.cols)
+
+
+def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
+    """`plan.tile_layout`: a tile's closure is itself and its TM `RowA` units, and its ``b_rows`` its TN `RowB` units in the
+    weight's Program; a draw proves both, the row units each once (`Plan.proved_b`), opens nothing, and the tile stratum
+    has the W_ref given."""
+    tm, tn = HIDDEN.tile
+    lay = plan.tile_layout(HIDDEN, 1000)
+    lay.check()
+    us, ws = lay.units, pc4.units(pc4.weight(HIDDEN))
+    tiles = [u for u in us if u.role == "tile"]
+    assert len(tiles) == 4 and set(lay.closure) == set(lay.b_rows) == {t.index for t in tiles}
+    for t in tiles:
+        rs, cs = t.where
+        assert [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]] == [("row_a", (rs * tm + i,)) for i in range(tm)]
+        assert [(ws[j].role, ws[j].where) for j in lay.b_rows[t.index]] == [("row_b", (cs * tn + j,)) for j in range(tn)]
+    assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("tile", 4 * 1000)] and lay.tile_work() == 1000
+    for law in (plan.CountLaw(3), plan.WorkLaw(2)):
+        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc4"}), lay, law)
+        drawn = [u for u in p.drawn if us[u].role == "tile"]
+        assert drawn and p.openings == () and p.proved_y == ()
+        assert set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
+        assert p.proved_b == tuple(sorted({j for t in drawn for j in lay.b_rows[t]}))
+    assert plan.tile_layout(replace(HIDDEN, hidden=False), 1000).closure == lay.closure
 
 
 def test_shapes_outside_the_circuit_are_refused():

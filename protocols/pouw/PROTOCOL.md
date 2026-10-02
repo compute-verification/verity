@@ -495,14 +495,15 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `live_row` on exact squares. `words.PouwSqAcc`, `PouwSqCeil` and `PouwSqGe` scale each square by 2^300 into a
     576-bit integer, which never leaves the row unit. No other rejection of the scheme's is reachable on such a row (the
     module docstring).
-  - The noise lines and G are anchored inputs, as in `pc4`.
+  - The noise lines and G are verifier-derived public inputs, as in `pc4` (`anchors.TileAnchors`, G on the record's chain).
   - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
     partition computes each value in exactly one unit.
-  - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below), with
-    `pouw/row-fp32/v1` input rows and `pouw/row-fp8-p/v1` rows. At k = 4,096 a row unit adds 167 SHA-512 compressions
-    (131 + 36), and a 64 × 64 tile adds 4,611 and 281 Keccak-p[1600, 12].
-  - Not in it yet: the debit and the cap, and a plan and closure that draw a tile. Until those land, Pearl-C's runs are
-    checked by its reference audit, a development shortcut that opens rows.
+  - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
+    `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
+    C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows and `pouw/row-fp8-p/v1` rows. A 64 × 64
+    tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile with its rows, as for `pc4`.
+  - Not in it yet: the debit and the cap. Until they land, Pearl-C's runs are checked by its reference audit, a
+    development shortcut that opens rows.
 
 ## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 
@@ -696,46 +697,50 @@ useful    U/(α_A·α_B), glue
   - A unit is a tile, not a word, because a unit reads its rows through their commitments. Once rows are hidden it
     hashes them, and a word unit would hash about 4.9 KiB of rows for each word.
   - ``ok`` is the row's admission (`parse_row`'s finiteness, then `row_passes`).
-  - The noise lines and G are anchored inputs: the lines are TurboSHAKE128 of seeds the verifier derives, and G =
-    F_Bᵀ·F_A (`gram`) is a function of them, which the verifier computes.
+  - The noise lines and G are verifier-derived public inputs, built as `ncp-v2`'s anchors are (`anchors.TileAnchors`,
+    from the scheme's `noise(ctx)`): the lines are TurboSHAKE128 of seeds that read public values alone (seed_A the
+    salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), and G = F_Bᵀ·F_A (`gram`)
+    is a function of them. `check_inputs` refuses any other. Both Programs read F_A and F_B; E_A is the call's, E_B and
+    G the weight's.
   - The Programs evaluate to the pinned ``test-16-nvfp4`` vector, and every partition computes each value in exactly one
     unit.
-  - The hiding Programs (``Shape.hidden``: `Pc4WeightHidden`, `Pc4CallHidden`, `Pc4CheckHidden`) have the same units,
-    each its plain unit and the hm96-sha512 commit strings b ‖ c of the rows it reads and writes (`circuit.leaves`). A
-    root publishes only admission bits and commit strings: a row unit's of its input row and of its nvfp4-p row, a tile
-    unit's of the nvfp4-p rows it reads and of its tile digest. Every salt is an input. A tile's string for a row is the
-    row unit's, under one salt, which is how the verifier links the two units; so each such string is computed in both,
-    which `Q_word` v1 refuses and v2 reports (`unit_cut`'s ``recompute``), and the tests check that nothing else is.
-  - Each row is the row C-Flock commits from the same 16-bit words (`verity_flock.circuit.Port`; `leaves.ROW_SCHEMA`).
-    A row of 16-bit elements is an `hm96-sha512/row/v1` row: `sha512/row/v1`'s prefix block names role X, the word
-    width (16) and the word count, as every C-Flock v1 port's does, and the row is whole SHA-512 blocks. A packed row
-    and the tile digest are `hm96-sha512/row/v2` bit rows: `sha512/row/v2`'s prefix block names only the length in bits,
-    16 a word. Neither digest names the role or the schema, so the registration domain of the tree a row sits in binds
-    the schema id, the word count and the role. Every narrower element is packed low bits first, so a row's bytes are
-    the tensor's memory (`rowleaf.bit_row`'s of its elements):
+  - The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ from the plain ones only in the
+    tile: `Pc4TileHidden` is `Pc4Tile` and its tile digest (`circuit.leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and
+    U, on `hashes.KeccakP1600R12`), which it returns in place of C̃ and U. The weight's Program is `Pc4Weight` under
+    hiding too. A root publishes only admission bits and tile digests, and every partition still computes each value
+    in exactly one unit.
+  - The hiding is C-Flock's: every row a unit reads or writes is a committed port, which C-Flock commits as an
+    hm96-sha512 row and hashes in the proof (`--zk`), so the Programs hold no leaf and no salt. `pc4.PORTS` names each
+    unit's committed rows: a row unit's input row (bf16) and the nvfp4-p row it writes, and a tile's TM + TN nvfp4-p
+    rows and its tile digest. A tile reads each row as its row unit wrote it (the same words, schema and salt), so the
+    units link by equal commit strings b ‖ c.
+  - The rows are `hm96-sha512/row/v1` rows of 16-bit words: `sha512/row/v1`'s prefix block names the role, the word
+    width (16) and the word count, and a registration domain binds the schema id and the word count. Every narrower
+    element is packed low bits first, so a row's bytes are the tensor's memory:
 
     ~~~text
-    schema id            words                                                     count             role               C-Flock row
-    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)   v1, 64 | k
-    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W               v1, 32 | k
-    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  v2
+    schema id            words                                                     count             role
+    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)
+    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W
+    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
-    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               v2
-    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
+    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W
+    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X
     ~~~
 
     nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
     that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
-    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
-  - The built leaves cost what was priced: a row unit adds 89 SHA-512 compressions at k = 4,096 (67 for the bf16 row,
-    22 for the nvfp4-p row), and a 64 × 64 tile adds 2,819 (22 for each of its 128 rows, 3 for the tile digest's string)
-    and 281 Keccak-p[1600, 12] for the digest. Packing, hm96's mask and b's XOR are wiring and XORs.
-  - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's words, digest, commit
-    string and tree leaf at k = 64 and 4,096, and the digest of two tiles. The gates compute them, and C-Flock's ports
-    commit them (`backends/flock/tests/test_pouw_rows.py`).
-  - Not in it yet: the debit and the cap, R1, D-24, and a plan and closure that draw a tile (`circuit.plan` is
-    `ncp-v2`'s). Until those land, runs are checked by the replay above, a development shortcut that opens rows, and
-    every report says so.
+    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c. These rows are what C-Flock's ports commit, byte
+    for byte.
+  - In gates the hiding adds only the tile digest: 281 Keccak-p[1600, 12] a 64 × 64 tile.
+  - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's row bytes, `sha512/row/v1`
+    digest, commit string and tree leaf at k = 64 and 4,096, and the digest of two tiles, which the gates compute.
+    C-Flock's ports are mapped onto them.
+  - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
+    each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
+    TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
+  - Not in it yet: the debit and the cap, R1, D-24, and the plan's link checks and paths. Until those land, runs are
+    checked by the replay above, a development shortcut that opens rows, and every report says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
