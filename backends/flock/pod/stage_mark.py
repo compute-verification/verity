@@ -65,13 +65,18 @@ def main() -> int:
         fs, csha = files(o / "classes" / shape[:16]), rec["stage"].get("circuit_sha512")
         entry = rec.get("stage_cached")
         if not entry:
+            # class_statement deletes a fresh stage's *.bin and circuit.txt from OUT_K once they are cached, so the entry is the
+            # one whose record is this stage's (shape, stage, row units), the newest if several are; post checks it is the one proved
+            hits = []
             for e in sorted(root.iterdir()):
                 r = json.loads((e / "rec.json").read_text()) if len(e.name) == 32 and (e / "rec.json").exists() else {}
-                if r.get("shape") == shape and (r.get("stage") or {}).get("circuit_sha512") == csha and files(e) == fs:
-                    entry = e.name
-                    break
+                if (r.get("shape") == shape and r.get("stage") == rec["stage"] and r.get("row_units") == rec.get("row_units")
+                        and (not fs or files(e) == fs)):
+                    hits.append(((e / "rec.json").stat().st_mtime, e.name))
+            entry = max(hits)[1] if hits else None
         if not entry:
             return finish(o, {"op": op, "ok": False, "why": f"the stage wrote no entry in {root} holding these bytes"}, t0)
+        fs = files(root / entry)
         key, parts = ident(o, shape)
         mark = {"ident": key, **parts, "entry": entry, "files": fs, "circuit_sha512": csha, "stage_s": rec.get("stage_s"),
                 "stage_py_maxrss_gb": rec.get("stage_py_maxrss_gb"), "row_units": rec.get("row_units"), "definition": rec.get("definition"),
