@@ -1,5 +1,6 @@
-import Pous.Accounting.LemmaA
-import Pous.Model.Inc
+import Pous.Protocol.Accounting.LemmaA
+import Pous.Protocol.Model.Inc
+import Pous.Assumptions.P2
 
 /-!
 # Named assumptions

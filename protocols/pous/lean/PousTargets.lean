@@ -1,11 +1,11 @@
-import Pous
+import Pous.Guarantees
 
 /-!
 # Open targets (untrusted)
 
 Nothing here is trusted, and nothing here is in the default build: it is the list of what to prove next. Every target
-is pinned in `Pous/Pinned.lean`; `grade.sh` grades a proof of `Pous.Pinned.X` given as `theorem solution`. The names
-below are the draft names the prover files use. The proved statements are in `PousProofs/Pinned.lean`.
+is pinned in `Pous/Guarantees.lean`; `grade.sh` grades a proof of `Pous.Pinned.X` given as `theorem solution`. The names
+below are the draft names the prover files use. The proved statements are in `Pous/SecurityProofs.lean`.
 -/
 
 namespace PousTargets

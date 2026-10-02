@@ -288,10 +288,10 @@ def test_certificates_at_their_points():
 
 
 def test_certificates_name_proved_pins():
-    """A certificate's `theorem` is the `Pous.Pinned` statement it rests on (`lean/Pous/Pinned.lean`), and its proof
+    """A certificate's `theorem` is the `Pous.Pinned` statement it rests on (`lean/Pous/Guarantees.lean`), and its proof
     `PousProofs.X` is pinned in `lean/lean-audit.json`.  Experimental schemes are exempt: P2's pin is proposed."""
     lean = Path(__file__).parents[1] / "lean"
-    statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Pinned.lean").read_text(), re.M))
+    statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Guarantees.lean").read_text(), re.M))
     pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
     checked = 0
     for name in schemes.REGISTRY:

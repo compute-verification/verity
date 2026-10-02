@@ -7,7 +7,9 @@
 #   1. The trusted sources match TRUSTED.sha256, and the trusted layer and the grader build, before any submission code
 #      runs. The hashes of the grader binary, the toolchain's `lean`, the trusted sources and every `.olean` on the
 #      grader's LEAN_PATH (this package, Mathlib and its dependencies, the toolchain's core) are recorded.
-#   2. The submission may import only `Pous` and `Mathlib.*`; the grader's trusted environment is exactly those imports.
+#   2. The submission may import only the trusted layer (`Pous.Protocol`, `Pous.Assumptions`, `Pous.Guarantees`), the
+#      proved `Pous.SecurityProofs.Sanity` and `Pous.SecurityProofs.Accounting.Numbers`, and `Mathlib.*`; the grader's
+#      trusted environment is exactly those imports.
 #   3. It compiles in a throwaway directory, inside a user, mount, PID and network namespace where every other mount is
 #      read-only. Compile-time IO (`#eval`, `run_cmd`) can write nothing outside that directory, and every process it
 #      starts dies with the namespace.
@@ -32,7 +34,8 @@ unshare --user --map-root-user --pid --fork --mount --net true 2> /dev/null \
 
 # 1. the trusted tree, before any submission code runs
 sha256sum --quiet -c TRUSTED.sha256 >&2 || fatal "trusted files differ from TRUSTED.sha256"
-lake build Pous pous-grader >&2 || fatal "the trusted layer or the grader does not build"
+lake build Pous.Protocol Pous.Assumptions Pous.Guarantees Pous.SecurityProofs.Sanity \
+  Pous.SecurityProofs.Accounting.Numbers pous-grader >&2 || fatal "the trusted layer or the grader does not build"
 grader=$root/.lake/build/bin/pous-grader
 lean=$(elan which lean) || fatal "no lean for $(cat lean-toolchain)"
 lean_path=$(lake env printenv LEAN_PATH) || fatal "no LEAN_PATH"
@@ -52,8 +55,9 @@ imports=$(sed -n 's/^[[:space:]]*import[[:space:]]\{1,\}//p' "$work/PousSubmissi
 [ -n "$imports" ] || fail "no import"
 for m in $imports; do
   case "$m" in
-    Pous|Mathlib|Mathlib.*) ;;
-    *) fail "import $m: a submission may import only Pous and Mathlib modules" ;;
+    Pous.Protocol|Pous.Assumptions|Pous.Guarantees|Mathlib|Mathlib.*) ;;
+    Pous.SecurityProofs.Sanity|Pous.SecurityProofs.Accounting.Numbers) ;;
+    *) fail "import $m: a submission may import only the trusted layer, Sanity, Numbers and Mathlib modules" ;;
   esac
 done
 
