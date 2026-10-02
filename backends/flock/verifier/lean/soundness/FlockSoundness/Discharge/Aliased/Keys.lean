@@ -102,6 +102,31 @@ def srcKey (c : Circuit) (x : ℕ) : Src :=
         (portCols c.unit.inGroups)[portOf (portCols c.unit.inGroups) (x % (c.unit.inWords * WORD))]!.1)
   else .pad (x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD))
 
+/-- **At a leaf port, Δ copies the zero or a message bit**: only a cut port's copy comes from a wire or no source. -/
+theorem srcAt_leaf (c : Circuit) (k : ℕ) {p : ℕ} (t : ℕ) (hp : p < (c.unit.inGroups.getD 0 default).bits.size) :
+    srcAt c k p t = .zero ∨ ∃ q byte bit, srcAt c k p t = .msg q byte bit ∧ bit < 8 := by
+  unfold srcAt
+  simp only [hp, ↓reduceIte]
+  split
+  · exact Or.inl rfl
+  · exact Or.inr ⟨_, _, _, rfl, Nat.mod_lt _ (by decide)⟩
+
+/-- **A unit with only leaf inputs**: every stacked input at a port bit has the zero key or a message bit's. -/
+theorem srcKey_leaf (c : Circuit) (h1 : c.unit.inGroups.size = 1) (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ}
+    (hm : x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups) :
+    srcKey c x = .zero ∨ ∃ q byte bit, srcKey c x = .msg q byte bit ∧ bit < 8 := by
+  unfold srcKey
+  rw [ite_eq_left hm]
+  obtain ⟨p, t, hp, ht, hpt⟩ := mem_portBits hm
+  rw [hpt, portOf_eq hnd hp ht]
+  refine srcAt_leaf c _ _ ?_
+  obtain ⟨g, hg⟩ := List.length_eq_one_iff.1 (show c.unit.inGroups.toList.length = 1 by simpa using h1)
+  have hgs : c.unit.inGroups = #[g] := Array.toList_inj.1 (by simpa using hg)
+  have hsz : (portCols #[g]).size = g.bits.size := by
+    simpa using congrArg List.length (portCols_single g)
+  rw [hgs] at hp ⊢
+  simpa [hsz] using hp
+
 /-- Only padding rows have padding keys, and a padding key names its input. -/
 theorem srcKey_pad {c : Circuit} {x k off : ℕ} (h : srcKey c x = .pad k off) :
     k = x / (c.unit.inWords * WORD) ∧ off = x % (c.unit.inWords * WORD) := by
