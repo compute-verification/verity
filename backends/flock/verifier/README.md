@@ -25,15 +25,19 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 ~~~
 
 `ID` names a version:
-- `verity/flock-circuit`: PR #83 from `e51e2b86`, the default. It needs no `--comp`, and it pins `seed_injection: false`,
-  as a proving build does. A circuit that binds a `verity/partition/v1` digest needs `--partition F`, the verifier's own
-  copy of the partition object (§16.10).
+- `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row
+  (§16.13), so the public file holds roots, hiding leaves and structure only. It needs no `--comp`, and it pins
+  `seed_injection: false`, as a proving build does. A circuit that binds a `verity/partition/v1` digest needs
+  `--partition F`, the verifier's own copy of the partition object (§16.10).
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
   decodes the program and evaluates the query itself (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
+- `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
+  `verity/flock-circuit/types@210d32e1` is its form with public outputs.
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
-  statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10). Runs
-  staged at `68ae79f2` or later use this name. The unsuffixed name stays `e51e2b86`'s statement for the runs staged before.
+  statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10), with
+  public outputs. Runs staged from `68ae79f2` until hidden outputs use this name.
+- `verity/flock-circuit@e51e2b86` (and `+seed-injection`): PR #83 from `e51e2b86`, for the runs staged before `68ae79f2`.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
 
