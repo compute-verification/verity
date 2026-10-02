@@ -89,6 +89,25 @@ def test_a_call_without_a_boolean_version_is_not_evaluated_by_name(tmp_path) -> 
         "boolean:Unknown_v1": "not compiled: Unknown_v1 is no row of the Program"}
 
 
+def test_a_picks_stated_peak_bounds_what_its_evaluation_allocates(tmp_path) -> None:
+    import tracemalloc
+
+    nodes, r = _row(bind(b1.SiluMul, I=1024), Array(2048, W16))
+    ev = BR.BooleanRows(nodes, 0)
+    ev.prewarm([r])
+    gu = np.random.default_rng(5).integers(0, 1 << 16, 2048).astype(np.uint16)
+    tracemalloc.start()
+    try:
+        base = tracemalloc.get_traced_memory()[0]
+        ev(_Index({"out": "act"}), r, {}, [gu])
+        held = tracemalloc.get_traced_memory()[1] - base
+    finally:
+        tracemalloc.stop()
+    assert held <= ev.peak_bytes(r) / BR.PEAK_MARGIN
+    nodes, r = _row(bind(b1.Gemm, K=4, N=2), Array(4, W16), Array(2, Array(4, W16)))
+    assert BR.BooleanRows(nodes, 0).peak_bytes(r) == 0                   # declined before it allocates
+
+
 def test_a_boolean_version_that_changes_the_calls_boundary_is_refused(monkeypatch) -> None:
     import verity_vllm.program.boolean as BB
 
@@ -123,3 +142,21 @@ def test_the_picks_are_tabulated_by_family() -> None:
     o = BR.outcome(art)
     assert o["by_family"] == {"RoPE_v1": {"picked": 3, "evaluated": 3, "mismatch": 1}, "Gemm_v2": {"picked": 1, "evaluated": 0, "mismatch": 0}}
     assert (o["seed"], o["picked"], o["equal"], o["grade"]) == (7, 4, 2, "partial")
+
+
+def test_the_uniform_draws_picks_are_tabulated_by_family_not_by_its_one_stratum() -> None:
+    sr = {"result": False, "grade": "mismatch", "why": "x",
+          "sample": {"strata_by": "uniform", "k": 5, "picked": 5, "evaluated": 4, "equal": 3, "mismatch_n": 1, "not_evaluated_n": 1},
+          "timing": {"per_family_n": {"RoPE_v1": 3, "Gemm_v2": 2}},
+          "strata": {"all|all|all|all|all|all": {"population": 99, "sampled": 5, "evaluated": 4, "mismatch": 1}},
+          "mismatch_by": {"by_family": {"Gemm_v2": 1}}, "not_evaluated": [{"spec": "RoPE_v1{D=64}"}]}
+    assert BR.outcome({"sampled_replay": sr})["by_family"] == {"RoPE_v1": {"picked": 3, "evaluated": 2, "mismatch": 0},
+                                                              "Gemm_v2": {"picked": 2, "evaluated": 2, "mismatch": 1}}
+    sr["sample"]["not_evaluated_n"] = 13
+    assert BR.outcome({"sampled_replay": sr})["by_family"]["Gemm_v2"] == {"picked": 2, "evaluated": None, "mismatch": 1}
+
+
+def test_a_replay_that_did_not_run_is_an_outcome_with_its_reason() -> None:
+    why = "sampled replay not run: KeyError('tree node 1 of step 0 level 0 is not in the slim dumped store')"
+    o = BR.outcome({"sampled_replay": {"result": None, "grade": "not-evaluated", "why": why, "error": "KeyError(...)"}})
+    assert (o["result"], o["grade"], o["why"], o["picked"], o["evaluated"], o["by_family"], o["wall_s"]) == (None, "not-evaluated", why, None, None, {}, None)

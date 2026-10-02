@@ -44,12 +44,15 @@ namespace Flat
 def leafCol (c : Circuit) (k j t : ℕ) : ℕ :=
   c.unitRange.slot k + ((portCols #[c.unit.inGroups.getD 0 default]).map (·.1)).getD j 0 + t
 
-/-- Unit copy `k`'s leaf `j`, bit `t`: the message bit it copies, or the copy's forced-zero row for a zero leaf. -/
+/-- Unit copy `k`'s leaf `j`, bit `t`: the message bit it copies, or the copy's forced-zero row for a zero leaf or a bit
+row's leaf bit past its length. -/
 def leafSrc (c : Circuit) (k j t : ℕ) : ℕ :=
   if (c.leavesIn.getD (k % c.upv) #[])[j]! < 0 then c.unitRange.slot k + c.unit.useful else
     let x := ((c.leavesIn.getD (k % c.upv) #[])[j]!).toNat
     let p := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x)).getD 0
-    Typed.msgCol c (k / c.upv) p (2 * (x - (Typed.starts c)[p]!) + t / 8) (t % 8)
+    if 16 * (x - (Typed.starts c)[p]!) + t < c.ports[p]!.bits then
+      Typed.msgCol c (k / c.upv) p (2 * (x - (Typed.starts c)[p]!) + t / 8) (t % 8)
+    else c.unitRange.slot k + c.unit.useful
 
 /-- `HmRow.delta`'s leaf pairs: each unit copy's leaf bits copy their message bits. -/
 def leafPairs (c : Circuit) : List (ℕ × ℕ) :=
@@ -59,10 +62,11 @@ def leafPairs (c : Circuit) : List (ℕ × ℕ) :=
 /-- VU `g`'s cut `e`: its port's first column. -/
 def cutCol (c : Circuit) (g : ℕ) (e : ℕ × ℕ × ℕ) : ℕ := c.slotCol c.unitNet g e.1 + (portCols c.unit.inGroups)[e.2.1]!.1
 
-/-- VU `g`'s cut `e`, bit `t`: its row word's message bit, or the forced-zero row past the word. -/
+/-- VU `g`'s cut `e`, bit `t`: its row word's message bit, or the forced-zero row past the word or the row's length. -/
 def cutSrc (c : Circuit) (g : ℕ) (e : ℕ × ℕ × ℕ) (t : ℕ) : ℕ :=
   let p := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ e.2.2)).getD 0
-  if t < 16 then Typed.msgCol c g p (2 * (e.2.2 - (Typed.starts c)[p]!) + t / 8) (t % 8)
+  if t < 16 && 16 * (e.2.2 - (Typed.starts c)[p]!) + t < c.ports[p]!.bits then
+    Typed.msgCol c g p (2 * (e.2.2 - (Typed.starts c)[p]!) + t / 8) (t % 8)
   else c.unitRange.slot 0 + c.unit.useful
 
 /-- `HmRow.delta`'s cut pairs: each VU's cut ports copy their row words' bits. -/
@@ -88,13 +92,8 @@ def wirePairs (c : Circuit) : List (ℕ × ℕ) :=
     (List.range (wireWidth c w)).flatMap fun t =>
       [(wireDst c g w + t, wireDst c g w + t), (wireDst c g w + t, wireSrc c g w + t)]
 
-/-- A row circuit's bit that Δ fills: a row's first `cv` bit, or an hm96 slot's `pad` bit (`DeltaIn`'s first two forms). -/
-def RowBit (c : Circuit) (x : ℕ) : Prop :=
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 512,
-      x = c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[0]!.1 +
-        (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2]!.1 + t) ∨
-  (∃ g < c.g, ∃ p < (HmRow.rowSlots c.ports).2.size, ∃ t < 1024,
-      x = c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1 + t)
+/-- A row circuit's bit that Δ fills: a bit of a row's chain, or of its hm96 slot (`DeltaIn`'s first two forms). -/
+def RowBit (c : Circuit) (x : ℕ) : Prop := ShaRowBit c x ∨ HmRowBit c x
 
 /-- Unit copy `s₀`'s input port `p`, bit `t`: the column Δ copies into it. A leaf port's leaf (`leafSrc`), else the cut
 into it (`cutSrc`), else the wire into it (`wireSrc`); `HmRow.check` wires each port exactly once. -/
@@ -147,7 +146,7 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
         · simp
   intro d hd
   have h0 : FlatRowsQ c pin d := ⟨[], by simp [hd], by simp⟩
-  -- the rows' cv and pad bits
+  -- the rows' constant bits: each row's first cv, its hm96 pad's, its chain's message bits past its length
   refine run_bind_fst (Q := FlatDelta c pin) (P := FlatRowsQ c pin)
     (forIn_id_inv_range (FlatRowsQ c pin) (fun g _ hg d hd => ⟨_, rfl,
       forIn_id_inv_range (FlatRowsQ c pin) (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) h0) ?_
@@ -161,10 +160,19 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
       · exact hq q hq'
       · exact hi
       · exact hi
-    refine forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ⟨_, rfl, push2 hd ?_⟩)
-      (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ⟨_, rfl, push2 hd ?_⟩) hd)
-    · exact Or.inr ⟨g, hg, p, hp, t, ht, rfl⟩
-    · exact Or.inl ⟨g, hg, p, hp, t, ht, rfl⟩
+    refine forIn_id_inv_range (FlatRowsQ c pin) (fun k _ hk d hd => ⟨_, rfl,
+        forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_) hd⟩)
+      (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_)
+        (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ⟨_, rfl, push2 hd ?_⟩) hd))
+    · split
+      · exact ⟨_, rfl, push2 hd (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact ⟨_, rfl, push2 hd (Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)⟩
+      · exact ⟨_, rfl, hd⟩
+    · split
+      · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
+      · exact Or.inr ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩
   rintro d ⟨rows, hrows, hrq⟩
   refine ⟨rows, ?_, hrq⟩
   -- the units' leaf bits
@@ -574,26 +582,17 @@ theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
     lt_of_lt_of_le hoff (L.fit st.c.unitNet).2
   have hrow0 : ∀ q ∈ rows, q.1 ≠ st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t) := by
     intro q hq heq
-    obtain ⟨hws, hw0⟩ := rowSlots_spec st.c.ports P.ports
-    rcases hrows q hq with ⟨g, hg, pp, hpp, tt, htt, he⟩ | ⟨g, hg, pp, hpp, tt, htt, he⟩
-    · obtain ⟨h1, h2⟩ := hw0 _ (getElem_mem_toList' hpp)
-      have hidx : 2 * ((HmRow.rowSlots st.c.ports).2[pp]!)[0]!.2 < 6 := by omega
+    have hws := rowSlots_spec st.c.ports
+    have hall := rowSlots_all st.c.ports
+    rcases hrows q hq with ⟨g, hg, pp, hpp, k, hk, i, hi, tt, htt, he⟩ | ⟨g, hg, pp, hpp, i, hi, tt, htt, he⟩
+    · obtain ⟨h1, h2⟩ := hall _ (getElem_mem_toList' hpp) _ (getElem_mem_toList' hk)
+      have hidx : 2 * ((HmRow.rowSlots st.c.ports).2[pp]!)[k]!.2 + i < 6 := by omega
       refine L.ne_unit_at P C P.shaNet (Ne.symm hsha) hg (by rw [C.perVu_sha]; exact h1)
         (getElem_mem_toList' (by rw [C.sha_in.1]; exact hidx)) ?_ hs₀ hb (he ▸ heq)
-      rw [C.sha_in.2 _ hidx, ite_eq_left (by simp)]
+      rw [C.sha_in.2 _ hidx, sha_width _ _ hi]
       exact htt
-    · have hl : (portCols (st.c.nets.getD st.c.hmNet default).2.inGroups).toList.map (·.2) =
-          [512, 1024, 8 * HmRow.SALT_BYTES] := by
-        rw [← Array.toList_map, C.hm_in]
-      have hsz : (portCols (st.c.nets.getD st.c.hmNet default).2.inGroups).size = 3 := by
-        have := congrArg List.length hl; simpa using this
-      have hw : (portCols (st.c.nets.getD st.c.hmNet default).2.inGroups)[1]!.2 = 1024 := by
-        rw [getElem!_pos _ 1 (by rw [hsz]; omega)]
-        have := congrArg (fun l : List ℕ => l[1]?) hl
-        simp only [List.getElem?_map, Array.getElem?_toList] at this
-        rw [Array.getElem?_eq_getElem (by rw [hsz]; omega)] at this
-        simpa using this
-      refine L.ne_unit_at P C P.hmNet (Ne.symm hhm) hg ?_ (getElem_mem_toList' (by rw [hsz]; omega))
+    · obtain ⟨hil, hw⟩ := hm_width C.hm_in hi
+      refine L.ne_unit_at P C P.hmNet (Ne.symm hhm) hg ?_ (getElem_mem_toList' hil)
         (by rw [hw]; exact htt) hs₀ hb (he ▸ heq)
       rw [C.perVu_hm, ← hws]
       exact lt_of_lt_of_le hpp (le_nextPow2 _)
@@ -781,7 +780,7 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       exact netOfD_built hnet) hpc
     have P' : ParseFacts tags st.c := by
       rw [hc]
-      exact ⟨P.nets, P.ports, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.typed⟩
+      exact ⟨P.nets, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.typed⟩
     obtain ⟨ls, hcheck⟩ := P'.check
     have h0 : c'.nets[0]? = some ("unit", net) := by
       rw [← Array.getElem?_toList, hmore]
