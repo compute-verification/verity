@@ -489,14 +489,17 @@ def _encode(backend: Backend, w: Any, tags: Any) -> tuple[float, Any]:
 
 
 def _timed_arm(backend: Backend, fn: Callable[[], Any], reps: int) -> tuple[list[float], dict[str, Any]]:
-    """`fn`'s reps, from a CUDA graph where the path is capturable, and how it was timed."""
-    if backend.graphed is not None:
-        try:
-            replay = backend.graphed(fn)
-            return _reps(backend, replay, reps), {"graphed": True}
-        except Exception as e:  # noqa: BLE001  a non-capturable path (a host read mid-kernel) falls back to eager
-            return _reps(backend, fn, reps), {"graphed": False, "reason": type(e).__name__ + ": " + str(e)[:200]}
-    return _reps(backend, fn, reps), {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
+    """`fn`'s reps, from a CUDA graph where the path is capturable, and how it was timed.  The eager fallback runs after the
+    `except` clause: inside it the traceback holds the failed capture's frames and their tensors (a decode's state and output,
+    44 GiB on llama3.1-8b/linears+head at 384 KiB blocks) through every eager rep."""
+    if backend.graphed is None:
+        return _reps(backend, fn, reps), {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
+    try:
+        replay = backend.graphed(fn)
+        return _reps(backend, replay, reps), {"graphed": True}
+    except Exception as e:  # noqa: BLE001  a non-capturable path (a host read mid-kernel) falls back to eager
+        reason = type(e).__name__ + ": " + str(e)[:200]
+    return _reps(backend, fn, reps), {"graphed": False, "reason": reason}
 
 
 def take_decode_paths() -> list[dict[str, Any]]:

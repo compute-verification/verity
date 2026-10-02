@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import types
+import weakref
 from pathlib import Path
 
 import pytest
@@ -492,6 +493,26 @@ def test_the_plain_arm_warms_the_device_up_before_its_first_rep_and_keeps_no_war
     assert warm > 0 and ran == ["x1"] * warm + ["x1"] * 4 + ["x8"] * 4           # then each T: one untimed call, 3 reps
     assert reps == {1: [0.125] * 3, 8: [0.125] * 3} and not how[1]["graphed"]
     assert harness.Backend("cpu", None, None, None, None, None, timer).warmup_s == 0           # the CPU stand-in's: none
+
+
+def test_the_eager_fallback_runs_after_the_failed_capture_and_its_tensors_are_released():
+    harness = _harness()
+    held = []
+
+    class Tensors:
+        pass
+
+    def graphed(fn):
+        state = Tensors()                                      # a failed capture's tensors, alive in its frame
+        held.append(weakref.ref(state))
+        raise RuntimeError("operation not permitted when stream is capturing")
+
+    def fn():
+        assert held[0]() is None
+
+    fake = harness.Backend("cpu", None, None, None, None, None, lambda f: (f(), 1e-3)[1], graphed=graphed)
+    reps, how = harness._timed_arm(fake, fn, 2)
+    assert reps == [1e-3, 1e-3] and not how["graphed"] and how["reason"].startswith("RuntimeError: operation not permitted")
 
 
 SMI_STUB = """\
