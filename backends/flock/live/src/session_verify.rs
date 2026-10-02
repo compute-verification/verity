@@ -129,7 +129,7 @@ fn all_cores() -> bool {
 }
 
 /// Upstream's `fold_alpha_batched_pooled` placement (its `SUMCHECK_PAR_THRESHOLD` is 2^12 columns), for any work of the fold's.
-fn on_fold_pool<T: Send>(n_cols: usize, f: impl FnOnce() -> T + Send) -> T {
+pub(crate) fn on_fold_pool<T: Send>(n_cols: usize, f: impl FnOnce() -> T + Send) -> T {
     if n_cols >= 1 << 12 && all_cores() { all_core_pool().install(f) } else { f() }
 }
 
@@ -341,7 +341,7 @@ fn inner_product(a: &[F128], b: &[F128]) -> F128 {
 
 /// Whether `comb_partial_structured` covers `c`: every slot type at least 2^k_skip columns and within the block, the ranges
 /// disjoint and within it, Δ and the pin within it. Upstream's fold panics on the last three; this form then folds flat.
-fn structured_covers(c: &BlockCircuit, k_skip: usize) -> bool {
+pub(crate) fn structured_covers(c: &BlockCircuit, k_skip: usize) -> bool {
     let n = 1usize << c.k_log;
     if c.types.is_empty() || c.tables.len() != c.types.len() || c.types.iter().any(|t| t.0 < k_skip || t.0 > c.k_log) || c.pin >= n {
         return false;
@@ -361,7 +361,7 @@ fn structured_covers(c: &BlockCircuit, k_skip: usize) -> bool {
 
 /// Whether the quirky eq table vanishes on the smallest slot type's first slot, where upstream's fold panics ("eq tensor
 /// vanishes on the first slot"): every skip weight zero, or a coordinate above that slot equal to 1 (`1 + x = 0`).
-fn first_slot_vanishes(c: &BlockCircuit, ws: &[F128], xr: &[F128], k_skip: usize) -> bool {
+pub(crate) fn first_slot_vanishes(c: &BlockCircuit, ws: &[F128], xr: &[F128], k_skip: usize) -> bool {
     let lo = c.types.iter().map(|t| t.0).min().unwrap_or(k_skip);
     ws.iter().all(|w| *w == F128::ZERO) || xr[lo - k_skip..].iter().any(|x| *x == F128::ONE)
 }
@@ -415,7 +415,7 @@ fn interval_eq_sum(x: &[F128], r: &[F128], mut a: usize, count: usize) -> F128 {
 /// as `ratio_q · base` at the first slot's table. Its share of `comb_partial[y mod 64]` is `base_t[y] · eq(rr[..sl−6], y >> 6)`
 /// times `eq(xr[sl−6..], q) · eq(rr[sl−6..], q)`, so a type costs one fold at 2^sl and its ranges a sum over positions
 /// ([`interval_eq_sum`]). Δ's entry `(i, col)` adds `α·eq_row(i)·eq(rr, col >> 6)` (B's without α), the pin β·eq(rr, pin >> 6).
-fn comb_partial_structured(c: &BlockCircuit, alpha: F128, beta: F128, ws: &[F128], xr: &[F128], rr: &[F128],
+pub(crate) fn comb_partial_structured(c: &BlockCircuit, alpha: F128, beta: F128, ws: &[F128], xr: &[F128], rr: &[F128],
                            times: &mut Vec<(&'static str, f64)>) -> Vec<F128> {
     let n_skip = ws.len();
     let k_skip = n_skip.trailing_zeros() as usize;
