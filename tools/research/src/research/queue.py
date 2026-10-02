@@ -11,7 +11,8 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
 has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
-writes, so a new push needs a new one; it replaces the merge-request note.  Draft state is ignored: agents open PRs as drafts, and
+writes, so a new push needs a new one; once the queue lands trains it replaces the merge request
+(until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
@@ -510,7 +511,7 @@ class Queue:
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready":
-                e.why = "admitted: merges at the next sync"
+                e.why = "admitted: ready for a train (the queue does not land trains yet)"
         return entries
 
 
@@ -557,8 +558,9 @@ def ready(github, store, number: int | None, by: str) -> int:
         return 2
     target = grant_target(pr.number, pr.head)
     store.add_label(target, vocab.READY, True, by)
-    print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {_label_write_through(store, target)}")
-    return 0
+    said, lost = _label_write_through(store, target)
+    print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {said}")
+    return 1 if lost else 0
 
 
 def main(argv: list[str]) -> int:

@@ -10,7 +10,8 @@
 #  3. GPU 1's device check on this cubin, v1 (G = 4) only, no timing (run.py check.json, SHAPES empty);
 #  4. e2e.py: every mode's own gates, then its timing, then pearlc's verify pass, retained under $WORK/passes/<run id> (about
 #     45 GB on node 2's /workspace, outside the run directory, so custody does not upload it).
-# The reference verifier runs after the window, on the CPU (verify.sh <run id>).  Needs setup.sh's $WORK.
+# The reference replay runs after the window, on the CPU (verify.sh <run id>); its ACCEPT is replay-verified (development
+# shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
 # FlashInfer finds the sampling module setup.sh built, with the same flags.  jit-built.txt lists every FlashInfer library
 # built during the run: empty unless a first-call JIT landed in it.
@@ -23,6 +24,8 @@
 # run (a fill job).  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C scheme, and so its hashing format)
 # pass to e2e.py and profile_decode.py; the quality run names its own schemes.  GRAPHS=1 passes --graphs to e2e.py, FP8_GRAPHS=1 --fp8-graphs.
 # ROWS_FORM=s (an -h2 SCHEME only) passes --rows-form s to e2e.py and profile_decode.py: forming's statistics from -h2's row-leaf pass.
+# WHOLE_STEP=1 passes --whole-step: the arm's decode forwards as vLLM's FULL graphs with Pearl-C's calls inside; with it,
+# WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
@@ -30,7 +33,7 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
 mkdir -p "$OUT"
 MODE=${MODE:-window}
 SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs}
-          ${ROWS_FORM:+--rows-form "$ROWS_FORM"})
+          ${ROWS_FORM:+--rows-form "$ROWS_FORM"} ${WHOLE_STEP:+--whole-step} ${WHOLE_DEFER:+--whole-defer})
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f

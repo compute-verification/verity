@@ -6,13 +6,18 @@ description: >
   when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
   `check`, tests, shared tools, other lanes' work) and the `kind: friction` note format with its `severity: incident` flag.
   Use when you worked around something, a step bit you twice, you see a better abstraction, you're unsure whether a change
-  is yours to make, you just got a ruling from Daniel, or you're the coordinator reading friction notes.
+  is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or a command fails for
+  missing credentials.
 ---
 
 # Friction
 
 When something gets in your way (a wrong command, a clumsy step, a check that fails late, a missing abstraction), take the
 first of these that applies.
+
+If `research data`, `research queue` or node ssh fail for missing credentials, rerun from a fresh tmux login shell before
+anything else: on a cloud VM a long-lived tool shell can lose the injected secrets (store, node SSH key, Slack token) that a
+fresh login shell still has.
 
 ## 1. Fix it, when it's clearly yours
 
@@ -33,8 +38,8 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
-- one stand-alone question, through the channel you already use to reach your coordinator (a lane: a handoff to
-  `lanes/coordinator/`; a Project worker: its report). The coordinator answers from the rulings when one applies, and
+- one stand-alone question to your coordinator (a handle holder: on Slack, `research slack ask`; a worker: its report or
+  reply to the coordinator that launched it). The coordinator answers from the rulings when one applies, and
   otherwise puts the question to Daniel as written;
 - the case, the change, and your recommendation, in a few lines;
 - meanwhile, prepare the change on your branch, and land it only after the ruling.
@@ -59,8 +64,8 @@ Write a friction note when the fix isn't yours or can't happen now, and the fric
 about half an hour, or the second time you hit it. Not for what you fixed, and not for one-off slips. Search the notes first:
 if one covers it, write a two-line note naming it under `recurs:`, because repeats are what get fixed.
 
-A note is a file, never a message, so it pings nobody. A blocker still goes to your coordinator as a handoff (lane contract
-§3a); the note is its record.
+A note is a file, never a message, so it pings nobody. A blocker still goes to your coordinator as a message (Slack, or
+your report to it); the note is its record.
 
 ~~~markdown
 ---
@@ -88,6 +93,37 @@ into a question for Daniel.
 ## Rulings so far
 
 Newest first. Each is Daniel's.
+
+- 2026-10-01 (4:31 PM PDT): a table that tabulates a fixed function is a value even with no program parameter
+  (`gelu_tanh_bf16`, `tanh_rn`). The only tables in an operation's own definition are the hardware's measured ones (the
+  MUFU tables, `tanh_mufu` included), which stay gates with the floating-point formats' constants. The hidden read's cost
+  is accepted for conceptual clarity unless it proves a bottleneck.
+- 2026-10-01 (3:32 PM PDT): no protocol deals with public values, so none gets an exemption; PoUW's tile check moves into
+  a proof. During development a proof may be replaced by replay, or verification skipped, for research velocity: that's
+  a shortcut, never the protocol. Shapes such as batch size and sequence length may stay public for now: the first
+  protocol decouples values from circuits, and private-circuit protocols come later.
+- 2026-10-01 (2:43 PM PDT): a decision Daniel must make goes where Slack notifies him, never only in a note or a lead's
+  thread. Use one question per post, with its options, your recommendation, and its deadline or default:
+  `research msg ask-daniel` (the card mentions him), or, if the card fails, `research msg send --to @daniel`.
+- 2026-10-01 (1:14 PM PDT; this wording 3:06 PM): the circuit holds only gates, and values are always hidden, the core
+  guarantee of even the most basic protocol. An operation's own definition is gates: the floating-point formats'
+  constants, SHA-512's, the measured GPU tables for exp2, rcp and tanh. Everything a program or a request brings is a value:
+  the weights, a program's constants (eps, the attention scale, a softcap) and tables (`gelu_tanh_bf16`, `tanh_rn`), a
+  request's parameters (temperature, top-p, Philox positions), every intermediate and every output. A value is committed
+  under a hiding leaf and touched only inside a zero-knowledge proof, never framed as part of the program the verifier
+  already has. The hill-climb optimizes the hiding protocol (`--zk`), not the non-ZK circuit prover.
+- 2026-10-01 (12:37 PM PDT): lanes work around the clock, so timelines are planned in hours: a pilot, trial or rollout gets
+  hours (about eight for a process pilot), not the days or weeks a human team would give it.
+- 2026-10-01 (10:56 AM PDT): only leads get handles (a name in `research msg`), never individual workers; a worker is
+  reached through its lead. A new lead is a line in `.agents/skills/using-slack/registry.json`, and `names open`
+  refuses any other name.
+- 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
+  A handoff, an order or an ask goes on Slack (`research msg`), or to your own Cursor workers as a follow-up; a note
+  written as a message reaches nobody.
+- 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
+  message, counts as the named statement reviewer's sign-off for `research merge`.
+- 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
+  needs no Slack admin. Comms owns the routing (`@<name>` at the start of a post wakes that lead's agent).
 
 - 2026-10-01 (12:05 AM PDT): a protocol's README is an outline, signposts and its core API, and Lean is the source of
   truth for a mature protocol. A protocol keeps a `PROTOCOL.md` only while it is experimental (Python is the truth until

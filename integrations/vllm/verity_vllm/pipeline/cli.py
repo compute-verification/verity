@@ -16,7 +16,7 @@ import dataclasses
 import importlib
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from typing import Any
 
 from verity_vllm.config import UsageError
@@ -30,6 +30,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "boolean-purity": ("verity_vllm.program.boolean", "the Definitions a Program reaches that are not Boolean (or, --dry-run, would)"),
     "boolean-replay": ("verity_vllm.pipeline.boolean_replay", "a deferred Commit's replay with every pick evaluated on bits"),
+    "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "canonical-profiles": ("verity_vllm.engine.profiles.canonical", "check or rewrite the canonical profile pins"),
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
@@ -212,6 +213,14 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
 
 
+def process_settings(environ: MutableMapping[str, str]) -> None:
+    """The process-wide settings every command takes from the environment: a leased Commit's lease (`gpu_lease.acquire` reads and
+    sets this environment)."""
+    if environ.get("VERITY_LEASE_STARTED"):
+        from verity_vllm.pipeline import gpu_lease
+        gpu_lease.use_environ(environ)
+
+
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
     argv = sys.argv[1:] if process else list(argv)
@@ -222,10 +231,14 @@ def main(argv: list[str] | None = None) -> Any:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
     parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    process_settings(os.environ)
     if process:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
         sys.argv[:] = [mod.__file__ or sys.argv[0], *argv[1:]]
     try:
+        if process and os.environ.get("VERITY_LEASE_STARTED"):
+            from verity_vllm.pipeline import gpu_lease
+            return gpu_lease.run_main(mod.main, opts)
         return mod.main(opts)
     except UsageError as e:
         parser.error(str(e))

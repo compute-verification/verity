@@ -57,7 +57,7 @@ Ten minutes here saves a GPU window. For your line, version and mechanism:
    the node's sections before your first build.
 4. **Owner:** every kernel directory, shared module and tool has one owner lane (the table in
    `store:pous/internal/pouw/rtx-pro/brief.md`). A change to someone else's code goes to them, as a PR against their
-   branch or a handoff, never as an edit in their tree.
+   branch or a message to them, never as an edit in their tree.
 
 If it was tried and dropped, your hypothesis says what's different this time, or you pick something else.
 
@@ -234,13 +234,12 @@ Between kernel lanes there is ownership, one copy of each shared type, and GPU e
 nobody.
 
 - **One owner per thing.** A kernel directory, the hashing module, the harness, the serving API and the panel each have
-  one owner lane. Change theirs by a PR against their branch or a handoff, and review their PRs when they ask.
+  one owner lane. Change theirs by a PR against their branch or a message to them, and review their PRs when they ask.
 - **Interfaces are data, in one place.** Scheme names, hashing formats, schedules, step groups and kernel variants are
   defined once (`verity_pouw.serving`, #567). Never keep a local copy of such a table (tree hashes, keys, arm tables); if
   you find one, replace yours with the shared one, or tell its owner.
-- **Messages:** a one-line checkpoint per result in your status file. Send a handoff only to unblock, to ask for a
-  decision, or when your result changes someone's plan (lane contract §3a). A post to the research coordinator or the
-  Verity root is named `-handoff-`, never `-note-`.
+- **Messages:** a one-line checkpoint per result in your status file. Message your coordinator (never through a note)
+  only to unblock, to ask for a decision, or when your result changes someone's plan (lane contract §3a).
 - **Serialize your own edits:** write, then commit, then run, never a write and a launch at once. Commit and push often:
   a VM reset has wiped uncommitted work twice.
 - **The assessor's folder and id are its own** (`store:pous/internal/pouw/red-team/`). Send it code or a job through the

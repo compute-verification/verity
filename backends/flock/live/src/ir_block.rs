@@ -58,6 +58,110 @@ pub struct IrUnitNet {
     /// A cut lowering's cut structure (its final `CUT <json>` line: `words`, `tail`, per-unit `in` / `out` ports), covered by
     /// `sha256` and so by the pin (red-team-flock-2 IR4).
     pub cut: Option<serde_json::Value>,
+    /// `a` and `b` as [`IrUnitNet::eval64_flat`] reads them, built on its first call: `a` and `b` must not change after it.
+    pub flat: FlatCache,
+}
+
+/// A net's rows in one flat pass: row i's A columns other than i are `cols[off[2i]..off[2i + 1]]`, its B columns other than i
+/// `cols[off[2i + 1]..off[2i + 2]]`, and bit 0 (1) of `own[i]` whether A (B) reads column i an odd number of times. Every
+/// column a row reads is an earlier one or the constant's, so one pass leaves each row's z, a and b final.
+struct Flat {
+    off: Vec<u32>,
+    cols: Vec<u32>,
+    own: Vec<u8>,
+}
+
+/// None: a row [`Flat`] cannot express (a later column, an input row that is not `[i]` or empty, more than 2^32 entries).
+/// A clone starts empty, so a copy whose rows are then edited builds its own.
+#[derive(Default)]
+pub struct FlatCache(OnceLock<Option<Flat>>);
+
+impl Clone for FlatCache {
+    fn clone(&self) -> Self {
+        FlatCache::default()
+    }
+}
+
+impl Flat {
+    fn of(net: &IrUnitNet) -> Option<Flat> {
+        let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
+        if u == 0 || cp != u - 1 || first > cp || net.a[cp] != [cp] || net.b[cp] != [cp] {
+            return None;
+        }
+        const CHUNK: usize = 1 << 14;
+        let parts: Vec<Option<(Vec<u32>, Vec<u32>, Vec<u8>)>> = (0..cp.div_ceil(CHUNK)).into_par_iter().map(|p| {
+            let rows = p * CHUNK..((p + 1) * CHUNK).min(cp);
+            let (mut off, mut cols, mut own) = (Vec::with_capacity(2 * rows.len()), Vec::new(), Vec::with_capacity(rows.len()));
+            for i in rows {
+                let mut o = 0u8;
+                for (side, row) in [&net.a[i], &net.b[i]].into_iter().enumerate() {
+                    off.push(cols.len() as u32);
+                    if i < first {
+                        match row.as_slice() {
+                            [] => {}
+                            [c] if *c == i => o |= 1 << side,
+                            _ => return None,
+                        }
+                        continue;
+                    }
+                    for &c in row {
+                        if c == i {
+                            o ^= 1 << side;
+                        } else if c < i || c == cp {
+                            cols.push(c as u32);
+                        } else {
+                            return None;
+                        }
+                    }
+                }
+                own.push(o);
+            }
+            Some((off, cols, own))
+        }).collect();
+        let total: usize = parts.iter().map(|p| p.as_ref().map_or(0, |x| x.1.len())).sum();
+        if total >= u32::MAX as usize {
+            return None;
+        }
+        let (mut off, mut cols, mut own) = (Vec::with_capacity(2 * cp + 1), Vec::with_capacity(total), Vec::with_capacity(cp));
+        for p in parts {
+            let (o, c, w) = p?;
+            let base = cols.len() as u32;
+            off.extend(o.iter().map(|x| x + base));
+            cols.extend_from_slice(&c);
+            own.extend_from_slice(&w);
+        }
+        off.push(cols.len() as u32);
+        Some(Flat { off, cols, own })
+    }
+
+    /// [`IrUnitNet::eval64`] in one pass.
+    fn eval64(&self, net: &IrUnitNet, input: impl Fn(usize) -> u64) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+        let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
+        let (mut z, mut a, mut b) = (vec![0u64; u], vec![0u64; u], vec![0u64; u]);
+        let mask = |o: u8, side: u8| 0u64.wrapping_sub(((o >> side) & 1) as u64);
+        for i in 0..first {
+            let o = self.own[i];
+            if o & 1 == 1 {
+                z[i] = input(i);
+            }
+            a[i] = z[i] & mask(o, 0);
+            b[i] = z[i] & mask(o, 1);
+        }
+        z[cp] = !0;
+        (a[cp], b[cp]) = (!0, !0);
+        let (off, cols) = (&self.off[..], &self.cols[..]);
+        for i in first..cp {
+            let (s, m, e) = (off[2 * i] as usize, off[2 * i + 1] as usize, off[2 * i + 2] as usize);
+            let x = cols[s..m].iter().fold(0u64, |x, &k| x ^ z[k as usize]);
+            let y = cols[m..e].iter().fold(0u64, |y, &k| y ^ z[k as usize]);
+            let zi = x & y;
+            let o = self.own[i];
+            z[i] = zi;
+            a[i] = x ^ (zi & mask(o, 0));
+            b[i] = y ^ (zi & mask(o, 1));
+        }
+        (z, a, b)
+    }
 }
 
 impl IrUnitNet {
@@ -110,7 +214,7 @@ impl IrUnitNet {
         assert!(rest.next().is_none(), "netlist text after the rows that is not its LEAVES and CUT lines, in that order");
         let unit_log = useful.next_power_of_two().trailing_zeros() as usize;
         IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log: unit_log.max(7), sha256,
-                    leaves, cut }
+                    leaves, cut, flat: FlatCache::default() }
     }
 
     /// Whether column `i` is an input column (its row is `A = B = [i]`).
@@ -155,6 +259,20 @@ impl IrUnitNet {
         let a: Vec<u64> = (0..u).map(|i| self.a[i].iter().fold(0u64, |s, &k| s ^ z[k])).collect();
         let b: Vec<u64> = (0..u).map(|i| self.b[i].iter().fold(0u64, |s, &k| s ^ z[k])).collect();
         (z, a, b)
+    }
+
+    /// [`IrUnitNet::eval64`], equal to it bit for bit, in one pass over flat u32 forms of `a` and `b` built on the first call
+    /// (the two-pass evaluation where a row reads a later column).
+    pub fn eval64_flat(&self, input: impl Fn(usize) -> u64) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+        match self.flat.0.get_or_init(|| Flat::of(self)) {
+            Some(f) => f.eval64(self, input),
+            None => self.eval64(input),
+        }
+    }
+
+    /// Builds the flat forms [`IrUnitNet::eval64_flat`] reads, if not yet built: whether it evaluates in one pass.
+    pub fn one_pass(&self) -> bool {
+        self.flat.0.get_or_init(|| Flat::of(self)).is_some()
     }
 
     /// Every output word of a single unit from its input words.
@@ -661,4 +779,66 @@ pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn next(s: &mut u64, m: usize) -> usize {
+        *s ^= *s << 13;
+        *s ^= *s >> 7;
+        *s ^= *s << 17;
+        (*s % m as u64) as usize
+    }
+
+    /// Random rows of every kind `eval64` reads: input rows and empty ones, the constant, repeated columns, and assertion
+    /// rows (A reads the row's own column, B the constant).
+    fn random_net(seed: u64, in_words: usize, useful: usize) -> IrUnitNet {
+        let (mut s, first, cp) = (seed, in_words * WORD, useful - 1);
+        let (mut a, mut b) = (Vec::new(), Vec::new());
+        for i in 0..useful {
+            let (ra, rb) = if i == cp {
+                (vec![cp], vec![cp])
+            } else if i < first {
+                if next(&mut s, 5) == 0 { (vec![], vec![]) } else { (vec![i], vec![i]) }
+            } else {
+                let (na, nb, kind) = (1 + next(&mut s, 7), 1 + next(&mut s, 7), next(&mut s, 5));
+                let mut pick = |n: usize| -> Vec<usize> { (0..n).map(|_| if next(&mut s, 9) == 0 { cp } else { next(&mut s, i) }).collect() };
+                let (mut ra, mut rb) = (pick(na), pick(nb));
+                match kind {
+                    0 => { ra.push(i); rb = vec![cp]; }
+                    1 => { ra.push(ra[0]); rb.push(rb[0]); }
+                    2 => { ra.extend([i, i]); }
+                    _ => {}
+                }
+                (ra, rb)
+            };
+            a.push(ra);
+            b.push(rb);
+        }
+        IrUnitNet { name: "t".into(), useful, const_pos: cp, in_groups: vec![], out_groups: vec![], in_words, out_cols: vec![], a, b,
+                    unit_log: useful.next_power_of_two().trailing_zeros().max(7) as usize, sha256: [0; 32], leaves: None, cut: None,
+                    flat: FlatCache::default() }
+    }
+
+    #[test]
+    fn eval64_flat_is_eval64() {
+        for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000), (77, 3, 40_000)] {
+            let net = random_net(seed, in_words, useful);
+            for k in 0..3u64 {
+                let input = |col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(k as u32 * 7);
+                assert!(net.eval64_flat(input) == net.eval64(input), "net {seed}, inputs {k}");
+            }
+            assert!(net.flat.0.get().is_some_and(|f| f.is_some()), "net {seed} took the two-pass path");
+            assert!(net.clone().flat.0.get().is_none(), "a clone keeps the flat forms");
+            // a row reading a later column: the two-pass evaluation, still equal
+            let mut fwd = net.clone();
+            let i = in_words * WORD + 3;
+            fwd.a[i].push(i + 5);
+            let input = |col: usize| col as u64 * 0x2545_f491_4f6c_dd1d;
+            assert!(fwd.eval64_flat(input) == fwd.eval64(input));
+            assert!(fwd.flat.0.get().is_some_and(|f| f.is_none()), "a later column took the one-pass path");
+        }
+    }
 }

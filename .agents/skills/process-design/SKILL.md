@@ -119,7 +119,8 @@ where a result is relied on.
    often it happens times what it costs when found late.
 6. **Run the ten tests,** with a one-line answer to each.
 7. **Simplify and walk again.** Drop every piece whose cost exceeds its benefit, and repeat steps 4 to 6 on what's left.
-8. **Pilot.** Apply it to one package or one lane, measure the same numbers after a week, then extend it or retire it.
+8. **Pilot.** Apply it to one package or one lane for about eight hours, measure the same numbers, then extend it or retire
+   it. Lanes work around the clock, so a pilot gets hours, not the week a human team would give it.
 
 ### Default budget
 

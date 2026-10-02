@@ -1,6 +1,6 @@
 {
  "certificate": {
-  "call_ns": 483000,
+  "call_ns": 241500,
   "claims": [
    "ideal-permutation",
    "random-oracle",

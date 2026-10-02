@@ -27,8 +27,18 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify_run.py` after the window: the first two must be accepted and the control rejected (the panel's rule of 11:50Z).
+  `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
+  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule of 11:50Z).
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
+
+``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
+size only), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
+(`pouw_pearl_c_whole`): a decode step is one graph replay after one slot upload.  Prefill runs eagerly; a retained decode
+replays its own capture, which also keeps each call's A words and tree.  Its gate (`whole_check`) holds a forward's calls
+replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
+counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
+check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
+``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
 
 ``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
 (`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
@@ -75,7 +85,7 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
-#: the verify's no-write controls, each a retained pass the verifier must reject: every commitment write omitted, and (under
+#: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
@@ -102,6 +112,9 @@ def engine(args, group: str):
     if group == "base-graphs":
         kw["enforce_eager"] = False
         return LLM(**kw, compilation_config={"cudagraph_capture_sizes": CAPTURE_SIZES})
+    if group == "arm" and getattr(args, "whole_step", False):
+        kw["enforce_eager"] = False
+        return LLM(**kw, compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": [BATCH]})
     try:
         return LLM(**kw, compilation_config={"mode": 0})
     except TypeError:
@@ -131,13 +144,22 @@ def install(model, args, beacon: bytes):
     salt = Epoch.unverified(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"))
+                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False))
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     vllm_site.attach(stack, sites, Hooks(tag=f"pouw:{scheme}"))
     return run, weights, stack
+
+
+def whole_step(llm, run, stack):
+    """``--whole-step``: Pearl-C's decode forwards replayed as vLLM's own graphs (`pouw_pearl_c_whole.WholeStep`), on the
+    engine's in-process model runner."""
+    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.protocol_options.pouw_pearl_c_whole import WholeStep
+    return WholeStep(run, stack, get_model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
 
 
 def arm_of(mode: str, run, args):
@@ -150,9 +172,9 @@ def arm_of(mode: str, run, args):
                                                       run_id=os.environ.get("RESEARCH_RUN_ID")))
 
 
-def gate(run, weights: dict) -> list[dict]:
+def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
-    distinct (n, k) and both m."""
+    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -183,9 +205,110 @@ def gate(run, weights: dict) -> list[dict]:
         out.append(schedule_check(run, weights))
     if run.hashing and getattr(run, "graphs", False):
         out += graphs_check(run, weights)
+    if whole:
+        out.append(whole_check(run, weights))
     run.details["passes"].clear()
     run.gemm_ms()
     return out
+
+
+def whole_check(run, weights: dict) -> dict:
+    """With ``--whole-step``, a forward's calls (every weight once, m = 32, in weight order) made eagerly twice in one pass,
+    then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice
+    in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's decode steps
+    replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit, and each
+    pass's second replay must upload the slots the first one staged (with hashing)."""
+    import torch
+    dev = next(iter(weights.values())).device
+    gen = torch.Generator(device=dev).manual_seed(20261002)
+    xs = {w: torch.randn(BATCH, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
+    rows = 2 * BATCH * len(weights) if run.hashing else 0
+    forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
+    keep = ("transcript_root", "activation_roots", "units", "tiles")
+
+    def ended(ys):
+        return [y.clone() for y in ys], run.flag_buf[:rows].clone(), {k: v for k, v in run.end().items() if k in keep}
+
+    run.graphs = False
+    run.begin()
+    run.poison()
+    forward()
+    want = ended(forward())
+    run.graphs = True
+    run.begin()
+    forward()
+    run.end()
+    run.begin()
+    graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=dev)
+    side.wait_stream(torch.cuda.current_stream(dev))
+    run.whole_capture_begin()
+    try:
+        with torch.cuda.graph(graph, stream=side):
+            outs = forward()
+    finally:
+        calls = run.whole_capture_end()
+    run.end()
+    got, staged = [], []
+    for _ in range(2):
+        run.begin()
+        run.poison()
+        for _ in range(2):
+            staged.append(run.whole_replay(calls))
+            graph.replay()
+            run.whole_replayed(calls)
+        got.append(ended(outs))
+    same = all(g[2] == want[2] and torch.equal(g[1], want[1]) and all(torch.equal(a, b) for a, b in zip(g[0], want[0], strict=True))
+               for g in got)
+    kept = whole_retained_check(run, forward, side) if run.hashing else None
+    return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": want[2], "replays": [g[2] for g in got],
+            "replay_equals_eager": same, "staged": staged, "retained_equals_eager": kept,
+            "ok": (same and len(calls) == len(weights) and kept is not False
+                   and staged == ([False, True] * 2 if run.hashing else [False] * 4))}
+
+
+def whole_retained_check(run, forward, side) -> bool:
+    """A retained pass of `forward` made eagerly, and one replayed from a whole capture of a retained pass's kind: the same
+    records, call files (each call's rows and A tree) and commitment, byte for byte.  Each pass drops its retain directory
+    before it ends, so neither writes the weights' files, which the two would share."""
+    import shutil
+    import tempfile
+
+    import torch
+    keep, dirs = ("transcript_root", "activation_roots", "units", "tiles"), [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
+
+    def ended() -> tuple:
+        recs, files = list(run.cur.records), list(run.cur.files)
+        run.cur.retain = None
+        return recs, files, {k: v for k, v in run.end().items() if k in keep}
+
+    try:
+        run.graphs = False
+        run.begin(retain=str(dirs[0]))
+        forward()
+        want = ended()
+        run.graphs = True
+        run.begin()
+        graph = torch.cuda.CUDAGraph()
+        run.whole_capture_begin(run.whole_key(True))
+        try:
+            forward()
+            side.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.graph(graph, stream=side):
+                forward()
+        finally:
+            calls = run.whole_capture_end()
+        run.end()
+        run.begin(retain=str(dirs[1]))
+        run.whole_replay(calls)
+        graph.replay()
+        run.whole_replayed(calls)
+        got = ended()
+        files = sorted(p.relative_to(dirs[0]) for p in (dirs[0] / "calls").iterdir())
+        return (got == want and files == sorted(p.relative_to(dirs[1]) for p in (dirs[1] / "calls").iterdir())
+                and all((dirs[0] / f).read_bytes() == (dirs[1] / f).read_bytes() for f in files))
+    finally:
+        for d in dirs:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def schedule_check(run, weights: dict) -> dict:
@@ -305,15 +428,18 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         from vllm_bench import PROMPTS, find_model
 
         llm = engine(args, group)
-        run = stack = None
+        run = stack = whole = None
         ready: dict = {"group": group}
         if group == "arm":
             run, weights, stack = install(find_model(llm), args, beacon)
-            ready["gate"] = gate(run, weights)
+            ws = getattr(args, "whole_step", False)
+            ready["gate"] = gate(run, weights, ws)
             run.hashing = False
-            ready["gate"] += gate(run, weights)
+            ready["gate"] += gate(run, weights, ws)
             run.hashing = True
             ready.update(committer=run.details["committer"], excluded_b=sum(run.details["excluded_b"].values()))
+            if ws:
+                whole = whole_step(llm, run, stack)
         conn.send(ready)
         one = SamplingParams(temperature=0.0, max_tokens=1, ignore_eos=True)
         many = SamplingParams(temperature=0.0, max_tokens=1 + STEPS, ignore_eos=True)
@@ -347,6 +473,9 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                     raise ValueError(f"mode {mode} is not the {group} engine's")
                 if stack is not None:
                     stack.activate(arm_of(mode, run, args))
+                if whole is not None:
+                    whole.prepare()
+                    whole.take()
             if op == "chat":
                 *_, outs = timed(chat, SamplingParams(temperature=0.0, max_tokens=48))
                 conn.send({"tokens": [list(o.outputs[0].token_ids) for o in outs], "texts": [o.outputs[0].text for o in outs[:4]]})
@@ -357,25 +486,36 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                 p = [{"prompt_token_ids": x} for x in cmd["prompts"]]
                 t1, g1, _, _ = timed(p, one)
                 tn, gn, cn, _ = timed(p, many)
-                conn.send({"step_s": (tn - t1) / STEPS, "gemm_step_s": (gn - g1) / STEPS, "t1_s": t1, "tn_s": tn, "commitment": cn})
+                conn.send({"step_s": (tn - t1) / STEPS, "gemm_step_s": (gn - g1) / STEPS, "t1_s": t1, "tn_s": tn, "commitment": cn,
+                           **({"whole_step": whole.take()} if whole is not None else {})})
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
                 from verity_vllm.linear.api import Control
                 stack.activate(arm_of("pearlc", run, args))
                 out = {}
+                if whole is not None:
+                    whole.take()
                 for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
                     _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     want = cmd["want"][name]
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
-                    out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same}
+                    out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
+                                 **({"whole_step": whole.take()} if whole is not None else {})}
                     if run.graphs:
-                        run.graphs = False
+                        p, ref = [{"prompt_token_ids": x} for x in prompts], want
+                        if whole is not None:    # vLLM's eager decode isn't its graph's: both sides on vLLM's eager path
+                            whole.enabled = False
                         try:
-                            _, _, eager, _ = timed([{"prompt_token_ids": x} for x in prompts], sp)
+                            if whole is not None:
+                                _, _, ref, _ = timed(p, sp)
+                            run.graphs = False
+                            _, _, eager, _ = timed(p, sp)
                         finally:
                             run.graphs = True
-                        out[name]["same_commitment_eager"] = all(eager.get(k) == want.get(k) for k in
+                            if whole is not None:
+                                whole.enabled = True
+                        out[name]["same_commitment_eager"] = all(eager.get(k) == ref.get(k) for k in
                                                                  ("transcript_root", "activation_roots", "units", "tiles"))
                 for label, omits in CONTROLS.items():
                     _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / label),
@@ -539,8 +679,8 @@ def smoke(args) -> None:
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
-                 "run": os.environ.get("RESEARCH_RUN_ID"),
-                 "steps": [], "resident": False}
+                 "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
+                 "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
     def step(name, f):
         t0 = time.perf_counter()
@@ -673,6 +813,11 @@ def main() -> None:
     ap.add_argument("--fp8-graphs", action="store_true",
                     help="also time stock FP8 as vLLM serves it (compiled, CUDA graphs), a third engine, beside the eager one")
     ap.add_argument("--graphs", action="store_true", help="decode's calls (m <= GRAPH_ROWS) replay their steps as one CUDA graph each")
+    ap.add_argument("--whole-step", action="store_true",
+                    help="(implies --graphs) the arm engine runs vLLM's FULL decode graphs, Pearl-C's captured inside them "
+                         "(pouw_pearl_c_whole); retained passes run eagerly")
+    ap.add_argument("--whole-defer", action="store_true",
+                    help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
     ap.add_argument("--rows-form", choices=("w", "s"), default="w",
                     help="A's rows form: s takes forming's statistics from -h2's row-leaf pass over A (-h2 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
@@ -680,6 +825,9 @@ def main() -> None:
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
+    args.graphs = args.graphs or args.whole_step
+    if args.whole_defer and not args.whole_step:
+        ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
     if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing != "h2":
         ap.error(f"--rows-form s is -h2's, and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
@@ -690,7 +838,7 @@ def main() -> None:
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
-                 "rows_form": args.rows_form,
+                 "rows_form": args.rows_form, "whole_step": args.whole_step, "whole_defer": args.whole_defer,
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

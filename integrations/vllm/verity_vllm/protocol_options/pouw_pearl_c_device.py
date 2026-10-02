@@ -348,10 +348,11 @@ class PearlCDeviceRun(GraphCalls):
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w"):
+                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.rows_form = rows_form
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
+        self.whole_defer = whole_defer
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -392,7 +393,9 @@ class PearlCDeviceRun(GraphCalls):
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
-            "schedule": None, "graphs": f"calls of at most {GRAPH_ROWS} rows, serial schedule" if self.graphs else None,
+            "schedule": None,
+            "graphs": (f"calls of at most {GRAPH_ROWS} rows, serial schedule"
+                       + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -496,6 +499,17 @@ class PearlCDeviceRun(GraphCalls):
         """The call's steps in order (`_call_names`)."""
         return _steps(pipe, self._call_names())
 
+    def _call_cuts(self, pipe: Any) -> tuple[int, int]:
+        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
+        tile hashing runs, and before the call's own tile hashing, which it forks."""
+        have = {name for name, _, _ in pipe.steps()}
+        groups = [STEP_GROUPS[x] for x in self._call_names() if x in have]
+        a = next((i for i, g in enumerate(groups) if g != "a_tree"), len(groups))
+        b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
+        if "a_tree" in groups[a:] or any(g != "tile_hash" for g in groups[b:]):
+            raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's tree and end with the tile hashing")
+        return a, b
+
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
         key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16))
@@ -563,6 +577,7 @@ class PearlCDeviceRun(GraphCalls):
         if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > FLAG_ROWS):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
                                f"{FLAG_ROWS} screened rows); end it and begin another")
+        self.join_before(sh)
         sh.xa[:m].copy_(x2)
         if m16 > m:
             sh.xa[m:m16].zero_()
@@ -572,9 +587,7 @@ class PearlCDeviceRun(GraphCalls):
         caller = self.torch_stream(raw) if cuda else None
         main = self.main if self.schedule.main_priority == "greatest" else None
         if self._graphed(m16):
-            if self.hashing:
-                self._slot(w, index, m16, m, caller)
-            y, screened = self._replay(w, sh, pipe, raw, tiles, m)
+            y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
@@ -630,20 +643,10 @@ class PearlCDeviceRun(GraphCalls):
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
-                cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), sh.xa[:m]),
-                                                 wt.excluded))
-                cur.files.append(self._retain_call(cur, index, sh, size))
+                self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe))
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
         return out.reshape(*lead, wt.n)
-
-    def _retain_call(self, cur: _Pass, index: int, sh: _Shape, tree_bytes: int) -> dict:
-        import torch
-        d = cur.retain / "calls"
-        d.mkdir(parents=True, exist_ok=True)
-        rows = _bytes(sh.xa[:sh.m16].to(torch.bfloat16).view(torch.uint8))
-        tree = _bytes(sh.b["tree_a"][:tree_bytes])
-        return {"rows": _write(d / f"{index}.rows.bf16", rows, digest=False), "tree": _write(d / f"{index}.tree", tree)}
 
     # ---- passes -----------------------------------------------------------------------------------------------------
 
@@ -669,10 +672,8 @@ class PearlCDeviceRun(GraphCalls):
             for sh in self.shapes.values():
                 for t in self._buffers(sh):
                     t.fill_(value)
-            for g in self._graphs.values():
-                for t in (g.y.view(torch.uint8), g.leaves, g.flags):
-                    if t is not None:
-                        t.fill_(value)
+            for t in self._graph_buffers():
+                t.fill_(value)
 
     def end(self) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
