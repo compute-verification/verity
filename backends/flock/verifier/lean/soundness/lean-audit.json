@@ -4374,8 +4374,8 @@
   "FlockSoundness.Discharge.Exec.accepts_allRetained": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_allRetained {I : FlockSoundness.Discharge.Exec.Inputs}",
-    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hr : Eq I.tags.retainRounds Bool.true)",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hh : Eq I.tags.hiddenOutputs Bool.false)",
+    "  (hr : Eq I.tags.retainRounds Bool.true) (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      Exists fun sess =>",
@@ -4385,13 +4385,13 @@
     "              List.instMembership.mem sess.streams.toList s → FlockSoundness.Refine.AllRetained s.rounds))"
    ],
    "assumptions": [],
-   "type_hash": "b192f119d838a45e183163f51e0bbc33b3664f9979da1ed70dd2df3f230b155e"
+   "type_hash": "827a3409cfb1295422893dfe1950e3b68873be8cb25fb5511fe481f5b8333279"
   },
   "FlockSoundness.Discharge.Exec.accepts_rep_rounds": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_rep_rounds {I : FlockSoundness.Discharge.Exec.Inputs}",
-    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hr : Eq I.tags.retainRounds Bool.true)",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hh : Eq I.tags.hiddenOutputs Bool.false)",
+    "  (hr : Eq I.tags.retainRounds Bool.true) (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      Exists fun sess =>",
@@ -4410,13 +4410,13 @@
     "                        (Array.instGetElem?NatLtSize.getElem! t.proofs (instHAdd.hAdd (instHMul.hMul 2 j) 1)))))))"
    ],
    "assumptions": [],
-   "type_hash": "50dc5df1cc75d5a67d3674f059b5d2de6b2edf66c9723f4d980d7e33141d2de8"
+   "type_hash": "084b1f5e42f7c0b57b4868f73a52c8d37606ce18af7f8013ffce793812e427c9"
   },
   "FlockSoundness.Discharge.Exec.accepts_retained": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_retained {I : FlockSoundness.Discharge.Exec.Inputs}",
-    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hr : Eq I.tags.retainRounds Bool.true)",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hh : Eq I.tags.hiddenOutputs Bool.false)",
+    "  (hr : Eq I.tags.retainRounds Bool.true) (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      Exists fun sess =>",
@@ -4429,12 +4429,13 @@
     "                    List.instMembership.mem s.rounds.toList r → Exists fun b => Eq r.bytes (Option.some b))))"
    ],
    "assumptions": [],
-   "type_hash": "c7cb051c914ecaf2ec46a7ad4f99da9e5c4b87c3867d2b3d0369d59e3f0ca739"
+   "type_hash": "f91230fbbe4ae8fae422b238d6c655a9908e5d537eb5126be07ceca9ac07ce34"
   },
   "FlockSoundness.Discharge.Exec.accepts_setupH": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_setupH {I : FlockSoundness.Discharge.Exec.Inputs}",
-    "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hh : Eq I.tags.hiddenOutputs Bool.false)",
+    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      And (Eq (FlockSoundness.Discharge.Exec.setupOf I t.record) (Except.ok { fst := spec, snd := sts }))",
@@ -4450,12 +4451,13 @@
     "                  (instLENat.le I.count 1 → Eq d (FlockSoundness.Discharge.Exec.recordDraw t.record)))))"
    ],
    "assumptions": [],
-   "type_hash": "f0541ca4dcbccaa0aac8d5aa651c63700e14af52b6aaf3be8a63c023459fe854"
+   "type_hash": "68be32d543b30a590b1af3bdc2e305fce05562967151dcfae304152b0bad0b19"
   },
   "FlockSoundness.Discharge.Exec.accepts_tables_hm96": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96 {I : FlockSoundness.Discharge.Exec.Inputs}",
-    "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (hh : Eq I.tags.hiddenOutputs Bool.false)",
+    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      Exists fun sess =>",
@@ -4577,13 +4579,13 @@
     "                                                              (FlockSoundness.Refine.saltsOf p₀ p₁ sch)))))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "f1edd208ddf2bca39daf9463818c868f8d1d1a4ceb818cd8a9e31694463c4115"
+   "type_hash": "191847863d44eec64ecbc282fe8038aadf56357f015171ddc839b7bb100b3e66"
   },
   "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf {I : FlockSoundness.Discharge.Exec.Inputs}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (hl : Eq I.tags.merkleLeaf \"hm96-sha512/v1\")",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  (hh : Eq I.tags.hiddenOutputs Bool.false) (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      Exists fun sess =>",
@@ -4705,13 +4707,13 @@
     "                                                              (FlockSoundness.Refine.saltsOf p₀ p₁ sch))))))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "2bd754e39fd569b191c2620c894a61181e47253e167f18235ad759de4667c789"
+   "type_hash": "4f1242e79239b9c00d34d2d740984788207e519ebc7524a689bf5dd3156fe744"
   },
   "FlockSoundness.Discharge.Exec.accepts_verdict_hm96": {
    "signature": [
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96 {I : FlockSoundness.Discharge.Exec.Inputs}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (hl : Eq I.tags.merkleLeaf \"hm96-sha512/v1\")",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
+    "  (hh : Eq I.tags.hiddenOutputs Bool.false) (h : FlockSoundness.Discharge.Exec.Accepts I t) :",
     "  Exists fun spec =>",
     "    Exists fun sts =>",
     "      Exists fun sess =>",
@@ -4889,7 +4891,7 @@
     "                                                    Bool.true))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "fdc26178d7cf21ac72f0dc1bd2f48e01ca06949a376cbb4851b4a9347e821401"
+   "type_hash": "a1fa3cc175e683391d85b08f580093056204f82c0f077439a6d97b068dcee44a"
   },
   "FlockSoundness.Discharge.Exec.capOfRoot_eq": {
    "signature": [
@@ -5549,13 +5551,14 @@
     "  {count : Nat} {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
     "  {work : Option (Prod Nat (Array (Prod String (Prod Nat Nat))))} {stratified : Option Nat}",
     "  {closure : Option (Std.HashMap Nat (Array Nat))} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
+    "  (hh : Eq tags.hiddenOutputs Bool.false)",
     "  (h :",
     "    Eq (Flock.Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure)",
     "      (Except.ok { fst := spec, snd := sts })) :",
     "  Eq spec.retainRounds tags.retainRounds"
    ],
    "assumptions": [],
-   "type_hash": "f34ecac952c9f1aa61c58b612e77656b1e242101c302c9e94f3dcfecf4949efb"
+   "type_hash": "db0eb5ae1c7361ccf304879d1edbccc6f24a3ade972b56ada350aca20f2bc2ae"
   },
   "FlockSoundness.Discharge.Exec.simAudit_eq_on": {
    "signature": [
@@ -6368,8 +6371,8 @@
     "FlockSoundness.Discharge.Integrate.drawSetup_of_accepts {I : FlockSoundness.Discharge.Exec.Inputs} {mPts n : Nat}",
     "  {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit} (ht : Eq I.tags.typed Bool.false)",
     "  (hc : Eq (Flock.HmRow.parse I.tags I.circuitFile I.tables) (Except.ok c)) (ho : Eq c.outNet c.unitNet)",
-    "  (hc1 : instLENat.le I.count 1) {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t)",
+    "  (hh : Eq I.tags.hiddenOutputs Bool.false) (hc1 : instLENat.le I.count 1)",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.Exec.Accepts I t)",
     "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some d)) :",
     "  Exists fun st =>",
     "    Exists fun D =>",
@@ -6381,7 +6384,7 @@
     "            Eq st.mPts mPts → Exists fun x => Eq x.st st))"
    ],
    "assumptions": [],
-   "type_hash": "3b1bec9df7dcdbf4681824479218dcdc2badd1be0c5d58d2a3ac41f97c4d6763"
+   "type_hash": "da96d5041b2250bf9383c8c4e05d8cd3fb3a892adf5afe0b9d2e91d9f8485dde"
   },
   "FlockSoundness.Discharge.Integrate.drawSetup_of_setupH": {
    "signature": [
@@ -6655,9 +6658,9 @@
     "FlockSoundness.Discharge.Integrate.tableAt_of_accepts {I : FlockSoundness.Discharge.Exec.Inputs} {mPts n : Nat}",
     "  {S : Finset (Fin n)} {c : Flock.Circuit} (ht : Eq I.tags.typed Bool.false)",
     "  (hc : Eq (Flock.HmRow.parse I.tags I.circuitFile I.tables) (Except.ok c)) (ho : Eq c.outNet c.unitNet)",
-    "  (hc1 : instLENat.le I.count 1) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
-    "  (x₀ : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S₀ (dj S₀)) {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.Exec.Accepts I t)",
+    "  (hh : Eq I.tags.hiddenOutputs Bool.false) (hc1 : instLENat.le I.count 1) (dj : Finset (Fin n) → Lean.Json)",
+    "  {S₀ : Finset (Fin n)} (x₀ : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S₀ (dj S₀))",
+    "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.Exec.Accepts I t)",
     "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S)))",
     "  (hS :",
     "    ∀ (D : Flock.Draw.UnitDraw),",
@@ -6681,7 +6684,7 @@
     "          (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st)))"
    ],
    "assumptions": [],
-   "type_hash": "564499485a2a9436354b310cdce6475cfd963f5d69874bc26ff22331feddc50c"
+   "type_hash": "84d2011c6525dc3c93b735734705247408773221e424306458de1ae439fdf4e2"
   },
   "FlockSoundness.Discharge.Integrate.tableAt_stmt": {
    "signature": [
@@ -17824,9 +17827,9 @@
    ]
   },
   "FlockSoundness.Discharge.Exec.Setup": {
-   "digest": "39be40fbee95eddcffc89684f23f0d0112f554402f9a7406e4ffa34b225ef044",
+   "digest": "a2e5dfc2cdaeb3f8bd2b7e6ae0bd86b38a7be1db658981e29175ea5f3eba03a6",
    "definitions": {
-    "FlockSoundness.Discharge.Exec.tagsAt": "b9da2d0e14824bb027a3bc4f933204220964d22860cab490be9a441d47190eab"
+    "FlockSoundness.Discharge.Exec.tagsAt": "1a652483666eca83aff8dc337ed3f972341fa267c6b8869083f6603433b763fa"
    },
    "pins": [
     "FlockSoundness.Discharge.Exec.accepts_setupH",
