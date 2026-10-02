@@ -8225,6 +8225,13 @@
    "assumptions": [],
    "type_hash": "dcaf61a1601b88f64602443aa252b30494832842abae4d96c2868695f895e932"
   },
+  "FlockSoundness.Discharge.PlaysCoin.coinsOfRounds": {},
+  "FlockSoundness.Discharge.PlaysCoin.cutOfPat": {},
+  "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns": {},
+  "FlockSoundness.Discharge.PlaysCoin.decodesOfRuns": {},
+  "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns": {},
+  "FlockSoundness.Discharge.PlaysCoin.tapeOfGroups": {},
+  "FlockSoundness.Discharge.PlaysCoin.toT_exact": {},
   "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton": {
    "signature": [
     "FlockSoundness.Discharge.Zero.Prog.zeroCols_singleton {N n : Nat} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)}",
