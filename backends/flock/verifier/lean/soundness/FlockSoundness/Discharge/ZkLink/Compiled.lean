@@ -170,6 +170,17 @@ def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.
 
 /-! ## The table -/
 
+/-- **The commitments' hash and leaf schemes**: `H` and its node encoding `E` for every tree, the row leaf `Lf` (the
+68-lane level-0 rows and every level's rows), the pads-pair leaf `Lp` (with `Ep`, its tree's encoding) and `τ`'s leaf
+`Lτ`. Under `--zk` all three leaves are `hm96-sha512/v1` (`Merkle.Leaf.hm96`). -/
+structure Hashes (F D Sl : Type) where
+  H : List UInt8 → D
+  E : Merkle.Enc (List F) D
+  Lf : Merkle.Leaf (List F) Sl D H
+  Ep : Merkle.Enc (F × F) D
+  Lp : Merkle.Leaf (F × F) Sl D H
+  Lτ : Merkle.Leaf F Sl D H
+
 /-- **A compiled `--zk` rep's result**, pending the openings: the Ligerito levels' verdict, caps and requests, and the
 inner proof's check. -/
 structure PendZ (F D Sl : Type) where
@@ -181,12 +192,11 @@ def PendZ.reject : PendZ F D Sl := ⟨PendL.reject, fun _ => False⟩
 
 /-- **A compiled `--zk` rep** (`repZK` compiled): the pads root, the masked phase compiled, and the compiled inner proof
 on the phase's rows. -/
-noncomputable def repZC (A : Arith F K) (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D)
-    (Lp : Merkle.Leaf (F × F) Sl D H) (Lτ : Merkle.Leaf F Sl D H) (T : TabZK F mPts) (r : ℕ)
+noncomputable def repZC (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ)
     (extra : List (Claim F T.S.m)) : Game (PendZ F D Sl) := do
   let root ← recv D
   let o ← repMaskedZC (D := D) A T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ r extra
-  let v ← innerGameC H Ep Lp Lτ T.dom T.np T.nP T.q T.pos o.1 T.tr root
+  let v ← innerGameC Hs.H Hs.Ep Hs.Lp Hs.Lτ T.dom T.np T.nP T.q T.pos o.1 T.tr root
   pure ⟨o.2, v⟩
 
 /-- **The final message of a compiled `--zk` table**, after the last coin of both reps: the rows of every level with
@@ -217,30 +227,30 @@ structure OutZC (F D Sl : Type) where
   opens : OpensZ F D Sl
 
 /-- **Rep `r` of a compiled `--zk` table at the link points `pts`** (`Refine.modelTable`'s `G`). -/
-noncomputable def repZCAt (A : Arith F K) (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D)
-    (Lp : Merkle.Leaf (F × F) Sl D H) (Lτ : Merkle.Leaf F Sl D H) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
+noncomputable def repZCAt (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
     (r : Fin 2) : Game (PendZ F D Sl) :=
-  repZC A H Ep Lp Lτ T r.val (extraClaims T.S T.ptLocal mPts pts)
+  repZC A Hs T r.val (extraClaims T.S T.ptLocal mPts pts)
 
 open Classical in
 /-- **A compiled `--zk` table's verdict and output** (`Refine.modelTable`'s `out`): accepted iff both reps' Ligerito
 verdicts accept on the opened rows, both inner checks hold, and every row path verifies (`OpensOKZ`). -/
-noncomputable def outZC (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (T : TabZK F mPts) (cap₀ : Cap D) (pend : PendZ F D Sl × PendZ F D Sl) (os : OpensZ F D Sl) : OutZC F D Sl :=
+noncomputable def outZC (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D) (pend : PendZ F D Sl × PendZ F D Sl)
+    (os : OpensZ F D Sl) : OutZC F D Sl :=
   ⟨pend.1.lig.verdict os.rows && pend.2.lig.verdict os.rows &&
       decide (pend.1.inner (os.inner 0) ∧ pend.2.inner (os.inner 1) ∧
-        OpensOKZ H E Lf (width₀ T) cap₀ 0 pend.1.lig os.rows os.salts ∧
-        OpensOKZ H E Lf (width₀ T) cap₀ 1 pend.2.lig os.rows os.salts),
+        OpensOKZ Hs.H Hs.E Hs.Lf (width₀ T) cap₀ 0 pend.1.lig os.rows os.salts ∧
+        OpensOKZ Hs.H Hs.E Hs.Lf (width₀ T) cap₀ 1 pend.2.lig os.rows os.salts),
     cap₀, pend, os⟩
 
 /-- **A compiled `--zk` table after its witness cap `cap₀` and the link points `pts`**: both reps concurrently, then the
 openings, then the verdict (`outZC`). -/
-noncomputable def tabAfterZC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
-    (Lτ : Merkle.Leaf F Sl D H) (T : TabZK F mPts) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) :
-    Game (OutZC F D Sl) :=
-  (interleave (repZCAt A H Ep Lp Lτ T pts 0) (repZCAt A H Ep Lp Lτ T pts 1)).bind fun pend =>
-    Game.send (OpensZ F D Sl) fun os => Game.ret (outZC H E Lf T cap₀ pend os)
+noncomputable def tabAfterZC (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D)
+    (pts : Fin 2 → Fin mPts → F) : Game (OutZC F D Sl) :=
+  (interleave (repZCAt A Hs T pts 0) (repZCAt A Hs T pts 1)).bind fun pend =>
+    Game.send (OpensZ F D Sl) fun os => Game.ret (outZC Hs T cap₀ pend os)
+
+instance [Inhabited D] [Inhabited Sl] : Inhabited (OpensZ F D Sl) :=
+  ⟨⟨fun _ _ _ => ([], []), fun _ _ _ => default, fun _ => ⟨fun _ => ((0, 0), default, []), (0, default)⟩⟩⟩
 
 /-- A default output, for positions outside a batch. -/
 def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
@@ -266,21 +276,18 @@ theorem sessionZK_eq (A : Arith F K) (ts : List (TabZK F mPts)) :
 
 /-- **The compiled batched `--zk` session**: `Commit` sends every table's witness cap, then one link-point draw, then
 every table's compiled reps and openings concurrently. -/
-noncomputable def sessionZC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
-    (Lτ : Merkle.Leaf F Sl D H) (ts : List (TabZK F mPts)) : Game (List (OutZC F D Sl)) :=
-  sessionZG (tabAfterZC A H E Lf Ep Lp Lτ) ts
+noncomputable def sessionZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
+    Game (List (OutZC F D Sl)) :=
+  sessionZG (tabAfterZC A Hs) ts
 
 /-- The compiled session accepts when every table accepts. -/
 def acceptedZC [Inhabited D] [Inhabited Sl] (ts : List (TabZK F mPts)) (outs : List (OutZC F D Sl)) : Prop :=
   ∀ i : Fin ts.length, (outs.getD i dfltOutZC).accepted = true
 
 /-- The compiled tables' runs after `Commit`, with the caps it sent. -/
-noncomputable def gamesZC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
-    (Lτ : Merkle.Leaf F Sl D H) (ts : List (TabZK F mPts)) (caps : Fin ts.length → Cap D) :
+noncomputable def gamesZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) (caps : Fin ts.length → Cap D) :
     List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)) :=
-  List.ofFn fun i => tabAfterZC A H E Lf Ep Lp Lτ (ts.get i) (caps i)
+  List.ofFn fun i => tabAfterZC A Hs (ts.get i) (caps i)
 
 /-- After `Commit`: one link-point draw, then the games concurrently. -/
 noncomputable def sessAfterZC (fs : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) :
@@ -288,28 +295,24 @@ noncomputable def sessAfterZC (fs : List ((Fin 2 → Fin mPts → F) → Game (O
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
 omit [Fintype K] in
-theorem sessionZC_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
-    (Lτ : Merkle.Leaf F Sl D H) (ts : List (TabZK F mPts)) :
-    sessionZC A H E Lf Ep Lp Lτ ts =
-      Game.send (Fin ts.length → Cap D) fun caps => sessAfterZC (gamesZC A H E Lf Ep Lp Lτ ts caps) :=
+theorem sessionZC_eq (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
+    sessionZC A Hs ts = Game.send (Fin ts.length → Cap D) fun caps => sessAfterZC (gamesZC A Hs ts caps) :=
   rfl
 
 section Batched
 
-variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-  (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
-  (Lτ : Merkle.Leaf F Sl D H) {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) {n : ℕ} {Reg : Type}
+  (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
 
 open Classical in
 /-- **The compiled batched `--zk` session on a draw**: the plan's tables in one compiled session; it accepts when every
 table accepts. -/
 noncomputable def batchedSessionZC (S : Finset (Fin n)) (R : Reg) : Game Bool :=
-  (sessionZC A H E Lf Ep Lp Lτ (planZ S R)).map fun outs => decide (acceptedZC (planZ S R) outs)
+  (sessionZC A Hs (planZ S R)).map fun outs => decide (acceptedZC (planZ S R) outs)
 
 /-- The strategy in the compiled session inside a verdict strategy. -/
-noncomputable def zcStrat {S : Finset (Fin n)} {R : Reg} (τ : Strategy (batchedSessionZC A H E Lf Ep Lp Lτ planZ S R)) :
-    Strategy (sessionZC A H E Lf Ep Lp Lτ (planZ S R)) :=
+noncomputable def zcStrat {S : Finset (Fin n)} {R : Reg} (τ : Strategy (batchedSessionZC A Hs planZ S R)) :
+    Strategy (sessionZC A Hs (planZ S R)) :=
   Strategy.ofMap _ _ τ
 
 end Batched
@@ -324,7 +327,7 @@ def slotOpensZ (out : OutZC F D Sl) (r ℓ Q : ℕ) : List (ℕ × List F × Sl 
       (pj.1, (out.opens.rows r ℓ pj.2).1, out.opens.salts r ℓ pj.2, (out.opens.rows r ℓ pj.2).2)
 
 /-- Both reps' level-0 openings. -/
-def opens₀Z (sch : Schedule) (out : OutZC F D Sl) : List (ℕ × List F × Sl × List D) :=
+def opens₀Hs (sch : Schedule) (out : OutZC F D Sl) : List (ℕ × List F × Sl × List D) :=
   slotOpensZ out 0 0 (lvOf sch 0).queries ++ slotOpensZ out 1 0 (lvOf sch 0).queries
 
 /-- An opening verifies against `cap`: a row of `w` elements whose path verifies from its leaf under its salt. -/
@@ -335,10 +338,10 @@ def VerifiedZ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Le
 open Classical in
 /-- **The witness cap's openings, by position**: at each level-0 position, the first verifying 68-lane row a run opened
 there. -/
-noncomputable def op₀Z (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+noncomputable def op₀Hs (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (T : TabZK F mPts) (cap : Cap D) (out : OutZC F D Sl) :
     Fin (2 ^ (lvOf T.sch 0).logLen) → Option (Fin (width₀ T) → F) := fun p =>
-  (((opens₀Z T.sch out).filter fun x =>
+  (((opens₀Hs T.sch out).filter fun x =>
       decide (x.1 = p.val ∧ VerifiedZ H E Lf cap (width₀ T) (pathLen (lvOf T.sch 0)) x)).head?).map
     fun x lane => x.2.1.getD lane.val 0
 
@@ -348,36 +351,33 @@ def tabOfW (w d : ℕ) (v : Fin (2 ^ d) → Fin w → F) : Oracle F :=
 
 /-- **The extractor's level-0 oracle of table `n`** from runs `bs` after `Commit` with witness cap `cap₀`: at each
 level-0 position, the first verifying opening one of the runs made there, and zero elsewhere. -/
-noncomputable def extractTableZ [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (T : TabZK F mPts) (n : ℕ) (cap₀ : Cap D)
-    (bs : List (List (OutZC F D Sl))) : Oracle F :=
+noncomputable def extractTableZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (n : ℕ)
+    (cap₀ : Cap D) (bs : List (List (OutZC F D Sl))) : Oracle F :=
   tabOfW (width₀ T) (lvOf T.sch 0).logLen
-    (Extract.firstTable (fun outs : List (OutZC F D Sl) => op₀Z H E Lf T cap₀ (outs.getD n dfltOutZC))
+    (Extract.firstTable (fun outs : List (OutZC F D Sl) => op₀Hs Hs.H Hs.E Hs.Lf T cap₀ (outs.getD n dfltOutZC))
       (fun _ _ => 0) bs)
 
 section Acc
 
-variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-  (Lf : Merkle.Leaf (List F) Sl D H) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
-  (Lτ : Merkle.Leaf F Sl D H) (ts : List (TabZK F mPts))
+variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts))
 
 /-- The probability that the compiled session accepts, after `Commit`. -/
-noncomputable def accProbZC (τ : Strategy (sessionZC A H E Lf Ep Lp Lτ ts)) : ℝ :=
-  expect (ind (acceptedZC ts)) (sessAfterZC (gamesZC A H E Lf Ep Lp Lτ ts τ.1)) τ.2
+noncomputable def accProbZC (τ : Strategy (sessionZC A Hs ts)) : ℝ :=
+  expect (ind (acceptedZC ts)) (sessAfterZC (gamesZC A Hs ts τ.1)) τ.2
 
 open Classical in
 /-- **An event of table `j`'s extraction, from accepted reruns**: the probability, over `k` reruns of everything after
 `Commit` in which the compiled session accepts, that the level-0 oracle the extractor fills from table `j`'s openings
 satisfies `G`. -/
-noncomputable def extractProbAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A H E Lf Ep Lp Lτ ts))
+noncomputable def extractProbAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts))
     (G : Oracle F → Prop) : ℝ :=
-  Extract.expectAcc (sessAfterZC (gamesZC A H E Lf Ep Lp Lτ ts τ.1)) τ.2 (acceptedZC ts) k
-    (ind fun bs => G (extractTableZ H E Lf (ts.get j) j (τ.1 j) bs))
+  Extract.expectAcc (sessAfterZC (gamesZC A Hs ts τ.1)) τ.2 (acceptedZC ts) k
+    (ind fun bs => G (extractTableZ Hs (ts.get j) j (τ.1 j) bs))
 
 /-- **Table `j`'s extraction from accepted reruns fails**: no padded witness near the extracted oracle satisfies the
 table's statement. -/
-noncomputable def failProbAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A H E Lf Ep Lp Lτ ts)) : ℝ :=
-  extractProbAccZ A H E Lf Ep Lp Lτ ts j k τ fun C => ¬ (ts.get j).Committed A C
+noncomputable def failProbAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts)) : ℝ :=
+  extractProbAccZ A Hs ts j k τ fun C => ¬ (ts.get j).Committed A C
 
 /-- **The rate of table `j`'s relative term**, `N₀/(ek)`, `N₀` its level-0 positions. -/
 noncomputable def rateZ (j : Fin ts.length) (k : ℕ) : ℝ :=
