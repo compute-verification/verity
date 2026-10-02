@@ -248,6 +248,21 @@ impl ProverRng {
         self.fill_at(purpose, index, &mut b);
         b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect()
     }
+
+    /// [`Self::f128s`]'s words, written into `out` on rayon's threads, 2^16 words to a task: a word is a function of the seed and
+    /// its address alone, so they are the serial draw's.
+    pub fn fill_f128s(&self, purpose: u64, index: u64, out: &mut [F128]) {
+        use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
+        const CHUNK: usize = 1 << 16;
+        out.par_chunks_mut(CHUNK).enumerate().for_each_init(|| (ProverRng { rng: self.rng.clone(), table: self.table }, vec![0u8; 16 * CHUNK]),
+            |(r, b), (c, o)| {
+                // a word is 16 bytes, an index 32
+                r.fill_at(purpose, index + (c * CHUNK / 2) as u64, &mut b[..16 * o.len()]);
+                for (x, w) in o.iter_mut().zip(b.chunks(16)) {
+                    *x = F128::new(u64::from_le_bytes(w[..8].try_into().unwrap()), u64::from_le_bytes(w[8..].try_into().unwrap()));
+                }
+            });
+    }
 }
 
 /// The prover's masking hooks. M0 implements them as the identity ([`NoMask`]).
@@ -347,6 +362,17 @@ mod tests {
         assert_eq!((s1.level0_id(), s1.next_id()), (1 << TABLE_SHIFT, (1 << TABLE_SHIFT) + 1));
         assert_eq!(s1.salt(s1.level0_id(), 0), s.salt(1 << TABLE_SHIFT, 0), "one key, the table's own trees");
         assert_ne!(s1.salt(s1.level0_id(), 0), s0.salt(s0.level0_id(), 0));
+    }
+
+    #[test]
+    fn the_parallel_fill_is_the_serial_draw() {
+        let r = ProverRng::for_table(ProverSeed::injected([7; 32]), 1);
+        for (stream, index, n) in [(6u64, 3u64 << 32, (1usize << 18) + 5), (7, 67 << 32, 436), (6, 0, 1 << 16), (7, 0, 1)] {
+            let mut got = vec![F128::ZERO; n];
+            r.fill_f128s(stream, index, &mut got);
+            let mut s = ProverRng::for_table(ProverSeed::injected([7; 32]), 1);
+            assert_eq!(got, s.f128s(stream, index, n), "stream {stream} at {index}, {n} words");
+        }
     }
 
     #[test]

@@ -118,9 +118,9 @@ pub enum Live<'a> {
     /// M0: straight to the rep's stream
     Stream(&'a mut LiveChallenger),
     /// M1: through `rounds` (the masking challenger in front of the rep's stream, `crate::replay_round`), with level 0's hiding
-    /// (`level0`: the session's padding and extra lanes, this rep's pair)
+    /// (`level0`: the session's padding and extra lanes; `rep`: this rep's pair, in place of `level0.rep`)
     #[cfg(feature = "sha512")]
-    Zk { level0: &'a Level0, rounds: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128> },
+    Zk { level0: &'a Level0, rep: usize, rounds: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128> },
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
@@ -773,11 +773,11 @@ pub fn prove_circuit(
         Live::Zk { level0, .. } => sc.with_queries0(level0.queries0),
         Live::Stream(_) => sc,
     };
-    let (params, mut rounds, level0): (ProveParams, Option<Rounds<'_>>, Option<&Level0>) = match live {
-        Live::Stream(ch) => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, Some(ch)), None, None),
+    let (params, mut rounds, level0, zk_rep): (ProveParams, Option<Rounds<'_>>, Option<&Level0>, usize) = match live {
+        Live::Stream(ch) => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, Some(ch)), None, None, 0),
         #[cfg(feature = "sha512")]
-        Live::Zk { level0, rounds } => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None),
-                                        Some(Rounds { handler: rounds, failed: None, rounds: 0 }), Some(level0)),
+        Live::Zk { level0, rep, rounds } => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None),
+                                             Some(Rounds { handler: rounds, failed: None, rounds: 0 }), Some(level0), rep),
     };
     let params = match rounds.as_mut() {
         Some(r) => params.with_rounds(r),
@@ -940,11 +940,11 @@ pub fn prove_circuit(
     });
     #[cfg(feature = "sha512")]
     if let (Some(z), Some((pads, extra))) = (level0, &zk_words) {
-        (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
+        (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, zk_rep as i32, z.t_pad as i32, z.tamper as i32);
         (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
     }
     #[cfg(not(feature = "sha512"))]
-    let _ = level0;
+    let _ = (level0, zk_rep);
     #[cfg(feature = "sha512")]
     let hm96_prefixes: Vec<u8> = {
         let c = flock_merkle::hm96::consts();
