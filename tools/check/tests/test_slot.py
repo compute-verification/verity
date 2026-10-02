@@ -75,6 +75,33 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a")
 
 
+def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_ticket_is_cleared(tmp_path, monkeypatch, capsys):
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    (line / f"{1:020d}-1").write_text("")                                    # a waiter that died: nobody holds its ticket
+    first = _hold(line / f"{2:020d}-2")                                      # a live one that came first; slot a is free
+    seen, ran = [], {}
+
+    def sleep(_s):
+        seen.append(sorted(p.name for p in line.iterdir()))
+        (line / f"{2:020d}-2").unlink()                                      # it takes its slot and runs
+        os.close(first)
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=sleep)
+    assert len(seen) == 1 and seen[0][0] == f"{2:020d}-2" and len(seen[0]) == 2, seen     # the dead ticket gone, ours behind
+    assert ran == {"slot": "a"} and list(line.iterdir()) == []
+    assert "slot: 1 check(s) ahead in line; retrying every 20 s" in capsys.readouterr().err
+
+
 def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
 
