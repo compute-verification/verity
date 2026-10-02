@@ -99,12 +99,26 @@ theorem refinement :
 theorem riskConcave_needs_k_two :
     detectionRisk 2 1 (1 / 2) 1 - detectionRisk 2 1 (1 / 2) 0 <
       detectionRisk 2 1 (1 / 2) 2 - detectionRisk 2 1 (1 / 2) 1 := by
-  sorry
+  have e0 : detectionRisk 2 1 (1 / 2) 0 = 0 := by norm_num [detectionRisk]
+  have e1 : detectionRisk 2 1 (1 / 2) 1 = -Real.log (3 / 4) := by norm_num [detectionRisk]
+  have e2 : detectionRisk 2 1 (1 / 2) 2 = -Real.log (1 / 2) := by norm_num [detectionRisk]
+  rw [e0, e1, e2]
+  have h := Real.log_lt_log (by norm_num) (show (1 / 2 : ℝ) < (3 / 4) ^ 2 by norm_num)
+  rw [Real.log_pow] at h
+  push_cast at h
+  linarith
 
 theorem riskConcave_needs_small_p :
     detectionRisk 3 2 (4 / 5) 1 - detectionRisk 3 2 (4 / 5) 0 <
       detectionRisk 3 2 (4 / 5) 2 - detectionRisk 3 2 (4 / 5) 1 := by
-  sorry
+  have e0 : detectionRisk 3 2 (4 / 5) 0 = 0 := by norm_num [detectionRisk, Nat.choose]
+  have e1 : detectionRisk 3 2 (4 / 5) 1 = -Real.log (7 / 15) := by norm_num [detectionRisk, Nat.choose]
+  have e2 : detectionRisk 3 2 (4 / 5) 2 = -Real.log (1 / 5) := by norm_num [detectionRisk, Nat.choose]
+  rw [e0, e1, e2]
+  have h := Real.log_lt_log (by norm_num) (show (1 / 5 : ℝ) < (7 / 15) ^ 2 by norm_num)
+  rw [Real.log_pow] at h
+  push_cast at h
+  linarith
 
 theorem concentration :
     detectionRisk 2 2 (1 / 2) 2 + detectionRisk 2 2 (1 / 2) 0 <
