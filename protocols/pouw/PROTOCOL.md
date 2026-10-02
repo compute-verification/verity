@@ -483,7 +483,9 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
     at 16,384³, per unit and per audit tile (Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`, `_16384` and their
     `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
-    at 1/1,000 is the assumption.
+    at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
+    (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
+    the ledger publishes the larger of the two prices, the in-loop add's.
   - `credit_of` and `wref` here are still `creditDev` and `wrefDev`: they keep the first promotion add of every word
     that rev1 takes out (m·n FADDs per unit, 0.090% of the credit at 8,192³ and 0.045% at 16,384³), so the cap and
     the credit they give are that much above rev1's.

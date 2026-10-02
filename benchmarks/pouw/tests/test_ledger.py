@@ -216,6 +216,19 @@ PINS = {
         "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
         "    (1648180439 / 446072750000).cast Pouw.PearlC.εPearlC"]},
     "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400": {"type_hash": "o", "signature": ["the same γ"]},
+    "Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192": {"type_hash": "i", "signature": [
+        "Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
+        "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) (sem : Pouw.PearlC.PearlCSem Q R S)",
+        "  (hTT :",
+        "    Pouw.PearlC.Assumptions.TTOutPearlCDevRev1 CM (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem (1 / 1000)) :",
+        "  Pouw.PearlC.Gγ CM",
+        "    (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem (1 / 1000)",
+        "      (instHSub.hSub (218 / 25) 8))",
+        "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
+        "    (205211 / 55610750).cast Pouw.PearlC.εPearlC"]},
+    "Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap_8192": {"type_hash": "g", "signature": [
+        "Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap_8192 {Q R S : Type} (ρ : Rat) (hρ : Rat.instLT.lt ρ 1) :",
+        "    (instHSub.hSub 1 (instHMul.hMul (instHSub.hSub 1 ρ) (221844 / 222443))).cast Pouw.PearlC.εPearlC"]},
 }
 
 
@@ -224,13 +237,16 @@ def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_wha
             for r in P.extract(PINS, "t", {"Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192": "0000000064832e60"})}
     assert set(rows) == {"pearlCGammaSm120v2Cap1000_8192", "pearlCGammaSm120v2LoopCast8p72Cap1000_8192",
                          "gammaHot_sm120v2HotLoopCast8_publicConst64_8192", "gammaFp4ChainOnly_sm120Loop_lut256_8192",
-                         "pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"}
+                         "pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192", "pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192"}
     stmt = rows["pearlCGammaSm120v2Cap1000_8192"]
     assert (stmt["statement"], stmt["path"], stmt["fadd"], stmt["reading"], stmt["kind"], stmt["shape"], stmt["status"]) == \
         ("pearl-c-sm120/v2", "cast-8", Fraction(8), "forming-credited", "unit", 8192, "pinned")
     v1 = rows["pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"]
     assert (v1["statement"], v1["path"], v1["fadd"], v1["cap"], v1["gamma"]) == (
         "pearl-c-sm120/v1", "cast-8.72", Fraction(1047, 125), Fraction(1, 1000), Fraction(1648180439, 446072750000))
+    issue = rows["pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192"]
+    assert (issue["path"], issue["fadd"], issue["cap"], issue["gamma"]) == (
+        "cast-8.72", Fraction(8), Fraction(1, 1000), Fraction(205211, 55610750))
     assert stmt["cap"] == Fraction(1, 1000) and rows["gammaHot_sm120v2HotLoopCast8_publicConst64_8192"]["cap"] is None
     assert stmt["gamma"] == Fraction(216793, 59950000)
     wide = rows["pearlCGammaSm120v2LoopCast8p72Cap1000_8192"]
@@ -279,15 +295,18 @@ def test_the_checked_in_table_gives_the_panel_s_published_gamma(statement, path,
     assert set(g["by_price"]) == {"8", "1047/125"} and all(v["pin"].startswith("Pouw.PearlC.") for v in g["by_price"].values())
 
 
-@pytest.mark.parametrize("n, gamma", [(8192, "1648180439/446072750000"), (16384, "1058166877/294158650000")])
-def test_v1_reads_its_cap_1_1000_and_names_the_8_00_twin_it_lacks(n, gamma):
-    """v1's statement is at 1/1,000 now: its loop-price twin is #838's (0.36949% at 8,192³, 0.35973% at 16,384³), its 1/400
-    twins are history, and with no twin at FADD 8.00 under the new cap nothing is published."""
+@pytest.mark.parametrize("n, issue, loop", [(8192, "205211/55610750", "1648180439/446072750000"),
+                                             (16384, "5273/1466810", "1058166877/294158650000")])
+def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
+    """v1's statement is at 1/1,000 now: its twins at the cast 8.72 are DeviceSm120CapRev1Gamma's at FADD 8.00 (0.36901% at
+    8,192³, 0.35949% at 16,384³) and #838's at the loop price (0.36949%, 0.35973%), the larger published; its 1/400 twins
+    are history."""
     t = P.load()
     g = P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", n, n)
-    assert g["cap"] == "1/1000" and g["published"] is None and set(g["by_price"]) == {"1047/125"}
-    assert g["by_price"]["1047/125"]["gamma"] == gamma and g["by_price"]["1047/125"]["status"] == "pinned"
-    assert g["missing"] == [f"a forming-credited twin of pearl-c-sm120/v1 on cast-8.72 at {n}³, FADD 8, cap 1/1000"]
+    assert g["cap"] == "1/1000" and g["missing"] == [] and g["pins"] == ["pinned"]
+    assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
+    assert (g["published"], g["published_at"]) == (loop, "1047/125")
+    assert g["by_price"]["8"]["pin"] == f"Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_{n}"
     assert all(P.lookup(t, "pearl-c-sm120/v1", path, n, n)["by_price"] == {} for path in ("cast-8", "cast-16", "cast-32.06"))
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", n, n)["published"] is not None
 
