@@ -106,6 +106,35 @@ def test_the_public_inputs_file_is_c_flocks(case):
             t.public_inputs(role, indexes)
 
 
+def test_the_public_inputs_file_is_in_parameter_leaf_order():
+    """The verifier's file holds each region in the unit's parameter leaf order, and its check refuses any other order:
+    F_B in read order (transposed, code p of line t at word p·k + t, as C-Flock's staging first read it) or two instances
+    swapped, every word otherwise right, is refused at its first differing word, as C-Flock's Lean verifier refuses it."""
+    t = RV.anchors("pc4-64", "pc4", 64, None)
+    own = t.public_inputs("row_a", (0, 1))
+    t.check_public_inputs("row_a", (0, 1), own)
+    head, body = own.split(b"\n", 1)
+    words = [int.from_bytes(body[j:j + 2], "little") for j in range(0, len(body), 2)]
+    sizes = [(p["port"], p["words"]) for p in json.loads(head)["ports"]]
+    assert sizes == [("e", 32), ("fa", 2048), ("fb", 2048)]
+    per = sum(n for _p, n in sizes)
+    fb = slice(32 + 2048, per)
+    read_order = []
+    for i in range(2):
+        w = words[i * per:(i + 1) * per]
+        f = w[fb]
+        w[fb] = [f[32 * line + p] for p in range(32) for line in range(64)]
+        read_order += w
+    misordered = head + b"\n" + region_bytes(read_order)
+    assert misordered != own and sorted(read_order) == sorted(words)
+    with pytest.raises(DomainError, match=r"^public input fb: word \d+ of instance 0 is not the verifier's own recomputation"):
+        t.check_public_inputs("row_a", (0, 1), misordered)
+    with pytest.raises(DomainError, match=r"^public input e: word \d+ of instance 0 "):
+        t.check_public_inputs("row_a", (0, 1), t.public_inputs("row_a", (1, 0)))
+    with pytest.raises(DomainError, match="header"):
+        t.check_public_inputs("row_a", (0, 1), t.public_inputs("row_a", (0,)))
+
+
 def test_a_window_refuses_a_repeated_call_index():
     """(forward, position) names one call (A11, `UniqueCallIndices`): a second call with it is refused."""
     call = F.call(32, 64, 32)
