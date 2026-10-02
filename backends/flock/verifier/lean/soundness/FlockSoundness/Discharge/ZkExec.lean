@@ -8,3 +8,9 @@ import FlockSoundness.Discharge.ZkExec.Refines
 import FlockSoundness.Discharge.ZkExec.Compiled
 import FlockSoundness.Discharge.ZkExec.Shape
 import FlockSoundness.Discharge.ZkExec.Coin
+import FlockSoundness.Discharge.ZkExec.RunsStatements
+import FlockSoundness.Discharge.ZkExec.RunsSeams
+import FlockSoundness.Discharge.ZkExec.RunsFrames
+import FlockSoundness.Discharge.ZkExec.RunsSizes
+import FlockSoundness.Discharge.ZkExec.RunsCarries
+import FlockSoundness.Discharge.ZkExec.RunsCut
