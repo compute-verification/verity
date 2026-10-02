@@ -19,7 +19,7 @@
   "rho": "18/19",
   "rounds": 5,
   "segments": 1,
-  "theorem": "Pous.Pinned.BandMultiMeetsFamily",
+  "theorem": "Pous.SecurityProofs.BandMultiMeetsFamily",
   "work": 1048576
  },
  "name": "band-chain/d12/v1",

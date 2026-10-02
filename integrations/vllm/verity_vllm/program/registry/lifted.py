@@ -51,13 +51,13 @@ the TRUE lifted width `Σ (w+1)` and run the untouched `partition.validate_width
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from verity.ir.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
                     composite)
 from verity.ir.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
 from verity.ir.types import Array, Record, Tuple, Type, Value
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names (SPEC §7)
 LABEL = "lifted-padded"  # R17 BRIEF §7: every result of this lane is labelled so, never a panel / active-reference row
@@ -235,7 +235,7 @@ def _gather_families() -> dict[int, Callable[[int], PrimitiveDefinition]]:
     return {16: P.gather_bf16, 32: R.gather_f32}
 
 
-def _classify(ops: Sequence[int], widths: Sequence[int]) -> int:
+def _classify(ops: Sequence[int], widths: Iterable[int]) -> int:
     """PAD-01 / §3.1 operand scan: 2 = some operand invalid (→ INV), 1 = all valid and some ⊥ (→ ⊥), 0 = all Active."""
     saw_bot = False
     for x, w in zip(ops, widths):
@@ -248,7 +248,7 @@ def _classify(ops: Sequence[int], widths: Sequence[int]) -> int:
 
 
 def _strict_wrapper(p: PrimitiveDefinition) -> PrimitiveDefinition:
-    widths = [w for _, t in p.params for w in t.leaf_widths()]
+    widths = operand_widths.leaf_widths(p.params)
     wout = p.ret.w
     bot_out, inv_out = enc_bot(wout), inv(wout)
     f = p.evaluate

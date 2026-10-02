@@ -307,6 +307,22 @@ def test_grants_read_through_to_the_remote_and_a_failed_pull_grants_nothing(tmp_
     assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and len(logs) == 2
 
 
+def test_grants_with_no_remote_configured_say_so_once(tmp_path, monkeypatch):
+    """A machine with no store remote sees only its own marks: `not marked ready` there may be a mark made elsewhere."""
+    from research.queue import StoreGrants
+
+    head = "0123456789abcdef0123456789abcdef01234567"
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    store = LocalStore(tmp_path / "store")
+    assert store.remote is None
+    logs: list[str] = []
+    grants = StoreGrants(store, log=logs.append)
+    assert grants.ready(12, head) is False and grants(12, head) == set() and grants.ready(13, head) is False
+    assert len(logs) == 1 and logs[0].startswith("research queue: no evidence-store remote is configured here")
+    store.add_label(grant_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-02T13:00:00Z")
+    assert grants.ready(12, head) is True and len(logs) == 1
+
+
 def test_rules_refuse_what_they_cannot_place():
     assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "statement-reviewer"]
     for bad in ('[[grant]]\nrole = "whoever"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\n', 'colour = "red"\n',

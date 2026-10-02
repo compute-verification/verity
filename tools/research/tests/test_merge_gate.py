@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from research.cli import main as research_main
@@ -31,6 +32,13 @@ def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
     (feat / "a.txt").write_text("a\nb\n")
     _git(feat, "commit", "-q", "-am", "feat")
     return main, feat, _git(feat, "rev-parse", "HEAD")
+
+
+def _declared_by_the_throwaway_repo(monkeypatch) -> None:
+    """`--tool check` imports `tools.check.tool` whenever `tools` is importable in this process (the suite's own checkout, from
+    sys.path or an earlier test's import) and reads the throwaway repo's file only when that fails: make it fail."""
+    for name in ("tools", "tools.check", "tools.check.tool"):
+        monkeypatch.setitem(sys.modules, name, None)
 
 
 def _record(tmp_path: Path, checkout: Path, monkeypatch, command: str) -> int:
@@ -162,13 +170,31 @@ def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path
     lint = ["--lint", "sh -c 'test ! -e BAD'"]
     assert merge_main(["--train", "--prepare", "train-prep/1", f"7@{a[:9]}", *lint]) == 0, capsys.readouterr().err
     tip = _git(origin, "rev-parse", "train-prep/1")
-    assert f"pushed origin/train-prep/1 = {tip[:12]} (tree {_git(origin, 'rev-parse', 'train-prep/1^{tree}')[:12]})" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"pushed origin/train-prep/1 = {tip[:12]} (tree {_git(origin, 'rev-parse', 'train-prep/1^{tree}')[:12]})" in out
+    assert f"`tools/check/train.sh {tip[:12]} MACHINE`" in out, "the branch is only on origin; train.sh resolves the sha here"
     assert _git(origin, "rev-parse", "train-prep/1^1") == _git(origin, "rev-parse", "main") and _git(origin, "rev-parse", "train-prep/1^2") == a
     assert _git(origin, "log", "-1", "--format=%s", "train-prep/1") == f"Merge #7 ({a[:8]})"
     assert _git(main, "symbolic-ref", "--short", "HEAD") == "lander-work" and (main / "a.txt").read_text() == "uncommitted\n"
     assert _git(main, "rev-parse", "HEAD") == _git(main, "rev-parse", "BAD") and "research-train" not in _git(main, "worktree", "list")
     assert merge_main(["--train", "--prepare", "train-prep/2", "--onto", "train-prep/1", f"B@{b[:9]}", *lint]) == 0
     assert _git(origin, "rev-parse", "train-prep/2^1") == tip and _git(origin, "rev-parse", "train-prep/2^2") == b
+
+
+def test_prepares_default_lint_runs_under_uv_when_this_interpreter_lacks_pytest(monkeypatch):
+    """A system python3 has no pytest, so the preflight's lints failed under it (old-circuits-and-proofs, 2 Oct)."""
+    import importlib.util
+    import shutil
+
+    from research import merge
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(shutil, "which", lambda name: "/opt/uv" if name == "uv" else None)
+    assert merge.preflight_argv() == [sys.executable, *merge.PREFLIGHT]
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "pytest" else real(name, *a))
+    assert merge.preflight_argv() == ["/opt/uv", "run", "--locked", "python", *merge.PREFLIGHT]
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert merge.preflight_argv() == [sys.executable, *merge.PREFLIGHT], "without uv, this interpreter is all there is"
 
 
 def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_nothing(tmp_path, monkeypatch, capsys):
@@ -204,8 +230,7 @@ _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'sch
 def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, monkeypatch, capsys):
     """The target's declaration says `agree` must pass for a change under flock/: an attempt that skipped it admits a change
     elsewhere but not one under flock/; one where it passed admits both."""
-    import sys
-
+    _declared_by_the_throwaway_repo(monkeypatch)
     main, feat, _tip = _repos(tmp_path)
     (main / "tools" / "check").mkdir(parents=True)
     (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
@@ -237,8 +262,7 @@ def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_tr
     """A adds the rule that `agree` must pass for a change under flock/; C, checked on A, changes flock/. Once A lands, C merges
     tree-identically, and the steps are read from main's declaration (now A's) against the diff from main's tip (C's flock/
     change): an attempt of C that skipped `agree` is refused, one where it passed lands."""
-    import sys
-
+    _declared_by_the_throwaway_repo(monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
     decl = "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1'{})\n"
     (main / "tools" / "check").mkdir(parents=True)
