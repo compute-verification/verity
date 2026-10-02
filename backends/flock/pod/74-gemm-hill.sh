@@ -67,6 +67,8 @@ fi
 # the job template's cargo target dir is shared; the builds here keep their own
 unset CARGO_TARGET_DIR
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+# K = 32768's coordinate (16,860,955 ANDs, k_log 27) is past the class sweep's default cap of 2^24 ANDs a shape
+export MAX_ANDS=${MAX_ANDS:-33554432}
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done
