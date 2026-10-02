@@ -13,6 +13,8 @@ import FlockSoundness.Discharge.Layout.KeyProg
 import FlockSoundness.Discharge.Layout.OutShape
 import FlockSoundness.Discharge.Layout.OutPin
 import FlockSoundness.Discharge.Layout.RowEnc
+import FlockSoundness.Discharge.Layout.KeysRow
+import FlockSoundness.Discharge.Layout.Keyed
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -52,5 +54,9 @@ from the decoder's places and the executable's regions:
   (`keyRowsOut`);
 * `RowEnc`: the bytes `sha512/row/v1` hashes for a row (`rowEnc`, injective by `rowEnc_inj`; the layout's values carry
   their width, `BitVal`): at `keyProg`'s row port `q`, `rowPrefix words` and the row's bytes at the message columns
-  (`keyRow_enc`, [e2e-hm]'s `port_commit` row), and `rs` with it (`keyRowsEnc`).
+  (`keyRow_enc`, [e2e-hm]'s `port_commit` row), and `rs` with it (`keyRowsEnc`);
+* `KeysRow`: `KeysRow` from the parse at row widths `16 · words` (`keysRow_of_parse`, `portRowW`), for a unit with only
+  its leaf group whose rows read only port bits (`PortReads`, a circuit condition);
+* `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`), with
+  [e2e-const]'s and [e2e-zero]'s constant and zero gates.
 -/
