@@ -1,8 +1,8 @@
-import Pous
+import Pous.Guarantees
 
-/-! The grader's positive control: a proof of `Pous.Pinned.KFloor`. -/
+/-! The grader's positive control: a proof of `Pous.Guarantees.KFloor`. -/
 
-theorem solution : Pous.Pinned.KFloor := by
+theorem solution : Pous.Guarantees.KFloor := by
   refine ⟨by norm_num [Pous.Params.ρ, Pous.Params.δ], fun k hk => ?_⟩
   by_contra h
   have hmono : Pous.Params.ρ ^ 85 ≤ Pous.Params.ρ ^ k :=

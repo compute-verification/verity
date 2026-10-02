@@ -1,5 +1,4 @@
 import Pous
-import PousProofs
 
 /-!
 # Axiom audit
@@ -28,36 +27,36 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 -- accounting: the report's operating point
 #print axioms Pous.Accounting.p₀_at_report
 #print axioms Pous.Accounting.report_k214
--- the proved pinned statements (`PousProofs/Pinned.lean`)
-#print axioms PousProofs.KFloor
-#print axioms PousProofs.Theorem1ii
-#print axioms PousProofs.Theorem1iiTimed
-#print axioms PousProofs.Theorem1iTimed
-#print axioms PousProofs.Theorem1iiSeq
-#print axioms PousProofs.Theorem1iiiTimed
-#print axioms PousProofs.FibreCount
-#print axioms PousProofs.A1CompressionCard
-#print axioms PousProofs.A1CompressionPr
-#print axioms PousProofs.A3Prime
-#print axioms PousProofs.A3PrimeLam
-#print axioms PousProofs.A6RederiveUntimed
-#print axioms PousProofs.A6RederiveTimed
-#print axioms PousProofs.B1IndepSet
-#print axioms PousProofs.B2Stacking
-#print axioms PousProofs.B3Chain
-#print axioms PousProofs.FischClaim13
-#print axioms PousProofs.FischClaim14
-#print axioms PousProofs.B5ExPostFactoBounded
-#print axioms PousProofs.B5ExPostFacto
-#print axioms PousProofs.TransposeMixing
-#print axioms PousProofs.ReverseNeedsAllChildren
-#print axioms PousProofs.N10Refuted
-#print axioms PousProofs.SampledAuditProd
-#print axioms PousProofs.SampledAuditSeq
-#print axioms PousProofs.SampledAuditSim
-#print axioms PousProofs.StackedAuditSeq
-#print axioms PousProofs.StackedAuditOnePercent
-#print axioms PousProofs.DenseMeets
+-- the proved guarantees (`Pous/SecurityProofs.lean`)
+#print axioms Pous.SecurityProofs.KFloor
+#print axioms Pous.SecurityProofs.Theorem1ii
+#print axioms Pous.SecurityProofs.Theorem1iiTimed
+#print axioms Pous.SecurityProofs.Theorem1iTimed
+#print axioms Pous.SecurityProofs.Theorem1iiSeq
+#print axioms Pous.SecurityProofs.Theorem1iiiTimed
+#print axioms Pous.SecurityProofs.FibreCount
+#print axioms Pous.SecurityProofs.A1CompressionCard
+#print axioms Pous.SecurityProofs.A1CompressionPr
+#print axioms Pous.SecurityProofs.A3Prime
+#print axioms Pous.SecurityProofs.A3PrimeLam
+#print axioms Pous.SecurityProofs.A6RederiveUntimed
+#print axioms Pous.SecurityProofs.A6RederiveTimed
+#print axioms Pous.SecurityProofs.B1IndepSet
+#print axioms Pous.SecurityProofs.B2Stacking
+#print axioms Pous.SecurityProofs.B3Chain
+#print axioms Pous.SecurityProofs.FischClaim13
+#print axioms Pous.SecurityProofs.FischClaim14
+#print axioms Pous.SecurityProofs.B5ExPostFactoBounded
+#print axioms Pous.SecurityProofs.B5ExPostFacto
+#print axioms Pous.SecurityProofs.TransposeMixing
+#print axioms Pous.SecurityProofs.ReverseNeedsAllChildren
+#print axioms Pous.SecurityProofs.N10Refuted
+#print axioms Pous.SecurityProofs.SampledAuditProd
+#print axioms Pous.SecurityProofs.SampledAuditSeq
+#print axioms Pous.SecurityProofs.SampledAuditSim
+#print axioms Pous.SecurityProofs.StackedAuditSeq
+#print axioms Pous.SecurityProofs.StackedAuditOnePercent
+#print axioms Pous.SecurityProofs.DenseMeets
 -- the one-way bound on Fisch's stacked graph
 #print axioms PousBridge.b2ToB5
 #print axioms PousBridge.b5_stacked
@@ -78,30 +77,30 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousDenseReCert.segTag_meets_14
 #print axioms PousDenseReCert.segTag_auditSecure
 -- the overwrite chain: P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, no hypothesis
-#print axioms PousProofs.P3ConcreteMeets64
-#print axioms PousProofs.P3ConcreteMeets14GB
-#print axioms PousProofs.P3ConcreteMeets64D12
-#print axioms PousProofs.BandChainMeets64
-#print axioms PousProofs.BandChainMeets64D5
-#print axioms PousProofs.BandChainMeets64D12
-#print axioms PousProofs.BandMultiMeets14
-#print axioms PousProofs.BandMultiMeets14K106
-#print axioms PousProofs.BandMultiMeetsFamily
-#print axioms PousProofs.ChainDenseMeets64
-#print axioms PousProofs.BandPubMeets64
-#print axioms PousProofs.BandPubMeets14
-#print axioms PousProofs.BandPubMeets14Global
-#print axioms PousProofs.ChainDenseMeets111
+#print axioms Pous.SecurityProofs.P3ConcreteMeets64
+#print axioms Pous.SecurityProofs.P3ConcreteMeets14GB
+#print axioms Pous.SecurityProofs.P3ConcreteMeets64D12
+#print axioms Pous.SecurityProofs.BandChainMeets64
+#print axioms Pous.SecurityProofs.BandChainMeets64D5
+#print axioms Pous.SecurityProofs.BandChainMeets64D12
+#print axioms Pous.SecurityProofs.BandMultiMeets14
+#print axioms Pous.SecurityProofs.BandMultiMeets14K106
+#print axioms Pous.SecurityProofs.BandMultiMeetsFamily
+#print axioms Pous.SecurityProofs.ChainDenseMeets64
+#print axioms Pous.SecurityProofs.BandPubMeets64
+#print axioms Pous.SecurityProofs.BandPubMeets14
+#print axioms Pous.SecurityProofs.BandPubMeets14Global
+#print axioms Pous.SecurityProofs.ChainDenseMeets111
 -- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
-#print axioms PousProofs.P2MeetsM1pB19Uncond
-#print axioms PousProofs.P2MeetsM1pFamilyUncond
-#print axioms PousProofs.P2MeetsM1pW8192Uncond
-#print axioms PousProofs.P2SlackB19Uncond
-#print axioms PousProofs.P2SlackFamilyUncond
-#print axioms PousProofs.P2ErrorSplitB19Uncond
+#print axioms Pous.SecurityProofs.P2MeetsM1pB19Uncond
+#print axioms Pous.SecurityProofs.P2MeetsM1pFamilyUncond
+#print axioms Pous.SecurityProofs.P2MeetsM1pW8192Uncond
+#print axioms Pous.SecurityProofs.P2SlackB19Uncond
+#print axioms Pous.SecurityProofs.P2SlackFamilyUncond
+#print axioms Pous.SecurityProofs.P2ErrorSplitB19Uncond
 #print axioms PousP2p.not_meets_m1p_b19_k85
 #print axioms PousMargin.not_slack_raw
--- P2 in the ring cost model (`Pous/P2/Cost.lean`): `MeetsOn` at `L = Q` gives `Meets`, the non-vacuity pins
+-- P2 in the ring cost model (`Pous/Protocol/P2/Cost.lean`): `MeetsOn` at `L = Q` gives `Meets`, the non-vacuity pins
 -- (honest storage is accepted; recomputing the roots breaks `MeetsOn`), and dropping low bits breaks `k = 88`
 #print axioms PousP2Ring.meets_of_meetsOn
 #print axioms PousP2Ring.complete

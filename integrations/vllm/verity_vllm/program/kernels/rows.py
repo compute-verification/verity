@@ -734,14 +734,14 @@ def _check_targets() -> dict[str, list]:
     }
 
 
-def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None, check_targets: Callable | None = None) -> None:
+def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None, check_targets: Callable | None = None, batch: Callable | None = None) -> None:
     k = ROWS[family] = RowKernel(family, fn, returns)
     register(family, _instance(k), kernel=KERNEL, domain=DOMAIN, sample=sample or _sample(),
-             check_targets=check_targets or (lambda rng: _check_targets()[family]))
+             check_targets=check_targets or (lambda rng: _check_targets()[family]), batch=batch)
 
 
 _row("Gemm_v1", gemm, ("0",))
-_row("Gemm_v2", gemm_dot, ("0",))
+_row("Gemm_v2", gemm_dot, ("0",), batch=lambda x, w, **statics: dense_rows.gemm_dot_rows(gemm_dot_prim, x, w, **statics))
 _row("RoPE_v1", rope, ("0",))
 _row("Attention_v3", partial(attention, "Attention_v3"), ("out",))
 _row("Attention_v2", partial(attention, "Attention_v2"), ("out",))

@@ -3,7 +3,7 @@
 
 Its certificate at the frozen point (`band.SECURE_FIRST`: `B = 512`, 64 KiB blocks), for every `d ≥ 5`, with no
 hypothesis (in the ideal-permutation model): `k = 111`, `D = 5` calls of at least 241.5 µs, `Q = 2^20`, with the cliff at
-`d` (`band_cliff_d12`). It is `Pous.Pinned.BandMultiMeetsFamily`: `Meets` for the `N`-segment store
+`d` (`band_cliff_d12`). It is `Pous.SecurityProofs.BandMultiMeetsFamily`: `Meets` for the `N`-segment store
 `chainBandSeg N (2^9) d` keyed by `segDom salt` (segment `s` by `tag_s = salt ‖ u64 s`, as the codec keys it), for
 every `N` from 1 to `2^64`, which is every segment count `BandParams` allows. It is one `Meets` for the whole store:
 challenges uniform over all its blocks, the state bound of the whole store, one permutation. At one segment it is also
@@ -64,7 +64,7 @@ class Band(Scheme):
         p = self.params
         if (p.blocks_per_segment, p.m) != POINT or p.d < 5:
             return None
-        return chain_certificate("Pous.Pinned.BandMultiMeetsFamily", p.d, p.segments)
+        return chain_certificate("Pous.SecurityProofs.BandMultiMeetsFamily", p.d, p.segments)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return dense_codec.encode_segment(self.params, self.prims, salt, s, w_seg)

@@ -42,6 +42,8 @@
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
+  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...]   # what runs on the Nebius nodes
+                                                 # (pods/nebius/deploy.toml) against main, and installs from a pushed commit (research/deploy.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -159,7 +161,7 @@ def cmd_run(argv: list[str]) -> int:
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
     q.add_argument("--gpus", type=int, default=None, metavar="N", help="default: its kind's (else 0)")
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
-    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1)")
+    q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1); also the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
                    help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
                         "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
@@ -591,6 +593,9 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
 
 
 GPU_WAIT_MIN = 120
+# a queued job's thread pools take its --cpus, as a pod's take its quota (pod_bootstrap.sh): left alone, BLAS and OpenMP start one
+# thread per host core inside a scope of a few CPUs. The job's own --env still decides.
+THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
@@ -656,6 +661,9 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
             print(f"research run: --env wants K=V, got {kv!r}", file=sys.stderr)
             return 2
         env[k] = v
+    if queue:
+        cpus = str(int((queue.get("job") or {}).get("cpus") or 1))
+        env = {**dict.fromkeys(THREAD_POOL_VARS, cpus), **env}
     asked_cwd = remote.flag_value(harness_opts, "--cwd")
     if asked_cwd is not None and not os.path.isabs(asked_cwd) and not ns.source:
         print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
@@ -1047,6 +1055,10 @@ def main(argv: list[str] | None = None) -> int:
         from .pods.part import main as pods_main
 
         return pods_main(rest)
+    if cmd == "deploy":
+        from .deploy import main as deploy_main
+
+        return deploy_main(rest)
     if cmd == "notes":
         from .notes import main as notes_main
 
