@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .codec import canonical_json
-from .program import INPUT_ID
+from .program import input_id
 from .types import type_from_json
 
 FORMAT = "verity/annotations/v0"
@@ -109,7 +109,7 @@ class _Program:
     def __init__(self, desc: Mapping[str, Any], sha512: str | None) -> None:
         self.desc, self.sha512 = desc, sha512
         root = desc["definitions"][desc["root"]]["body"]["nodes"]
-        self.calls = {k for k, n in enumerate(root) if not INPUT_ID.match(_callee(desc, n))}
+        self.calls = {k for k, n in enumerate(root) if input_id(_callee(desc, n)) is None}
 
     def specs(self, d: str) -> list[str]:
         defs = self.desc["definitions"]

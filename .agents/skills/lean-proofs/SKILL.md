@@ -3,13 +3,13 @@ name: lean-proofs
 description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
   scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
-  tools/lean/audit.py, stating assumptions as named Props, freezing and pinning the theorems a ledger or PR
-  cites in lean-audit.json, watching ArkLib and other dependencies for proofs of what we assume
-  (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build directories, and Daniel's
-  Lean rulings (theorems proved under their assumptions, Lean as the source of truth for them). Use when adding or
-  changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3, soundness, packages/verity/lean,
-  protocols/pous/lean, protocols/network_warden/lean), when a Lean build or proof is slow, editing a lean-audit.json
-  or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
+  tools/lean/audit.py, stating assumptions as named Props, freezing and pinning the guarantees a ledger or PR cites in
+  lean-audit.json, moving them without a statement review (--moved), watching ArkLib and other dependencies for proofs
+  of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
+  directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
+  them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
+  soundness, packages/verity/lean, protocols/pous/lean, protocols/network_warden/lean), when a Lean build or proof is
+  slow, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
 # Lean proofs
@@ -20,14 +20,18 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
 
 - **Pick the package by its dependencies.** Code the verifier runs, and anything the V[B] generator or a reference
   prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
-  `level3/` (Mathlib). Protocol theorems (soundness, knowledge soundness, zero knowledge, audits): `soundness/` (ArkLib).
-  Proofs about core's own definitions (`verity.ml.tc` and the like): `packages/verity/lean/` (no dependencies), since
-  core depends on no backend. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
+  `level3/` (Mathlib). C-Flock's guarantees (soundness, knowledge soundness, zero knowledge, audits): `soundness/`
+  (ArkLib).
+  Proofs about core's own definitions (`verity.ml.tc` and the like), and the model every protocol states its guarantees
+  in (circuits, partitions, declarations, games): `packages/verity/lean/` (Mathlib only), since core depends on no
+  backend. A protocol's guarantees: its own package under `protocols/<name>/lean/`, which may require core's and other
+  protocols' packages. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
 - **Own a subdirectory and namespace** (`FlockSoundness/Knowledge/`, `FlockSoundness.Knowledge`), with one aggregator
   module that imports its files. The package root imports the aggregator once, when the area is created, so parallel
   lanes don't edit the same root file.
-- **Definitions a pinned statement reads go in definition files** (`Model/`, `Accounting/`, `Assumptions.lean`), not in a
-  proof file. The audit lists where they are (`reads` in `lean-audit.json`); keep that list short.
+- **Definitions a guarantee reads go in definition files** (`Protocol/`, `Assumptions`, `Guarantees/` in the
+  packages laid out under the four names, see `AGENTS.md`; `Model/`, `Accounting/`, `Assumptions.lean` elsewhere), not in
+  a proof file. The audit lists where they are (`reads` in `lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
   `.olean` files, and an audit then reads what another agent's build left. A second Lean task on the same machine gets
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
@@ -55,7 +59,7 @@ While proving, check one file at a time, and leave the whole package and the aud
   /tmp/scratch/Probe.lean`. It takes well under a second against built imports:
 
   ~~~lean
-  import Verity.TC.AmpereSound
+  import Verity.SecurityProofs.TC.AmpereSound
   #print axioms Verity.TC.ampere_step_hw     -- a sorry shows as sorryAx, long before the audit runs
   example (a b : Nat) : a + b = b + a := by exact?
   ~~~
@@ -88,28 +92,35 @@ simp with that.
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
   assumption, or a theorem in a lane branch, not on `main`.
-- **Freeze the statement, then prove it.** In your lane branch, state the theorem on a `sorry` stub, check it against the
-  paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
-  statement, so it passes once the proof lands, and the pin shows if the statement moved on the way. Never make a theorem
-  easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an unmotivated
-  hypothesis, or move a verifier check into an assumption. That list is also what the statement reviewer checks.
-- **Pin what you cite.** When a ledger row, a table or a PR description says a theorem is proved, add its name under
-  `pins` and run `python tools/lean/audit.py --update PKG`. Commit the record with the proof.
+- **Freeze the statement, then prove it.** In your lane branch, state the guarantee on a `sorry` stub, check it against
+  the paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
+  statement, so it passes once the proof lands, and the pin shows if the statement moved on the way. Never make a
+  guarantee easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an
+  unmotivated hypothesis, or move a verifier check into an assumption. That list is also what the statement reviewer checks.
+- **Pin what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
+  (`SecurityProofs.G` under the four names) to `pins` and run `python tools/lean/audit.py --update PKG`. Commit the
+  record with the proof.
 - **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
   (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
   The entry lists the dependency's constants that the statement is about. An assumption stated over the package's own
-  definitions gets none: no upstream theorem can mention them, so the entry could never fire. The audit fails when the
+  definitions gets none: no upstream theorem can mention them, so the entry could never fire. Nor does one about a single
+  number (PoUS's `PrimeP16448`): its entry would fire on every theorem about primes. The audit fails when the
   pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
   (`soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
   new version.
   Cite the output in `ASSUMPTIONS.md`'s upstream status rather than writing one.
-- **A changed record is a changed claim.** If `--update` changes a record or `reads` for a theorem you didn't mean to
-  change, your edit changed what that theorem says: undo it, or say so in the PR and update the ledger.
+- **A changed record is a changed claim.** If `--update` changes a record or `reads` for a guarantee you didn't mean to
+  change, your edit changed what that guarantee says: undo it, or say so in the PR and update the ledger.
 - **A changed record needs a named statement reviewer.** The axiom checks and the replay pass a weakened definition
   (a vacuous theorem is still a theorem), so paste what `--update` printed into the PR, and ask someone other than the
   author to read it. The PR description names that reviewer.
+- **A move is not a change.** When you rename pins or move what they read (a package moving to the four names), write
+  the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
+  `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A pin that says what its record
+  says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each get
+  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map.
 
 ## Before the PR
 
@@ -124,15 +135,19 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
+  conclusion, where an assumption is a named `Prop` (README "Glossary").
+- 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
+  when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
 - 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
   because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
   `path` require changes no revision, so a feature PR may add it. Python's protocols still import only `verity` and
   themselves (`tests/test_protocol_boundaries.py`).
-- 2026-10-01: there are theorems and assumptions, and a theorem is **proved under its assumptions**; there is no third
-  status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one than a
-  fact about our own circuit that we mean to prove (`HmRowComputes`). So what a theorem assumes is explicit and hard to
-  break, a table, a ledger or a PR cites a theorem with its assumptions, and proving an assumption removes it from every
-  theorem that took it.
+- 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
+  third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
+  than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
+  hard to break, a table, a ledger or a PR cites a guarantee with its assumptions, and proving an assumption removes it
+  from every guarantee that took it.
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
   derived from Lean and the audit's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
