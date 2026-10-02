@@ -318,6 +318,15 @@ def test_every_computing_gate_is_in_one_unit_and_inputs_in_none():
                 assert c["committed_bits"] == sum(g["width"][g["keep"][x]] for x in c["committed"])
 
 
+@pytest.mark.parametrize("edit,why", [(lambda us: us[:-1], "in no unit"),
+                                      (lambda us: us + [us[-1]], "is in units")])
+def test_evaluate_call_refuses_a_cut_that_misses_or_repeats_a_gate(monkeypatch, edit, why):
+    whole = cut.call_units
+    monkeypatch.setattr(cut, "call_units", lambda G, X: edit(whole(G, X)))
+    with pytest.raises(ValueError, match=why):
+        cut.evaluate_call(Ripple, 32)
+
+
 def test_units_are_numbered_by_call_then_layout():
     for name, runs in VECTORS["evaluations"]:
         ev = runs[0]
