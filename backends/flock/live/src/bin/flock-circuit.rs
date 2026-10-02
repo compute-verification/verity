@@ -474,7 +474,7 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
         let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
-        zkv::verify_inner(inner, &zk_layout(st), cons, ch)
+        zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
     .map_err(|e| e.chars().take(200).collect::<String>())
@@ -867,6 +867,8 @@ struct ZkRep {
     points: Arc<Mutex<Vec<Vec<F128>>>>,
     /// a dishonest prover: absorb and send values masked with pads other than the committed ones
     pad_mismatch: bool,
+    /// a dishonest prover: re-solve `final_c'` after the inner proof's coins so that the batched constraint holds
+    final_c_solved: bool,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
     /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
@@ -886,7 +888,7 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
     let ic = zkv::InnerCommit::new(&pads, sb);
-    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
+    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, t_commit: tz0.elapsed().as_secs_f64(),
             level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep }, ..level0.clone() }) }
 }
 
@@ -1050,7 +1052,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
                                                            -> (Vec<u8>, Value) {
     let (mut inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
-    let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
+    let (mut zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &zk.ic.root(), Some(&proof.lincheck.comb_partial), &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
@@ -1068,8 +1070,12 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     let t_prime = proof.pcs_open.ligerito.zk_level0.as_ref().expect("level 0's hiding messages").t_prime;
     cons.extend(zkv::ligerito_constraints(&zk.lay, &rec, &zkv::ligerito_exposed(&proof.pcs_open.ligerito, &zk.lay), t_prime).unwrap_or_else(|e| panic!("{e}")));
     let fails = zkv::failing(&cons, &zk.pads.h);
+    let kept = zk.final_c_solved.then(|| cons.clone());
     let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
-    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    if let Some(cons) = kept {
+        zc.final_c_eval += final_c_shift(&zk.lay, &zk.pads.h, cons, &inner, &lch.coins);
+    }
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
     let o = bk.as_object_mut().expect("buckets");
@@ -1079,6 +1085,17 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
         o.insert(k.into(), v);
     }
     (bincode::serialize(&(commitment, masked, inner)).unwrap(), bk)
+}
+
+/// The shift of `final_c'` that zeroes the inner proof's batched constraint on the committed pads, from its coins (`ε`, then
+/// the batching coins): `final_c'` is a constant of the c_eval and ring switch c rows.
+fn final_c_shift(lay: &Layout, h: &[F128], mut cons: Vec<(&'static str, zkv::Lin)>, inner: &InnerProof, coins: &[F128]) -> F128 {
+    cons.extend(zkv::triple_constraints(lay, coins[0], inner.rho, inner.sigma));
+    let g = &coins[1..1 + cons.len()];
+    let (c, t) = zkv::batch(&cons, g);
+    let sum = c.iter().zip(h).fold(t, |a, (x, y)| a + *x * *y);
+    let at = |name: &str| cons.iter().position(|r| r.0 == name).expect("a row of final_c'");
+    sum * (g[at("zerocheck c_eval")] + g[at("ring switch c")]).inv()
 }
 
 fn f128s_hex(v: &[F128]) -> Vec<String> {
@@ -1539,7 +1556,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
         add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
         add("masked (proof): inner tau (<c, mu>, mu uniform) and its commitment's salt", 16 + inner.tau_salt.len());
-        add("masked (proof): final_c' (never absorbed; its pad h_fc)", 16);
+        add("masked (proof): final_c' (its pad h_fc; absorbed by the inner proof)", 16);
         let nonces_zero = pr.pcs_open.batching_nonces.iter().all(|x| *x == 0);
         add(if nonces_zero { "public (proof): the opening's batching nonces (live coins: always 0)" } else { "CLEAR (proof): nonzero batching nonces" },
             8 * pr.pcs_open.batching_nonces.len());
@@ -2193,6 +2210,8 @@ struct Plan {
     substitute: Option<Vec<Vec<u8>>>,
     /// M1: mask the sent values with pads other than the committed ones
     zk_pad_mismatch: bool,
+    /// M1: `final_c'` re-solved after the inner proof's batching coins, cancelling the failing rows
+    zk_final_c_solved: bool,
     /// M1's control: zero pads and a zero mask slot (M0's values, in M1's format)
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
@@ -2824,6 +2843,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("native_sha_matches_eval64", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
+    ("zk_final_c_solved_after_the_batching_coins", false, true),
     ("zk_level0_folds_another_extra_lane", false, true),
     ("zk_level0_blinded_claim_forged", false, true),
     ("zk_level0_ybar_forged", false, true),
@@ -2882,6 +2902,7 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "fast_profile_proofs" => Plan { fast: true, ..h },
         "opened_salt_altered" => Plan { salt_flip: true, ..h },
         "zk_pads_not_the_committed_ones" => Plan { zk_pad_mismatch: true, ..h },
+        "zk_final_c_solved_after_the_batching_coins" => Plan { zk_pad_mismatch: true, zk_final_c_solved: true, ..h },
         "zk_level0_folds_another_extra_lane" => Plan { zk_l0_tamper: 1, ..h },
         "zk_level0_blinded_claim_forged" => Plan { zk_l0_tamper: 2, ..h },
         "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..h },
