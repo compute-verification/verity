@@ -1308,14 +1308,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   position the verifier's program reads for its unit, so units must be `derived`. A port named on one side only refuses.
   Verdicts report `registered`.
 - **Public input ports** (`Flock.HmIn`, §16.13's statements). META may name `public_inputs` (`[{port, words, seed,
-  derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs that are words the verifier
-  recomputes from public data, not rows (the design owner's condition, Oct 2). The words of an unpacked unit range's leaf
-  group holding them hold no row leaf; each run of them is cut into the largest aligned blocks of `2^e` words, and Δ copies
-  none of their bits. Regions `in r` follow the digests, block by block: `2^s` words each, `s = min(e, PT_LOCAL − 7 −
-  ⌈log2 count⌉)`, the slot bits free, valued at each instance's public words. The header repeats `public_inputs`; the body ends
-  with every instance's public words (u16 LE). The verifier needs its own `--public-inputs F` (`verity/flock-public-inputs/v1`:
-  `{format, instances, ports}`, then the population's words) and refuses a word that differs, a missing file, and a port
-  named on one side only.
+  derivation}]`) and `leaves_public` (per unit, each leaf's public word or −1): unit inputs the verifier recomputes from
+  public data, not rows. The words of an unpacked unit range's leaf group holding them hold no row leaf; each run of
+  them is cut into the largest aligned blocks of `2^e` words, and Δ copies none of their bits. Regions `in r` follow the
+  digests, block by block: `2^s` words each, `s = min(e, PT_LOCAL − 7 − ⌈log2 count⌉)`, the slot bits free, valued at
+  each instance's public words. The header repeats `public_inputs`; the body ends with every instance's public words
+  (u16 LE). The verifier needs its own `--public-inputs F` (`verity/flock-public-inputs/v1`: `{format, instances,
+  ports}`, then the population's words), refusing a differing word, a missing file and a port named on one side only.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1431,8 +1430,7 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 
 `verify --zk`, the verifier's setting, checks `flock-circuit --zk` sessions (any `J`, draws) after the same setup, public
 input words included (D7), by `backends/flock/live/PROTOCOL.md`'s masked protocol on §7.4's coin tree (`Flock.Zk*`).
-`hooks` is upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`. `agree.py --zk` compares the live build's
-`replay --zk`.
+`hooks` is upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
 
 ## 17. Acceptance, assumptions and trust
 
@@ -1469,11 +1467,9 @@ a vector that exercises one carries the upstream verdict it expects (`upstream_a
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root.
 - **D6:** a `--zk` record's `coin_tree` (§7.4, §16.14); upstream ignores it.
-- **D7:** public input words (§16.10), also under `--zk`: the spec refuses a word that is not the verifier's own
-  recomputation; upstream's serve and replay take no recomputation, and accept it.
+- **D7:** public input words (§16.10, also under `--zk`): upstream takes no recomputation and accepts any word.
 
-At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
-in `redigest.py` and `fuzz.py`).
+The corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks` in `redigest.py` and `fuzz.py`).
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
 unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
