@@ -182,6 +182,49 @@ def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
     assert am["requests"][0]["inputs"][2]["gates"] == am["requests"][1]["inputs"][2]["gates"] == [2, 5]
 
 
+def _toy_registered_request(LP: int, values_n: int = 2):
+    """A registered_values derive's wrapper shape: `(prompt, values, weights)` with `values` bound at registration."""
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("values", Array(S.V, Value(16))), ("weights", Array(4, Value(16)))),
+                Array(1, Value(16)))
+
+    def body(B, S, prompt, values, weights):
+        return coll_concat(Array(1, Value(16)), [B.call(_ADD, B.call(_ADD, prompt[0], values[0]), weights[0])])
+
+    d = REGISTRY["ToyRegReq_v1"] if "ToyRegReq_v1" in REGISTRY else CompositeDefinition("ToyRegReq", 1, ("LP", "V"), sig, body)
+    return d.bind(LP=LP, V=values_n)
+
+
+def _registered_component(LP: int, values_n: int = 2, registered=("values",)):
+    wp = [("prompt", f"Array<{LP},Value<16>>"), ("values", f"Array<{values_n},Value<16>>"), ("weights", "Array<4,Value<16>>")]
+    return W.request_component(encode_program(Program(_toy_registered_request(LP, values_n), registered=registered)), REGISTRY, wp)
+
+
+def test_registered_values_are_shared_once_and_registered_at_the_root():
+    """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
+    Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
+    from verity.ir.constants import REGISTRATION, RUN, inputs
+    ca, cb = _registered_component(2), _registered_component(5)
+    assert ca.bindings == (RUN, REGISTRATION, RUN)
+    wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
+    assert wl.registered == ("shared.values",) and wl.shared == (1, 2)
+    assert wl.program.input_gates == 2 + 4 + 2 + 5
+    names = [n for n, _ in wl.fn.signature()[0]]
+    assert dict(zip(names, wl.program.bindings)) == {"shared.values": REGISTRATION, "shared.weights": RUN, names[2]: RUN, names[3]: RUN}
+    assert len(inputs(wl.program.circuit)[REGISTRATION]) == 2 and len(inputs(wl.program.circuit)[RUN]) == 4 + 2 + 5
+    assert wl.artifact()["shared"]["registered"] == ["shared.values"]
+    # the components agree on what they register, or the workload is not one program
+    with pytest.raises(ValueError, match="register different groups"):
+        W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca),
+                           W.WorkloadRequest("b", 1, 5, 1, 0, _registered_component(5, registered=()))], lag=0)
+
+
+def test_a_workload_without_registered_values_keeps_its_digest():
+    wl = _wl([(3, 2), (5, 0)])
+    assert wl.registered == () and "registered" not in wl.artifact()["shared"]
+    assert wl.digest == "c7b27da04c555a2a56c06126ba6d3eb28b6fef06fdb2ffe449be43a4cb18c5e4"
+
+
 def _toy_rank_request(LP: int, T: int):
     """A TP rank Program's shape (tp M-0314): `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
     the number of request-local inputs BEFORE the shared group depends on T and the weights group shifts per component."""

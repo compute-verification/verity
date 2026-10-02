@@ -1131,7 +1131,7 @@ gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_
 With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
 circuit is malformed. Under `Q_word` v2 (a cut's `"recompute": "report"`, the reference's `recompute="report"`) a recomputed
 pair across units is no failure: it is counted (`recomputed_across`), and every other code is v1's. `unit_cut_agree.py`
-checks the codes against the reference on random cuts, each cut under both rules.
+checks the codes against the reference on random cuts (5000 agree, every code exercised), each cut under both rules.
 
 **One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`,
 PR #111). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
@@ -1225,9 +1225,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   a statement with no compression. Message bit `b` of byte `j` is a row bit if `8j + b < ℓ`, else a zero fill bit (`j <
   B`) or padding; so the hm96 `pad` may hold row bytes, and a row of ≤ 111 bytes has no compression.
 - **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
-  1536`, output `bc 1024`) are `CIRCUIT` sections, which must be the nets the verifier generates (`Flock.HmNets`, as
-  `sha512_circuit` builds them and `ir_lower.layout` lays them out): setup refuses one that differs, naming its first
-  differing row. Per VU, port `p`'s compressions are numbered on from the previous
+  1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
   ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
   slot `p` for port `p`. The `sha512x3` range is `packed` (aligned to one slot, spanning its count); every other range is
   aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
@@ -1326,14 +1324,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
   whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
   and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
-  failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
-  is `as stated`, with the reason in `note`, which an audit reports as a gap.
-- **Registered reads** (`Flock.Registered`). A shared-row header may name `registered`, `{port: {value, positions,
-  paths}}`: rows of a value committed at registration. The verifier then needs its own `--registered F`
-  (`verity/registered-reads/v0`: per port the value, root, leaf count, domain, and each unit's read position). Every table
-  row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, and every instance's ref must name the
-  position the verifier's program reads for its unit, so units must be `derived`. A port named on one side only refuses.
-  Verdicts report `registered`.
+  failing cut refuses the partition, naming the Call and its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
+  refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
+  audit reports as a gap.
+- **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
+  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
+  u16 words, padded. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, each
+  instance's ref name its unit's read position in the verifier's program (units `derived`). A port on one side only
+  refuses; verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1390,7 +1389,7 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - A read inside the root's own region, or inside a placed call, is refused.
   - **Rows only through `deriveChecked`,** whose check covers reads (#263): a placed read is a segment of a generated
     layout for its table, and a generated layout's rows are `table/v2`'s (`genOk`).
-  - **Tested** on typed attention (`test_lean_typed_reads.py`).
+  - **Tested** on typed attention (`test_lean_typed_reads.py`): the derived rows are the writer's `rows/` byte for byte.
 - **Not yet:** `unit_in`'s constant bindings.
 
 ### 16.12 Sessions of several tables (#306, `--session-tables J`)
