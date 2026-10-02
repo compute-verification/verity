@@ -8735,6 +8735,8 @@
    "assumptions": [],
    "type_hash": "a6717aeb976e7dba1cbda3f330a0b584d491fed3653ff67336be5d5a7ecd91df"
   },
+  "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc": {},
+  "FlockSoundness.Discharge.ZkExec.zk_headline_exec_zc_execOS": {},
   "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok": {
    "signature": ["FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok : FlockSoundness.Discharge.ZkExec.ZkRepOk"],
    "assumptions": [],
