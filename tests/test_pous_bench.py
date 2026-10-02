@@ -26,7 +26,7 @@ def test_weight_sets_are_the_frozen_benchmarks():
     sets = {ws["id"]: ws for ws in doc["weight_sets"]}
     blocks = {i: -(-ws["bytes"] // 65_536) for i, ws in sets.items()}
     assert blocks == {"qwen2.5-0.5b/linears+head": 15_075, "qwen2.5-7b/layer0+head": 23_744, "llama3.1-8b/layer0+head": 22_688,
-                      "llama3.1-8b/layers0-8+head": 75_936}
+                      "llama3.1-8b/layers0-8+head": 75_936, "llama3.1-8b/linears+head": 229_024}
     for ws in sets.values():
         assert ws["bytes"] == sum(o * k * 2 for _, o, k in ws["tensors"])
         assert all(len(s) == 64 for s in ws["checkpoint"]["safetensors_sha256"].values())
