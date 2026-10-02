@@ -2,6 +2,7 @@ import FlockSoundness.Discharge.Layout.Readers
 import FlockSoundness.Discharge.Layout.Bytes
 import FlockSoundness.Discharge.Layout.Region
 import FlockSoundness.Discharge.Layout.HmRegion
+import FlockSoundness.Discharge.Layout.OutRegion
 import FlockSoundness.Discharge.Layout.Pins
 import FlockSoundness.Discharge.Layout.Drawn
 import FlockSoundness.Discharge.Layout.QSort
@@ -20,6 +21,8 @@ from the decoder's places and the executable's regions:
   `inBlock_mkRegion`, `inBlock_lt`);
 * `HmRegion`: the `b ‖ c` the statement pins at the `hm96` slots' outputs (`bc_pinned`, at `bcAddr`, the slot's output
   column by `bcAddr_eq_slotCol`), and setupH's regions (`setupH_regions`);
+* `OutRegion`: the returned outputs the statement pins at the unit slots' output columns, in an untyped circuit whose
+  unit returns them (`out_pinned`, at `outAddr`; region "out"'s bytes `outRegion_bytes`, its packing `pack_bit`);
 * `Pins`: `lay` and `rs` from fixed readers (`Readers`) and three facts of every satisfying witness: Δ's copies
   (`Readers.Copies`), the rows' pinned `b ‖ c` (`Readers.BcPinned`) and the other pinned values (`Readers.ValPinned`);
 * `Drawn`: at a drawn statement, the pinned `b ‖ c` of a proved unit's `hm96` slot is the unit's in the registered
