@@ -8677,6 +8677,14 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_one": {},
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_retained": {},
+  "FlockSoundness.Discharge.ZkExec.acceptsZK_setupH": {},
+  "FlockSoundness.Discharge.ZkExec.execRefinesZK_one": {},
+  "FlockSoundness.Discharge.ZkExec.verifyInner_ok": {},
+  "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one": {},
+  "FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok": {},
+  "FlockSoundness.Discharge.ZkExec.zk_verify_ok": {},
   "FlockSoundness.Discharge.ZkSession.TabZK.after_sound": {
    "signature": [
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]",
