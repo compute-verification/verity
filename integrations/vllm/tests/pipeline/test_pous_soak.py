@@ -22,6 +22,15 @@ def test_cells_are_the_whole_cross_once():
     assert len({(c["load"], c["rate"], c["kib"], c["config"]) for c in cs}) == 72
 
 
+def test_a_chosen_cross_and_its_schedule():
+    cs = S.cells(("decode", "prefill", "mixed"), S.ALL_CONFIGS)
+    assert len(cs) == 3 * 3 * 3 * 3 == 81 and [c["id"] for c in cs] == list(range(81))
+    assert {c["load"] for c in cs} == {"decode", "prefill", "mixed"} and {c["config"] for c in cs} == set(S.ALL_CONFIGS)
+    assert S.cells() == S.cells(S.LOADS, S.CONFIGS), "the soak's own cross keeps its ids"
+    passes = S.draw_schedule(b"z" * 32, 2, 0, len(cs))
+    assert len(passes) == 2 and all(sorted(c for c, ts in p) == list(range(81)) and all(ts for _, ts in p) for p in passes)
+
+
 def test_schedule_is_passes_of_permutations_fixed_by_the_seed():
     a, b = S.draw_schedule(b"x" * 32), S.draw_schedule(b"x" * 32)
     assert a == b and len(a) == S.PASSES
@@ -75,9 +84,9 @@ def fake(tmp_path_factory):
     resp.stop()
 
 
-def _run(fake, tuned, ts, t_sched, blk, ops, nbytes, ring):
+def _run(fake, tuned, ts, t_sched, blk, ops, nbytes, ring, zerocopy=False):
     rec = np.zeros((len(t_sched), len(S.REC)), np.int64)
-    c = S.Client(fake.lib, fake.resp.port, tuned, ts)
+    c = S.Client(fake.lib, fake.resp.port, tuned, ts, zerocopy)
     assert c.config[15] == S.MAGIC and int(c.config[10]) & 1 == int(tuned) and bool(int(c.config[10]) & 32) == (not ts)
     if tuned:
         done, status = S.run_tuned(fake.lib, c, ring, t_sched, blk, ops, nbytes, rec, 2**62, 5)
@@ -136,6 +145,30 @@ def test_loops_answer_every_read_and_ping_and_the_checker_accepts_them(fake, tun
     # not an error.
     bad = {k: x for k, x in v["order_violations"].items() if x and k != "..<=S4"}
     assert not bad, bad
+
+
+@pytest.mark.parametrize("kib", [64, 384])
+def test_zero_copy_sends_answer_every_read_after_each_completion(fake, kib):
+    ring = S.Ring(nslots=32)
+    n, nbytes = 20, kib * 1024
+    blk = S.block_starts(np.random.default_rng(kib + 1), n, fake.blocks, nbytes)
+    ops = np.full(n, S.OP_READ, np.int64)
+    ops[5] = S.OP_PING
+    errors = fake.resp.stat()["errors"]
+    done, status, rec, ping, _ = _run(fake, True, True, np.zeros(n, np.int64), blk, ops, nbytes, ring, zerocopy=True)
+    assert (done, status) == (n, 0)
+    col = S.COL
+    assert np.all(rec[:, col["srv_flags"]] & 128) and np.all(rec[:, col["status"]] == 0)
+    # each response waited for the one before it to complete, so by the next header every earlier one has
+    assert rec[1:, col["srv_zc_completions"]].min() >= 1 and int(ping[25]) >= 1
+    assert np.all(np.diff(rec[:, col["srv_zc_completions"]]) >= 0) and np.all(rec[:, col["srv_zc_wait_ns"]] >= 0)
+    assert int(ping[10]) & 256, "loopback delivers a zero-copy send by copying it, and says so"
+    checker = S.Checker(fake.vk)
+    checked = [S.check_slot(ring, checker, seq) for seq in range(n)]
+    assert all(why is None for _, why in checked) and sum(k for k, _ in checked) == (n - 1) * (nbytes // S.BLOCK)
+    after = fake.resp.stat()
+    assert after["errors"] - errors == (0 if after["mlocked"] else 1), "no error but a refused mlockall (a small memlock limit)"
+    assert rec[:, col["srv_zc_wait_ns"]].max() < 10**9, "no completion timed out"
 
 
 @pytest.mark.parametrize("tuned", [True, False])
@@ -204,6 +237,37 @@ def test_write_chunk_round_trips(tmp_path):
         assert z["rec_vllm_state"].tolist() == [S.STATE_DECODE, S.STATE_DECODE]
         assert json.loads(str(z["meta_json"]))["summary"] == doc["summary"]
     assert doc["summary"]["3"]["answers"] == 2 and doc["validation"]["answers"] == 2
+
+
+def test_write_chunk_carries_the_second_engine_per_run(tmp_path):
+    soak = SimpleNamespace(job=tmp_path, runs=[{"cell": 1, "start_ns": 0, "end_ns": 10**9}, {"cell": 2, "start_ns": 10**9,
+                                                                                            "end_ns": 2 * 10**9}],
+                           recs=[], rec_meta=[], table=S.cells(("decode",), S.ALL_CONFIGS))
+    (tmp_path / "engine2.bin").write_bytes(S.ENGINE2.pack(10, 20, 10**9) + S.ENGINE2.pack(30, 40, 10**9))
+    doc = S.write_chunk(tmp_path / "chunk.npz", soak, {"wrong": 0, "checked_blocks": 0})
+    assert doc["cells"] == soak.table and len(doc["cells"]) == 27
+    e2 = doc["validation"]["second_engine"]
+    assert e2["runs_without_steps"] == [1] and doc["runs"][0]["engine2"] == {"steps": 2, "gb_per_s": 2.0}
+    with np.load(tmp_path / "chunk.npz") as z:
+        assert z["engine2_steps"].tolist() == [[10, 20, 10**9], [30, 40, 10**9]]
+
+
+def test_the_second_engine_reads_every_weight_each_step(tmp_path):
+    torch = pytest.importorskip("torch")
+    shapes = ((8, 16), (16, 8))
+    e = S.SecondEngine(tmp_path / "engine2.bin", 3, 4, "cpu", shapes)
+    assert e.bytes == 2 * 3 * (8 * 16 + 16 * 8) == sum(w.numel() * w.element_size() for w in e.w)
+    info = e.warm(2)
+    assert info["layers"] == 3 and info["bytes_per_step"] == e.bytes and not info["graph"]
+    want = e.x[16] @ e.w[-1]
+    for _ in range(3):
+        e.step()
+    assert torch.equal(e.y[8], want)
+    e.close()
+    steps = S.read_engine2(tmp_path / "engine2.bin")
+    assert steps.shape == (3, 3) and np.all(steps[:, 2] == e.bytes) and np.all(steps[:, 1] >= steps[:, 0])
+    assert S.SecondEngine.__init__.__defaults__[-1] == S.LLAMA8B_LAYER
+    assert 2 * 32 * sum(i * o for i, o in S.LLAMA8B_LAYER) == 13_958_643_712, "Llama-3.1-8B's 32 decoder layers in BF16"
 
 
 def test_record_layout_matches_the_library(fake):

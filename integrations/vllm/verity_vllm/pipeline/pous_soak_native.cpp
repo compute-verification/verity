@@ -3,7 +3,8 @@
 // length, a per-connection configuration and the kernel's software RX/TX timestamps) and the tuned verifier's hot loop.
 //
 // Wire (little-endian).  Request = u64 op | nbytes << 8, u64 arg.  op 2 = ping, op 3 = close, op 4 = `nbytes` contiguous bytes of
-// C from block `arg`, op 5 = configure the connection (arg bit 0: tuned, bit 1: timestamping off).  Response = HEADER_WORDS u64,
+// C from block `arg`, op 5 = configure the connection (arg bit 0: tuned, bit 1: timestamping off, bit 2: zero-copy sends).
+// Response = HEADER_WORDS u64,
 // then `nbytes` bytes (configure: none; a ping's are the staging buffer's, no device work):
 //   0 status (0 ok, 1 out of range, 2 CUDA error, 3 bad op)   1 device_ns (copy start to end event; configure: mlock call ns)
 //   2 server_ns (request read to response ready, steady clock; configure: effective SO_SNDBUF)
@@ -19,7 +20,10 @@
 //   21 SCHED_FIFO: 1 in effect, else the errno of the last attempt << 8
 //   22 the kernel TX timestamp of the previous response's last byte, matched by key (0 when not yet read)
 //   23 the same for the response before it (a timestamp read only after the next request arrived)
-//   flags also: 32 timestamping off (the twin cells), 64 SCHED_FIFO in effect
+//   24 zero-copy: ns this response waited, after the request was read, for the previous response's completion (the staging
+//      buffer is reused only once the kernel released it)   25 zero-copy completions received on this connection
+//   flags also: 32 timestamping off (the twin cells), 64 SCHED_FIFO in effect, 128 zero-copy sends (SO_ZEROCOPY, MSG_ZEROCOPY),
+//   256 a completion so far reported the kernel copied the data (SO_EE_CODE_ZEROCOPY_COPIED: loopback always does, on delivery)
 // The kernel TX timestamp of a response is only known after its send, so a header reports the newest one read so far; the error
 // queue is drained while the thread waits for the next request, never between a request and its response.
 #ifdef SOAK_FAKE_CUDA
@@ -76,9 +80,9 @@ static inline cudaError_t cudaFreeHost(void* p) { std::free(p); return cudaSucce
 
 namespace {
 
-constexpr int HEADER_WORDS = 24;
+constexpr int HEADER_WORDS = 26;
 constexpr size_t HEADER_BYTES = HEADER_WORDS * 8;
-constexpr uint64_t MAGIC = 0x534f414b00000001ull;  // "SOAK", version 1
+constexpr uint64_t MAGIC = 0x534f414b00000002ull;  // "SOAK", version 2
 constexpr uint64_t BLOCK = 65536;
 constexpr int TS_FLAGS = SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_SOFTWARE |
                          SOF_TIMESTAMPING_OPT_ID | SOF_TIMESTAMPING_OPT_TSONLY;
@@ -102,8 +106,9 @@ inline int64_t cmsg_ts(msghdr* m) {
   return 0;
 }
 
-// One message of the error queue: 0 when it is empty, 1 with a TX timestamp in (*ts, *key), 2 for any other message.
-inline int read_tx(int fd, int64_t* ts, uint64_t* key) {
+// One message of the error queue: 0 when it is empty, 1 with a TX timestamp in (*ts, *key), 3 with a zero-copy completion
+// (its last id in *zhi, its code in *zcode) when those are asked for, 2 for any other message.
+inline int read_tx(int fd, int64_t* ts, uint64_t* key, uint32_t* zhi = nullptr, uint32_t* zcode = nullptr) {
   char ctrl[512];
   msghdr m{};
   m.msg_control = ctrl;
@@ -124,6 +129,10 @@ inline int read_tx(int fd, int64_t* ts, uint64_t* key) {
       if (e.ee_origin == SO_EE_ORIGIN_TIMESTAMPING && e.ee_info == SCM_TSTAMP_SND) {
         k = e.ee_data;
         snd = true;
+      } else if (e.ee_origin == SO_EE_ORIGIN_ZEROCOPY && zhi) {
+        *zhi = e.ee_data;
+        *zcode = e.ee_code;
+        return 3;
       }
     }
   }
@@ -218,26 +227,45 @@ class SoakResponder {
         n -= (size_t)r;
       } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) || !running_.load(std::memory_order_relaxed)) {
         return false;
-      } else if (*tx_pending && n == 16) {
-        int64_t t;
-        uint64_t k;
-        int r2;
-        while ((r2 = read_tx(fd, &t, &k)) != 0) {
-          if (r2 != 1) continue;
-          ++errq_reads_;
-          *ktx = t;
-          *kkey = k;
-          for (int j = 0; j < 2; ++j)
-            if (k == want_key_[j] && !want_ts_[j]) want_ts_[j] = t;
-          if ((uint32_t)(k - tx_key_) < 0x80000000u) *tx_pending = false;
-        }
+      } else if ((*tx_pending || zc_pending()) && n == 16) {
+        drain_errq(tx_pending, ktx, kkey);
       }
     }
     return true;
   }
 
-  void configure(int fd, bool tuned, bool ts_off, uint64_t* head) {
+  bool zc_pending() const { return zc_ && zc_done_ != zc_sent_; }
+
+  // The error queue's TX timestamps and zero-copy completions, until it is empty.
+  void drain_errq(bool* tx_pending, int64_t* ktx, uint64_t* kkey) {
+    int64_t t;
+    uint64_t k;
+    uint32_t zhi = 0, zcode = 0;
+    int r2;
+    while ((r2 = read_tx(fd_, &t, &k, &zhi, &zcode)) != 0) {
+      if (r2 == 3) {
+        zc_done_ = zhi + 1;
+        ++zc_completions_;
+        if (zcode & SO_EE_CODE_ZEROCOPY_COPIED) zc_copied_ = true;
+        continue;
+      }
+      if (r2 != 1) continue;
+      ++errq_reads_;
+      *ktx = t;
+      *kkey = k;
+      for (int j = 0; j < 2; ++j)
+        if (k == want_key_[j] && !want_ts_[j]) want_ts_[j] = t;
+      if ((uint32_t)(k - tx_key_) < 0x80000000u) *tx_pending = false;
+    }
+  }
+
+  void configure(int fd, bool tuned, bool ts_off, bool zerocopy, uint64_t* head) {
     tuned_ = tuned;
+    if (zerocopy && !zc_) {
+      int one = 1;
+      zc_ = ::setsockopt(fd, SOL_SOCKET, SO_ZEROCOPY, &one, sizeof(one)) == 0;
+      if (!zc_) errors_.fetch_add(1);
+    }
     if (ts_off && !ts_off_) {
       int zero = 0;
       ::setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &zero, sizeof(zero));
@@ -314,8 +342,12 @@ class SoakResponder {
       bool ts_on = ::setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &tsf, sizeof(tsf)) == 0;
       ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
       conn_fd_.store(fd);
+      fd_ = fd;
       tuned_ = false;
       ts_off_ = false;
+      zc_ = zc_copied_ = false;
+      zc_sent_ = zc_done_ = 0;
+      zc_completions_ = 0;
       tx_key_ = 0;
       errq_reads_ = 0;
       want_key_[0] = want_key_[1] = ~0ull;
@@ -331,7 +363,17 @@ class SoakResponder {
         int64_t urx = realtime_ns();
         uint64_t op = req[0] & 0xff, nbytes = req[0] >> 8;
         if (op == 3) break;
+        // Zero-copy: the previous response's pages are the staging buffer's until the kernel completes it.
+        int64_t zc_wait = 0;
+        if (zc_pending()) {
+          int64_t w0 = realtime_ns();
+          while (zc_pending() && running_.load(std::memory_order_relaxed) && realtime_ns() - w0 < 1000000000)
+            drain_errq(&tx_pending, &ktx, &kkey);
+          zc_wait = realtime_ns() - w0;
+          if (zc_pending()) errors_.fetch_add(1);  // a second without it: counted, and the checker sees any damage
+        }
         std::memset(head, 0, HEADER_BYTES);
+        head[24] = (uint64_t)zc_wait;
         if (op == 4) {
           head[16] = (uint64_t)realtime_ns();
           if (nbytes == 0 || nbytes > max_bytes_ || req[1] > total_ / BLOCK || req[1] * BLOCK + nbytes > total_) {
@@ -355,7 +397,7 @@ class SoakResponder {
           }
           answered_.fetch_add(1);
         } else if (op == 5) {
-          configure(fd, req[1] & 1, req[1] & 2, head);
+          configure(fd, req[1] & 1, req[1] & 2, req[1] & 4, head);
           nbytes = 0;
         } else {
           if (op != 2) head[0] = 3;
@@ -369,7 +411,7 @@ class SoakResponder {
         head[8] = prev_calls;
         head[9] = (uint64_t)prev_end;
         head[10] = (tuned_ ? 1 : 0) | (mlocked_.load() ? 2 : 0) | (krx ? 4 : 0) | (ts_on && !ts_off_ ? 8 : 0) | (quick_ok ? 16 : 0) |
-                   (ts_off_ ? 32 : 0) | (fifo_ == 1 ? 64 : 0);
+                   (ts_off_ ? 32 : 0) | (fifo_ == 1 ? 64 : 0) | (zc_ ? 128 : 0) | (zc_copied_ ? 256 : 0);
         head[11] = (uint64_t)sched_getcpu();
         head[12] = seq++;
         head[13] = nbytes;
@@ -382,6 +424,7 @@ class SoakResponder {
         head[21] = fifo_;
         head[22] = (uint64_t)want_ts_[0];
         head[23] = (uint64_t)want_ts_[1];
+        head[25] = zc_completions_;
         size_t want = HEADER_BYTES + nbytes;
         head[2] = op == 5 ? head[2]
                           : (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
@@ -395,11 +438,15 @@ class SoakResponder {
           msghdr m{};
           m.msg_iov = &iov;
           m.msg_iovlen = 1;
-          ssize_t r = ::sendmsg(fd, &m, MSG_NOSIGNAL | MSG_DONTWAIT);
+          ssize_t r = ::sendmsg(fd, &m, MSG_NOSIGNAL | MSG_DONTWAIT | (zc_ ? MSG_ZEROCOPY : 0));
           ++calls;
           if (r > 0) {
             p += r;
             left -= (size_t)r;
+            if (zc_) ++zc_sent_;
+          } else if (zc_ && r < 0 && errno == ENOBUFS) {
+            ++eagain;  // the socket's option memory is full of uncompleted notifications: reap them
+            drain_errq(&tx_pending, &ktx, &kkey);
           } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
             ok = false;
             break;
@@ -437,8 +484,10 @@ class SoakResponder {
   int port_;
   int cpu_;
   uint64_t max_bytes_;
-  int listen_fd_ = -1;
-  bool tuned_ = false, ts_off_ = false;
+  int listen_fd_ = -1, fd_ = -1;
+  bool tuned_ = false, ts_off_ = false, zc_ = false, zc_copied_ = false;
+  uint32_t zc_sent_ = 0, zc_done_ = 0;  // zero-copy sends made and completed (notification ids are per send call, from 0)
+  uint64_t zc_completions_ = 0;
   uint64_t tx_key_ = 0, errq_reads_ = 0, fifo_ = 0;
   uint64_t want_key_[2] = {~0ull, ~0ull};  // the last-byte keys of the last two responses, newest first
   int64_t want_ts_[2] = {0, 0};             // their TX timestamps, once read

@@ -8,13 +8,16 @@ every answer's timing recorded raw.
 `serve` is `pous_run.cmd_serve`'s engine (``pous:<scheme>``, the GPU codec, the verifier's salt) without its native responder:
 the soak responder (`pous_soak_native.cpp`) answers contiguous reads of `C` of any length straight from device memory, on its
 own core, with the kernel's software RX/TX timestamps (SO_TIMESTAMPING) in every header.  vLLM runs the load the verifier asks
-for (`LOADS`, through ``load.json``), and every forward step's boundaries go to ``steps.bin`` (`StepLog`).
+for (`LOADS`, through ``load.json``), and every forward step's boundaries go to ``steps.bin`` (`StepLog`).  With
+``--second-engine-layers`` a second engine (`SecondEngine`: a served 8B model's decode, as its device-memory reads) runs beside
+it whenever the load is not idle, its steps in ``engine2.bin``.
 
 `verify` runs cells (`cells`: load x Poisson rate x bytes per answer x responder configuration) in the order of
 ``schedule.json`` (passes of random permutations, drawn once and kept in the state directory with the position reached, so
 the order survives the jobs a 30-minute GPU cap splits the soak into).  Each cell is a fresh connection; ``tuned`` is the C hot
 loop (`soak_client_run`) with mlockall, 1 MiB socket buffers and TCP_QUICKACK on both ends, ``baseline`` the series' Python
-loop (`pous_verifier.LiveResponder`'s) against the same responder with default buffers.  Every response lands in a shared
+loop (`pous_verifier.LiveResponder`'s) against the same responder with default buffers, ``zerocopy`` tuned with the responder
+sending through MSG_ZEROCOPY (`ALL_CONFIGS`; ``--loads`` and ``--configs`` pick the cross).  Every response lands in a shared
 ring that a checker process (`check`) verifies against `vk`, every 64 KiB block it contains; a wrong answer halts the soak.  A
 sampler process (`sample`) reads /proc/softirqs, /proc/interrupts, /proc/stat and the hot threads' schedstat every 100 ms.
 The job's records, steps and samples go into one compressed chunk (`write_chunk`), preserved from the pod (`preserve`).
@@ -41,9 +44,9 @@ from typing import Any
 import numpy as np
 
 BLOCK = 65536
-HEADER_WORDS = 24
+HEADER_WORDS = 26
 HEADER_BYTES = 8 * HEADER_WORDS
-MAGIC = 0x534F414B00000001
+MAGIC = 0x534F414B00000002
 SLOT_META = 64
 MAX_BYTES = 384 * 1024
 SLOT_BYTES = SLOT_META + HEADER_BYTES + MAX_BYTES
@@ -55,6 +58,7 @@ LOADS = ("idle", "decode", "prefill", "mixed")
 RATES = (10, 100, 1000)
 SIZES_KIB = (64, 144, 384)
 CONFIGS = ("baseline", "tuned")
+ALL_CONFIGS = (*CONFIGS, "zerocopy")   # zerocopy: tuned, and the responder sends with MSG_ZEROCOPY
 CELL_S = 60.0
 SETTLE_S = 2.0
 CHUNK_S = 1800.0            # a chunk closes after the cell that ends this long after it opened: a crash loses at most one
@@ -65,7 +69,8 @@ KIND = "pous-soak-chunk/v1"
 
 HEAD = ("status", "device_ns", "server_ns", "srv_krx", "srv_urx", "srv_utx", "srv_ktx_newest", "srv_ktx_key", "srv_prev_send_calls",
         "srv_prev_send_end", "srv_flags", "srv_cpu", "srv_seq", "srv_nbytes", "srv_prev_last_key", "magic", "srv_s1", "srv_s2",
-        "srv_prev_send_eagain", "srv_op", "srv_errq_reads", "srv_fifo", "srv_ktx_prev", "srv_ktx_prev2")
+        "srv_prev_send_eagain", "srv_op", "srv_errq_reads", "srv_fifo", "srv_ktx_prev", "srv_ktx_prev2", "srv_zc_wait_ns",
+        "srv_zc_completions")
 REC = ("t_sched", "t_send0", "t_send1", "t_first", "t_recv", "c_krx_first", "c_krx_last", "c_ktx", "recv_calls", "ring_wait_ns",
        "seq", "blk", "nbytes", "op", *HEAD)
 COL = {n: i for i, n in enumerate(REC)}
@@ -75,17 +80,17 @@ STATE_IDLE, STATE_PREFILL, STATE_DECODE = 0, 1, 2
 SAMPLE_CPUS = tuple(range(80, 94))
 
 
-def cells() -> list[dict[str, Any]]:
-    """Every cell of the cross, its id its index."""
+def cells(loads: tuple[str, ...] = LOADS, configs: tuple[str, ...] = CONFIGS) -> list[dict[str, Any]]:
+    """Every cell of the cross of ``loads`` x `RATES` x `SIZES_KIB` x ``configs``, its id its index."""
     return [{"id": i, "load": load, "rate": rate, "kib": kib, "config": cfg}
-            for i, (load, rate, kib, cfg) in enumerate(itertools.product(LOADS, RATES, SIZES_KIB, CONFIGS))]
+            for i, (load, rate, kib, cfg) in enumerate(itertools.product(loads, RATES, SIZES_KIB, configs))]
 
 
-def draw_schedule(seed: bytes, passes: int = PASSES, twins: int = TWINS_PER_PASS) -> list[list[list[int]]]:
-    """``passes`` random permutations of the cells, from ``seed``, as [cell, timestamping] entries; each pass also runs ``twins``
-    random cells a second time with timestamping off (0) at random places."""
+def draw_schedule(seed: bytes, passes: int = PASSES, twins: int = TWINS_PER_PASS, n: int | None = None) -> list[list[list[int]]]:
+    """``passes`` random permutations of the ``n`` cells (the default cross's), from ``seed``, as [cell, timestamping] entries;
+    each pass also runs ``twins`` random cells a second time with timestamping off (0) at random places."""
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(b"pous-soak/schedule/v2" + seed).digest()[:8], "little"))
-    n = len(cells())
+    n = len(cells()) if n is None else n
     out = []
     for _ in range(passes):
         entries = [[int(c), 1] for c in rng.permutation(n)]
@@ -295,6 +300,138 @@ def read_steps(path: Path) -> np.ndarray:
     return np.stack([a[n].astype(np.int64) for n in STEP_FIELDS], axis=1) if len(a) else np.zeros((0, len(STEP_FIELDS)), np.int64)
 
 
+#: Llama-3.1-8B's decoder layer as BF16 weight matrices (in, out): q, k, v, o, gate, up, down (hidden 4096, 8 KV heads of 128,
+#: MLP 14336); 218 M parameters, 436 MB a layer, 13.96 GB for its 32
+LLAMA8B_LAYER = ((4096, 4096), (4096, 1024), (4096, 1024), (4096, 4096), (4096, 14336), (4096, 14336), (14336, 4096))
+ENGINE2 = struct.Struct("<qqq")
+ENGINE2_FIELDS = ("cpu_t0", "cpu_t1", "bytes")
+
+
+class SecondEngine:
+    """A second model served beside the POUS engine, as its memory traffic: ``layers`` of Llama-3.1-8B's decoder weights in BF16
+    (`LLAMA8B_LAYER`) on the server's device, and each step one token of each of ``batch`` sequences through every matrix, so a
+    step reads every weight once from device memory, as a decode step of a served 8B model does (at batch 32 a GEMM does 32 FLOP
+    per weight byte, far under the GPU's ridge: bandwidth-bound like real decode).  It lives in the serve process, so the
+    responder's copies share its CUDA context as they would a co-served model's.  While `on` is set, steps run back to back on
+    their own stream (one CUDA graph when capture works), each waited on with a blocking event so the thread sleeps rather than
+    spins; each step is appended to ``path`` as `ENGINE2` (realtime ns before the launch and after the wait, bytes read)."""
+
+    def __init__(self, path: Path, layers: int, batch: int, device: Any,
+                 shapes: tuple[tuple[int, int], ...] = LLAMA8B_LAYER) -> None:
+        import threading
+
+        import torch
+
+        self.torch, self.dev = torch, torch.device(device)
+        self.cuda = self.dev.type == "cuda"
+        self.bytes = 2 * layers * sum(i * o for i, o in shapes)
+        if self.cuda:
+            free, _ = torch.cuda.mem_get_info(self.dev)
+            if free < self.bytes + (2 << 30):
+                raise SystemExit(f"the second engine needs {self.bytes / 2**30:.1f} GiB and 2 GiB spare; {free / 2**30:.1f} GiB free")
+        self.w = [torch.empty(i, o, dtype=torch.bfloat16, device=self.dev).normal_(0, 0.02)
+                  for _ in range(layers) for i, o in shapes]
+        dims = sorted({d for io in shapes for d in io})
+        self.x = {d: torch.randn(batch, d, dtype=torch.bfloat16, device=self.dev) for d in dims}
+        self.y = {d: torch.empty(batch, d, dtype=torch.bfloat16, device=self.dev) for d in dims}
+        self.layers, self.batch, self.shapes, self.steps, self.graph_error = layers, batch, shapes, 0, None
+        self.graph: Any = None
+        self.stream = torch.cuda.Stream(self.dev) if self.cuda else None
+        if self.cuda:
+            self.stream.wait_stream(torch.cuda.current_stream(self.dev))
+            with torch.cuda.stream(self.stream):
+                for _ in range(3):
+                    self._step()
+            self.stream.synchronize()
+            try:
+                g = torch.cuda.CUDAGraph()
+                with torch.cuda.graph(g, stream=self.stream, capture_error_mode="thread_local"):
+                    self._step()
+                self.graph = g
+            except Exception as e:  # noqa: BLE001  (eager launches then; recorded)
+                self.graph_error = repr(e)
+        self.f = open(path, "ab", buffering=1 << 16)  # noqa: SIM115  (open for the server's lifetime; close() closes it)
+        self.on, self.done = threading.Event(), threading.Event()
+        self.flushed = time.monotonic()
+        self.ev = torch.cuda.Event(blocking=True) if self.cuda else None
+        self.thread = threading.Thread(target=self._run, name="second-engine", daemon=True)
+
+    def _step(self) -> None:
+        for w in self.w:
+            self.torch.matmul(self.x[w.shape[0]], w, out=self.y[w.shape[1]])
+
+    def _one(self) -> tuple[int, int]:
+        t0 = time.time_ns()
+        if self.cuda:
+            with self.torch.cuda.stream(self.stream):
+                if self.graph is not None:
+                    self.graph.replay()
+                else:
+                    self._step()
+                self.ev.record(self.stream)
+            self.ev.synchronize()
+        else:
+            self._step()
+        return t0, time.time_ns()
+
+    def step(self) -> None:
+        """One step, appended to the log."""
+        t0, t1 = self._one()
+        self.f.write(ENGINE2.pack(t0, t1, self.bytes))
+        self.steps += 1
+        if time.monotonic() - self.flushed > 1.0:
+            self.f.flush()
+            self.flushed = time.monotonic()
+
+    def warm(self, steps: int = 20) -> dict[str, Any]:
+        """``steps`` steps now, not logged; the engine's facts and the device-memory read rate they reached."""
+        spans = [self._one() for _ in range(steps)]
+        busy = sum(t1 - t0 for t0, t1 in spans)
+        return {"layer_shapes": [list(io) for io in self.shapes], "dtype": "bf16", "layers": self.layers, "batch": self.batch,
+                "bytes_per_step": self.bytes, "graph": self.graph is not None, "graph_error": self.graph_error,
+                "warm_steps": steps, "warm_gb_per_s": round(self.bytes * steps / busy, 2) if busy else None}
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def _run(self) -> None:
+        while not self.done.is_set():
+            if self.on.wait(0.05):
+                self.step()
+
+    def close(self) -> None:
+        self.done.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=30)
+        self.f.close()
+
+
+def read_engine2(path: Path) -> np.ndarray:
+    """``engine2.bin`` as an int64 array, one row per second-engine step, columns `ENGINE2_FIELDS`."""
+    raw = path.read_bytes() if path.exists() else b""
+    raw = raw[:len(raw) - len(raw) % ENGINE2.size]
+    return np.frombuffer(raw, dtype="<i8").reshape(-1, len(ENGINE2_FIELDS)).astype(np.int64)
+
+
+def engine2_by_run(runs: list[dict[str, Any]], e2: np.ndarray) -> dict[str, Any]:
+    """Per run, the second engine's steps inside it and its device-memory read rate over the run (bytes of the steps that started
+    in it over its length, GB/s), and the runs it did not run in."""
+    rates, idle = [], []
+    for r, run in enumerate(runs):
+        if "start_ns" not in run or "end_ns" not in run:
+            continue
+        inside = (e2[:, 0] >= run["start_ns"]) & (e2[:, 0] < run["end_ns"]) if len(e2) else np.zeros(0, bool)
+        n = int(np.count_nonzero(inside))
+        gbps = float(e2[inside, 2].sum()) / (run["end_ns"] - run["start_ns"]) if n else 0.0
+        run["engine2"] = {"steps": n, "gb_per_s": round(gbps, 1)}
+        rates.append(gbps)
+        if not n:
+            idle.append(r)
+    a = np.array(rates)
+    return {"runs_without_steps": idle, "gb_per_s_min": round(float(a.min()), 1) if len(a) else None,
+            "gb_per_s_p50": round(float(np.median(a)), 1) if len(a) else None}
+
+
 def load_call(engine: Any, mode: str, rng: np.random.Generator, prompts: list[str]) -> None:
     """One generate call of the load ``mode``: decode-heavy (8 sequences of 32 tokens), prefill-heavy (4 fresh 2048-token
     prompts, 1 token: no prefix cache can hit), mixed (the series' serving loop), idle (none)."""
@@ -343,12 +480,17 @@ def cmd_serve(a) -> int:
         load_call(engine, mode, rng, R.PROMPTS)
     if steps is not None:
         steps.flush()
+    engine2, engine2_info = None, None
+    if a.second_engine_layers:
+        engine2 = SecondEngine(job / "engine2.bin", a.second_engine_layers, a.second_engine_batch, store.c.device)
+        engine2_info = engine2.warm()
+        engine2.start()
     lib = load_native(Path(a.native))
     resp = Responder(lib, store.c.data_ptr(), total, store.c.device.index, a.responder_cpu)
     _write(job / "ready.json", {"port": resp.port, "pid": os.getpid(), "responder_tid": resp.stat()["tid"],
                                 "root": opt.commitment()["storage_root"], "blocks": p.blocks, "block_bytes": p.block_bytes,
                                 "total": total, "build_s": build_s, "warm_steps": steps.steps if steps else None,
-                                "step_log_error": step_error, "utc": utc()})
+                                "step_log_error": step_error, "second_engine": engine2_info, "utc": utc()})
     control, ack, stop = job / "load.json", job / "load-ack.json", job / "stop-serve"
     mode, seq, seen = "idle", -1, 0.0
     calls: dict[str, int] = {}
@@ -358,6 +500,10 @@ def cmd_serve(a) -> int:
             if m != seen:
                 doc = _read(control)
                 seen, mode, seq = m, doc["mode"], doc["seq"]
+                if engine2 is not None and mode == "idle":
+                    engine2.on.clear()
+                elif engine2 is not None:
+                    engine2.on.set()
                 _write(ack, {"mode": mode, "seq": seq, "t_ns": time.time_ns()})
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
             pass
@@ -366,9 +512,11 @@ def cmd_serve(a) -> int:
     out = resp.stop()
     if steps is not None:
         steps.close()
+    if engine2 is not None:
+        engine2.close()
     comp.close()
     _write(job / "serve.json", {"responder": out, "load_calls": calls, "steps": steps.steps if steps else None, "build_s": build_s,
-                                "utc": utc()})
+                                "second_engine_steps": engine2.steps if engine2 else None, "utc": utc()})
     return 0
 
 
@@ -649,7 +797,7 @@ def cmd_sample(a) -> int:
 class Client:
     """One connection to the soak responder, configured for one cell."""
 
-    def __init__(self, lib: ctypes.CDLL, port: int, tuned: bool, ts: bool = True) -> None:
+    def __init__(self, lib: ctypes.CDLL, port: int, tuned: bool, ts: bool = True, zerocopy: bool = False) -> None:
         self.lib, self.tuned, self.ts = lib, tuned, ts
         self.sock = socket.create_connection(("127.0.0.1", port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -657,7 +805,7 @@ class Client:
         self.sock.setblocking(False)
         self.fd = self.sock.fileno()
         self.reqs = 0
-        self.config = self.exchange(OP_CONFIG, int(tuned) | (0 if ts else 2))
+        self.config = self.exchange(OP_CONFIG, int(tuned) | (0 if ts else 2) | (4 if zerocopy else 0))
 
     def tcp_info(self) -> dict[str, int]:
         """The connection's TCP_INFO (struct tcp_info's u32 fields after its 8 u8 ones)."""
@@ -778,14 +926,23 @@ class Soak:
         self.load_seq = 0
         self.mode: str | None = None
         self.checking = lambda: True
+        loads, configs = tuple(a.loads.split(",")), tuple(a.configs.split(","))
+        if not set(loads) <= set(LOADS) or not set(configs) <= set(ALL_CONFIGS):
+            raise SystemExit(f"--loads {a.loads} --configs {a.configs}: loads are of {LOADS}, configs of {ALL_CONFIGS}")
+        self.table = cells(loads, configs)
 
     def schedule(self) -> dict[str, Any]:
         path = self.state / "schedule-v2.json"
         if not path.exists():
             seed = os.urandom(32)
-            _write(path, {"seed": seed.hex(), "cells": cells(), "passes": draw_schedule(seed), "cell_s": self.a.cell_s,
-                          "settle_s": SETTLE_S, "ping_fraction": PING_FRACTION, "twins_per_pass": TWINS_PER_PASS, "created": utc()})
-        return _read(path)
+            _write(path, {"seed": seed.hex(), "cells": self.table, "passes": draw_schedule(seed, self.a.passes, self.a.twins,
+                                                                                           len(self.table)),
+                          "cell_s": self.a.cell_s, "settle_s": SETTLE_S, "ping_fraction": PING_FRACTION,
+                          "twins_per_pass": self.a.twins, "created": utc()})
+        doc = _read(path)
+        if doc["cells"] != self.table:
+            raise SystemExit(f"{path} holds another cell table than --loads {self.a.loads} --configs {self.a.configs}")
+        return doc
 
     def position(self) -> int:
         p = self.state / "progress-v2.json"
@@ -816,7 +973,7 @@ class Soak:
 
     def cell(self, lib: ctypes.CDLL, ring: Ring, ready: dict[str, Any], cell: dict[str, Any], pas: int, pos: int,
              deadline_ns: int, ts: bool = True) -> dict[str, Any]:
-        tuned = cell["config"] == "tuned"
+        tuned, zerocopy = cell["config"] != "baseline", cell["config"] == "zerocopy"
         nbytes = cell["kib"] * 1024
         run: dict[str, Any] = {"cell": cell["id"], "pass": pas, "position": pos, "ts": ts, "start_utc": utc(),
                                "start_ns": time.time_ns()}
@@ -830,10 +987,12 @@ class Soak:
                 run["verifier_fifo"] = "in effect"
             except OSError as e:
                 run["verifier_fifo"] = f"refused: {e.strerror}"
-        c = Client(lib, ready["port"], tuned, ts)
+        c = Client(lib, ready["port"], tuned, ts, zerocopy)
         h = c.config
         run["server_config"] = {"mlock_ns": int(h[1]), "sndbuf": int(h[2]), "rcvbuf": int(h[14]), "flags": int(h[10]),
                                 "fifo": int(h[21])}
+        if zerocopy and not int(h[10]) & 128:
+            raise OSError(f"the responder refused SO_ZEROCOPY (flags {int(h[10])})")
         run["client_rcvbuf"] = c.rcvbuf
         time.sleep(SETTLE_S)
         rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
@@ -949,7 +1108,7 @@ def response_tx(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]]
 
 
 def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], steps: np.ndarray, samples: dict[str, np.ndarray],
-             checked_blocks: int | None, cell_s: float) -> dict[str, Any]:
+             checked_blocks: int | None, cell_s: float, table: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """The chunk's §6 counts (the measurement contract): order violations along t_sched <= V0 <= K_rx_req <= S0 <= S1 <= S2 <= S3
     <= K_tx_resp <= S4 and K_tx_resp <= V1 (every stamp REALTIME, tolerance 1 µs), G <= S2 - S1 + 1 µs, absent kernel stamps
     (timestamping-on runs), clock offset steps, answers against verified blocks, statuses, per-run counts against rate x time,
@@ -1000,7 +1159,7 @@ def validate(rec: np.ndarray, run_idx: np.ndarray, runs: list[dict[str, Any]], s
     else:
         out["clock_offset"] = {"samples": 0}
     rate_dev, loaded_idle, retrans, counted = [], [], 0, 0
-    table = cells()
+    table = table or cells()
     for r, run in enumerate(runs):
         if "cell" not in run or "error" in run:
             continue
@@ -1034,6 +1193,13 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
                               "rec_pass": meta[:, 1].astype(np.int16), "rec_run": meta[:, 2].astype(np.int32),
                               "rec_vllm_state": state, "rec_vllm_reqs": reqs, "rec_vllm_running": running,
                               "steps": steps, "step_columns": np.array(STEP_FIELDS)}
+    table = getattr(soak, "table", None) or cells()
+    e2p = soak.job / "engine2.bin"
+    e2 = read_engine2(e2p) if e2p.exists() else None
+    if e2 is not None:
+        if "chunk_start_ns" in extra and len(e2):
+            e2 = e2[e2[:, 0] >= extra["chunk_start_ns"] - 5_000_000_000]
+        arrays.update({"engine2_steps": e2, "engine2_columns": np.array(ENGINE2_FIELDS)})
     sp = soak.job / "samples.npz"
     samples: dict[str, np.ndarray] = {}
     if sp.exists():
@@ -1043,8 +1209,10 @@ def write_chunk(path: Path, soak: Soak, extra: dict[str, Any]) -> dict[str, Any]
     arrays["rec_k_tx_resp"], arrays["rec_s4"] = response_tx(rec, meta[:, 2], soak.runs)
     summary = summarize(rec, meta)
     validation = validate(rec, meta[:, 2], soak.runs, steps, samples, extra.get("checked_blocks"),
-                          float(extra.get("cell_s", CELL_S)))
-    doc = {"schema": KIND, "runs": soak.runs, "summary": summary, "validation": validation, "cells": cells(), "answers": len(rec),
+                          float(extra.get("cell_s", CELL_S)), table)
+    if e2 is not None:
+        validation["second_engine"] = engine2_by_run(soak.runs, e2)
+    doc = {"schema": KIND, "runs": soak.runs, "summary": summary, "validation": validation, "cells": table, "answers": len(rec),
            **extra}
     arrays["meta_json"] = np.array(json.dumps(doc, sort_keys=True, default=str))
     tmp = path.with_name(f".{path.name}.tmp.npz")
@@ -1231,6 +1399,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--kernels", default="")
     s.add_argument("--responder-cpu", type=int, default=92)
     s.add_argument("--serve-cpus", default="80-89")
+    s.add_argument("--second-engine-layers", type=int, default=0,
+                   help="Llama-3.1-8B decoder layers of a second engine's weights streamed while loaded (0: none; 32: the model)")
+    s.add_argument("--second-engine-batch", type=int, default=32, help="the second engine's sequences per decode step")
     v = sub.add_parser("verify")
     v.add_argument("--setup", required=True)
     v.add_argument("--job", required=True)
@@ -1246,6 +1417,10 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--env", default="", help="JSON recorded in the chunk (the job's environment facts)")
     v.add_argument("--gpu-uuid", default="", help="the server's GPU, sampled through NVML")
     v.add_argument("--node", default="", help="a text file of the node's static facts, recorded in the chunk")
+    v.add_argument("--loads", default=",".join(LOADS), help="the cross's loads, in order")
+    v.add_argument("--configs", default=",".join(CONFIGS), help=f"the cross's responder configs, in order (of {ALL_CONFIGS})")
+    v.add_argument("--passes", type=int, default=PASSES)
+    v.add_argument("--twins", type=int, default=TWINS_PER_PASS, help="timestamping-off twins per pass")
     c = sub.add_parser("check")
     c.add_argument("--setup", required=True)
     c.add_argument("--job", required=True)
