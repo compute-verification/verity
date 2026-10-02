@@ -1,4 +1,7 @@
-import FlockSoundness.Discharge.Hidden.Defs
+import FlockSoundness.Discharge.Hidden.Binding
+import FlockSoundness.Discharge.Hidden.Public
+import FlockSoundness.Discharge.Hidden.Delta
+import FlockSoundness.Discharge.Hidden.Layout
 
 /-!
 # The soundness of a hidden-output statement (`Stmt.setupHidden`)
@@ -17,18 +20,18 @@ The frozen statements of `Defs.lean`, one theorem each:
 
 namespace FlockSoundness.Discharge.Hidden
 
-theorem setupHidden_spec : SetupHiddenSpec := by sorry
+theorem setupHidden_spec : SetupHiddenSpec := fun h => setupHidden_spec' h
 
-theorem hidden_delta : HiddenDelta := by sorry
+theorem hidden_delta : HiddenDelta := hidden_delta'
 
-theorem hidden_layout : HiddenLayout := by sorry
+theorem hidden_layout : HiddenLayout := hidden_layout'
 
-theorem public_exposes : PublicExposes := by sorry
+theorem public_exposes : PublicExposes := public_exposes'
 
 theorem outputs_committed : OutputsCommitted := by sorry
 
-theorem commitPair_spec : CommitPairSpec := by sorry
+theorem commitPair_spec : CommitPairSpec := commitPair_spec'
 
-theorem outputs_binding : OutputsBinding := by sorry
+theorem outputs_binding : OutputsBinding := outputs_binding_of outputs_committed
 
 end FlockSoundness.Discharge.Hidden
