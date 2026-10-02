@@ -45,7 +45,12 @@ theorem granularity :
   sorry
 
 theorem heavyUnit : MeetsTarget (Law.subset 1 1 le_rfl) (fun _ => 1) 1 (1 / 2) := by
-  sorry
+  intro B hB
+  have h1 : (1 : ℝ) ≤ B.card := by simpa using hB
+  have h2 : B.card ≤ 1 := by simpa using Finset.card_le_univ B
+  have h3 : 1 ≤ B.card := by exact_mod_cast h1
+  rw [Law.subset_escape, show B.card = 1 by omega]
+  norm_num
 
 theorem unequal :
     (∀ u : Fin 100, 1 ≤ (if u.val < 50 then (1 : ℝ) else 2) ∧ (if u.val < 50 then (1 : ℝ) else 2) ≤ 2) ∧
