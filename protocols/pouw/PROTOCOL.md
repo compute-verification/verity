@@ -2,8 +2,8 @@
 
 Certifies that a declared workload of integer or FP8 matmuls was computed with at least a stated fraction of the honest
 work, by sampled recomputation of committed checked values. The setting and the cost model (W1 on an RTX 4090) are the
-PoUW problem statement's; the guarantee is Lean's `Pouw.Proofs.endToEnd` instantiated with a scheme's conjecture. The
-Lean package is `lean/`, and every theorem this document cites is pinned in its `lean-audit.json`.
+PoUW problem statement's; the guarantee is Lean's `Pouw.SecurityProofs.EndToEnd` instantiated with a scheme's
+conjecture. The Lean package is `lean/`, and every theorem this document cites is pinned in its `lean-audit.json`.
 
 ## The interface
 
@@ -55,8 +55,9 @@ shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one
 - the domain id's tag is `domain/b3s`.
 
 7. **Profile.** When every selected tile passes, `WorkProfile`: for every ε_s in (0, 1] and every operator whose online cost
-   is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `endToEnd`), with γ = 1 − (1 − γ_0)/Ω*,
-   under the certificate's conjecture. A scheme with no γ_0 gets only the sampling half; a lottery gets neither.
+   is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `Pouw.SecurityProofs.EndToEnd`), with
+   γ = 1 − (1 − γ_0)/Ω*, under the certificate's conjecture. A scheme with no γ_0 gets only the sampling half; a lottery
+   gets neither.
 
 **Randomness.** The protocol owns the outer coins: the salt (from a beacon round) and the draw (from the verifier's source,
 never the prover's root). A scheme's noise is its own derivation from the salt and the prover's roots, Fiat-Shamir inside
@@ -72,7 +73,8 @@ F₁ ∈ [−31, 32]^(k×n)   per (epoch, weight); column j from SHAKE256("verit
 R                      signed permutation with R[π(j)][j] = σ_j:  E₂[i][j] = σ_j·E₁[i][π(j)],  F₂[π(l)][j] = −σ_l·F₁[l][j]
 E₃ = E₁ + E₂,  F₃ = F₁ + F₂
 X = [A + E₁ | A + E₂ | −(A + E₃)],   Y = [B + F₁ ; B + F₂ ; B + F₃],   X·Y = A·Bᵀ
-β        128: X + β is u8 and Y is s8 on the int7 domain (Lean `rangeU`, `biasU8Iff`)
+β        128: X + β is u8 and Y is s8 on the int7 domain (Lean `Pouw.SecurityProofs.NCP.RangeU`,
+         `Pouw.SecurityProofs.NCP.BiasU8Iff`)
 c₀[j]    −β·Σ_{l<3k} Y[l][j]   (−3β·colsum(B) for an unsigned P), the accumulator's initial value
 checked  C^U_t = c₀ + Σ_{l<16t} (X + β)[:, l]·Y[l, :] mod 2^32, t = 1 … 3k/16 (Lean `mmWU 128`); the last is A·Bᵀ
 digest   SHAKE256("verity/pouw/ncp/tile/v1" ‖ 0 ‖ words)[:32], words little-endian, step-major, row-major within a step
@@ -80,22 +82,24 @@ tiles    16 × 16
 domain   16 | m;  64 | k, n;  1,088 ≤ k ≤ 2^16  (γ_0 = 1/200 ≥ 16/(3k));  n₀ = 1,600 ≤ n ≤ 2^16  (Ω* = 1 + f/(3n₀) ≤ 1.005)
 wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves priced, Lean `wrefU 24`; the per-weight forming of
          B + F_i is left out)
-γ        1 − (199/200)/(1 + 8/n₀) ≈ 0.995% over the whole domain (`gammaFromTTNCP_U_v1`); ≈ 0.89% at n = 2,048; ≈ 0.69% at
-         4,096²; the same formula gives 1.27% at n = 1,024, so the certificate records n₀ with β and f
+γ        1 − (199/200)/(1 + 8/n₀) ≈ 0.995% over the whole domain (`Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`);
+         ≈ 0.89% at n = 2,048; ≈ 0.69% at 4,096²; the same formula gives 1.27% at n = 1,024, so the certificate records
+         n₀ with β and f
 ~~~
 
 - **Checked values.** Route U's accumulator, the u8 × s8 tensor-core schedule the W1 accounting prices. It equals the
-  unbiased running sums shifted by public data, C^U_t = C_t − β·Σ_{l ≥ 16t} Y[l][j] (`checkedU_eq`), so every bound
-  proved modulo V₀ transfers. The unbiased sums (`checked_unbiased`) are retired as checked values; their honest program
-  would cost 36 units per position (γ = 1.08% at n = 2,048).
-- **β = 129** (f = 20, γ ≈ 0.91% at n₀ = 1,600, 0.82% at n = 2,048; `gammaFromTTNCP_U_C2`) needs an unsigned P and a
-  SASS check that the IADD3 with two negated sources is one instruction. The native route-U kernel
+  unbiased running sums shifted by public data, C^U_t = C_t − β·Σ_{l ≥ 16t} Y[l][j]
+  (`Pouw.SecurityProofs.NCP.CheckedUEq`), so every bound proved modulo V₀ transfers. The unbiased sums
+  (`checked_unbiased`) are retired as checked values; their honest program would cost 36 units per position (γ = 1.08%
+  at n = 2,048).
+- **β = 129** (f = 20, γ ≈ 0.91% at n₀ = 1,600, 0.82% at n = 2,048; `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2`) needs
+  an unsigned P and a SASS check that the IADD3 with two negated sources is one instruction. The native route-U kernel
   (`kernels/pouw_gemm.cu`, `ncp_route_u`) reads X + β already formed, so its SASS shows the u8 × s8 `IMMA` but not the
   forming step; `ncp-v1` stays at β = 128.
 - **γ is conditional on TTNCP_U(0.5%).** The red team found that A2, as first written, required the model program to
   reproduce every output, not only the checked words. Restricted to the checked words, A2 makes the Theorem D chain
-  equivalent to TT_NCP rather than a reduction to milder assumptions (`a2WordsIff`). So TTNCP_U, TT_NCP over the route-U
-  checked values, stays the named conjecture, and every γ here holds only under it.
+  equivalent to TT_NCP rather than a reduction to milder assumptions (`Pouw.SecurityProofs.Dimension.A2WordsIff`). So
+  TTNCP_U, TT_NCP over the route-U checked values, stays the named conjecture, and every γ here holds only under it.
 
 - **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
   seed `pous-pouw-ncp-Pword-v1`; repair 1 (seed + `/repair`) so that no word lands in its own 16-step; repair 2 (seed +
@@ -107,15 +111,20 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   (a) to (c), not the rule's other clauses or λ₃ ≥ 16: the rule (Lean `Admissible`) is checked at every k, and
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
-  16 ∣ k (Lean `shiftBy24_admissible`, `independentWitness`).
+  16 ∣ k (Lean `shiftBy24_admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
 - **Lean** (the certificate's pins, all approved by the red team, Phase 13):
-  - the reduction: `Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
-    `Pouw.NCP.Assumptions.TTNCP_U`, with `ttncpUIff` (it is TT_NCP over the route-U checked set) and `ttncpUWitness`;
-  - the algebra: `Pouw.NCP.Proofs.cancel` and `stacked` (the unbiased stack, which the final checkpoint equals), and
-    `Pouw.NCP.RouteUProofs.checkedU_eq`, `checkedU_final`, `wrapU`, `rangeU`, `mmWUExact`, `yuChecked`;
-  - the chain to the checked words: `Pouw.NCP.RouteUWordProofs.int7Int32UPos` (k ≤ 2^16 for an unsigned P, 2^15 for a
-    signed one), `ncpWordFloorIndU`, `wrapFinalOnlyIndU`, `wrapWordFloorIndU`;
-  - the barrier and the generic game: `Pouw.Barrier.Proofs.generic`, `theorem1`, `workWeightedSampling`, `endToEnd`.
+  - the reduction: `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
+    `Pouw.NCP.Assumptions.TTNCP_U`, with `Pouw.SecurityProofs.NCP.TTNCPUIff` (it is TT_NCP over the route-U checked
+    set) and `Pouw.SecurityProofs.NCP.TTNCPUWitness`;
+  - the algebra: `Pouw.SecurityProofs.NCP.Cancel` and `Pouw.SecurityProofs.NCP.Stacked` (the unbiased stack, which the
+    final checkpoint equals), and `Pouw.SecurityProofs.NCP.CheckedUEq`, `Pouw.SecurityProofs.NCP.CheckedUFinal`,
+    `Pouw.SecurityProofs.NCP.WrapU`, `Pouw.SecurityProofs.NCP.RangeU`, `Pouw.SecurityProofs.NCP.MmWUExact`,
+    `Pouw.SecurityProofs.NCP.YUChecked`;
+  - the chain to the checked words: `Pouw.SecurityProofs.NCP.Int7Int32UPos` (k ≤ 2^16 for an unsigned P, 2^15 for a
+    signed one), `Pouw.SecurityProofs.NCP.NCPWordFloorIndU`, `Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU`,
+    `Pouw.SecurityProofs.NCP.WrapWordFloorIndU`;
+  - the barrier and the generic game: `Pouw.SecurityProofs.Barrier.Generic`, `Pouw.SecurityProofs.Theorem1`,
+    `Pouw.SecurityProofs.WorkWeightedSampling`, `Pouw.SecurityProofs.EndToEnd`.
 
   Assumed: TTNCP_U(0.5%); `Word.NzNCP` of the route-U words (the floors' hypothesis). Not proved: that M_4090 runs H_ref
   within `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with
@@ -519,7 +528,7 @@ useful    U/(α_A·α_B), glue
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
   §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
-  - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
+  - β = 4.14 / 2.23 / 1.19 / 0.50 / 0.18% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
   - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
     fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
   - β is measured, not derived. It is the worst net saving that annealing plus exact block optimisation found over the
@@ -527,8 +536,9 @@ useful    U/(α_A·α_B), glue
   - It is measured on each bucket's own R1 admission boundary at k = 1,024, where the cap is largest, and at 0.005,
     0.01 and 0.015 inside it, since the worst family can sit there (at n = 256 and 2,048 it does). The need is
     1.5× the mean over 8 draws of the best search. Each bucket takes the largest of that need, the assessor's
-    boundary check (2.23% at n = 256) and the earlier grid table (0.17% stands at n = 2,048).
-  - The evidence is `art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e` (`beta_final.py`, the
+    boundary check (2.23% at n = 256), the earlier grid's cells under the same cap (0.18% at n = 2,048, from its
+    L = 0, p = 0.40 cell) and the grid's table.
+  - The evidence is `art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca` (`beta_final.py`, the
     boundary run and its sources). The grid before it is research store `cheap-binding/pearlc4-fix/beta_table.py
     --mu 1.5` on `strong.jsonl` and `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256
     and 512 (`exact256.jsonl`).
@@ -640,7 +650,8 @@ useful    U/(α_A·α_B), glue
   row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
-    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SB's range;
+    per-row rules or R1 (`r1_row`, row by row over its workers), the draws and their openings, and a count of device
+    scale bytes outside D-SB's range;
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
@@ -648,8 +659,12 @@ useful    U/(α_A·α_B), glue
   once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
   sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
-  the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
-  not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).
+  and the transcript tree and the records are built on the host after timing.
+
+  Its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof). The replay opens rows and
+  words and recomputes them in the clear. The protocol keeps every value hidden: it checks a drawn tile by a ZK proof of
+  its units under sampled proofs, which opens nothing (research store `internal/pouw/hidden-check-design.md`). So no
+  report cites the replay's ACCEPT as the protocol's verdict.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format

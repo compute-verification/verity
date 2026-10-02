@@ -13,7 +13,8 @@ A package's verdict is reused while everything its audit reads is unchanged. Its
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
-(the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, the controls first. Each pass is
+(the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, without the controls: they test
+the auditor, so the `tools/lean` suite runs them, cached on `tools/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
 in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
 it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
@@ -96,6 +97,10 @@ def path_deps(pkg: str) -> list[str]:
     return sorted(set(out))
 
 
+#: How the audit runs, and so part of every key
+FLAGS = ["--all", "--no-controls", "--build"]
+
+
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
     own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
@@ -130,7 +135,7 @@ def explain(name: str, cache: Path) -> tuple[int, list[str]]:
     if len(match) != 1:
         return 2, [f"lean_audit: {name!r} matches {len(match)} packages: {', '.join(match) or ', '.join(pkgs)}"]
     pkg = match[0]
-    now = components(pkg, files, ["--all", "--build"])
+    now = components(pkg, files, FLAGS)
     k = key_of(now)
     if (cache / f"{k}.json").is_file():
         return 0, [f"{pkg}: PASS reused ({k[:12]}): every file its audit reads is unchanged"]
@@ -353,17 +358,16 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
-        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(work),
+        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, "--root", str(work),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
-        controls_ok = not [f for f in failed if f.startswith("controls")]
         for rep in doc.get("packages", []):
             p = os.path.relpath(rep["package"], work)
             rep["package"] = p
             reports[p] = rep
-            if controls_ok and not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
+            if not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
                 tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
@@ -373,8 +377,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             failed = [f"audit.py exit {r.returncode}"]
         # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
         # the revision the manifest pins, before it compiles anything): keeping those, a retry fetches only what is missing
-        passed = {work / p for p in audited if p in reports and ((controls_ok and not reports[p].get("failures"))
-                                                                 or transient(reports[p]))}
+        passed = {work / p for p in audited if p in reports and (not reports[p].get("failures") or transient(reports[p]))}
     finally:
         warm.give_back(passed)
         shutil.rmtree(work, ignore_errors=True)
@@ -389,7 +392,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         fresh = True
         files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".lake" not in p.parts]
     pkgs = packages(files)
-    comps = {p: components(p, files, ["--all", "--build"]) for p in pkgs}
+    comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
     reports, cached = {}, {}

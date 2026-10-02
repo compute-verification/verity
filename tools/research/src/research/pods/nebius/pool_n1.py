@@ -20,6 +20,12 @@ now) × its GPUs, split across the hours it spans. It is delivered when its Job 
 Attempts its pods launched (the store's `attempts.host` is the pod) is `done` with validation `passed`, or with no validation and
 rc 0 and declared outputs. A verdict lands up to ~30 min after the lease ends, so an hour is provisional until an hour after it
 ends. `gpu-pool-*` holder Jobs count as leased; the leases inside them are not yet attributed, so they deliver nothing.
+
+Node 2's publisher neither computes nor pushes the merged `/workspace/usage/infra-pool.json` while a timed window is on. From
+10 minutes to 3 hours after its last push, each pass here rewrites that file with this pass's `nodes.n1` and an empty
+`nodes.n2` that names the pause (`paused_since`, also kept as `n2_generated_at`), so the console shows node 1 now and no node-2
+numbers rather than both going stale. After 3 hours it leaves the file alone, and the console's staleness error shows the outage.
+Node 2's next push replaces the file whole.
 """
 from __future__ import annotations
 
@@ -37,6 +43,8 @@ from pathlib import Path
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 DCGM = 'service="nvidia-dcgm-exporter"'
 OUT = Path(os.environ.get("POOL_N1_OUT", "/workspace/usage/infra-pool-n1.json"))
+MERGED = Path(os.environ.get("POOL_MERGED", "/workspace/usage/infra-pool.json"))   # node 2's publisher writes it, by scp
+PAUSE_COVER_S = (600, 3 * 3600)
 GIT = os.environ.get("POOL_N1_GIT", "/workspace/research/git/verity.git")
 REF = "refs/kueue-fold/infra-nebius"
 REF_JSON = Path(os.environ.get("POOL_N1_REF_JSON", "/workspace/verity-guest/drift/ref.json"))
@@ -285,6 +293,24 @@ def write(out: Path, n1: dict) -> None:
     tmp.replace(out)
 
 
+def cover_pause(merged: Path, n1: dict, now: float) -> bool:
+    """Rewrite the merged file while node 2's publisher is paused (the module docstring); True when it did."""
+    try:
+        doc = json.loads(merged.read_text())
+        last = doc.get("n2_generated_at") or doc["generated_at"]
+        age = now - datetime.fromisoformat(last.replace("Z", "+00:00")).timestamp()
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+    if not PAUSE_COVER_S[0] < age < PAUSE_COVER_S[1]:
+        return False
+    cover = {"generated_at": iso(now), "n2_generated_at": last,
+             "nodes": {"n1": n1, "n2": {"paused_since": last, "note": "node 2's publisher pauses while a timed window is on"}}}
+    tmp = merged.with_name(f".{merged.name}.n1-tmp")
+    tmp.write_text(json.dumps(cover, indent=1) + "\n")
+    tmp.replace(merged)
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, default=OUT)
@@ -296,7 +322,10 @@ def main() -> int:
         try:
             if n % 3 == 0:
                 drift = template_drift()
-            write(ns.out, build(observe(), drift))
+            n1 = build(observe(), drift)
+            write(ns.out, n1)
+            if cover_pause(MERGED, n1, time.time()):
+                print(f"{iso(time.time())} pool_n1: covered node 2's paused {MERGED}", flush=True)
         except Exception as e:  # noqa: BLE001  (a failed pass is retried next time; the file's age shows it)
             print(f"{iso(time.time())} pool_n1 failed: {str(e)[:300]}", flush=True)
         if not ns.loop:

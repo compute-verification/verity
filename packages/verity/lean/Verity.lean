@@ -1,2 +1,4 @@
+import Verity.Protocol
 import Verity.Assumptions
-import Verity.TC
+import Verity.Guarantees
+import Verity.SecurityProofs

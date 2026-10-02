@@ -31,7 +31,7 @@ from typing import Callable, Any
 
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
                    SpecializedDefinition, bind)
-from .program import INPUT_ID, input_prim
+from .program import input_id, input_prim, is_input
 from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
 from .types import type_from_json
 
@@ -422,7 +422,8 @@ def descriptor_size(program_or_desc) -> int:
 # Primitive families that are materialised on demand (one definition per width / constant / vocab) when a descriptor is
 # decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
 # package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
-# `program.INPUT_ID` always denotes the IR's own `Input<w>`, ahead of any registry entry.
+# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes the IR's own `Input<w>` or `RegisteredInput<w>`, ahead of
+# any registry entry.
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []
 
 
@@ -506,9 +507,9 @@ def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
 
 
 def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
-    m = INPUT_ID.match(fid)
+    m = input_id(fid)
     if m:
-        return input_prim(int(m[1]))
+        return input_prim(m[1], m[0])
     if fid in registry:
         return registry[fid]  # type: ignore[return-value]
     for pat, make in _LAZY_PRIMITIVE_FAMILIES:
@@ -719,6 +720,8 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         for nd in b["nodes"]:
             k = len(nodes)
             fn = get(callee_id(nd["fn"]))
+            if fid != desc["root"] and is_input(fn):
+                raise ValueError(f"definition {fid!r} node {k}: an input node ({fn.id}) appears only in the root's body")
             _check_node(fid, k, nd, fn)
             try:
                 args = tuple(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema, leaves)) for a in nd["args"])

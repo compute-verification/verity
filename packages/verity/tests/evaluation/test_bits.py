@@ -147,6 +147,41 @@ def test_evaluate_batch_routes_a_boolean_composite(monkeypatch) -> None:
     assert np.array_equal(E.evaluate_batch(spec, *inputs), ref)
 
 
+def _wide_adder(w: int) -> CompositeDefinition:
+    def body(B, S, x, y):
+        r = B.scan(FULL_ADDER, B.call(BL.constant(0)), (x, y))
+        return _cat(Array(w + 1, BIT), r[1], r[0])
+
+    return CompositeDefinition(f"BitsTestAdder{w}", 1, (), lambda S: ((("x", Array(w, BIT)), ("y", Array(w, BIT))), Array(w + 1, BIT)),
+                               body, register=False)
+
+
+def _held(spec, n: int) -> int:
+    import tracemalloc
+
+    rng = np.random.default_rng(n)
+    inputs = [_bits(rng, n, t) for _, t in spec.signature()[0]]
+    BS.compile(spec)
+    tracemalloc.start()
+    try:
+        base = tracemalloc.get_traced_memory()[0]
+        BS.evaluate_bits(spec, *inputs)
+        return tracemalloc.get_traced_memory()[1] - base
+    finally:
+        tracemalloc.stop()
+
+
+@pytest.mark.parametrize("n", [1, 200, 5000])
+def test_peak_bytes_bounds_what_evaluate_bits_holds(n: int) -> None:
+    from verity.ml.boolean import gemm as BG
+
+    for spec in (bind(_random(0)), bind(_random(3)), bind(_wide_adder(1024))):
+        assert _held(spec, n) <= BS.peak_bytes(spec, n)
+    gemm = bind(BG.Gemm, K=32, N=64, DOT=BG.HopperBF16WgmmaDot16)
+    held, bound = _held(gemm, min(n, 200)), BS.peak_bytes(gemm, min(n, 200))
+    assert held <= bound <= 1.15 * held  # a wide body: the bound is what a replay worker is fitted to
+
+
 def test_compiled_counts_and_refusals() -> None:
     c = BS.compile(ADDER)
     assert c.counts == {"and": 2 * W, "xor": 3 * W, "not": 0}

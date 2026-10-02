@@ -43,7 +43,7 @@ pub const TABLE_SHIFT: u32 = 32;
 
 /// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
 /// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ProverSeed {
     seed: [u8; 32],
     injected: bool,

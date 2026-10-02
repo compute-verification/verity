@@ -21,6 +21,14 @@
   `owners_digest`; the object's digest differs by its version), and `verify` checks every Call's cut as v1 does but for one rule: a
   value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's units
   may compute a common value, so a count of them bounds wrong work but is not distinct work; a consumer that credits work takes v1.
+* **Q_call v1**, `params = {"X": <bits>}` (`call_query`, 32 the agreed value; `CallPartition`; the algorithm in `cut`'s "Q_call v1",
+  `PROTOCOL.md` §11).  The same Calls, each cut in isolation; a unit is a gate interval of the Call (the Call, a body node, a member or
+  an iteration), cut down from the Call until its outputs fit in X bits; Input gates and constants are in no unit and every other gate
+  is in exactly one.  Units are numbered by Call, then layout order (`locate`, `gates`); `owners_digest` digests their owners.  The
+  query is inapplicable (`query-inapplicable`) to a root Call not of form `call` or `primitive` (`why: "root-form"`) and to a computing
+  gate wider than X bits (`why: "gate-too-wide"`).  `verify` checks every Call's cut (`cut.check_call_cut`: the invariant, w_out <= X)
+  and reports a value computed in two units as Q_word v2 does (`recomputed_across`), never refusing it; `served` is numbered by
+  `CallGates`' compact computing gates.
 * **Q_template_instance v0**, `params = {"template": <descriptor id>}` (`TemplatePartition`).  The root body's nodes other than its
   Input nodes must each be a `call` or a `batch` whose callee's descriptor id (`codec.descriptor_id`, the `callees` entry) is the
   template.  Each call is one unit and each batch member one unit, numbered in canonical order (node order, then member); the input
@@ -50,7 +58,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .codec import canonical_json, descriptor_id, encode_program
 from .codec import SCHEMA_V1
-from .cut import RECOMPUTE, WIRING, CallGraph, DefinitionCut, QueryInapplicable, check_cut, derived_committed, evaluate_definition, member_refs
+from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
+                  check_call_cut, check_cut, derived_committed, evaluate_call, evaluate_definition, member_refs)
 from .layout import resolve
 from .partition import CutVerdict
 from .program import is_input
@@ -74,6 +83,7 @@ def _templates_ok(t: Any) -> bool:
 
 Q_TEMPLATE_INSTANCE = ("Q_template_instance", 0)
 Q_TEMPLATE_INSTANCES = ("Q_template_instances", 0)
+Q_CALL = ("Q_call", 1)
 
 def _word_params_ok(p: Mapping[str, Any]) -> bool:
     return all(_is_int(v) and 0 < v <= PARAM_MAX for v in p.values())
@@ -83,6 +93,7 @@ def _word_params_ok(p: Mapping[str, Any]) -> bool:
 QUERIES: dict[tuple[str, int], tuple[tuple[str, ...], Callable[[Mapping[str, Any]], bool]]] = {
     ("Q_word", 1): (("X", "W"), _word_params_ok),
     ("Q_word", 2): (("X", "W"), _word_params_ok),
+    Q_CALL: (("X",), _word_params_ok),
     Q_TEMPLATE_INSTANCE: (("template",), lambda p: isinstance(p["template"], str)),
     Q_TEMPLATE_INSTANCES: (("templates",), lambda p: _templates_ok(p["templates"])),
 }
@@ -106,6 +117,13 @@ def query(X: int = 16, W: int = 32, version: int = 1) -> dict[str, Any]:
     if ("Q_word", version) not in QUERIES:
         raise ValueError(f"Q_word has versions 1 and 2, not {version!r}")
     return {"name": "Q_word", "version": version, "params": {"X": X, "W": W}}
+
+
+def call_query(X: int = CALL_X) -> dict[str, Any]:
+    """`Q_call{X}` v1 (`cut`'s "Q_call v1"): units of at most X bits out, cut along Calls."""
+    if not (_is_int(X) and 0 < X <= PARAM_MAX):
+        raise ValueError(f"Q_call's X is an integer in 1..{PARAM_MAX}, not {X!r}")
+    return {"name": Q_CALL[0], "version": Q_CALL[1], "params": {"X": X}}
 
 
 def template_id(t: Any) -> str:
@@ -171,7 +189,7 @@ def validate(obj: Any) -> CutVerdict:
 
 def calls(program: Any) -> list[tuple[int, Any]]:
     """The Program's Calls: (index in the root body, the node's Definition) for every root body node that is not an Input node
-    (`program.is_input`: the callee's id is `Input<w>_v1`)."""
+    (`program.is_input`: the callee's id is `Input<w>_v1` or `RegisteredInput<w>_v1`)."""
     return [(k, n.fn) for k, n in enumerate(program.root.body.nodes) if not is_input(n.fn)]
 
 
@@ -224,6 +242,70 @@ class Partition:
 
     def committed(self, p: int) -> list[int]:
         return derived_committed(self.graph(p), self.owner(p))
+
+    def check(self, p: int, committed: Iterable[int] | None = None) -> CutVerdict:
+        """Call `p`'s cut on its graph (`cut.check_cut`), held to `committed` when given."""
+        return check_cut(self.graph(p), self.owner(p), committed, (self.X, self.W, 0), self.recompute)
+
+
+class CallPartition:
+    """`Q_call` v1 applied to a program (`cut`'s "Q_call v1"): per Call its `CallCut` (activations of one Definition share it), the
+    units numbered by Call then layout order (`population`, `locate`, `gates`), and per Call its gates, owners and derived committed
+    set, in `CallGates`' compact numbering."""
+
+    recompute = "report"
+
+    def __init__(self, program: Any, q: Mapping[str, Any], memo: dict | None = None) -> None:
+        if (q.get("name"), q.get("version")) != Q_CALL:
+            raise ValueError(f"not Q_call v1: {q.get('name')!r} v{q.get('version')!r}")
+        self.query = dict(q)
+        self.X = int(q["params"]["X"])
+        self._memo = {} if memo is None else memo
+        self.program = program
+        self.calls: list[tuple[int, CallCut]] = []
+        for k, fn in calls(program):
+            form = program.root.body.nodes[k].form
+            if form not in ("call", "primitive"):
+                raise QueryInapplicable(f"root node {k} has form {form!r}: Q_call v1's Calls are call or primitive nodes",
+                                        {"call": k, "form": form, "definition": fn.id, "why": "root-form"})
+            try:
+                self.calls.append((k, evaluate_call(fn, self.X, self._memo)))
+            except QueryInapplicable as e:
+                raise QueryInapplicable(str(e), {"call": k, **e.detail}) from None
+        self._start: list[int] = []
+        t = 0
+        for _k, c in self.calls:
+            self._start.append(t)
+            t += len(c.units)
+        self.population = t
+
+    def locate(self, i: int) -> tuple[int, int, int, list[list[int]]]:
+        """Unit `i` -> (position in `calls`, the Call's root-body index, unit within the Call, its path of `[k]` / `[k, m]` steps)."""
+        if not 0 <= i < self.population:
+            raise IndexError(f"unit {i} outside 0..{self.population - 1}")
+        p = bisect.bisect_right(self._start, i) - 1
+        k, c = self.calls[p]
+        u = i - self._start[p]
+        return p, k, u, [list(s) for s in c.units[u][2]]
+
+    def gates(self, i: int) -> tuple[int, int]:
+        """Unit `i`'s root gate interval [lo, hi): its computing gates are its gates; Input gates and constants in it are in no unit."""
+        p, k, u, _path = self.locate(i)
+        lo, hi, _ = self.calls[p][1].units[u]
+        base = self.program.root.body.offsets[k]
+        return base + lo, base + hi
+
+    def graph(self, p: int) -> CallGates:
+        return call_gates(self.calls[p][1].fn, self._memo)
+
+    def owner(self, p: int) -> list[int]:
+        return self.calls[p][1].owner()
+
+    def committed(self, p: int) -> list[int]:
+        return call_committed(self.graph(p), self.calls[p][1])
+
+    def check(self, p: int, committed: Iterable[int] | None = None) -> CutVerdict:
+        return check_call_cut(self.graph(p), self.owner(p), self.X, committed)
 
 
 class TemplatePartition:
@@ -329,7 +411,7 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     return None
 
 
-def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None) -> Partition | TemplatePartition:
+def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None) -> Partition | CallPartition | TemplatePartition:
     """The query `q` (default `Q_word{16, 32}` v1) applied to `program`: `QueryInapplicable` when the program is not topological
     (`order_violation`), checked once here for every query, or when the query does not apply to it."""
     bad = order_violation(program)
@@ -338,6 +420,8 @@ def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None
     q = dict(q or query())
     if (q.get("name"), q.get("version")) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES):
         return TemplatePartition(program, q)
+    if (q.get("name"), q.get("version")) == Q_CALL:
+        return CallPartition(program, q, memo)
     return Partition(program, q, memo)
 
 
@@ -346,7 +430,7 @@ def ranges_digest(part: TemplatePartition) -> str:
     return hashlib.sha512(f"{FORMAT}/ranges".encode() + b"\0" + canonical_json([list(r) for r in part.ranges])).hexdigest()
 
 
-def owners_digest(part: Partition) -> str:
+def owners_digest(part: Partition | CallPartition) -> str:
     """SHA-512 over the evaluated owners: `"verity/partition/v1/owners\\0" || canon([[root-body index, owner list], ...])`."""
     return hashlib.sha512(f"{FORMAT}/owners".encode() + b"\0" + canonical_json([[k, part.owner(p)] for p, (k, _c) in enumerate(part.calls)])).hexdigest()
 
@@ -383,12 +467,13 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     except QueryInapplicable as e:
         bad["query-inapplicable"] = [e.detail]
     verdict = _verdict(bad)
-    if not template and RECOMPUTE.get(obj["query"]["version"]) == "report":
+    kind = (obj["query"]["name"], obj["query"]["version"])
+    if kind == Q_CALL or (kind[0] == "Q_word" and RECOMPUTE.get(kind[1]) == "report"):
         verdict.detail["recomputed_across"] = {"n": sum(r["n"] for r in report), "gates": report[:64]}
     return verdict
 
 
-def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, bad: dict[str, list], report: list[dict]) -> None:
+def _verify_calls(part: Partition | CallPartition, served: Mapping[int, Iterable[int]] | None, bad: dict[str, list], report: list[dict]) -> None:
     if served is not None:
         known = {k for k, _c in part.calls}
         unknown = sorted((k for k in served if k not in known), key=repr)
@@ -401,13 +486,13 @@ def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, b
     checked: dict[str, CutVerdict] = {}
     for p, (k, c) in enumerate(part.calls):
         if served is not None and k in served:
-            r = check_cut(part.graph(p), part.owner(p), served[k], (part.X, part.W, 0), part.recompute)
+            r = part.check(p, served[k])
         else:
             if served is not None and part.committed(p):
                 bad.setdefault("served-missing", []).append(k)
             r = checked.get(c.fn.id)
             if r is None:
-                r = checked[c.fn.id] = check_cut(part.graph(p), part.owner(p), None, (part.X, part.W, 0), part.recompute)
+                r = checked[c.fn.id] = part.check(p)
         if not r.ok:
             bad.setdefault("cut", []).append({"call": k, "codes": list(r.codes), "detail": r.detail})
         across = r.detail.get("recomputed_across")
@@ -425,6 +510,6 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
     return CutVerdict(not codes, codes, {k: {"n": len(x), "gates": x[:64]} for k, x in bad.items()})
 
 
-__all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES",
-           "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
+__all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL",
+           "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
            "owners_digest", "verify"]

@@ -399,7 +399,7 @@ def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any]
 
 MIN_BAND_D = 5
 """The least in-degree with a certificate: `Pous.Pinned.BandMultiMeetsFamily` holds for every `d ≥ 5` and every segment
-count from 1 to 2^64 at `D = 5`, `k = 111`, 483 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
+count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at `d` (`schemes.band.Band.certificate`)."""
 
 
 def with_in_degree(base: Any, d: int) -> Any:

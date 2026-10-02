@@ -24,6 +24,7 @@ from verity.ir.refs import array_of, tuple_of
 from verity.ir.types import Array, Tuple
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import ZERO
+from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_moe as BM
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry.prims import F32, I32
@@ -87,6 +88,7 @@ def test_the_word_views() -> None:
     assert TR.word_of(bind(BM.MoeSumCoordinate, TOPK=8)).id == bind(M.MoeSumCoordinate, TOPK=8).id == "MoeSumCoordinate_v1{TOPK=8}"
     assert TR.word_of(bind(BM.MoeSum, TOPK=8, H=8)).id == bind(M.MoeSum, TOPK=8, H=8).id == "MoeSum_v1{TOPK=8,H=8}"
     assert TR.word_of(bind(BM.NvExpf)).id == bind(M.NvExpf).id == "NvExpf_v1"
+    assert SW.boolean_version(bind(M.NvExpf)).id == "NvExpf_v2"
     assert TR.word_of(bind(BM.MoeRouterProbs, E=8, VPT=4)).id == "MoeRouterProbs_v1{E=8,VPT=4}"
     assert (TR.word_of(bind(BM.MoeRouterTopKOrdered, E=64, TOPK=8, VPT=8)).id
             == bind(M.MoeRouterTopKOrdered, E=64, TOPK=8, VPT=8).id == "MoeRouterTopKOrdered_v1{E=64,TOPK=8,VPT=8}")

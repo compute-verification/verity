@@ -1,14 +1,15 @@
-"""Flash attention on bits: `AttnBlock` / `AttentionHead` / `Attention` v6 (v3's statics), v7 (v2's) and v8 (v5's), the v3 and
-v2 bodies (`b1`) and the v5 body (`fa2_check_inf`) line for line over Boolean Definitions, so their word views are those chains
-at the same statics.
+"""Flash attention on bits: `AttnBlock` / `AttentionHead` / `Attention` v6 (v3's statics), v7 (v2's), v8 (v5's) and v9 (v4's),
+the v3 and v2 bodies (`b1`) and the v5 and v4 bodies (`fa2_check_inf`, `fa3_check_inf`) line for line over Boolean
+Definitions, so their word views are those chains at the same statics.
 
 Every word is its bits (`verity.ir.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
 callees are the Boolean versions of the word chains': `DotBf16_v3{K=D, DOT}` and `DOT` itself (`verity.ml.boolean.gemm`;
 v6's is `AmpereBF16TcDot16_v3`), `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2` and the inverse sum
-(v6's `Fa2InvSum_v2`; v7's and v8's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`
+(v6's `Fa2InvSum_v2`; v7's, v8's and v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`
 (`verity.ml.boolean.mufu`). The word constants (zero, `_scale_log2_bits(D)`) are written with the constant bits. v4 and v5 are
 the FA3 / FA2 per-iteration `Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`); v8 is v5's, whose unguarded blocks
-(`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is.
+(`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is; v9 is v4's, whose unguarded blocks read it as it
+is for `max * scale` too.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, _scale_log2_bits)
 from verity_vllm.program.registry.fa2_check_inf import AttentionHeadV5, AttentionV5, AttnBlockV5
+from verity_vllm.program.registry.fa3_check_inf import AttentionHeadV4, AttentionV4, AttnBlockV4
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
@@ -71,9 +73,11 @@ def _attention_type(S):
              ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))), Array(S.NH, Array(S.D, BF16)))
 
 
-def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True):
+def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True,
+           guard_max: bool = True):
     """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
-    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded."""
+    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
+    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`."""
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"{name}: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
     if FIRST and not check:
@@ -85,11 +89,11 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     for j in range(1, NVIS):
         bmax = B.call(BA.F32Max, bmax, s[j])
     m_new = bmax if FIRST else B.call(BA.F32Max, m_prev, bmax)
-    m_use = B.call(BA.GuardNegInfZero, m_new)
+    m_use = B.call(BA.GuardNegInfZero, m_new) if check or guard_max else m_new
     scale_log2 = c.word(_scale_log2_bits(D), 32)
     if not FIRST:
         scores_scale = B.call(BM.MufuEx2Ftz, B.call(BA.F32MulFtz, B.call(BA.F32SubFtz, m_prev, m_use if check else m_new), scale_log2))
-    max_scaled = B.call(BA.F32MulFtz, m_use, scale_log2)
+    max_scaled = B.call(BA.F32MulFtz, m_use if guard_max else m_new, scale_log2)
     p = [B.call(BM.MufuEx2Ftz, B.call(BA.F32FmaSubFtz, s[j], scale_log2, max_scaled)) for j in range(NVIS)]
     lanes: list[Coll] = []
     for ln in range(4):
@@ -244,6 +248,40 @@ def _checked_attention(B, S, q, kc, vc):
 
 AttentionV8 = _on_bits("Attention", 8, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _attention_type,
                        _checked_attention, AttentionV5)
+
+
+def _fa3_checked_block(B, S, q, k, v, m_prev, l_prev, o_prev):
+    """`AttnBlock_v4`'s body on bits: FA3's per-iteration `Check_inf` as the static `CHECK`; without it neither the rescale nor
+    `max * scale` reads the guarded running max."""
+    return _block(B, "AttnBlock_v9", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev, check=S.CHECK,
+                  guard_max=S.CHECK)
+
+
+AttnBlockV9 = _on_bits("AttnBlock", 9, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"], _block_type, _fa3_checked_block, AttnBlockV4)
+
+
+def _fa3_checked_head(B, S, q, k, v):
+    """`AttentionHead_v4`'s body on bits over `AttnBlock_v9`: block b runs with `CHECK = b >= MASKED_FROM`."""
+    nb = (S.T + S.BN - 1) // S.BN
+    if not 0 <= S.MASKED_FROM <= nb - 1:
+        raise ValueError(f"AttentionHead_v9: MASKED_FROM {S.MASKED_FROM} outside blocks 0..{nb - 1} "
+                         "(the first block is always a Check_inf iteration)")
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV9, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT,
+                                                                CHECK=b >= S.MASKED_FROM), S.INV, q, k, v)
+
+
+AttentionHeadV9 = _on_bits("AttentionHead", 9, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _head_type, _fa3_checked_head,
+                           AttentionHeadV4)
+
+
+def _fa3_checked_attention(B, S, q, kc, vc):
+    """`Attention_v4`'s body on bits over `AttentionHead_v9`; every head of the row shares its tile, so one MASKED_FROM."""
+    return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV9, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV,
+                                                     MASKED_FROM=S.MASKED_FROM), q, kc, vc)
+
+
+AttentionV9 = _on_bits("Attention", 9, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _attention_type,
+                       _fa3_checked_attention, AttentionV4)
 
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV

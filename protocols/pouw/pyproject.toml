@@ -20,6 +20,7 @@ verity = { workspace = true }
 # reads the HOPPER wgmma model replays and the RTX 4090 captures.
 inputs = ["fixtures/tc/vectors/fp8-hopper-wgmma-k1536.json", "fixtures/tc/vectors/fp8-hopper-wgmma-k32.json",
           "packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json"]
+parallel = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -279,6 +279,17 @@ def _plan_request(p: Plan, manifest: Mapping[str, Any], rid: str, ids: Sequence[
     return out
 
 
+def _definition(spec: str) -> tuple[Any, list[Any]]:
+    """The registered Definition a Call's spec names and its parameters."""
+    from verity.evaluation.reference import signature_of
+    from verity_vllm.query.call_scope import specialization
+    from verity_vllm.query.manifest.format import spec_family
+    from verity_vllm.query.program_view import spec_statics
+
+    d = specialization(spec_family(spec), spec_statics(spec))
+    return d, signature_of(d)[0]
+
+
 def _identity_fault(r: Mapping[str, Any], g: tuple[Any, list[int]] | None) -> str | None:
     if int(r.get("invocation") or 0) or r.get("program_op_path"):
         return f"invocation {r.get('invocation')} of a shared module ({r.get('program_op_path')}): one forward, several bodies"
@@ -339,21 +350,15 @@ class _Context:
         return self.wports[k]
 
     def definition(self, cid: int) -> str:
-        from verity_vllm.query.call_scope import specialization
-        from verity_vllm.query.manifest.format import spec_family
-        from verity_vllm.query.program_view import spec_statics
-
         r = self.raw[cid]
         spec = str(r["spec"])
         if str(r.get("form") or "call") != "call":
             raise Uncovered(f"Call {cid} ({spec}) is a {r.get('form')} row")
         if spec not in self.plan.definitions:
-            from verity.evaluation.reference import signature_of
             from verity_vllm.program.kernels import kernel_registry, rows
 
             try:
-                d = specialization(spec_family(spec), spec_statics(spec))
-                params = signature_of(d)[0]
+                d, params = _definition(spec)
             except Exception as e:  # noqa: BLE001
                 raise Uncovered(f"Call {cid}: {spec} does not resolve to a registered Definition ({e!r:.80})") from None
             leaves = sum(pt.leaves for pt in params)
@@ -583,6 +588,64 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
     return max((-(-n // max(1, tokens.get(e, 1))) for e, n in nbytes.items()), default=0), max(count.values(), default=0)
 
 
+# ------------------------------------------------------------------------------------------------------------------------------- record
+def to_json(p: Plan) -> dict[str, Any]:
+    """`p` as JSON: each distinct template once (the bodies' parts index them), the literals' words as little-endian u64 in base64, each
+    Definition by its spec and arity (`of_json` resolves it again)."""
+    import base64
+
+    index: dict[tuple, int] = {}
+    templates: list[dict[str, Any]] = []
+
+    def tpl(t: Template) -> int:
+        k = (t, tuple(o.where for o in t.operands))
+        if k not in index:
+            index[k] = len(templates)
+            templates.append({"specs": t.specs, "recipes": t.recipes, "levels": t.levels,
+                              "operands": [[o.where, o.per_row, o.elems, o.width] for o in t.operands],
+                              "targets": [[x.name, x.at, x.lo, x.hi, x.dtype, x.shared] for x in t.targets],
+                              "shared_specs": t.shared_specs, "shared_recipes": t.shared_recipes, "shared_levels": t.shared_levels})
+        return index[k]
+
+    bodies = [[e, m, [[q.request, tpl(q.template), q.rows] for q in b.parts]] for (e, m), b in p.bodies.items()]
+    return {"program_dirs": p.program_dirs, "templates": templates, "bodies": bodies,
+            "literals": {s: [list(a.shape), base64.b64encode(np.ascontiguousarray(a, dtype="<u8").tobytes()).decode()] for s, a in p.literals.items()},
+            "fields": {n: list(v) for n, v in p.fields.items()}, "definitions": {s: n for s, (_d, n) in p.definitions.items()},
+            "kernel_only": sorted(p.kernel_only), "composition": [[e, c] for e, c in p.composition.items()], "order": p.order,
+            "by_index": [[i, r] for i, r in p.by_index.items()], "identities": p.identities, "uncovered": p.uncovered,
+            "bytes_per_token": p.bytes_per_token, "tensors_per_step": p.tensors_per_step}
+
+
+def _tuples(x: Any) -> Any:
+    return tuple(_tuples(y) for y in x) if isinstance(x, list) else x
+
+
+def of_json(doc: Mapping[str, Any]) -> Plan:
+    """The Plan `to_json` wrote; each Definition resolved from its spec (ValueError when one resolves to another arity)."""
+    import base64
+
+    templates = [Template(_tuples(t["specs"]), _tuples(t["recipes"]), _tuples(t["levels"]),
+                          tuple(Operand(str(w), int(k), int(e), int(b)) for w, k, e, b in t["operands"]),
+                          tuple(Target(str(n), _tuples(at), int(lo), int(hi), str(dt), bool(sh)) for n, at, lo, hi, dt, sh in t["targets"]),
+                          _tuples(t["shared_specs"]), _tuples(t["shared_recipes"]), _tuples(t["shared_levels"])) for t in doc["templates"]]
+    definitions: dict[str, tuple[Any, int]] = {}
+    for spec, n in doc["definitions"].items():
+        d, params = _definition(spec)
+        if len(params) != int(n):
+            raise ValueError(f"call-boundary plan: {spec} takes {len(params)} arguments here, {n} in the plan")
+        definitions[spec] = (d, int(n))
+    return Plan(program_dirs={str(r): str(d) for r, d in doc["program_dirs"].items()},
+                bodies={(int(e), str(m)): Body(str(m), int(e), tuple(Part(str(r), templates[int(i)], int(n)) for r, i, n in parts))
+                        for e, m, parts in doc["bodies"]},
+                literals={s: np.frombuffer(base64.b64decode(b), dtype="<u8").astype(np.uint64).reshape(shape)
+                          for s, (shape, b) in doc["literals"].items()},
+                fields={str(n): (int(e), int(w)) for n, (e, w) in doc["fields"].items()}, definitions=definitions,
+                kernel_only=set(doc["kernel_only"]), composition={int(e): {str(r): int(n) for r, n in c.items()} for e, c in doc["composition"]},
+                order={str(k): str(v) for k, v in doc["order"].items()}, by_index={int(i): str(r) for i, r in doc["by_index"]},
+                identities=int(doc["identities"]), uncovered=[str(u) for u in doc["uncovered"]], bytes_per_token=int(doc["bytes_per_token"]),
+                tensors_per_step=int(doc["tensors_per_step"]))
+
+
 # ---------------------------------------------------------------------------------------------------------------------------- evaluation
 def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray],
                       shared: dict | None = None) -> dict[str, np.ndarray]:
@@ -657,4 +720,4 @@ def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
 
 
 __all__ = ["FAMILY", "WORD_DTYPES", "Uncovered", "Operand", "Target", "Template", "Part", "Body", "Plan", "build_dirs", "request_programs",
-           "plan", "evaluate_template"]
+           "plan", "to_json", "of_json", "evaluate_template"]

@@ -1097,9 +1097,10 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     the input unit (`INPUT_UNIT`); every computed gate is computed in exactly one computing unit, whose proof being valid implies the
     gate is the correct function of the committed values the unit reads.
 
-    `owner[g]` is the unit of gate `g`: `INPUT_UNIT` for an input gate, a computing unit index >= 0 otherwise.  Constants and wiring are
-    circuit structure -- hardwired into each unit's statement, never committed, not gates: `structure_gates` of the circuit's
-    `total_gates` (input gates included) are such.  `reads` are (producer, consumer) pairs of gates, `outputs` the returned gates,
+    `owner[g]` is the unit of gate `g`: `INPUT_UNIT` for an input gate, a computing unit index >= 0 otherwise.  Structure is an
+    operation's own constant bits and wiring: gates any unit may read, bound outside the partition and outside the committed set,
+    computed in no unit: `structure_gates` of the circuit's `total_gates` (input gates included) are such.  A program's data is no
+    structure: it enters as input gates, registered (bound at registration) or run (bound per request), in the input unit.  `reads` are (producer, consumer) pairs of gates, `outputs` the returned gates,
     `committed` the gates whose values are committed once and reused by every reader (the input gates' values under their roots),
     `recomputed` the (gate, earlier gate) pairs that compute the same function of the same values (a second computation of one value).
     A value computed again in the unit that already computes it crosses no boundary: it is a redundant gate of that unit's statement

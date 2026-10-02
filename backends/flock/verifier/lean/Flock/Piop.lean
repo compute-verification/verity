@@ -101,12 +101,19 @@ def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : Zeroc
   absorbF p.finalB
   return { z, rho, rRest := r, vA := p.finalA, vB := p.finalB, vC := p.finalC }
 
+/-- One lincheck round's column fold at challenge `t` (L3): the top half onto the bottom half. -/
+def halve (t : F128) (comb : Array F128) : Array F128 :=
+  (Array.range (comb.size / 2)).map fun i => comb[i]! + t * (comb[i + comb.size / 2]! + comb[i]!)
+
 /-- What the lincheck needs from a statement's circuit (§16.1). -/
 structure CircuitFold where
   kLog : Nat
   pin : Nat
   /-- `fold α lw ρ_in = α·A_0ᵀe + B_0ᵀe` over the `2^kLog` columns, for `e[s + 64·u] = lw[s] · eq(ρ_in, u)` -/
   fold : F128 → Array F128 → Array F128 → V (Array F128)
+  /-- `folded α β lw ρ_in ts`: `fold α lw ρ_in` with `β` added at `pin`, halved at `ts` in turn (`halve`), on the entries
+  left, `Σ_u eq(ts reversed, u) · comb[s + 64·u]` at `s`; a statement computes it from its structure where it can -/
+  folded : F128 → F128 → Array F128 → Array F128 → Array F128 → V (Array F128)
   deriving Inhabited
 
 structure LcOut where
@@ -122,11 +129,6 @@ def lincheck (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM LcOut := do
   label "flock-lincheck-v0"
   let alpha ← sample
   let beta ← sample
-  let comb0 ← match c.fold alpha (skipWeights zc.z) rhoIn with
-    | .ok v => pure v
-    | .error err => throw err
-  check (comb0.size == 2 ^ kLog) "lincheck: the circuit fold has the wrong width"
-  let mut comb := comb0.modify c.pin (· + beta)
   let mut claim := alpha * zc.vA + zc.vB + beta
   let mut ts : Array F128 := #[]
   for j in [0:kLog - 6] do
@@ -138,8 +140,10 @@ def lincheck (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM LcOut := do
     let e0 := claim + q1
     let c1 := e0 + q1 + qinf
     claim := qinf * t * t + c1 * t + e0
-    let h := comb.size / 2
-    comb := (Array.range h).map fun i => comb[i]! + t * (comb[i + h]! + comb[i]!)
+  let comb ← match c.folded alpha beta (skipWeights zc.z) rhoIn ts with
+    | .ok v => pure v
+    | .error err => throw err
+  check (comb.size == 64) "lincheck: the circuit fold has the wrong width"
   absorbSlice p.zPartial
   check (dot comb p.zPartial == claim) "lincheck: ConsistencyFailed (sumcheck-final)"
   let rPrime ← sample

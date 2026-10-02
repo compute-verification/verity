@@ -40,6 +40,11 @@ import sysconfig
 import pytest
 
 SLOW_S = 5.0
+#: the reason a test that needs the evidence store gives when it skips because it can't reach it (the testing skill). Under a
+#: recorded check (`VERITY_STORE_REQUIRED=1`, which `check.py` gives its steps) that skip is a failure, so a check never passes
+#: without the tests that need the store.
+STORE_UNREACHABLE = "the evidence store is not reachable"
+_STORE_REQUIRED = os.environ.get("VERITY_STORE_REQUIRED") == "1"
 _KEY = "verity_suite_guard"
 _ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and os.environ.get("VERITY_SUITE_REPORT"))
 
@@ -213,6 +218,19 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         with open(heavy) as f:
             order = heavy_first([i.nodeid for i in items], json.load(f), workers)
         items[:] = [items[i] for i in order]
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Under `VERITY_STORE_REQUIRED=1`, a skip whose reason says the store is unreachable (`STORE_UNREACHABLE`) fails instead."""
+    report = (yield).get_result()
+    if not (_STORE_REQUIRED and report.skipped) or getattr(report, "wasxfail", None) is not None:
+        return
+    reason = report.longrepr[2] if isinstance(report.longrepr, tuple) else str(report.longrepr)
+    if STORE_UNREACHABLE in reason:
+        report.outcome = "failed"
+        report.longrepr = (f"{reason}\nVERITY_STORE_REQUIRED=1 (a recorded check): a test that needs the evidence store fails "
+                           "where it can't reach it, rather than skip")
 
 
 def pytest_runtest_logreport(report) -> None:

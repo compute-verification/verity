@@ -135,3 +135,65 @@ def test_a_reused_pid_is_a_new_process_and_a_timed_window_pauses_the_probe(tmp_p
     status.write_text("2026-10-01T03:47:17Z free GPUs 2/8, kept free 8, waiters -, timed False, window waiting True, backfill False\n")
     assert W.window_running(str(status))
     assert not W.window_running(str(tmp_path / "missing"))
+
+
+def test_the_relay_keeps_its_place_through_an_unmounted_log_and_a_failed_post(tmp_path, monkeypatch):
+    """Node 2's quota cutover (2026-10-01): while /workspace was unmounted the log read as missing, the relay reset its cursor to 0,
+    and after the remount it posted hours-old rows; a Slack error after 5 posts lost the state, so every pass repeated them."""
+    import argparse
+    import inspect
+    import json
+    import re
+    import subprocess
+
+    from research import slack
+
+    rows = [json.dumps({"key": f"k{i}", "node": "vy-nebius-2", "ts": f"t{i}", "mb_per_s": 20, "pid": i, "user": "research",
+                        "cmd": "python3 job.py", "paths": ["/workspace/x"], "cgroup": "/user.slice", "allocation": "none"})
+            for i in range(4)]
+    log: dict[str, list[str] | None] = {"n2": rows[:2]}
+    posted: list[str] = []
+    fail_on: set[str] = set()
+
+    def fake_run(argv, capture_output, text):
+        lines = log[argv[-2]]
+        if lines is None:   # what the remote `[ -f log ] || { echo ...; }` prints
+            return subprocess.CompletedProcess(argv, 0, re.search(r"echo (\w+);", argv[-1]).group(1) + "\n", "")
+        seen = int(re.search(r"tail -n \+(\d+)", argv[-1]).group(1)) - 1
+        return subprocess.CompletedProcess(argv, 0, "\n".join([str(len(lines)), *lines[seen:]]) + "\n", "")
+
+    real_post = inspect.signature(slack._post)
+
+    def fake_post(*a, **k):
+        args = real_post.bind(*a, **k).arguments   # the real signature, so a call that drifts from it fails here
+        assert args.get("thread") is None, "an alert is a top-level post"
+        ts = re.search(r"\((t\d)\)", args["text"]).group(1)
+        if ts in fail_on:
+            raise slack.SlackError("the Cursor identity socket the Slack broker needs is unavailable")
+        posted.append(ts)
+
+    monkeypatch.setattr(W.subprocess, "run", fake_run)
+    monkeypatch.setattr(slack, "registry_path", lambda: None)
+    monkeypatch.setattr(slack, "load_registry", lambda p: {})
+    monkeypatch.setattr(slack, "channel_id_for", lambda reg, key: "C1")
+    monkeypatch.setattr(slack, "Slack", lambda *a, **k: None)
+    monkeypatch.setattr(slack, "_post", fake_post)
+    state = tmp_path / "relay.json"
+    ns = argparse.Namespace(nodes=["n2"], out="/workspace/research/write-probe", every=0, state=str(state), handle="infra",
+                            dry_run=False, once=True)
+
+    W.relay(ns)
+    assert posted == ["t0", "t1"]
+    log["n2"] = None                                   # unmounted
+    W.relay(ns)
+    assert json.loads(state.read_text())["lines"]["n2"] == 2
+    log["n2"] = rows                                   # remounted, two new rows; the second post fails
+    fail_on.add("t3")
+    try:
+        W.relay(ns)
+    except slack.SlackError:
+        pass
+    assert posted == ["t0", "t1", "t2"]
+    fail_on.clear()
+    W.relay(ns)
+    assert posted == ["t0", "t1", "t2", "t3"]

@@ -138,20 +138,19 @@ from verity_vllm.observe.fold.resolver import (
     ResolutionReport,
     Shared,
     StepContext,
+    Supplied,
     Transparent,
     Unsupported,
     parts_of,
     resolve_step,
     spec_label,
 )
+from verity_vllm.observe.fold.summary import REFERENCE_INTEGRITY_RULE, summarize  # noqa: F401  (re-exported: fold_compare, tests)
+from verity_vllm.observe.fold.supplied import SuppliedInputs
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.fold.views import row_view, rows_view
 
 I32 = Value(32)
-
-#: [R9 ref 2026-09-18] the fail-closed reference-integrity rule id (definition and evaluation over persisted summaries:
-#: `verity_vllm.check.gates.REF_INTEGRITY_RULE` / `gates.fold_integrity`); quoted in `summarize()` so every fold summary names it
-REFERENCE_INTEGRITY_RULE = "R1/2026-09-18"
 
 #: integer view dtypes that may hold a 32-bit token value (vLLM's int64 token / sampler buffers)
 _TOKEN_WIDTHS = {("int64", 32), ("uint64", 32), ("int32", 32), ("uint32", 32)}
@@ -199,6 +198,9 @@ class FoldResult:
     tp: dict | None = None
     collectives: list[dict] = field(default_factory=list)
     peers_layout: list[dict] = field(default_factory=list)
+    #: a `registered_values` profile's supplied inputs (`_Fold.supplied`): the registered `values` and each request's `run_<i>`,
+    #: every field's name, width, bits and leaf offset; empty otherwise
+    supplied: dict = field(default_factory=dict)
     #: [COORD R17-28 F3, mprof] the Program's descriptor (`verity.ir.codec.encode_program`) as built for the digest: `persist_program`
     #: writes THIS instead of encoding the same Program a second time (36 s + a second digest at B8 1024/128; the descriptor is the
     #: digest's input, so program.json's `program` and `digest` come from one encoding by construction)
@@ -304,6 +306,7 @@ class _Fold:
         self.peers_param: dict[int, int] = {}
         self.peers_fields: dict[int, list[dict]] = {}
         self.peers_leaves: dict[int, int] = {}
+        self.supplied_inputs = SuppliedInputs()   # a `registered_values` profile's run and registered values
         self.collectives: list[dict] = []
         self.cur_coll_k: int = 0
         self._coll_prep: dict[int, tuple[Compute, dict]] = {}   # id(c) -> (c, prep); c held so an id() reuse cannot alias a stale prep
@@ -425,6 +428,8 @@ class _Fold:
                 self.peers_fields[i] = []
                 self.peers_leaves[i] = 0
                 params.append(("peers" if len(reqs) == 1 else f"peers_{i}", Record()))   # placeholder type: fields finalised at _finish
+        if getattr(self.profile, "registered_values", False):
+            self.supplied_inputs.declare(params, len(reqs))
         params.append(("weights", self.weights_type))
         self.params = tuple(params)
         self.B = Builder(self.params, I32)  # ret type is set once the outputs are known
@@ -746,6 +751,8 @@ class _Fold:
                     colls.append(shared[k])
                 elif isinstance(op, Param):
                     colls.append(self._param(op, i, ptype, c, pname))
+                elif isinstance(op, Supplied):
+                    colls.append(Coll(ptype, self.supplied_inputs.leaf(op, ptype, f"{spec_label(c.spec)}.{pname}", self.req_index, FoldError)))
                 else:
                     colls.append(self._wrap(ptype, self._read_operand(op, i), op.view, f"{spec_label(c.spec)}.{pname}[row {i}]"))
             rows.append(colls)
@@ -1155,6 +1162,13 @@ class _Fold:
                 params[pidx] = (params[pidx][0], Record(*[(f["name"], f["type"]) for f in flds]))
             self.params = tuple(params)
             self.B.params = self.params
+        if self.supplied_inputs:
+            if not self.supplied_inputs.fields["values"]:
+                msg = "registered_values profile: no Definition read a program value; the `values` parameter would be empty"
+                if self.strict:
+                    raise FoldError(msg)
+                self._problem("ValuesEmpty", msg, {})
+            self.params = self.B.params = self.supplied_inputs.finalise(self.params)
         body = self.B.finish(out)
         params, ret_type = self.params, out.type
         defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=params, _r=ret_type: (_p, _r), replayer(body),
@@ -1167,7 +1181,7 @@ class _Fold:
         descriptor = None
         if with_program:
             t0 = time.time()
-            program = Program(spec)
+            program = Program(spec, registered=("values",) if self.supplied_inputs else ())
             self.timings["program_s"] = round(time.time() - t0, 3)
             t0 = time.time()
             descriptor = encode_program(program)          # [R17-28 F3] encoded once: the digest's input AND program.json's `program`
@@ -1187,7 +1201,8 @@ class _Fold:
                           memory=mem, notes=self.notes, body=body, steps=self.steps, errors=self.errors, timings=self.timings,
                           sampled=sampled, discarded=discarded, refed=list(self.refed), weights_type=self.weights_type, params=self.params,
                           requests=list(self.requests), accesses=self.accesses, tp=dict(self.tp) if self.tp else None,
-                          collectives=list(self.collectives), peers_layout=self._peers_layout(), descriptor=descriptor)
+                          collectives=list(self.collectives), peers_layout=self._peers_layout(), descriptor=descriptor,
+                          supplied=self.supplied_inputs.layout(self.params, self.requests, program))
 
     def _peers_layout(self) -> list[dict]:
         """[R17 D90] The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
@@ -1225,7 +1240,7 @@ def _same_element(a: ViewDesc, b: ViewDesc) -> bool:
 
 
 def _row_operand_view(op: Operand, i: int) -> ViewDesc | None:
-    if isinstance(op, (Const, Param)):
+    if isinstance(op, (Const, Param, Supplied)):
         return None          # [R15 stoch] no device view: a Program constant / a declared parameter
     if isinstance(op, Shared):
         return op.view
@@ -1259,29 +1274,3 @@ def instance_nodes(result: FoldResult, *, spec_prefix: str | None = None, step: 
         out.append(m)
     return out
 
-
-def summarize(result: FoldResult) -> dict:
-    """A JSON-able summary of a fold for reports."""
-    return {"digest": result.digest, "params": [[n, repr(t)] for n, t in result.params], "ret_type": repr(result.body.ret_type) if result.body else None,
-            "nodes": len(result.body.nodes) if result.body else 0, "instances": len(result.instances),
-            "report": result.report.to_dict(), "memory": result.memory, "steps": result.steps, "errors": len(result.errors),
-            "error_classes": _hist(e["class"] for e in result.errors), "error_examples": result.errors[:16],
-            "notes": result.notes[:64], "timings": result.timings, "sampled": result.sampled, "discarded": result.discarded,
-            # [R9 ref 2026-09-18] recompute wiring evidence + the fail-closed eligibility rule (see `gates.fold_integrity`)
-            "refed": len(result.refed), "refed_examples": result.refed[:16],
-            "reference_integrity": {"rule": REFERENCE_INTEGRITY_RULE, "eligible": result.reference_eligible,
-                                    "errors": len(result.errors), "unsupported": int(getattr(result.report, "unsupported", 0) or 0)},
-            "spec": spec_label(result.spec) if result.spec is not None else None,
-            # [R17 D90] the tensor-parallel facts of a rank fold (None / empty on a TP1 log): rank/world, the collectives executed (one
-            # record each, own view as repr) and the `peers_<i>` root-parameter layout -- the collective_received roots the fold synthesised
-            "tp": result.tp,
-            "collectives": [{**{k: v for k, v in c.items() if k != "own_view"}, "own_view": repr(c.get("own_view"))} for c in result.collectives],
-            "collectives_by_kind": _hist(c["kind"] for c in result.collectives),
-            "peers_layout": result.peers_layout}
-
-
-def _hist(items) -> dict[str, int]:
-    h: dict[str, int] = {}
-    for i in items:
-        h[i] = h.get(i, 0) + 1
-    return dict(sorted(h.items()))

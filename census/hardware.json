@@ -148,6 +148,34 @@
     ]
   },
   {
+    "id": "rtx-pro-6000-server/e2m1",
+    "name": "RTX PRO 6000",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "dtype": "e2m1",
+    "rate": "fp4 (e2m1, block-scaled) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 2000e12,
+    "accumulate": "fp32",
+    "memory_bytes": 103079215104,
+    "sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: FP4 Tensor Core 4 PFLOPS; datasheet (Apr 2025): Peak FP4 AI PFLOPS 4 PFLOPS. Both are the 2:4-sparse figure (4 x the sparse FP16 | BF16 1 PFLOP), so the dense peak is 4 PFLOPS / 2",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      },
+      {
+        "label": "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4, row 'Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)': 2015.2 dense / 4030.4 sparse on the Workstation Edition at its 2617 MHz boost, 1755.7 / 3511.4 on Max-Q; 4 x dense BF16",
+        "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used. Dense = the datasheet's sparse FP4 AI PFLOPS / 2. 4 x rtx-pro-6000-server/bf16, and rounded the same way (1872 TFLOPS at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1)",
+    "memory_bytes_per_second": 1597e9,
+    "memory_sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition datasheet (Apr 2025), Technical Specifications: memory bandwidth 1597 GB/s, 96 GB GDDR7 with ECC",
+        "href": "https://www.pny.com/file%20library/company/support/product%20brochures/nvidia%20data%20center%20gpus/english/rtx-pro-6000-blackwell-server-edition-data-sheet.pdf"
+      }
+    ]
+  },
+  {
     "id": "l40s-48gb/bf16",
     "name": "L40S",
     "device": "NVIDIA L40S 48GB",

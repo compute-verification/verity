@@ -17,6 +17,8 @@ One line per fact on stdout, one per failure on stderr. It checks:
 - that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
+  A machine with check slots (`slot.py`) shares its disk with other work, which a recorded drop in free space counts, so
+  there it is 45 GB (vy-nebius-1, 1 Oct: a 2 GB check "took" 607 GB while the node's jobs wrote).
 The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations
@@ -58,6 +60,7 @@ def _module(path: Path, name: str):
 
 LA = _module(ROOT / "tools" / "check" / "lean_audit.py", "check_preflight_lean_audit")
 CHECK = _module(ROOT / "tools" / "check" / "check.py", "check_preflight_check")
+SLOT = _module(ROOT / "tools" / "check" / "slot.py", "check_preflight_slot")
 
 
 def _out(argv: list[str]) -> str | None:
@@ -261,11 +264,13 @@ def recorded_peak(runs: Path | None, recent: int = RECENT) -> tuple[float, str] 
     return max(peaks) if peaks else None
 
 
-def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, runs: Path | None = None) -> tuple[list[str], list[str]]:
+def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, runs: Path | None = None,
+         shared: bool = False) -> tuple[list[str], list[str]]:
     """Free space on the tree's and the cache's filesystems (one sum when they are one) against what a check takes there: the
     warm floor (`TREE_GB`, `CACHE_GB`), or `MARGIN` times the peak recent checks here recorded on the tree's (`recorded_peak`)
-    when that is more, plus `MARGIN` times each dependency tree to restore, on the cache's."""
-    peak = recorded_peak(runs)
+    when that is more and the machine is not `shared` (it has check slots), plus `MARGIN` times each dependency tree to
+    restore, on the cache's."""
+    peak = None if shared else recorded_peak(runs)
     derived = MARGIN * peak[0] if peak else 0.0
     at_tree, at_cache = _existing(tree), _existing(cache)
     extra = MARGIN * sum(DEPS_TREE_GB + r["bytes"] / GB for r in restore)
@@ -277,6 +282,8 @@ def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, 
         if at == at_tree and derived > floor:
             floor = derived
             why.append(f"{MARGIN:g} x the {peak[0]:.0f} GB check {peak[1]} took here")
+        if at == at_tree and shared:
+            why.append("the warm floor: this machine's check slots share its disk with other work")
         if more:
             why.append(f"{len(restore)} Lean dependency tree(s) to restore")
         gb = floor + more
@@ -306,7 +313,7 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
-        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None) -> tuple[list[str], list[str]]:
+        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, shared: bool = False) -> tuple[list[str], list[str]]:
     lean = (root / "backends" / "flock" / "verifier" / "lean" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
@@ -318,7 +325,7 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
         fails.append(f"prepare the pod: `{POD_SETUP}`")
     f, x, restore = lean_deps(root, packages, cache, urls)
     facts, fails = facts + f, fails + x
-    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs)):
+    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs, shared)):
         facts, fails = facts + f, fails + x
     return facts, fails
 
@@ -330,7 +337,7 @@ def _env_path(name: str) -> Path | None:
 def main() -> int:
     runs = ROOT.parent.parent / "runs" if ROOT.parent.name == "src" else None       # a shipped tree: <root>/src/<sha>, <root>/runs
     facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir(),
-                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs)
+                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs, shared=SLOT.SLOTS.exists())
     for line in facts:
         print(line, flush=True)
     for line in fails:

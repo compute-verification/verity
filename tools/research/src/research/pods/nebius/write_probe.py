@@ -269,17 +269,19 @@ def relay(ns: argparse.Namespace) -> int:
             seen = state["lines"].get(host, 0)
             f = f"{ns.out}/unmatched.jsonl"
             r = subprocess.run(["ssh", "-o", "ConnectTimeout=10", host,
-                                f"[ -f {f} ] || {{ echo 0; exit 0; }}; wc -l < {f}; tail -n +{seen + 1} {f}"],
+                                f"[ -f {f} ] || {{ echo missing; exit 0; }}; wc -l < {f}; tail -n +{seen + 1} {f}"],
                                capture_output=True, text=True)
             lines = r.stdout.splitlines()
             if r.returncode or not lines:
                 print(f"write_probe relay: {host} unreadable ({r.stderr.strip()[:120]})", file=sys.stderr)
                 continue
+            if lines[0].strip() == "missing":   # /workspace unmounted (a cutover): resetting here replayed every old row
+                continue
             total = int(lines[0].strip() or 0)
             if total < seen:
                 state["lines"][host] = 0
                 continue
-            for ln in lines[1:]:
+            for n, ln in enumerate(lines[1:], seen + 1):
                 try:
                     row = json.loads(ln)
                 except ValueError:
@@ -287,8 +289,10 @@ def relay(ns: argparse.Namespace) -> int:
                 last = state["posted"].get(row["key"], 0)
                 if time.time() - last >= 3600:
                     slack._post(slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=ns.dry_run), channel, ns.handle,
-                                alert_text(row), ns.agent_url)
+                                alert_text(row))
                     state["posted"][row["key"]] = time.time()
+                    state["lines"][host] = min(n, total)
+                    state_path.write_text(json.dumps(state))   # a later post that raises must not repeat this one
             state["lines"][host] = total
         state_path.write_text(json.dumps(state))
         if ns.once:
@@ -312,7 +316,6 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--every", type=float, default=120.0)
     r.add_argument("--state", default=str(Path.home() / ".research" / "write-probe-relay.json"))
     r.add_argument("--handle", default="infra")
-    r.add_argument("--agent-url", default=os.environ.get("RESEARCH_AGENT_URL"))
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--once", action="store_true")
     r.set_defaults(fn=relay)

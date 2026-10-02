@@ -20,7 +20,8 @@ FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "work
 PINNED = {
     "hardware": {"a100-sxm4-80gb/bf16": 312e12, "h100-sxm5-80gb/bf16": 989.4e12, "h100-sxm5-80gb/e4m3": 1978.9e12,
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12, "rtx-pro-6000-server/bf16": 500e12,
-                 "rtx-pro-6000-server/e4m3": 1000e12, "l40s-48gb/bf16": 362.05e12, "l40s-48gb/e4m3": 733e12},
+                 "rtx-pro-6000-server/e4m3": 1000e12, "rtx-pro-6000-server/e2m1": 2000e12, "l40s-48gb/bf16": 362.05e12,
+                 "l40s-48gb/e4m3": 733e12},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
     "subcircuit_templates": {"gemm-coordinate": ("K", "datatype", "semantics"), "attention-head": ("D", "BN", "semantics"), "rope-head": ("D",),
@@ -32,7 +33,8 @@ PINNED = {
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
               "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090", "rtx-pro-6000-server/bf16": "RTX PRO 6000",
-              "rtx-pro-6000-server/e4m3": "RTX PRO 6000", "l40s-48gb/bf16": "L40S", "l40s-48gb/e4m3": "L40S"},
+              "rtx-pro-6000-server/e4m3": "RTX PRO 6000", "rtx-pro-6000-server/e2m1": "RTX PRO 6000", "l40s-48gb/bf16": "L40S",
+              "l40s-48gb/e4m3": "L40S"},
     "input_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
                       "bench-instances-nvfp4-sm120-v1"},
 }
@@ -106,8 +108,10 @@ def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or
         t = TARGETS[name]
         assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
     used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
-    # the L40S FP8 line serves no row yet; the RTX PRO 6000 BF16 line serves only the POUS bench's --hardware
-    assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3", "rtx-pro-6000-server/bf16"}
+    # the L40S FP8 line serves no row yet; the RTX PRO 6000 lines serve the POUS bench's --hardware and the GemmCoordinate
+    # hillclimbs (backends/flock/pod/gemm_hill.py)
+    rtx_pro = {f"rtx-pro-6000-server/{d}" for d in ("bf16", "e4m3", "e2m1")}
+    assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3"} | rtx_pro
     sets = [s.target for s in census.INPUT_SETS.values()]
     assert set(sets) <= set(TARGETS) and len(sets) == len(set(sets))
     assert all(s.size == census.SUBCIRCUIT_TEMPLATES[census.SUBCIRCUITS[s.subcircuit].template].reference_batch

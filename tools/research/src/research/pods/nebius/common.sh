@@ -3,7 +3,8 @@
 #
 # Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64 (the PEM as one line of base64,
 # `base64 -w0 key.pem`).  The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
-# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked five times; it is still read when _B64 is unset.
+# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct; it is still read when _B64
+# is unset.
 # The key is written to a mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile
 # lives there too (`nebius -c`), so nothing is written to ~/.nebius or the repository and no value is ever printed.  Never run these
 # with `bash -x`.
@@ -36,10 +37,19 @@ nebius_auth() {
   [ -x "$NEBIUS_BIN" ] || die "no nebius CLI (curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | bash)"
   local v
   for v in NEBIUS_SA_ID NEBIUS_SA_PUBLIC_KEY_ID; do
-    [ -n "${!v:-}" ] || die "$v is not set (a Cursor secret: Dashboard -> Cloud Agents -> Secrets)"
+    [ -n "${!v:-}" ] && continue
+    case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
+      *",$v,"*) die "$v not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
+      *) die "$v is not set (a Cursor secret: Dashboard -> Cloud Agents -> Secrets)" ;;
+    esac
   done
-  [ -n "${NEBIUS_SA_PRIVATE_KEY_B64:-}${NEBIUS_SA_PRIVATE_KEY:-}" ] \
-    || die "NEBIUS_SA_PRIVATE_KEY_B64 is not set (a Cursor secret, \`base64 -w0 key.pem\`: Dashboard -> Cloud Agents -> Secrets)"
+  if [ -z "${NEBIUS_SA_PRIVATE_KEY_B64:-}${NEBIUS_SA_PRIVATE_KEY:-}" ]; then
+    case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
+      *",NEBIUS_SA_PRIVATE_KEY_B64,"* | *",NEBIUS_SA_PRIVATE_KEY,"*)
+        die "the Nebius key is not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
+      *) die "NEBIUS_SA_PRIVATE_KEY_B64 is not set (a Cursor secret, \`base64 -w0 key.pem\`: Dashboard -> Cloud Agents -> Secrets)" ;;
+    esac
+  fi
   NB_DIR=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/nebius-auth.XXXXXX") || die "mktemp failed"
   chmod 700 "$NB_DIR"
   trap 'rm -rf "$NB_DIR"' EXIT

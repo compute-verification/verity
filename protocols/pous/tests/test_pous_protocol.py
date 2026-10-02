@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from verity.claims import get as core_claim
-from verity_pous import band, dense, protocol, schemes
+from verity_pous import band, dense, primitives, protocol, schemes
 from verity_pous.codec import Geometry
 from verity_pous.layout import Layout
 from verity_pous.params import Params
@@ -272,7 +272,7 @@ def test_the_family_certificate_covers_a_70_gb_store():
 
 def test_certificates_at_their_points():
     b = schemes.get().certificate
-    assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 483_000, 12, 1)
+    assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 241_500, 12, 1)
     assert (b.theorem, b.hypotheses) == ("Pous.Pinned.BandMultiMeetsFamily", ())
     d = schemes.get("dense-chain/v1").certificate
     assert (d.theorem, d.hypotheses, d.cliff, d.k, d.rounds, d.segments) == ("Pous.Pinned.ChainDenseMeets64", (), None,
@@ -324,21 +324,49 @@ def _fake_vk(sch: protocol.Scheme) -> VerifierKey:
                                                      for i in range(sch.params.blocks)])
 
 
+def test_the_call_floor_is_the_streamed_chain_count():
+    """A 64 KiB `Π₂` call in a chain is 10 rounds of one absorb each: the prefix and a 65,568-byte half are 65,570
+    bytes, 483 SHAKE256 blocks, so 4,830 Keccak-f, 241,500 ns at 50 ns.  Counting every round's 482 further squeeze
+    blocks in sequence too gives 9,650 (482,500 ns), the 483 µs the certificates used to carry."""
+    half = (2 * 524_288 + 512) // 16
+    absorb = -(-(primitives.ROUND_PREFIX_BYTES + half) // primitives.SHAKE256_RATE)
+    assert (half, absorb, primitives.FEISTEL_ROUNDS, primitives.KECCAK_F_NS) == (65_568, 483, 10, 50)
+    assert primitives.pi2_keccak_f(524_288) == primitives.FEISTEL_ROUNDS * absorb == 4_830
+    assert primitives.FEISTEL_ROUNDS * (absorb + -(-half // primitives.SHAKE256_RATE) - 1) == 9_650
+    assert primitives.pi2_call_ns(524_288) == 241_500
+    assert band.SECURE_FIRST.call_ns == dense.POINT_64K.call_ns == 241_500
+    for name in ("band-chain/d12/v1", "dense-chain/v1"):
+        cert = schemes.get(name).certificate
+        assert cert.call_ns == 241_500 and (cert.rounds + 1) * cert.call_ns == 1_449_000
+    assert (schemes.get().certificate.cliff + 1) * 241_500 == 3_139_500
+
+
+def test_a_two_ms_deadline_is_refused_for_five_rounds():
+    """Δ + RTT = 2.0 ms fits 8 calls of 241.5 µs, past the certificate's D = 5 (under the old 483 µs it fit 4)."""
+    sch = schemes.get()
+    vk = _fake_vk(sch)
+    k = protocol.challenge_key(b"\x00" * 32, vk)
+    with pytest.raises(ValueError, match="fits 8 calls of 241500 ns; the certificate covers 5"):
+        protocol.Verifier(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
+    research = protocol.Verifier(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
+    assert any("covers 5" in g for g in research.gaps) and research.certificate.effective_rounds(research.limit_ns) == 8
+
+
 def test_the_verifier_enforces_the_certificate():
-    """k = 111 is certified only for D = 5 calls of 483 µs: Δ + RTT < 2.898 ms, inside the cliff at 6.279 ms."""
+    """k = 111 is certified only for D = 5 calls of 241.5 µs: Δ + RTT < 1.449 ms, inside the cliff at 3.1395 ms."""
     sch = schemes.get()
     vk, key = _fake_vk(sch), b"\x00" * 32
     k = protocol.challenge_key(key, vk)
     assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=36_800).k == 111
-    assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_397_999).gaps == ()
+    assert protocol.Verifier(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_398_000)
+        protocol.Verifier(sch, vk, k, rtt_allowance_ns=949_000)
     with pytest.raises(ValueError, match="below"):
         protocol.Verifier(sch, vk, k, k=110)
-    uncertified = protocol.Verifier(sch, vk, k, rtt_allowance_ns=3_000_000, research=True)
+    uncertified = protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
     assert any("covers 5" in g for g in uncertified.gaps)
     with pytest.raises(ValueError, match="cliff"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=5_779_000, research=True)
+        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
     with pytest.raises(ValueError, match="parameters"):
         protocol.Verifier(schemes.get(segments=2), vk, k)
 
@@ -348,7 +376,7 @@ def test_the_dense_certificate_has_no_cliff_but_the_same_rounds():
     vk = _fake_vk(sch)
     k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.Verifier(sch, vk, k, rtt_allowance_ns=2_398_000)
+        protocol.Verifier(sch, vk, k, rtt_allowance_ns=949_000)
     far = protocol.Verifier(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
     assert not any("cliff" in g for g in far.gaps)
 
@@ -363,7 +391,7 @@ def test_certified_profile_of_one_band12_segment():
     v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
-    assert p.certified and p.gaps == () and p.effective_rounds == 1
+    assert p.certified and p.gaps == () and p.effective_rounds == 2
     assert p.state_bound_bits == 254_307_274 == (512 * 524_288 * 18) // 19
     assert "(Pous.Pinned.BandMultiMeetsFamily; under ideal-permutation, " in p.statement()
     assert "given" not in p.statement()

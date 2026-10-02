@@ -12,6 +12,9 @@ A job leases a GPU for its GPU phase only: its pod requests no `nvidia.com/gpu`,
 the device plugin, so Kubernetes never hands it to another pod. Every other GPU is *fenced*: a `flock -x` on its lock file, held by
 a detached process whose owner line says who=kubernetes, so no lease can take it, whatever list a waiting gpu-lease read at its
 start. A fence outlives this controller, so a crash fails closed. `pool.gpus` (the allowed file) lists every index.
+A holder requests its GPU and nothing else: waiting pods hold their queue's CPU and memory quota, so a holder that needed any could
+wait on the very pods it serves. It is BestEffort, so evicted first under memory pressure, and an evicted holder's lease is outside
+the pool (below).
 Each tick, with the brain absent (local rules):
   - grow: when the waiters want more than the free pool GPUs and pending holders cover, submit holders (at most `$VY_POOL_MAX`,
     and never past the queue's nominal GPU quota less what its other admitted Workloads reserve: a holder on borrowed quota is
@@ -26,6 +29,16 @@ hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a G
 hand, or Kueue reclaimed it) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease
 held by a host process (a `research run --queue` job, in no pod) is signalled instead, its gpu-lease scope else its owner pid:
 SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemption does.
+**Pools.** One controller serves one queue's pool, named `$VY_POOL_NAME` (its holders' `verity.dev/gpu-pool` label; default
+node1, the `provers` pool in /run/gpu-lease). A second pool runs as a second controller with its own `$GPU_LEASE_DIR`,
+`$VY_POOL_QUEUE`, `$VY_POOL_PRIORITY` and `$VY_POOL_NAME` (circuits': /run/gpu-lease-circuits, `deployments-gpu`, `circuits-gpu`,
+circuits): each fences, in its own lock files, every GPU its own holders don't hold, so a waiter gets only its own pool's GPUs.
+`$VY_POOL_QUEUE` is the ClusterQueue whose quota the holders take; `$VY_POOL_LOCAL_QUEUE` (default the same name) is the
+LocalQueue they are submitted to. Circuits' holders use `deployments-gpu-pool`, so the Commit pacer's hold on the
+`deployments-gpu` LocalQueue never holds them back (sky/release.py).
+**Blocked.** While `$GPU_LEASE_DIR/blocked` exists (gpu_stray.py writes it when a process of the pool's pods runs on a GPU it
+holds no lease for; a person removes it once that's cleared), the pool grants nothing new: leases already held go on, every
+other pool GPU is fenced and its holder deleted, and pending holders are cancelled.
 **The brain.** With `$VY_LEASE_BRAIN` set (a command, e.g. `ssh vy-cluster cluster grant --node vy-nebius-1`), each tick sends
 it the state as JSON on stdin and reads `{"grants": {"<pid>": [index, ...]}, "pool_target": N}`. While it answers, this controller
 holds `agent.lock`, so every request queues for a grant (gpu-lease agent mode); after `BRAIN_MISSES` failures in a row it drops the
@@ -46,6 +59,7 @@ from pathlib import Path
 
 DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 QUEUE = os.environ.get("VY_POOL_QUEUE", "provers")
+LOCAL_QUEUE = os.environ.get("VY_POOL_LOCAL_QUEUE", QUEUE)   # the LocalQueue its holders are submitted to, on ClusterQueue QUEUE
 PRIORITY = os.environ.get("VY_POOL_PRIORITY", "dev")
 POOL_MAX = int(os.environ.get("VY_POOL_MAX", "3"))
 IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
@@ -59,6 +73,7 @@ SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 KUBECTL = os.environ.get("VY_KUBECTL", "sudo -n k3s kubectl").split()
 POOL_LABEL = "verity.dev/gpu-pool"
+POOL_NAME = os.environ.get("VY_POOL_NAME", "node1")
 FENCE_CMD = "n1-lease-fence"
 
 
@@ -171,11 +186,11 @@ def unfence(pids: list[int]) -> None:
 
 
 def holder_job(t: float) -> dict:
-    name = f"gpu-pool-{int(t * 1000)}"
-    labels = {POOL_LABEL: "node1"}
+    name = f"gpu-pool-{int(t * 1000)}" if POOL_NAME == "node1" else f"gpu-pool-{POOL_NAME}-{int(t * 1000)}"
+    labels = {POOL_LABEL: POOL_NAME}
     return {
         "apiVersion": "batch/v1", "kind": "Job",
-        "metadata": {"name": name, "labels": {**labels, "kueue.x-k8s.io/queue-name": QUEUE,
+        "metadata": {"name": name, "labels": {**labels, "kueue.x-k8s.io/queue-name": LOCAL_QUEUE,
                                               "kueue.x-k8s.io/priority-class": PRIORITY}},
         "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 600, "template": {
             "metadata": {"labels": labels},
@@ -184,8 +199,7 @@ def holder_job(t: float) -> dict:
                      "securityContext": {"runAsUser": 1000, "runAsGroup": 1000}, "terminationGracePeriodSeconds": 1,
                      "containers": [{"name": "hold", "image": IMAGE, "imagePullPolicy": "IfNotPresent",
                                      "command": ["sh", "-c", "nvidia-smi --query-gpu=uuid --format=csv,noheader; exec sleep 2147483647"],
-                                     "resources": {"requests": {"cpu": "100m", "memory": "64Mi", "nvidia.com/gpu": "1"},
-                                                   "limits": {"nvidia.com/gpu": "1"}}}]}}},
+                                     "resources": {"requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}}]}}},
     }
 
 
@@ -248,7 +262,7 @@ class Controller:
         print(json.dumps(rec), flush=True)
 
     def observe(self) -> dict:
-        jobs = json.loads(kubectl("get", "jobs", "-l", f"{POOL_LABEL}=node1", "-o", "json"))["items"]
+        jobs = json.loads(kubectl("get", "jobs", "-l", f"{POOL_LABEL}={POOL_NAME}", "-o", "json"))["items"]
         pods = json.loads(kubectl("get", "pods", "-o", "json"))["items"]
         try:
             cq = json.loads(kubectl("get", "clusterqueue", QUEUE, "-o", "json"))
@@ -331,7 +345,11 @@ class Controller:
                               "owner_alive": bool(pid) and Path(f"/proc/{pid}").exists(), "seen": iso(t)}
             gpus.append(g)
         want = waiters()
-        brain = self.ask_brain(t, gpus, want, pending) if BRAIN else None
+        try:
+            blocked = (DIR / "blocked").read_text().strip() or "blocked"
+        except OSError:
+            blocked = None
+        brain = self.ask_brain(t, gpus, want, pending) if BRAIN and not blocked else None
         for g in gpus:
             i, lease = g["index"], g.get("lease")
             if g["holder"] is None and lease:
@@ -347,7 +365,7 @@ class Controller:
                 if pid:
                     g["fence_pids"] = [pid]
                     self.log(t, "fenced", gpu=i)
-            if g["holder"] is not None and g["fence_pids"] and not dry:
+            if g["holder"] is not None and g["fence_pids"] and not dry and not blocked:
                 unfence(g["fence_pids"])
                 g["fence_pids"] = []
                 self.log(t, "unfenced", gpu=i, holder=g["holder"])
@@ -355,6 +373,21 @@ class Controller:
                 self.free_since.setdefault(i, t)
             else:
                 self.free_since.pop(i, None)
+        if blocked and not dry:
+            for g in gpus:
+                i = g["index"]
+                if g["holder"] is None or g.get("lease"):
+                    continue
+                if not g["fence_pids"] and (pid := fence(i, t)):
+                    g["fence_pids"] = [pid]
+                if g["fence_pids"]:
+                    kubectl("delete", "job", g["holder"], "--wait=false", "--ignore-not-found")
+                    self.log(t, "blocked-shrink", gpu=i, holder=g["holder"], why=blocked[:200])
+                    g["holder"] = None
+                    self.free_since.pop(i, None)
+            for name in pending:
+                kubectl("delete", "job", name, "--wait=false", "--ignore-not-found")
+                self.log(t, "cancel", holder=name, why="blocked")
         free = sorted(i for i in self.free_since if i in pool)
         wanted = sum(w["n"] for w in want)
         target = brain.get("pool_target") if brain else None
@@ -365,6 +398,8 @@ class Controller:
         borrow = BORROW if want and all(w.get("preempt") == "1" for w in want) and t < (epoch(BORROW_UNTIL) or float("inf")) else 0
         limit = min(POOL_MAX, cap + borrow) if cap is not None else len(pool) + len(pending)
         target = max(0, min(limit, int(target)))
+        if blocked:
+            target = len(pool) + len(pending)
         grow = target - len(pool) - len(pending)
         if grow > 0 and not dry:
             for k in range(grow):
@@ -389,7 +424,8 @@ class Controller:
                     self.log(t, "shrink", gpu=i, holder=pool[i])
                     extra -= 1
         state = {"t": iso(t), "node": SERVER, "mode": "brain" if self.agent_fd is not None else "local", "pool": len(pool),
-                 "pending_holders": pending, "waiting": want, "gpus": gpus, "events": self.events}
+                 "pool_name": POOL_NAME, "blocked": blocked, "pending_holders": pending, "waiting": want, "gpus": gpus,
+                 "events": self.events}
         if not dry:
             write(DIR / "pool.gpus", ",".join(str(i) for i in range(n)) + "\n")
             write(DIR / "n1-lease.json", json.dumps(state, indent=1) + "\n")

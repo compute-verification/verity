@@ -4,12 +4,12 @@ shape and arm, each flag set prepared on BF16 operands of the fixture's kind, la
 ``all`` output's middle byte flipped and the gate rerun (it must refuse), and `known_bad` gated (it must refuse).  With
 --run-dir, the hash call dumps its transcript as the harness would (`_Call.dump`: its ``transcript_buffers`` poisoned,
 the weight side and the call relaunched) into RUN_DIR/transcripts/<arm>/<shape>, its no-write negative control beside it
-(<shape>-nowrite: the same buffers poisoned and read back without a launch), and each arm's ``verifier`` (arm interface
-v0.5, `check_verifier` when the harness has it) goes to RUN_DIR/verifiers.json with the shapes and controls dumped.
---verify-run RUN_DIR, on the CPU alone, runs them per shape as the harness's verify.py does: the commands in order, a
-transcript accepted only by a line starting ACCEPT that names its sha256, with no REJECT naming it and every command
-exiting 0, and a control passing only by a REJECT naming its sha256.  One JSON object per line; exit 4 when any gate,
-control, check or verification fails.
+(<shape>-nowrite: the same buffers poisoned and read back without a launch), and each arm's ``verifier`` (its reference
+replay; arm interface v0.5, `check_verifier` when the harness has it) goes to RUN_DIR/verifiers.json with the shapes and
+controls dumped.  --verify-run RUN_DIR, on the CPU alone, runs them per shape as the harness's verify.py does: the commands
+in order, a transcript replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md) only by a
+line starting ACCEPT that names its sha256, with no REJECT naming it and every command exiting 0, and a control passing
+only by a REJECT naming its sha256.  One JSON object per line; exit 4 when any gate, control, check or replay fails.
 
   python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--roles hash ...] [--run-dir D]
   python3 arm_smoke.py --verify-run D --run-id ID --commit SHA
@@ -35,8 +35,8 @@ ROOT = HERE.parents[2]
 
 
 def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: str, control: bool = False) -> dict:
-    """The verifier's commands on one shape's dump, judged as verify.py judges them; a negative control passes only by a
-    REJECT line naming its transcript's sha256 (and no ACCEPT)."""
+    """The reference replay's commands on one shape's dump, judged as verify.py judges them; a negative control passes only
+    by a REJECT line naming its transcript's sha256 (and no ACCEPT)."""
     path = run_dir / v["transcript"].format(arm=arm, shape=label)
     values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": commit, "arm": arm,
               "shape": label, "transcript": str(path), "dir": str(path.parent)}
@@ -82,8 +82,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--arms", nargs="*", default=["PearlC4Nv", "PearlC4Mx"])
     ap.add_argument("--roles", nargs="*", default=["hash", "nohash", "plain"])
     ap.add_argument("--run-dir", type=Path, help="dump each shape's transcript (and its no-write control) under "
-                    "RUN_DIR/transcripts and record each arm's verifier in RUN_DIR/verifiers.json")
-    ap.add_argument("--verify-run", type=Path, metavar="RUN_DIR", help="no GPU: run the verifiers a --run-dir pass recorded")
+                    "RUN_DIR/transcripts and record each arm's reference replay in RUN_DIR/verifiers.json")
+    ap.add_argument("--verify-run", type=Path, metavar="RUN_DIR",
+                    help="no GPU: run the reference replays a --run-dir pass recorded; an ACCEPT is replay-verified "
+                         "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)")
     ap.add_argument("--run-id", default="arm-smoke")
     ap.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
     a = ap.parse_args(argv)

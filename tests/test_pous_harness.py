@@ -268,10 +268,10 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     point = harness.with_in_degree(band.SECURE_FIRST, 6)
     cert = scheme_of("band-chain/d6/v1", point).certificate
     assert (cert.theorem, cert.cliff, cert.k, cert.rounds, cert.call_ns) == ("Pous.Pinned.BandMultiMeetsFamily", 6, 111, 5,
-                                                                             483_000)
+                                                                             241_500)
     assert scheme_of("band-chain/d6/v1", point.with_segments(448)).certificate.segments == 448
     gate, _ = _bench().certificate_gate(scheme_of("band-chain/d6/v1", point), 111, 700_000)
-    assert gate["passed"] and gate["effective_rounds"] == 1
+    assert gate["passed"] and gate["effective_rounds"] == 2
     assert params_of("band-chain/d6/v1", point.manifest()) == point
     for d in (4, 1):
         with pytest.raises(ValueError, match=f"d = {d} is refused"):

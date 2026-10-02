@@ -14,7 +14,9 @@ engine step e pack the rows of every request of e in the runtime's order (`step_
 else a collector error naming the step and nothing of it is committed.  A body whose requests share one template is evaluated packed in
 the pre-hook, so its words (a block-scaled FP8 linear's x_s) are there during the forward; otherwise each request's rows are split out in
 the runtime's order and evaluated with its own template at the step's end.  Each target is committed packed under the identity's name,
-rows in the runtime's order: per token or one per request, the two splits of the binding map.
+rows in the runtime's order: per token or one per request, the two splits of the binding map.  A run that is never a record (the
+Commit's warm-up instrumented run, `placeholder`) commits every target as zero words of its shape and evaluates nothing: its root is
+discarded, and the steps still lay out the record's tensors for the staging it sizes and learns.
 """
 from __future__ import annotations
 
@@ -82,6 +84,12 @@ def operand_words(torch: Any, body: Body, tensors: Sequence[Any]) -> list[np.nda
     return out
 
 
+def zeros(body: Body) -> dict[str, np.ndarray]:
+    """Every target of `body` as zero words of the shape and word width its evaluation has: [rows, f * width], one row when step-shared."""
+    rows = sum(q.rows for q in body.parts)
+    return {t.name: np.zeros((1 if t.shared else rows, len(t.at) * (t.hi - t.lo)), WORD_DTYPES[t.dtype][0]) for t in body.targets}
+
+
 # -------------------------------------------------------------------------------------------------------------------------------- source
 class CallBoundarySource:
     short_name = "call_boundary"
@@ -103,8 +111,12 @@ class CallBoundarySource:
         self._values: dict[tuple[str, int], dict[str, np.ndarray]] = {}
         self._fields: dict[str, np.ndarray] = {}
         self._shared: dict = {}                                               # step-shared Values by form, once per Commit
-        self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "bodies": 0, "modules": len(self.modules), "errors": 0, "seconds": 0.0}
+        self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "bodies": 0, "modules": len(self.modules), "errors": 0, "seconds": 0.0,
+                                      "placeholder_bodies": 0}
         self.active = False
+        #: set around a run that is never a record (the Commit's warm-up instrumented run, `taps.warmup`): every target is committed as
+        #: zero words of its shape, so the steps lay out the same tensors, and nothing is evaluated
+        self.placeholder = False
         self._names: frozenset[str] | None = None
 
     def install(self) -> None:
@@ -172,7 +184,10 @@ class CallBoundarySource:
         """The body's operands at its pre-hook, evaluated now when its requests share one template, else held for the step's end."""
         t0 = time.perf_counter()
         ops = operand_words(self.torch, body, tensors)
-        if body.packed:
+        if self.placeholder:
+            self._values[(body.module, body.engine_step)] = zeros(body)
+            self.stats["placeholder_bodies"] += 1
+        elif body.packed:
             tpl = body.parts[0].template
             self._values[(body.module, body.engine_step)] = CP.evaluate_template(self.plan, tpl, sum(q.rows for q in body.parts), ops,
                                                                                  self.weight, self._shared)
@@ -298,16 +313,17 @@ class CallBoundarySource:
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,
-           model: Any = None, programs: Sequence[str | None] = ()) -> tuple[tuple[str, ...], CallBoundarySource | None]:
+           model: Any = None, programs: Sequence[str | None] = (), plan: Plan | None = None) -> tuple[tuple[str, ...], CallBoundarySource | None]:
     """Attach the source to `com` when `enabled`; the required manifest must name `call_boundaries` identities, `programs` (the Build dir,
-    the programs root) must hold each request's Program and every identity must be covered, else the Commit is refused (exit 3).  Returns
-    the required classes with `call_boundaries` added unless they were given explicitly."""
+    the programs root) must hold each request's Program and every identity must be covered, else the Commit is refused (exit 3).  `plan`:
+    `plan_of` the manifest over `programs`, derived already (the Commit's call-boundary plan), else derived here.  Returns the required
+    classes with `call_boundaries` added unless they were given explicitly."""
     if not enabled:
         return required_classes, None
     if not manifest_sites(manifest):
         print("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity", flush=True)
         raise SystemExit(3)
-    plan = plan_of(manifest or {}, *programs)
+    plan = plan if plan is not None else plan_of(manifest or {}, *programs)
     if plan.uncovered or not plan.bodies:
         print(f"[delta] REFUSE: call boundaries: {len(plan.uncovered)} of {plan.identities} identities have no host evaluation "
               f"(--program-dir / --programs-root {list(programs)}): {plan.uncovered[:4]}", flush=True)
@@ -322,4 +338,4 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
 
 
 __all__ = ["FAMILY", "WORD_DTYPES", "CLAIMS", "CallBoundarySource", "claimed", "unattached", "manifest_sites", "plan_of", "words",
-           "operand_words", "attach"]
+           "operand_words", "zeros", "attach"]

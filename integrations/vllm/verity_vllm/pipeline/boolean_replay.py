@@ -2,15 +2,19 @@
 every picked row evaluated by the Boolean version of its Definition (`verity_vllm.program.boolean.boolean_version`, the switch's
 one table) on the committed inputs, bit-sliced (`verity.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
 
-    verity-vllm boolean-replay BUNDLE --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
+    verity-vllm boolean-replay BUNDLE|KEEP --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
                                --revision REV] [--word]
 
-The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied into ``OUT/boolean`` beside a link to
-the bundle, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the copies and the bundle against
-each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the run root), and the Program is the
+BUNDLE is the Commit's sealed replay bundle, or KEEP the slim keep its decided replay left (`commit/replay_slim_p<pair>`, the kept
+leaves; `cpu_replay.open_keep`).  The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied
+into ``OUT/boolean`` beside a link to it, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the
+copies and the bundle against each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the
+run root), and the Program is the
 Build's of record (`row_dir/build_request`, its digest checked against the Commit's).  A row whose Definition has no Boolean version,
 or whose Boolean version does not keep the Call's boundary (the word view of its signature is not the Call's), is not evaluated, by
-name.  ``--word`` replays the same draw with the word evaluators into ``OUT/word``, the baseline.
+name.  ``--word`` replays the same draw with the word evaluators into ``OUT/word``, the baseline.  After the prewarm the forked pool
+is fitted to the cgroup's memory from each pick's bound (`BooleanRows.peak_bytes`, `driver.fit_pool`); a pick that cannot fit is
+refused (exit 2).
 
 ``OUT/boolean_replay.json`` cites the Commit (Program digest, run root, binding map sha256, bundle manifest sha256, the draw's seed),
 holds σ over the Program's row Definitions (word id -> Boolean id, or why not), and per replay the picks by family: picked,
@@ -54,6 +58,9 @@ class Options(CR.Options):
 
 
 _RUN_MAX = 1 << 20  # elements converted at once (an embedding table's 28M words would take 7 GB of temporaries whole)
+#: a worker's measured peak over `BooleanRows.peak_bytes`' bound: 1.145 for r20261001-200753-63d1's LM head (182.1 GiB measured, 159 GiB
+#: bound), the allocator keeping what the worker's previous pick freed
+PEAK_MARGIN = 1.25
 
 
 def _runs(widths: list[int]) -> list[tuple[int, int, int, int]]:
@@ -147,6 +154,28 @@ class BooleanRows:
         self._write(line | {"boolean": b.id, "s": round(time.perf_counter() - t0, 3)})
         return out
 
+    def peak_bytes(self, vu: dict) -> int:
+        """A bound on the bytes one pick's evaluation (`__call__`) allocates, times `PEAK_MARGIN`: the bits of every argument, with
+        each conversion's element-width list and one run's temporaries (`to_bits`), the bit-sliced evaluation (`bits.peak_bytes`), and
+        the output's words (`to_words`).  Its operands are views of the weights or a few committed words, and are not counted; a row
+        with no Boolean version is declined before it allocates (0)."""
+        from verity.evaluation.bits import peak_bytes
+
+        nd = self.nodes[self.K + int(vu["i"])]
+        try:
+            b = self.version(str(vu["spec"]), nd)
+        except Declined:
+            return 0
+
+        def port(t: Any) -> tuple[int, int, int, int]:   # elements, bits, a run's elements, the widest element
+            return t.leaves, BL.bit_type(t).leaves, min(_RUN_MAX, t.leaves), max(t.width_set() or {1})
+
+        args = [port(a.type) for a in nd.args]
+        e, n, k, w = port(nd.out)
+        convert = max((16 * e_ + 8 * k_ * (1 + 2 * w_) for e_, _, k_, w_ in args), default=0)
+        words = n + 8 * n + 24 * e + 8 * k * (w + 1)
+        return int(PEAK_MARGIN * (sum(a[1] for a in args) + max(peak_bytes(b, 1), convert, words)))
+
     def prewarm(self, picked: list[dict]) -> dict[str, str]:
         """Each picked spec's Boolean version compiled in the parent, before the replay forks (`driver._prewarm_evaluators`)."""
         from verity.evaluation.bits import compile as compile_bits
@@ -190,19 +219,27 @@ def scratch(bundle: Path, out: Path) -> Path:
 
 
 def outcome(art: dict[str, Any]) -> dict[str, Any]:
-    """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record."""
+    """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record.  The uniform draw's
+    one stratum names no family: a family's evaluated count is then its picks less its not-evaluated ones, known only while the record
+    lists every not-evaluated pick (it lists at most 12; None past that), and its mismatches are `mismatch_by`'s, which counts them all."""
     sr = art["sampled_replay"]
-    s, fam = sr["sample"], {}
-    for f, n in (sr["timing"].get("per_family_n") or {}).items():
+    s, t, fam = sr.get("sample") or {}, sr.get("timing") or {}, {}
+    for f, n in (t.get("per_family_n") or {}).items():
         fam[f] = {"picked": int(n), "evaluated": 0, "mismatch": 0}
-    for key, st in (sr.get("strata") or {}).items():
-        f = fam.setdefault(key.split("|")[0].split("{")[0], {"picked": 0, "evaluated": 0, "mismatch": 0})
-        f["evaluated"] += int(st.get("evaluated", 0))
-        f["mismatch"] += int(st.get("mismatch", 0))
+    if s.get("strata_by") == "uniform":
+        ne, wrong = sr.get("not_evaluated") or [], (sr.get("mismatch_by") or {}).get("by_family") or {}
+        gone = Counter(str(x.get("spec")).split("{")[0] for x in ne) if len(ne) == int(s.get("not_evaluated_n") or 0) else None
+        for f, d in fam.items():
+            d["evaluated"], d["mismatch"] = None if gone is None else d["picked"] - gone[f], int(wrong.get(f, 0))
+    else:
+        for key, st in (sr.get("strata") or {}).items():
+            f = fam.setdefault(key.split("|")[0].split("{")[0], {"picked": 0, "evaluated": 0, "mismatch": 0})
+            f["evaluated"] += int(st.get("evaluated", 0))
+            f["mismatch"] += int(st.get("mismatch", 0))
     return {"result": sr["result"], "grade": sr["grade"], "why": sr["why"],
             **{k: s.get(k) for k in ("seed", "seed_source", "k", "picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n")},
             "by_family": fam, "not_evaluated": sr.get("not_evaluated"), "mismatch": sr.get("mismatch"),
-            "wall_s": sr["timing"]["wall_s"], "workers": sr["timing"]["workers"]}
+            "wall_s": t.get("wall_s"), "workers": t.get("workers")}
 
 
 def _replay(o: Options, link: Path) -> dict[str, Any]:
@@ -229,9 +266,12 @@ def run(o: Options) -> dict[str, Any]:
     bad = [r["i"] for r in rows if descriptor_id(nodes[K + int(r["i"])].fn) != r["spec"]]
     if bad:
         raise CR.Refused(f"{len(bad)} instance rows are not their Program node's Call (first: row {bad[0]})")
+    keep = json.loads((bundle / CR.SLIM_DOC).read_text()) if (bundle / CR.SLIM_DOC).is_file() else None
     doc: dict[str, Any] = {"schema": SCHEMA, "commit": {"dir": str(bundle.parent.resolve()), "pair": pair, "program_digest": digest,
                                                         "run_root": ctx["run_root"], "binding_map_sha256": record[f"binding_map_p{pair}.json"],
-                                                        "bundle_manifest_sha256": _sha256(bundle / "MANIFEST.json")}}
+                                                        "bundle_manifest_sha256": keep["bundle_manifest_sha256"] if keep else _sha256(bundle / "MANIFEST.json")}}
+    if keep:
+        doc["commit"]["keep"] = {"path": str(bundle), "dump_sha256": keep["dump_sha256"], "bytes": keep["bytes"], "picked": keep["picked"]}
     ev = BooleanRows(nodes, K, out / "boolean" / "rows.jsonl", o.seconds_per_vu)
     for spec, k in sorted({r["spec"]: K + int(r["i"]) for r in rows}.items()):
         try:
@@ -259,9 +299,11 @@ def run(o: Options) -> dict[str, Any]:
 
 
 def main(o: Options) -> int:
+    from verity_vllm.check.replay.driver import PoolDoesNotFit
+
     try:
         doc = run(o)
-    except CR.Refused as e:
+    except (CR.Refused, PoolDoesNotFit) as e:
         print(f"[boolean-replay] REFUSED: {e}", flush=True)
         return 2
     r = doc["result"]

@@ -93,6 +93,34 @@
       "usergroup": "S0C5LSDENA1"
     },
     {
+      "handle": "ci",
+      "holder": "the CI lead (bc-7ff3de9e-dd31-5d7f-9e53-265bfba177d0)",
+      "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
+      "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
+      "usergroup": null
+    },
+    {
+      "handle": "lean",
+      "holder": "the lean agent (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
+      "remit": "Lean: reviews every audit-flagged change to a pinned Lean guarantee.",
+      "charter": "Daniel, 2026-10-01 10:18 AM PDT",
+      "usergroup": null
+    },
+    {
+      "handle": "comms",
+      "holder": "comms (bc-3e100045-0b60-5d20-951e-7207a989b252)",
+      "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
+      "charter": "Daniel, 2026-10-01 9:12 AM PDT",
+      "usergroup": null
+    },
+    {
+      "handle": "top",
+      "holder": "top-level, Daniel's coordinator (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
+      "remit": "Top-level: Daniel's coordinator across every lead.",
+      "charter": "Daniel",
+      "usergroup": null
+    },
+    {
       "handle": "old-accounting",
       "holder": "the old pous coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
       "remit": "Advising its successor, the accounting coordinator: handing off to it and relaying the old pous workers' results.",
@@ -101,8 +129,8 @@
     },
     {
       "handle": "old-circuits-and-proofs",
-      "holder": "two holders: the old vLLM coordinator (bc-ecac3029) and the old research coordinator (bc-8ece7cde)",
-      "remit": "Advising @circuits and @proofs, their successors: handing off to them and relaying the old vLLM and research workers' results.",
+      "holder": "the lander: the research coordinator (bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628), which runs the merge trains",
+      "remit": "The lander: runs the merge trains, and advises @circuits and @proofs, its successors.",
       "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
       "usergroup": "S0C5MCG1A2Z"
     }

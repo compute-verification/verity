@@ -32,6 +32,7 @@ from verity.ir.defs import bind
 from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
+from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
 from verity_vllm.program.registry import gemm_bias as GB
@@ -369,12 +370,21 @@ def nvfp4_gemm_spec(profile, K: int, N: int):
     return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
 
 
+_SCALE_INPUT = {"Attention_v3": VI.AttentionV10, "Attention_v2": VI.AttentionV12, "Attention_v4": VI.AttentionV13,
+                "Attention_v5": F2.AttentionV11, "AttentionSoftcap_v1": VI.AttentionSoftcapV4, "AttentionSoftcap_v2": VI.AttentionSoftcapV5}
+
+
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
-                   cap: float | None = None):
+                   cap: float | None = None, scale_input: bool = False):
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
     construction the row's index among its sequence's query rows in the launch (`row`) selects its tile (FA3, `fa3_check_inf`); FA2
     (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`).  A logit soft cap `cap` selects the softcapped
-    chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere."""
+    chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere.
+    `scale_input`: the constant chain's twin that reads its values as inputs (`_SCALE_INPUT`: the scale `scale_log2`; a softcapped
+    chain's `softcap_mul` and `scale_log2`, with no `CAP`)."""
+    if scale_input:
+        spec = attention_spec(profile, T, NH, KVH, D, seqlen_q, row, own_rows, cap)
+        return bind(_SCALE_INPUT[spec.base_id], **{k: v for k, v in spec.bindings.items() if k != "CAP"})
     g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if cap is not None:
         from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415

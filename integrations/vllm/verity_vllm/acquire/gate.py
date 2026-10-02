@@ -30,6 +30,7 @@ from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
 from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
 from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import taps
 
 PLAN_COMPARE_SCHEMA = "verity-vllm/acquisition-plan-compare/v1"
@@ -84,9 +85,13 @@ def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str
     claims must be covered by the call-boundary source's host plan over the Build dirs under `roots` (`call_boundary_source.plan_of`,
     what its `attach` refuses the Commit without); a claimed one must name an attached source.  The record: the counts, the attached
     sources and the identities without one, named."""
+    return call_boundaries_of(manifest, CB.plan_of(manifest, *roots) if CB.manifest_sites(manifest) else None)
+
+
+def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
+    """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
     on = taps.attached(manifest)
     ids = sum(1 for r in manifest.get("identities") or [] if r.get("family") == CB.FAMILY)
-    plan = CB.plan_of(manifest, *roots) if CB.manifest_sites(manifest) else None
     uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(manifest, on)
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),

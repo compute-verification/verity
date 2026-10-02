@@ -53,6 +53,19 @@ def test_every_registered_definition_is_checked():
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
 
+def test_every_operation_is_checked_and_reaches_no_table_outside_the_library():
+    """The guard does not visit an operation (`verity.ml.operations`), so a table an operation reached would be hidden: every
+    listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
+    from verity.ir import constants as K
+    from verity.ml import operations as O
+
+    ops = [fn for fn in SUITE.values() if O.is_operation(fn)]
+    assert {fn.base_id for fn in ops} == O.OPERATIONS
+    for fn in ops:
+        held = sorted(p.id for p in TG.reachable([fn]).values() if K.held_tables(p, O.is_library_table))
+        assert not held, (fn.id, held)
+
+
 def test_every_template_is_checked():
     from verity_numerical.bench import templates as TM
 
@@ -159,6 +172,116 @@ def test_the_vectors_start_with_every_edge():
     assert a[:len(e32)].tolist() == list(e32) and (x[:len(e16)] == np.array(e16)[:, None]).all()
 
 
+# --- registered tables ----------------------------------------------------------------------------------------------------------
+
+#: a table of 2^12 two-word entries (8,192 leaves), past `TABLE_OPTS.input_budget`, held by `_HOLDS` as a registered input
+TABLE_IB = 12
+TABLE_OPTS = dataclasses.replace(OPTS, input_budget=1024)
+TABLE_REGIONS = ((0, 1000), (1000, 1 << TABLE_IB))
+
+
+def _table_entry(i: int) -> int:
+    return (i * 0x9E3779B1 + 0x7F4A7C15) & 0xFFFFFFFF
+
+
+def _table_word(j: int) -> int:
+    return (_table_entry(j >> 1) >> (16 * (j & 1))) & 0xFFFF
+
+
+def _holds():
+    from verity.ir.defs import PrimitiveDefinition
+    from verity.ir.types import Value
+
+    return PrimitiveDefinition("CircuitCheckHolds", 1, (("x", Value(32)),), Value(32), _table_entry, register=False,
+                               tables=(("cc_table", "registered"),))
+
+
+def _table_read(lazy: bool = True):
+    """(index, table) -> the table's two-word entry at the index's low bits, as `TableRead` reads it."""
+    from verity.ir.defs import PrimitiveDefinition
+    from verity.ir.types import Array, Value
+
+    mask = (1 << TABLE_IB) - 1
+    p = PrimitiveDefinition("CircuitCheckTableRead", 1, (("index", Value(32)), ("table", Array((2 << TABLE_IB) // 64, Array(64, Value(16))))),
+                            Value(32), lambda idx, *w: w[2 * (idx & mask)] | w[2 * (idx & mask) + 1] << 16, register=False)
+    if lazy:
+        p.evaluate_lazy = lambda get: get(1 + 2 * (get(0) & mask)) | get(2 + 2 * (get(0) & mask)) << 16  # type: ignore[attr-defined]
+    return p
+
+
+def _table_probe(holds):
+    from verity.evaluation import RegisteredTable
+
+    return VX.TableProbe(1, RegisteredTable("cc_table", _table_word, 2 << TABLE_IB, holds), 2, TABLE_REGIONS,
+                         lambda e: [[e | (0x5A << 24)]])
+
+
+def test_the_probed_entries_are_the_ends_and_each_regions_edges():
+    assert VX.probe_entries(1 << 27, [(0, 0x01102CB4), (0x01102CB4, 0x01B89BA3), (0x01B89BA3, 1 << 27)]) == \
+        [0, 0x01102CB3, 0x01102CB4, 0x01B89BA2, 0x01B89BA3, (1 << 27) - 1]
+    assert VX.probe_entries(8, []) == [0, 7]
+    with pytest.raises(ValueError, match=r"region \[4, 9\) is not within the table's 8 entries"):
+        VX.probe_entries(8, [(4, 9)])
+
+
+def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
+    """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
+    instance per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
+    from verity.evaluation import evaluate
+
+    read, holds = _table_read(), _holds()
+    probe = _table_probe(holds)
+    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: probe)
+    monkeypatch.setattr(VX.RegisteredTable, "__iter__", lambda self: pytest.fail("the table was flattened"), raising=False)
+    params, _ = CK.signature_of(read)
+    instances, got, _rec = VX.table_instances(params, probe, CK._n_vectors(read, TABLE_OPTS, 1), TABLE_OPTS.seed)
+    for args in instances:
+        evaluate(read, *args)
+    assert got == {2 * (args[0] & ((1 << TABLE_IB) - 1)) + k for args in instances for k in (0, 1)}
+    e = CK.check_definition(read, TABLE_OPTS, memo={}, pins=PINS)
+    assert not e["failures"], e["failures"]
+    corr = e["correspondence"]
+    assert corr["table"] == {"name": "cc_table", "param": 1, "entries": 1 << TABLE_IB, "leaves": 2 << TABLE_IB,
+                             "regions": [list(r) for r in TABLE_REGIONS], "probed_entries": [0, 999, 1000, (1 << TABLE_IB) - 1],
+                             "probe_instances": 4, "words_read": len(got)}
+    assert corr["vectors"] == len(instances) == TABLE_OPTS.vectors + 4 and len(got) < 2 << TABLE_IB
+    assert corr["realizations"] == [{"via": "c-flock:ir_lower", "lowered": False, "reason": "a lowering takes every input leaf, and "
+                                     "this Definition's correspondence reads a registered table lazily"}]
+
+
+def test_a_probe_that_reads_past_the_table_is_a_partial_reference(monkeypatch):
+    """An entry index one past the last (an off-by-one in ``evaluate_lazy``) raises on the last entry's probe, by name."""
+    read = _table_read()
+    mask = (1 << TABLE_IB) - 1
+    read.evaluate_lazy = lambda get: get(3 + 2 * (get(0) & mask)) | get(2 + 2 * (get(0) & mask)) << 16  # type: ignore[attr-defined]
+    probe = _table_probe(_holds())
+    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: VX.TableProbe(probe.param, probe.table, 2, (), lambda e: [[e]]))
+    e = CK.check_definition(read, dataclasses.replace(TABLE_OPTS, vectors=4, min_vectors=4), memo={}, pins=PINS)
+    (f,) = e["failures"]
+    assert f["name"].startswith("correspondence/reference-not-total CircuitCheckTableRead_v1 raised on ")
+    assert any("IndexError" in x["error"] for x in f["examples"])
+
+
+def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
+    e = CK.check_definition(_table_read(), TABLE_OPTS, memo={}, pins=PINS)
+    assert [f["name"] for f in e["failures"]] == [
+        "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget 1024, and no "
+        "registered table probes it (`circuit_check.targets.TABLE_PROBES`)"]
+
+
+def test_a_definition_over_the_leaf_budget_is_not_partitioned(monkeypatch):
+    """The word query and `Q_call` resolve every parameter leaf: over ``partition_max_leaves`` the partition is a warning, not run."""
+    read = _table_read()
+    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: _table_probe(_holds()))
+    e = CK.check_definition(read, dataclasses.replace(TABLE_OPTS, partition_max_leaves=4096), memo={}, pins=PINS, as_call=True)
+    assert not e["failures"]
+    assert [w["name"] for w in e["warnings"]] == [
+        "partition/unchecked CircuitCheckTableRead_v1: 1 its parameters' 8193 leaves are over the partition's leaf budget 4096: the "
+        "word query and Q_call resolve every leaf"]
+    assert e["partition"]["checked"] is False and "q_call" not in e["partition"]
+    assert CK.check_definition(read, TABLE_OPTS, memo={}, pins=PINS, as_call=True)["partition"]["q_call"]["checked"]
+
+
 # --- negatives: each check fires, by name ---------------------------------------------------------------------------------------
 
 def _composite(name, sig, body):
@@ -250,6 +373,31 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
 
 
+def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
+    """`Q_call` v1 beside `Q_word`: a Boolean Call's units, committed bits and the values two units compute (reported); a Call with
+    a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
+    from verity.ir.defs import PrimitiveDefinition
+    from verity.ir.types import Array, Value
+
+    fn = TG.definition(BOOL_RECOMPUTE)
+    rec, failed = _partition(fn, 2)
+    assert not failed and rec["q_call"] == QCALL_ROPE
+    add64 = PrimitiveDefinition("CircuitCheckAdd64", 1, (("a", Value(64)), ("b", Value(64))), Value(64), lambda a, b: (a + b) % (1 << 64),
+                                register=False)
+    wide = _composite("CircuitCheckWide64", ((("a", Array(2, Value(64))),), Value(64)), lambda B, S, a: B.call(add64, a[0], a[1]))
+    F = CK.Findings()
+    rec, _rule = CK.partition(wide, OPTS, F, {}, applies=True)
+    assert rec["q_call"]["inapplicable"] == {"definition": wide.id, "gate": 0, "primitive": add64.id, "width": 64, "X": 32, "why": "gate-too-wide"}
+    assert [w["name"] for w in F.warnings if w["code"] == "q-call-inapplicable"] == [f"partition/q-call-inapplicable {wide.id}: 1 gate-too-wide"]
+    assert not [f for f in F.failures if f["code"].startswith("q-call")]
+    assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
+
+
+#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a unit, and the same values computed in two units as v2 reports
+QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
+              "codes": []}
+
+
 def test_the_boolean_versions_of_the_served_calls_are_calls():
     """Sigma's image of the word Call families (`boolean_version`, the switch's `word=` table) is held as Calls."""
     calls = TG.call_families()
@@ -261,10 +409,15 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 
 def test_every_call_the_suite_checks_is_partitioned():
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
-    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap)."""
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap) and `Options.partition_max_leaves`."""
+    from verity.evaluation.reference import signature_of
+
     calls = TG.call_families()
     over = {k: fn.gates for k, fn in SUITE.items() if TG.family(fn) in calls and getattr(fn, "gates", 0) > OPTS.partition_max_gates}
     assert not over
+    wide = {k: n for k, fn in SUITE.items() if TG.family(fn) in calls
+            and (n := sum(pt.leaves for pt in signature_of(fn)[0])) > OPTS.partition_max_leaves}
+    assert not wide
 
 
 def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding():

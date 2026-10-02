@@ -21,19 +21,28 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 ~~~text
 cd backends/flock/verifier/lean && lake build          # .lake/build/bin/flock-verify
 flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
-flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR]   # digest, Σ, Hello
+flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
 ~~~
 
 `ID` names a version:
-- `verity/flock-circuit`: PR #83 from `e51e2b86`, the default. It needs no `--comp`, and it pins `seed_injection: false`,
-  as a proving build does. A circuit that binds a `verity/partition/v1` digest needs `--partition F`, the verifier's own
-  copy of the partition object (§16.10).
+- `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row
+  (§16.13), so the public file holds roots, hiding leaves and structure only (M0's transcript is not hiding; no soundness
+  theorem covers `Stmt.setupHidden` yet). Before #757 the name meant `@e51e2b86`, and `/types` meant `types@210d32e1`.
+  It needs no `--comp`, and it pins
+  `seed_injection: false`, as a proving build does. A circuit that binds a `verity/partition/v1` digest needs
+  `--partition F`, the verifier's own copy of the partition object (§16.10).
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
   decodes the program and evaluates the query itself (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
+- `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
+  `verity/flock-circuit/types@210d32e1` is its form with public outputs.
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
-  statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10). Runs
-  staged at `68ae79f2` or later use this name. The unsuffixed name stays `e51e2b86`'s statement for the runs staged before.
+  statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10), with
+  public outputs. Runs staged from `68ae79f2` until hidden outputs use this name. A proving build's session of this
+  statement or a later one (the hidden-output and typed ones) on per-round OS coins (`FC_COINS=os`) needs `--coins os`,
+  which binds the identity that mode writes, not who drew the coins (PROTOCOL.md §7.1, §17.2); a seeded one needs
+  `--coins seed`, the default.
+- `verity/flock-circuit@e51e2b86` (and `+seed-injection`): PR #83 from `e51e2b86`, for the runs staged before `68ae79f2`.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
 
@@ -65,6 +74,9 @@ package's Mathlib and ArkLib pin, so that one build covers both.
 ~~~text
 research data fetch art:ef080b64 --to /tmp/v     # likewise the other two
 ~~~
+
+`transcript_check.py` (PROTOCOL.md §18's spec self-check) matches every recorded round on the first vector of all 50 honest
+sets, both reps, `m` 25 to 34 (`art:430c513a`).
 
 `redigest.py SESSION_DIR OUT_DIR` writes the proof mutants: one value of one rep's proof is edited, and that rep's round
 digests and `proof_sha256` are rebuilt from the edited proof (with `transcript_check.py`'s spec transcript), keeping
@@ -139,3 +151,28 @@ inputs from the store, regenerates the mutants, retained-bytes sessions and fuzz
 research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean flock-verify \
     --upstream fd02e847=flock-circuit --upstream 9294e161=flock-netlist --work DIR --seed S --fuzz N
 ~~~
+
+### The statements' own tests and sets
+
+- Typed statement (§16.11): on RoPE (`D = 64`) and SiLU·mul (`I = 8192`) the derived rows are the old statement's unit
+  section byte for byte (`flock-verify typed-expand`, `test_lean_typed_statement.py`); on #273's GEMM the verifier accepts
+  the prover's 3 honest recorded CPU selftest sessions of 20 and refuses the 17 negatives (`test_lean_typed_template.py`);
+  on typed attention the derived rows are the writer's `rows/` byte for byte (`test_lean_typed_reads.py`).
+- Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's `template_instance_vectors.json`
+  (16 of 16: the population, the ranges, every unit's node, member and gates, the refusals word for word, the malformed
+  parameters).
+- Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
+  instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
+  (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
+  file (`<case>.pub.bin`) under its real public digest, so those negatives reach the proof's openings, not the session
+  parameters.
+- Hidden outputs (§16.13): PR #83's pinned build has none of these statements, so check's agreement step replays none, and
+  the agreement is between Lean and this repository's Rust prover, not upstream's verifier. `vectors.json` `live.sets` 2 to
+  5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate; `ci.py --live`: 20/20, 21/21,
+  20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`), the honest sessions accepted, so digest and Σ are the
+  prover's, and every negative refused, `output_row_committed_false` (an output row's `b ‖ c` not the circuit's outputs)
+  included. `test_lean_hidden_outputs.py` verifies four of each set's cases (the honest session and the three false
+  statements) from a fetched fixture (`backends/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable
+  set needs a pinned upstream build with `flock-circuit replay` (the selftest's `record_replays_offline` already replays
+  in process). `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit
+  (`statement`, and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06`.

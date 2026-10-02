@@ -1,5 +1,5 @@
-"""`Q_word` v1 (and v2, a delta on it, below), the partition query, and the references a cut is checked on: each Call's computing
-graph, the cut, the width rule.
+"""`Q_word` v1 (and v2, a delta on it, below) and `Q_call` v1 (last), the partition queries, and the references a cut is checked on:
+each Call's computing graph, the cut, the width rule.
 
 The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any change to its behaviour bumps the query's version):
 
@@ -9,10 +9,10 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
 
 0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's
    parameters and earlier nodes, a body's `ret` any of its nodes (`partition_object.order_violation`, checked for every query) -- and
-   whose root body's nodes other than its Input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
+   whose root body's nodes other than its input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
    `evaluate` raises `QueryInapplicable` and `verify` refuses with `query-inapplicable` (where, and why).  `CallGraph`'s own check
    (step 3: an operand inside the Call comes before its gate) is a backstop the program-level rule already implies.
-1. **Calls.**  The root body's nodes that are not Input nodes (callee id `Input<w>_v1`), in body order.  Each is cut as its Definition's activation
+1. **Calls.**  The root body's nodes that are not input nodes (callee id `Input<w>_v1` or `RegisteredInput<w>_v1`), in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
    `L..L+gates-1`.  Activations of one Definition share its cut.  A primitive Call is one gate: it reads its inputs and is returned.
 2. **Evaluate(fn, X).**  A primitive is one unit, or none when it has no parameters or its id is in `WIRING`.  A separable body
@@ -64,6 +64,43 @@ bounds wrong work but is not distinct work.  `check_cut`'s default, and so `vali
 **Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
 case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
 included, to check the cut on it.
+
+**Q_call v1** (`evaluate_call`, `PROTOCOL.md` §11), a query of its own, with one parameter X (bits; 32 is the agreed value):
+
+0. **Applicability.**  Q_word's step 0: topological, and every root Call a `call` or `primitive` node (`why: "root-form"`).  And no
+   *wide gate*: a computing gate (below) whose declared width exceeds X makes the query inapplicable (`why: "gate-too-wide"`, with
+   the Call, the Definition, the gate, its primitive and width).  An Input gate or a constant of any width is no computing gate.
+1. **Calls.**  Q_word's step 1: each root Call is cut as its Definition's activation in a one-Call Program (`call_scope`), its
+   parameter leaves Input gates `0..L-1`, its gates `0..n-1` (local, layout order), every returned leaf a designated output.
+   Activations of one Definition share its cut.
+2. **Gates** (`CallGates`).  A gate is *computing* when its primitive has parameters; Input gates and constants (no parameters)
+   are inputs: in no unit, outside the committed set.  There is no wiring list, no constant folding and no wide fan-in rule: every operand
+   of every gate is read.  `last[g]` is the last gate of the Call that reads computing gate `g`, or `n` when the Call returns `g`
+   (a returned leaf resolving to a computing gate of the Call; one resolving to a parameter or a constant returns nothing of the
+   Call's), or -1 when nothing reads it.
+3. **Pieces.**  A piece is a gate interval `[lo, hi)` of the Call: the Call itself, a body node (`offsets[k]..offsets[k+1]` of
+   its activation), or a member or iteration of a batch or scan node.  Its outputs are its computing gates `g` with
+   `last[g] >= hi` (read after the piece, or returned): the layout is topological, so nothing before `lo` reads inside it, and
+   this is `parts.out(S)` for S the piece's computing gates.  w_out is their summed declared widths.
+4. **Cut** (`call_units`), from the Call down, depth first in layout order: a piece without computing gates is no unit; one
+   with w_out <= X is one unit; otherwise its children are the pieces, in order -- a composite activation's (the Call's, a call
+   node's callee, a composite member's) body nodes; a batch or scan node's members or iterations.  A primitive piece is one
+   gate of at most X bits, so it always fits, and the cut ends.  A unit is (`lo`, `hi`, path): the path is its steps from the
+   Call's activation, `[k]` a body node, `[k, m]` member `m` of node `k`.
+5. **Units of the Program.**  By Call, then layout order within it; the input unit is not a unit.
+6. **Checks** (`check_call_cut`).  Owner per computing gate: its unit.  Committed: a computing gate another unit reads or the
+   Call returns, i.e. `last[g] >= hi` of its unit, so a unit's committed bits are its w_out.  `validate_unit_cut` holds the
+   invariant (its structure the constants: gates any unit may read, bound outside the partition; the Call's parameters its
+   input unit), recomputes reported as under Q_word v2 (keys
+   below), and the width rule is w_out <= X (`unit-too-wide`).  Served commits, numbered as `CallGates` compacts the computing
+   gates, are held to the derived set.
+   Recomputes: `key(j) = (primitive id, operand tokens)`, a parameter's token from `("i", leaf)`, a constant's (an operation's own
+   bits) from `("c", primitive id)`; a computing gate whose key an earlier one `f` had is the pair `(j, f)` and takes `f`'s token,
+   else its own, `("g", j)`.  A program's data reaches the Call through its parameters, from registered or run input gates, so it
+   is compared by leaf, never by value.
+
+**Cost.**  O(n) to build `CallGates` (one pass over the gates and their operands), O(n · depth) for the cut, each piece's w_out
+one scan of its interval.
 """
 from __future__ import annotations
 
@@ -76,7 +113,7 @@ from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
 from .refs import Affine, Strided
 
 #: primitives that only rearrange bits (each output bit a constant or a copy of one input bit): wiring, like constants, is
-#: computed in no unit, may be read by any, and is never committed
+#: computed in no unit, may be read by any, and is outside the committed set
 WIRING = frozenset({"Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"})
 
 #: a gate with more operands than this is *wide* (step 3); Q_word v1's own threshold, not the layout's lazy-operand one
@@ -509,5 +546,233 @@ def evaluate_definition(fn: Any, X: int, memo: dict | None = None, wiring: froze
     return r
 
 
+# --- Q_call v1 ------------------------------------------------------------------------------------------------------------------
+
+#: `Q_call` v1's agreed bound: at most this many bits out of a unit
+CALL_X = 32
+
+
+class CallGates:
+    """One activation of `fn` gate by gate (step 2): `n` local gates, `inputs` (the Call's parameter leaves, Input gates `0..L-1` of
+    `call_scope`), per gate `computing`, `width`, `prim` (id), `last` (the last local reader; `n` when returned; -1 unread);
+    `keep` (compact -> local) and `idx` (local -> compact, -1 for an input), the compact numbering `verify`'s served commits use;
+    `reads`: (producer, consumer) compact pairs, each distinct producer once per consumer, a parameter leaf `i` as `nc + i`;
+    `outputs`: the returned computing gates (compact, first occurrence in return order); `recomputed`: (gate, earlier) compact pairs."""
+
+    def __init__(self, fn: Any) -> None:
+        c, call = call_scope(fn)
+        lo, n = call.offset, fn.gates
+        self.fn, self.n, self.inputs = fn, n, lo
+        computing = bytearray(n)
+        width = [0] * n
+        prim: list[str] = [""] * n
+        last = [-1] * n
+        ops: list[tuple[int, ...]] = [()] * n
+        for j in range(n):
+            g = c.gate(lo + j)
+            p = g.prim
+            width[j], prim[j] = p.ret.w, p.id
+            if not p.params:
+                continue
+            computing[j] = 1
+            mine = []
+            for o in g.operands:
+                o -= lo
+                if o >= j:
+                    raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o}, not before it (the layout is not topological)",
+                                            {"definition": fn.id, "gate": j, "reads": o, "why": "not topological"})
+                mine.append(o)                                       # < 0: parameter leaf lo + o
+                if o >= 0 and computing[o] and last[o] < j:
+                    last[o] = j
+            ops[j] = tuple(mine)
+        returned: list[int] = []
+        for g in ([0] if not hasattr(fn, "body") else (resolve(call, r) - lo for r in fn.body.ret)):
+            if 0 <= g < n and computing[g]:
+                returned.append(g)
+                last[g] = n
+        self.computing, self.width, self.prim, self.last = computing, width, prim, last
+        self.keep = [j for j in range(n) if computing[j]]
+        self.nc = len(self.keep)
+        idx = [-1] * n
+        for i, j in enumerate(self.keep):
+            idx[j] = i
+        self.idx = idx
+        self.constants = n - self.nc
+        seen_out: set[int] = set()
+        self.outputs = [idx[g] for g in returned if not (g in seen_out or seen_out.add(g))]
+        ids = _Interner()
+        tok = [0] * n
+        first: dict[tuple, int] = {}
+        recomputed: list[tuple[int, int]] = []
+        reads: list[tuple[int, int]] = []
+        for j in range(n):
+            if not computing[j]:
+                tok[j] = ids(("c", prim[j]))
+                continue
+            k = (prim[j],) + tuple(ids(("i", lo + o)) if o < 0 else tok[o] for o in ops[j])
+            if k in first:
+                recomputed.append((idx[j], idx[first[k]]))
+                tok[j] = tok[first[k]]
+            else:
+                first[k] = j
+                tok[j] = ids(("g", j))
+            q = idx[j]
+            got: set[int] = set()
+            for o in ops[j]:
+                if o in got or (o >= 0 and not computing[o]):
+                    continue
+                got.add(o)
+                reads.append((self.nc + lo + o if o < 0 else idx[o], q))
+        self.recomputed, self.reads = recomputed, reads
+
+    def widest(self, X: int) -> int | None:
+        """The first computing gate wider than X bits (local), or None."""
+        return next((j for j in self.keep if self.width[j] > X), None)
+
+    def w_out(self, lo: int, hi: int, limit: int | None = None) -> int:
+        """The summed widths of the piece `[lo, hi)`'s outputs (step 3), scanning down from `hi`; past `limit`, stops early."""
+        w, comp, width, last = 0, self.computing, self.width, self.last
+        for g in range(hi - 1, lo - 1, -1):
+            if comp[g] and last[g] >= hi:
+                w += width[g]
+                if limit is not None and w > limit:
+                    return w
+        return w
+
+    def any_computing(self, lo: int, hi: int) -> bool:
+        return any(self.computing[lo:hi])
+
+
+def call_units(G: CallGates, X: int) -> list[tuple[int, int, tuple[tuple[int, ...], ...]]]:
+    """Step 4: the Call's units, (lo, hi, path) in layout order (see the module docstring)."""
+    units: list[tuple[int, int, tuple[tuple[int, ...], ...]]] = []
+    # a pending piece: (lo, hi, path, children) where children() lists the pieces it splits into
+    stack: list[tuple[int, int, tuple, Any]] = [(0, G.n, (), ("activation", G.fn, 0))]
+    while stack:
+        lo, hi, path, how = stack.pop()
+        if not G.any_computing(lo, hi):
+            continue
+        if G.w_out(lo, hi, X) <= X:
+            units.append((lo, hi, path))
+            continue
+        kids = list(_children(how, path))
+        stack.extend(reversed(kids))
+    return units
+
+
+def _children(how: tuple, path: tuple) -> Iterator[tuple[int, int, tuple, Any]]:
+    """A piece's children (step 4): an activation's body nodes; a call node's callee's body nodes; a batch or scan's members."""
+    kind, fn, off = how
+    if kind == "activation":
+        body = fn.body
+        for k, node in enumerate(body.nodes):
+            lo = off + body.offsets[k]
+            hi = off + body.offsets[k + 1]
+            if node.form == "primitive":
+                yield lo, hi, path + ((k,),), ("gate", node.fn, lo)
+            elif node.form == "call":
+                yield lo, hi, path + ((k,),), ("activation", node.fn, lo)
+            else:
+                yield lo, hi, path + ((k,),), ("members", node, lo)
+        return
+    if kind == "members":
+        node, g = fn, fn.fn.gates
+        step = path[-1][0]
+        for m in range(node.n):
+            lo = off + m * g
+            yield lo, lo + g, path[:-1] + ((step, m),), (("gate", node.fn, lo) if not hasattr(node.fn, "body") else ("activation", node.fn, lo))
+        return
+    raise AssertionError(f"a {kind} piece always fits")
+
+
+class CallCut:
+    """`Q_call{X}`'s cut of one Definition: `units` [(lo, hi, path)] over its local gates (`CallGates`), and `owner()`, the unit of
+    each computing gate in compact order."""
+
+    __slots__ = ("fn", "units", "_owner")
+
+    def __init__(self, fn: Any, units: list[tuple[int, int, tuple]], owner: list[int]) -> None:
+        self.fn, self.units, self._owner = fn, units, owner
+
+    def owner(self) -> list[int]:
+        return list(self._owner)
+
+
+def call_gates(fn: Any, memo: dict | None = None) -> CallGates:
+    """`CallGates(fn)`, memoised by Definition id."""
+    memo = {} if memo is None else memo
+    key = ("Q_call/gates", fn.id)
+    got = memo.get(key)
+    if got is None:
+        got = memo[key] = CallGates(fn)
+    return got
+
+
+def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut:
+    """`Q_call{X}` on one activation of `fn` (steps 0, 2-4): `QueryInapplicable` (`gate-too-wide`) when a computing gate is wider than
+    X bits.  Memoised by Definition id."""
+    memo = {} if memo is None else memo
+    key = ("Q_call", fn.id, X)
+    got = memo.get(key)
+    if got is not None:
+        return got
+    G = call_gates(fn, memo)
+    j = G.widest(X)
+    if j is not None:
+        raise QueryInapplicable(f"{fn.id}: gate {j} ({G.prim[j]}) is {G.width[j]} bits, wider than Q_call's X = {X}",
+                                {"definition": fn.id, "gate": j, "primitive": G.prim[j], "width": G.width[j], "X": X, "why": "gate-too-wide"})
+    units = call_units(G, X)
+    owner = [-1] * G.nc
+    for u, (lo, hi, _path) in enumerate(units):
+        for g in range(lo, hi):
+            i = G.idx[g]
+            if i >= 0:
+                if owner[i] >= 0:
+                    raise ValueError(f"{fn.id}: computing gate {g} is in units {owner[i]} and {u}")
+                owner[i] = u
+    gaps = [G.keep[i] for i, u in enumerate(owner) if u < 0]
+    if gaps:
+        raise ValueError(f"{fn.id}: computing gates {gaps[:8]} are in no unit ({len(gaps)} in all)")
+    r = memo[key] = CallCut(fn, units, owner)
+    return r
+
+
+def call_committed(G: CallGates, cut: CallCut) -> list[int]:
+    """The derived committed set (step 6), compact, ascending: computing gates read after their unit's interval, or returned."""
+    out = []
+    for lo, hi, _path in cut.units:
+        for g in range(lo, hi):
+            if G.computing[g] and G.last[g] >= hi:
+                out.append(G.idx[g])
+    return sorted(out)
+
+
+def check_call_cut(G: CallGates, owner: Sequence[int], X: int, committed: Iterable[int] | None = None) -> CutVerdict:
+    """One Call's `Q_call{X}` cut against its gates (step 6), from the reads alone: `validate_unit_cut` with recomputes reported, and
+    `unit-too-wide` ((unit, out bits) per unit whose boundary -- gates another unit reads, or returned -- exceeds X bits).
+    `committed`: what serving commits (compact numbering); None: the boundary the reads derive."""
+    owner = [int(u) for u in owner]
+    if len(owner) != G.nc:
+        return CutVerdict(False, ("owner-length",), {"owner-length": {"n": 1, "gates": [len(owner), G.nc]}})
+    k, nc = G.inputs, G.nc
+    full = owner + [INPUT_UNIT] * k
+    boundary = {p for p, q in G.reads if p < nc and full[p] != full[q]} | set(G.outputs)
+    if committed is None:
+        committed = boundary
+    read = sorted({p for p, _q in G.reads if p >= nc})                     # the parameter leaves a unit reads, under the input unit's roots
+    cut = validate_unit_cut(G.n + k, G.constants, full, G.reads, list(G.outputs),
+                            sorted({int(g) for g in committed}) + read, range(nc, nc + k), G.recomputed, "report")
+    ob: Counter = Counter()
+    for g in boundary:
+        ob[owner[g]] += G.width[G.keep[g]]
+    wide = sorted([u, b] for u, b in ob.items() if b > X)
+    if not wide:
+        return cut
+    detail = dict(cut.detail)
+    detail["unit-too-wide"] = {"n": len(wide), "gates": wide[:64], "limits": [X]}
+    return CutVerdict(False, tuple(cut.codes) + ("unit-too-wide",), detail)
+
+
 __all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "RECOMPUTE", "QueryInapplicable", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
-           "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition"]
+           "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition",
+           "CALL_X", "CallGates", "call_gates", "call_units", "CallCut", "evaluate_call", "call_committed", "check_call_cut"]

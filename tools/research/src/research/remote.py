@@ -64,6 +64,9 @@
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
+    adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine (a pod belongs to the VM that made it), writes the
+                    remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
                     verified_from = the machine's clock before hashing, file count, bytes, manifest sha256), which the guard requires.
@@ -1483,6 +1486,50 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         raise
 
 
+def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None) -> Path:
+    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
+    the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
+    machine holds it (each machine's answer in the reason), or when the local dir already exists."""
+    from .store import ids
+
+    if not ids.is_run_id(run_id):
+        raise Refused(f"{run_id!r} is not a full run id (rYYYYMMDD-HHMMSS-xxxx), so it is not looked up on the machines")
+    local = runs_root / run_id
+    if local.exists():
+        raise Refused(f"{local} exists already")
+    ms = load_machines() if machines is None else machines
+    names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
+    answers = []
+    for name in names:
+        m = ms.get(name)
+        if m is None:
+            raise Refused(f"machine {name!r} is not registered")
+        try:
+            tgt = pod_target(m)
+        except Refused as e:
+            answers.append(f"{name}: {e}")
+            continue
+        rd = f"{m['root']}/runs/{run_id}"
+        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
+        try:
+            r = ssh_run(ssh, ["test", "-d", rd], timeout=60)
+        except subprocess.TimeoutExpired:
+            answers.append(f"{name}: no answer in 60 s")
+            continue
+        if r.returncode != 0:
+            answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
+            continue
+        local.mkdir(parents=True, exist_ok=False)
+        write_json_atomic(local / "remote.json", {
+            "schema": "research/remote/v0.1", "run_id": run_id, "machine": name, "project": m.get("project"), "phase": "adopted",
+            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": None, "launch_args": [],
+            "pod_id": m.get("pod_id"), "host": tgt["host"], "port": tgt["port"], "user": tgt.get("user", "root"), "root": m["root"],
+            "remote_run_dir": rd})
+        fetch(local)
+        return local
+    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
+
+
 def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir.  Unreachable -> observed_utc unchanged, reason recorded."""
     rec = _read_json(local_dir / "remote.json")
@@ -1532,6 +1579,37 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
             rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
+
+
+def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
+    """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
+    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
+    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody."""
+    rec = fetch(local_dir)
+    if err := rec.get("last_fetch_error"):
+        raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
+    st = _read_json(local_dir / "status.json") or {}
+    if st.get("state") != "running":
+        raise Refused(f"{local_dir.name} is {st.get('state') or 'not running yet'}, so there is nothing to cancel")
+    pgid = st.get("pgid")
+    if not isinstance(pgid, int) or pgid <= 1:
+        raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
+    if not rec.get("tool"):
+        raise Refused(f"{local_dir.name}'s remote.json names no shipped tool to record the cancel with")
+    rd = rec["remote_run_dir"]
+    tele = ["env", f"PYTHONPATH={rec['tool']}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
+            "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-nonempty", "--attempt-dir", rd,
+            "--deliver"]
+    script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"
+    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+    try:
+        res = json.loads(r.stdout.decode(errors="replace").splitlines()[-1])
+    except (IndexError, ValueError):
+        res = {}
+    if res.get("kind") != "cancel_result":
+        raise Refused(f"the cancel did not run on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
+            "why": res.get("reason")}
 
 
 def _file_sha256(p: Path) -> str:

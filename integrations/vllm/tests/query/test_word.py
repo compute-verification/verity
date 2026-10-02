@@ -376,6 +376,7 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
     assert r["families"] == ["AttentionHead_v3", "Attention_v3", "EmbeddingShard_v1", "RMSNormTriton_v1"] and r["n"] == 4 and r["same"], r
 
 
+@pytest.mark.slow
 def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
     """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
     manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported.  A workload

@@ -20,7 +20,6 @@ namespace FlockSoundness
 structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop where
   pre : ∃ more, c.nets.toList = (#[("root", t.root)] ++ t.layouts.map fun (e : String × Net × ℕ) => (e.1, e.2.1)).toList ++ more ∧
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
@@ -90,19 +89,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   simp (config := { zeta := false }) only [jpL] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨s2, hlook, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets2 at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpS at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpS] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨ports, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, hpcheck, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨listed, -, h⟩ := hh)
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jpR] at h
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h
   replace h := ite_throw_ok h
@@ -262,18 +249,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
         cases hw
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
-  -- the ports
-  have hports : ∀ p ∈ ports.toList, 0 < p.chunks := by
-    intro p hp
-    have := forIn_array_yield_ok (fun a s hs => by
-      split at hs
-      · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
-      · cases hs; rfl) hpcheck p hp
-    split at this
-    · obtain ⟨_, hx, -⟩ := except_bind_ok this; cases hx
-    · rename_i hbad
-      simp only [Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, not_or, not_not] at hbad
-      omega
   -- the ranges' nets
   have hkinds : ∀ r ∈ ranges.toList, ∀ i, r.kind = .net i → i < nets2.size := by
     intro r hr i hi
@@ -314,7 +289,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          ports := hports, unitNet := findIdx?_lt hunit
+          unitNet := findIdx?_lt hunit
           root := by
             obtain ⟨more, hm, -⟩ := hnets
             obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
@@ -353,13 +328,13 @@ theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String
     exact Or.inr ⟨net, c', rfl, hc', (Except.ok.inj h).symm⟩
 
 /-- **What `Stmt.setupH` accepted, for a typed statement** (`tags.typed = true`): the circuit `parseTyped` accepted, the
-pin `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 26`. -/
+pin `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/
 theorem setupH_spec_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = true) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     HmRow.parseTyped tags cf tables = .ok st.c ∧ HmRow.pin st.c = .ok st.pin ∧
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
-      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 26 := by
+      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 27 := by
   unfold Stmt.setupH at h
   simp (config := { zeta := false }) only [ht, ↓reduceIte] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)

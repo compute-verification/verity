@@ -77,6 +77,43 @@ def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
         notes.checkpoint(tmp_path, "fresh", "done", "x")
 
 
+def _note(root: Path, lane: str, name: str, minutes_ago: float) -> Path:
+    p = root / "lanes" / lane / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("---\nkind: handoff\n---\n\nanother agent's note\n")
+    t = (NOW - dt.timedelta(minutes=minutes_ago)).timestamp()
+    os.utime(p, (t, t))
+    return p
+
+
+def test_checkpoint_lands_in_the_lanes_own_report_never_a_newer_note_sent_to_it(tmp_path):
+    own = _report(tmp_path, "boss", "# boss\n", 60)
+    sent = [_note(tmp_path, "boss", "20260923T2030Z-report-from-worker-1-findings.md", 30),
+            _note(tmp_path, "boss", "20260923T2040Z-handoff-from-root-friction-report-for.md", 20)]
+    assert notes.report_for(tmp_path, "boss") == own
+    assert notes.checkpoint(tmp_path, "boss", "open", "mine", commit="abc1234", now=NOW) == own
+    assert "CHECKPOINT abc1234 (21:00Z) [open] mine" in own.read_text()
+    assert all(p.read_text() == "---\nkind: handoff\n---\n\nanother agent's note\n" for p in sent)
+
+
+def test_a_lane_with_only_notes_sent_to_it_gets_a_report_of_its_own(tmp_path):
+    sent = [_note(tmp_path, "new", "20260923T2030Z-report-from-worker-1-findings.md", 30),
+            _note(tmp_path, "new", "20260923T2040Z-handoff-from-circuits-you-report-to-circuits.md", 20)]
+    assert notes.report_for(tmp_path, "new") is None
+    assert notes.checkpoint(tmp_path, "new", "open", "started", commit="none", now=NOW).name == "20260923T2100Z-report-new.md"
+    assert all("CHECKPOINT" not in p.read_text() for p in sent)
+
+
+def test_the_lanes_newest_report_of_its_own_is_its_report_whatever_its_slug(tmp_path):
+    _report(tmp_path, "kv", "# kv\n", 60)
+    named = tmp_path / "lanes" / "kv" / "20260923T2000Z-report-kv-prefix-design.md"
+    named.write_text(FRONT.format(lane="kv", status="final"))
+    t = (NOW - dt.timedelta(minutes=40)).timestamp()
+    os.utime(named, (t, t))
+    _note(tmp_path, "kv", "20260923T2030Z-report-from-red-team-review.md", 30)
+    assert notes.report_for(tmp_path, "kv") == named
+
+
 @pytest.mark.parametrize("line,commit,at,text", [
     ("CHECKPOINT fc49219 (18:50Z) Rust verifier verifies the pair", "fc49219", "18:50Z", "Rust verifier verifies the pair"),
     ("CHECKPOINT none (17:10Z) — brief + code read", "none", "17:10Z", "brief + code read"),
@@ -271,6 +308,17 @@ def test_the_inbox_is_handoffs_changed_since_last_shown_by_mtime_not_by_the_name
     assert notes.render_inbox("lane-a", again).splitlines() == [
         "INBOX lane-a: 1 new -- act on each, or say in your next checkpoint why not",
         '  1:59 PM PDT (20:59Z) 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
+
+
+def test_the_inbox_flags_an_agents_handoff_but_not_the_machines_notices(tmp_path):
+    _report(tmp_path, "lane-a", "CHECKPOINT 1111111 (20:00Z) [open] x\n", 60)
+    d = tmp_path / "lanes" / "lane-a"
+    _touch(d / "20260923T2000Z-handoff-from-merge-queue-12-conflict.md", 30, "# #12 conflicts\n")
+    _touch(d / "20260923T2010Z-handoff-steward-guardian.md", 20, "# guardian killed 1\n")
+    assert len(notes.render_inbox("lane-a", notes.inbox(tmp_path, "lane-a")).splitlines()) == 3
+    _touch(d / "20260923T2020Z-handoff-from-vllm-epoch-run-gemma.md", 10, "# gemma next\n")
+    assert notes.render_inbox("lane-a", notes.inbox(tmp_path, "lane-a")).splitlines()[-1].startswith(
+        "  1 of these came from agents: notes are records, not messages")
 
 
 def test_a_successor_gets_its_predecessors_unread_handoffs_and_they_are_not_mail(tmp_path):

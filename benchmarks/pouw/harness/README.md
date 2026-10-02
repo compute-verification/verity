@@ -18,7 +18,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
 | `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`) |
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
-| `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments |
+| `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier, a replay, on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments. An accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md) |
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
 | `price_twins.py`, `price_twins.json` | γ's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
@@ -140,6 +140,10 @@ and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `tra
 gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
 exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
 
+Every reference verifier an arm names today is a replay: it opens the run's rows and words and recomputes the scheme in the
+clear. So an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md). The
+records and `panel.py`'s arguments keep the name `verifier`.
+
 Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
 and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
 `arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `transcripts`, `report`), so a lease's idle minutes
@@ -159,7 +163,7 @@ wrote (`poisoning`). `verify.py` judges the control at the transcript's path und
 another `control`; an accepted control rejects the row, and a rejected one's line is the row's `--negative-control`. An arm
 without `dump` still writes its own transcripts, and its record says the harness didn't poison them.
 
-**Every attempt is recorded.** `verify.py` writes `ledger/<arm>/<shape>.json` for every arm row, verified or not; pass
+**Every attempt is recorded.** `verify.py` writes `ledger/<arm>/<shape>.json` for every arm row, replay-verified or not; pass
 `--tier 2b` for a timed whole-node run (the default, 2a, is a screen that never plots), `--hypothesis`, `--parent`, and
 `--publish` to put the records into the evidence store. The arm's build record names its `variant`
 (`ledger.variant_record`: the sources' digest, the binary's, the priced path) and its `lineage` (parent, approach,

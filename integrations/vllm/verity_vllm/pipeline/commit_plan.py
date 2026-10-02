@@ -128,24 +128,33 @@ def write(path: str | os.PathLike[str], doc: dict[str, Any]) -> None:
     os.replace(tmp, p)
 
 
-def use(path: str, args: Any) -> tuple[tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]] | None, dict[str, Any]]:
-    """The producer facts of the plan at `path` for the Commit `args` describes, as `oracle_producers_of_record` returns them, and the
-    plan's record: (None, record with `plan_recomputed` and the reason) when the plan is unreadable, of another schema, or keyed
-    differently from this Commit -- the Commit then derives the facts itself."""
-    t0 = time.monotonic()
-    rec: dict[str, Any] = {"path": str(path), "schema": SCHEMA}
+def keyed(path: str, args: Any, schema: str) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """The plan document at `path` when it is of `schema` and keyed as the Commit `args` describes (`key`), and its record: (None, record
+    with `plan_recomputed` and the reason) when it is unreadable, of another schema, or keyed differently."""
+    rec: dict[str, Any] = {"path": str(path), "schema": schema}
     try:
         doc = json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
         return None, {**rec, "used": False, "plan_recomputed": True, "why": f"plan unreadable: {type(e).__name__}: {e}"[:300]}
-    if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
-        return None, {**rec, "used": False, "plan_recomputed": True, "why": f"plan schema {doc.get('schema') if isinstance(doc, dict) else None!r} != {SCHEMA}"}
+    if not isinstance(doc, dict) or doc.get("schema") != schema:
+        return None, {**rec, "used": False, "plan_recomputed": True, "why": f"plan schema {doc.get('schema') if isinstance(doc, dict) else None!r} != {schema}"}
     want, have = key(args), doc.get("key") or {}
     diff = sorted(k for k in set(want) | set(have) if want.get(k) != have.get(k))
     rec.update(key=want, planned_utc=doc.get("utc"), plan_wall_s=doc.get("wall_s"))
     if diff:
         return None, {**rec, "used": False, "plan_recomputed": True,
                       "why": "plan key differs from this Commit's: " + ", ".join(f"{k} {str(have.get(k))[:16]} != {str(want.get(k))[:16]}" for k in diff)}
+    return doc, rec
+
+
+def use(path: str, args: Any) -> tuple[tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]] | None, dict[str, Any]]:
+    """The producer facts of the plan at `path` for the Commit `args` describes, as `oracle_producers_of_record` returns them, and the
+    plan's record: (None, record with `plan_recomputed` and the reason) when the plan is unreadable, of another schema, or keyed
+    differently from this Commit (`keyed`) -- the Commit then derives the facts itself."""
+    t0 = time.monotonic()
+    doc, rec = keyed(path, args, SCHEMA)
+    if doc is None:
+        return None, rec
     pf = doc.get("producer_facts") or {}
     out = (facts_of_json(pf.get("facts")), dict(pf.get("record") or {}))
     return out, {**rec, "used": True, "plan_recomputed": False, "members": len(out[0] or {}), "check_s": round(time.monotonic() - t0, 3)}

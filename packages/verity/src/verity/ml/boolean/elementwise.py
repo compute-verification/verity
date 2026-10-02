@@ -40,7 +40,7 @@ from .. import fp32 as W
 from .. import scalar as S
 from . import fp
 from .forms import NOT, ZERO, add, and_reduce
-from .trace import Traced, definition, emit, trace
+from .trace import Traced, definition, emit, trace, word_of
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32Div", "F32Fma", "F32Mul", "I32Add", "bf16_band",
            "on_bits", "shared_operand", "specialized"]
@@ -180,12 +180,17 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
 
 
 def on_bits(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word: Any,
-            register: bool = True) -> CompositeDefinition:
+            register: bool = True, lifted: Sequence[str] = ()) -> CompositeDefinition:
     """The Boolean composite ``name_v{version}{statics}`` with body ``body`` (whose Calls are Boolean Definitions), documented by
-    ``body``'s docstring, whose word view is the word Definition ``word`` bound at the same statics (`trace.word_of`)."""
+    ``body``'s docstring, whose word view is the word Definition ``word`` bound at the same statics (`trace.word_of`), each static
+    in ``lifted`` (a Boolean Definition) read as its own word view. A static-free one names ``word`` itself: the switch
+    (`verity_vllm.program.boolean`) finds a word Definition without bindings by its id alone."""
     d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
                             conformance="exact-model-tested", register=register)
-    d.word = lambda b: bind(word, **{k: b[k] for k in statics})  # type: ignore[attr-defined]
+    if statics:
+        d.word = lambda b: bind(word, **{k: (word_of(b[k]) if k in lifted else b[k]) for k in statics})  # type: ignore[attr-defined]
+    else:
+        d.word = bind(word) if isinstance(word, CompositeDefinition) else word  # type: ignore[attr-defined]
     return d
 
 

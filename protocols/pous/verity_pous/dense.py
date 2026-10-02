@@ -27,7 +27,7 @@ from .labels import salt_value, tag
 from .oracle import KeyQuery, PiInvQuery, PiQuery, Prog, Query, parallel, run
 from .params import SALT_BITS
 from .primitives import (CAPACITY_BITS, FeistelPi, IdealPermutation, OverwriteStepper, Permutation, Primitives,
-                         key_program)
+                         key_program, pi2_call_ns)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,8 +87,9 @@ class DenseParams:
 
     @property
     def call_ns(self) -> int:
-        """The adversary's fastest call, a 64 KB `Π₂`: at least 483 µs, so `D = 5` covers `Δ + RTT < 2.90` ms."""
-        return 483_000
+        """The adversary's fastest call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
+        (`primitives.pi2_keccak_f`), so `D = 5` covers `Δ + RTT < 1.449` ms."""
+        return pi2_call_ns(POINT_64K.m)
 
     def parents(self, i: int) -> range:
         """`(Dense.completeDAG B).par i`: every earlier block."""
@@ -106,7 +107,7 @@ class DenseParams:
 
 POINT_64K = DenseParams(512, 524_288)
 """The dense point: 512 blocks of 65,536 B (`ℓ = 524288` bits) per segment (32 MiB), audited at `D = 5` calls of at
-least 483 µs with `k = 111`: the point `Pous.Pinned.ChainDenseMeets64` certifies for this `H`, with no hypothesis,
+least 241.5 µs with `k = 111`: the point `Pous.Pinned.ChainDenseMeets64` certifies for this `H`, with no hypothesis,
 and `dense_meets_64` for a random oracle (`lean/submissions/dense/DenseReCert.lean`, `k = 106`).  The secure-first
 default is now the band (`band.SECURE_FIRST`)."""
 

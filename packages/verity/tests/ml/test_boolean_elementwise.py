@@ -19,7 +19,7 @@ from verity.evaluation import bits as BS
 from verity.evaluation.reference import standalone_call
 from verity.ir import boolean as BL
 from verity.ir import codec
-from verity.ir.defs import REGISTRY, CompositeDefinition, bind
+from verity.ir.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.types import Array
 from verity.ml import fp32 as W
 from verity.ml import kernels as K
@@ -225,6 +225,31 @@ def test_a_composite_on_bits_has_the_word_composite_as_its_word_view() -> None:
     assert [BL.word_type(t) for t in params] == list(word_params) and BL.word_type(ret) == word_ret
     rng = np.random.default_rng(26)
     _agree(target, [rng.integers(0, 1 << 16, (2_000, 5)).astype(np.uint16) for _ in range(2)])
+
+
+def test_on_bits_names_a_static_free_word_itself_and_reads_a_lifted_static_through_its_word_view() -> None:
+    """A static-free composite on bits names the word composite itself (a Definition, which the switch keys by id); a function
+    static in ``lifted``, bound to a Boolean Definition, appears in the word view as that Definition's word."""
+    def pair(B, S, a, b):
+        return B.call(EW.Bf16Add, a, b)
+
+    def word_pair(B, S, a, b):
+        return B.call(W.Bf16Add, a, b)
+
+    sig = lambda T: lambda S: ((("a", T), ("b", T)), T)  # noqa: E731
+    word = CompositeDefinition("OnBitsStaticFreeWord", 1, (), sig(W.BF16), word_pair, register=False)
+    d = EW.on_bits("OnBitsStaticFree", 2, (), sig(EW.BF16), pair, word, register=False)
+    assert isinstance(d.word, SpecializedDefinition) and TR.word_of(bind(d)).id == bind(word).id
+
+    def apply(B, S, a, b):
+        return B.call(S.ADD, a, b)
+
+    word = CompositeDefinition("OnBitsLiftedWord", 1, ("ADD",), sig(W.BF16), apply, register=False)
+    d = EW.on_bits("OnBitsLifted", 2, ("ADD",), sig(EW.BF16), apply, word, register=False, lifted=("ADD",))
+    target = bind(d, ADD=EW.Bf16Add)
+    assert TR.word_of(target).id == bind(word, ADD=W.Bf16Add).id
+    rng = np.random.default_rng(27)
+    _agree(target, [rng.integers(0, 1 << 16, 2_000).astype(np.uint16) for _ in range(2)])
 
 
 _I32_SPECIALS = np.array([0, 1, 2, 0x7FFFFFFE, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFE, 0xFFFFFFFF, 0x0000FFFF, 0x00010000,

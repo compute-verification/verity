@@ -1,4 +1,4 @@
-"""The warden's grid on one link: constant-rate, left-packed, FIFO release (Lean `NetTiming.Model.Grid`).
+"""The warden's grid on one link: constant-rate, left-packed, FIFO release (Lean `NetTiming.Protocol.Grid`).
 
 A grid is one link's record for one window: `buckets` rows of `allocation` slots. A slot holds either a real frame
 (`bytes` of the fixed frame size) or padding (`None`). Every bucket emits exactly `allocation` frames on the wire: the

@@ -12,5 +12,7 @@ import FlockLevel3.NovelBasis
 import FlockLevel3.Fold
 import FlockLevel3.LookupFold
 import FlockLevel3.FoldStmt
+import FlockLevel3.Folded
 import FlockLevel3.LookupRows
 import FlockLevel3.Placed
+import FlockLevel3.RowV2

@@ -65,27 +65,34 @@ The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Se
 ## The band scheme (secure-first)
 
 `band.SECURE_FIRST` is `BandParams(512, 524288, d = 12)`: 512 blocks of 65,536 B per segment (32 MiB), audited with
-`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs
 (`Pous.Pinned.BandMultiMeetsFamily`, for every `d ≥ 5` and every segment count, with no hypothesis). Segment `s` is
 exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
 below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, ..., C_{max(0, v-d)}` (Lean
 `parentsDesc (bandDAG B d) v`), then the pad.
+
+**The per-call floor** (`primitives.pi2_keccak_f`, `pi2_call_ns`). A 64 KiB `Π₂` call is ten Feistel rounds, and
+each round function absorbs a 2-byte prefix and a 65,568-byte half: 65,570 bytes, 483 blocks at SHAKE256's rate of
+136. Round `i + 1`'s absorb block `k` needs only round `i`'s squeeze block `k`, so the rounds stream, and in the
+overwrite chain a call boundary is a round boundary. A call in a chain costs 10 × 483 = 4,830 sequential Keccak-f,
+241.5 µs at 50 ns per Keccak-f; counting each round's 482 further squeeze blocks in sequence too would give 9,650
+(482.5 µs). The band's and dense's `call_ns` is 241,500 ns, so `D = 5` covers `Δ + RTT < 6 × 241.5 µs = 1.449` ms.
 
 - Block `v` costs `min(v, d) + 1` calls: 6,578 per segment at `d = 12`, 20 times fewer than dense's 131,328. Decoding
   is `d + 1 = 13` rounds deep, and a segment decodes in 24.6 s on one core in Python (dense: 493.9 s).
 - **Deployment condition, the cliff.** The effective `D`, the sequential `Π₂` calls an adversary completes within
   `Δ + RTT`, must not exceed `d`. With `d ≥ D′` the band is exactly as hard as dense at `D′` (`band_chain_hard`). At
   `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
-  dropped row has all its parents held, and the audit accepts with probability 1. At 483 µs per call, `d = 12` holds
-  while `Δ + RTT < 6.279` ms. `audit.TimedVerifier` refuses a deadline past it (`band.check_deployment`), and
-  `test_gap_attack_at_the_cliff` replays the attack on real labels.
+  dropped row has all its parents held, and the audit accepts with probability 1. At 241.5 µs per call, `d = 12`
+  holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms. `audit.TimedVerifier` refuses a deadline past it
+  (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
 - `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
 
 ## The dense scheme (selectable)
 
 `dense.POINT_64K` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
-`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. The 111 is what
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 241.5 µs. The 111 is what
 `Pous.Pinned.ChainDenseMeets64` certifies for this overwrite-chain `H`, for one segment, with no hypothesis; a
 random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
@@ -196,7 +203,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `claims`: ids in `verity.claims`' format.
 
   Each `theorem` is the `Pous.Pinned` statement it rests on. At the frozen point, the band's certificate is
-  `Pous.Pinned.BandMultiMeetsFamily`, with no hypothesis: k 111, D 5, Q 2^20, 483 µs, cliff at `d`, for every segment
+  `Pous.Pinned.BandMultiMeetsFamily`, with no hypothesis: k 111, D 5, Q 2^20, 241.5 µs, cliff at `d`, for every segment
   count N from 1 to `2^64` (all that `BandParams` allows), so no segment count is a gap. It is one `Meets` for the whole
   store: challenges are uniform over all its blocks, the state bound is the whole store's, and one permutation serves
   every segment. A 70 GiB store, 2,240 segments, is certified whole. At one segment it is also `BandChainMeets64`, and
@@ -227,8 +234,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
-    band and dense, `Δ + RTT` must stay under 2.898 ms. `TimedVerifier` alone refuses only past the band's cliff, at
-    6.279 ms;
+    band and dense, `Δ + RTT` must stay under 1.449 ms. `TimedVerifier` alone refuses only past the band's cliff, at
+    about 3.14 ms (3,139,500 ns at `d = 12`);
   - a scheme with no certificate at its parameters.
 
   `research=True` runs such an audit anyway, except past the cliff.
@@ -275,7 +282,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
+| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |

@@ -20,7 +20,14 @@ structure Port where
   words : Nat
   chunks : Nat
   nb : Nat
+  /-- the row's length in bits: a `sha512/row/v1` row's words' -/
+  bits : Nat := 16 * words
+  /-- a bit row (`sha512/row/v2`, its leaf `hm96-sha512/row/v2`) -/
+  v2 : Bool := false
   deriving Inhabited, Repr
+
+/-- The row bytes its digest hashes after the prefix: `2 * words`, a bit row's `ceil(bits / 8)`. -/
+def Port.bytes (p : Port) : Nat := if p.v2 then (p.bits + 7) / 8 else 2 * p.words
 
 inductive Kind where
   | comp
@@ -264,7 +271,8 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let ports ← (← J.arr mj "ports" ctx).mapM fun p => do
     let a ← J.asArr p s!"{ctx}: a port"
     if a.size != 4 then throw s!"{ctx}: a port is not [name, words, chunks, nb]"
-    pure (⟨← J.asStr a[0]! "port name", ← J.asNat a[1]! "port words", ← J.asNat a[2]! "port chunks", ← J.asNat a[3]! "port nb"⟩ : Port)
+    pure ({ name := ← J.asStr a[0]! "port name", words := ← J.asNat a[1]! "port words", chunks := ← J.asNat a[2]! "port chunks",
+            nb := ← J.asNat a[3]! "port nb" } : Port)
   let g ← J.nat mj "vus_per_block" ctx
   let upv ← J.nat mj "units_per_vu" ctx
   let some unitNet := nets.findIdx? (·.1 == "unit") | throw "circuit: no unit circuit"

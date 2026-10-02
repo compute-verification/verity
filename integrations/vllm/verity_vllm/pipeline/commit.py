@@ -71,9 +71,8 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import opened as OV  # noqa: E402
-from verity_vllm.commit import challenge as CH  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -932,7 +931,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
 # taken BEFORE any committer); later jobs reuse it when `engine_kwargs_for` yields the same kwargs / env flags / checkpoint (else the job is
 # refused with HOT-KEY-MISMATCH and the worker restarts, reason recorded).  Every committer built in a job is registered in _HOT["coms"] so
 # the worker can close it (uninstall + worker stop + pool shutdown) and re-check the engine is pristine after the job.  _HOT is None in a
-# plain (cold) process: nothing below changes.
+# plain (cold) process: nothing below changes.  A grouped Commit (`commit_group`) sets it too, with ``group`` (`group_reuse`) and ``last``.
 _HOT: dict[str, Any] | None = None
 
 HOT_UNSAFE = ("compiled_taps", "arms", "only_arm", "late_read", "value_check", "arena_unchecked", "profile_hooks", "moe_source")
@@ -975,7 +974,7 @@ class Options:
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     openings: int = option("--openings", type=int, default=64)
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
@@ -1028,6 +1027,7 @@ class Options:
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every RoPE head in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
+    call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -1157,6 +1157,29 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
+    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
+    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
+    # (a control-only process has no committer at all: nothing installed, nothing compiled in)
+    kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
+    multi = bool(args.arms)
+    coms: dict[str, Any] = {}
+    # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
+    # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
+    # at their first consumer's input, not the module's forward output (oracle_compare.promote_handed_down); form (B) reads them every pair
+    oracle_producers: tuple[dict | None, dict] | None = None
+    plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
+    if required_manifest is not None and kinds:
+        from verity_vllm.check import oracle_compare as _OCP
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, wl["requests"], wl["sampling"], tl=TL)
+        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
+        if oracle_producers[0]:
+            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
+            oracle_producers[1]["handed_down"] = _hd
+            if _hd["rows"]:
+                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
+                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
+                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
+    GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
                 target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=args.protocols_config or wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
@@ -1268,39 +1291,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
 
     run_id = f"{Path(args.workload).stem}"
-    # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
-    # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
-    kinds = [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
-    multi = bool(args.arms)
-    coms: dict[str, Any] = {}
-    if args.only_arm == "control":
-        kinds = []                                           # control-only process: no committer at all (nothing installed, nothing compiled in)
     if os.environ.get("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
         import sys as _sys
 
         _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
         print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
-    # the Programs' producer facts for a v2-query manifest (which carries none), derived once BEFORE the committer is armed: the members
-    # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
-    # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
-    oracle_producers: tuple[dict | None, dict] | None = None
-    plan_rec: dict | None = None
-    if required_manifest is not None and kinds:
-        from verity_vllm.check import oracle_compare as _OCP
-        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling, tl=TL)
-        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
-        if oracle_producers[0]:
-            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
-            oracle_producers[1]["handed_down"] = _hd
-            if _hd["rows"]:
-                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
-                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
-                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
         if _HOT is not None:
-            _HOT.setdefault("coms", []).append(com)          # closed by the hot worker after the job (uninstall + worker stop + pool shutdown)
+            _HOT.setdefault("coms", []).append(GR.adopt(_HOT, com))          # closed after the job (hot worker, grouped Commit: on the group's pinned pool)
         if compiled_kernels is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
@@ -1332,7 +1332,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -1686,7 +1686,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--flip-weight did not change the element ({_before} -> {flip_weight_rec['after']}): pick another value")
             print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- checkpoint_binding (the weights pin) MUST FAIL naming {_fw[0]}", flush=True)
         with TL.span("prep.register_weights", kind=kind):
-            w = com.register_weights()
+            w = GR.register_weights(_HOT, com, args.weights_hash)
         TL.end("prep.committer_setup", kind=kind)
         print(f"[delta] weight registration ({kind}): {w}", flush=True)
         # [MAN-09, rev-cb M-0610 / coord M-0614 (1)] the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
@@ -1723,7 +1723,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _wor_rec["derived"] = WR.derivation_provenance(_pd, args.checkpoint_dir, args.checkpoints, None)
                         _wor_rec["derived"]["tool"] = "verity_vllm.pipeline.commit (in-process --checkpoint-dir fallback)"
                     (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
-                _live_wd = WR.live_param_digests(eng.model)
+                _live_wd = GR.live_digests(_HOT, eng.model, WR.live_param_digests)
                 print(f"[delta] weights of record ({kind}): root {str(_wor_rec.get('root_of_record'))[:16]} fields {_wor_rec.get('n_pinned')}/{_wor_rec.get('n_fields')} pinned, "
                       f"unpinned {len(_wor_rec.get('unpinned') or [])}, unresolved {len(_wor_rec.get('unresolved') or [])}, shards pinned {(_wor_rec.get('checkpoint') or {}).get('all_shards_pinned')}; "
                       f"live digests {_live_wd.get('n')} tensors in {_live_wd.get('wall_s')} s", flush=True)
@@ -1735,15 +1735,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # [R17 fp8] bounded staging: the warm-up is also the LEARN-ONLY pass -- every shape class of the workload (same lengths, same schedule
         # as the record runs: throwaway_requests) gets its plan here; a learning step over the transient budget records its plan and
         # discards its windows (placeholder root: this run is never a record).  The record runs then hit every plan and stage bounded.
+        # Its call boundaries are placeholder words of their shapes (TAPS.warmup): the record pass evaluates its own.
         TL.start("prep.warmup_instrumented", kind=kind)
-        if getattr(com, "bounded", False):
-            com.learn_only = True
+        TAPS.warmup(com, True)
         com.install()
         r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
         rc = com.finalize()
         com.uninstall()
+        TAPS.warmup(com, False)
         if getattr(com, "bounded", False):
-            com.learn_only = False
             _bs = rc.extra.get("bounded_staging") or {}
             print(f"[delta] bounded staging warm-up ({kind}): learned-only steps {_bs.get('learned_only_steps')} ({(_bs.get('learned_only_bytes') or 0) >> 20} MiB "
                   f"discarded), transient peak {(_bs.get('transient_peak_bytes') or 0) >> 20} MiB (budget {(_bs.get('learn_budget_bytes') or 0) >> 20} MiB), "
@@ -1843,8 +1843,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
                 "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
-                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30,
-                            "nvidia_smi_used_mib": nvidia_smi_used_mib()},
+                "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
@@ -1920,6 +1919,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # R14 BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
+                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None), after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))
@@ -2413,7 +2413,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "moe_source": {"mode": args.moe_source, "attached": moe_attached},
                "negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None),        # NEGATIVE TEST flags armed on this run, by name
                "run_roots": [r["commit"]["run_root"] for r in rows if r["arm"] != "control" and r.get("commit")]}
-    verdict.update(CP.verdict_entry(args, plan_rec))
+    verdict.update({**CP.verdict_entry(args, plan_rec), **BP.verdict_entry(args, cb_rec)})
     # [R16 sys / coord M-0090 (5)] replay cache of record: the ORIGINAL pair's artifact lists the pairs that share its replay (root equality
     # explicit); the verdict carries the evaluated-vs-reused count so a reader sees at once that C2 ran once per distinct root
     if getattr(args, "replay_cache", False):

@@ -550,6 +550,51 @@
    ],
    "model_layers": 28,
    "bytes": 1556086784
+  },
+  {
+   "id": "llama3.1-8b/layer0+head",
+   "model": "unsloth/Meta-Llama-3.1-8B-Instruct",
+   "checkpoint": {
+    "repo": "unsloth/Meta-Llama-3.1-8B-Instruct",
+    "revision": "a2856192dd7c25b842431f39c179a6c2c2f627d1",
+    "safetensors_sha256": {
+     "model-00001-of-00004.safetensors": "2b1879f356aed350030bb40eb45ad362c89d9891096f79a3ab323d3ba5607668",
+     "model-00002-of-00004.safetensors": "09d433f650646834a83c580877bd60c6d1f88f7755305c12576b5c7058f9af15",
+     "model-00003-of-00004.safetensors": "fc1cdddd6bfa91128d6e94ee73d0ce62bfcdb7af29e978ddcab30c66ae9ea7fa",
+     "model-00004-of-00004.safetensors": "92ecfe1a2414458b4821ac8c13cf8cb70aed66b5eea8dc5ad9eeb4ff309d6d7b"
+    }
+   },
+   "note": "layer 0's linears as vLLM holds them (merged qkv and gate_up, out x in, bf16) and the untied head, from the Llama-3.1-8B checkpoint PoUW serves (benchmarks/pouw/pearl_c_vllm/setup.sh); 1,486,880,768 bytes, 22,688 blocks of 64 KiB",
+   "dtype": "bf16",
+   "tensors": [
+    [
+     "model.layers.0.self_attn.qkv_proj.weight",
+     6144,
+     4096
+    ],
+    [
+     "model.layers.0.self_attn.o_proj.weight",
+     4096,
+     4096
+    ],
+    [
+     "model.layers.0.mlp.gate_up_proj.weight",
+     28672,
+     4096
+    ],
+    [
+     "model.layers.0.mlp.down_proj.weight",
+     4096,
+     14336
+    ],
+    [
+     "lm_head.weight",
+     128256,
+     4096
+    ]
+   ],
+   "model_layers": 32,
+   "bytes": 1486880768
   }
  ]
 }

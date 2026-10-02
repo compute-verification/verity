@@ -81,6 +81,24 @@
    "assumptions": [],
    "type_hash": "ee014b79708a48d123ada1fabd7045af3e7f99eceb015b486b49506b378311ab"
   },
+  "FlockLevel3.RowV2.enc_inj": {
+   "signature": ["FlockLevel3.RowV2.enc_inj : Function.Injective fun r => FlockLevel3.RowV2.enc r.val"],
+   "assumptions": [],
+   "type_hash": "eb485a237d27b3e8fd83e415b6c5e255f449a0db43713a3100f5869ccf775455"
+  },
+  "FlockLevel3.RowV2.packBits_length": {
+   "signature": [
+    "FlockLevel3.RowV2.packBits_length (bs : List Bool) :",
+    "  Eq (Flock.HmRow.packBits bs).length (instHDiv.hDiv (instHAdd.hAdd bs.length 7) 8)"
+   ],
+   "assumptions": [],
+   "type_hash": "42235c01d6d3171dd03c6d6f625a8b54b12bae8a5373c70a0de0c6f65584f2cd"
+  },
+  "FlockLevel3.RowV2.prefix_size": {
+   "signature": ["FlockLevel3.RowV2.prefix_size (l : Nat) : Eq (Flock.HmRow.rowPrefixV2 l).size 128"],
+   "assumptions": [],
+   "type_hash": "1450d2499d3fca0680fdae44619236a165fd1ad601cd9eb2c5035c522b41502c"
+  },
   "FlockLevel3.T_xK": {
    "signature": ["FlockLevel3.T_xK : Eq (FlockLevel3.T FlockLevel3.xK) 1"],
    "assumptions": [],
@@ -266,6 +284,29 @@
    "assumptions": [],
    "type_hash": "8b58c5299be820ea3ddaf1d0e1942d8d2bf24dcd647802218591faf101758a54"
   },
+  "FlockLevel3.foldedPartial_eq": {
+   "signature": [
+    "FlockLevel3.foldedPartial_eq (st : Flock.Stmt) (alpha beta : Flock.F128) (lw rho ts w : Array Flock.F128)",
+    "  (hst : Eq st.structured Bool.true) (hts : Eq (instHAdd.hAdd ts.size 6) st.c.kLog)",
+    "  (h : Eq (st.foldedPartial alpha beta lw rho ts) (Except.ok w)) :",
+    "  Exists fun v =>",
+    "    And (Eq (st.fold alpha lw rho) (Except.ok v))",
+    "      (Eq w (Array.foldl (fun c t => Flock.halve t c) (v.modify st.pin fun x => instHAdd.hAdd x beta) ts))"
+   ],
+   "assumptions": [],
+   "type_hash": "e40c82ac41724a3d9dc08b019a1a56354cd0b0125ffe5667d66454f3269af627"
+  },
+  "FlockLevel3.folded_eq": {
+   "signature": [
+    "FlockLevel3.folded_eq (st : Flock.Stmt) (alpha beta : Flock.F128) (lw rho ts w : Array Flock.F128)",
+    "  (h : Eq (st.folded alpha beta lw rho ts) (Except.ok w)) :",
+    "  Exists fun v =>",
+    "    And (Eq (st.fold alpha lw rho) (Except.ok v))",
+    "      (Eq w (Array.foldl (fun c t => Flock.halve t c) (v.modify st.pin fun x => instHAdd.hAdd x beta) ts))"
+   ],
+   "assumptions": [],
+   "type_hash": "0c7977a1424158f6da1745deda3456352a45eaa7da29ca0570363dc8623fdf0c"
+  },
   "FlockLevel3.lo_balanced": {
    "signature": [
     "FlockLevel3.lo_balanced (b : Nat) :",
@@ -361,6 +402,21 @@
    "signature": ["FlockLevel3.pack_unpack (a : FlockLevel3.GF128) : Eq (FlockLevel3.pack (FlockLevel3.unpack a)) a"],
    "assumptions": [],
    "type_hash": "2ebb989f5391c859d6cce017e11cf48386715e6073ba1b0eeb7ac4993dd280d0"
+  },
+  "FlockLevel3.partial_eq_halve_fold": {
+   "signature": [
+    "FlockLevel3.partial_eq_halve_fold (l : List Flock.F128) (v : Array Flock.F128) :",
+    "  Eq v.size (instHMul.hMul (instHPow.hPow 2 l.length) 64) →",
+    "    ∀ (s : Nat),",
+    "      instLTNat.lt s 64 →",
+    "        Eq (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (List.foldl (fun c t => Flock.halve t c) v l) s))",
+    "          ((Finset.range (instHPow.hPow 2 l.length)).sum fun u =>",
+    "            instHMul.hMul",
+    "              (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! (Flock.eqTable l.reverse.toArray) u))",
+    "              (FlockLevel3.GF128.of (Array.instGetElem?NatLtSize.getElem! v (instHAdd.hAdd s (instHMul.hMul 64 u)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "46bc27d43242a4bd56fc4b74706d7163805906796d7134a8781797c84b51205a"
   },
   "FlockLevel3.phi_injective": {
    "signature": ["FlockLevel3.phi_injective : Function.Injective FlockLevel3.phi"],
@@ -623,6 +679,7 @@
     "FlockLevel3.ofLimbs",
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -703,6 +760,7 @@
     "FlockLevel3.ofLimbs",
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -752,6 +810,7 @@
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.omega_injective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -793,6 +852,7 @@
     "FlockLevel3.ofLimbs",
     "FlockLevel3.ofLimbs_bijective",
     "FlockLevel3.pack_unpack",
+    "FlockLevel3.partial_eq_halve_fold",
     "FlockLevel3.phi_injective",
     "FlockLevel3.phi_surjective",
     "FlockLevel3.pinned_indep",
@@ -878,6 +938,13 @@
     "FlockLevel3.eqAtPinned": "f2d1353f742bc78ebccce359b713fa4ebba650e3309ff23614fb29575952cff4"
    },
    "pins": ["FlockLevel3.pinned_indep"]
+  },
+  "FlockLevel3.RowV2": {
+   "digest": "833d0970d2d09ce12457506c3c063a7862eae4975d1346fa094c48204807f4ef",
+   "definitions": {
+    "FlockLevel3.RowV2.enc": "21f076dccb57bb3668c1758c8cdbbf66a023c49098d2849f05164bc05e5ef8b9"
+   },
+   "pins": ["FlockLevel3.RowV2.enc_inj"]
   },
   "FlockLevel3.Seam": {
    "digest": "8b148ac1964b8642981b91d2696fb33aa0d43cd9fea308f21d563ed85a6d868f",

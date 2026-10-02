@@ -7,12 +7,21 @@
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
-  research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
-  research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
-  research inspect <run-id|prefix|path> [--runs-dir D] [--json]
+  research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
+  research cancel <run-id> --reason TEXT [--by WHO]   # SIGTERM to the run's workload process group, recorded as a manual cancel;
+                                                 # never the runner, never SIGKILL, so it still records the exit and publishes custody
+  research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
+  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
+                                                 # a full run id another VM launched (no local dir): found on --on NAME, else on
+                                                 # each ssh machine, and its records fetched here (remote.adopt)
   research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
+  research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
+  research keep show PATH                        # a node path's retention record (research/retention/v0, a sidecar), explicit or implicit
+  research retention report [--root R] [--depth N] [--json]   # every recorded path and every unowned area, unowned and expired first
+  research retention gc [--root R] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+                                                 # policy default: delete only what a record allows; a dry run unless --apply (research/retention.py)
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
@@ -41,8 +50,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
-  research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync|ask-daniel [--dry-run]
-                                                 # the coordination API on Slack (research/slack.py; skill using-slack)
+  research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
+                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -405,7 +414,8 @@ def _survive_stray_signals() -> None:
 
     def note(signum: int, _frame: object) -> None:
         print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
-              f"and publishes the run when the workload exits; stop the workload with `kill -TERM -<pgid>` (status.json)", file=sys.stderr, flush=True)
+              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from the launcher, or "
+              f"`kill -TERM -<pgid>` (status.json) here, and never SIGKILL the runner", file=sys.stderr, flush=True)
 
     for s in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(s, note)
@@ -700,10 +710,37 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     return 0
 
 
+def _run_dir(root: Path, ref: str, on: str | None) -> Path:
+    """`ref` under the local runs root, else, for a full run id, the run another VM launched, adopted from the machine that holds
+    it (`remote.adopt`).  FileNotFoundError names each machine's answer, and the store's attempt when it has one."""
+    try:
+        return R.resolve(root, ref)
+    except FileNotFoundError:
+        from .store import ids
+
+        if not ids.is_run_id(ref):
+            raise
+    try:
+        return remote.adopt(root, ref, on=on)
+    except remote.Refused as e:
+        raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
+
+
+def _attempt_hint(run_id: str) -> str:
+    try:
+        from .store.local import LocalStore
+
+        found = LocalStore().get_attempt(run_id) is not None
+    except Exception:  # noqa: BLE001  no store, no remote: the hint is optional
+        return ""
+    return f"; the store has its attempt: `research data show {run_id}`" if found else ""
+
+
 def cmd_fetch(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research fetch")
     ap.add_argument("ref")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
@@ -711,7 +748,7 @@ def cmd_fetch(argv: list[str]) -> int:
         print(f"research fetch --all: refused: {why}", file=sys.stderr)
         return 3
     try:
-        run_dir = R.resolve(root, ns.ref)
+        run_dir = _run_dir(root, ns.ref, ns.on)
         rec = remote.fetch(run_dir, everything=ns.all)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research fetch: {e}", file=sys.stderr)
@@ -731,6 +768,28 @@ def cmd_fetch(argv: list[str]) -> int:
     if marker and not marker.get("written"):
         print(f"research: {s['run_id']}: .fetched NOT written on the machine ({marker.get('reason')}); a pod guard keeps refusing to terminate",
               file=sys.stderr)
+    return 0
+
+
+def cmd_cancel(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
+                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
+    ap.add_argument("ref")
+    ap.add_argument("--reason", required=True)
+    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
+    ap.add_argument("--runs-dir", default=None)
+    ns = ap.parse_args(argv)
+    try:
+        run_dir = R.resolve(R.runs_root(ns.runs_dir), ns.ref)
+        out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
+    except (FileNotFoundError, LookupError, remote.Refused) as e:
+        print(f"research cancel: {e}", file=sys.stderr)
+        return 1
+    if not out["delivered"]:
+        print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
+        return 1
+    print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
+          f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
     return 0
 
 
@@ -806,7 +865,10 @@ def _fmt(s: dict) -> str:
 
 def cmd_status(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research status")
+    ap.add_argument("ref", nargs="?", help="just this run, its records fetched first while it is remote and not finished (a full run "
+                                           "id another VM launched is found on its machine)")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
     ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
@@ -823,14 +885,21 @@ def cmd_status(argv: list[str]) -> int:
             ledger = {"provider": "runpod", "observed_utc": utc_now_ms(), **data}
         except Exception as e:  # noqa: BLE001
             ledger = {"provider": "runpod", "error": f"{type(e).__name__}: {e}"}
-    if ns.refresh:
-        for s in R.list_runs(root):
+    one = None
+    if ns.ref:
+        try:
+            one = _run_dir(root, ns.ref, ns.on)
+        except (FileNotFoundError, LookupError) as e:
+            print(f"research status: {e}", file=sys.stderr)
+            return 1
+    if ns.refresh or one:
+        for s in [R.summarize(one)] if one else R.list_runs(root):
             if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
                 try:
                     remote.fetch(Path(s["dir"]))
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
-    rows = R.list_runs(root)
+    rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
     if ns.json:
@@ -866,13 +935,14 @@ def _tool_line(tool: dict | None) -> str:
 
 def cmd_inspect(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research inspect")
-    ap.add_argument("ref", help="run id, unique prefix, or directory")
+    ap.add_argument("ref", help="run id, unique prefix, or directory; a full run id another VM launched is fetched from its machine")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     try:
-        run_dir = R.resolve(root, ns.ref)
+        run_dir = _run_dir(root, ns.ref, ns.on)
     except (FileNotFoundError, LookupError) as exc:
         print(f"research inspect: {exc}", file=sys.stderr)
         return 1
@@ -941,6 +1011,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_inspect(rest)
     if cmd == "fetch":
         return cmd_fetch(rest)
+    if cmd == "cancel":
+        return cmd_cancel(rest)
     if cmd == "compare":
         return cmd_compare(rest)
     if cmd == "launch-request":
@@ -963,6 +1035,14 @@ def main(argv: list[str] | None = None) -> int:
         from .store.cli import main as data_main
 
         return data_main(rest)
+    if cmd == "keep":
+        from .retention import keep_main
+
+        return keep_main(rest)
+    if cmd == "retention":
+        from .retention import main as retention_main
+
+        return retention_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
@@ -991,10 +1071,10 @@ def main(argv: list[str] | None = None) -> int:
         from .commitmap import main as git_main
 
         return git_main(rest)
-    if cmd == "slack":
+    if cmd in ("msg", "slack"):
         from .slack import main as slack_main
 
-        return slack_main(rest)
+        return slack_main(rest, prog=f"research {cmd}")
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

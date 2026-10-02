@@ -119,7 +119,8 @@ link term per audit.
   prover the bound is `⊤` (`linkBoundCR`). A2 is not asked of every prover at once: a prover can hard-code a collision.
   It dominates the audit's hash term.
 - **The value binding** (`Binding/`). `ValueBinding` is built from the serving rows' `hm96-sha512/row/v1` leaves
-  (`HmRows.binding`): a commit string's commitment is its leaf `SHA-512(leaf_prefix ‖ b ‖ c)` under the executable's
+  (`HmRows.binding`; a bit row's `/row/v2` leaves through `HmRows.v2`, whose `enc_inj` is `FlockLevel3.RowV2.enc_inj`):
+  a commit string's commitment is its leaf `SHA-512(leaf_prefix ‖ b ‖ c)` under the executable's
   key, and `collide` is an explicit extractor (`ExplicitLeaf.hm96`, `hm96Pair_spec`): two different rows with one leaf
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
@@ -134,6 +135,15 @@ link term per audit.
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
   `HmRowComputes` for rows, `HmRows.registered_weights_hm96`; for the message the audit's extractor settles on,
   `registered_weights_extracted`).
+- **Registered reads** (`Registered/`; PROTOCOL.md §16.10). A row a session reads from a value registered before opens
+  the registered root the verifier holds, at the position the verifier's program reads (`Flock.Registered.check_ok`, in
+  the verifier's package). Two different leaves the verifier accepts at one position under one root give an explicit
+  SHA-512 collision (`TwoOpenings.collides`, from `Flock.Registered.opensLeaf_binding`), at most `q²/2^513` likely under
+  `cr/sha-512` (`TwoOpenings.conflict_strict`). Where the check holds, a registered read's leaf is the registrant's, and
+  the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
+  `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
+  bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
+  `δ_reg = qR²/2^513` (`Reads.prob_off_le`).
 
 ### 1.4 Status
 
@@ -163,6 +173,7 @@ link term per audit.
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
+| Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
@@ -385,9 +396,41 @@ term below 2^-170.
   step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
   (`placement_of_setupH`). What a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).
 
-## 3. Zero knowledge (planned; not yet proved)
+## 3. Zero knowledge (Lemmas A, B and C proved for the model; the simulator over a model of the session's views)
 
 The masked protocol and the reference prover are in DESIGN.md §6, and the session model in DESIGN.md §11.
+
+**In Lean** (`FlockSoundness/ZK/`, pinned, the standard axioms only), for the model of one masked table `ZK/Table.lean`
+(the reference prover `Table.view`, the simulator `Table.sim`) and sessions of `J` of them:
+
+- **Lemma B**, special honest-verifier zero knowledge at a fixed coin vector where the prover refuses nothing:
+  `table_shvzk`; with real hm96 leaves, within `2·N_hid·δ₁` under `Hm96Hiding`, `table_shvzk_hm96`; per session,
+  `session_shvzk_hm96`.
+- **Lemma A**, the pre-final view on two witnesses carrying the public region data (the dummy is one) has one
+  distribution: `table_prefinal_indep` where the prover refuses nothing, and at every coin vector on what is sent before
+  it refuses (a failing rank check, dependent `ρ^r`, `β = 0`), in the code's order, `session_prefinal_indep_cut`
+  (`ZK/Cut.lean`, `ZK/Refusal.lean`).
+- **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
+  prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
+  `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).
+- M2's coin openings bind under SHA-512 collision resistance (T6, `coin_opening_binding_keyed`), and T7's numeric step
+  (`gk_ratio_le_third`).
+- **Theorem GK**, the Goldreich–Kahan simulator (`ZK/GK/`): `gk` makes a dummy run, estimates the completion rate from
+  fresh dummy runs, and rewinds at most `4t/p̃` times with fresh dummy openings, under a cap `M`. `Model.gk_simulate`: for a
+  deterministic `V*`, every test with values in `[0, 1]` of the simulator's output is within
+  `3δ_C + 8t·δ_B + 3^{-t} + t/M + q²/2^513` of the real view's. `⊥_bind` is a SHA-512 collision the finder computes (T6's
+  extraction as an algorithm, `bindColl_isColl` and `bindCollKeyed_isColl`, at most `2(|path| + 3 + n)` hashes), under
+  `SHA512CRStrict` at the finder's budget `q`. `prefinalClose_hm96` (Lemma C, `δ_C = 2·|L|·δ₁`) and `rewindClose_hm96`
+  (Lemma B, `δ_B = 2·N_hid·δ₁`) discharge the two distances, and `gk_simulate_hm96` is the bound with both on the keyed coin
+  tree; `gk_simulate_avg` averages over `V*`'s tape. Expected polynomial time is stated as the expected number of `V*`'s
+  runs: at most `1 + 5M` on every outcome (`sim_runs_le`), at most `1 + 5t` in expectation uniformly in `M`
+  (`sim_runs_ev`), and `Pr[runs ≥ x] ≤ (1 + 5t)/x` (`sim_runs_tail`). The model of one session's views (`Model`: the real
+  and dummy runs, the two rewinds, completion and the pre-final view, with its fields `comp_eq`, `inc_real`, `inc_dummy`
+  and `bind_real`), its links to Lemmas B and C, the coin conflict (`hbad`) and Lemma B's non-degeneracy at the coins of
+  every completed first run (`V*` picks them) are hypotheses.
+
+**Not in Lean:** the link from `flock-circuit --zk` to the model (the Lean reference prover and its differential test,
+DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness.
 
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
@@ -458,7 +501,8 @@ The weights are committed once and every later proof opens that root. The analys
    `HmRowComputes` (phase 2i) and the layout's facts.
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
-3. **Stages 1e and 3, zero knowledge and the reference prover** (§3), after M1's masking spec: first the special
-   honest-verifier ZK lemma, then Goldreich–Kahan simulation of one batched session.
+3. **Stages 1e and 3, zero knowledge and the reference prover** (§3): Lemmas A, B and C are proved for the model, and
+   Goldreich–Kahan simulation over a model of one session's views; that model's instance from a Lean reference prover
+   tied to `flock-circuit --zk` remains.
 4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".

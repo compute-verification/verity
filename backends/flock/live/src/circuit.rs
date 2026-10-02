@@ -1,34 +1,49 @@
 //! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its serving rows committed in the circuit, and
-//! nothing public but the frame-v3-sha512 roots, each row's hm96 commit string `b || c`, the declared outputs and the pinned
-//! layout. `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance files.
+//! nothing public but the frame-v3-sha512 roots, each row's hm96 commit string `b || c` and the pinned layout. The rows are
+//! the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks): an output is a
+//! hidden value like an input. `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance
+//! files.
 //!
 //! A row is an `hm96-sha512/row/v1` leaf: `x = SHA-512(sha512_row_prefix || row)`, `b = x XOR M(key) y`, `c = SHA-512(salt_prefix
-//! || y)` for its 192-byte salt `y`; the frame leaf binds `hm96.SHA512.tree_leaf(key, b || c)`. A block holds whole instances
-//! (VUs) in aligned ranges of slots: `sha512x3` (three SHA-512 compressions, 2^18 bits: a row's blocks after its constant
-//! first block), `hm96` (one per input port: the padding compression, then `b || c` from the salt), the template's units
-//! (2^unit_log bits), the tail's slots, and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0 places each
-//! slot type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
-//! - each row's first compression read the prefix's midstate and its hm96 slot the padding block (constants);
+//! || y)` for its 192-byte salt `y`; the frame leaf binds `hm96.SHA512.tree_leaf(key, b || c)`. Or (META `row_schemas`, per port)
+//! an `hm96-sha512/row/v2` leaf, a bit row of `l` bits: `x = SHA-512(P(l) || ceil(l / 8) bytes)`, the row's bits least
+//! significant first, its u16 leaves the same bits (an output row's `l` its words' bits). A block holds whole instances (VUs)
+//! in aligned ranges of slots: `sha512x3` (three SHA-512 compressions, 2^18 bits: a row's message blocks after its constant
+//! first block but the last), `hm96` (one per row: the last block's compression, then `b || c` from the salt), the template's
+//! units (2^unit_log bits), the tail's slots, and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0
+//! places each slot type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
+//! - each row's first compression (its hm96 slot, a row of no other compression) read the prefix's midstate, and every
+//!   message bit at or past the row's length (a bit row's fill bits, then SHA-512's padding) its constant;
 //! - every later compression read the previous one's output, and the hm96 slot the last one's (the row's wires);
-//! - every unit's leaf input bits copies of the message bits that hash them, and a zero leaf a copy of a forced-zero row;
+//! - every unit's leaf input bits copies of the message bits that hash them, and a zero leaf (or a bit row's leaf bit past
+//!   its length) a copy of a forced-zero row;
+//! - every output row's message bits copies of the returned output bits, and its padding words copies of a forced-zero row;
 //! - every other wire of the template's slots, and every slot's constant a copy of the pinned column.
 //!
 //! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
-//! every row's `b || c` (its hm96 slot's output) and every unit's returned-output words. The rows, their salts, the chaining
-//! values and every word between slots stay private. A padding instance is the all-zero instance with zero salts, whose
-//! `b || c` (checked here natively: a zero salt's mask is zero) and outputs (forced by its circuit) are pinned. A shared-row file
-//! (header `shared_rows`) commits each input port's rows once, as one table, and names the row each instance reads (its refs):
-//! the instance's digest values are those rows' `b || c`, so the rows it hashes in the circuit are the committed ones.
+//! every row's `b || c` (its hm96 slot's output). The rows (outputs too), their salts, the chaining values and every word
+//! between slots stay private. A padding instance is the all-zero instance with zero salts, whose rows' `b || c` are pinned and
+//! checked here natively (a zero salt's mask is zero): its input rows are zero, its output rows its outputs (forced by its
+//! circuit, pinned in META). A shared-row file (header `shared_rows`) commits each input port's rows once, as one table, and
+//! names the row each instance reads (its refs): the instance's digest values are those rows' `b || c`, so the rows it hashes
+//! in the circuit are the committed ones. Its output rows are one per instance (refs `0 … n − 1`): equal outputs stay apart.
 //!
 //! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3-sha512 roots against
-//! the public `b || c` and outputs, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
+//! the public `b || c`, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
 //! public cut words or native words in META) is refused at parse; a template's tail is a slot type of the circuit or the
 //! template has no statement here.
 
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Instant,
+};
 
 use flock_core::{
-    lincheck::{LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
+    lincheck::{CscCircuit, LincheckCircuit, pack_z_lincheck_from_packed},
     proof::eq_skip_weights,
     r1cs::{BlockR1cs, SparseBinaryMatrix, WitnessLayout},
     verifier::ExtraClaim,
@@ -59,16 +74,18 @@ pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
+/// a bit row's leaf (`sha512/row/v2`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
+pub const ROW_SCHEMA_V2: &str = "hm96-sha512/row/v2";
 pub const SHA_NET: &str = "sha512x3";
 pub const HM_NET: &str = "hm96";
 /// compressions per `sha512x3` slot
 pub const PER_SLOT: usize = 3;
 /// META's bindings (what the statement binds about the circuit): a class leaves them out.
 pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
-/// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 26`,
+/// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 27`,
 /// at most 1,024 public regions, at most 64 link-point coordinates; with PROTOCOL.md §16.5's `m <= 35`. A statement outside it
 /// is refused, so an accepted statement is one the pins cover.
-pub const IN_RANGE_K_LOG: usize = 26;
+pub const IN_RANGE_K_LOG: usize = 27;
 pub const IN_RANGE_REGIONS: usize = 1024;
 pub const IN_RANGE_M_PTS: usize = 64;
 pub const M_MAX: usize = 35;
@@ -134,7 +151,10 @@ pub const PARTITION_PROVISIONAL: &str = "flock-circuit/unit-cover/v0";
 pub const SALT_BYTES: usize = 192;
 pub const BC_BYTES: usize = 128;
 const SHA512_ROW_TAG: &[u8] = b"verity/sha512-row/v1\0";
+const SHA512_ROW_V2_TAG: &[u8] = b"verity/sha512-row/v2\0";
 const ROLE_X: u8 = 1;
+/// a port's compressions, at most: each reads 1024 message columns of a block of at most 2^IN_RANGE_K_LOG
+const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
@@ -201,16 +221,61 @@ impl Range {
 pub struct Port {
     pub name: String,
     pub words: usize,
-    /// compressions after the constant first block (the padding block is the hm96 slot's)
+    /// compressions after the constant first block (the last block, the row's last bytes and SHA-512's padding, is the hm96
+    /// slot's)
     pub comps: usize,
+    /// the row's length in bits: `16 * words` (`sha512/row/v1`), or a bit row's own (`v2`)
+    pub bits: usize,
+    /// a bit row (`sha512/row/v2`, its leaf `hm96-sha512/row/v2`)
+    pub v2: bool,
 }
 
-/// A row's constants (`sha512/row/v1`): its first block, the chaining value after it, the padding block's message words.
+impl Port {
+    /// The row bytes its digest hashes after the prefix: `2 * words`, a bit row's `ceil(bits / 8)`.
+    pub fn bytes(&self) -> usize {
+        if self.v2 { self.bits.div_ceil(8) } else { 2 * self.words }
+    }
+
+    pub fn schema(&self) -> &'static str {
+        if self.v2 { ROW_SCHEMA_V2 } else { ROW_SCHEMA }
+    }
+}
+
+/// A row's constants: its first block, the chaining value after it, and SHA-512's padding after its bytes (a whole block for
+/// `sha512/row/v1`).
 #[derive(Clone, Debug)]
 pub struct RowConsts {
     pub prefix: Vec<u8>,
     pub midstate: [u64; 8],
-    pub pad: [u64; 16],
+    pub tail: Vec<u8>,
+}
+
+impl RowConsts {
+    /// The message after the prefix: the row's first `bytes` bytes (zeros past `row`), then the padding.
+    pub fn message(&self, row: &[u8], bytes: usize) -> Vec<u8> {
+        let mut m = row[..bytes.min(row.len())].to_vec();
+        m.resize(bytes, 0);
+        m.extend_from_slice(&self.tail);
+        m
+    }
+}
+
+/// Column `t` of a message block's 1024 (word `t / 64`, its bit `t % 64`; the block's bytes big-endian per word) as the
+/// block's byte and the byte's bit.
+pub fn block_bit(t: usize) -> (usize, usize) {
+    (8 * (t / 64) + 7 - (t % 64) / 8, t % 8)
+}
+
+/// Bit `t` (a block column) of block `k` of port `port`'s message after the prefix: `None` for a row bit (`8 j + b < bits`),
+/// else the constant there (a fill bit of the last row byte, zero, or SHA-512's padding).
+pub fn const_bit(port: &Port, rc: &RowConsts, k: usize, t: usize) -> Option<bool> {
+    let (o, b) = block_bit(t);
+    let j = 128 * k + o;
+    if 8 * j + b < port.bits {
+        return None;
+    }
+    let bytes = port.bytes();
+    Some(j >= bytes && (rc.tail[j - bytes] >> b) & 1 == 1)
 }
 
 /// A copy of every bit of output port `src_port` of slot `(src_net, src_idx)` into input port `dst_port` of slot
@@ -232,7 +297,11 @@ pub struct Composite {
     pub meta: Value,
     pub nets: Vec<(String, IrUnitNet)>,
     pub ranges: Vec<Range>,
+    /// every row: the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks)
     pub ports: Vec<Port>,
+    /// the input rows (META `input_ports`): `ports[..n_in]`
+    pub n_in: usize,
+    /// each output port's words
     pub out_words: Vec<usize>,
     pub g: usize,
     pub k_log: usize,
@@ -251,8 +320,9 @@ pub struct Composite {
     pub leaf_cuts: Vec<(usize, usize, usize)>,
     /// `leaf_cuts` by unit: `(input port, leaf)`
     pub leaf_cuts_of: Vec<Vec<(usize, usize)>>,
-    /// the all-zero instance's `b || c` per port
+    /// the all-zero instance's `b || c` per row (its output rows hold `dummy_outputs`)
     pub dummy_bc: Vec<[u8; BC_BYTES]>,
+    /// the all-zero instance's output words
     pub dummy_outputs: Vec<u16>,
     pub leaf_scheme: Value,
     /// slots per VU of each circuit
@@ -361,11 +431,28 @@ pub fn row_prefix(words: usize) -> Vec<u8> {
     v
 }
 
+/// `sha512/row/v2`'s first block `P(bits)`: `"verity/sha512-row/v2\0" || u64be bits`, zero padded
+/// (`verity.commitments.rowleaf.sha512_row_v2_prefix`).
+pub fn row_prefix_v2(bits: u64) -> Vec<u8> {
+    let mut v = SHA512_ROW_V2_TAG.to_vec();
+    v.extend(bits.to_be_bytes());
+    v.resize(128, 0);
+    v
+}
+
 /// The padding block after `total` bytes (a multiple of 128): 0x80, zeros, the 128-bit bit length.
 pub fn pad_block(total: usize) -> [u8; 128] {
     let mut b = [0u8; 128];
     b[0] = 0x80;
     b[112..].copy_from_slice(&(8 * total as u128).to_be_bytes());
+    b
+}
+
+/// SHA-512's padding after a message of `total` bytes: 0x80, zeros to 112 mod 128, the 128-bit bit length.
+pub fn pad_tail(total: usize) -> Vec<u8> {
+    let mut b = vec![0x80];
+    b.resize(1 + (128 - (total + 17) % 128) % 128, 0);
+    b.extend((8 * total as u128).to_be_bytes());
     b
 }
 
@@ -384,7 +471,8 @@ pub fn row_slots(ports: &[Port]) -> (usize, Vec<Vec<(usize, usize)>>) {
     (at.div_ceil(PER_SLOT), where_)
 }
 
-/// Each row's chain (compression k's `cv` from compression k-1's `out`) and its hm96 slot's `cv` (from the last).
+/// Each row's chain (compression k's `cv` from compression k-1's `out`) and its hm96 slot's `cv` (from the last; a row of
+/// no compression gives its hm96 slot the midstate, a Δ constant).
 fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
     let (_, where_) = row_slots(ports);
     let mut out = Vec::new();
@@ -392,8 +480,9 @@ fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
         for k in 1..w.len() {
             out.push(Wire { dst: (sha, w[k].0, 2 * w[k].1), src: (sha, w[k - 1].0, w[k - 1].1) });
         }
-        let last = w[w.len() - 1];
-        out.push(Wire { dst: (hm, p, 0), src: (sha, last.0, last.1) });
+        if let Some(last) = w.last() {
+            out.push(Wire { dst: (hm, p, 0), src: (sha, last.0, last.1) });
+        }
     }
     out
 }
@@ -495,31 +584,66 @@ impl Composite {
                 lookups_fast.push((nets.len() - 1, fast));
             }
         }
-        if meta["scheme"] != SCHEME || meta["row_schema"] != ROW_SCHEMA {
-            return Err(format!("META: rows are not {SCHEME} ({ROW_SCHEMA}) leaves"));
+        // one sha512/row/v1 schema for every port, or (`row_schemas`) each port's bit row and its length in bits
+        let v2 = meta.get("row_schemas").is_some();
+        if meta["scheme"] != SCHEME || v2 == meta.get("row_schema").is_some() || (!v2 && meta["row_schema"] != ROW_SCHEMA) {
+            return Err(format!("META: rows are not {SCHEME} ({ROW_SCHEMA}, or {ROW_SCHEMA_V2} per port) leaves"));
         }
-        let ports: Vec<Port> = meta["ports"].as_array().ok_or("META: ports")?.iter().map(|p| Port {
-            name: p[0].as_str().unwrap_or("").into(), words: p[1].as_u64().unwrap_or(0) as usize, comps: p[2].as_u64().unwrap_or(0) as usize,
-        }).collect();
-        for p in &ports {
-            if p.words == 0 || (2 * p.words) % 128 != 0 || p.comps != 2 * p.words / 128 {
-                return Err(format!("port {}: not whole SHA-512 blocks", p.name));
-            }
+        if v2 && typed {
+            return Err(format!("META: a typed statement's rows are {ROW_SCHEMA} leaves"));
         }
-        // each row's constants, recomputed here from the scheme (never taken from META)
+        let n_in = us(&meta, "input_ports")?;
+        let listed_ports = meta["ports"].as_array().ok_or("META: ports")?;
+        let lengths: Vec<Option<u64>> = if v2 {
+            let s = meta["row_schemas"].as_array().filter(|s| s.len() == listed_ports.len())
+                .ok_or("META: row_schemas is not one [schema, bits] per port")?;
+            s.iter().map(|x| match x.as_array().map(|a| a.as_slice()) {
+                Some([schema, bits]) if schema == ROW_SCHEMA_V2 => bits.as_u64().map(Some).ok_or_else(|| "META: a bit row's length is not a u64".to_string()),
+                _ => Err(format!("META: row_schemas: each port's is [{ROW_SCHEMA_V2:?}, bits]")),
+            }).collect::<Result<_, _>>()?
+        } else {
+            vec![None; listed_ports.len()]
+        };
+        let mut ports = Vec::new();
+        for (p, bits) in listed_ports.iter().zip(&lengths) {
+            let (name, words, comps) = (p[0].as_str().unwrap_or("").to_string(), p[1].as_u64().unwrap_or(0) as usize, p[2].as_u64().unwrap_or(0) as usize);
+            let port = match *bits {
+                None => {
+                    if words == 0 || (2 * words) % 128 != 0 || comps != 2 * words / 128 {
+                        return Err(format!("port {name}: not whole SHA-512 blocks"));
+                    }
+                    Port { name, words, comps, bits: 16 * words, v2: false }
+                }
+                Some(l) => {
+                    // every count derived from the length: its leaves, and its message's blocks after the prefix but the last
+                    let bytes = l.div_ceil(8);
+                    let want = (l.div_ceil(16) as usize, ((bytes + 17).div_ceil(128) - 1) as usize);
+                    if want.1 > MAX_COMPS || (words, comps) != want {
+                        return Err(format!("port {name}: a row of {l} bits is {} u16 leaves and {} compressions, not META's {words} and {comps}",
+                                           want.0, want.1));
+                    }
+                    Port { name, words, comps, bits: l as usize, v2: true }
+                }
+            };
+            ports.push(port);
+        }
+        // each row's constants, recomputed here from its schema and length (never taken from META)
         let rows: Vec<RowConsts> = ports.iter().map(|p| {
-            let prefix = row_prefix(p.words);
+            let prefix = if p.v2 { row_prefix_v2(p.bits as u64) } else { row_prefix(p.words) };
             let mut midstate = SHA512_IV;
             compress(&mut midstate, &prefix);
-            RowConsts { prefix, midstate, pad: words_be(&pad_block(128 + 2 * p.words)) }
+            RowConsts { prefix, midstate, tail: pad_tail(128 + p.bytes()) }
         }).collect();
         let listed = meta["rows"].as_array().ok_or("META: rows")?;
         if listed.len() != ports.len() || listed.iter().zip(&rows).any(|(m, r)| {
             m["prefix"].as_str() != Some(crate::hex(&r.prefix).as_str())
                 || m["midstate"] != json!(r.midstate.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>())
-                || m["pad"].as_str() != Some(crate::hex(&r.pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>()).as_str())
+                || m["pad"].as_str() != Some(crate::hex(&r.tail).as_str())
         }) {
-            return Err("META: a row's constants are not sha512/row/v1's".into());
+            return Err(format!("META: a row's constants are not {}'s", if v2 { "sha512/row/v2" } else { "sha512/row/v1" }));
+        }
+        if v2 && ports.iter().all(|p| p.comps == 0) {
+            return Err(format!("META: no row has a compression before its last block (the {SHA_NET} range, the pin's, holds no slot)"));
         }
         if meta["row_key_sha512"].as_str() != Some(crate::hex(&Sha512::digest(hm96_sha512_default_key())).as_str()) {
             return Err("META: the rows' hm96 key is not hm96-sha512/v1's default key".into());
@@ -579,7 +703,7 @@ impl Composite {
             return Err("META: the rows' wires are not the chains and hm96 inputs the ports imply".into());
         }
         let c = Composite {
-            name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
+            name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
             out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(), typed: None,
@@ -639,6 +763,15 @@ impl Composite {
         if self.per_vu[self.sha_net] != n_sha || self.per_vu[self.hm_net] != self.ports.len().next_power_of_two() {
             return Err("the rows' slots per VU are not the ports' compressions (three per slot) and one hm96 slot per port".into());
         }
+        let out_names: Vec<&str> = self.meta["out_ports"].as_array().map(|a| a.iter().map(|p| p[0].as_str().unwrap_or("")).collect()).unwrap_or_default();
+        let mut names: Vec<&str> = self.ports.iter().map(|p| p.name.as_str()).collect();
+        names.sort_unstable();
+        if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_words.len() || names.windows(2).any(|w| w[0] == w[1])
+            || self.out_rows().iter().zip(&self.out_words).zip(&out_names)
+                .any(|((p, &w), &nm)| p.name != nm || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words)
+        {
+            return Err("the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits), each name once".into());
+        }
         let (sha, hm) = (&self.nets[self.sha_net].1, &self.nets[self.hm_net].1);
         if port_cols(&sha.in_groups) != (0..2 * PER_SLOT).map(|i| (port_cols(&sha.in_groups)[i].0, if i % 2 == 0 { 512 } else { 1024 })).collect::<Vec<_>>()
             || port_cols(&sha.out_groups).iter().map(|x| x.1).collect::<Vec<_>>() != vec![512; PER_SLOT]
@@ -687,7 +820,7 @@ impl Composite {
             }
         }
         self.check_wiring()?;
-        let n_in: usize = self.ports.iter().map(|p| p.words).sum();
+        let n_in = self.in_words();
         let n_out: usize = self.out_words.iter().sum();
         if self.leaves_in.len() != self.upv || self.leaves_out.len() != self.upv {
             return Err("the leaf maps are not one per unit".into());
@@ -745,7 +878,7 @@ impl Composite {
             *wired.entry(w.dst).or_default() += 1;
         }
         for &(u, j, leaf) in &self.leaf_cuts {
-            let n_in: usize = self.ports.iter().map(|p| p.words).sum();
+            let n_in = self.in_words();
             let pc = port_cols(&unit.in_groups);
             if u >= self.upv || j < leaf_ports || j >= pc.len() || pc[j].1 < 16 || leaf >= n_in {
                 return Err("a leaf cut outside the unit's cut inputs or the rows".into());
@@ -768,7 +901,7 @@ impl Composite {
         Ok(())
     }
 
-    /// A typed template's block: the root one slot per VU, a power of two of them (region `Out` spans the root's range);
+    /// A typed template's block: the root one slot per VU, a power of two of them;
     /// its inputs the rows' words and its outputs the output words (16 bits each, one output group); each placed layout's
     /// slots its parts; a forced-zero row in the root's slot.
     fn check_typed(&self, t: &TypedBlock) -> Result<(), String> {
@@ -778,10 +911,12 @@ impl Composite {
             return Err("the instance's root is not one slot per VU".into());
         }
         if !self.range_of(self.unit_net).count.is_power_of_two() {
-            return Err("the instance's roots (vus_per_block) are not a power of two: region Out would cover fewer VUs than it lists".into());
+            return Err("the instance's roots (vus_per_block) are not a power of two".into());
         }
-        if t.inst.ins != self.ports.iter().map(|p| (p.words, 16)).collect::<Vec<_>>() || t.inst.outs != self.out_words.iter().map(|&w| (w, 16)).collect::<Vec<_>>() {
-            return Err("the instance type's ports are not the rows' words and the output words".into());
+        if t.inst.ins != self.ports[..self.n_in].iter().map(|p| (p.words, 16)).collect::<Vec<_>>()
+            || t.inst.outs != self.out_words.iter().map(|&w| (w, 16)).collect::<Vec<_>>()
+        {
+            return Err("the instance type's ports are not the input rows' words and the output words".into());
         }
         if root.out_groups.len() != 1 || root.out_groups[0].bits.iter().sum::<usize>() != 16 * n_out || !(16 * n_out).is_power_of_two() {
             return Err("the instance's outputs are not one output group of the output words".into());
@@ -835,15 +970,68 @@ impl Composite {
         self.ports.iter().map(|p| 2 * p.words).sum()
     }
 
+    /// the input rows' words (the leaves a unit reads)
+    pub fn in_words(&self) -> usize {
+        self.ports[..self.n_in].iter().map(|p| p.words).sum()
+    }
+
+    pub fn out_rows(&self) -> &[Port] {
+        &self.ports[self.n_in.min(self.ports.len())..]
+    }
+
+    /// Row `p` of the all-zero instance (u16 LE): zero, or for an output row the zero instance's outputs, zero-padded.
+    pub fn dummy_row(&self, p: usize) -> Vec<u8> {
+        let mut row = vec![0u8; 2 * self.ports[p].words];
+        if p >= self.n_in {
+            let j = p - self.n_in;
+            let at: usize = self.out_words[..j].iter().sum();
+            for (k, v) in self.dummy_outputs[at..at + self.out_words[j]].iter().enumerate() {
+                row[2 * k..2 * k + 2].copy_from_slice(&v.to_le_bytes());
+            }
+        }
+        row
+    }
+
+    /// `(g, o)`: the first column of output word `o` of VU `g` (16 bits from it), as the circuit computes it: the unit that
+    /// returns it, the last stage's output port, or a typed instance's root's output group.
+    pub fn out_col(&self) -> impl Fn(usize, usize) -> usize + '_ {
+        let unit = self.unit();
+        let ret: Vec<(usize, usize)> = {
+            let mut r = vec![(0, 0); self.out_words.iter().sum()];
+            for (u, l) in self.leaves_out.iter().enumerate() {
+                for (q, &o) in l.iter().enumerate() {
+                    r[o] = (u, q);
+                }
+            }
+            r
+        };
+        let unit_cols = port_cols(unit.out_groups.get(..1).unwrap_or(&[]));
+        let tail_cols = port_cols(&self.nets[self.out_net].1.out_groups);
+        move |g, o| {
+            if self.typed.is_some() {
+                self.slot_col(self.unit_net, g, 0) + unit.out_groups[0].col * WORD + 16 * o
+            } else if self.out_net != self.unit_net {
+                self.slot_col(self.out_net, g, 0) + tail_cols[self.out_ports[o]].0
+            } else {
+                let (u, q) = ret[o];
+                self.slot_col(self.unit_net, g, u) + unit_cols[q].0
+            }
+        }
+    }
+
     /// `(g, p, byte, t)`: bit `t` of row byte `byte` of VU `g`'s port `p` as a column, a message bit of its compression (the
-    /// block's bytes big-endian per word).
+    /// block's bytes big-endian per word): a `sha512x3` slot's message, or for the last block the hm96 slot's `pad`.
     pub fn msg_col(&self) -> impl Fn(usize, usize, usize, usize) -> usize + '_ {
         let (_, where_) = row_slots(&self.ports);
         let sin = port_cols(&self.nets[self.sha_net].1.in_groups);
+        let hin = port_cols(&self.nets[self.hm_net].1.in_groups);
         move |g, p, byte, t| {
             let (k, o) = (byte / 128, byte % 128);
-            let (slot, sub) = where_[p][k];
-            self.slot_col(self.sha_net, g, slot) + sin[2 * sub + 1].0 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+            let at = 64 * (o / 8) + 56 - 8 * (o % 8) + t;
+            match where_[p].get(k) {
+                Some(&(slot, sub)) => self.slot_col(self.sha_net, g, slot) + sin[2 * sub + 1].0 + at,
+                None => self.slot_col(self.hm_net, g, p) + hin[1].0 + at,
+            }
         }
     }
 
@@ -875,7 +1063,8 @@ pub fn pin_of(c: &Composite) -> usize {
 }
 
 /// Δ (A and B), derived from the pinned circuit: every slot's constant, the rows' constants (midstate, padding block), the unit
-/// leaf wiring (each leaf bit a copy of its message bit), and every wire (the rows' chains first).
+/// leaf wiring (each leaf bit a copy of its message bit), every wire (the rows' chains first), and each output row's message
+/// bits (copies of the output bits).
 pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let (mut da, mut db) = (Vec::new(), Vec::new());
     let both = |da: &mut Vec<(u32, u32)>, db: &mut Vec<(u32, u32)>, i: usize, src: usize| {
@@ -899,13 +1088,29 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let zero = c.unit_range().slot(0) + c.unit().useful;
     for g in 0..c.g {
         for (p, w) in where_.iter().enumerate() {
-            let cv = c.slot_col(c.sha_net, g, w[0].0) + sin[2 * w[0].1].0;
+            let (port, rc) = (&c.ports[p], &c.rows[p]);
+            let cv = match w.first() {
+                Some(&(slot, sub)) => c.slot_col(c.sha_net, g, slot) + sin[2 * sub].0,
+                None => c.slot_col(c.hm_net, g, p) + hin[0].0,
+            };
             for t in 0..512 {
-                both(&mut da, &mut db, cv + t, if (c.rows[p].midstate[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
+                both(&mut da, &mut db, cv + t, if (rc.midstate[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
             }
+            // the last block's constant bits (a sha512/row/v1 row's: all of it), then those of the blocks before it from the
+            // first that holds a bit at or past the row's length
             let pad = c.slot_col(c.hm_net, g, p) + hin[1].0;
             for t in 0..1024 {
-                both(&mut da, &mut db, pad + t, if (c.rows[p].pad[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
+                if let Some(v) = const_bit(port, rc, port.comps, t) {
+                    both(&mut da, &mut db, pad + t, if v { pin } else { zero });
+                }
+            }
+            for k in port.bits / 1024..port.comps {
+                let msg = c.slot_col(c.sha_net, g, w[k].0) + sin[2 * w[k].1 + 1].0;
+                for t in 0..1024 {
+                    if let Some(v) = const_bit(port, rc, k, t) {
+                        both(&mut da, &mut db, msg + t, if v { pin } else { zero });
+                    }
+                }
             }
         }
     }
@@ -921,12 +1126,14 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
         let base = ur.slot(k);
         for (j, &leaf) in c.leaves_in[u].iter().enumerate() {
             for t in 0..16 {
+                // a zero leaf, or a bit row's leaf bit past its length: the slot's forced-zero row
                 let src = if leaf < 0 {
                     base + unit.useful
                 } else {
                     let leaf = leaf as usize;
                     let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
-                    msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8)
+                    let i = 16 * (leaf - starts[p]) + t;
+                    if i < c.ports[p].bits { msg_col(g, p, i / 8, i % 8) } else { base + unit.useful }
                 };
                 both(&mut da, &mut db, base + leaf_cols[j] + t, src);
             }
@@ -938,7 +1145,8 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
             let dst = c.slot_col(c.unit_net, g, u) + pc[j].0;
             for t in 0..pc[j].1 {
-                both(&mut da, &mut db, dst + t, if t < 16 { msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8) } else { zero });
+                let i = 16 * (leaf - starts[p]) + t;
+                both(&mut da, &mut db, dst + t, if t < 16 && i < c.ports[p].bits { msg_col(g, p, i / 8, i % 8) } else { zero });
             }
         }
     }
@@ -976,6 +1184,21 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             }
         }
     }
+    // each output row's message bits, per VU: copies of the output bits it commits (word k bit t: bit t % 8 of row byte
+    // 2k + t / 8), zero past its port's words
+    let out_col = c.out_col();
+    for g in 0..c.g {
+        let mut at = 0;
+        for (j, port) in c.out_rows().iter().enumerate() {
+            for k in 0..port.words {
+                for t in 0..16 {
+                    let src = if k < c.out_words[j] { out_col(g, at + k) + t } else { zero };
+                    both(&mut da, &mut db, msg_col(g, c.n_in + j, 2 * k + t / 8, t % 8), src);
+                }
+            }
+            at += c.out_words[j];
+        }
+    }
     (da, db)
 }
 
@@ -990,18 +1213,17 @@ pub struct Instances {
     pub salts: Option<Vec<u8>>,
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
-    pub outputs: Vec<u16>,
-    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, refs, outputs): what Σ binds
+    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, refs): what Σ binds
     pub public_sha512: [u8; 64],
-    /// the registered population's `b || c` and outputs (a drawn statement: the frame-v3 roots are over them); `None`: the
-    /// statement's own
-    pub population: Option<(usize, Vec<[u8; BC_BYTES]>, Vec<u16>)>,
+    /// the registered population's `b || c` (a drawn statement: the frame-v3 roots are over them); `None`: the statement's own
+    pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
     pub tables: Option<RowTables>,
 }
 
-/// Header `shared_rows: {port: R_p}`: input port `p`'s frame-v3 tree is a table of `R_p` committed rows, and instance `i`
-/// reads its row `refs[i * ports + p]`. Rows, salts and `b || c` are the tables', port-major.
+/// Header `shared_rows: {port: R_p}`: row `p`'s frame-v3 tree is a table of `R_p` committed rows, and instance `i` reads its
+/// row `refs[i * ports + p]`. Rows, salts and `b || c` are the tables', port-major. An output row's table is the instances'
+/// own rows, `R_p = n` and refs `0 … n − 1`.
 #[derive(Clone)]
 pub struct RowTables {
     pub counts: Vec<usize>,
@@ -1051,18 +1273,21 @@ impl Instances {
         let n = header["instances"].as_u64().ok_or("header: instances")? as usize;
         let has_rows = header["rows"].as_bool().ok_or("header: rows")?;
         let rb = c.row_bytes();
-        let (n_out, np) = (c.out_words.iter().sum::<usize>(), c.ports.len());
+        let np = c.ports.len();
         let body = &b[nl + 1..];
         let counts: Option<Vec<usize>> = match header.get("shared_rows") {
             None => None,
             Some(s) => {
                 let m = s.as_object().ok_or("header: shared_rows is not an object")?;
                 if m.len() != np || c.ports.iter().any(|p| !m.contains_key(&p.name)) {
-                    return Err("header: shared_rows does not name exactly the circuit's input ports".into());
+                    return Err("header: shared_rows does not name exactly the circuit's rows".into());
                 }
                 let counts: Vec<usize> = c.ports.iter().map(|p| m[&p.name].as_u64().unwrap_or(0) as usize).collect();
                 if counts.contains(&0) {
                     return Err("header: a shared_rows table has no row".into());
+                }
+                if counts[c.n_in..].iter().any(|&r| r != n) {
+                    return Err("header: an output row's table is not one row per instance".into());
                 }
                 Some(counts)
             }
@@ -1073,7 +1298,7 @@ impl Instances {
             Some(k) => (k.iter().zip(&c.ports).map(|(r, p)| r * 2 * p.words).sum(), k.iter().sum::<usize>() * SALT_BYTES, k.iter().sum(), 4 * n * np),
         };
         let (rows_len, salts_len) = if has_rows { (rows_len, salts_len) } else { (0, 0) };
-        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len + 2 * n * n_out {
+        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len {
             return Err("instance file length".into());
         }
         let private = |a: usize, len: usize| has_rows.then(|| body[a..a + len].to_vec());
@@ -1081,13 +1306,15 @@ impl Instances {
         let pubs = &body[rows_len + salts_len..];
         let bcs = pubs[..BC_BYTES * n_bcs].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
         let tail = &pubs[BC_BYTES * n_bcs..];
-        let outputs = tail[refs_len..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
         let (rows, salts, tables) = match counts {
             None => (rows, salts, None),
             Some(counts) => {
-                let refs: Vec<u32> = tail[..refs_len].chunks(4).map(|x| u32::from_le_bytes(x.try_into().unwrap())).collect();
+                let refs: Vec<u32> = tail.chunks(4).map(|x| u32::from_le_bytes(x.try_into().unwrap())).collect();
                 if refs.iter().enumerate().any(|(k, &r)| r as usize >= counts[k % np]) {
                     return Err("shared rows: an instance's ref is past its table".into());
+                }
+                if refs.iter().enumerate().any(|(k, &r)| k % np >= c.n_in && r as usize != k / np) {
+                    return Err("shared rows: an instance's output row is not its own".into());
                 }
                 (None, None, Some(RowTables { counts, rows: rows.map(std::sync::Arc::new), salts: salts.map(std::sync::Arc::new), refs }))
             }
@@ -1102,7 +1329,7 @@ impl Instances {
         }
         header["rows"] = Value::Bool(false);
         let public_sha512 = Self::public_digest(&header, pubs);
-        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None, tables })
+        Ok(Instances { header, n, rows, salts, bcs, public_sha512, population: None, tables })
     }
 
     /// SHA-512 of the header's compact key-sorted JSON and the public bytes. serde_json's maps are sorted (no `preserve_order`), so
@@ -1133,7 +1360,7 @@ impl Instances {
             return Err("U: the draw's population is not this registered population".into());
         }
         let np = c.ports.len();
-        let (rb, n_out) = (c.row_bytes(), c.out_words.iter().sum::<usize>());
+        let rb = c.row_bytes();
         let indices: Vec<usize> = units.iter().map(|&u| self.header["units"]["indices"][u].as_u64().unwrap_or(0) as usize).collect();
         // the population's header but its units (millions of entries), which the draw's replace
         let mut header: Value = self.header.as_object().map(|m| m.iter().filter(|(k, _)| k.as_str() != "units").map(|(k, v)| (k.clone(), v.clone()))
@@ -1146,14 +1373,12 @@ impl Instances {
         if let Some(t) = &self.tables {
             pubs.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
         }
-        pubs.extend(self.outputs.iter().flat_map(|w| w.to_le_bytes()));
         let public_sha512 = Self::public_digest(&header, &pubs);
-        let outputs = units.iter().flat_map(|&u| self.outputs[u * n_out..(u + 1) * n_out].to_vec()).collect();
-        let population = Some((self.n, self.bcs.clone(), self.outputs.clone()));
+        let population = Some((self.n, self.bcs.clone()));
         if let Some(t) = &self.tables {
             // the tables stay the population's; the drawn instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
-            return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), outputs, public_sha512, population,
+            return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512, population,
                                   tables: Some(RowTables { refs, ..t.clone() }) });
         }
         Ok(Instances {
@@ -1161,7 +1386,6 @@ impl Instances {
             rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
             salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
-            outputs,
             public_sha512,
             population,
             tables: None,
@@ -1278,11 +1502,14 @@ pub fn row_tree_leaf(bc: &[u8; BC_BYTES]) -> [u8; 64] {
     h.finalize().into()
 }
 
-/// The all-zero row's `b || c` under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix || 0^192)`.
-pub fn zero_row_bc(words: usize) -> [u8; BC_BYTES] {
+/// Port `port`'s row `row` (its words u16 LE) under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix
+/// || 0^192)`; `x` is the port's row digest (`sha512/row/v1` of its words, or a bit row of its length: the row's first bytes).
+pub fn row_bc_zero_salt(port: &Port, row: &[u8]) -> [u8; BC_BYTES] {
     let mut h = Sha512::new();
-    h.update(row_prefix(words));
-    h.update(vec![0u8; 2 * words]);
+    h.update(if port.v2 { row_prefix_v2(port.bits as u64) } else { row_prefix(port.words) });
+    let mut m = row[..port.bytes().min(row.len())].to_vec();
+    m.resize(port.bytes(), 0);
+    h.update(m);
     let x = h.finalize();
     let mut h = Sha512::new();
     h.update(hm96_prefixes().0);
@@ -1293,8 +1520,8 @@ pub fn zero_row_bc(words: usize) -> [u8; BC_BYTES] {
     bc
 }
 
-/// The frame-v3-sha512 roots recomputed from the file's `b || c` and output words, against its header's; the pinned dummy
-/// `b || c` against the zero row's (the commitment scheme's own functions; the circuit is never evaluated here).
+/// The frame-v3-sha512 roots recomputed from the file's `b || c`, against its header's; the pinned dummy `b || c` against the
+/// padding instance's rows' under zero salts (the commitment scheme's own functions; the circuit is never evaluated here).
 pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     let fv = &inst.header["frame_v3"];
     let get = |k: &str, p: &str| -> Result<Vec<u8>, String> { hexb(fv[k][p].as_str().ok_or(format!("frame_v3.{k}.{p} missing"))?) };
@@ -1308,32 +1535,28 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         }
     }
     for (p, port) in c.ports.iter().enumerate() {
-        if fv["schemas"][&port.name] != ROW_SCHEMA {
-            return Err(format!("input port {}: schema is not {ROW_SCHEMA}", port.name));
+        if fv["schemas"][&port.name] != port.schema() {
+            return Err(format!("row {}: schema is not {}", port.name, port.schema()));
         }
-        if zero_row_bc(port.words) != c.dummy_bc[p] {
-            return Err(format!("the pinned dummy b || c of port {} is not the zero row's", port.name));
+        if row_bc_zero_salt(port, &c.dummy_row(p)) != c.dummy_bc[p] {
+            return Err(format!("the pinned dummy b || c of row {} is not the padding instance's row under a zero salt", port.name));
         }
     }
-    for (k, (name, root)) in frame_roots(c, inst)?.into_iter().enumerate() {
+    for (name, root) in frame_roots(c, inst)? {
         if root.to_vec() != get("roots", &name)? {
-            return Err(if k < c.ports.len() {
-                format!("input port {name}: the rows' b || c do not hash to the header's frame-v3-sha512 root")
-            } else {
-                format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root")
-            });
+            return Err(format!("row {name}: the rows' b || c do not hash to the header's frame-v3-sha512 root"));
         }
     }
     Ok(())
 }
 
-/// The frame-v3-sha512 roots of the file's public part, input ports' row trees then output ports' word trees: over the
+/// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the
 /// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
 pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
     let fv = &inst.header["frame_v3"];
     let dom_of = |k: &str| -> Result<Vec<u8>, String> { hexb(fv["domain_ids"][k].as_str().ok_or(format!("frame_v3.domain_ids.{k} missing"))?) };
     let np = c.ports.len();
-    let (n, bcs, outputs) = match &inst.population { Some((n, b, o)) => (*n, b, o), None => (inst.n, &inst.bcs, &inst.outputs) };
+    let (n, bcs) = match &inst.population { Some((n, b)) => (*n, b), None => (inst.n, &inst.bcs) };
     let mut out = Vec::new();
     for (p, port) in c.ports.iter().enumerate() {
         let dom = dom_of(&port.name)?;
@@ -1341,17 +1564,8 @@ pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 
             Some(t) => (t.counts[p], Box::new(move |r| t.start(p) + r)),
             None => (n, Box::new(move |i| i * np + p)),
         };
-        let leaves = (0..count).into_par_iter().map(|r| fv3_leaf(&dom, r, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[row(r)]))).collect();
+        let leaves = (0..count).into_par_iter().map(|r| fv3_leaf(&dom, r, port.schema().as_bytes(), &row_tree_leaf(&bcs[row(r)]))).collect();
         out.push((port.name.clone(), fv3_root(&dom, leaves)));
-    }
-    let n_out: usize = c.out_words.iter().sum();
-    let mut at = 0;
-    for (name, w) in c.meta["out_ports"].as_array().unwrap().iter().map(|x| (x[0].as_str().unwrap_or(""), x[1].as_u64().unwrap_or(0) as usize)) {
-        let dom = dom_of(name)?;
-        let words: Vec<u16> = (0..n).flat_map(|i| outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
-        let leaves = words.par_iter().enumerate().map(|(r, v)| fv3_leaf(&dom, r, b"u16", &v.to_be_bytes())).collect();
-        out.push((name.to_string(), fv3_root(&dom, leaves)));
-        at += w;
     }
     Ok(out)
 }
@@ -1360,10 +1574,8 @@ pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Region {
-    /// port `p`'s `b || c` of each VU (its hm96 slot's output)
+    /// row `p`'s `b || c` of each VU (its hm96 slot's output)
     Digest(usize),
-    /// every unit slot's returned-output words
-    Out,
 }
 
 pub struct RegionShape {
@@ -1456,8 +1668,9 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
-    /// per slot type: its log size and its circuit
-    pub types: Vec<(usize, SparseMatrixCircuit<'static>)>,
+    /// per slot type: its log size and its circuit, column-major: the fold gathers each column's rows, where a row scatter
+    /// would give each of its ~4 chunks per thread an accumulator as wide as the slot (2^21 to 2^24 columns for a GEMM unit)
+    pub types: Vec<(usize, CscCircuit)>,
     /// per slot type: a generated read's table-direct B side
     pub tables: Vec<Option<TableSide>>,
     /// (type index, first position, count) per range
@@ -1509,13 +1722,16 @@ impl LincheckCircuit for BlockCircuit {
 }
 
 /// A dishonest prover's row witness (VU 0 of block 0): a compression's chaining value, the first chaining value (not the
-/// midstate), the padding block, or a salt, each followed consistently downstream.
+/// midstate), the last block, a salt, a bit row's first fill bit, or its padding's 0x80 bit in a block it shares with the
+/// row's bytes, each followed consistently downstream.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RowTamper {
     pub cv_flip: bool,
     pub midstate_flip: bool,
     pub pad_flip: bool,
     pub salt_flip: bool,
+    pub fill_flip: bool,
+    pub mixed_pad_flip: bool,
 }
 
 /// Block `b`'s row slots' input words (`Stmt::row_inputs`), as a witness source hands them over.
@@ -1539,6 +1755,8 @@ pub struct Stmt {
     pub flock_digest: [u8; 32],
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
+    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification, read by the rest
+    pub c0_identity: OnceLock<bool>,
 }
 
 /// The strongly connected components of the per-VU slot graph (`(net, slot)`, an edge from each wire's source slot to its
@@ -1677,12 +1895,139 @@ pub(crate) fn lanes(v: &[u64], n: usize, uw: usize) -> Vec<Vec<F128>> {
     out
 }
 
-fn flip_bit(w: &mut F128, t: usize) {
-    if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
+/// [`lanes`] as u64 words (each F128 word's lo, then hi) into `dst`: lane l's `len` words at `dst[l * stride + off..]`, zero
+/// past `v`'s rows. Eight blocks are transposed at a time, so each lane's words land a cache line at a time.
+fn lanes_into(v: &[u64], n: usize, dst: &mut [u64], stride: usize, off: usize, len: usize) {
+    let blocks = v.len().div_ceil(64);
+    assert!(n <= 64 && blocks <= len && (n == 0 || (n - 1) * stride + off + len <= dst.len()), "lanes_into: out of range");
+    for (c, rows) in v.chunks(512).enumerate() {
+        let mut t = [[0u64; 64]; 8];
+        let k = rows.len().div_ceil(64);
+        for (tb, r) in t.iter_mut().zip(rows.chunks(64)) {
+            tb[..r.len()].copy_from_slice(r);
+            transpose64(tb);
+        }
+        for l in 0..n {
+            let at = l * stride + off + 8 * c;
+            for (d, tb) in dst[at..at + k].iter_mut().zip(&t) {
+                *d = tb[l];
+            }
+        }
+    }
+    for l in 0..n {
+        dst[l * stride + off + blocks..l * stride + off + len].fill(0);
+    }
 }
 
-fn leak<T>(x: T) -> &'static T {
-    Box::leak(Box::new(x))
+/// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`, as mapped host slots hold them (`HostSlots`
+/// with a, b per slot): slot x's a words then its b words, `uw` F128 words each as (lo, hi) u64 pairs, at `out[4 * uw * x..]`,
+/// written straight from each lane group's bit-sliced rows. Whether every slot's z is a & b word for word, which that layout
+/// requires (if not, `out` holds no layout).
+pub fn unit_ab_into(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> bool {
+    assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_into: out is not 4 * uw words per slot");
+    let t0 = Instant::now();
+    let one_pass = unit_flat() && net.one_pass();
+    let flat_s = t0.elapsed().as_secs_f64();
+    let prof = GroupProf::default();
+    let ok = out.par_chunks_mut(64 * 4 * uw).zip(ins.par_chunks(64)).enumerate().all(|(gi, (dst, grp))| {
+        let (zz, aa, bq) = prof.eval(net, ni, gi, grp);
+        let tw = Instant::now();
+        let used = u64::MAX >> (64 - grp.len());
+        let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+        if ok {
+            lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
+            lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
+        }
+        prof.out(tw);
+        ok
+    });
+    prof.print("slot_ab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
+    ok
+}
+
+/// A lane group's evaluation for [`Stmt::slot_zab`] and [`unit_ab_into`] (`eval64_flat`; with `FC_UNIT_CHECK=1` eval64 beside
+/// it, asserted equal), and the times `FC_UNIT_PROFILE` reports.
+#[derive(Default)]
+struct GroupProf {
+    eval_ns: AtomicU64,
+    eval_max: AtomicU64,
+    ref_ns: AtomicU64,
+    ref_max: AtomicU64,
+    out_ns: AtomicU64,
+    check: OnceLock<bool>,
+}
+
+impl GroupProf {
+    fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+        let te = Instant::now();
+        let lanes_in = |col: usize| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l));
+        let got = if unit_flat() {
+            let cols = bit_rows(grp, net.in_words);
+            net.eval64_flat(|col| cols[col])
+        } else {
+            net.eval64(lanes_in)
+        };
+        let e = te.elapsed().as_nanos() as u64;
+        self.eval_ns.fetch_add(e, Ordering::Relaxed);
+        self.eval_max.fetch_max(e, Ordering::Relaxed);
+        if *self.check.get_or_init(|| std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1")) {
+            let tr = Instant::now();
+            let want = net.eval64(lanes_in);
+            let r = tr.elapsed().as_nanos() as u64;
+            self.ref_ns.fetch_add(r, Ordering::Relaxed);
+            self.ref_max.fetch_max(r, Ordering::Relaxed);
+            assert!(want == got, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
+        }
+        got
+    }
+
+    fn out(&self, since: Instant) {
+        self.out_ns.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    /// `out_sum_s`: the lanes' packed words (`lanes`, or `unit_ab_into`'s writes)
+    #[allow(clippy::too_many_arguments)]
+    fn print(&self, part: &str, ni: usize, rows: usize, slots: usize, one_pass: bool, flat_s: f64, t0: Instant) {
+        if unit_profile() {
+            let s = |x: &AtomicU64| x.load(Ordering::Relaxed) as f64 * 1e-9;
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": part, "circuit": ni, "rows": rows, "slots": slots,
+                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wall_s": t0.elapsed().as_secs_f64(),
+                "eval_sum_s": s(&self.eval_ns), "eval_max_s": s(&self.eval_max), "out_sum_s": s(&self.out_ns),
+                "check": self.check.get().copied().unwrap_or(false), "eval64_sum_s": s(&self.ref_ns), "eval64_max_s": s(&self.ref_max)}));
+        }
+    }
+}
+
+/// Up to 64 lanes' first `words` words as bit-sliced rows (`lanes`' inverse): bit l of row c is bit c of lane l.
+fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
+    let mut out = vec![0u64; words * WORD];
+    for (w, rows) in out.chunks_exact_mut(WORD).enumerate() {
+        for (h, half) in rows.chunks_exact_mut(64).enumerate() {
+            let mut t = [0u64; 64];
+            for (x, r) in t.iter_mut().zip(grp) {
+                *x = r.get(w).map_or(0, |v| if h == 0 { v.lo } else { v.hi });
+            }
+            transpose64(&mut t);
+            half.copy_from_slice(&t);
+        }
+    }
+    out
+}
+
+/// Whether host unit slots are evaluated by [`IrUnitNet::eval64_flat`]; `FC_UNIT_FLAT=0`: by `eval64`, the path before it.
+pub fn unit_flat() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_UNIT_FLAT").as_deref() != Ok("0"))
+}
+
+/// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
+pub fn unit_profile() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_UNIT_PROFILE").as_deref() == Ok("1"))
+}
+
+fn flip_bit(w: &mut F128, t: usize) {
+    if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
 
 impl Stmt {
@@ -1694,7 +2039,7 @@ impl Stmt {
         shape_in_range(m, PT_LOCAL + nbl)?;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
-        let mut types: Vec<(usize, SparseMatrixCircuit<'static>)> = Vec::new();
+        let mut types: Vec<(usize, CscCircuit)> = Vec::new();
         let mut tables: Vec<Option<TableSide>> = Vec::new();
         let mut type_of: BTreeMap<String, usize> = BTreeMap::new();
         let mut ranges = Vec::new();
@@ -1709,12 +2054,12 @@ impl Stmt {
                         let net = &c.nets[i].1;
                         let k = 1usize << net.unit_log;
                         let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                        SparseMatrixCircuit::new(leak(pad(&net.a)), leak(pad(&net.b)))
+                        CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b))
                     }
                     Kind::Mask => {
                         let k = 1usize << r.slot_log;
                         let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
-                        SparseMatrixCircuit::new(leak(id.clone()), leak(id))
+                        CscCircuit::from_matrices(&id, &id)
                     }
                 };
                 types.push((r.slot_log, circ));
@@ -1759,7 +2104,8 @@ impl Stmt {
             csc_cache: OnceLock::new(),
         };
         let circuit = BlockCircuit { k_log, pin, types, tables, ranges, da, db };
-        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity })
+        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity,
+                  c0_identity: OnceLock::new() })
     }
 
     fn regions(c: &Composite) -> Result<Vec<RegionShape>, String> {
@@ -1779,19 +2125,6 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
-        if c.out_net != c.unit_net || c.typed.is_some() {
-            // the last stage's (or a typed instance's root's) output group is the output words (one slot per VU)
-            let (net, r) = (&c.nets[c.out_net].1, c.range_of(c.out_net));
-            let nbits = 16 * c.out_words.iter().sum::<usize>();
-            out.push(mk(Region::Out, [bits(0, nbits.trailing_zeros() as usize), bits(r.slot_log, r.count.trailing_zeros() as usize)].concat(),
-                        r.start() + net.out_groups[0].col * WORD)?);
-            return Ok(out);
-        }
-        let unit = c.unit();
-        let ur = c.unit_range();
-        let g0 = &unit.out_groups[0];
-        out.push(mk(Region::Out, [bits(0, 7 + g0.words.trailing_zeros() as usize), bits(ur.slot_log, ur.count.trailing_zeros() as usize)].concat(),
-                    ur.start() + g0.col * WORD)?);
         Ok(out)
     }
 
@@ -1823,14 +2156,25 @@ impl Stmt {
             }
         };
         let chained = c.ports.iter().position(|p| p.comps > 1);
+        // a bit row's first message bit past its length (its last byte's fill bit), and its padding's first bit in a block with
+        // its bytes (bit 7 of the 0x80 byte)
+        let filled = c.ports.iter().position(|p| p.v2 && p.bits % 8 != 0);
+        let mixed = c.ports.iter().position(|p| p.v2 && p.bytes() % 128 != 0);
         for g in 0..c.g {
             let inst = self.inst_of(b, g);
             let first = b == 0 && g == 0;
             let mut off = 0;
             for (p, port) in c.ports.iter().enumerate() {
                 let n = 2 * port.words;
-                let row: Vec<u8> = match (rows, inst) { (Some(r), Some(i)) => r[i * rb + off..i * rb + off + n].to_vec(), _ => vec![0; n] };
+                let row: Vec<u8> = match (rows, inst) { (Some(r), Some(i)) => r[i * rb + off..i * rb + off + n].to_vec(), _ => c.dummy_row(p) };
                 off += n;
+                let mut msg = c.rows[p].message(&row, port.bytes());
+                if t.fill_flip && first && filled == Some(p) {
+                    msg[port.bits / 8] ^= 1 << (port.bits % 8);
+                }
+                if t.mixed_pad_flip && first && mixed == Some(p) {
+                    msg[port.bytes()] ^= 0x80;
+                }
                 let mut cv = c.rows[p].midstate;
                 if t.midstate_flip && first && p == 0 {
                     cv[0] ^= 1;
@@ -1840,13 +2184,13 @@ impl Stmt {
                         cv[0] ^= 1;
                     }
                     let (slot, sub) = where_[p][k];
-                    let blk = &row[128 * k..128 * k + 128];
+                    let blk = &msg[128 * k..128 * k + 128];
                     let w = &mut si[g * n_sha + slot];
                     put(w, sin[2 * sub].0, &cv);
                     put(w, sin[2 * sub + 1].0, &words_be::<16>(blk));
                     compress(&mut cv, blk);
                 }
-                let mut pad = c.rows[p].pad;
+                let mut pad = words_be::<16>(&msg[128 * port.comps..]);
                 if t.pad_flip && first && p == 0 {
                     pad[0] ^= 1;
                 }
@@ -1871,7 +2215,7 @@ impl Stmt {
     pub fn unit_inputs(&self, rows: Option<&[u8]>, b: usize, k: usize) -> Vec<F128> {
         let c = &self.c;
         if c.typed.is_some() {
-            let words = c.ports.iter().map(|p| p.words).sum::<usize>();
+            let words = c.in_words();
             let mut w = vec![F128::ZERO; (16 * words).div_ceil(WORD)];
             let (Some(rows), Some(i)) = (rows, self.inst_of(b, k)) else { return w };
             let rb = c.row_bytes();
@@ -2132,11 +2476,19 @@ impl Stmt {
                     (x, f(zz), f(aa), f(bq))
                 }).collect()
             } else {
-                ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
-                    let (zz, aa, bq) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+                let t0 = Instant::now();
+                let one_pass = unit_flat() && net.one_pass();
+                let flat_s = t0.elapsed().as_secs_f64();
+                let prof = GroupProf::default();
+                let items = ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
+                    let (zz, aa, bq) = prof.eval(net, ni, gi, grp);
+                    let tl = Instant::now();
                     let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+                    prof.out(tl);
                     z.into_iter().zip(a).zip(b).enumerate().map(move |(l, ((z, a), b))| (64 * gi + l, z, a, b))
-                }).collect()
+                }).collect();
+                prof.print("slot_zab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
+                items
             };
             items
         }
@@ -2192,27 +2544,6 @@ impl Stmt {
         let np = c.ports.len();
         match reg {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
-            Region::Out if c.out_net != c.unit_net || c.typed.is_some() => {
-                let n_out = c.out_words.iter().sum::<usize>();
-                (0..c.g).flat_map(|g| (0..n_out).flat_map(move |o| match self.inst_of(b, g) { Some(i) => inst.outputs[i * n_out + o], None => c.dummy_outputs[o] }.to_le_bytes()))
-                    .collect()
-            }
-            Region::Out => {
-                let unit = c.unit();
-                let ur = c.unit_range();
-                let (g0, n_out) = (&unit.out_groups[0], c.out_words.iter().sum::<usize>());
-                (0..ur.count).flat_map(|k| {
-                    let (g, u) = (k / c.upv, k % c.upv);
-                    let mut w = vec![F128::ZERO; g0.words];
-                    let mut col = 0;
-                    for (j, &o) in c.leaves_out[u].iter().enumerate() {
-                        let v = match self.inst_of(b, g) { Some(i) => inst.outputs[i * n_out + o], None => c.dummy_outputs[o] } as u64;
-                        if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
-                        col += g0.bits[j];
-                    }
-                    w.into_iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat())
-                }).collect()
-            }
         }
     }
 
@@ -2360,7 +2691,7 @@ mod tests {
 
     #[test]
     fn regions_past_in_range_or_not_subcubes_are_refused() {
-        let region = |free: Vec<usize>| RegionShape { region: Region::Out, free, mask: 0, fixed: 0 };
+        let region = |free: Vec<usize>| RegionShape { region: Region::Digest(0), free, mask: 0, fixed: 0 };
         let many = |n: usize| (0..n).map(|i| region(vec![i % 20, 20])).collect::<Vec<_>>();
         assert!(regions_in_range(&many(IN_RANGE_REGIONS)).is_ok());
         assert!(regions_in_range(&many(IN_RANGE_REGIONS + 1)).unwrap_err().contains("Stmt.InRange"));
@@ -2396,6 +2727,69 @@ mod tests {
                 }
             }
             assert!(*got == want, "lane {l}");
+        }
+    }
+
+    #[test]
+    fn bit_rows_are_the_lanes_bits() {
+        let mut s = 0x1234_5678_9abc_def1u64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let (n, words) = (41, 5);
+        let grp: Vec<Vec<F128>> = (0..n).map(|_| (0..words).map(|_| F128::new(r(), r())).collect()).collect();
+        let rows = bit_rows(&grp, words);
+        assert_eq!(rows.len(), words * WORD);
+        for (c, &x) in rows.iter().enumerate() {
+            assert_eq!(x >> n, 0, "row {c} has bits past the lanes");
+            for (l, v) in grp.iter().enumerate() {
+                assert_eq!((x >> l) & 1, bit(&v[c / WORD], c % WORD), "row {c} lane {l}");
+            }
+        }
+    }
+
+    #[test]
+    fn unit_ab_into_is_the_lanes_packed() {
+        let mut s = 0x0bad_5eed_1234_5677u64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        for (rows, n, uw) in [(300, 41, 4), (512, 64, 4), (1000, 1, 8), (64, 7, 1), (4099, 64, 64)] {
+            let v: Vec<u64> = (0..rows).map(|_| r()).collect();
+            let (stride, off) = (4 * uw + 3, 1);
+            let mut dst = vec![!0u64; n * stride];
+            lanes_into(&v, n, &mut dst, stride, off, 2 * uw);
+            for (l, w) in lanes(&v, n, uw).iter().enumerate() {
+                let want: Vec<u64> = w.iter().flat_map(|x| [x.lo, x.hi]).collect();
+                assert_eq!(dst[l * stride + off..l * stride + off + 2 * uw], want[..], "rows {rows}, lane {l}");
+            }
+        }
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        let uw = 1usize << (net.unit_log - 7);
+        // an assertion row (its own column in A, B the constant) that fails: z is not a & b there
+        let mut bad = net.clone();
+        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a[i].is_empty() && !bad.b[i].is_empty()).unwrap();
+        bad.b[i] = vec![bad.const_pos];
+        bad.a[i].push(i);
+        for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&bad, 100, true)] {
+            let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| match (w, wide) {
+                (0, false) => F128::new(r() & ((1 << n) - 1), 0),
+                (_, false) => F128::ZERO,
+                _ => F128::new(r(), r()),
+            }).collect()).collect();
+            let (mut want, mut ok) = (Vec::new(), true);
+            for grp in ins.chunks(64) {
+                let (z, a, b) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, w)| x | (bit(&w[col / WORD], col % WORD) << l)));
+                let (z, a, b) = (lanes(&z, grp.len(), uw), lanes(&a, grp.len(), uw), lanes(&b, grp.len(), uw));
+                for ((z, a), b) in z.iter().zip(&a).zip(&b) {
+                    ok &= z.iter().zip(a).zip(b).all(|((z, a), b)| z.lo == a.lo & b.lo && z.hi == a.hi & b.hi);
+                    want.extend(a.iter().chain(b).flat_map(|x| [x.lo, x.hi]));
+                }
+            }
+            let mut out = vec![!0u64; 4 * uw * slots];
+            assert_eq!(unit_ab_into(net, 0, uw, &ins, &mut out), ok, "{slots} slots: z = a & b");
+            assert_eq!(ok, !std::ptr::eq(net, &bad), "a lookup's rows hold, the failed assertion does not");
+            if ok {
+                assert!(out == want, "{slots} slots: the packed a, b words");
+            }
         }
     }
 
@@ -2449,18 +2843,21 @@ mod tests {
         compress(&mut mid, &prefix);
         let pad = words_be::<16>(&pad_block(256));
         let zeros = "0".repeat(128);
+        let row = json!({"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
+                         "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())});
+        // the input row x, then y's output row (its one word zero-padded to a block): one hm96 slot per row
         let meta = json!({"format": crate::typed::FORMAT, "statement": crate::typed::STATEMENT, "program_sha512": zeros,
-            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA, "ports": [["x", 64, 1]],
-            "rows": [{"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
-                      "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())}],
-            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 16,
+            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA,
+            "ports": [["x", 64, 1], ["y", 64, 1]], "input_ports": 1, "rows": [row, row],
+            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 17,
             "ranges": [{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 2, "packed": true},
-                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 2},
-                       {"type": "unit", "net": "root", "slot_log": 11, "pos0": 24, "count": 2},
-                       {"type": "unit", "net": l0["sha512"], "slot_log": 9, "pos0": 104, "count": 4, "packed": true},
-                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 54, "count": 1}],
-            "per_vu": {SHA_NET: 1, HM_NET: 1, "root": 1, l0["sha512"].as_str().unwrap(): 2},
-            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]], "leaf_scheme": leaf_scheme(),
+                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 4},
+                       {"type": "unit", "net": "root", "slot_log": 11, "pos0": 32, "count": 2},
+                       {"type": "unit", "net": l0["sha512"], "slot_log": 9, "pos0": 136, "count": 4, "packed": true},
+                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 70, "count": 1}],
+            "per_vu": {SHA_NET: 1, HM_NET: 2, "root": 1, l0["sha512"].as_str().unwrap(): 2},
+            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
+            "leaf_scheme": leaf_scheme(),
             "policy": "calls/v1", "unit_in": [], "types": {r.clone(): root, c: callee}, "layouts": [l0, l1], "unit_layout": 1, "unit_type": r});
         // a row circuit: its port groups (bits per port), no rows but the constant
         let section = |name: &str, ins: &[usize], in_words: usize, outs: &[usize], out_words: usize| {
@@ -2549,6 +2946,41 @@ mod tests {
         assert!(ln.k == 31 && got == want);
     }
 
+    /// Every slot type's column-major fold is upstream's row-scatter fold of the same rows (`SparseMatrixCircuit`), both
+    /// sides and α-batched, at random weights: units with rows, units with none but the constant, and the mask.
+    #[test]
+    fn slot_type_folds_are_the_row_folds() {
+        use flock_core::lincheck::SparseMatrixCircuit;
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let st = Stmt::new(c.clone(), 2, json!({})).unwrap();
+        let mut s = 11u64;
+        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+        let alpha = rnd();
+        let mut seen = BTreeSet::new();
+        for (r, &(t, _, _)) in c.ranges.iter().zip(&st.circuit.ranges) {
+            if !seen.insert(t) {
+                continue;
+            }
+            let k = 1usize << r.slot_log;
+            let (a, b) = match r.kind {
+                Kind::Net(i) => {
+                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
+                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
+                }
+                Kind::Mask => {
+                    let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
+                    (id.clone(), id)
+                }
+            };
+            let eq: Vec<F128> = (0..k).map(|_| rnd()).collect();
+            let (rows, cols) = (SparseMatrixCircuit::new(&a, &b), &st.circuit.types[t].1);
+            assert_eq!(cols.fold_alpha_batched(alpha, &eq), rows.fold_alpha_batched(alpha, &eq), "{:?}", r.kind);
+            assert_eq!(cols.fold_split(&eq), rows.fold_split(&eq), "{:?}", r.kind);
+        }
+        assert_eq!(seen.len(), st.circuit.types.len());
+        assert!(c.ranges.iter().any(|r| r.kind == Kind::Mask) && c.nets.iter().any(|n| n.1.a.iter().filter(|x| !x.is_empty()).count() > 1));
+    }
+
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.
     #[test]
     fn typed_template_refusals() {
@@ -2560,16 +2992,16 @@ mod tests {
             lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
             Composite::parse(&lines.join("\n"), None).err().unwrap_or_default()
         };
-        // three VUs a block, every range laid out for them (aligned, disjoint) in 2^17 bits
+        // three VUs a block, every range laid out for them (aligned, disjoint) in 2^18 bits
         assert!(meta_of(&|m| {
             let part = m["ranges"][3]["net"].clone();
             m["vus_per_block"] = json!(3);
-            m["k_log"] = json!(17);
+            m["k_log"] = json!(18);
             m["ranges"] = json!([{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 3, "packed": true},
-                                 {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 8, "count": 3},
-                                 {"type": "unit", "net": "root", "slot_log": 11, "pos0": 48, "count": 3},
-                                 {"type": "unit", "net": part, "slot_log": 9, "pos0": 208, "count": 6, "packed": true},
-                                 {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 107, "count": 1}]);
+                                 {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 8, "count": 6},
+                                 {"type": "unit", "net": "root", "slot_log": 11, "pos0": 64, "count": 3},
+                                 {"type": "unit", "net": part, "slot_log": 9, "pos0": 272, "count": 6, "packed": true},
+                                 {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 139, "count": 1}]);
         }).contains("not a power of two"), "three roots");
         assert!(meta_of(&|m| m["wires"] = json!([])).contains("never stated"));
         assert!(Composite::parse(&text, None).is_ok());
@@ -2608,5 +3040,41 @@ mod tests {
             n += 1;
         }
         assert!(n >= 8, "{n} vectors");
+    }
+
+    /// A bit row's message as the Δ constants leave it (`const_bit`, else the row's bit at `block_bit`'s byte and bit),
+    /// compressed from the chaining value after `P(bits)`, is SHA-512 of `P(bits)` and the row's bytes (`sha512/row/v2`) at
+    /// every residue of the length: `bits` mod 8 of 0, 1 and 7, and its bytes mod 128 of 0, 1, 111, 112 and 127.
+    #[test]
+    fn bit_row_constants_complete_sha512_of_the_prefix_and_bytes() {
+        let mut s = 0x2545_f491_4f6c_dd1du64;
+        let mut lengths = vec![0usize, 8, 1024, 2048];
+        for bytes in [1usize, 111, 112, 127, 128, 129, 239, 240, 255, 256] {
+            lengths.extend([8 * bytes - 7, 8 * bytes - 1]);
+        }
+        for bits in lengths {
+            let bytes = bits.div_ceil(8);
+            let port = Port { name: "p".into(), words: bits.div_ceil(16), comps: (bytes + 17).div_ceil(128) - 1, bits, v2: true };
+            let prefix = row_prefix_v2(bits as u64);
+            let mut midstate = SHA512_IV;
+            compress(&mut midstate, &prefix);
+            let rc = RowConsts { prefix: prefix.clone(), midstate, tail: pad_tail(128 + bytes) };
+            let mut row: Vec<u8> = (0..bytes).map(|_| { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s as u8 }).collect();
+            if bits % 8 != 0 {
+                row[bytes - 1] &= (1u8 << (bits % 8)) - 1;
+            }
+            let mut cv = rc.midstate;
+            for k in 0..=port.comps {
+                let mut blk = [0u8; 128];
+                for t in 0..1024 {
+                    let (o, b) = block_bit(t);
+                    let v = const_bit(&port, &rc, k, t).unwrap_or_else(|| (row[128 * k + o] >> b) & 1 == 1);
+                    blk[o] |= (v as u8) << b;
+                }
+                compress(&mut cv, &blk);
+            }
+            let got: Vec<u8> = cv.iter().flat_map(|w| w.to_be_bytes()).collect();
+            assert_eq!(got, Sha512::digest([prefix, row].concat()).to_vec(), "bits {bits}");
+        }
     }
 }

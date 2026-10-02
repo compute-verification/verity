@@ -23,6 +23,52 @@ def _set(sid: str, n: int, tmp_path):
     return InputSet.open(summary["path"])
 
 
+PUBLIC_HEADER = {"format", "statement", "scheme", "set", "subcircuit", "range", "instances", "units", "circuit_sha512", "rows", "frame_v3",
+                 "shared_rows"}
+PUBLIC_FRAME = {"frame", "roots", "domain_ids", "bindings", "owner", "schemas", "row_key_sha512"}
+
+
+def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
+    """The verifier's file holds the frame-v3 roots, each row's hiding leaf ``b || c`` and structure, and nothing else: its
+    header is the layout's (names, the range, the unit indices, the circuit's pin, the frame's domains bound to those alone),
+    its body exactly the ``b || c`` (then a shared-row file's refs), each the hm96 commit of one of the prover's rows (an output
+    row too) under a nonzero salt. An output word, a digest of the set's values or any other value fails it."""
+    from verity.commitments import hm96
+    from verity.commitments.identity import identity_digest
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity_flock import ir_frame
+
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
+    hp, hv = json.loads(hp), json.loads(hv)
+    assert set(hv) <= PUBLIC_HEADER and set(hv["frame_v3"]) == PUBLIC_FRAME and hv == dict(hp, rows=False)
+    ports = [(nm, w) for nm, w, _ in meta["ports"]]
+    names = [nm for nm, _ in ports]
+    assert names[meta["input_ports"]:] == [nm for nm, _ in meta["out_ports"]], "one output row per output port"
+    fv, (lo, hi), n = hv["frame_v3"], hv["range"], hv["instances"]
+    assert all(set(fv[k]) == set(names) for k in ("roots", "domain_ids", "bindings", "schemas"))
+    assert set(fv["schemas"].values()) == {FC.ROW_SCHEMA}
+    for nm in names:
+        assert fv["bindings"][nm] == identity_digest(ir_frame.BINDING_TAG, {"set": hv["set"], "lo": lo, "hi": hi, "port": nm,
+                                                                            "schema": FC.ROW_SCHEMA})
+    shared = "shared_rows" in hv
+    counts = hv["shared_rows"] if shared else {nm: n for nm in names}
+    n_bcs = sum(counts.values())
+    assert len(bv) == FC.BC_BYTES * n_bcs + (4 * n * len(names) if shared else 0), "nothing but the b || c and refs"
+    assert bp.endswith(bv)
+    rb = sum(2 * w for _, w in ports)
+    rows_len = sum(2 * w * counts[nm] for nm, w in ports) if shared else n * rb
+    order = [(p, r) for p in range(len(ports)) for r in range(counts[names[p]])] if shared else \
+        [(p, i) for i in range(n) for p in range(len(ports))]
+    for k, (p, r) in enumerate(order):
+        w = ports[p][1]
+        at = (sum(2 * ports[q][1] * counts[names[q]] for q in range(p)) + 2 * w * r) if shared else r * rb + sum(2 * x for _, x in ports[:p])
+        salt = bp[rows_len + k * FC.SALT_BYTES:][:FC.SALT_BYTES]
+        words = np.frombuffer(bp[at:at + 2 * w], dtype="<u2").tolist()
+        assert any(salt), "a hiding leaf: the salt is not zero"
+        assert bv[k * FC.BC_BYTES:][:FC.BC_BYTES] == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt)
+
+
 @pytest.mark.slow
 def test_rope_composes_private_by_default(tmp_path):
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
@@ -59,41 +105,41 @@ def test_rope_composes_private_by_default(tmp_path):
     salt0, bc0 = body[4 * rb:4 * rb + FC.SALT_BYTES], body[4 * rb + 4 * np_ * FC.SALT_BYTES:][:FC.BC_BYTES]
     words = np.frombuffer(body[:2 * ports[0][1]], dtype="<u2").tolist()
     assert bc0 == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt0)
+    # instance 0's output row: its output words, zero-padded to whole SHA-512 blocks
+    j = meta["input_ports"]
+    assert [p[0] for p in ports[j:]] == [p.name for p in s.subcircuit.outputs] and meta["per_vu"][FC.HM_NET] == FC._pow2(len(ports))
+    at = sum(2 * w for _, w, _ in ports[:j])
+    got = np.frombuffer(body[at:at + 2 * ports[j][1]], dtype="<u2")
+    want = np.asarray(s.port(ports[j][0], 0, 1), dtype=np.uint16).reshape(-1)
+    assert (got[:len(want)] == want).all() and not got[len(want):].any() and ports[j][1] % 64 == 0
+    assert_public_only(text, prover, verifier)
 
 
 @pytest.mark.slow
 def test_shared_rows_are_tables_and_refs(tmp_path):
     """A shared-row file commits each port's distinct rows once (its frame-v3 tree over them) and gives every instance its refs:
-    a population whose instances 2 and 3 repeat 0 and 1 has two-row tables and refs 0, 1, 0, 1."""
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-
+    a population whose instances 2 and 3 repeat 0 and 1 has two-row tables and refs 0, 1, 0, 1, and its output rows one row per
+    instance (refs 0, 1, 2, 3), their equal values apart."""
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
     meta = json.loads(text.split("\n", 2)[1][5:])
     ports = [(nm, w) for nm, w, _ in meta["ports"]]
-    pick = [0, 1, 0, 1]
-    rows = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for nm, _ in ports}
+    pick, j = [0, 1, 0, 1], meta["input_ports"]
+    rows = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for nm, _ in ports[:j]}
     outs = {p.name: np.asarray(s.port(p.name, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for p in s.subcircuit.outputs}
     head = FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, share_rows=True, rows=rows, outs=outs)
-    assert head["shared_rows"] == {nm: 2 for nm, _ in ports}
+    assert head["shared_rows"] == {nm: 2 if k < j else 4 for k, (nm, _) in enumerate(ports)}, "an output row is its instance's own"
+    assert_public_only(text, *((tmp_path / f).read_bytes() for f in ("inst.bin", "pub.bin")))
     prover, verifier = ((tmp_path / f).read_bytes().split(b"\n", 1)[1] for f in ("inst.bin", "pub.bin"))
-    assert prover.endswith(verifier), "the public part is the same bytes"
-    n_out = sum(w for _, w in meta["out_ports"])
-    assert len(verifier) == 2 * len(ports) * FC.BC_BYTES + 4 * 4 * len(ports) + 2 * 4 * n_out
-    refs = np.frombuffer(verifier[2 * len(ports) * FC.BC_BYTES:][:16 * len(ports)], dtype="<u4").reshape(4, len(ports))
-    assert refs.tolist() == [[r] * len(ports) for r in pick]
-    # the tables: port-major rows, then port-major salts; each table row's b || c is hm96-sha512 of its row and salt
-    rows_len = sum(2 * 2 * w for _, w in ports)
+    n_bcs = 2 * j + 4 * (len(ports) - j)
+    refs = np.frombuffer(verifier[n_bcs * FC.BC_BYTES:][:16 * len(ports)], dtype="<u4").reshape(4, len(ports))
+    assert refs.tolist() == [[r] * j + [i] * (len(ports) - j) for i, r in enumerate(pick)]
+    # the tables: port-major rows (the input rows' distinct rows, every instance's output row)
     at = 0
     for k, (nm, w) in enumerate(ports):
-        table = np.frombuffer(prover[at:at + 2 * 2 * w], dtype="<u2").reshape(2, w)
-        assert (table == rows[nm][:2]).all()
-        for r in range(2):
-            salt = prover[rows_len + (2 * k + r) * FC.SALT_BYTES:][:FC.SALT_BYTES]
-            bc = verifier[(2 * k + r) * FC.BC_BYTES:][:FC.BC_BYTES]
-            assert bc == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(table[r].tolist(), 16, ROLE_X), salt)
-        at += 2 * 2 * w
+        table = np.frombuffer(prover[at:at + 2 * head["shared_rows"][nm] * w], dtype="<u2").reshape(-1, w)
+        assert (table[:, :rows[nm].shape[1]] == rows[nm][:2]).all() if k < j else (table[:, :outs[nm].shape[1]] == outs[nm]).all()
+        at += table.nbytes
     per = FC.write(text, s, 0, 4, None, tmp_path / "per.bin", b"k" * 32, rows=rows, outs=outs)
     assert "shared_rows" not in per and per["frame_v3"]["roots"] != head["frame_v3"]["roots"]
 
@@ -102,38 +148,50 @@ def test_shared_rows_are_tables_and_refs(tmp_path):
 def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
     """Tables and refs as given (a value-independent layout): an equal row stays a separate table row with its own salt, the
     refs and the committer's salts are written as given."""
-    from verity.commitments import hm96
-    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
-    names = [nm for nm, _, _ in json.loads(text.split("\n", 2)[1][5:])["ports"]]
-    base = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1) for nm in names}
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    names = [nm for nm, _, _ in meta["ports"]]
+    base = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1) for nm in ("x", "cs")}
     tables = {"x": base["x"][[0, 1, 0]], "cs": base["cs"][[0, 1]]}
     refs = {"x": [0, 1, 2, 1], "cs": [0, 1, 0, 1]}
     outs = {p.name: np.asarray(s.port(p.name, 0, 4), dtype=np.uint16).reshape(4, -1)[[0, 1, 0, 1]] for p in s.subcircuit.outputs}
-    salts = {nm: [bytes([k, r]) * (FC.SALT_BYTES // 2) for r in range(len(tables[nm]))] for k, nm in enumerate(names)}
+    counts = {"x": 3, "cs": 2, **{nm: 4 for nm in outs}}
+    salts = {nm: [bytes([k + 1, r]) * (FC.SALT_BYTES // 2) for r in range(counts[nm])] for k, nm in enumerate(names)}
     head = FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", share_rows=True, outs=outs, tables=tables, refs=refs,
                     salts=salts)
-    assert head["shared_rows"] == {"x": 3, "cs": 2}
+    assert head["shared_rows"] == counts, "the output rows are the instances' own: equal outputs stay apart"
+    assert_public_only(text, *((tmp_path / f).read_bytes() for f in ("inst.bin", "pub.bin")))
     prover, verifier = ((tmp_path / f).read_bytes().split(b"\n", 1)[1] for f in ("inst.bin", "pub.bin"))
-    n_rows = sum(len(tables[nm]) for nm in names)
+    n_rows = sum(counts.values())
     got = np.frombuffer(verifier[n_rows * FC.BC_BYTES:][:16 * len(names)], dtype="<u4").reshape(4, len(names))
-    assert got.tolist() == [[refs[nm][i] for nm in names] for i in range(4)]
-    rows_len = sum(2 * t.size for t in tables.values())
-    at, row = 0, 0
+    assert got.tolist() == [[refs[nm][i] if nm in refs else i for nm in names] for i in range(4)]
+    rows_len = sum(2 * t.size for t in tables.values()) + sum(2 * 4 * w for nm, w, _ in meta["ports"] if nm in outs)
+    row = 0
     for nm in names:
-        for r, words in enumerate(tables[nm]):
-            assert (np.frombuffer(prover[at:at + 2 * words.size], dtype="<u2") == words).all()
+        for r in range(counts[nm]):
             assert prover[rows_len + row * FC.SALT_BYTES:][:FC.SALT_BYTES] == salts[nm][r]
-            bc = verifier[row * FC.BC_BYTES:][:FC.BC_BYTES]
-            assert bc == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words.tolist(), 16, ROLE_X), salts[nm][r])
-            at, row = at + 2 * words.size, row + 1
-    x_start = sum(len(tables[nm]) for nm in names[:names.index("x")])
+            row += 1
+    o_start = sum(counts[nm] for nm in names[:meta["input_ports"]])
+    out0, out2 = (verifier[(o_start + r) * FC.BC_BYTES:][:FC.BC_BYTES] for r in (0, 2))
+    assert out0 != out2, "equal outputs, separate rows and salts: different leaves"
+    x_start = sum(counts[nm] for nm in names[:names.index("x")])
     x0, x2 = (verifier[(x_start + r) * FC.BC_BYTES:][:FC.BC_BYTES] for r in (0, 2))
     assert x0 != x2, "equal rows, different salts: different leaves"
     with pytest.raises(ValueError, match="one ref per instance"):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", share_rows=True, outs=outs, tables=tables, refs={**refs, "x": [0, 1, 3, 1]})
+    reg = {"cs": {"value": "w", "positions": [4, 2], "paths": ["00" * 64, "11" * 64]}}
+    shared = dict(share_rows=True, outs=outs, tables=tables, refs=refs)
+    assert FC.write(text, s, 0, 4, None, tmp_path / "reg.bin", salts=salts, registered=reg, **shared)["registered"] == reg
+    assert json.loads((tmp_path / "reg.bin").read_bytes().split(b"\n", 1)[0])["registered"] == reg
+    with pytest.raises(ValueError, match="one position and path per table row"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"cs": {**reg["cs"], "paths": ["00" * 64]}}, **shared)
+    with pytest.raises(ValueError, match="registered salts"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", registered=reg, **shared)
+    out = next(iter(outs))
+    with pytest.raises(ValueError, match="some input ports' tables"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={out: {**reg["cs"], "positions": [0] * 4,
+                                                                                          "paths": ["00" * 64] * 4}}, **shared)
 
 
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):

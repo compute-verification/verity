@@ -54,6 +54,12 @@ secrets) the environment stands in:
 No value is ever printed. `research data mint-credential` already read the
 same variables.
 
+On a cloud VM a long-lived shell can lose the injected secrets that a fresh
+tmux login shell still has. When a secret named in
+`$CLOUD_AGENT_INJECTED_SECRET_NAMES` is missing from the shell, the store,
+`research queue ready`, node ssh and the Nebius scripts fail and say `rerun
+from a fresh tmux login shell` (`secret_hint.py`).
+
 ## Commands
 
 ~~~text
@@ -69,8 +75,9 @@ research run --queue --source GITDIR --project P [--kind K] [--question Q] [--me
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (tools/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
-research status [--refresh] [--all] [--json]
-research inspect RUN [--json]
+research status [RUN] [--refresh] [--all] [--json]
+research inspect RUN [--json]            # fetch, status RUN and inspect take a run another VM launched (a full id): found on
+                                         # --on NAME, else on each ssh machine, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
 research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
@@ -82,6 +89,7 @@ research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
+research merge --train --prepare BRANCH [--onto BASE] N@SHA ...      # build a train, lint it, push it for train.sh
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
@@ -107,6 +115,13 @@ polled there), and fast-forwards the target to it when it passes: the exact tree
 the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
 the longest prefix that passed.
 
+`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain of merges, onto
+the remote's `--into` or the prep branch of a train ahead (`--onto`), in a scratch worktree, so the checkout it runs from is never
+touched. Each `N@SHA` (pull request N) or `BRANCH@SHA` is fetched and refused unless its head is still SHA. The build stops at
+the first ref that doesn't merge. Then check's preflight runs on the result (`check.py --preflight`: `uv.lock`, the wall-clock
+lint and the repository's tests, among them the markdown caps), and the tip is pushed as BRANCH, never forced, and read back.
+Nothing is recorded or landed: `tools/check/train.sh BRANCH MACHINE` checks it, and `research merge BRANCH` lands it.
+
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`), and `research merge --sweep` does only that.
 It fetches the remote's copy of the target, closes every open pull request whose head is on it with a one-line comment naming
 the commit it landed in, and retargets onto the target every open pull request whose base branch's tip is on it. That covers
@@ -123,10 +138,13 @@ the target's checkout): when the merge's diff touches a prefix, only an attempt 
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
 needs.
 
+**Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
+label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
+
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`, which replaces the merge-request note), and has the grants the rules file
+ready PR`, a `ready` label on `pr:{n}@{head}`, which will replace the merge request once the queue lands trains), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
@@ -227,8 +245,10 @@ starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. The runner's argv carries the workload's command, so a
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
-publishes. Stop a run through its workload's process group (`kill -TERM
--<pgid>`, status.json `pgid`). `--exclusive` refuses if any run is live, and
+publishes. Stop a run with `research cancel RUN --reason TEXT` from the launcher: SIGTERM to its workload's process group
+(status.json `pgid`), recorded first as a manual cancel in events.jsonl, so the run classifies `CANCELLED_MANUAL`. On the
+machine the same is `kill -TERM -<pgid>`. Never SIGKILL the runner: one killed during its custody upload leaves the run without
+custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
@@ -378,6 +398,38 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
+
+### Retention of node data: `research keep`, `research retention`
+
+`src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data: `path`
+(relative to the root), `node`, `owner` (a lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority`
+(`low|normal|high|keep`), `preserved` (an art id or null), `regenerate` (a command or null), `why`. It covers everything beneath its
+path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
+gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
+campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
+is written for it, and a sidecar wins.
+
+~~~text
+research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
+research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
+research retention report [--root /workspace] [--depth 2] [--json]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+~~~
+
+`--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
+a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
+path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
+
+Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
+then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
+expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
+`/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are
+read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
+count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
+for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
+no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
+unowned, unpreserved bitsets that nobody could decide to delete.
 
 ### Slack
 

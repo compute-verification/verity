@@ -1,6 +1,7 @@
-"""Proposition 2 and the warden's semantics. By name, the tests mirror the ten theorems `NetTiming.Occupancy` pins and
-its three proved but unpinned lemmas, `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`. The warden tests
-check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""
+"""Proposition 2 and the warden's semantics. By name, the tests mirror Proposition 2's ten guarantees
+(`NetTiming.SecurityProofs.CardFree` and the rest, proved in `NetTiming.SecurityProofs.Occupancy`) and that module's
+three proved but unpinned lemmas, `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`. The warden tests check
+the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""
 
 import itertools
 import math
@@ -47,7 +48,7 @@ def test_occ_fill_leftPacked_and_injective(T, r):
         real = [s for row in g for s in row if s is not None]
         assert real == frames(sum(counts))  # the k-th frame in the k-th real slot
         seen.add(g)
-    assert len(seen) == (r + 1) ** T  # fill_injective
+    assert len(seen) == (r + 1) ** T  # SecurityProofs.FillInjective
 
 
 def test_exists_fill_of_leftPacked():
@@ -65,8 +66,8 @@ def test_exists_fill_of_leftPacked():
 def test_card_counts(T, r):
     vectors = list(itertools.product(range(r + 1), repeat=T))
     for M in range(T * r + 1):
-        assert sum(sum(n) == M for n in vectors) <= capacity.all_released_patterns(T, M)  # card_counts_eq_le
-        assert sum(sum(n) <= M for n in vectors) <= capacity.available_patterns(T, M)  # card_counts_le_le
+        assert sum(sum(n) == M for n in vectors) <= capacity.all_released_patterns(T, M)  # SecurityProofs.CardCountsEqLe
+        assert sum(sum(n) <= M for n in vectors) <= capacity.available_patterns(T, M)  # SecurityProofs.CardCountsLeLe
 
 
 def test_released_self():
@@ -83,7 +84,7 @@ def test_sum_released_le_and_conservation():
         r = rng.randint(1, 4)
         enq = [rng.randint(0, 6) for _ in range(rng.randint(1, 10))]
         out = released(r, enq)
-        assert sum(out) <= sum(enq)  # sum_released_le
+        assert sum(out) <= sum(enq)  # SecurityProofs.SumReleasedLe
         assert all(0 <= x <= r for x in out)
 
 

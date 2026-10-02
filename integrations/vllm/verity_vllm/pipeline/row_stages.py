@@ -8,7 +8,8 @@
   workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
   ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
   row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
-  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``).
+  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``, over the Programs the Commit reads with ``boundary-plan``, which
+  writes the Commit's call-boundary plan on a PASS).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
   a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
@@ -41,6 +42,7 @@ from typing import Any, Callable
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_group as RG
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
@@ -85,7 +87,7 @@ class SingleRow(Row):
             if stage_on(self.stages, "commit"):
                 self.commit()
             if stage_on(self.stages, "replay"):
-                RC.replay(self)
+                RG.replay(self) if self.ck_.group else RC.replay(self)
                 self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
@@ -374,7 +376,7 @@ class SingleRow(Row):
             self.log("BUILD FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10 if mrc == 0 else 13)
-        self.call_boundaries(to)
+        self.call_boundaries(to, RP.call_boundaries_cmd(self))
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
@@ -693,7 +695,8 @@ class SingleRow(Row):
             self.tl("validate.manifest_verify", "end", ("rc", 1))
             self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
 
-    def commit(self) -> None:
+    def commit_prepare(self) -> tuple[int, list[str]]:
+        """The Commit stage up to its command line -> (its timeout, its command)."""
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)
@@ -729,14 +732,22 @@ class SingleRow(Row):
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
         cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
+        return to, cmd
+
+    def commit(self) -> None:
+        d, ck = self.d, self.ck_
+        if ck.group:
+            self.replay_pending = RG.commit(self, CAP)
+            return
+        to, cmd = self.commit_prepare()
         t0 = int(time.time())
-        if ck.hot_engine == "1":
+        if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log",
                               self.cli("hot", "submit", "--root", self.env.hot_root, "--idle", self.env.hot_idle, "--", *cmd[4:]))
         else:
             self.gpu_exclusive("commit-cold")
-            rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
+            rck = self.run_gpu("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
         if self.config_run:
             self.replay_pending = RC.commit_verdict(self, rck, wall)

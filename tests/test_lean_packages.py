@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,9 +71,27 @@ def test_every_record_merges_with_the_driver():
 CORE = ROOT / "packages" / "verity" / "lean"
 
 
-def test_core_package_has_no_dependencies():
-    """Core's own proofs (`packages/verity/lean`) live in a package of their own that requires nothing: core depends on no
-    backend, and a Lean dependency would put one in its build."""
+def _requires(pkg: Path) -> list[dict]:
+    return tomllib.loads((pkg / "lakefile.toml").read_text()).get("require", []) if (pkg / "lakefile.toml").exists() else []
+
+
+def test_core_package_requires_only_mathlib():
+    """Core's Lean (`packages/verity/lean`) is the model every protocol states its guarantees in, so it requires nothing of
+    the repository: a path dependency here would put a protocol or a backend under every guarantee."""
     assert CORE in lake_packages()
-    assert "require" not in (CORE / "lakefile.toml").read_text()
-    assert json.loads((CORE / "lake-manifest.json").read_text())["packages"] == []
+    assert [r["name"] for r in _requires(CORE)] == ["mathlib"]
+
+
+def test_protocol_packages_require_core_and_protocols_only():
+    """A protocol's Lean package may require core's and other protocols' packages (the ruling of Oct 1 in
+    `.agents/skills/lean-proofs/SKILL.md`), never a backend's: backends instantiate protocols, not the reverse."""
+    bad = []
+    for pkg in lake_packages():
+        if pkg.relative_to(ROOT).parts[0] != "protocols":
+            continue
+        for r in _requires(pkg):
+            if "path" in r:
+                target = (pkg / r["path"]).resolve()
+                if target != CORE and target.relative_to(ROOT).parts[0] != "protocols":
+                    bad.append(f"{pkg.relative_to(ROOT)} requires {target.relative_to(ROOT)}")
+    assert not bad, bad
