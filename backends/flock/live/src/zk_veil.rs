@@ -84,6 +84,41 @@ pub fn take_vtime() -> Vec<(&'static str, f64)> {
     VTIME.with(|v| v.borrow_mut().take().unwrap_or_default())
 }
 
+/// Level 0's padding codeword `Enc(c·ybar ‖ ybar)` (`flock_core::pcs::ligerito::zk::pad_codeword`) at the positions `qs` only:
+/// `(c + Ŵ_L(ω_q)) · Σ_{i < t_pad} ybar_i X_i(ω_q)` by coordinates, where `ω_q = Σ_{k ∈ bits(q)} x^k` is the standard additive
+/// NTT's `q`-th point, `Ŵ_j` its normalized subspace polynomials (F_2-linear: `Ŵ_j(x^k)` is 0 below `j` and 1 at `j`), `X_i =
+/// Π_{j ∈ bits(i)} Ŵ_j` the novel basis and `L = 2^log_msg`.
+pub fn pad_at(ybar: &[F256], log_msg: usize, log_inv_rate: usize, qs: &[usize]) -> Vec<F256> {
+    use flock_core::pcs::ligerito::zk::PAD_C;
+    let d = log_msg + log_inv_rate;
+    assert!(ybar.len() <= 1 << log_msg && d <= 64);
+    // w[j][k - j] = Ŵ_j(x^k), k ≥ j (AdditiveNttF128's table)
+    let mut w: Vec<Vec<F128>> = vec![(0..d).map(|k| F128::new(1u64 << k, 0)).collect()];
+    for j in 1..d {
+        let p = &w[j - 1];
+        let row = (1..p.len()).map(|k| p[k] * (p[k] + p[0])).collect();
+        w.push(row);
+    }
+    for row in w.iter_mut() {
+        let inv = row[0].inv();
+        row.iter_mut().for_each(|v| *v *= inv);
+    }
+    let bits = (usize::BITS - ybar.len().saturating_sub(1).leading_zeros()) as usize;
+    let coords: [Vec<F128>; 2] = [0, 1].map(|k| ybar.iter().map(|y| y.coordinates()[k]).collect());
+    qs.iter().map(|&q| {
+        let what = |j: usize| (j..d).filter(|&k| (q >> k) & 1 == 1).fold(F128::ZERO, |a, k| a + w[j][k - j]);
+        let wj: Vec<F128> = (0..bits).map(what).collect();
+        let mut x = vec![F128::ONE; ybar.len()];
+        for i in 1..ybar.len() {
+            let t = (usize::BITS - 1 - i.leading_zeros()) as usize;
+            x[i] = x[i ^ (1 << t)] * wj[t];
+        }
+        let f = PAD_C + what(log_msg);
+        let [a, b] = [0, 1].map(|k| coords[k].iter().zip(&x).fold(F128::ZERO, |acc, (y, xi)| acc + *y * *xi) * f);
+        F256::new(a, b)
+    }).collect()
+}
+
 /// How the verifier's replayed lincheck computes `comb_partial` (`FC_ZK_LINCHECK`, default `flat`): upstream's flat fold, from
 /// the block's structure after the rounds (`session_verify`'s `partial`), or both, rejecting when they differ.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1323,6 +1358,18 @@ mod tests {
         let mut pr2 = pr.clone();
         pr2.opened[3].0 += F128::ONE;
         assert!(verify_inner(&pr2, &lay, vec![("t", l)], &mut Tape::new(&coins)).is_err());
+    }
+
+    #[test]
+    fn pad_at_is_the_padding_codeword_at_every_position() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([5; 32]));
+        for (n, (log_msg, rate, t_pad)) in [(4, 1, 1), (4, 1, 5), (5, 2, 16), (6, 1, 33), (7, 3, 100), (9, 1, 436)].into_iter().enumerate() {
+            let w = rng.f128s(STREAM_PADS, n as u64, 2 * t_pad);
+            let ybar: Vec<F256> = (0..t_pad).map(|i| F256::new(w[2 * i], w[2 * i + 1])).collect();
+            let full = flock_core::pcs::ligerito::zk::pad_codeword(&ybar, log_msg, rate);
+            let qs: Vec<usize> = (0..full.len()).collect();
+            assert_eq!(pad_at(&ybar, log_msg, rate, &qs), full, "log_msg={log_msg} rate={rate} t_pad={t_pad}");
+        }
     }
 
     #[test]
