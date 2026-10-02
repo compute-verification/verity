@@ -196,8 +196,10 @@ def test_a_leased_commit_reads_its_checkpoint_files_whole_and_an_unleased_one_re
         files.append(tmp_path / f"model-{i}.safetensors")
         files[-1].write_bytes(os.urandom(n))
     leased = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started")}
-    assert GL.prefetch([str(f) for f in files], environ={"GPU_LEASE": "/l/gpu-lease"}) is None and not GL._PREFETCH
-    assert GL.prefetch([], environ=leased) is None and not GL._PREFETCH
+    called = []
+    assert GL.prefetch(lambda: called.append(1) or [str(f) for f in files], environ={"GPU_LEASE": "/l/gpu-lease"}) is None
+    assert not called and not GL._PREFETCH
+    assert GL.prefetch(list, environ=leased) is None and not GL._PREFETCH
     pf = GL.Prefetch([str(f) for f in files] + [str(tmp_path / "gone.safetensors")], threads=2, chunk=1 << 20)
     tl = _TL()
     rec = pf.wait(tl)
@@ -206,11 +208,21 @@ def test_a_leased_commit_reads_its_checkpoint_files_whole_and_an_unleased_one_re
     assert [e[:2] for e in tl.ev] == [("start", "gpu_lease.prefetch_wait"), ("end", "gpu_lease.prefetch_wait")] and tl.ev[1][2] == rec
 
 
+def test_a_checkpoint_that_cant_be_named_is_left_to_the_engine_build(tmp_path, capsys):
+    leased = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started")}
+
+    def missing():
+        raise SystemExit("o/m: local snapshot /x missing")
+
+    assert GL.prefetch(missing, environ=leased) is None and not GL._PREFETCH
+    assert "checkpoint prefetch: none" in capsys.readouterr().out
+
+
 def test_the_commit_waits_for_its_checkpoint_read_before_it_asks_for_the_gpu(tmp_path, monkeypatch):
     env = {"GPU_LEASE": "/l/missing-gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started"), "CUDA_VISIBLE_DEVICES": ""}
     monkeypatch.setattr(GL, "cuda_initialised", lambda: False)
     (tmp_path / "w.safetensors").write_bytes(b"x" * 4096)
-    pf = GL.prefetch([str(tmp_path / "w.safetensors")], environ=env)
+    pf = GL.prefetch(lambda: [str(tmp_path / "w.safetensors")], environ=env)
     assert GL._PREFETCH == [pf]
     asked = []
     monkeypatch.setattr(pf, "wait", lambda tl=None: asked.append(os.path.exists(tmp_path / "gpu_lease.requested")) or {})
@@ -222,7 +234,7 @@ def test_the_commit_waits_for_its_checkpoint_read_before_it_asks_for_the_gpu(tmp
 def test_the_commit_starts_its_checkpoint_read_before_the_producer_facts_and_the_lease():
     src = Path(GL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
-    marks = ["GL.prefetch(_ckpt_files)", "CP.producer_facts(", "GL.acquire(TL)", 'TL.start("engine.build"']
+    marks = ["GL.prefetch(lambda: va.checkpoint_files(args.checkpoints", "CP.producer_facts(", "GL.acquire(TL)", 'TL.start("engine.build"']
     at = [main.index(m) for m in marks]
     assert at == sorted(at) and main.count("GL.prefetch(") == 1, dict(zip(marks, at))
 

@@ -1167,20 +1167,13 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # at their first consumer's input, not the module's forward output (oracle_compare.promote_handed_down); form (B) reads them every pair
     oracle_producers: tuple[dict | None, dict] | None = None
     plan_rec, (cb_plan, cb_rec) = None, BP.use(args, required_manifest if kinds else None, tl=TL)
-    if GL.will_acquire() and (_HOT or {}).get("eng") is None:
-        try:
-            _ckpt_files = va.checkpoint_files(args.checkpoints, case=va.case_of(wl, args.case))
-        except (Exception, SystemExit) as _e:  # noqa: BLE001  (the engine build names the checkpoint's error itself)
-            _ckpt_files = []
-            print(f"[delta] checkpoint prefetch: none ({_e!r})"[:300], flush=True)
-        GL.prefetch(_ckpt_files)
+    GL.prefetch(lambda: va.checkpoint_files(args.checkpoints, case=va.case_of(wl, args.case)))     # the engine's files, read beside the facts
     if required_manifest is not None and kinds:
         from verity_vllm.check import oracle_compare as _OCP
         oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, wl["requests"], wl["sampling"], tl=TL)
         print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
         if oracle_producers[0]:
-            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
-            oracle_producers[1]["handed_down"] = _hd
+            oracle_producers[1]["handed_down"] = _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
             if _hd["rows"]:
                 print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
                       f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "

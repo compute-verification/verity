@@ -154,12 +154,20 @@ class Prefetch:
         return rec
 
 
-def prefetch(paths: list[str], environ: MutableMapping[str, str] | None = None) -> Prefetch | None:
-    """Start reading ``paths`` (the engine's checkpoint files) when this process will take a lease; ``acquire`` waits for the read
-    before it asks for the GPU. Without a lease, nothing."""
-    if not paths or not will_acquire(environ):
+def prefetch(paths: Callable[[], list[str]], environ: MutableMapping[str, str] | None = None) -> Prefetch | None:
+    """Start reading ``paths()`` (the engine's checkpoint files) when this process will take a lease; ``acquire`` waits for the read
+    before it asks for the GPU. Without a lease, nothing (``paths`` is not called). A checkpoint that can't be named is not read here:
+    the engine build reports it."""
+    if not will_acquire(environ):
         return None
-    pf = Prefetch(paths)
+    try:
+        files = paths()
+    except (Exception, SystemExit) as e:  # noqa: BLE001
+        print(f"[delta] checkpoint prefetch: none ({e!r})"[:300], flush=True)
+        return None
+    if not files:
+        return None
+    pf = Prefetch(files)
     _PREFETCH.append(pf)
     return pf
 
