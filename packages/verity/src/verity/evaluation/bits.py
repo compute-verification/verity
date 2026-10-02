@@ -26,6 +26,8 @@ from verity.ir import boolean as BL
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ir.types import Type
 
+from .reference import refuse_registered_tables
+
 __all__ = ["Compiled", "compile", "evaluate_bits", "evaluate_words"]
 
 _KINDS = ("and", "xor", "not")
@@ -238,6 +240,7 @@ def _evaluate(c: Compiled, bits: np.ndarray) -> np.ndarray:
 
 
 def _leaf_bits(c: Compiled, inputs: Sequence[Any]) -> tuple[np.ndarray, int]:
+    refuse_registered_tables(c.target, inputs, "evaluate_bits")
     if len(inputs) != len(c.params):
         raise TypeError(f"{c.target}: expected {len(c.params)} input arrays, got {len(inputs)}")
     cols, n = [], None
@@ -292,6 +295,7 @@ def evaluate_words(target: Any, *inputs: Any) -> np.ndarray:
     from .batch import type_dtype, type_shape
 
     c = compile(target)
+    refuse_registered_tables(c.target, inputs, "evaluate_words")
     if len(inputs) != len(c.params):
         raise TypeError(f"{c.target}: expected {len(c.params)} input arrays, got {len(inputs)}")
     cols, n = [], None

@@ -7,9 +7,14 @@ ints: a primitive through its evaluator, a composite specialization through the 
 A target is an IR Definition (`PrimitiveDefinition`, a static-free `CompositeDefinition`, a complete
 `SpecializedDefinition`) or a `ScalarReference`: a silicon function that no core Definition wraps yet (the FP8 and NVFP4
 steps), with a signature in IR types so that batching, sampling and checking treat both alike.
+
+A table held in a registered input (`tanh_rn`: 2^27 entries of two words) can be passed to `evaluate` as a `RegisteredTable`
+instead of its flat word list: the same words, read one at a time when a gate asks for them.  The result is the flattened
+form's, bit for bit; `evaluate_batch` and the bit-sliced evaluators refuse it by name (`refuse_registered_tables`).
 """
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
@@ -17,17 +22,20 @@ from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, Specialized
 from verity.ir.evaluate import ExecutionTranscript, MissingValue, evaluate_call, evaluate_region
 from verity.ir.layout import FunctionCall
 from verity.ir.program import Program
+from verity.ir.refs import Affine
 from verity.ir.types import Type, Value
 
 __all__ = [
     "ExecutionTranscript",
     "MissingValue",
+    "RegisteredTable",
     "ScalarReference",
     "Target",
     "evaluate",
     "evaluate_call",
     "evaluate_region",
     "key_of",
+    "refuse_registered_tables",
     "resolve",
     "signature_of",
     "standalone_call",
@@ -59,6 +67,45 @@ class ScalarReference:
     @property
     def complete(self) -> bool:
         return all(k in self.bindings for k in self.statics)
+
+
+@dataclass(frozen=True, eq=False)
+class RegisteredTable:
+    """A table held in a registered input, as an operand of `evaluate`: ``word(j)`` is the word of its leaf ``j`` (``0 <= j <
+    leaves``, in the parameter's leaf order), called only for the leaves a gate reads.
+
+    ``declared_by`` is a primitive that declares ``name`` as a ``registered`` table (`PrimitiveDefinition.tables`); no other
+    table is taken this way: a ``library`` table is an operation's own definition, gates and never an operand.  It binds an
+    aggregate parameter of ``leaves`` leaves, of one width (one `Input` batch of the target's standalone Program)."""
+
+    name: str
+    word: Callable[[int], int] = field(repr=False)
+    leaves: int
+    declared_by: PrimitiveDefinition
+
+    def __post_init__(self) -> None:
+        kinds = {k for n, k in getattr(self.declared_by, "tables", ()) if n == self.name}
+        if "registered" not in kinds:
+            what = "it as a library table, an operation's own definition" if "library" in kinds else "no table of that name"
+            raise ValueError(f"{self.name!r} is not a registered table of {self.declared_by.id}: it declares {what}")
+        if self.leaves < 1:
+            raise ValueError(f"registered table {self.name!r}: {self.leaves} leaves")
+
+    def read(self, j: int) -> int:
+        """Leaf ``j``'s word, indexed as the flattened form's list is (a negative ``j`` counts from the end)."""
+        if j < 0:
+            j += self.leaves
+        if not 0 <= j < self.leaves:
+            raise IndexError(f"registered table {self.name!r} has {self.leaves} leaves, not {j}")
+        return int(self.word(j))
+
+
+def refuse_registered_tables(target_id: str, inputs: Sequence[Any], who: str) -> None:
+    """Raise, by name, for a `RegisteredTable` among ``inputs``: ``who`` takes arrays, one row per instance."""
+    for j, a in enumerate(inputs):
+        if isinstance(a, RegisteredTable):
+            raise TypeError(f"{target_id} argument {j}: {who} takes arrays, not the registered table {a.name!r} "
+                            f"({a.leaves} leaves); `verity.evaluation.evaluate` reads it lazily, one instance at a time")
 
 
 Target = PrimitiveDefinition | CompositeDefinition | SpecializedDefinition | ScalarReference
@@ -127,10 +174,99 @@ def _flat(args: Sequence[Any]) -> list[int]:
     return out
 
 
+def _leaves(a: Any) -> list[int]:
+    return [a] if isinstance(a, int) else [int(v) for v in a]
+
+
+class _Operands:
+    """The flattened operand list of ``args`` with each `RegisteredTable`'s words read on demand: ``ops[j]`` is ``flat[j]``."""
+
+    def __init__(self, args: Sequence[Any]) -> None:
+        self.starts: list[int] = []
+        self.parts: list[Any] = []
+        n = 0
+        for a in args:
+            part = a if isinstance(a, RegisteredTable) else _leaves(a)
+            self.starts.append(n)
+            self.parts.append(part)
+            n += part.leaves if isinstance(part, RegisteredTable) else len(part)
+        self.n = n
+
+    def __getitem__(self, j: int) -> int:
+        if j < 0:
+            j += self.n
+        if not 0 <= j < self.n:
+            raise IndexError("list index out of range")
+        k = bisect.bisect_right(self.starts, j) - 1
+        part, i = self.parts[k], j - self.starts[k]
+        return part.read(i) if isinstance(part, RegisteredTable) else part[i]
+
+
+class _Transcript(dict):
+    """An execution transcript whose registered tables' Input gates are read through the table, never stored."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.los: list[int] = []
+        self.tables: list[RegisteredTable] = []
+
+    def add_table(self, lo: int, table: RegisteredTable) -> None:
+        k = bisect.bisect_left(self.los, lo)
+        self.los.insert(k, lo)
+        self.tables.insert(k, table)
+
+    def __missing__(self, g: int) -> int:
+        k = bisect.bisect_right(self.los, g) - 1
+        if k >= 0 and g - self.los[k] < self.tables[k].leaves:
+            return self.tables[k].read(g - self.los[k])
+        raise KeyError(g)
+
+
+def _evaluate_with_tables(t: Any, args: Sequence[Any]) -> tuple[int, ...]:
+    """`evaluate` with a `RegisteredTable` among ``args``: each binds a whole aggregate parameter, and only the words the gates
+    read are read."""
+    params, _ = signature_of(t)
+    if len(args) != len(params):
+        raise TypeError(f"{t.id}: expected {len(params)} arguments, got {len(args)}")
+    for j, (a, pt) in enumerate(zip(args, params)):
+        if not isinstance(a, RegisteredTable):
+            continue
+        if isinstance(pt, Value) or pt.leaves != a.leaves or pt.homogeneous_width() is None:
+            raise TypeError(f"{t.id} argument {j}: the registered table {a.name!r} ({a.leaves} leaves) binds an aggregate "
+                            f"parameter of as many leaves of one width, not {pt!r}")
+    if isinstance(t, ScalarReference):
+        raise TypeError(f"{t.id} is a ScalarReference, whose function takes every leaf: a registered table is read through "
+                        "a Definition's gates")
+    if isinstance(t, PrimitiveDefinition):
+        lazy = getattr(t, "evaluate_lazy", None)
+        if lazy is None:
+            raise TypeError(f"{t.id} has no evaluate_lazy: its evaluator takes every leaf of the registered table")
+        return (lazy(_Operands(args).__getitem__),)
+    prog, call = standalone_call(t)
+    tr = _Transcript()
+    for pi, a in enumerate(args):
+        refs = prog.input_coll(pi).refs
+        if isinstance(a, RegisteredTable):
+            assert isinstance(refs, Affine) and refs.count == a.leaves, (t.id, pi, refs)
+            tr.add_table(refs.base, a)
+            continue
+        vals = _leaves(a)
+        if len(vals) != refs.count:
+            raise ValueError(f"{t.id} argument {pi}: expected {refs.count} leaves, got {len(vals)}")
+        tr.update((refs[k][2], v) for k, v in enumerate(vals))
+    evaluate_region(prog.circuit, call, tr)
+    return tuple(tr[g] for g in call.returns)
+
+
 def evaluate(target: Target, *args: Any) -> tuple[int, ...]:
     """One instance of ``target`` on plain ints (one int per ``Value`` parameter, a flat int sequence per aggregate
-    parameter, in leaf order); returns the output leaves.  Raises whatever the reference raises outside its domain."""
+    parameter, in leaf order); returns the output leaves.  Raises whatever the reference raises outside its domain.
+
+    An aggregate parameter that holds a registered table may take a `RegisteredTable` instead of its words: a primitive then
+    reads it through its ``evaluate_lazy``, a composite's gates through the transcript, and the result is the same."""
     t = resolve(target)
+    if any(isinstance(a, RegisteredTable) for a in args):
+        return _evaluate_with_tables(t, args)
     if isinstance(t, ScalarReference):
         params, _ = signature_of(t)
         r = t.fn(*(a if isinstance(pt, Value) else list(a) for a, pt in zip(args, params)), **t.bindings)
