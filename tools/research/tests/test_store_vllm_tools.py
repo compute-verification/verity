@@ -39,7 +39,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 # ---- Tool declarations -------------------------------------------------------------------------------------------------------------------------
 
 def test_vllm_tools_are_registered_and_loadable_by_name():
-    for stage in ("build", "match", "commit"):
+    for stage in ("build", "plan", "match", "commit", "replay"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
@@ -49,8 +49,10 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
     assert tools_registry.load("vllm.build", REPO).produces[0] == "vllm-build/v1"
+    assert tools_registry.load("vllm.plan", REPO).produces[0] == "vllm-commit-plan/v1"
     assert tools_registry.load("vllm.match", REPO).produces[0] == "vllm-match-record/v1"
     assert tools_registry.load("vllm.commit", REPO).produces[0] == "vllm-verdict/v1"
+    assert tools_registry.load("vllm.replay", REPO).produces[0] == "vllm-verdict/v1"
 
 
 def test_row_configuration_is_the_key_and_retain_is_not():
@@ -89,9 +91,16 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
     assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--pairs", "3", "--retain", "host", "--window-mb", "2048"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--pairs", "5"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--extra-engine-args", "max_num_batched_tokens=512"))
+    assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--replay-deferred", "1")), "a deferred Commit's outputs differ"
+    assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--replay-deferred", "0"))
+    assert "replay_deferred" not in c.resolve_params(_argv("commit"))[1], "off, it leaves the derivation of every earlier Commit as it was"
     build_art = "art:" + "1" * 64
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit"), inputs={"build": build_art}), "the consumed Build is part of the derivation"
     assert _drv(m, _argv("match")) != _drv(c, _argv("commit")), "different tools, different derivations"
+    r = tools_registry.load("vllm.replay", REPO)
+    commit_art = "art:" + "2" * 64
+    assert _drv(r, _argv("replay"), inputs={"build": build_art, "commit": commit_art}) != \
+        _drv(r, _argv("replay"), inputs={"build": build_art, "commit": "art:" + "3" * 64}), "the replayed Commit is part of the derivation"
 
 
 def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs():

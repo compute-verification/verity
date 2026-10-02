@@ -355,6 +355,20 @@ def plan(sizing: dict[str, Any], requests: list[dict[str, Any]], *, mode: dict[s
             "_sched": sched}
 
 
+def calibrate_commit(out: Path, *, row: str) -> None:
+    """Measured vs predicted for every record-only plan a Commit printed before its run (`admission_planner_*.json` in its `out`): one
+    calibration ENTRY per plan (VmHWM / footprint peaks / the peak step's staged bytes) beside it -- exec collects these; the table in
+    tests/fixtures/admission grows by name.  A plan that cannot be calibrated is named, never fatal."""
+    for pp in sorted(out.glob("admission_planner_*.json")):
+        try:
+            cal = calibrate(json.loads(pp.read_text()), out, row=row)
+            (out / pp.name.replace("admission_planner_", "planner_calibration_")).write_text(json.dumps(cal, indent=1, default=str) + "\n")
+            print(f"[delta] PLANNER CALIBRATION ({pp.name}): measured {(cal.get('measured_bytes') or 0) >> 20} MiB ({cal.get('measured_by')}) / predicted "
+                  f"{cal['predicted_bytes'] >> 20} MiB = {cal.get('ratio')}; ratios {cal.get('ratios')}; ENTRY {json.dumps(cal['entry'])}", flush=True)
+        except Exception as e:  # noqa: BLE001 -- a calibration is a measurement beside the record, not a check of it
+            print(f"[delta] PLANNER CALIBRATION not computed for {pp.name}: {type(e).__name__}: {e}", flush=True)
+
+
 def calibrate(p: dict[str, Any], record_dir: str | Path, *, row: str | None = None) -> dict[str, Any]:
     """Measured vs predicted, per term where the record measures it, for one Commit's `commit/` directory; returns the calibration ENTRY too."""
     d = Path(record_dir)

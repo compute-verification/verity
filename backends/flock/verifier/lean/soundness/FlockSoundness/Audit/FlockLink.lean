@@ -24,6 +24,10 @@ named).
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions
   (`outC`), so under A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
 
+A2 is asked of one prover at a time (`LinkCR`): some prover hard-codes two openings of a commit string, and its
+finders find a collision, so no bound holds for every prover under A2. The theorem bounds the link term at each prover
+whose finders satisfy A2, and gives `⊤` at any other (`linkBoundCR`).
+
 The link event at a drawn unit gives a reading other than the plurality at some commit string, so
 the audit's link term is at most the ideal link mass, summed over commit strings. The ideal extractor
 and the trial differ only by the waits that give up (`k/(eRw)`). Each commit string is weighted by
@@ -644,30 +648,45 @@ theorem avg_ofReal {Cc : Type} [Fintype Cc] [Nonempty Cc] (f : Cc → ℝ) (hf :
   refine Finset.sum_congr rfl fun c _ => ?_
   rw [ENNReal.ofReal_mul (hf c), ENNReal.ofReal_inv_of_pos hc, ENNReal.ofReal_natCast, mul_comm]
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance.** For the batched audit
-with the expected-time extractor (`analysisBE`) and the plurality value layer (`Xplur`), given the
-binding of wires to commit strings (`ValueBinding`) and A2 for the explicit finder of each commit
-string (`hCR`):
+/-- **A2 for one prover's link finders** (`Assumptions.SHA512ExpectedTimeCR`): at the registration `R` and the
+prover's continuation `τ`, for the finder built for each commit string a draw can read. A2 is a hypothesis about one
+finder, since some finder outputs a collision after no evaluations: a prover that hard-codes two openings of one commit
+string has link finders that find one. So the link theorem asks A2 only of the finders of the prover it bounds. -/
+def LinkCR (k Rw M : ℕ) (t' : ℝ) : Prop :=
+  ∀ (c : vb.Pos) (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
+    (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
+    (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
+    (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))
+
+open Classical in
+/-- **The link bound, prover by prover**: `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))` at a prover whose link
+finders satisfy A2 (`LinkCR`), and `⊤` at any other. -/
+noncomputable def linkBoundCR (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) :
+    ℝ≥0∞ :=
+  if P.LinkCR H E plan tab vb R τ k Rw M t' then
+    ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
+      (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+  else ⊤
+
+/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
+with the expected-time extractor (`analysisBE`) and the plurality value layer (`Xplur`), given the binding of wires to
+commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCR`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
-with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on
-every table's `N₀/(ek)`, `t'` the SHA-512 evaluations of one session run, `M` the finder's further
-trials and `Rw` the waits' length. -/
+with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on every table's `N₀/(ek)`,
+`t'` the SHA-512 evaluations of one session run, `M` the finder's further trials and `Rw` the waits' length. At any other
+prover the bound is `⊤` (`linkBoundCR`). -/
 theorem flock_batched_linkSoundE
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
-    (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))) :
+    (ht : 0 ≤ t') :
     (P.analysisBE (L := L) H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
         (fun S R j => (hr S R j).trans_lt hρ) hlow).LinkSound
-      (fun _ _ => ENNReal.ofReal
-        ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
-          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) /
-          (1 - ρ))) := by
+      (P.linkBoundCR H E plan tab vb k Rw M ρ t') := by
   intro R τ tgt
+  unfold linkBoundCR
+  split_ifs with hCR
+  swap
+  · exact le_top
   set B := 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)
     with hBdef
   have hρ1 : 0 < 1 - ρ := by linarith
@@ -730,7 +749,7 @@ theorem flock_batched_linkSoundE
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hc : ∀ c, (∑ ω, f c ω) / Fintype.card L.Ω ≤
       (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω * B := fun c =>
-    P.ideal_mass_le H E plan tab vb R τ k Rw M hRw hM ht c (hCR R τ c)
+    P.ideal_mass_le H E plan tab vb R τ k Rw M hRw hM ht c (hCR c)
   calc (∑ ω, Λ ω) / Fintype.card L.Ω
       = (∑ c, (∑ ω, f c ω) / Fintype.card L.Ω) / (1 - ρ) := by
         simp only [hΛ, div_eq_mul_inv, ← Finset.sum_mul]
