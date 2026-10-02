@@ -157,11 +157,12 @@ def wireF (c : Circuit) (g p : ℕ) : List (ℕ × ℕ) :=
     [hmWire c.ports c.shaNet c.hmNet p]).flatMap fun w =>
       (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)
 
-theorem wireCopies_eq {c : Circuit} (hw : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet) :
+theorem wireCopies_eq {c : Circuit} (hw : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet)
+    (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks) :
     wireCopies c = (List.range c.g).flatMap fun g =>
       (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p => wireF c g p := by
   unfold wireCopies wireF
-  rw [hw, rowWires_eq]
+  rw [hw, rowWires_eq _ _ _ hpos]
   simp only [List.flatMap_assoc]
 
 /-- Δ's copies along wires `ws`. -/
@@ -169,11 +170,11 @@ def wireCopiesOf (c : Circuit) (ws : List Wire) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => ws.flatMap fun w =>
     (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)
 
-theorem wireCopiesOf_rows (c : Circuit) :
+theorem wireCopiesOf_rows (c : Circuit) (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks) :
     wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList = (List.range c.g).flatMap fun g =>
       (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p => wireF c g p := by
   unfold wireCopiesOf wireF
-  rw [rowWires_eq]
+  rw [rowWires_eq _ _ _ hpos]
   simp only [List.flatMap_assoc]
 
 theorem rowSlots_size' (ports : Array Port) : (HmRow.rowSlots ports).2.size = ports.size := by
@@ -208,18 +209,17 @@ structure RowRanges (c : Circuit) : Prop where
   perVu_hm : c.perVu.getD c.hmNet 0 = nextPow2 c.ports.size
   rowNets : HmNets.check c = .ok ()
   kLog : c.kLog ≤ 32
-  ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
 
 theorem RowRanges.ofT {st : Stmt} {tb : TypedBlock} {words : String → Option (Array ℕ)} {done : Array D} {u : D}
     {tags : Tags} {t : Typed.Template} (T : TemplateLayout st tb words done u) (C : CheckFactsT st.c tb)
     (P : ParseFactsT tags t st.c) : RowRanges st.c :=
   ⟨T.disj, T.bound, T.slotLog, T.count, T.one_range, T.fit, T.shaNet.1, T.hmNet.1, C.perVu_sha, C.perVu_hm, P.rowNets,
-    T.kLog, P.ports⟩
+    T.kLog⟩
 
 theorem RowRanges.ofL {st : Stmt} {tags : Tags} (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c) :
     RowRanges st.c :=
   ⟨L.disj, L.bound, L.slotLog, C.count, C.one_range, fun i => (L.fit i).1, P.shaNet, P.hmNet, C.perVu_sha, C.perVu_hm,
-    P.rowNets, L.kLog, P.ports⟩
+    P.rowNets, L.kLog⟩
 
 namespace RowRanges
 
@@ -305,11 +305,9 @@ theorem sha_ne_hm_col {g p k t g' p' off' : ℕ} (hg : g < c.g) (hp : p < c.port
   exact sha_ne_hm R.rowNets ((R.shaIn_at hg hp hk ht).inj R.disj hn.1 hn.2.1 hm.1 hm.2.1
     (by rw [h]; exact R.hmIn_at hg' hp' ho')).1
 
-theorem pos {p : ℕ} (hp : p < c.ports.size) : 0 < c.ports[p]!.chunks :=
-  R.ports _ (getElem_mem_toList' hp)
-
 /-- A row copy at a `cv` input bit of compression `k` is the first compression's, at its bit. -/
-theorem rowF_ne_sha {pin g' p' g p k t₀ : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size) (hg : g < c.g)
+theorem rowF_ne_sha (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
+    {pin g' p' g p k t₀ : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size) (hg : g < c.g)
     (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks) (ht₀ : t₀ < 512) {e : ℕ × ℕ}
     (he : e ∈ (List.range 512).map (fun t => (cvCol c g' p' + t, constSrc c pin (HmRow.midstate c.ports[p']!.words) t)) ++
       (List.range 1024).map fun t => (padCol c g' p' + t, constSrc c pin (HmRow.padWords c.ports[p']!.words) t))
@@ -317,7 +315,7 @@ theorem rowF_ne_sha {pin g' p' g p k t₀ : ℕ} (hg' : g' < c.g) (hp' : p' < c.
   rcases rowF_mem he with ⟨t, ht, he1⟩ | ⟨t, ht, he1⟩
   · rw [he1]
     intro h
-    obtain ⟨h1, h2, h3, -⟩ := R.sha_dec hg' hp' (R.pos hp') ht hg hp hk ht₀ h
+    obtain ⟨h1, h2, h3, -⟩ := R.sha_dec hg' hp' (hpos p' hp') ht hg hp hk ht₀ h
     exact hne ⟨h1, h2, h3.symm⟩
   · rw [he1, padCol_eq R.rowNets, Nat.add_assoc]
     exact fun h => R.sha_ne_hm_col hg hp hk ht₀ hg' hp' (by omega) h.symm
@@ -341,14 +339,15 @@ theorem wireF_ne_sha {g' p' g p k t₀ : ℕ} (hg' : g' < c.g) (hp' : p' < c.por
     exact fun h => R.sha_ne_hm_col hg hp hk ht₀ hg' hp' (by omega) h.symm
 
 /-- A row copy at an `hm96` input bit at `off` is the `pad` copy at `off − 512`. -/
-theorem rowF_ne_hm {pin g' p' g p off : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size) (hg : g < c.g)
+theorem rowF_ne_hm (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
+    {pin g' p' g p off : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size) (hg : g < c.g)
     (hp : p < c.ports.size) (ho : off < 1536) {e : ℕ × ℕ}
     (he : e ∈ (List.range 512).map (fun t => (cvCol c g' p' + t, constSrc c pin (HmRow.midstate c.ports[p']!.words) t)) ++
       (List.range 1024).map fun t => (padCol c g' p' + t, constSrc c pin (HmRow.padWords c.ports[p']!.words) t))
     (hne : ¬ (g' = g ∧ p' = p ∧ 512 ≤ off)) : e.1 ≠ c.slotCol c.hmNet g p + off := by
   rcases rowF_mem he with ⟨t, ht, he1⟩ | ⟨t, ht, he1⟩
   · rw [he1]
-    exact R.sha_ne_hm_col hg' hp' (R.pos hp') ht hg hp (by omega)
+    exact R.sha_ne_hm_col hg' hp' (hpos p' hp') ht hg hp (by omega)
   · rw [he1, padCol_eq R.rowNets, Nat.add_assoc]
     intro h
     obtain ⟨h1, h2, h3⟩ := R.hm_dec hg' hp' (by omega) hg hp (by omega) h
@@ -374,27 +373,29 @@ theorem wireF_ne_hm {g' p' g p off : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.s
 
 /-- **Δ's one copy into the first compression's `cv` bit `t₀`**: the row prefix's midstate bit, from the pin or the
 forced-zero row. -/
-theorem cv0_filter {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht₀ : t₀ < 512) :
+theorem cv0_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
+    {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht₀ : t₀ < 512) :
     (rowCopies c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = cvCol c g p + t₀) =
       [(cvCol c g p + t₀, constSrc c pin (HmRow.midstate c.ports[p]!.words) t₀)] := by
   have hsz := rowSlots_size' c.ports
-  have h0 := R.pos hp
+  have h0 := hpos p hp
   have hw := filter_flatMap2_none _ _ (fun g p => wireF c g p) (cvCol c g p + t₀) fun g' hg' p' hp' e he =>
     R.wireF_ne_sha (k := 0) hg' (hsz ▸ hp') hg hp h0 ht₀ he fun h => absurd h.2.2 (by omega)
   have hr := filter_flatMap2_single _ _ _ (cvCol c g p + t₀) g p hg (hsz ▸ hp) fun g' hg' p' hp' hne e he =>
-    R.rowF_ne_sha (pin := pin) (k := 0) hg' (hsz ▸ hp') hg hp h0 ht₀ he fun h => hne ⟨h.1, h.2.1⟩
+    R.rowF_ne_sha hpos (pin := pin) (k := 0) hg' (hsz ▸ hp') hg hp h0 ht₀ he fun h => hne ⟨h.1, h.2.1⟩
   have hpad := filter_map_none (List.range 1024) (padCol c g p)
     (constSrc c pin (HmRow.padWords c.ports[p]!.words)) (cvCol c g p + t₀) fun t ht => by
       have := List.mem_range.1 ht
       rw [padCol_eq R.rowNets, Nat.add_assoc]
       exact fun h => R.sha_ne_hm_col (k := 0) hg hp h0 ht₀ hg hp (by omega) h.symm
-  rw [List.filter_append, wireCopiesOf_rows, hw, List.append_nil]
+  rw [List.filter_append, wireCopiesOf_rows _ hpos, hw, List.append_nil]
   unfold rowCopies
   rw [hr, List.filter_append, filter_map_single _ _ _ _ ht₀, hpad, List.append_nil]
 
 /-- **Δ's one copy into compression `k ≥ 1`'s `cv` bit `t₀`**: the chain from compression `k − 1`'s output. -/
-theorem chain_filter {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk1 : 1 ≤ k)
+theorem chain_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
+    {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk1 : 1 ≤ k)
     (hk : k < c.ports[p]!.chunks) (ht₀ : t₀ < 512) :
     (rowCopies c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = Flat.wireDst c g (chainWire c.ports c.shaNet p k) + t₀) =
@@ -407,7 +408,7 @@ theorem chain_filter {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.siz
       (List.range 512).map (fun t => (cvCol c g' p' + t, constSrc c pin (HmRow.midstate c.ports[p']!.words) t)) ++
       (List.range 1024).map fun t => (padCol c g' p' + t, constSrc c pin (HmRow.padWords c.ports[p']!.words) t))
     (Flat.wireDst c g (chainWire c.ports c.shaNet p k) + t₀) fun g' hg' p' hp' e he => by
-      rw [hx]; exact R.rowF_ne_sha hg' (hsz ▸ hp') hg hp hk ht₀ he fun h => by omega
+      rw [hx]; exact R.rowF_ne_sha hpos hg' (hsz ▸ hp') hg hp hk ht₀ he fun h => by omega
   have hw := filter_flatMap2_single _ _ (fun g p => wireF c g p)
     (Flat.wireDst c g (chainWire c.ports c.shaNet p k) + t₀) g p hg (hsz ▸ hp) fun g' hg' p' hp' hne e he => by
       rw [hx]; exact R.wireF_ne_sha hg' (hsz ▸ hp') hg hp hk ht₀ he fun h => hne ⟨h.1, h.2.1⟩
@@ -437,13 +438,14 @@ theorem chain_filter {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.siz
       exact fun h => R.sha_ne_hm_col hg hp hk ht₀ hg hp (by omega) h.symm
   rw [List.filter_append]
   unfold rowCopies
-  rw [hr, List.nil_append, wireCopiesOf_rows, hw]
+  rw [hr, List.nil_append, wireCopiesOf_rows _ hpos, hw]
   unfold wireF
   rw [List.flatMap_append, List.filter_append, List.flatMap_map, hc, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, hh, List.append_nil, chainWidth_eq R.rowNets hs, filter_map_single _ _ _ _ ht₀]
 
 /-- **Δ's one copy into the `hm96` slot's `cv` bit `t₀`**: the wire from the last compression's output. -/
-theorem hmcv_filter {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht₀ : t₀ < 512) :
+theorem hmcv_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
+    {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht₀ : t₀ < 512) :
     (rowCopies c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = Flat.wireDst c g (hmWire c.ports c.shaNet c.hmNet p) + t₀) =
       [(Flat.wireDst c g (hmWire c.ports c.shaNet c.hmNet p) + t₀,
@@ -455,7 +457,7 @@ theorem hmcv_filter {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) 
       (List.range 512).map (fun t => (cvCol c g' p' + t, constSrc c pin (HmRow.midstate c.ports[p']!.words) t)) ++
       (List.range 1024).map fun t => (padCol c g' p' + t, constSrc c pin (HmRow.padWords c.ports[p']!.words) t))
     (Flat.wireDst c g (hmWire c.ports c.shaNet c.hmNet p) + t₀) fun g' hg' p' hp' e he => by
-      rw [hx]; exact R.rowF_ne_hm hg' (hsz ▸ hp') hg hp (by omega) he fun h => by omega
+      rw [hx]; exact R.rowF_ne_hm hpos hg' (hsz ▸ hp') hg hp (by omega) he fun h => by omega
   have hw := filter_flatMap2_single _ _ (fun g p => wireF c g p)
     (Flat.wireDst c g (hmWire c.ports c.shaNet c.hmNet p) + t₀) g p hg (hsz ▸ hp) fun g' hg' p' hp' hne e he => by
       rw [hx]; exact R.wireF_ne_hm hg' (hsz ▸ hp') hg hp (by omega) he fun h => hne ⟨h.1, h.2.1⟩
@@ -473,30 +475,31 @@ theorem hmcv_filter {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) 
       exact R.sha_ne_hm_col hg hp hk2 ht hg hp (by omega)
   rw [List.filter_append]
   unfold rowCopies
-  rw [hr, List.nil_append, wireCopiesOf_rows, hw]
+  rw [hr, List.nil_append, wireCopiesOf_rows _ hpos, hw]
   unfold wireF
   rw [List.flatMap_append, List.filter_append, hc, List.nil_append, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, hmWidth_eq R.rowNets, filter_map_single _ _ _ _ ht₀]
 
 /-- **Δ's one copy into the `hm96` slot's `pad` bit `t₀`**: the padding block's bit, from the pin or the forced-zero
 row. -/
-theorem pad_filter {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht₀ : t₀ < 1024) :
+theorem pad_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
+    {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ht₀ : t₀ < 1024) :
     (rowCopies c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = padCol c g p + t₀) =
       [(padCol c g p + t₀, constSrc c pin (HmRow.padWords c.ports[p]!.words) t₀)] := by
   have hsz := rowSlots_size' c.ports
-  have h0 := R.pos hp
+  have h0 := hpos p hp
   have hx : padCol c g p + t₀ = c.slotCol c.hmNet g p + (512 + t₀) := by
     rw [padCol_eq R.rowNets, Nat.add_assoc]
   have hw := filter_flatMap2_none _ _ (fun g p => wireF c g p) (padCol c g p + t₀) fun g' hg' p' hp' e he => by
     rw [hx]; exact R.wireF_ne_hm hg' (hsz ▸ hp') hg hp (by omega) he fun h => by omega
   have hr := filter_flatMap2_single _ _ _ (padCol c g p + t₀) g p hg (hsz ▸ hp) fun g' hg' p' hp' hne e he => by
-    rw [hx]; exact R.rowF_ne_hm (pin := pin) hg' (hsz ▸ hp') hg hp (by omega) he fun h => hne ⟨h.1, h.2.1⟩
+    rw [hx]; exact R.rowF_ne_hm hpos (pin := pin) hg' (hsz ▸ hp') hg hp (by omega) he fun h => hne ⟨h.1, h.2.1⟩
   have hcv := filter_map_none (List.range 512) (cvCol c g p)
     (constSrc c pin (HmRow.midstate c.ports[p]!.words)) (padCol c g p + t₀) fun t ht => by
       rw [hx]
       exact R.sha_ne_hm_col (k := 0) hg hp h0 (List.mem_range.1 ht) hg hp (by omega)
-  rw [List.filter_append, wireCopiesOf_rows, hw, List.append_nil]
+  rw [List.filter_append, wireCopiesOf_rows _ hpos, hw, List.append_nil]
   unfold rowCopies
   rw [hr, List.filter_append, hcv, List.nil_append, filter_map_single _ _ _ _ ht₀]
 
@@ -606,8 +609,9 @@ local notation "𝒖" => done.getD unit default
 `(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
 theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
     (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
-    (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb) (hda : st.da = (HmRow.delta st.c st.pin).1)
-    (hdb : st.db = (HmRow.delta st.c st.pin).2)
+    (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
+    (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {n s off x src : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
@@ -639,7 +643,7 @@ theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types 
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
     intro j
-    obtain ⟨h1, h2⟩ := delta_rows st.c st.pin T.typed
+    obtain ⟨h1, h2⟩ := delta_rows st.c st.pin T.typed hv1 P.portWords
     rw [deltaEntry_eq_count, deltaEntry_eq_count, hda, hdb, h1, h2, List.count_append, List.count_append, hF,
       T.tail_zero hd hul U hy true, T.tail_zero hd hul U hy false, Nat.add_zero]
     exact ⟨rfl, rfl⟩

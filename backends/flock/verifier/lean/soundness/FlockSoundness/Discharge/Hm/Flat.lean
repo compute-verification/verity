@@ -18,7 +18,9 @@ open Compose Flock.DeriveAll Types.Dag
 
 /-- **Δ without a typed template, pair by pair**: the slot constants' pairs, the rows' constant bits, the units' leaf
 and cut bits and the wires' bits (`flatPairs`). -/
-theorem delta_flat_eq (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
+theorem delta_flat_eq (c : Circuit) (pin : ℕ) (ht : c.typed = none)
+    (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    (hw : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks) :
     (HmRow.delta c pin).1.toList = flatPairs c pin := by
   unfold HmRow.delta
   simp only
@@ -49,14 +51,45 @@ theorem delta_flat_eq (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
   intro d hd
   refine FlockSoundness.run_bind_fst (Q := fun r => r.toList = flatPairs c pin)
     (P := fun d' => d'.toList = d.toList ++ rowPairs c pin) ?_ ?_
-  · refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) d
+  · rw [← rowPairsAll_v1 c pin hv1 hw]
+    refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) d
     refine forIn_range_append _ _ (fun p _ d => ⟨_, rfl, ?_⟩) d
-    refine Eq.trans (forIn_range_append (fun t => [(padCol c g p + t, padCol c g p + t),
-        (padCol c g p + t, constSrc c pin (HmRow.padWords c.ports[p]!.words) t)]) 1024
-        (fun t _ d => ⟨_, rfl, ?_⟩) _) ?_
-    · simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
-      rfl
-    rw [← List.append_assoc]
+    rw [rowPairsOf, ← List.append_assoc, ← List.append_assoc]
+    refine Eq.trans (forIn_range'_append (fun k => (List.range 1024).flatMap fun t => bitPairs c pin
+        (msgColOf c g p k + t) (HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t)) _ _
+        (fun k _ _ d => ⟨_, rfl, ?_⟩) _) ?_
+    · refine forIn_range_append _ _ (fun t _ d => ?_) d
+      split
+      · rename_i v hv
+        have hv' : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t = some v := hv
+        refine ⟨_, rfl, ?_⟩
+        rw [hv']
+        simp only [bitPairs, Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
+        rfl
+      · rename_i hv
+        have hv' : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t = none :=
+          Option.eq_none_iff_forall_ne_some.mpr hv
+        refine ⟨_, rfl, ?_⟩
+        rw [hv']
+        simp only [bitPairs, List.append_nil]
+    refine (List.append_left_inj _).mpr ?_
+    refine Eq.trans (forIn_range_append (fun t => bitPairs c pin (padCol c g p + t)
+        (HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) ((HmRow.rowSlots c.ports).2[p]!).size t)) 1024
+        (fun t _ d => ?_) _) ?_
+    · split
+      · rename_i v hv
+        have hv' : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) ((HmRow.rowSlots c.ports).2[p]!).size t =
+          some v := hv
+        refine ⟨_, rfl, ?_⟩
+        rw [hv']
+        simp only [bitPairs, Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
+        rfl
+      · rename_i hv
+        have hv' : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) ((HmRow.rowSlots c.ports).2[p]!).size t =
+          none := Option.eq_none_iff_forall_ne_some.mpr hv
+        refine ⟨_, rfl, ?_⟩
+        rw [hv']
+        simp only [bitPairs, List.append_nil]
     refine (List.append_left_inj _).mpr ?_
     refine forIn_range_append _ _ (fun t _ d => ⟨_, rfl, ?_⟩) d
     simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
@@ -355,7 +388,8 @@ theorem flatPairs_countL (hrw : RowWires st.c) {n s off x src : ℕ} (hn : n = s
 /-- **An input bit of a row net's slot holds its one copy**, in the untyped statement. At a self row `x` of a
 `sha512x3` or `hm96` slot below the net's input rows, where `rowCopies` and the rows' wires write exactly one
 `(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
-theorem inBit_copyL (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c)
+theorem inBit_copyL (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s off x src : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
@@ -370,7 +404,7 @@ theorem inBit_copyL (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires 
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
       deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
     intro j
-    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed, hF]
+    rw [L.delta_b, deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords, hF]
     exact ⟨rfl, rfl⟩
   have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
   exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j

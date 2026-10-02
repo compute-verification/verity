@@ -25,19 +25,25 @@ theorem forIn_range1_append {γ : Type} (G : ℕ → List γ) (n : ℕ) {f : ℕ
   have := forIn_id_append G (List.range' 1 [1:n].size) (fun a _ d => hf a d) d
   simpa [Std.Legacy.Range.size] using this
 
-/-- **The rows' wires**, port by port: compression `k`'s `cv` from compression `k − 1`'s output for `k ≥ 1`, then the
-`hm96` slot's `cv` from the last compression's output. -/
-theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) :
+/-- **The rows' wires**, port by port, when every row has a compression: compression `k`'s `cv` from compression
+`k − 1`'s output for `k ≥ 1`, then the `hm96` slot's `cv` from the last compression's output. -/
+theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) (hpos : ∀ p < ports.size, 0 < ports[p]!.chunks) :
     (HmRow.rowWires ports sha hm).toList = (List.range (HmRow.rowSlots ports).2.size).flatMap fun p =>
       (List.range' 1 (((HmRow.rowSlots ports).2[p]!).size - 1)).map (chainWire ports sha p) ++
         [hmWire ports sha hm p] := by
   unfold HmRow.rowWires
   simp only
+  have hS : (HmRow.rowSlots ports).2.size = ports.size := by
+    rw [← Array.length_toList, rowSlots_eq, List.length_map, List.length_range]
   show (forIn (m := Id) [:(HmRow.rowSlots ports).2.size] (#[] : Array Wire) _).toList = _
   refine Eq.trans (forIn_range_append (fun p =>
       List.map (chainWire ports sha p) (List.range' 1 (((HmRow.rowSlots ports).2[p]!).size - 1)) ++
-        [hmWire ports sha hm p]) _ (fun p _ d => ⟨_, rfl, ?_⟩) #[]) ?_
-  · rw [Array.toList_push, ← List.append_assoc]
+        [hmWire ports sha hm p]) _ (fun p hp d => ?_) #[]) ?_
+  · have h0 : 0 < ((HmRow.rowSlots ports).2[p]!).size := by
+      rw [rowSlots_size (hS ▸ hp)]; exact hpos _ (hS ▸ hp)
+    simp only [h0, ↓reduceIte]
+    refine ⟨_, rfl, ?_⟩
+    rw [Array.toList_push, ← List.append_assoc]
     refine (List.append_left_inj _).mpr ?_
     refine Eq.trans (forIn_range1_append (fun k => [chainWire ports sha p k]) _ (fun k d => ⟨_, rfl, ?_⟩) d) ?_
     · rw [Array.toList_push]

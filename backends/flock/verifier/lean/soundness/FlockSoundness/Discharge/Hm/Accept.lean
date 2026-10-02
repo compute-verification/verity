@@ -85,7 +85,7 @@ set_option hygiene false in
 local notation "𝒖" => done.getD unit default
 
 /-- **A row's `b ‖ c` in a satisfying witness of the accepted template statement.** At VU `g`, port `p`'s row: if its
-words fill its chunks (`hw`, which `HmRow.parse` checks) and the block holds Δ's copies into the slots' inputs (the first
+words fill its chunks, at least one (`hn`, `hw`) and the block holds Δ's copies into the slots' inputs (the first
 compression's `cv` the row prefix's midstate, each later `cv` the previous compression's output, the `hm96` slot's `cv`
 the last output and its `pad` the padding block), then the 128 bytes the block holds at `bcCol` are the commit string of
 the `2 · words` row bytes at `Typed.msgCol` and the 192 salt bytes at `saltCol`. -/
@@ -94,7 +94,8 @@ theorem row_bc_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked typ
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
-    (hp : p < st.c.ports.size) (hw : 2 * st.c.ports[p]!.words = 128 * st.c.ports[p]!.chunks)
+    (hp : p < st.c.ports.size) (hn : 0 < st.c.ports[p]!.chunks)
+    (hw : 2 * st.c.ports[p]!.words = 128 * st.c.ports[p]!.chunks)
     (hcv0 : ∀ t < 512, blockBit (T.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
       wordsBit (HmRow.midstate st.c.ports[p]!.words) t)
     (hchain : ∀ k, k + 1 < st.c.ports[p]!.chunks → ∀ t < 512,
@@ -109,9 +110,8 @@ theorem row_bc_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked typ
       ((HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
         bytesOf (blockBit (T.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
       (bytesOf (blockBit (T.model regs) z o) 192 (saltCol st.c g p)) := by
-  have hn : 0 < st.c.ports[p]!.chunks := P.ports _ (getElem_mem_toList' hp)
-  refine port_commit_rows st.c _ g p hn hw P.rowNets (fun k hk => (rowSlot_lt hp hk).2) (fun k hk => ?_) ?_
-    hcv0 hchain hcvh hpad
+  refine port_commit_rows st.c _ g p hn hw (rowSlots_size hp).ge P.rowNets (fun k hk => (rowSlot_lt hp hk).2)
+    (fun k hk => ?_) ?_ hcv0 hchain hcvh hpad
   · exact shaSlot_of_sat hd hul T U hz o P.rowNets hg (by rw [C.perVu_sha]; exact (rowSlot_lt hp hk).1)
   · exact hmSlot_of_sat hd hul T U hz o P.rowNets hg (by rw [C.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
 

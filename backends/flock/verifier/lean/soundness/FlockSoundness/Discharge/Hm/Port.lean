@@ -94,26 +94,28 @@ def saltCol (c : Circuit) (g p j t : ℕ) : ℕ := c.slotCol c.hmNet g p + hmIn 
 `HmRow.regions` pins. -/
 def bcCol (c : Circuit) (g p j t : ℕ) : ℕ := c.slotCol c.hmNet g p + hmOut c + 8 * j + t
 
-/-- The row's byte `128 k + o`, bit `t`, is compression `k`'s message input bit `wordBit (8 o + t)`. -/
-theorem msgCol_eq (c : Circuit) (g p k : ℕ) {o t : ℕ} (ho : o < 128) (ht : t < 8) :
+/-- The row's byte `128 k + o`, bit `t`, is compression `k`'s message input bit `wordBit (8 o + t)`, for a compression
+`k` of the row. -/
+theorem msgCol_eq (c : Circuit) (g p k : ℕ) {o t : ℕ} (hk : k < ((HmRow.rowSlots c.ports).2[p]!).size) (ho : o < 128)
+    (ht : t < 8) :
     Typed.msgCol c g p (128 * k + o) t = shaBase c g p k + shaIn c (2 * shaSub c p k + 1) + wordBit (8 * o + t) := by
-  have hk : (128 * k + o) / 128 = k := by omega
+  have hk' : (128 * k + o) / 128 = k := by omega
   have ho' : (128 * k + o) % 128 = o := by omega
-  simp only [Typed.msgCol, hk, ho', shaBase, shaSub, shaIn, wordBit]
+  simp only [Typed.msgCol, hk', ho', hk, ↓reduceIte, shaBase, shaSub, shaIn, wordBit]
   omega
 
 /-! ## The port -/
 
 /-- **A port's row at its columns.** Port `p` of the circuit `c` has `words` u16 words in `n > 0` chunks
-(`2 · words = 128 n`, `HmRow.parse`'s port check). At VU `g` of a block whose bits are `w`: suppose the `sha512x3` and
-`hm96` nets' input ports sit where the generated nets put them (`hsin`, `hhin`), each compression `k`'s slot holds the
-net on an assignment `zs k` that reads the slot's input columns and whose output `sub k` the slot's output columns hold,
-the `hm96` slot likewise on `zh`, and the block holds Δ's copies: the first `cv` the prefix's midstate, each next `cv` the
+(`2 · words = 128 n`, `HmRow.parse`'s port check), each a compression of the row's slots (`hslots`). At VU `g` of a
+block whose bits are `w`: suppose the `sha512x3` and `hm96` nets' input ports sit where the generated nets put them
+(`hsin`, `hhin`), each compression `k`'s slot holds the net on an assignment `zs k` that reads the slot's input columns
+and whose output `sub k` the slot's output columns hold, the `hm96` slot likewise on `zh`, and the block holds Δ's copies: the first `cv` the prefix's midstate, each next `cv` the
 previous output, the hm96 `cv` the last output, and its `pad` the padding block. Then the 128 bytes at `bcCol` are
 `commitString (rowPrefix words ‖ row) salt`, where the row is the `2 · words` bytes at `Typed.msgCol` and the salt the
 192 bytes at `saltCol`. -/
 theorem port_commit (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {words n : ℕ} (hn : 0 < n) (hw : 2 * words = 128 * n)
-    (hsub : ∀ k < n, shaSub c p k < 3)
+    (hslots : n ≤ ((HmRow.rowSlots c.ports).2[p]!).size) (hsub : ∀ k < n, shaSub c p k < 3)
     (hsin : ∀ s < 3, shaIn c (2 * s) = 1536 * s ∧ shaIn c (2 * s + 1) = 1536 * s + 512)
     (hhin : hmIn c 0 = 0 ∧ hmIn c 1 = 512 ∧ hmIn c 2 = 1536)
     (zs : ℕ → Var → Bool) (hzs : ∀ k < n, ∀ v : ℕ, v < 4608 → zs k v = w (shaBase c g p k + v))
@@ -144,7 +146,7 @@ theorem port_commit (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {words n : ℕ}
       have hwb : wordBit (8 * o + t) < 1024 := by unfold wordBit; omega
       rw [hzs k hk _ (by have := hsub k hk; omega), bitL_bytesOf _ _ (by omega),
         show (8 * (128 * k + o) + t) / 8 = 128 * k + o by omega, show (8 * (128 * k + o) + t) % 8 = t by omega,
-        msgCol_eq c g p k ho ht, (hsin _ (hsub k hk)).2]
+        msgCol_eq c g p k (by omega) ho ht, (hsin _ (hsub k hk)).2]
       exact congrArg w (by omega))
     zh hh
     (fun q hq => by

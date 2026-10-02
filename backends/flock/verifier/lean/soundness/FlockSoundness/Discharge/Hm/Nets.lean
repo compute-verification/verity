@@ -112,7 +112,8 @@ compression `k`'s `sha512x3` slot holds that net's rows (`LaidRows`, from row 81
 the 128 bytes at `bcCol` are `commitString (rowPrefix words ‖ row) salt`, the row the `2 · words` bytes at
 `Typed.msgCol` and the salt the 192 bytes at `saltCol`. -/
 theorem port_commit_rows (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {words n : ℕ} (hn : 0 < n)
-    (hw : 2 * words = 128 * n) (hck : HmNets.check c = .ok ()) (hsub : ∀ k < n, shaSub c p k < 3)
+    (hw : 2 * words = 128 * n) (hslots : n ≤ ((HmRow.rowSlots c.ports).2[p]!).size) (hck : HmNets.check c = .ok ())
+    (hsub : ∀ k < n, shaSub c p k < 3)
     (hsha : ∀ k < n, LaidRows (shaLaid ()) 8192 fun j => w (shaBase c g p k + j))
     (hhm : LaidRows (hmLaid ()) 4096 fun j => w (c.slotCol c.hmNet g p + j))
     (hcv0 : ∀ t < 512, w (shaBase c g p 0 + shaIn c (2 * shaSub c p 0) + t) = wordsBit (HmRow.midstate words) t)
@@ -174,7 +175,7 @@ theorem port_commit_rows (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {words n :
     have := laid_outs ((hm96Row Hm96.Default512.key).run St.empty).2 HM_IN HM_OUT _ (fun j => w (c.slotCol c.hmNet g p + j))
       (by rw [List.size_toArray, hl]; decide) hhmL _ hj
     rw [hmOut_eq hck, Nat.add_assoc, this, List.getElem_toArray, ← bit_of_lt (by rw [hl]; exact ht)]
-  exact port_commit c w g p hn hw hsub (shaIn_eq hck) (hmIn_eq hck) zs hzs hrows hout zh hzh hh hbc hcv0 hchain hcvh
-    hpad
+  exact port_commit c w g p hn hw hslots hsub (shaIn_eq hck) (hmIn_eq hck) zs hzs hrows hout zh hzh hh hbc hcv0 hchain
+    hcvh hpad
 
 end FlockSoundness.Discharge.Hm
