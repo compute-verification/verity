@@ -1,5 +1,6 @@
 import FlockSoundness.Discharge.Hidden.Binding
 import FlockSoundness.Discharge.Hidden.Public
+import FlockSoundness.Discharge.Hidden.Delta
 
 /-!
 # The soundness of a hidden-output statement (`Stmt.setupHidden`)
@@ -20,7 +21,7 @@ namespace FlockSoundness.Discharge.Hidden
 
 theorem setupHidden_spec : SetupHiddenSpec := fun h => setupHidden_spec' h
 
-theorem hidden_delta : HiddenDelta := by sorry
+theorem hidden_delta : HiddenDelta := hidden_delta'
 
 theorem hidden_layout : HiddenLayout := by sorry
 
