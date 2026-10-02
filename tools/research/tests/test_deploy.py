@@ -235,6 +235,9 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert deploy.clean(rep), rep
     assert deploy.main(["drift", "--json", "--no-fetch"], run=local, manifest=world["manifest"], repo=world["repo"]) == 0
     assert json.loads(capsys.readouterr().out)["n"]["entries"]
+    assert deploy.main(["drift", "--node", "zz", "--node", "n", "--no-fetch"], run=local, manifest=world["manifest"],
+                       repo=world["repo"]) == 2                                   # a repeated --node adds, never replaces
+    assert "no node 'zz'" in capsys.readouterr().err
 
 
 def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):
