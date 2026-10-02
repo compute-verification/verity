@@ -91,7 +91,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
- package (`lean/`, whose `Pouw.Proofs.endToEnd` is the guarantee); see its `PROTOCOL.md`.
+ package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
  `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
  channel: the warden, its audit and calibration, and its Lean package (`lean/`).
  Applications (vLLM) compose protocols.

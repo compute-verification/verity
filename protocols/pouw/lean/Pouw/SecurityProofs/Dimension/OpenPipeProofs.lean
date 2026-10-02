@@ -1,5 +1,6 @@
 import Pouw.Assumptions.Dimension.OpenPipe
 import Pouw.SecurityProofs.Dimension.ForestProofs
+import Pouw.Guarantees.Dimension
 
 /-!
 # The open quadratic pipe: proofs
@@ -281,7 +282,7 @@ theorem honestOn_cost {k m n N : ℕ} {R : Mat} {A : (Fin k → Fin n → Fin 64
     List.map_const', List.sum_replicate, length_toList, smul_eq_mul, mul_comm]
 
 /-- **On the checked words, A2 does not depend on the pipe class.** -/
-theorem a2WordsIff : A2WordsIff := by
+theorem a2WordsIff : Pouw.Guarantees.Dimension.A2WordsIff := by
   intro k m n N R A B U M γ₂ hind hMR hU hγ₂
   obtain ⟨h2, hli⟩ := gridNear k m n N R A B U (word k m n N R A B) hind hMR hU
     (fun u _ p _ => by rw [sub_self]; exact Submodule.zero_mem _)

@@ -1,6 +1,7 @@
 import Pouw.Protocol.Barrier.Pinned
 import Pouw.SecurityProofs.NCP.Proofs
 import Pouw.SecurityProofs.Prob
+import Pouw.Guarantees.Barrier
 
 /-!
 # The degenerate-input barrier: proofs
@@ -36,7 +37,7 @@ theorem genericPr : Pinned.GenericPr := by
   exact le_trans (pr_mono fun x hx => wins_of_all_correct P U x.1 x.2 _ hc hW hγ hx) (hG U hU c₀ hc q hq A hA)
 
 /-- **The generic barrier.** -/
-theorem generic : Pinned.Generic := by
+theorem generic : Pouw.Guarantees.Barrier.Generic := by
   intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW γ hγ η hG
   obtain ⟨hU, hc, hq, hA, hall⟩ := hpt
   have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW γ hγ η hG

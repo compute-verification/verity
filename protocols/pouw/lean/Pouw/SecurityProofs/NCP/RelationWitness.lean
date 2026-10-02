@@ -1,5 +1,6 @@
 import Pouw.SecurityProofs.NCP.RelationProofs
 import Pouw.SecurityProofs.NCP.GameProofs
+import Pouw.Guarantees.NCP
 
 /-!
 # The shift by 24: independent checkpoints, hence relation-free; FinalOnly and the floor under independence
@@ -179,7 +180,7 @@ theorem indep_of_fresh {k : ℕ} {R : Mat}
     · exact ih c (by omega) hsum' p h'
     · rw [h']; exact hlast
 
-theorem independentWitness : IndependentWitness := fun k hk h16 =>
+theorem independentWitness : Pouw.Guarantees.NCP.IndependentWitness := fun k hk h16 =>
   ⟨shiftBy 24 k, shiftBy24_admissible hk h16, indep_of_fresh (fresh hk h16)⟩
 
 theorem ncpFinalOnlyInd : NCPFinalOnlyInd := fun k m n N R A B adv h16 hI =>

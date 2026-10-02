@@ -22,16 +22,6 @@ def GenericPr : Prop :=
       pr (fun x : (Q → R) × S => correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N)
         ≤ η q U.layout.N
 
-/-- **The generic barrier.** In every cost model, for every protocol and domain: if `(U, 𝒜)` is a cheap point at
-cost `c₀` with `q` oracle calls and `W = ∑_u W_ref(u) > 0`, then `G_γ` fails for every `γ < 1 − c₀/W` and every
-error `η` with `η(q, N) < 1`: the adversary wins with probability 1. -/
-def Generic : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] [Fintype S] [Nonempty S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
-    (q : ℕ),
-    CheapPoint CM P D U A c₀ q → 0 < totalWref P U.layout →
-    ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, Gγ CM P D γ η → 1 ≤ η q U.layout.N
-
 /-- **Class (a) in the abstract model: `γ ≥ 1 − 1/p`.** For every noise source, domain and `W_ref ≥ p·W_mm`
 (`p ≥ 1`), on every in-domain workload with positive work: the adversary that commits `A = 0`, computes
 `(0 + E)(B + F)` with one product and outputs the constant `0` wins with probability 1 at every `γ < 1 − 1/p`. A

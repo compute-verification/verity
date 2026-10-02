@@ -96,46 +96,9 @@ namespace RouteU
 
 /-! ## Pinned statements -/
 
-/-- **The biases that keep `X + β` in u8**: for permutation matrices `R` exactly `β ∈ {127, 128, 129}`, and for
-signed permutations exactly `β ∈ {127, 128}`. On the int7 domain `X` ranges over `[−127, 126]` for a permutation
-matrix and over `[−127, 127]` for a signed permutation (at `k = 2`, `X₃ = −(A + E₁ + E₂)` reaches `127` with
-`E₂ = −E₁[π l]`), and both ends are attained. -/
-def BiasU8Iff : Prop :=
-  ∀ β : ℤ, (BiasU8 β Unsigned ↔ 127 ≤ β ∧ β ≤ 129) ∧ (BiasU8 β SignedPerm ↔ 127 ≤ β ∧ β ≤ 128)
-
-/-- **The shift identity** (over ℤ, every `β`): for `16t ≤ 3k`, route U's checked value is the unbiased running sum
-minus `β` times the suffix column sum of `Y` from `16t`: `C^U_t = C_t − β·s_t`. -/
-def CheckedUEq : Prop :=
-  ∀ (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (t i j : ℕ), 16 * t ≤ 3 * k →
-    checkedU β k A B E1 F1 R t i j =
-      mm (16 * t) (stackX k A E1 R) (stackY k B R F1) i j - β * ∑ l ∈ Ico (16 * t) (3 * k), stackY k B R F1 l j
-
-/-- **The final checked value** (every `β`): at `t = T = 3k/16` (`16 ∣ k`) route U's checked value is `A·B`. -/
-def CheckedUFinal : Prop :=
-  ∀ (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (i j : ℕ), 16 ∣ k → checkedU β k A B E1 F1 R (3 * k / 16) i j = mm k A B i j
-
-/-- **Route U's operand ranges**: for `β ∈ {127, 128, 129}`, a permutation matrix `R`, `E₁`, `F₁` in `[−31, 32]`
-and int7 `A`, `B`, every entry of `X_b` is u8 (`[0, 255]`) and every entry of `Y` is s8 (`[−128, 127]`). For a
-signed permutation the same holds at `β ∈ {127, 128}` (`BiasU8Iff`; `Y` is s8 for every signed permutation). -/
-def RangeU : Prop :=
-  ∀ (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat), 127 ≤ β → β ≤ 129 → Unsigned k R →
-    (∀ i, ∀ l < k, InNoise6 (E1 i l)) → (∀ l < k, ∀ j, InNoise6 (F1 l j)) →
-    (∀ i, ∀ l < k, InInt7 (A i l)) → (∀ l < k, ∀ j, InInt7 (B l j)) →
-    (∀ i l, l < 3 * k → 0 ≤ stackXU β k A E1 R i l ∧ stackXU β k A E1 R i l ≤ 255) ∧
-      (∀ l j, l < 3 * k → InInt8 (stackY k B R F1 l j))
-
 /-- **The int32 reading** (every `β`): route U's int32 accumulator at every depth is its running value mod `2^32`. -/
 def MmWUEq : Prop :=
   ∀ (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (τ i j : ℕ), mmWU β k A B E1 F1 R τ i j = wrap32 (runU β k A B E1 F1 R τ i j)
-
-/-- **int32 exactness of the last checkpoint** (as `WrapInt7`, every `β`): for int7 `A`, `B`, `16 ∣ k` and
-`k ≤ 2^19 − 1`, with any noise and `R`, route U's int32 accumulator at the last checkpoint, `16·(3k/16) = 3k`, is
-`A·B`, and so is the signed reading of the last checked value mod `2^32`. -/
-def WrapU : Prop :=
-  ∀ (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (i j : ℕ), 16 ∣ k → k ≤ 2 ^ 19 - 1 →
-    (∀ l < k, InInt7 (A i l)) → (∀ l < k, InInt7 (B l j)) →
-    mmWU β k A B E1 F1 R (16 * (3 * k / 16)) i j = mm k A B i j ∧
-      wrap32 (checkedU β k A B E1 F1 R (3 * k / 16) i j) = mm k A B i j
 
 /-- **The int32 range on route U, signed `R`** (`Chain.Int7Int32` on route U, at half its `k`): for
 `β ∈ {127, 128, 129}`, a signed-permutation `R`, `E₁`, `F₁` in `[−31, 32]`, int7 `A`, `B` and `k ≤ 2^15`, route U's
@@ -160,28 +123,10 @@ def Int7Int32UUnsigned : Prop :=
     (∀ i, ∀ l < k, InInt7 (A i l)) → (∀ l < k, ∀ j, InInt7 (B l j)) → k ≤ 2 ^ 16 → τ ≤ 3 * k →
     InInt32 (runU β k A B E1 F1 R τ i j)
 
-/-- **The wrap is the identity at every depth**: route U's int32 accumulator is its running value over ℤ at every
-`τ ≤ 3k`, for `β ∈ {127, 128, 129}`, `E₁`, `F₁` in `[−31, 32]` and int7 `A`, `B`, when `R` is a signed
-permutation and `k ≤ 2^15`, or a permutation matrix and `k ≤ 2^16`. -/
-def MmWUExact : Prop :=
-  ∀ (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (τ i j : ℕ), 127 ≤ β → β ≤ 129 →
-    (SignedPerm k R ∧ k ≤ 2 ^ 15 ∨ Unsigned k R ∧ k ≤ 2 ^ 16) →
-    (∀ i, ∀ l < k, InNoise6 (E1 i l)) → (∀ l < k, ∀ j, InNoise6 (F1 l j)) →
-    (∀ i, ∀ l < k, InInt7 (A i l)) → (∀ l < k, ∀ j, InInt7 (B l j)) → τ ≤ 3 * k →
-    mmWU β k A B E1 F1 R τ i j = runU β k A B E1 F1 R τ i j
-
 /-- **Route U's honest reference is complete** on the lead's domain, for every NCP instance, bias, noise and `R`: its
 checked values are `YU` by definition, and its useful output, the accumulator at `3k`, is `A·B`. -/
 def LeadCompleteU : Prop :=
   ∀ (Q R S : Type) (P : Params Q R S) (β : ℤ), (P.toProtocolU β).Complete leadDomain
-
-/-- **Route U's `Y` is the lead's depths**: at `d = 16` and `16 ∣ k`, block `t < 3k/16` of `YU β` is route U's int32
-reading of `checkedU β` at `t + 1`. -/
-def YUChecked : Prop :=
-  ∀ {Q R S : Type} (P : Params Q R S) (β : ℤ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (t i j : ℕ),
-    P.d = 16 → 16 ∣ (U.layout.shape u).k → t < 3 * (U.layout.shape u).k / 16 →
-    P.YU β H s U u A t i j = wrap32 (checkedU β (U.layout.shape u).k A (U.weight (U.layout.wid u))
-      (P.e1 H s U u A) (P.wtNoise H s U u).1 (P.wtNoise H s U u).2 (t + 1) i j)
 
 end RouteU
 

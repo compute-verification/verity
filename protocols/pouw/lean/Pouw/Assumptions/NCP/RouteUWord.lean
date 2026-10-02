@@ -56,46 +56,6 @@ def NCPFinalOnlyIndU : Prop :=
     CheckpointIndependent k 16 R → Word.Valid (fun _ => positions k m n) adv →
     ∀ u < N, Word.identCount (fun _ => positions k m n) (checkedUPos β k m n N R A B) adv u ≤ m * n
 
-/-- **The floor for route U under independence** (`Relation.NCPWordFloorInd` for `C^U`, with NzNCP of `C^U`):
-`N·2^−(m n·(γ₀·3k/16 − 1))`. -/
-def NCPWordFloorIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k →
-    CheckpointIndependent k 16 R → 0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
-    Word.NzNCP (fun _ => positions k m n) (checkedUPos β k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
-        16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv ω,
-          (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
-
-/-- **The int32 range of route U's checked values** (`Chain.Int7Int32` on route U): for `β ∈ {127, 128, 129}` and
-int7 `A u`, `B u`, every checked value of unit `u` is int32 when `R` is a signed permutation and `k ≤ 2^15`, or a
-permutation matrix and `k ≤ 2^16` (`RouteU.Int7Int32U`, `RouteU.Int7Int32UUnsigned`). -/
-def Int7Int32UPos : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (ω : Noise N m n k) (u p : ℕ), 127 ≤ β → β ≤ 129 →
-    (SignedPerm k R ∧ k ≤ 2 ^ 15 ∨ Unsigned k R ∧ k ≤ 2 ^ 16) →
-    (∀ i, ∀ l < k, InInt7 (A u i l)) → (∀ l < k, ∀ j, InInt7 (B u l j)) → p < positions k m n →
-    InInt32 (checkedUPos β k m n N R A B ω u p)
-
-/-- **FinalOnly for route U's protocol checked values** (`Chain.WrapFinalOnlyInd` on route U), under independence,
-in the int32-exact range. -/
-def WrapFinalOnlyIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary), 16 ∣ k →
-    CheckpointIndependent k 16 R → Word.Valid (fun _ => positions k m n) adv →
-    (∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checkedUPos β k m n N R A B ω u p)) →
-    ∀ u < N, Word.identCount (fun _ => positions k m n) (wrappedU β k m n N R A B) adv u ≤ m * n
-
-/-- **The floor for route U's protocol checked values** (`Chain.WrapWordFloorInd` on route U, with NzNCP of the
-wrapped route-U values), under independence, in the int32-exact range. -/
-def WrapWordFloorIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k →
-    CheckpointIndependent k 16 R → 0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
-    (∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checkedUPos β k m n N R A B ω u p)) →
-    Word.NzNCP (fun _ => positions k m n) (wrappedU β k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
-        16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv ω,
-          (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
-
 end RouteU
 
 end Pouw.NCP

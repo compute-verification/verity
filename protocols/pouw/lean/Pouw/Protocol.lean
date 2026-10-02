@@ -72,7 +72,7 @@ import Pouw.Protocol.Witness.Model
 /-!
 # PoUW's protocol: the definitions the statements read
 
-This layer and `Pouw.Assumptions` are the trusted text: they import only each other and Mathlib
+This layer, `Pouw.Assumptions` and `Pouw.Guarantees` are the trusted text: they import only each other and Mathlib
 (`Pouw.Protocol.PearlC.Defs` also Batteries), so their diff is everything a statement reviewer reads.
 `Pouw.SecurityProofs` holds the proofs and every lemma, which nobody reviews for meaning. A topic's modules keep their
 basenames in each layer (`Pouw.Protocol.Fp8Atom.E4M3`, `Pouw.SecurityProofs.Fp8Atom.Proofs`), and the topics' maps

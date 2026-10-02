@@ -1,5 +1,7 @@
+import Pouw.SecurityProofs.Barrier
 import Pouw.SecurityProofs.Barrier.Proofs
 import Pouw.SecurityProofs.Copy
+import Pouw.SecurityProofs.Dimension
 import Pouw.SecurityProofs.Dimension.A2WordsProofs
 import Pouw.SecurityProofs.Dimension.CausalProofs
 import Pouw.SecurityProofs.Dimension.EmbedProofs
@@ -43,8 +45,10 @@ import Pouw.SecurityProofs.Fp8Atom.H1TShiftStaging
 import Pouw.SecurityProofs.Fp8Atom.H1TSliceProofs
 import Pouw.SecurityProofs.Fp8Atom.H1TTileProofs
 import Pouw.SecurityProofs.Fp8Atom.Proofs
+import Pouw.SecurityProofs.Game
 import Pouw.SecurityProofs.M1
 import Pouw.SecurityProofs.Milestone
+import Pouw.SecurityProofs.NCP
 import Pouw.SecurityProofs.NCP.ChainProofs
 import Pouw.SecurityProofs.NCP.ExtraIdentityProofs
 import Pouw.SecurityProofs.NCP.GameProofs
@@ -116,6 +120,6 @@ import Pouw.SecurityProofs.Witness
 # PoUW's proofs
 
 Every theorem of the package and every lemma behind it, over `Pouw.Protocol`'s definitions and `Pouw.Assumptions`'
-named assumptions; the kernel checks them, and nobody reviews them for meaning. The topics' maps are in
-`Pouw.Protocol`.
+named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
+`Game`, `NCP`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Pouw.Protocol`.
 -/

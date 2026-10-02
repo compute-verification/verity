@@ -134,8 +134,4 @@ def NCPWordFloorInd : Prop :=
           (positions k m n : ℝ)) ≤
       N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
 
-/-- **An admissible `R` with independent checkpoints exists** (the witness for the rule): for every `k ≥ 1024` with
-`16 ∣ k`. -/
-def IndependentWitness : Prop := ∀ k, 1024 ≤ k → 16 ∣ k → ∃ R, Admissible k 16 R ∧ CheckpointIndependent k 16 R
-
 end Pouw.NCP.Relation

@@ -1,5 +1,6 @@
 import Pouw.Protocol.NCP.Pinned
 import Pouw.SecurityProofs.Exact
+import Pouw.Guarantees.NCP
 
 /-!
 # Noise that cancels inside one checked product: proofs
@@ -21,7 +22,7 @@ theorem assoc_entry (k : ℕ) (E1 R F1 : Mat) (i j : ℕ) :
   exact this.symm
 
 /-- **Cancellation.** -/
-theorem cancel : Pinned.Cancel := by
+theorem cancel : Pouw.Guarantees.NCP.Cancel := by
   intro k A B E1 F1 R
   funext i j
   have hassoc := assoc_entry k E1 R F1 i j
@@ -79,7 +80,7 @@ theorem stacked_eq (k : ℕ) (A B E1 F1 R : Mat) :
   simp only [Pi.add_apply]
 
 /-- **One product.** -/
-theorem stacked : Pinned.Stacked := fun k A B E1 F1 R =>
+theorem stacked : Pouw.Guarantees.NCP.Stacked := fun k A B E1 F1 R =>
   ⟨stacked_eq k A B E1 F1 R, (stacked_eq k A B E1 F1 R).trans (cancel k A B E1 F1 R)⟩
 
 /-- **int32 exactness with wraparound.** -/
@@ -121,7 +122,7 @@ theorem f2_bound {k : ℕ} {R F1 : Mat} (hR : SignedPerm k R) {j : ℕ} (hF : �
   rcases hσ (π.symm ⟨l, hl⟩) with h | h <;> rw [h] <;> constructor <;> linarith [hb.1, hb.2]
 
 /-- **The int8 range.** -/
-theorem range : Pinned.Range := by
+theorem range : Pouw.Guarantees.NCP.Range := by
   intro k A B E1 F1 R hR hE hF hA hB
   refine ⟨fun i l hl => ?_, fun l j hl => ?_⟩
   · simp only [stackX, hcat3, E3, Pi.add_apply, Pi.neg_apply]

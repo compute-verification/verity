@@ -1,5 +1,6 @@
 import Pouw.SecurityProofs.Reduction
 import Pouw.SecurityProofs.Sampling
+import Pouw.Guarantees.Game
 
 /-!
 # (b) Theorem 1, (d) end to end, (d″) at the milestone
@@ -28,7 +29,7 @@ theorem wins_of_accept (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
     _ = _ := by ring
 
 /-- **(b) Theorem 1**: `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ δ_s + η`. -/
-theorem theorem1 : Pinned.Theorem1 := by
+theorem theorem1 : Pouw.Guarantees.Theorem1 := by
   intro Q R S _ _ _ _ CM P D γ η hγ hG U hU T hT q hq A hA C _ accept εs δs hδ
   let E1 := fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
     εs * totalWref P U.layout <
@@ -44,7 +45,7 @@ theorem theorem1 : Pinned.Theorem1 := by
     _ ≤ δs + η q U.layout.N := add_le_add hδ ((pr_fst2_le E2).trans (hG U hU T hT q hq A hA))
 
 /-- **(d) End to end**: TT and the `Ω_max` bound give resource exhaustion with `δ_s = (1 − ε_s)^t`, `η = ε(q)`. -/
-theorem endToEnd : Pinned.EndToEnd := by
+theorem endToEnd : Pouw.Guarantees.EndToEnd := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA t εs hεs
   have hG := gammaFromTT Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT
   refine theorem1 Q R S CM P D (reductionGamma γ₀ Ωmax) ε (reductionGamma_lt_one hγ₀ hΩ) hG

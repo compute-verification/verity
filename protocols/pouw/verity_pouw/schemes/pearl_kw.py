@@ -625,7 +625,7 @@ class PearlKW:
             omega=Fraction(1),
             claims=("pearl-quantized-subspace-hardness", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
                     "beacon-unpredictability"),
-            theorems=("Pouw.Proofs.workWeightedSampling",),
+            theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
             hypotheses=("Pearl's Assumption 1 with its jackpot policy (informal: no γ_0, no constant, no joint form)",
                         f"the {self.device.name} device's FP8 accumulation is reproduced exactly"),
             allowances=("up to ⌊k·h·w/20⌋ skippable summands per tile (5%)", "up to 1/64 dead entries per side",

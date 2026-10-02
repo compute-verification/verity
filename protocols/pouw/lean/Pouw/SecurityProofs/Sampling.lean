@@ -5,6 +5,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Ring
+import Pouw.Guarantees.Game
 
 /-!
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`
@@ -54,7 +55,7 @@ theorem pr_all_in (K : Finset ℕ) (t : ℕ) :
   rw [div_pow]
 
 /-- **(c)** `Pr[accept ∧ ∑_{u∉K} w(u) > ε_s·∑_u w(u)] ≤ (1 − ε_s)^t`. -/
-theorem workWeightedSampling : Pinned.WorkWeightedSampling := by
+theorem workWeightedSampling : Pouw.Guarantees.WorkWeightedSampling := by
   intro α _ w N t K εs hεs
   have hp : (0 : ℝ) ≤ (1 - εs) ^ t := pow_nonneg (by linarith) t
   refine pr_prod_le _ _ hp fun a => ?_

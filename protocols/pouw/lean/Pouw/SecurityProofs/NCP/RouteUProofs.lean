@@ -2,6 +2,7 @@ import Pouw.Assumptions.NCP.RouteUGame
 import Pouw.SecurityProofs.NCP.GameProofs
 import Pouw.SecurityProofs.Sanity
 import Pouw.SecurityProofs.NCP.ChainProofs
+import Pouw.Guarantees.NCP
 
 /-!
 # NCP's checked values on route U: proofs
@@ -42,7 +43,7 @@ theorem runU_eq (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (τ i j : ℕ) :
   ring
 
 /-- **The shift identity.** -/
-theorem checkedU_eq : CheckedUEq := by
+theorem checkedU_eq : Pouw.Guarantees.NCP.CheckedUEq := by
   intro β k A B E1 F1 R t i j ht
   rw [checkedU, runU_eq, ← sum_range_add_sum_Ico _ ht]
   ring
@@ -56,7 +57,7 @@ theorem runU_full (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (i j : ℕ) :
 theorem sixteen_T {k : ℕ} (h : 16 ∣ k) : 16 * (3 * k / 16) = 3 * k := by omega
 
 /-- **The final checked value.** -/
-theorem checkedU_final : CheckedUFinal := by
+theorem checkedU_final : Pouw.Guarantees.NCP.CheckedUFinal := by
   intro β k A B E1 F1 R i j h
   rw [checkedU, sixteen_T h, runU_full]
 
@@ -131,7 +132,7 @@ theorem signed_swap : SignedPerm 2 (fun i j => if (i = 0 ∧ j = 1) ∨ (i = 1 �
   fin_cases i <;> fin_cases j <;> simp [Equiv.swap_apply_def]
 
 /-- **The biases that keep `X + β` in u8.** -/
-theorem biasU8Iff : BiasU8Iff := by
+theorem biasU8Iff : Pouw.Guarantees.NCP.BiasU8Iff := by
   intro β
   have lo : ∀ Rs : ℕ → Mat → Prop, Rs 1 (fun i j => if i = j then 1 else 0) → BiasU8 β Rs →
       127 ≤ β ∧ β ≤ 129 := by
@@ -158,7 +159,7 @@ theorem biasU8Iff : BiasU8Iff := by
     constructor <;> linarith [this.1, this.2]
 
 /-- **Route U's operand ranges.** -/
-theorem rangeU : RangeU := by
+theorem rangeU : Pouw.Guarantees.NCP.RangeU := by
   intro β k A B E1 F1 R h1 h2 hR hE hF hA hB
   obtain ⟨-, hY⟩ := GameProofs.rangeLead k A B E1 F1 R (unsigned_signed hR) hE hF hA hB
   refine ⟨fun i l hl => ?_, fun l j hl => ?_⟩
@@ -172,7 +173,7 @@ theorem rangeU : RangeU := by
 /-! ## The int32 reading -/
 
 /-- **int32 exactness of the last checkpoint.** -/
-theorem wrapU : WrapU := by
+theorem wrapU : Pouw.Guarantees.NCP.WrapU := by
   intro β k A B E1 F1 R i j h hk hA hB
   have hm : InInt32 (mm k A B i j) := int7_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB
   have e : wrap32 (checkedU β k A B E1 F1 R (3 * k / 16) i j) = mm k A B i j := by
@@ -318,7 +319,7 @@ theorem int7Int32UUnsigned : Int7Int32UUnsigned := by
   constructor <;> nlinarith [hb.1, hb.2]
 
 /-- **The wrap is the identity at every depth.** -/
-theorem mmWUExact : MmWUExact := by
+theorem mmWUExact : Pouw.Guarantees.NCP.MmWUExact := by
   intro β k A B E1 F1 R τ i j hβ1 hβ2 hR hE hF hA hB hτ
   rw [mmWU_eq]
   refine wrap32_of_mem ?_
@@ -337,7 +338,7 @@ theorem leadCompleteU : LeadCompleteU := by
   exact mmWU_full _ _ _ _ hk (fun l hl => hA _ hi l hl) (fun l hl => hwt u hu l hl _ hj)
 
 /-- **Route U's `Y` at the lead's depths.** -/
-theorem yuChecked : YUChecked := by
+theorem yuChecked : Pouw.Guarantees.NCP.YUChecked := by
   intro Q R S P β H s U u A t i j hd h16 ht
   have he : D1.blockEnd P.d (3 * (U.layout.shape u).k) t = 16 * (t + 1) := by
     rw [D1.blockEnd, hd]
@@ -356,7 +357,7 @@ open Finset Pouw.Proofs QTree Pouw.NCP.RouteU
 variable {Q R S : Type}
 
 /-- **`TT_NCP_U` is `TT_NCP` of route U's protocol.** -/
-theorem ttncpUIff : TTNCPUIff := fun _ _ _ _ _ _ _ _ _ _ _ _ _ => Iff.rfl
+theorem ttncpUIff : Pouw.Guarantees.NCP.TTNCPUIff := fun _ _ _ _ _ _ _ _ _ _ _ _ _ => Iff.rfl
 
 theorem wrefU_le (f : ℕ) {n₀ : ℕ} (hn₀ : 0 < n₀) {sh : Shape} (hn : n₀ ≤ sh.n) :
     ((3 * sh.Wmm + f * sh.m * sh.k : ℕ) : ℝ) ≤ (1 + f / (3 * (n₀ : ℝ))) * (3 * (sh.Wmm : ℝ)) := by
@@ -386,7 +387,7 @@ theorem gammaFromTTNCP_U : GammaFromTTNCP_U := by
   exact wrefU_le f hn₀ (hn U hU u hu)
 
 /-- **`G_γ` from TT_NCP_U at ncp-v1.** -/
-theorem gammaFromTTNCP_U_v1 : GammaFromTTNCP_U_v1 := by
+theorem gammaFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1 := by
   intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
   have e : (1 : ℝ) + ((24 : ℕ) : ℝ) / (3 * n₀) = 1 + 8 / n₀ := by
     have : (0 : ℝ) < n₀ := by exact_mod_cast hn₀
@@ -397,7 +398,7 @@ theorem gammaFromTTNCP_U_v1 : GammaFromTTNCP_U_v1 := by
   exact gammaFromTTNCP_U Q R S CM P 128 24 D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
 
 /-- **`G_γ` from TT_NCP_U at C2.** -/
-theorem gammaFromTTNCP_U_C2 : GammaFromTTNCP_U_C2 := by
+theorem gammaFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2 := by
   intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
   have e : (1 : ℝ) + ((20 : ℕ) : ℝ) / (3 * n₀) = 1 + 20 / (3 * n₀) := by norm_num
   rw [← e]
@@ -444,7 +445,7 @@ theorem calls_honestProgU (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : 
 end Honest
 
 /-- **TT_NCP_U's satisfiability witness.** -/
-theorem ttncpUWitness : TTNCPUWitness := by
+theorem ttncpUWitness : Pouw.Guarantees.NCP.TTNCPUWitness := by
   intro Q R _ _ _ P β c γ₀ h0 h1 hc hW
   refine ⟨GameProofs.ttncp_outputPriced3 _ _ h0 h1, fun U act _ s => honestProgU P β U act s, fun U hU act _ H s =>
     ⟨eval_honestProgU P β H U act s, ?_, calls_honestProgU P β H U act s hc⟩⟩

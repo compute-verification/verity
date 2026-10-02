@@ -123,19 +123,6 @@ def PerWordCost (γ₂ : ℝ) {N m n k : ℕ} (M : Machine (Noise N m n k)) (w :
   ∀ q : M.Prog, ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, w x.1 x.2 ∈ M.outputs q) →
     (1 - γ₂) * (16 * S.card : ℝ) ≤ M.cost q
 
-/-- **On the checked words, A2 does not depend on the pipe class**: under checkpoint independence and MinRank ≥ 5,
-for every machine and `γ₂ ≤ 1`, A2 into `QuadPipe 8` and A2 into `OpenQuadPipe 16 8`, both for the non-final
-checked words, are each equivalent to the per-word cost `(1 − γ₂)·16`. One way, a matching program pays 16 per word
-(`Theorem1Open`); the other way, the honest program on the words `q` outputs, one priced 16 instruction per word, is
-in both classes. -/
-def A2WordsIff : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (γ₂ : ℝ), CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N → γ₂ ≤ 1 →
-    (A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (word k m n N R A B) U) ↔
-        PerWordCost γ₂ M (word k m n N R A B) U) ∧
-      (A2_algebraicSufficiency γ₂ M (OpenQuadPipe 16 8) (wordSet (word k m n N R A B) U) ↔
-        PerWordCost γ₂ M (word k m n N R A B) U)
-
 /-- **An open-pipe program that no closed pipe is** (the tensor-core-junk shape of P9B-1): for every `k ≥ 1024` with
 `16 ∣ k`, `m, n ≥ 1` and a unit `u₀ ∈ U`, some `R` passes `Admissible`, is checkpoint independent and has MinRank ≥
 16, and some `OpenQuadPipe 16 8` program on the noise coordinates outputs the non-final checked words. One of its

@@ -43,6 +43,11 @@
    "except": [],
    "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof"
   },
+  "Pouw.Guarantees": {
+   "imports": ["Mathlib", "Pouw.Protocol", "Pouw.Assumptions", "Pouw.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+  },
   "Pouw.Protocol": {
    "imports": ["Mathlib", "Pouw.Protocol"],
    "except": ["Pouw.Protocol.PearlC.Defs"],
@@ -138,11 +143,6 @@
    "signature": ["Pouw.Barrier.Proofs.additiveWitness : Pouw.Barrier.Pinned.AdditiveWitness"],
    "assumptions": [],
    "type_hash": "3d6c86ae40baaffc810ef02d39bb1b558123439ffe31e02e9233a04dfffa4138"
-  },
-  "Pouw.Barrier.Proofs.generic": {
-   "signature": ["Pouw.Barrier.Proofs.generic : Pouw.Barrier.Pinned.Generic"],
-   "assumptions": [],
-   "type_hash": "1922bcc8c9e61fa03b13f313e4bd36e814bb5846c89ab69e2d3786b137dec4cc"
   },
   "Pouw.Barrier.Proofs.genericPr": {
    "signature": ["Pouw.Barrier.Proofs.genericPr : Pouw.Barrier.Pinned.GenericPr"],
@@ -581,11 +581,6 @@
    "signature": ["Pouw.Dimension.OpenPipe.a2QuadToOpen : Pouw.Dimension.OpenPipe.A2QuadToOpen"],
    "assumptions": [],
    "type_hash": "4770695a2e04a48311338d4c8e8a556b50bca292cf1d029e6ab9ae8819ff45cf"
-  },
-  "Pouw.Dimension.OpenPipe.a2WordsIff": {
-   "signature": ["Pouw.Dimension.OpenPipe.a2WordsIff : Pouw.Dimension.OpenPipe.A2WordsIff"],
-   "assumptions": [],
-   "type_hash": "40eaefc837ea86567151b355af4bf5cb0cb14343123ebddcb3aa361478870d59"
   },
   "Pouw.Dimension.OpenPipe.algBoundOpenQuad": {
    "signature": ["Pouw.Dimension.OpenPipe.algBoundOpenQuad : Pouw.Dimension.OpenPipe.AlgBoundOpenQuad"],
@@ -1320,25 +1315,10 @@
    "assumptions": [],
    "type_hash": "4b5a10642420d9271ec731f0e6c63b3aa98c8bcee89ed1303e6a4bb3e0e6b06d"
   },
-  "Pouw.NCP.Proofs.cancel": {
-   "signature": ["Pouw.NCP.Proofs.cancel : Pouw.NCP.Pinned.Cancel"],
-   "assumptions": [],
-   "type_hash": "edf0b395416d5692d090cc70fa29f092a84ffdf953b552c0911ae3393917e57a"
-  },
-  "Pouw.NCP.Proofs.range": {
-   "signature": ["Pouw.NCP.Proofs.range : Pouw.NCP.Pinned.Range"],
-   "assumptions": [],
-   "type_hash": "2fab041477681ff94bb70dda3eedf51c2dba33565822b403e14ac6c92bb7932d"
-  },
   "Pouw.NCP.Proofs.signedPermWitness": {
    "signature": ["Pouw.NCP.Proofs.signedPermWitness : Pouw.NCP.Pinned.SignedPermWitness"],
    "assumptions": [],
    "type_hash": "26b750c3541f9fcacd8ef90435facf67915d28a14448fe8b1f8b2ac009b60884"
-  },
-  "Pouw.NCP.Proofs.stacked": {
-   "signature": ["Pouw.NCP.Proofs.stacked : Pouw.NCP.Pinned.Stacked"],
-   "assumptions": [],
-   "type_hash": "254a4406dda7b1d0603780e0ae1d01ace77ab49d3c0318f805559da4bb7a316a"
   },
   "Pouw.NCP.Proofs.wrap": {
    "signature": ["Pouw.NCP.Proofs.wrap : Pouw.NCP.Pinned.Wrap"],
@@ -1375,11 +1355,6 @@
    "assumptions": [],
    "type_hash": "2bffcf09af5adf55dbd0e3fd61007dba064f42cca151b1d495fabe46917bf8bf"
   },
-  "Pouw.NCP.RelationWitness.independentWitness": {
-   "signature": ["Pouw.NCP.RelationWitness.independentWitness : Pouw.NCP.Relation.IndependentWitness"],
-   "assumptions": [],
-   "type_hash": "7e61c4e1d3ddcd5dc22a30a0270ca2c525df342a38ebb37b19b467cdbb8dd1f6"
-  },
   "Pouw.NCP.RelationWitness.ncpFinalOnlyInd": {
    "signature": ["Pouw.NCP.RelationWitness.ncpFinalOnlyInd : Pouw.NCP.Relation.NCPFinalOnlyInd"],
    "assumptions": [],
@@ -1395,35 +1370,10 @@
    "assumptions": [],
    "type_hash": "2b924f0bd533073e1e1dde9b907017c0d844ebf9b03918dd8e45fbff1971d9d1"
   },
-  "Pouw.NCP.RouteUProofs.biasU8Iff": {
-   "signature": ["Pouw.NCP.RouteUProofs.biasU8Iff : Pouw.NCP.RouteU.BiasU8Iff"],
-   "assumptions": [],
-   "type_hash": "03625f5ba041e5b195b305d69d6b201bc9fae648a79a3e152e5bcd4e8e8a376f"
-  },
-  "Pouw.NCP.RouteUProofs.checkedU_eq": {
-   "signature": ["Pouw.NCP.RouteUProofs.checkedU_eq : Pouw.NCP.RouteU.CheckedUEq"],
-   "assumptions": [],
-   "type_hash": "20c5b283f0abf9303b5067bc8f3e8d41f10ee02a7e00f5f4c5c9dad98b8d611b"
-  },
-  "Pouw.NCP.RouteUProofs.checkedU_final": {
-   "signature": ["Pouw.NCP.RouteUProofs.checkedU_final : Pouw.NCP.RouteU.CheckedUFinal"],
-   "assumptions": [],
-   "type_hash": "3093999f797989854a17f0219e0217faad1217e8cbc97a06799cd52570af7d78"
-  },
   "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U": {
    "signature": ["Pouw.NCP.RouteUProofs.gammaFromTTNCP_U : Pouw.NCP.RouteU.GammaFromTTNCP_U"],
    "assumptions": [],
    "type_hash": "a2e61d27cee7eafdf52f5c7fcb5a7cea96afae484e5e976f96cbfd62872ad673"
-  },
-  "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2": {
-   "signature": ["Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2 : Pouw.NCP.RouteU.GammaFromTTNCP_U_C2"],
-   "assumptions": [],
-   "type_hash": "2648368daa96d552ea4914cb80a5108b76dd75815b70ec2f614105cef0662697"
-  },
-  "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1": {
-   "signature": ["Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1 : Pouw.NCP.RouteU.GammaFromTTNCP_U_v1"],
-   "assumptions": [],
-   "type_hash": "8764c7c4ed7acff2430fb7cb05dbf772d39729a632619fae557b1b520e87ba83"
   },
   "Pouw.NCP.RouteUProofs.int7Int32U": {
    "signature": ["Pouw.NCP.RouteUProofs.int7Int32U : Pouw.NCP.RouteU.Int7Int32U"],
@@ -1445,70 +1395,20 @@
    "assumptions": [],
    "type_hash": "faf8e0828b3efd404dc5518baacf0c50e115737ce02d859249db87fababeb328"
   },
-  "Pouw.NCP.RouteUProofs.mmWUExact": {
-   "signature": ["Pouw.NCP.RouteUProofs.mmWUExact : Pouw.NCP.RouteU.MmWUExact"],
-   "assumptions": [],
-   "type_hash": "7677e5b588d20482c62cf1f75fe3d297191835337e967ada1e1cbefb34941a59"
-  },
   "Pouw.NCP.RouteUProofs.mmWU_eq": {
    "signature": ["Pouw.NCP.RouteUProofs.mmWU_eq : Pouw.NCP.RouteU.MmWUEq"],
    "assumptions": [],
    "type_hash": "caafe6b11de718c4b2fb4338ba26e0084bf46a63bef9eb4addd7eae85e778a53"
-  },
-  "Pouw.NCP.RouteUProofs.rangeU": {
-   "signature": ["Pouw.NCP.RouteUProofs.rangeU : Pouw.NCP.RouteU.RangeU"],
-   "assumptions": [],
-   "type_hash": "4543933bc2d8d7d5733a0e2364057fe65f6d064b0379bc3ca65787b933f3e6b8"
-  },
-  "Pouw.NCP.RouteUProofs.ttncpUIff": {
-   "signature": ["Pouw.NCP.RouteUProofs.ttncpUIff : Pouw.NCP.RouteU.TTNCPUIff"],
-   "assumptions": [],
-   "type_hash": "7f959a7f17099a8bf1e35f7c1dbcdececbdfc5962c6d8e99fc26e943fcf80e4c"
-  },
-  "Pouw.NCP.RouteUProofs.ttncpUWitness": {
-   "signature": ["Pouw.NCP.RouteUProofs.ttncpUWitness : Pouw.NCP.RouteU.TTNCPUWitness"],
-   "assumptions": [],
-   "type_hash": "c8c11b3fe37fdef0868b37924d26c23d9d48f84e5cec0cabb8def64ca03ce8d9"
-  },
-  "Pouw.NCP.RouteUProofs.wrapU": {
-   "signature": ["Pouw.NCP.RouteUProofs.wrapU : Pouw.NCP.RouteU.WrapU"],
-   "assumptions": [],
-   "type_hash": "cf6a1ba384c251be1f26b480ebf00bd460b8e7b52f270a748af16ae8628fe387"
-  },
-  "Pouw.NCP.RouteUProofs.yuChecked": {
-   "signature": ["Pouw.NCP.RouteUProofs.yuChecked : Pouw.NCP.RouteU.YUChecked"],
-   "assumptions": [],
-   "type_hash": "92b4692594cddacf19f029c50d819f4faa09716f2421dd522f9ff4d324e36dc7"
-  },
-  "Pouw.NCP.RouteUWordProofs.int7Int32UPos": {
-   "signature": ["Pouw.NCP.RouteUWordProofs.int7Int32UPos : Pouw.NCP.RouteU.Int7Int32UPos"],
-   "assumptions": [],
-   "type_hash": "d786d944bc1865f47bd27b9d0027fd929dfc7ecdf68107200de0da17b655f6e9"
   },
   "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU": {
    "signature": ["Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU : Pouw.NCP.RouteU.NCPFinalOnlyIndU"],
    "assumptions": [],
    "type_hash": "5b4d86c6350a56374edd2fedb1bfca6840da4704b03883a8367be253144623a8"
   },
-  "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU": {
-   "signature": ["Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU : Pouw.NCP.RouteU.NCPWordFloorIndU"],
-   "assumptions": [],
-   "type_hash": "43732128ea57b69df795694365787067e95f3ee2522c03ff92b3b6e0f534215f"
-  },
   "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU": {
    "signature": ["Pouw.NCP.RouteUWordProofs.reductionOnlyIfU : Pouw.NCP.RouteU.ReductionOnlyIfU"],
    "assumptions": [],
    "type_hash": "577b1062b25bf50c0c54e757b4467bc7b470208251cdb5fbf5334951f9ffbd6b"
-  },
-  "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU": {
-   "signature": ["Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU : Pouw.NCP.RouteU.WrapFinalOnlyIndU"],
-   "assumptions": [],
-   "type_hash": "009a48c3266797ade5164717ddc897e46913ed3473fe856b09b17fbb1ddedb6e"
-  },
-  "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU": {
-   "signature": ["Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU : Pouw.NCP.RouteU.WrapWordFloorIndU"],
-   "assumptions": [],
-   "type_hash": "0d2ec932763e8b5c0340e4a9c198da520e0b6b640e98dcff3c221b481f880c7f"
   },
   "Pouw.NCP.WordProofs.wordBound": {
    "signature": ["Pouw.NCP.WordProofs.wordBound : Pouw.NCP.Word.WordBound"],
@@ -6469,11 +6369,6 @@
    "assumptions": [],
    "type_hash": "13b71cfd214de6e791c54190425056bc8a809b7ba14ed954022f702d85ea9b59"
   },
-  "Pouw.Proofs.endToEnd": {
-   "signature": ["Pouw.Proofs.endToEnd : Pouw.Pinned.EndToEnd"],
-   "assumptions": [],
-   "type_hash": "0ff726b7d5fb0ea2d53fcabba0ba42a116efd76c8cdacecc5eb6212ae5888afb"
-  },
   "Pouw.Proofs.freeModel_queries": {
    "signature": ["Pouw.Proofs.freeModel_queries {Q R S : Type} : (Pouw.freeModel Q R S).Queries"],
    "assumptions": [],
@@ -6576,11 +6471,6 @@
    "assumptions": [],
    "type_hash": "2568a704cf95b368ad68391c0648ff252437d80743493290e13ffdc2de6bc27d"
   },
-  "Pouw.Proofs.theorem1": {
-   "signature": ["Pouw.Proofs.theorem1 : Pouw.Pinned.Theorem1"],
-   "assumptions": [],
-   "type_hash": "a17d0a88a5129f43adb08f5d8d31e8f6f4d98a1e102cca148794e0610dde390f"
-  },
   "Pouw.Proofs.ttWitness": {
    "signature": ["Pouw.Proofs.ttWitness : Pouw.Pinned.TTWitness"],
    "assumptions": [],
@@ -6590,11 +6480,6 @@
    "signature": ["Pouw.Proofs.usefulness : Pouw.Pinned.Usefulness"],
    "assumptions": [],
    "type_hash": "7ef23cef1aa38cf69119ff40c4240e5f2f5e7e2532aa05600ebeb5f389ce2149"
-  },
-  "Pouw.Proofs.workWeightedSampling": {
-   "signature": ["Pouw.Proofs.workWeightedSampling : Pouw.Pinned.WorkWeightedSampling"],
-   "assumptions": [],
-   "type_hash": "644a4fb1e2739be0a6fe115738ce11b9660e137e84e973d47c849c13e70baeff"
   },
   "Pouw.Sanity.Wmm_eq_zero": {
    "signature": [
@@ -6918,6 +6803,126 @@
    ],
    "assumptions": [],
    "type_hash": "65bba0e9be8a1364324c298fe86fc229d029f4b1fb0ad61e98d51e7ae0c989ec"
+  },
+  "Pouw.SecurityProofs.Barrier.Generic": {
+   "signature": ["Pouw.SecurityProofs.Barrier.Generic : Pouw.Guarantees.Barrier.Generic"],
+   "assumptions": [],
+   "type_hash": "aded53ec2e9f63def66fa95a6aa3556232c8a28a2b09e37a65ad3a573f8c3432"
+  },
+  "Pouw.SecurityProofs.Dimension.A2WordsIff": {
+   "signature": ["Pouw.SecurityProofs.Dimension.A2WordsIff : Pouw.Guarantees.Dimension.A2WordsIff"],
+   "assumptions": [],
+   "type_hash": "d70e520ee34caac86538e78234078690949ecaa654bf5728b7fa184fdd70bee7"
+  },
+  "Pouw.SecurityProofs.EndToEnd": {
+   "signature": ["Pouw.SecurityProofs.EndToEnd : Pouw.Guarantees.EndToEnd"],
+   "assumptions": [],
+   "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
+  },
+  "Pouw.SecurityProofs.NCP.BiasU8Iff": {
+   "signature": ["Pouw.SecurityProofs.NCP.BiasU8Iff : Pouw.Guarantees.NCP.BiasU8Iff"],
+   "assumptions": [],
+   "type_hash": "0026a531ea014eb0b4e6d1b93ef541094d535fc4871e90e2f129aa2d1baeec6a"
+  },
+  "Pouw.SecurityProofs.NCP.Cancel": {
+   "signature": ["Pouw.SecurityProofs.NCP.Cancel : Pouw.Guarantees.NCP.Cancel"],
+   "assumptions": [],
+   "type_hash": "7d6a63c306dc188f9daa720d46cae923677577e956539cf3d52bd2515d12a6de"
+  },
+  "Pouw.SecurityProofs.NCP.CheckedUEq": {
+   "signature": ["Pouw.SecurityProofs.NCP.CheckedUEq : Pouw.Guarantees.NCP.CheckedUEq"],
+   "assumptions": [],
+   "type_hash": "695f3a8100ceef2d70afb0e2ad5aeff4ab07e5f9c008e0e658de68246c360254"
+  },
+  "Pouw.SecurityProofs.NCP.CheckedUFinal": {
+   "signature": ["Pouw.SecurityProofs.NCP.CheckedUFinal : Pouw.Guarantees.NCP.CheckedUFinal"],
+   "assumptions": [],
+   "type_hash": "634038ce1fa6952b39ccf282424305f598ac7c0932327b6a4d69703ae2b5c6f6"
+  },
+  "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2": {
+   "signature": ["Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2"],
+   "assumptions": [],
+   "type_hash": "b759fdcdb1495b2d172765b9d7d5d9b34288fdbe099a9f65d49c946a5e90bb4f"
+  },
+  "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1": {
+   "signature": ["Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1"],
+   "assumptions": [],
+   "type_hash": "da9dc70217eaf7a7b10b9deac80243623e96aa2666ae7e57ee27f80f2fe9f2c6"
+  },
+  "Pouw.SecurityProofs.NCP.IndependentWitness": {
+   "signature": ["Pouw.SecurityProofs.NCP.IndependentWitness : Pouw.Guarantees.NCP.IndependentWitness"],
+   "assumptions": [],
+   "type_hash": "6ac5144c8c0f1cc26bcaa1e20648c5b6aae5dddc878e92e4335d4110934aa961"
+  },
+  "Pouw.SecurityProofs.NCP.Int7Int32UPos": {
+   "signature": ["Pouw.SecurityProofs.NCP.Int7Int32UPos : Pouw.Guarantees.NCP.Int7Int32UPos"],
+   "assumptions": [],
+   "type_hash": "88a8490b3ec911ae3ea8f079f5d9378e0b730c05e203a783ccb829cb9e6d0ca6"
+  },
+  "Pouw.SecurityProofs.NCP.MmWUExact": {
+   "signature": ["Pouw.SecurityProofs.NCP.MmWUExact : Pouw.Guarantees.NCP.MmWUExact"],
+   "assumptions": [],
+   "type_hash": "7c3ace2c9fbbc98e60a62961777c29e5e9d4d4ded5b2ca12859e0d6bac856189"
+  },
+  "Pouw.SecurityProofs.NCP.NCPWordFloorIndU": {
+   "signature": ["Pouw.SecurityProofs.NCP.NCPWordFloorIndU : Pouw.Guarantees.NCP.NCPWordFloorIndU"],
+   "assumptions": [],
+   "type_hash": "6c5b551aed0fe614557f6e64005b7659f0ac1f0d0a8e4d233c09c2a7a919504b"
+  },
+  "Pouw.SecurityProofs.NCP.Range": {
+   "signature": ["Pouw.SecurityProofs.NCP.Range : Pouw.Guarantees.NCP.Range"],
+   "assumptions": [],
+   "type_hash": "1bd051adca75460fd14500e22d1f3df045fb19d5737f6c7e85a3438c34ecb4d3"
+  },
+  "Pouw.SecurityProofs.NCP.RangeU": {
+   "signature": ["Pouw.SecurityProofs.NCP.RangeU : Pouw.Guarantees.NCP.RangeU"],
+   "assumptions": [],
+   "type_hash": "07da4bbfb8f70799c8f84577a71b68e7ab52535913e74f72ebb22d3746ff19f6"
+  },
+  "Pouw.SecurityProofs.NCP.Stacked": {
+   "signature": ["Pouw.SecurityProofs.NCP.Stacked : Pouw.Guarantees.NCP.Stacked"],
+   "assumptions": [],
+   "type_hash": "d16564ddb3bb4e44856357ce13c726a715b9a2b6c4669dae127f88ed3bc90475"
+  },
+  "Pouw.SecurityProofs.NCP.TTNCPUIff": {
+   "signature": ["Pouw.SecurityProofs.NCP.TTNCPUIff : Pouw.Guarantees.NCP.TTNCPUIff"],
+   "assumptions": [],
+   "type_hash": "737c213504fbe84602bd3f939e3f679afe027557dcba7c0c8cb6497c4a9fdcaa"
+  },
+  "Pouw.SecurityProofs.NCP.TTNCPUWitness": {
+   "signature": ["Pouw.SecurityProofs.NCP.TTNCPUWitness : Pouw.Guarantees.NCP.TTNCPUWitness"],
+   "assumptions": [],
+   "type_hash": "153f58d342cf1ae1cb5154831e36e4706894b213bbe710d1450ca6ecfbdd06da"
+  },
+  "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU": {
+   "signature": ["Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU : Pouw.Guarantees.NCP.WrapFinalOnlyIndU"],
+   "assumptions": [],
+   "type_hash": "5676fa43c70b9402767f73a0d4bb4496dd9652f146017f7c32c4b23676a56401"
+  },
+  "Pouw.SecurityProofs.NCP.WrapU": {
+   "signature": ["Pouw.SecurityProofs.NCP.WrapU : Pouw.Guarantees.NCP.WrapU"],
+   "assumptions": [],
+   "type_hash": "a337d47af122f827f5d5ea820e2b22f4cad3f3cd53ce63a759e56403f5f9bdad"
+  },
+  "Pouw.SecurityProofs.NCP.WrapWordFloorIndU": {
+   "signature": ["Pouw.SecurityProofs.NCP.WrapWordFloorIndU : Pouw.Guarantees.NCP.WrapWordFloorIndU"],
+   "assumptions": [],
+   "type_hash": "1444200530771489be7f089224c97901f74dabd0848234758a11c98a43fbe15f"
+  },
+  "Pouw.SecurityProofs.NCP.YUChecked": {
+   "signature": ["Pouw.SecurityProofs.NCP.YUChecked : Pouw.Guarantees.NCP.YUChecked"],
+   "assumptions": [],
+   "type_hash": "07e56fe9f88102f6281f1a4a536410aae27868252a8f1755aaf703c795446802"
+  },
+  "Pouw.SecurityProofs.Theorem1": {
+   "signature": ["Pouw.SecurityProofs.Theorem1 : Pouw.Guarantees.Theorem1"],
+   "assumptions": [],
+   "type_hash": "e6732e29262cf85d911761ff4fe2600b68d006d5f040ac74e4c98ca358d8e8f5"
+  },
+  "Pouw.SecurityProofs.WorkWeightedSampling": {
+   "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
+   "assumptions": [],
+   "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
   },
   "Pouw.TileBound.bf16_closed_upto8": {
    "signature": [
@@ -7686,7 +7691,6 @@
     "Pouw.Dimension.Forest.ttNCPQuadOfA2",
     "Pouw.Dimension.Fp8Mma.ceiling4090",
     "Pouw.Dimension.OpenPipe.a2QuadToOpen",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.openQuadChainConsistent",
     "Pouw.Dimension.OpenPipe.ttNCPOpenQuadOfA2",
     "Pouw.Dimension.RouteUProofs.a1U",
@@ -7715,7 +7719,8 @@
     "Pouw.Dimension.ttNCPOfA1A2W1",
     "Pouw.Dimension.ttNCPOfA1costA2",
     "Pouw.Dimension.ttNCPOfA2",
-    "Pouw.Dimension.ttNCPOfQuadA2"
+    "Pouw.Dimension.ttNCPOfQuadA2",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff"
    ]
   },
   "Pouw.Assumptions.Dimension.Embed": {
@@ -8210,7 +8215,6 @@
     "Pouw.Dimension.Forest.quadChainConsistentTight",
     "Pouw.Dimension.Forest.ttNCPQuadOfA2",
     "Pouw.Dimension.OpenPipe.a2QuadToOpen",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
     "Pouw.Dimension.OpenPipe.quadToOpen",
     "Pouw.Dimension.RouteUProofs.alg4090WitnessU",
@@ -8242,14 +8246,14 @@
     "Pouw.Dimension.ttNCPOfA1A2",
     "Pouw.Dimension.ttNCPOfA1A2W1",
     "Pouw.Dimension.ttNCPOfA1costA2",
-    "Pouw.Dimension.ttNCPOfQuadA2"
+    "Pouw.Dimension.ttNCPOfQuadA2",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff"
    ]
   },
   "Pouw.Assumptions.Dimension.OpenPipe": {
-   "digest": "771ff7ce6eda0857d40ef49a9d972d7e5f255827578b311f499cdc5b6a6897e7",
+   "digest": "66a6af98bd5f01760ef0541e3dfcfe1dc86d55625fa921a42a44e4c4352f6620",
    "definitions": {
     "Pouw.Dimension.OpenPipe.A2QuadToOpen": "6bedee2d021c56d31d79e05152e1ba88822c15ac13c6ca9d818c00c7e589e8ea",
-    "Pouw.Dimension.OpenPipe.A2WordsIff": "8b122c6db568cd91460b0d1841f2314b2b3a7f93d8bed64e3c73a43746194ef3",
     "Pouw.Dimension.OpenPipe.AlgBoundOpenQuad": "cb8b06b66bffcf18f65cb7881c1a21772b7b3b26cb16ae2b3ff813d9dcad9434",
     "Pouw.Dimension.OpenPipe.AlgBoundOpenQuad8": "ce663827b6bf08d8380c3d8c31b955d6aef4c69a9477118ee79e7563651cece2",
     "Pouw.Dimension.OpenPipe.OpenCount": "813fbc055c376c9d589e5c755c1cea9ab1615c966f8f64059560e62cd148af0e",
@@ -8268,14 +8272,14 @@
     "Pouw.Dimension.Embed.embedM4090",
     "Pouw.Dimension.Embed.perWordOfA1fp",
     "Pouw.Dimension.OpenPipe.a2QuadToOpen",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
     "Pouw.Dimension.OpenPipe.openQuadChainConsistent",
     "Pouw.Dimension.OpenPipe.quadToOpen",
     "Pouw.Dimension.OpenPipe.theorem1Open",
-    "Pouw.Dimension.OpenPipe.ttNCPOpenQuadOfA2"
+    "Pouw.Dimension.OpenPipe.ttNCPOpenQuadOfA2",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff"
    ]
   },
   "Pouw.Assumptions.Dimension.Pinned": {
@@ -8387,7 +8391,6 @@
     "Pouw.Dimension.Forest.theorem1Family",
     "Pouw.Dimension.Forest.ttNCPQuadOfA2",
     "Pouw.Dimension.OpenPipe.a2QuadToOpen",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
@@ -8415,7 +8418,8 @@
     "Pouw.Dimension.pipeWitness",
     "Pouw.Dimension.pipeWordWitness",
     "Pouw.Dimension.ttNCPOfA1costA2",
-    "Pouw.Dimension.ttNCPOfQuadA2"
+    "Pouw.Dimension.ttNCPOfQuadA2",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff"
    ]
   },
   "Pouw.Assumptions.Dimension.RouteU": {
@@ -8596,7 +8600,6 @@
     "Pouw.Assumptions.TT": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
    },
    "pins": [
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.gammaFromTT",
     "Pouw.Proofs.milestoneExhaustion",
     "Pouw.Proofs.milestoneRequirement",
@@ -8606,7 +8609,8 @@
     "Pouw.Sanity.tt_false_depth_zero",
     "Pouw.Sanity.tt_false_of_gamma0_ge_one",
     "Pouw.Sanity.tt_false_rank_zero",
-    "Pouw.Sanity.tt_false_zero_noise"
+    "Pouw.Sanity.tt_false_zero_noise",
+    "Pouw.SecurityProofs.EndToEnd"
    ]
   },
   "Pouw.Assumptions.NCP.Assumptions": {
@@ -8619,7 +8623,7 @@
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.NCP.GameProofs.leadWitness",
     "Pouw.NCP.GameProofs.ttncpWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff"
+    "Pouw.SecurityProofs.NCP.TTNCPUIff"
    ]
   },
   "Pouw.Assumptions.NCP.Chain": {
@@ -8681,41 +8685,25 @@
    },
    "pins": [
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness"
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness"
    ]
   },
   "Pouw.Assumptions.NCP.RouteUGame": {
-   "digest": "76fe0c5729dd6b2e943d9803fba25cc65c162466823d0f48c87a141b0daf21e5",
+   "digest": "9b834a0a2ecd6e50e53d091172fcb9fe6d07294ffaabd3ef868845d0af3e1372",
    "definitions": {
-    "Pouw.NCP.RouteU.GammaFromTTNCP_U": "72c6154e6ece8ab1208142a09ecab8405c1b6ce449aa1fa167691332a5e4e015",
-    "Pouw.NCP.RouteU.GammaFromTTNCP_U_C2": "a8334d8036c1d0ed26a041b59451446033e1225953721c53a0def5d84f85381a",
-    "Pouw.NCP.RouteU.GammaFromTTNCP_U_v1": "f30a5b786c011615b5fbf97bd872eb7c8c71e28333e62b37adc92924e646adcd",
-    "Pouw.NCP.RouteU.LeadUWitness": "e9dc4d9412f25835b42de83e534ec490b2b1dd518ab8dc0644326393c0348f68",
-    "Pouw.NCP.RouteU.TTNCPUIff": "7042c66a35355c74c8e9a21517d87923e6b78b78158bf7923bedcd5aeb9e3666",
-    "Pouw.NCP.RouteU.TTNCPUWitness": "471db055254e5436d8487289c7aa453cfce91a8aec0cc2c595d2cd0e0da5ba78"
+    "Pouw.NCP.RouteU.LeadUWitness": "e9dc4d9412f25835b42de83e534ec490b2b1dd518ab8dc0644326393c0348f68"
    },
-   "pins": [
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
-    "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness"
-   ]
+   "pins": ["Pouw.NCP.RouteUProofs.leadUWitness"]
   },
   "Pouw.Assumptions.NCP.RouteUWord": {
-   "digest": "687a6298a3983f5fdb969d671aa39e03566cd4cdf8f2071c61eaaf9237e8091c",
+   "digest": "a006387b11a8e2b2183965af99fbd9af584452bc4af5e549886d1bd43278d03f",
    "definitions": {
-    "Pouw.NCP.RouteU.Int7Int32UPos": "106c3111f43c4d1d90e07226371476ae77c78b0639b0edc67e97bfddf9576b30",
     "Pouw.NCP.RouteU.NCPFinalOnlyIndU": "bc559552c9ece1d86d2a324e28c14613e1f76f8e63f880afd53dbfce5f04ba82",
-    "Pouw.NCP.RouteU.NCPWordFloorIndU": "0f4f8bb6500d2b45857f8278ef7a44f5673fb7e901c1cff97b5a4536ab8e29d3",
     "Pouw.NCP.RouteU.ReductionOnlyIfU": "9f2ed79194b0d8b3615ed09b3fa1b93073f6f305040ea0ec50675816a63f1b63",
-    "Pouw.NCP.RouteU.WrapFinalOnlyIndU": "9b60be3a397f73dc52c804c8eedc14aaa43ee339020b80bfe0c9a77b08225d81",
-    "Pouw.NCP.RouteU.WrapWordFloorIndU": "33aecc3464e11e5e32005bd47499aa8edb13b1c4788da1383bee6e058e9a1398",
     "Pouw.NCP.checkedUPos": "03be5013b32c157f7ba76e6ba17d7726e21ec8600677bac69149a1d2d2ebd23b",
     "Pouw.NCP.wrappedU": "d70a9745378df31aa3f37d93cb46c3a3e525a9a7e7d00e2fa437481aea5c9bad"
    },
@@ -8751,12 +8739,12 @@
     "Pouw.Dimension.RouteUProofs.ttNCPQuadOfA2U",
     "Pouw.Dimension.RouteUProofs.wordCUSubV0",
     "Pouw.Dimension.RouteUProofs.wordUSubV0",
-    "Pouw.NCP.RouteUWordProofs.int7Int32UPos",
     "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
     "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU",
-    "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU"
+    "Pouw.SecurityProofs.NCP.Int7Int32UPos",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU"
    ]
   },
   "Pouw.Assumptions.PearlC.DeviceChainCap": {
@@ -9416,12 +9404,11 @@
    ]
   },
   "Pouw.Assumptions.Pinned": {
-   "digest": "a381be1f54bc76a38a9ac4c73f62098af8d1808a2388c764fadc26499af56c1c",
+   "digest": "1a69c699d4f7a74e93b9d6ca5b781b8dbb1e2eb3fa20c479885fbd162360bd45",
    "definitions": {
     "Pouw.Pinned.CopyBound": "e5a336992f93d833527ae755423ffebe259b4a5384cd64f3c97bfc9049be651e",
     "Pouw.Pinned.CopyNzWitness": "a6853eb7cba19f7e0b53bc491cf23491074b134ec1020fbecf411e6ce8dafb5b",
     "Pouw.Pinned.D1Complete": "0749b5b4e065f1da426c229afd1ab69a7cfb06bc6f3ad9f794b851e0c1374a4d",
-    "Pouw.Pinned.EndToEnd": "48e5f41e71f2e0940241f26aa54f44a309d8badf702f5127d5d64361a956acd0",
     "Pouw.Pinned.GameCanBeLost": "01ef251920ac215c486510b96d7499c880ff2cd88f1ee89fe8cd14d35148c53d",
     "Pouw.Pinned.GammaBudget": "00a06e944ad59b14d061bf4b2f66d239d6139641fed1ae797090a774944af690",
     "Pouw.Pinned.GammaFromTT": "312ac8ad9b0bf9f9d7072ebe050022071a9e1e8b187c2c2d6f36e8c7fba46400",
@@ -9435,15 +9422,12 @@
     "Pouw.Pinned.MilestoneWref": "e343f13edf3aa52c917eca01f895ced790335de17fdd637b3a6a94399058f896",
     "Pouw.Pinned.NoisedKBound": "074a327c9b72ccb620540006f12e851628697b2fef41d246f4cc47e496d9320c",
     "Pouw.Pinned.TTWitness": "d84e35439089294c73c13faa1be129e9cafc1e27e5d9a812c1bd374649082c59",
-    "Pouw.Pinned.Theorem1": "70631bf53050f320a551b6279421a8192b29ec73eff1397c3cd2adec4a47ad8c",
-    "Pouw.Pinned.Usefulness": "72101586da20a11f2fcc8fb4f5ead5c0dca29807de1597ac34210d849f40fd14",
-    "Pouw.Pinned.WorkWeightedSampling": "51d6b70189a5cde5798a82370a7be26a251ccd8739aa8eebbe3f476a3aca348e"
+    "Pouw.Pinned.Usefulness": "72101586da20a11f2fcc8fb4f5ead5c0dca29807de1597ac34210d849f40fd14"
    },
    "pins": [
     "Pouw.Proofs.copyBound",
     "Pouw.Proofs.copyNzWitness",
     "Pouw.Proofs.d1Complete",
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.gammaBudget",
     "Pouw.Proofs.gammaFromTT",
@@ -9456,10 +9440,82 @@
     "Pouw.Proofs.milestoneRequirement",
     "Pouw.Proofs.milestoneWref",
     "Pouw.Proofs.noisedKBound",
-    "Pouw.Proofs.theorem1",
     "Pouw.Proofs.ttWitness",
-    "Pouw.Proofs.usefulness",
-    "Pouw.Proofs.workWeightedSampling"
+    "Pouw.Proofs.usefulness"
+   ]
+  },
+  "Pouw.Guarantees.Barrier": {
+   "digest": "be1814fbe8f3b259c3732cbffaabe66737e36c1ef45c9710107af50c737cad0b",
+   "definitions": {
+    "Pouw.Guarantees.Barrier.Generic": "c3286787af46287c31fe8438bcf600817cf1c1848f3339188d36de8947b83ea7"
+   },
+   "pins": ["Pouw.SecurityProofs.Barrier.Generic"]
+  },
+  "Pouw.Guarantees.Dimension": {
+   "digest": "1902ba1b713c7dd692bfd23543bf99626e6b1dd6b72929569372266e86784a38",
+   "definitions": {
+    "Pouw.Guarantees.Dimension.A2WordsIff": "65557c05346ef70d00fbdfaf94ca2b86991dfe1ab5a4b857de5edb22d362e8d5"
+   },
+   "pins": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
+  },
+  "Pouw.Guarantees.Game": {
+   "digest": "846ac0ba0158c9d5507fcb777b3ac5a86ec2e27c1e58838e72ec55a83cbcfe78",
+   "definitions": {
+    "Pouw.Guarantees.EndToEnd": "c284f23d6e287932bcd39d62921ea35ab95296323b95d9b2b1090f8e75998063",
+    "Pouw.Guarantees.Theorem1": "d84099f4bd953907102ee6a29855d8a77bf368b5624b5bba929af6318015a15e",
+    "Pouw.Guarantees.WorkWeightedSampling": "b37ef510928501da7b0e271322b75a66d815f22612540edfd6892d93d117e7f2"
+   },
+   "pins": [
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkWeightedSampling"
+   ]
+  },
+  "Pouw.Guarantees.NCP": {
+   "digest": "b5bea43ef62ffa0c0720415cae0be727678ce6341547392e4876be57f81cb871",
+   "definitions": {
+    "Pouw.Guarantees.NCP.BiasU8Iff": "151516e1e4ee87903f8f14ac1c567a5e551c88a0c5b90f9319f383faf2e09389",
+    "Pouw.Guarantees.NCP.Cancel": "f94583533f0111a6bbcaa3c9623947cab329b9b707c7584f6ecd2e552f8c578b",
+    "Pouw.Guarantees.NCP.CheckedUEq": "cec4285cc6c3356b2a23bf86124b656ca750186359021b2c904eac98a699eae1",
+    "Pouw.Guarantees.NCP.CheckedUFinal": "3aa0308b31f68bde20e92aef42943c30c7851ea5916141e624e530d7f57e95ad",
+    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2": "91381b6af66e1988a22bb78349b9208c3b804a5f92e3f7697d031a4ca1741cfa",
+    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1": "bb7b1d69f2982273e5b146c11f7d4a86d11472eaa59e464a98e905e07423fb54",
+    "Pouw.Guarantees.NCP.IndependentWitness": "fffbf79427e4f9135959ad4e505c32953fa5ab1521cd33c283335fb539adbac3",
+    "Pouw.Guarantees.NCP.Int7Int32UPos": "c94618bd014850aecb0a6e4d226b9ce336d0a5a6314a54d659161218a60f196a",
+    "Pouw.Guarantees.NCP.MmWUExact": "be476faa1497b2a80f77d2ce48799efd668f4d8412ff27c2027d5a524207014f",
+    "Pouw.Guarantees.NCP.NCPWordFloorIndU": "cd02c84dc9007fddefe6a563d3318c06be08e4319de136166a99fc4ff1c1c3a8",
+    "Pouw.Guarantees.NCP.Range": "76983bd775f49c4240a70afd7b0d4cc9395c2f631860ebe94a4b9f3fa93c5ba1",
+    "Pouw.Guarantees.NCP.RangeU": "50d942f10ccae0732bb8083d486599f94eb606ad593194527048583137746756",
+    "Pouw.Guarantees.NCP.Stacked": "02b66d25dc44f44196c5eb4ee1d490ccb41b7e8cece81a47c64f0afb2415fae6",
+    "Pouw.Guarantees.NCP.TTNCPUIff": "2fe0085464b9ad5c66424a9710842259438e14b94dd3ebedec293f200e1f2188",
+    "Pouw.Guarantees.NCP.TTNCPUWitness": "a0c9af8d21778ce0c6de58401518dccc4173d251594cf8e4d37798bfd3a41cf7",
+    "Pouw.Guarantees.NCP.WrapFinalOnlyIndU": "cc7a0f435ecd4a059382d982f6063b1245867e20cf96149d61e455fe812f8b9a",
+    "Pouw.Guarantees.NCP.WrapU": "a90fc27845cfe2e8e13559319ff9fa97f28a89a14efc4597f588f68bfa5064dc",
+    "Pouw.Guarantees.NCP.WrapWordFloorIndU": "ceb18366b36e8a5c047ec418b0288b9514b861c57b85b91d4fc024a3d63f98a4",
+    "Pouw.Guarantees.NCP.YUChecked": "b27908d27a7947b8f55b3d7e3c6965afa85a2b6475ee20dd01dee53f1ac3b6a2",
+    "Pouw.NCP.RouteU.GammaFromTTNCP_U": "72c6154e6ece8ab1208142a09ecab8405c1b6ce449aa1fa167691332a5e4e015"
+   },
+   "pins": [
+    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
+    "Pouw.SecurityProofs.NCP.BiasU8Iff",
+    "Pouw.SecurityProofs.NCP.Cancel",
+    "Pouw.SecurityProofs.NCP.CheckedUEq",
+    "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.IndependentWitness",
+    "Pouw.SecurityProofs.NCP.Int7Int32UPos",
+    "Pouw.SecurityProofs.NCP.MmWUExact",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.Range",
+    "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.Stacked",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.YUChecked"
    ]
   },
   "Pouw.Protocol.Barrier.Defs": {
@@ -9501,22 +9557,21 @@
    "pins": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
-    "Pouw.Barrier.Proofs.generic",
     "Pouw.Barrier.Proofs.genericWitness",
     "Pouw.Barrier.Proofs.relation",
     "Pouw.Barrier.Proofs.relationAdmits",
     "Pouw.Barrier.Proofs.relationWitness",
     "Pouw.Barrier.Proofs.segment",
     "Pouw.NCP.GameProofs.oneSegment",
-    "Pouw.NCP.GameProofs.segmentLead"
+    "Pouw.NCP.GameProofs.segmentLead",
+    "Pouw.SecurityProofs.Barrier.Generic"
    ]
   },
   "Pouw.Protocol.Barrier.Pinned": {
-   "digest": "597525cf1cb51fee3e83d3822cbc79570168bd5786e65d38895fb683c40d6bf5",
+   "digest": "b131ab21eaec4b2987f0c38870365e740458bac6a1b1887c19a1bcb381a574b9",
    "definitions": {
     "Pouw.Barrier.Pinned.Additive": "0b4007c0659679e4af2eb2e3a1e3125788249d753a2c69018e2c79f0d8064514",
     "Pouw.Barrier.Pinned.AdditiveWitness": "0a1c48bcc757f1b18db6edab38f2e59c32c7904922e686657a0debaf81ee7343",
-    "Pouw.Barrier.Pinned.Generic": "0b7655628022fdc89d3954c4e685868c6d5d3dbad9abe412e231eebeebc7784f",
     "Pouw.Barrier.Pinned.GenericPr": "996f337a74a8f6971a9e766d166fdcf2ddf02bea0ba3d8833996caeaec1c8120",
     "Pouw.Barrier.Pinned.GenericWitness": "d053503e66641d931b770f3d77dccafde2fef4a74cff95b2df017f6c5015d3f6",
     "Pouw.Barrier.Pinned.Relation": "6f40375ac556a83453cf7fef6775602924c24cb64aa16f77e9379a94a4a1d3b2",
@@ -9529,7 +9584,6 @@
    "pins": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
-    "Pouw.Barrier.Proofs.generic",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.genericWitness",
     "Pouw.Barrier.Proofs.relation",
@@ -9556,7 +9610,6 @@
    "pins": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
-    "Pouw.Barrier.Proofs.generic",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.genericWitness",
     "Pouw.Barrier.Proofs.relation",
@@ -9589,7 +9642,6 @@
     "Pouw.Dimension.Forest.ttNCPQuadOfA2",
     "Pouw.Dimension.H100.mh100WordsConsistent",
     "Pouw.Dimension.H100.perWordMH100Words",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
@@ -9680,10 +9732,7 @@
     "Pouw.NCP.GameProofs.segmentLead",
     "Pouw.NCP.GameProofs.threeBlock",
     "Pouw.NCP.GameProofs.ttncpWitness",
-    "Pouw.NCP.Proofs.cancel",
-    "Pouw.NCP.Proofs.range",
     "Pouw.NCP.Proofs.signedPermWitness",
-    "Pouw.NCP.Proofs.stacked",
     "Pouw.NCP.Proofs.wrap",
     "Pouw.NCP.Proofs.wrapInt7",
     "Pouw.NCP.RelationProofs.ncpFinalOnly",
@@ -9691,35 +9740,18 @@
     "Pouw.NCP.RelationProofs.reductionIf",
     "Pouw.NCP.RelationProofs.reductionOnlyIf",
     "Pouw.NCP.RelationWitness.independentRelationFree",
-    "Pouw.NCP.RelationWitness.independentWitness",
     "Pouw.NCP.RelationWitness.ncpFinalOnlyInd",
     "Pouw.NCP.RelationWitness.ncpWordFloorInd",
     "Pouw.NCP.RelationWitness.relationFreeWitness",
-    "Pouw.NCP.RouteUProofs.biasU8Iff",
-    "Pouw.NCP.RouteUProofs.checkedU_eq",
-    "Pouw.NCP.RouteUProofs.checkedU_final",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.int7Int32U",
     "Pouw.NCP.RouteUProofs.int7Int32UUnsigned",
     "Pouw.NCP.RouteUProofs.leadCompleteU",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.mmWUExact",
     "Pouw.NCP.RouteUProofs.mmWU_eq",
-    "Pouw.NCP.RouteUProofs.rangeU",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUProofs.wrapU",
-    "Pouw.NCP.RouteUProofs.yuChecked",
-    "Pouw.NCP.RouteUWordProofs.int7Int32UPos",
     "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
     "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU",
-    "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU",
     "Pouw.Proofs.d1Complete",
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.freeModel_queries",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.gammaFromTT",
@@ -9734,7 +9766,6 @@
     "Pouw.Proofs.noiseRange_of_factor_bounds",
     "Pouw.Proofs.noisedKBound",
     "Pouw.Proofs.outputPriced_queries",
-    "Pouw.Proofs.theorem1",
     "Pouw.Proofs.ttWitness",
     "Pouw.Proofs.usefulness",
     "Pouw.Sanity.Wref_eq_zero_of_Wmm",
@@ -9755,7 +9786,30 @@
     "Pouw.Sanity.tt_false_zero_noise",
     "Pouw.Sanity.wins_T_zero_iff",
     "Pouw.Sanity.wins_empty",
-    "Pouw.Sanity.wins_of_gamma_ge_one"
+    "Pouw.Sanity.wins_of_gamma_ge_one",
+    "Pouw.SecurityProofs.Barrier.Generic",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff",
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.NCP.BiasU8Iff",
+    "Pouw.SecurityProofs.NCP.Cancel",
+    "Pouw.SecurityProofs.NCP.CheckedUEq",
+    "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.IndependentWitness",
+    "Pouw.SecurityProofs.NCP.Int7Int32UPos",
+    "Pouw.SecurityProofs.NCP.MmWUExact",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.Range",
+    "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.Stacked",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.YUChecked",
+    "Pouw.SecurityProofs.Theorem1"
    ]
   },
   "Pouw.Protocol.Basic.Prob": {
@@ -9765,7 +9819,6 @@
    },
    "pins": [
     "Pouw.Barrier.Proofs.additive",
-    "Pouw.Barrier.Proofs.generic",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.relation",
     "Pouw.Barrier.Proofs.segment",
@@ -9777,13 +9830,7 @@
     "Pouw.NCP.RelationProofs.ncpWordFloor",
     "Pouw.NCP.RelationWitness.ncpWordFloorInd",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU",
     "Pouw.NCP.WordProofs.wordBound",
     "Pouw.NCP.WordProofs.wordFloor",
     "Pouw.NCP.WordProofs.wordNzWitness",
@@ -10077,14 +10124,11 @@
     "Pouw.PearlC.ttOut_wref",
     "Pouw.Proofs.copyBound",
     "Pouw.Proofs.copyNzWitness",
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.gammaFromTT",
     "Pouw.Proofs.milestoneExhaustion",
     "Pouw.Proofs.milestoneRequirement",
-    "Pouw.Proofs.theorem1",
     "Pouw.Proofs.ttWitness",
-    "Pouw.Proofs.workWeightedSampling",
     "Pouw.Sanity.copy_zero_noise",
     "Pouw.Sanity.milestone_hypotheses_consistent",
     "Pouw.Sanity.pr_of_isEmpty",
@@ -10093,7 +10137,17 @@
     "Pouw.Sanity.tt_false_depth_zero",
     "Pouw.Sanity.tt_false_of_gamma0_ge_one",
     "Pouw.Sanity.tt_false_rank_zero",
-    "Pouw.Sanity.tt_false_zero_noise"
+    "Pouw.Sanity.tt_false_zero_noise",
+    "Pouw.SecurityProofs.Barrier.Generic",
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU",
+    "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkWeightedSampling"
    ]
   },
   "Pouw.Protocol.Basic.QTree": {
@@ -10108,7 +10162,6 @@
    },
    "pins": [
     "Pouw.Barrier.Proofs.additive",
-    "Pouw.Barrier.Proofs.generic",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.genericWitness",
     "Pouw.Barrier.Proofs.relation",
@@ -10119,11 +10172,7 @@
     "Pouw.NCP.GameProofs.oneSegment",
     "Pouw.NCP.GameProofs.ttncpWitness",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
     "Pouw.PearlC.gammaSampledU_implies_gammaSampled",
     "Pouw.PearlC.gammaU_implies_gamma",
     "Pouw.PearlC.pearlCGamma16384",
@@ -10410,14 +10459,12 @@
     "Pouw.PearlC.ttOutTile_wref",
     "Pouw.PearlC.ttOut_of_ttOutRowSeed",
     "Pouw.PearlC.ttOut_wref",
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.freeModel_queries",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.gammaFromTT",
     "Pouw.Proofs.milestoneExhaustion",
     "Pouw.Proofs.milestoneRequirement",
     "Pouw.Proofs.outputPriced_queries",
-    "Pouw.Proofs.theorem1",
     "Pouw.Proofs.ttWitness",
     "Pouw.Sanity.milestone_hypotheses_consistent",
     "Pouw.Sanity.randomized_of_deterministic",
@@ -10426,7 +10473,14 @@
     "Pouw.Sanity.tt_false_depth_zero",
     "Pouw.Sanity.tt_false_of_gamma0_ge_one",
     "Pouw.Sanity.tt_false_rank_zero",
-    "Pouw.Sanity.tt_false_zero_noise"
+    "Pouw.Sanity.tt_false_zero_noise",
+    "Pouw.SecurityProofs.Barrier.Generic",
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.Theorem1"
    ]
   },
   "Pouw.Protocol.D1": {
@@ -10468,13 +10522,8 @@
     "Pouw.NCP.GameProofs.oneSegment",
     "Pouw.NCP.GameProofs.ttncpWitness",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.leadCompleteU",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUProofs.yuChecked",
     "Pouw.Proofs.d1Complete",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.milestoneExhaustion",
@@ -10492,7 +10541,12 @@
     "Pouw.Sanity.noisedAct_rank_zero",
     "Pouw.Sanity.tt_false_depth_zero",
     "Pouw.Sanity.tt_false_rank_zero",
-    "Pouw.Sanity.tt_false_zero_noise"
+    "Pouw.Sanity.tt_false_zero_noise",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.YUChecked"
    ]
   },
   "Pouw.Protocol.Dimension.Causal": {
@@ -10575,7 +10629,6 @@
     "Pouw.Dimension.H100.mh100WordsConsistent",
     "Pouw.Dimension.H100.perWordMH100Words",
     "Pouw.Dimension.OpenPipe.a2QuadToOpen",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
@@ -10652,7 +10705,8 @@
     "Pouw.Dimension.ttNCPOfA1A2W1",
     "Pouw.Dimension.ttNCPOfA1costA2",
     "Pouw.Dimension.ttNCPOfA2",
-    "Pouw.Dimension.ttNCPOfQuadA2"
+    "Pouw.Dimension.ttNCPOfQuadA2",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff"
    ]
   },
   "Pouw.Protocol.Dimension.Lift": {
@@ -10681,7 +10735,6 @@
     "Pouw.Dimension.Forest.quadChainConsistent",
     "Pouw.Dimension.Forest.quadChainConsistentTight",
     "Pouw.Dimension.Forest.ttNCPQuadOfA2",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
@@ -10710,7 +10763,8 @@
     "Pouw.Dimension.pipeWitness",
     "Pouw.Dimension.pipeWordWitness",
     "Pouw.Dimension.ttNCPOfA1costA2",
-    "Pouw.Dimension.ttNCPOfQuadA2"
+    "Pouw.Dimension.ttNCPOfQuadA2",
+    "Pouw.SecurityProofs.Dimension.A2WordsIff"
    ]
   },
   "Pouw.Protocol.Fp8Atom.Atom": {
@@ -12177,7 +12231,6 @@
    "pins": [
     "Pouw.Barrier.Proofs.additive",
     "Pouw.Barrier.Proofs.additiveWitness",
-    "Pouw.Barrier.Proofs.generic",
     "Pouw.Barrier.Proofs.genericPr",
     "Pouw.Barrier.Proofs.genericWitness",
     "Pouw.Barrier.Proofs.relation",
@@ -12194,13 +12247,8 @@
     "Pouw.NCP.GameProofs.segmentLead",
     "Pouw.NCP.GameProofs.ttncpWitness",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.leadCompleteU",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUProofs.yuChecked",
     "Pouw.PearlC.gammaSampledU_implies_gammaSampled",
     "Pouw.PearlC.pearlCSampledDevChainCapKAt",
     "Pouw.PearlC.pearlCSampledDevKAt",
@@ -12325,7 +12373,6 @@
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_16384",
     "Pouw.PearlC.pearlCSampledUnpromotedChainCap1000_8192",
     "Pouw.Proofs.d1Complete",
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.freeModel_queries",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.gammaFromTT",
@@ -12336,9 +12383,7 @@
     "Pouw.Proofs.milestoneWref",
     "Pouw.Proofs.noiseRange_of_factor_bounds",
     "Pouw.Proofs.outputPriced_queries",
-    "Pouw.Proofs.theorem1",
     "Pouw.Proofs.ttWitness",
-    "Pouw.Proofs.workWeightedSampling",
     "Pouw.Sanity.Wmm_eq_zero",
     "Pouw.Sanity.Wref_eq_zero_of_Wmm",
     "Pouw.Sanity.Y_last",
@@ -12361,7 +12406,16 @@
     "Pouw.Sanity.tt_false_zero_noise",
     "Pouw.Sanity.wins_T_zero_iff",
     "Pouw.Sanity.wins_empty",
-    "Pouw.Sanity.wins_of_gamma_ge_one"
+    "Pouw.Sanity.wins_of_gamma_ge_one",
+    "Pouw.SecurityProofs.Barrier.Generic",
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.YUChecked",
+    "Pouw.SecurityProofs.Theorem1",
+    "Pouw.SecurityProofs.WorkWeightedSampling"
    ]
   },
   "Pouw.Protocol.Game.Params": {
@@ -12377,11 +12431,7 @@
     "Pouw.NCP.GameProofs.leadWitness",
     "Pouw.NCP.GameProofs.ttncpWitness",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.Proofs.endToEnd",
     "Pouw.Proofs.gameCanBeLost",
     "Pouw.Proofs.gammaBudget",
     "Pouw.Proofs.gammaFromTT",
@@ -12396,7 +12446,11 @@
     "Pouw.Sanity.omega_lt_inv_one_sub",
     "Pouw.Sanity.reductionGamma_lt_of_omega_lt_one",
     "Pouw.Sanity.tt_false_rank_zero",
-    "Pouw.Sanity.tt_false_zero_noise"
+    "Pouw.Sanity.tt_false_zero_noise",
+    "Pouw.SecurityProofs.EndToEnd",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness"
    ]
   },
   "Pouw.Protocol.M1": {
@@ -12478,7 +12532,6 @@
     "Pouw.Dimension.Forest.ttNCPQuadOfA2",
     "Pouw.Dimension.H100.mh100WordsConsistent",
     "Pouw.Dimension.H100.perWordMH100Words",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
@@ -12567,10 +12620,7 @@
     "Pouw.NCP.GameProofs.segmentLead",
     "Pouw.NCP.GameProofs.threeBlock",
     "Pouw.NCP.GameProofs.ttncpWitness",
-    "Pouw.NCP.Proofs.cancel",
-    "Pouw.NCP.Proofs.range",
     "Pouw.NCP.Proofs.signedPermWitness",
-    "Pouw.NCP.Proofs.stacked",
     "Pouw.NCP.Proofs.wrap",
     "Pouw.NCP.Proofs.wrapInt7",
     "Pouw.NCP.RelationProofs.ncpFinalOnly",
@@ -12578,33 +12628,37 @@
     "Pouw.NCP.RelationProofs.reductionIf",
     "Pouw.NCP.RelationProofs.reductionOnlyIf",
     "Pouw.NCP.RelationWitness.independentRelationFree",
-    "Pouw.NCP.RelationWitness.independentWitness",
     "Pouw.NCP.RelationWitness.ncpFinalOnlyInd",
     "Pouw.NCP.RelationWitness.ncpWordFloorInd",
     "Pouw.NCP.RelationWitness.relationFreeWitness",
-    "Pouw.NCP.RouteUProofs.biasU8Iff",
-    "Pouw.NCP.RouteUProofs.checkedU_eq",
-    "Pouw.NCP.RouteUProofs.checkedU_final",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.int7Int32U",
     "Pouw.NCP.RouteUProofs.int7Int32UUnsigned",
     "Pouw.NCP.RouteUProofs.leadCompleteU",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.mmWUExact",
     "Pouw.NCP.RouteUProofs.mmWU_eq",
-    "Pouw.NCP.RouteUProofs.rangeU",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUProofs.wrapU",
-    "Pouw.NCP.RouteUProofs.yuChecked",
-    "Pouw.NCP.RouteUWordProofs.int7Int32UPos",
     "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
     "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU",
-    "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU"
+    "Pouw.SecurityProofs.Dimension.A2WordsIff",
+    "Pouw.SecurityProofs.NCP.BiasU8Iff",
+    "Pouw.SecurityProofs.NCP.Cancel",
+    "Pouw.SecurityProofs.NCP.CheckedUEq",
+    "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.IndependentWitness",
+    "Pouw.SecurityProofs.NCP.Int7Int32UPos",
+    "Pouw.SecurityProofs.NCP.MmWUExact",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.Range",
+    "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.Stacked",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.YUChecked"
    ]
   },
   "Pouw.Protocol.NCP.ExtraIdentity": {
@@ -12615,23 +12669,13 @@
    "pins": ["Pouw.NCP.ExtraIdentityProofs.admissibleExtraIdentity"]
   },
   "Pouw.Protocol.NCP.Pinned": {
-   "digest": "2e8299e70a6dd362d8c4b129f15e7caf45cd221957cc2438c47e0123ff8ee97a",
+   "digest": "b415becb80636a06c342c813c781ce1aae9480c8438afc0503f2773cd59eedee",
    "definitions": {
-    "Pouw.NCP.Pinned.Cancel": "ab973aa352ecb441ffc232522c3c3b1cfeba41b096a27e0739cac320264d9066",
-    "Pouw.NCP.Pinned.Range": "c39a1d99d944fee27c24f45e73b33717c79e057c46cd2f9a997e9bfd8c895635",
     "Pouw.NCP.Pinned.SignedPermWitness": "5441f27702ebcb3e6fac45279b3e338ed221ed1381ae69ca16f029163cd108f4",
-    "Pouw.NCP.Pinned.Stacked": "a2ab7622e650b3373f21672361dd0c56dc40990fad5e326436853fb661552c28",
     "Pouw.NCP.Pinned.Wrap": "e87749de44b4ba9c0dfca11f83f4fbd09f447ab3063833c8c8f792cdf0c6403b",
     "Pouw.NCP.Pinned.WrapInt7": "0fc7d7f3bacf3a88acbb09e4b47c7a8328ff450ff26cc83919e30b32604d3ef6"
    },
-   "pins": [
-    "Pouw.NCP.Proofs.cancel",
-    "Pouw.NCP.Proofs.range",
-    "Pouw.NCP.Proofs.signedPermWitness",
-    "Pouw.NCP.Proofs.stacked",
-    "Pouw.NCP.Proofs.wrap",
-    "Pouw.NCP.Proofs.wrapInt7"
-   ]
+   "pins": ["Pouw.NCP.Proofs.signedPermWitness", "Pouw.NCP.Proofs.wrap", "Pouw.NCP.Proofs.wrapInt7"]
   },
   "Pouw.Protocol.NCP.Protocol": {
    "digest": "0152ce4bb1231c899f8d67eb339e4d757c0cbe85e0a08c6ddd820891d7761e4f",
@@ -12688,29 +12732,28 @@
     "Pouw.NCP.GameProofs.segmentLead",
     "Pouw.NCP.GameProofs.threeBlock",
     "Pouw.NCP.GameProofs.ttncpWitness",
-    "Pouw.NCP.RelationWitness.independentWitness",
     "Pouw.NCP.RelationWitness.relationFreeWitness",
-    "Pouw.NCP.RouteUProofs.biasU8Iff",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.int7Int32U",
     "Pouw.NCP.RouteUProofs.int7Int32UUnsigned",
     "Pouw.NCP.RouteUProofs.leadCompleteU",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.mmWUExact",
-    "Pouw.NCP.RouteUProofs.rangeU",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUProofs.yuChecked"
+    "Pouw.SecurityProofs.NCP.BiasU8Iff",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.IndependentWitness",
+    "Pouw.SecurityProofs.NCP.MmWUExact",
+    "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.YUChecked"
    ]
   },
   "Pouw.Protocol.NCP.Relation": {
-   "digest": "106a555a3c3ffaf3c6ba977d3a3f182f82d064a56db2501a181dddcbb364173f",
+   "digest": "eb3ea9ec5b188740fc266e215655391a48060eaa5e1da1f377b8e5824fbfcb70",
    "definitions": {
     "Pouw.NCP.Relation.CheckpointIndependent": "9ad4178a92f476d50868169d68dcfb2a672df02d0e2e8abbd0ae91ab7a9865fb",
     "Pouw.NCP.Relation.IndependentRelationFree": "c2fbd8e5260546d50276bd55802725f7efbadf9f2296d4a0ed319fb6ed7b66db",
-    "Pouw.NCP.Relation.IndependentWitness": "4ab6ec51431cd64d641ed5fcb665dc34aeb947469dc14080b6a18c6a4f3709ff",
     "Pouw.NCP.Relation.NCPFinalOnly": "52663d0f94b4e36eb7d68d03ade2605af4aac5803487ab971e196515b2511b48",
     "Pouw.NCP.Relation.NCPFinalOnlyInd": "36bb5853724760a2e15b8cfb7a1ed1e9501fd6cf538a814852c9df68ebe7d208",
     "Pouw.NCP.Relation.NCPWordFloor": "597bad55985e611504e0970351a5840f3d221e758d98e448f740c4058528362e",
@@ -12762,7 +12805,6 @@
     "Pouw.Dimension.H100.mh100WordsConsistent",
     "Pouw.Dimension.H100.perWordMH100Words",
     "Pouw.Dimension.OpenPipe.a2QuadToOpen",
-    "Pouw.Dimension.OpenPipe.a2WordsIff",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad",
     "Pouw.Dimension.OpenPipe.algBoundOpenQuad8",
     "Pouw.Dimension.OpenPipe.openPipeWitness",
@@ -12855,36 +12897,30 @@
     "Pouw.NCP.RelationProofs.reductionIf",
     "Pouw.NCP.RelationProofs.reductionOnlyIf",
     "Pouw.NCP.RelationWitness.independentRelationFree",
-    "Pouw.NCP.RelationWitness.independentWitness",
     "Pouw.NCP.RelationWitness.ncpFinalOnlyInd",
     "Pouw.NCP.RelationWitness.ncpWordFloorInd",
     "Pouw.NCP.RelationWitness.relationFreeWitness",
-    "Pouw.NCP.RouteUWordProofs.int7Int32UPos",
     "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
     "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU",
-    "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU"
+    "Pouw.SecurityProofs.Dimension.A2WordsIff",
+    "Pouw.SecurityProofs.NCP.IndependentWitness",
+    "Pouw.SecurityProofs.NCP.Int7Int32UPos",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU"
    ]
   },
   "Pouw.Protocol.NCP.RouteU": {
-   "digest": "c4c1e2825ede0b014cbe144fd5b05727c2c6e54deb3fbd0c965c88cffcfc413f",
+   "digest": "a7fd9ae5ffd69eaecc31578d3054b7e64399609abbaafa3f5066b07e930c53ab",
    "definitions": {
     "Pouw.NCP.BiasU8": "c2aa5ccd25f9faac71b03e177b31535661894a66d8399eb906bc2e336406ec07",
     "Pouw.NCP.Params.YU": "63fdc4c273215d08874b950ef0275f7faae703cd7fa7590d169a5eb4d51c6488",
     "Pouw.NCP.Params.refOutU": "40d825d7669436c391f36a3cd2ab63c277ed2e4fa2f2e00a26d2989e60f5d1ae",
     "Pouw.NCP.Params.toProtocolU": "bb031f588469e2dac9e5a3db7c4379bcc9e7a1ceccaaeb2a513380961b6450fd",
-    "Pouw.NCP.RouteU.BiasU8Iff": "a0325f9262f0cff9f674b10b6fac095992e8a81fd8e7fb7c9a1e4946192c2aaf",
-    "Pouw.NCP.RouteU.CheckedUEq": "8eda2cbcebe43e5102b5da2d46e5d6ee2339b31d885fc21f683b22886b89b869",
-    "Pouw.NCP.RouteU.CheckedUFinal": "8f02b79f968af5a0dcfd85ab25a5b918caebb6f99021749ce063d520cb326640",
     "Pouw.NCP.RouteU.Int7Int32U": "1b728cfa4b9ced4b760a523082a0d02e06082bd931992a64a009d8232bf832d3",
     "Pouw.NCP.RouteU.Int7Int32UUnsigned": "d507605d67f3de819a57ef31ad2f90b9c37e5b0ff9b3b7884d5c4f7cd3dbe27d",
     "Pouw.NCP.RouteU.LeadCompleteU": "e0845f13c83c451dbb7e2bc705ca7e81a03993ba6616e00ea6c68c4db3b4c5cd",
     "Pouw.NCP.RouteU.MmWUEq": "6c169d4be040c89a9fae506d15e15534386f9275d30e01aad843562d766c705d",
-    "Pouw.NCP.RouteU.MmWUExact": "964cb92b66af2bffb2ded558b7d76de607cb78bf8e976c16f4c6fb28c7ab6b91",
-    "Pouw.NCP.RouteU.RangeU": "6dff25433c3063bbd28eb17ffb287f6748492531538f05d44897d556963f92e4",
-    "Pouw.NCP.RouteU.WrapU": "4b638df839b607b7179a1b28f88a2d92cdaac219059f4cee67ef5da3c9e31540",
-    "Pouw.NCP.RouteU.YUChecked": "31a34e568751102399206bcdf81e675096419e5978ee6a8723e010c9d7e53d93",
     "Pouw.NCP.Unsigned": "a6e147abfff8a2a2d355f75bba98c9ac21e912811055a18f61492c464ca59bfe",
     "Pouw.NCP.accWFrom": "f2556e2af9395da5b0ec6a6e6b3871c7711ba017fe1ce50cd4c25a5f3d57e499",
     "Pouw.NCP.checkedU": "7f1244aa38de5c3f90b7d35dee772f76a3479d0bbcb179fa4313f9b240dcf121",
@@ -12926,29 +12962,29 @@
     "Pouw.Dimension.RouteUProofs.ttNCPQuadOfA2U",
     "Pouw.Dimension.RouteUProofs.wordCUSubV0",
     "Pouw.Dimension.RouteUProofs.wordUSubV0",
-    "Pouw.NCP.RouteUProofs.biasU8Iff",
-    "Pouw.NCP.RouteUProofs.checkedU_eq",
-    "Pouw.NCP.RouteUProofs.checkedU_final",
     "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2",
-    "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1",
     "Pouw.NCP.RouteUProofs.int7Int32U",
     "Pouw.NCP.RouteUProofs.int7Int32UUnsigned",
     "Pouw.NCP.RouteUProofs.leadCompleteU",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.mmWUExact",
     "Pouw.NCP.RouteUProofs.mmWU_eq",
-    "Pouw.NCP.RouteUProofs.rangeU",
-    "Pouw.NCP.RouteUProofs.ttncpUIff",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness",
-    "Pouw.NCP.RouteUProofs.wrapU",
-    "Pouw.NCP.RouteUProofs.yuChecked",
-    "Pouw.NCP.RouteUWordProofs.int7Int32UPos",
     "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
     "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU",
-    "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU"
+    "Pouw.SecurityProofs.NCP.BiasU8Iff",
+    "Pouw.SecurityProofs.NCP.CheckedUEq",
+    "Pouw.SecurityProofs.NCP.CheckedUFinal",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
+    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
+    "Pouw.SecurityProofs.NCP.Int7Int32UPos",
+    "Pouw.SecurityProofs.NCP.MmWUExact",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.RangeU",
+    "Pouw.SecurityProofs.NCP.TTNCPUIff",
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.YUChecked"
    ]
   },
   "Pouw.Protocol.NCP.Witness": {
@@ -12961,7 +12997,7 @@
     "Pouw.NCP.GameProofs.leadWitness",
     "Pouw.NCP.GameProofs.ttncpWitness",
     "Pouw.NCP.RouteUProofs.leadUWitness",
-    "Pouw.NCP.RouteUProofs.ttncpUWitness"
+    "Pouw.SecurityProofs.NCP.TTNCPUWitness"
    ]
   },
   "Pouw.Protocol.NCP.Word": {
@@ -13007,15 +13043,15 @@
     "Pouw.NCP.RelationWitness.ncpFinalOnlyInd",
     "Pouw.NCP.RelationWitness.ncpWordFloorInd",
     "Pouw.NCP.RouteUWordProofs.ncpFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
     "Pouw.NCP.RouteUWordProofs.reductionOnlyIfU",
-    "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU",
-    "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU",
     "Pouw.NCP.WordProofs.wordBound",
     "Pouw.NCP.WordProofs.wordFinalWitness",
     "Pouw.NCP.WordProofs.wordFloor",
     "Pouw.NCP.WordProofs.wordNzWitness",
-    "Pouw.NCP.WordProofs.wordZeroNoise"
+    "Pouw.NCP.WordProofs.wordZeroNoise",
+    "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
+    "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
+    "Pouw.SecurityProofs.NCP.WrapWordFloorIndU"
    ]
   },
   "Pouw.Protocol.PearlC.Accum": {

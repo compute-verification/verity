@@ -1,6 +1,7 @@
 import Pouw.Assumptions.NCP.RouteUWord
 import Pouw.SecurityProofs.NCP.ChainProofs
 import Pouw.SecurityProofs.NCP.RouteUProofs
+import Pouw.Guarantees.NCP
 
 /-!
 # The word layer on route U: proofs
@@ -170,14 +171,14 @@ theorem floor_sum {Ω : Type} {k m n N : ℕ} (X : Ω → ℕ → ℕ → ℤ) (
         rw [sum_const, card_range, nsmul_eq_mul]
 
 /-- **The floor for route U under independence.** -/
-theorem ncpWordFloorIndU : NCPWordFloorIndU := by
+theorem ncpWordFloorIndU : Pouw.Guarantees.NCP.NCPWordFloorIndU := by
   intro β k m n N R A B adv γ₀ h16 hI hγ0 hγ1 hV hNz
   exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv γ₀
     hγ0 hγ1 hV hNz).trans
     (floor_sum _ adv γ₀ fun u hu => ncpFinalOnlyIndU β k m n N R A B adv h16 hI hV u hu)
 
 /-- **The int32 range of route U's checked values.** -/
-theorem int7Int32UPos : Int7Int32UPos := by
+theorem int7Int32UPos : Pouw.Guarantees.NCP.Int7Int32UPos := by
   intro β k m n N R A B ω u p hβ1 hβ2 hR hA hB hp
   simp only [checkedUPos, checkedU]
   have hE : ∀ i, ∀ l < k, InNoise6 (e1Of ω u i l) := fun i l _ => ChainProofs.e1Of_noise ω u i l
@@ -210,13 +211,13 @@ theorem identCount_wrappedU (β : ℤ) {k m n N : ℕ} {R : Mat} {A B : ℕ → 
     exact ⟨hne, fun ω => by rw [heq ω p le_rfl, ht ω]; exact h ω⟩
 
 /-- **FinalOnly for route U's protocol checked values.** -/
-theorem wrapFinalOnlyIndU : WrapFinalOnlyIndU := by
+theorem wrapFinalOnlyIndU : Pouw.Guarantees.NCP.WrapFinalOnlyIndU := by
   intro β k m n N R A B adv h16 hI hV hr u hu
   rw [identCount_wrappedU β hV hr hu]
   exact ncpFinalOnlyIndU β k m n N R A B adv h16 hI hV u hu
 
 /-- **The floor for route U's protocol checked values.** -/
-theorem wrapWordFloorIndU : WrapWordFloorIndU := by
+theorem wrapWordFloorIndU : Pouw.Guarantees.NCP.WrapWordFloorIndU := by
   intro β k m n N R A B adv γ₀ h16 hI hγ0 hγ1 hV hr hNz
   exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv γ₀
     hγ0 hγ1 hV hNz).trans
