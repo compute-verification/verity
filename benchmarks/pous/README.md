@@ -11,7 +11,9 @@ scheme's certified parameters.
   - Llama-3.1-8B: layer 0 and the untied head, 22,688 blocks (band-gpu and the reference; not in `vllm-gpu`'s frozen
     harness);
   - Llama-3.1-8B: layers 0-8 and the untied head, 75,936 blocks (12,656 of 384 KiB, enough rows to fill an RTX PRO 6000
-    at long blocks; band-gpu and the reference).
+    at long blocks; band-gpu and the reference);
+  - Llama-3.1-8B: every layer's linears and the untied head, 229,024 blocks (38,171 of 384 KiB; band-gpu and the
+    reference).
 - `bench.py` is the harness: one command per (scheme, implementation, weight set, hardware). It writes `bench-result.json`
   (`verity-pous/bench-result/v1`), and `result.json` under `research run`.
   - Every implementation passes the same gates:
