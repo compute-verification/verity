@@ -6,8 +6,9 @@ cov-k03-8 (its biased q/k/v linear one `GemmBias_v2{K,N,DOT}` Call), Phi-3-mini 
 Gemma-2-2B's from cov-p058-2, Qwen3-30B-A3B's from cov-p081 and OLMoE's from cov-p069.
 A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
-Every pin but Gemma-2's (GeGLU) is the predictor's with `SiluMul_v2{I}` as the `silu_mul` kind, not yet re-traced; with
-`SiluMul_v1{I}` in its place the predictor gives each traced digest above.
+`SiluMul_v2{I}` as the `silu_mul` kind moved every pin but Gemma-2's (GeGLU): each is the Build's re-trace of its unit from the
+same checkpoints on the declared rtxpro6000 target (run r20261002-123618-cee3, CPU only), and with `SiluMul_v1{I}` in its place
+the predictor gives the rows' traced digests.
 """
 
 from __future__ import annotations
