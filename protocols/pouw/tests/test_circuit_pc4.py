@@ -1,23 +1,28 @@
 """Pearl-C4's tile check as a Program (`verity_pouw.circuit.pc4`): its primitives and float forms are the scheme's operations
 on the domain the row's admission bit admits, its units evaluate to `schemes.pearl_c4`'s forming, clean-up and checked
 words (the pinned ``test-16-nvfp4`` vector), its admission bit is `row_passes` on every row, and its partition computes
-every value in exactly one unit."""
+every value in exactly one unit; its hiding Programs publish only admission bits and commit strings, and only those are
+computed twice."""
 from __future__ import annotations
 
 import hashlib
 import json
 import random
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 
+import circuit_fixtures as CF
 import pearl_c4_vectors as V
 from verity.evaluation import evaluate
 from verity.ir import partition_object as PO
+from verity.ir.cut import RECOMPUTE, check_cut
 from verity.ir.program import Program
 from verity.ml.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
 from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.ml.tc import fp32
+from verity_pouw.circuit import leaves as L
 from verity_pouw.circuit import pc4
 from verity_pouw.circuit import words as W
 from verity_pouw.protocol import DomainError
@@ -204,6 +209,64 @@ def test_the_partition_computes_every_value_in_exactly_one_unit(side):
     _g, _owner, verdict = pc4.unit_cut(fn)
     assert verdict.ok, verdict.codes
     assert verdict.detail["certified"] == verdict.detail["computed_gates"]
+
+
+# ---- the hiding Programs ----------------------------------------------------------------------------------------------
+
+HIDDEN = pc4.Shape(4, 64, 6, tile=(2, 3), hidden=True)
+
+
+def test_the_hiding_programs_publish_the_commit_strings_of_every_row_and_tile():
+    """`Pc4WeightHidden`, `Pc4CallHidden` and `Pc4CheckHidden` return the admission bits and `leaves.commit` of every row a
+    unit reads or writes (A_i and B_j as bf16 rows, A′_i ‖ P_A,i and B̃_j ‖ P_B,j as nvfp4-p rows, each tile's reads equal to
+    its row units') and of every tile digest (`pearl_c.leaf` of the plain units' C̃ and U), and no checked word."""
+    m, k, n = HIDDEN.m, HIDDEN.k, HIDDEN.n
+    a = [w for i in range(m) for w in V.row_codes("pc4-hidden", "A", i, k)]
+    b = [w for j in range(n) for w in V.row_codes("pc4-hidden", "B", j, k)]
+    fa, fb = _flat(F.basis(SEED_B, F.ROLE_FA, k)), _flat(F.basis(SEED_B, F.ROLE_FB, k))
+    ea, eb = (_flat(F.line(SEED_B, role, i) for i in range(c)) for role, c in ((F.ROLE_EA, m), (F.ROLE_EB, n)))
+    g = _flat(F.gram(F.NVFP4, SEED_B, k))
+    plain = replace(HIDDEN, hidden=False)
+    wout = evaluate(pc4.weight(plain), b, eb, fa, fb, g)
+    bc, bs, pb, ok_b = wout[:n * k], wout[n * k:n * k + n * k // 16], wout[n * k + n * k // 16:-n], wout[-n:]
+    cout = evaluate(pc4.call(plain), a, ea, fa, fb, bc, bs, pb)
+    c, u = ([cout[f * m * n + i * n:f * m * n + (i + 1) * n] for i in range(m)] for f in range(2))
+    outs = [evaluate(pc4.templates(k)["row_a"], a[i * k:(i + 1) * k], ea[32 * i:32 * (i + 1)], fa, fb) for i in range(m)]
+    mids_a = [L.words_nvfp4_p(o[:k], o[k:k + k // 16], o[k + k // 16:-1]) for o in outs]
+    mids_b = [L.words_nvfp4_p(bc[j * k:(j + 1) * k], bs[j * k // 16:(j + 1) * k // 16], pb[64 * j:64 * (j + 1)])
+              for j in range(n)]
+    rows = lambda x, r: [L.words_bf16(x[i * k:(i + 1) * k]) for i in range(r)]   # noqa: E731
+    s = CF.salts(m, n, HIDDEN.tile)
+    want_call, want_weight = CF.hidden_outputs(HIDDEN.tile, cout[2 * m * n:], rows(a, m), mids_a, ok_b, rows(b, n), mids_b,
+                                               c, u, s)
+    y = CF.salt_args(s)
+    assert evaluate(pc4.weight(HIDDEN), b, eb, fa, fb, g, y["yb"], y["ybm"]) == want_weight
+    assert evaluate(pc4.call(HIDDEN), a, ea, fa, fb, bc, bs, pb, y["ya"], y["yam"], y["ybm"], y["yt"]) == want_call
+    got = evaluate(pc4.check(HIDDEN), a, ea, b, eb, fa, fb, g, y["ya"], y["yam"], y["yb"], y["ybm"], y["yt"])
+    assert got == want_call + want_weight
+
+
+@pytest.mark.parametrize("side", ["check", "weight", "call"])
+def test_the_hiding_partition_computes_only_commit_strings_twice(side):
+    """The hiding Programs have the plain ones' units, each its plain unit and its leaves, and the partition object
+    verifies.  A row's commit string is computed in its row unit and again in each tile that reads the row (the units link
+    by b ‖ c), so `Q_word` v1 refuses the cut for exactly that and v2's report passes it; every value two units compute is a
+    leaf's gate."""
+    fn = {"check": pc4.check, "weight": pc4.weight, "call": pc4.call}[side](HIDDEN)
+    prog, q = Program(fn), pc4.query(HIDDEN, side)
+    us = pc4.units(fn)
+    full = {"row_b": HIDDEN.n, "row_a": HIDDEN.m, "tile": 2 * 2}
+    assert Counter(u.role for u in us) == {r: full[r] for r in pc4.ROLES[side]}
+    tp = pc4.templates(HIDDEN.k, HIDDEN.tile, True)
+    assert [t for _k, t, _a, n in PO.evaluate(prog, q).ranges for _ in range(n)] == [PO.template_id(tp[u.role]) for u in us]
+    assert PO.verify(PO.build(prog, q), prog).ok
+    g, owner, v1 = pc4.unit_cut(fn)
+    across, outside = CF.recomputed_across(g, owner)
+    assert outside == []
+    assert v1.codes == (("gate-recomputed",) if side != "weight" else ()) and (across > 0) == (side != "weight")
+    v2 = check_cut(g, owner, limits=None, recompute=RECOMPUTE[2])
+    assert v2.ok and v2.detail["recomputed_across"]["n"] == across
+    assert v2.detail["certified"] == v2.detail["computed_gates"]
 
 
 def test_shapes_outside_the_circuit_are_refused():

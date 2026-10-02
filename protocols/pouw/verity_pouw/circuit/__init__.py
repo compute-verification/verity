@@ -2,7 +2,9 @@
 `docs/pouw/sampled-proofs-circuit.md`; `PROTOCOL.md` §`ncp-v2`).
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
-* `hashes`: SHA-512 and SHAKE256 in gates (`Sha512Compress`, `KeccakF1600`).
+* `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
+* `leaves`: the tile checks' hiding leaves, hm96-sha512/row/v1 of each row schema and of Pearl-C's tile digest, and their
+  native reference.
 * `ncp2`: the unit templates; `weight(shape, kind)`, a weight's Y units once per run; `linear(shape, kind)`, one call's
   Program, reading them; `window(shape, calls, kind)`, calls on one weight in one root.
 * `reference`: the native reference those must evaluate to.
@@ -10,8 +12,9 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds, and the window's refusal of a repeated call index.
 * `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law).
-* `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units; no
-  scheme of theirs is in `SCHEMES` yet.
+* `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
+  their hiding Programs (``Shape.hidden``), whose units publish commit strings for rows and tiles; no scheme of theirs is
+  in `SCHEMES` yet.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

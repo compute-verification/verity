@@ -498,8 +498,11 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   - The noise lines and G are anchored inputs, as in `pc4`.
   - The Programs evaluate to `pearl_c.json`'s pinned H100 test instance, and to the scheme on sm_120's records. Every
     partition computes each value in exactly one unit.
-  - Not in it yet: the debit and the cap, and the hiding leaves of A's rows, B's rows and the tile's words. Until those
-    land, Pearl-C's runs are checked by its reference audit, a development shortcut that opens rows.
+  - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below), with
+    `pouw/row-fp32/v1` input rows and `pouw/row-fp8-p/v1` rows. At k = 4,096 a row unit adds 167 SHA-512 compressions
+    (131 + 36), and a 64 × 64 tile adds 4,611 and 281 Keccak-p[1600, 12].
+  - Not in it yet: the debit and the cap, and a plan and closure that draw a tile. Until those land, Pearl-C's runs are
+    checked by its reference audit, a development shortcut that opens rows.
 
 ## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 
@@ -673,6 +676,11 @@ useful    U/(α_A·α_B), glue
   sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
   and the transcript tree and the records are built on the host after timing.
+
+  Its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof). The replay opens rows and
+  words and recomputes them in the clear. The protocol keeps every value hidden: it checks a drawn tile by a ZK proof of
+  its units under sampled proofs, which opens nothing (research store `internal/pouw/hidden-check-design.md`). So no
+  report cites the replay's ACCEPT as the protocol's verdict.
 - **The circuit (`circuit.pc4`)** is the tile check as a Program, the first step of moving it into sampled proofs. Its
   units are three templates:
 
@@ -692,9 +700,37 @@ useful    U/(α_A·α_B), glue
     F_Bᵀ·F_A (`gram`) is a function of them, which the verifier computes.
   - The Programs evaluate to the pinned ``test-16-nvfp4`` vector, and every partition computes each value in exactly one
     unit.
-  - Not in it yet: the debit and the cap, R1, D-24, and the hiding leaves of A's rows, B's rows and the tile's words.
-    Until those land, runs are checked by the replay above, a development shortcut that opens rows, and every report
-    says so.
+  - The hiding Programs (``Shape.hidden``: `Pc4WeightHidden`, `Pc4CallHidden`, `Pc4CheckHidden`) have the same units,
+    each its plain unit and the hm96-sha512 commit strings b ‖ c of the rows it reads and writes (`circuit.leaves`). A
+    root publishes only admission bits and commit strings: a row unit's of its input row and of its nvfp4-p row, a tile
+    unit's of the nvfp4-p rows it reads and of its tile digest. Every salt is an input. A tile's string for a row is the
+    row unit's, under one salt, which is how the verifier links the two units; so each such string is computed in both,
+    which `Q_word` v1 refuses and v2 reports (`unit_cut`'s ``recompute``), and the tests check that nothing else is.
+  - The rows are `hm96-sha512/row/v1` rows of 16-bit words: `sha512/row/v1`'s prefix block names the role, the word
+    width (16) and the word count, and a registration domain binds the schema id and the word count. Every narrower
+    element is packed low bits first, so a row's bytes are the tensor's memory:
+
+    ~~~text
+    schema id            words                                                     count             role
+    pouw/row-bf16/v1     k BF16 words                                              k                 X (A_i), W (B_j)
+    pouw/row-fp32/v1     k FP32 words, low half first                              2k                X, W
+    pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),
+                         UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
+    pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W
+    pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X
+    ~~~
+
+    nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
+    that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
+    computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
+  - The built leaves cost what was priced: a row unit adds 89 SHA-512 compressions at k = 4,096 (67 for the bf16 row,
+    22 for the nvfp4-p row), and a 64 × 64 tile adds 2,819 (22 for each of its 128 rows, 3 for the tile digest's string)
+    and 281 Keccak-p[1600, 12] for the digest. Packing, hm96's mask and b's XOR are wiring and XORs.
+  - Vectors: `tests/vectors/pouw_rows.json` (`tests/pouw_rows_vectors.py`) pins each schema's words, digest, commit
+    string and tree leaf at k = 64 and 4,096, and the digest of two tiles. The gates compute them.
+  - Not in it yet: the debit and the cap, R1, D-24, and a plan and closure that draw a tile (`circuit.plan` is
+    `ncp-v2`'s). Until those land, runs are checked by the replay above, a development shortcut that opens rows, and
+    every report says so.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format

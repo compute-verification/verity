@@ -1,5 +1,6 @@
 """PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
-adds to core's FP32, cast and tensor-core primitives, and the three exact sums of squares Pearl-C's (`pc8`) liveness reads.
+adds to core's FP32, cast and tensor-core primitives, the three exact sums of squares Pearl-C's (`pc8`) liveness reads, and
+the hiding leaves' byte packing and hm96 mask blocks (`leaves`), which are wiring and XORs.
 
 Every primitive but `PouwSqAcc` (576 bits) and `PouwSqCeil` (64) returns one value of at most 32 bits, so every unit of any
 `Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two 32-bit halves: SHA-512's
@@ -293,5 +294,48 @@ def PouwSqGe(x: int, th: int) -> int:
     return 1 if up48(sq300(x & M32)) >= th else 0
 
 
-__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "U32", "U8", "sx", "i32_to_f32_rn",
+# ---- the hiding leaves (`leaves`): a row's bytes as SHA-512's big-endian halves, and hm96's mask ----------------------------
+
+def bswap32(x: int) -> int:
+    return int.from_bytes((x & M32).to_bytes(4, "little"), "big")
+
+
+@primitive("PouwBswap32", 1, [("x", U32)], U32, conformance="protocol-defined")
+def PouwBswap32(x: int) -> int:
+    """x's four bytes reversed: a little-endian word (an FP32 word, a Keccak half-lane) as the big-endian half SHA-512 reads
+    its bytes as."""
+    return bswap32(x)
+
+
+@primitive("PouwPack16x2", 1, [("a", BF16), ("b", BF16)], U32, conformance="protocol-defined")
+def PouwPack16x2(a: int, b: int) -> int:
+    """Two 16-bit words little-endian, a's bytes first, as one big-endian half."""
+    return bswap32((a & 0xFFFF) | (b & 0xFFFF) << 16)
+
+
+@primitive("PouwPack8x4", 1, [(f"b{i}", U8) for i in range(4)], U32, conformance="protocol-defined")
+def PouwPack8x4(*b: int) -> int:
+    """Four bytes in order as one big-endian half."""
+    return sum((v & 0xFF) << (24 - 8 * i) for i, v in enumerate(b))
+
+
+@primitive("PouwPack4x8", 1, [(f"c{i}", E2M1) for i in range(8)], U32, conformance="protocol-defined")
+def PouwPack4x8(*c: int) -> int:
+    """Eight 4-bit codes two per byte, code 2i in the low nibble of byte i (NVFP4's packing), as one big-endian half."""
+    return bswap32(sum((v & 0xF) << (4 * i) for i, v in enumerate(c)))
+
+
+@primitive("PouwHm96Hankel", 1, [("y", U32), ("k0", U32), ("k1", U32)], U32, conformance="protocol-defined")
+def PouwHm96Hankel(y: int, k0: int, k1: int) -> int:
+    """One 32 × 32 block of hm96's Hankel product over GF(2) (`verity.commitments.hm96`, section 2): output bit a is the
+    parity of y_b · κ_(a+b) over b < 32, κ the 64 key bits k0 ‖ k1.  Every operand is a big-endian half of a byte string,
+    whose bit t is bit t mod 8 of byte t div 8 (hm96's bit order).  With k0 and k1 constants it is XORs alone."""
+    yl, kw, out = bswap32(y), bswap32(k0) | bswap32(k1) << 32, 0
+    for b in range(32):
+        if yl >> b & 1:
+            out ^= kw >> b
+    return bswap32(out)
+
+
+__all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "I7", "M32", "U32", "U8", "bswap32", "sx", "i32_to_f32_rn",
            *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
