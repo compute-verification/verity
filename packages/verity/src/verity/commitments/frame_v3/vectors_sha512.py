@@ -5,7 +5,7 @@
 
 The same framing as ``vectors.json`` through SHA-512: domain ids, leaves, pads, nodes and roots are 64 bytes, and row leaves
 are ``sha512/row/v1`` digests or ``sha512/row/v2`` (bit row) digests, the latter also as hiding (``hm96-sha512/row/v2``)
-leaves.  Every byte is spelled out.
+leaves, and ``sha512/row-seg/v1`` (segmented bit row) digests with their segments.  Every byte is spelled out.
 """
 
 from __future__ import annotations
@@ -19,7 +19,8 @@ from typing import Any
 from .. import hm96
 from ..indexed import RangeIndexedDomain
 from ..merkle import CommitmentDomain, _hash, _uint
-from ..rowleaf import ROLE_W, ROLE_X, bit_row, row_leaf
+from ..rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_SHA512_ROW_SEG, bit_row, row_leaf,
+                       sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from . import NAME_SHA512, BitRowLeaf, FrameV3, Port, RowLeaf, WordLeaf
 from .vectors import expand, row_words
 
@@ -29,6 +30,9 @@ ROW_CASES = [(role, bits, n) for role in (ROLE_X, ROLE_W) for bits in (8, 16) fo
 #: whose SHA-512 padding fits it (888: 111 bytes) and the first that needs a third block (896); a byte, a bit, none and a bit
 #: past one row block (1016, 1023, 1024, 1025); several blocks with a fill (3172) and without (8192)
 BIT_ROW_CASES = (0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172, 8192)
+#: sha512/row-seg/v1 rows by length in bits: no segment; one short segment with a fill; one segment a bit short, exactly
+#: full, and a bit over (a one-bit last segment); four segments, the last of 5 bits; PoUW's 8 KiB A row (eight full segments)
+ROW_SEG_CASES = (0, 1, 13, 8191, 8192, 8193, 3 * 8192 + 5, 65536)
 #: sha512/row/v2 rows of elements at a small K, ``(name, ((element bits, count), ...))``; the name is a label, never hashed
 FORMAT_ROW_CASES = (("nvfp4/k32", ((4, 32), (8, 2))), ("mxfp4/k64", ((4, 64), (8, 2))), ("e4m3/k5", ((8, 5),)),
                     ("bf16/k3", ((16, 3),)), ("e2m1/k3", ((4, 3),)))
@@ -134,6 +138,32 @@ def _bit_row_hiding_vectors() -> list[dict[str, Any]]:
     return out
 
 
+def _row_seg_vectors() -> list[dict[str, Any]]:
+    """``sha512/row-seg/v1`` rows with every segment's prefix and digest, and the 8 KiB row's hiding leaf (``hm96.SHA512``'s
+    default key)."""
+    out = []
+    for n_bits in ROW_SEG_CASES:
+        value = random_bits(f"row-seg-sha512/bits/{n_bits}", n_bits)
+        segments = sha512_row_seg_segments(n_bits)
+        segs = []
+        for j, m in enumerate(segments):
+            prefix = sha512_row_seg_segment_prefix(j, len(segments), m)
+            chunk = value[j * ROW_SEG_BYTES:j * ROW_SEG_BYTES + (m + 7) // 8]
+            segs.append({"n_bits": m, "prefix": prefix.hex(), "digest": hashlib.sha512(prefix + chunk).hexdigest()})
+        out.append({"schema": SCHEMA_SHA512_ROW_SEG, "name": f"bits/{n_bits}", "n_bits": n_bits,
+                    "prefix": sha512_row_seg_prefix(n_bits).hex(), "row_bytes": value.hex(), "segments": segs,
+                    "digest": sha512_row_seg_digest(value, n_bits).hex()})
+    inst, last = hm96.SHA512, out[-1]
+    d = domain(2, "frame-v3-sha512/vectors/hiding/row-seg")
+    salt = expand("row-seg-hiding-sha512/salt", inst.salt_bytes)
+    bc = inst.commit_string(inst.default_key, bytes.fromhex(last["digest"]), salt)
+    proven = inst.tree_leaf(inst.default_key, bc)
+    last["hiding"] = {"schema": SCHEMA_HM96_SHA512_ROW_SEG, "domain": _domain_doc(d, 2), "rank": 1, "salt": salt.hex(),
+                      "key_sha512": hashlib.sha512(inst.default_key).hexdigest(), "bc": bc.hex(), "hm96_leaf": proven.hex(),
+                      "leaf": row_leaf(d, 1, proven, SCHEMA_HM96_SHA512_ROW_SEG).hex()}
+    return out
+
+
 def _word_vectors() -> list[dict[str, Any]]:
     d = domain(3, "frame-v3-sha512/vectors/words")
     scheme = FrameV3({"y": Port(d, WordLeaf("u16", 2))})
@@ -161,6 +191,7 @@ def build() -> dict[str, Any]:
         "bit_row_leaves": _bit_row_vectors(),
         "bit_row_trees": _bit_row_tree_vectors(),
         "bit_row_hiding_leaves": _bit_row_hiding_vectors(),
+        "row_seg_leaves": _row_seg_vectors(),
         "word_leaves": _word_vectors(),
     }
 
