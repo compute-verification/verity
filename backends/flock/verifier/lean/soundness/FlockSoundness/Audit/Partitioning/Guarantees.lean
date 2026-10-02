@@ -35,7 +35,8 @@ on the leak, not leaks an adversary achieves.
 * `Concentration`: so for wrong proof units spread over replay units with `m_i` each, `∑_i ψ(m_i)` is smallest when
   they fill whole replay units, with at most one partial: the prover's least detectable placement concentrates.
 * `NestedEscape`: `ψ` is the nested law's detection risk. Under `nested`, a wrong set with `m_i` wrong proof units in
-  replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k)) = exp(−∑_i ψ(m_i))`.
+  replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`, which for `p < 1` is
+  `exp(−∑_i ψ(m_i))`.
 -/
 
 namespace FlockSoundness.Audit.Partitioning.Guarantees
@@ -144,7 +145,11 @@ def Concentration : Prop :=
 /-- **The nested law's escape.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof units with
 `m_i = wrongIn B i` of them in replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
 replay unit escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
-`ψ = detectionRisk N k p`. -/
+`ψ = detectionRisk N k p`.
+
+This is variant (a) of `Audit.TwoStage`: every commitment, the replay units' roots and every proof unit's, comes before
+the one nested draw, so `nested` is a one-stage law over the proof units. Under variant (b), where the prover commits a
+drawn replay unit's interior after the first stage, the escape is `effEscape` over the replay units, not `ψ`. -/
 def NestedEscape : Prop :=
   ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
     ((nested R N k a b hk).escape B).toReal =
