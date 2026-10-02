@@ -21,6 +21,7 @@ import FlockSoundness.Discharge.Exec.HeadlineL
 import FlockSoundness.Discharge.Exec.Live
 import FlockSoundness.Discharge.Exec.Merkle
 import FlockSoundness.Discharge.Exec.Retained
+import FlockSoundness.Discharge.Exec.Decode
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -59,5 +60,7 @@ import FlockSoundness.Discharge.Exec.Retained
 * `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
   at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for R11;
 * `Live`: R11 for one-table sessions of the live coin server, with `bad = ⊥`, given `Decodes` (`execRefines_one`), and
-  the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`).
+  the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
+* `Decode`: two pieces of `DecodesAll`: a run on two lists is a run on one tape with those messages and coins
+  (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`).
 -/
