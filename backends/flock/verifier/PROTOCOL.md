@@ -1424,7 +1424,8 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 `--zk`, the verifier's setting, verifies `flock-circuit --zk` sessions (with `--session-tables J` and draws): the masked
 protocol on the keyed coin tree (§7.4), as `backends/flock/live/PROTOCOL.md` and upstream's `zk_veil.rs` define it.
 `Flock.ZkProof`, `Flock.ZkLigerito` and `Flock.Zk` state each check and leave §8–§13's code as it is. The identity's
-`hooks` are upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`.
+`hooks` are upstream's `zk_identity`; `proof_class` stays `NON_ZK_PROOF`. Public input words (§16.10) are held to
+`--public-inputs F` at setup, as without `--zk` (D7).
 
 ## 17. Acceptance, assumptions and trust
 
@@ -1449,20 +1450,20 @@ Lean verifier without a spec change. After the gate passes, production runs only
 stays in CI as a regression oracle.
 
 "Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
-(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in five
-places, and the corpus marks the vectors that exercise them with the upstream verdict they expect
-(`upstream_accepted` in an expectation):
+(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is stricter in these places, and
+a vector that exercises one carries the upstream verdict it expects (`upstream_accepted`):
 
 - **D1:** `root_F = Σ` (S6). Upstream's server checks it only for statements without link points; the statement replay tools
   check it.
 - **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
   outside the rep prefixes.
 - **D3:** `link.sigma = Σ` (S4). Closed upstream at PR #83 `b3baabd8`.
-- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`: `from_record`
-  requires `msg` on every round when `Hello` says `"rounds": "bytes retained"`, and checks its length and digest.
+- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
   refuses a row that does not open its registered root.
 - **D6:** a `--zk` record's `coin_tree` (§7.4, §16.14), which upstream's `from_record` ignores.
+- **D7:** public input words (§16.10), also under `--zk`: the spec refuses a word that is not the verifier's own
+  recomputation; upstream's serve and replay take no recomputation, and accept it.
 
 At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
 in `redigest.py` and `fuzz.py`).
