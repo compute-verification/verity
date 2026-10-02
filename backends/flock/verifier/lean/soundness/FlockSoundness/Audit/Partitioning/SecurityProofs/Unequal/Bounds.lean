@@ -1,5 +1,6 @@
 import FlockSoundness.Audit.Partitioning.Guarantees
 import FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
+import FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
 
 /-!
 # Achievability, the granularity optimum and unequal units: the proofs
