@@ -3023,18 +3023,21 @@ mod tests {
         compress(&mut mid, &prefix);
         let pad = words_be::<16>(&pad_block(256));
         let zeros = "0".repeat(128);
+        let row = json!({"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
+                         "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())});
+        // the input row x, then y's output row (its one word zero-padded to a block): one hm96 slot per row
         let meta = json!({"format": crate::typed::FORMAT, "statement": crate::typed::STATEMENT, "program_sha512": zeros,
-            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA, "ports": [["x", 64, 1]],
-            "rows": [{"prefix": crate::hex(&prefix), "midstate": mid.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
-                      "pad": crate::hex(&pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>())}],
-            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 16,
+            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schema": ROW_SCHEMA,
+            "ports": [["x", 64, 1], ["y", 64, 1]], "input_ports": 1, "rows": [row, row],
+            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 17,
             "ranges": [{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 2, "packed": true},
-                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 2},
-                       {"type": "unit", "net": "root", "slot_log": 11, "pos0": 24, "count": 2},
-                       {"type": "unit", "net": l0["sha512"], "slot_log": 9, "pos0": 104, "count": 4, "packed": true},
-                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 54, "count": 1}],
-            "per_vu": {SHA_NET: 1, HM_NET: 1, "root": 1, l0["sha512"].as_str().unwrap(): 2},
-            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]], "leaf_scheme": leaf_scheme(),
+                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 4},
+                       {"type": "unit", "net": "root", "slot_log": 11, "pos0": 32, "count": 2},
+                       {"type": "unit", "net": l0["sha512"], "slot_log": 9, "pos0": 136, "count": 4, "packed": true},
+                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 70, "count": 1}],
+            "per_vu": {SHA_NET: 1, HM_NET: 2, "root": 1, l0["sha512"].as_str().unwrap(): 2},
+            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES]), crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["y", 1]],
+            "leaf_scheme": leaf_scheme(),
             "policy": "calls/v1", "unit_in": [], "types": {r.clone(): root, c: callee}, "layouts": [l0, l1], "unit_layout": 1, "unit_type": r});
         // a row circuit: its port groups (bits per port), no rows but the constant
         let section = |name: &str, ins: &[usize], in_words: usize, outs: &[usize], out_words: usize| {
@@ -3169,16 +3172,16 @@ mod tests {
             lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
             Composite::parse(&lines.join("\n"), None).err().unwrap_or_default()
         };
-        // three VUs a block, every range laid out for them (aligned, disjoint) in 2^17 bits
+        // three VUs a block, every range laid out for them (aligned, disjoint) in 2^18 bits
         assert!(meta_of(&|m| {
             let part = m["ranges"][3]["net"].clone();
             m["vus_per_block"] = json!(3);
-            m["k_log"] = json!(17);
+            m["k_log"] = json!(18);
             m["ranges"] = json!([{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 3, "packed": true},
-                                 {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 8, "count": 3},
-                                 {"type": "unit", "net": "root", "slot_log": 11, "pos0": 48, "count": 3},
-                                 {"type": "unit", "net": part, "slot_log": 9, "pos0": 208, "count": 6, "packed": true},
-                                 {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 107, "count": 1}]);
+                                 {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 8, "count": 6},
+                                 {"type": "unit", "net": "root", "slot_log": 11, "pos0": 64, "count": 3},
+                                 {"type": "unit", "net": part, "slot_log": 9, "pos0": 272, "count": 6, "packed": true},
+                                 {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 139, "count": 1}]);
         }).contains("not a power of two"), "three roots");
         assert!(meta_of(&|m| m["wires"] = json!([])).contains("never stated"));
         assert!(Composite::parse(&text, None).is_ok());
