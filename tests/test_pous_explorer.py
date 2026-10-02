@@ -147,8 +147,11 @@ def test_the_file_is_the_contract(doc):
     assert doc["block_sizes"] == [{"block_bytes": b, "call_ns": E.call_ns(b)} for b in E.BLOCK_BYTES]
     assert [e["D"] for e in doc["eps_proof"]] == list(range(6))
     assert {e["eps_proof_fraction"] for e in doc["eps_proof"] if e["D"] in (0, 1)} == {0.004}
+    sets = [w["id"] for w in doc["weight_sets"]]
+    assert len(set(sets)) == len(sets)
     for s in doc["schemes"]:
         assert s["kind"] in ("measured", "projected") and set(s["overhead_x_by_tokens"]) <= {"1", "8", "32", "2048"}
+        assert s["weight_set"] in sets and s["block_bytes"] in E.BLOCK_BYTES
         assert "art" not in s or (s["art"].startswith("art:") and len(s["art"]) == 68)
     assert len(json.dumps(doc)) < 1_000_000
 
