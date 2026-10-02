@@ -1344,7 +1344,8 @@ mod tests {
     fn pad_at_is_the_padding_codeword_at_every_position() {
         use flock_core::pcs::ligerito::zk::{pad_at, pad_codeword};
         let mut rng = ProverRng::from_seed(ProverSeed::injected([5; 32]));
-        let shapes = [(0, 1, 1), (4, 1, 0), (4, 1, 1), (4, 1, 5), (5, 2, 16), (6, 1, 33), (7, 3, 100), (9, 1, 436), (9, 2, 512)];
+        // the last is production's at m = 25 (`log_msg` 12, rate 1, `t_pad = 2·q0 = 554`)
+        let shapes = [(0, 1, 1), (4, 1, 0), (4, 1, 1), (4, 1, 5), (5, 2, 16), (6, 1, 33), (7, 3, 100), (9, 1, 436), (9, 2, 512), (12, 1, 554)];
         for (n, (log_msg, rate, t_pad)) in shapes.into_iter().enumerate() {
             let w = rng.f128s(STREAM_PADS, n as u64, 2 * t_pad);
             let ybar: Vec<F256> = (0..t_pad).map(|i| F256::new(w[2 * i], w[2 * i + 1])).collect();
