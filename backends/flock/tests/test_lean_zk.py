@@ -20,7 +20,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 staged by verity_flock.circuit (circuit_sha512 d2dafe7e…) with the live build's --zk sessions: sessions/selftest
 #: (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances), sessions/m26 (one
 #: table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all accepted)
-FIXTURE = "art:ba7f09ba"
+FIXTURE = "art:8126390c"
 STATEMENT = "verity/flock-circuit@967b8d06+seed-injection"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -64,9 +64,20 @@ def _selftest(root: Path, keep) -> None:
 
 @pytest.mark.slow
 def test_the_zk_selftest_sessions_get_their_live_verdicts(zk):
-    """The two honest sessions accepted; level 0's hiding forged four ways, the pads not the committed ones and an internal
-    bit flipped, each refused."""
+    """The two honest sessions accepted; level 0's hiding forged four ways, the pads not the committed ones (with and without
+    `final_c'` re-solved) and an internal bit flipped, each refused."""
     _selftest(zk, lambda n: n.startswith(("honest", "zk_")) or n == "unit_internal_bit_flipped")
+
+
+@pytest.mark.slow
+def test_final_c_solved_after_the_batching_coins_is_refused(zk):
+    """`final_c'` is a constant of two rows, so a prover who fixed it after the inner proof's batching coins could cancel any
+    failing row; it is absorbed before `ε` (live PROTOCOL.md §5), so the re-solved value is not the round's bytes."""
+    d = zk / "sessions" / "selftest" / "zk_final_c_solved_after_the_batching_coins"
+    live = json.loads((d / "case.json").read_text())["live"]
+    [v] = _verify(zk, d)
+    assert not live["accepted"] and live["why"].startswith("R2: "), live["why"]
+    assert not v["accepted"] and v["why"].startswith("R2: round "), v["why"]
 
 
 @pytest.mark.slow
