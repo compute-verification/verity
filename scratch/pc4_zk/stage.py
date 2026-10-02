@@ -117,6 +117,12 @@ def main() -> None:
         ks = {leaf_param[-1 - uc.inputs[t]] for t in g if uc.inputs[t] < 0}
         assert len(ks) == 1 and all(uc.inputs[t] < 0 for t in g), "each group one parameter's leaves"
         names.append(params[ks.pop()][0])
+    # the circuit names its public ports in the unit's parameter order (`public_ports`), as the verifier's file does, not in
+    # first-read order (row_b reads G before F_A)
+    slots = [i for i, nm in enumerate(names) if nm in ports]
+    by_name = {names[i]: groups[i] for i in slots}
+    for i, nm in zip(slots, [nm for nm in ports if nm in by_name]):
+        groups[i], names[i] = by_name[nm], nm
     low, port_words, span = lowering(act, uc, f"unit-class/{sh[:16]}", groups, names, set(ports))
     t_lower = time.time() - t0
     first = ta.regions(ROLE, 0)
@@ -162,6 +168,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "circuit.txt").write_text(text)
     meta = json.loads(text.split("\n", 2)[1][5:])
+    assert [p["port"] for p in meta["public_inputs"]] == list(ports), "the circuit's public ports are not in parameter order"
     obj = PO.build(units.program, units.query)
     assert PO.digest(obj) == meta["partition"]["digest"], "the partition object is not the one META binds"
     (OUT / "partition.json").write_text(json.dumps(obj, sort_keys=True))
@@ -186,6 +193,7 @@ def main() -> None:
         python_refusal = str(e)
     assert python_refusal, "check_public_inputs accepted a flipped anchor bit"
     FC.write_public_inputs(text, {nm: per_port[nm] for nm in ports}, N, OUT / "flock-public-inputs.bin")
+    assert own == (OUT / "flock-public-inputs.bin").read_bytes(), "the verifier's file is not C-Flock's writer's"
     pub = (OUT / f"pub-{N}.bin").read_bytes()
     body = own.split(b"\n", 1)[1]
     rec = {"role": ROLE, "k": K, "definition": str(uc.definition), "shape": sh, "ands": low.layout.counts["ands"], "n": N,
