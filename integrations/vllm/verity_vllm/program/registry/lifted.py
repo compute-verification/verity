@@ -51,15 +51,13 @@ the TRUE lifted width `Σ (w+1)` and run the untouched `partition.validate_width
 from __future__ import annotations
 
 import re
-from itertools import chain, repeat
 from typing import Any, Callable, Iterable, Sequence
 
 from verity.ir.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
                     composite)
-from verity.ir.layout import WIDE_FAN_IN
 from verity.ir.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
 from verity.ir.types import Array, Record, Tuple, Type, Value
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names (SPEC §7)
 LABEL = "lifted-padded"  # R17 BRIEF §7: every result of this lane is labelled so, never a panel / active-reference row
@@ -249,26 +247,8 @@ def _classify(ops: Sequence[int], widths: Iterable[int]) -> int:
     return 1 if saw_bot else 0
 
 
-class _WidthRuns:
-    """A wide operand list's leaf widths, iterated as their list is but held as one (count, width) run per parameter of one
-    width: `TableRead27x2_v1`'s table is 2^28 leaves."""
-
-    __slots__ = ("runs",)
-
-    def __init__(self, params: Sequence[tuple[str, Type]]) -> None:
-        runs: list[tuple[int, int]] = []
-        for _, t in params:
-            w = t.homogeneous_width()
-            runs += [(t.leaves, w)] if w is not None else [(1, x) for x in t.leaf_widths()]
-        self.runs = tuple(runs)
-
-    def __iter__(self):
-        return chain.from_iterable(repeat(w, n) for n, w in self.runs)
-
-
 def _strict_wrapper(p: PrimitiveDefinition) -> PrimitiveDefinition:
-    widths = [w for _, t in p.params for w in t.leaf_widths()] if sum(t.leaves for _, t in p.params) <= WIDE_FAN_IN \
-        else _WidthRuns(p.params)
+    widths = operand_widths.leaf_widths(p.params)
     wout = p.ret.w
     bot_out, inv_out = enc_bot(wout), inv(wout)
     f = p.evaluate
