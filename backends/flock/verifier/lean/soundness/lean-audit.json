@@ -8677,6 +8677,8 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkLink.batchedSessionZC_one": {},
+  "FlockSoundness.Discharge.ZkLink.sessionZC_one": {},
   "FlockSoundness.Discharge.ZkLink.allInh_repZCAt": {
    "signature": [
     "FlockSoundness.Discharge.ZkLink.allInh_repZCAt {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
