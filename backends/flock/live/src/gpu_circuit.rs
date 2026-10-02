@@ -118,9 +118,46 @@ pub enum Live<'a> {
     /// M0: straight to the rep's stream
     Stream(&'a mut LiveChallenger),
     /// M1: through `rounds` (the masking challenger in front of the rep's stream, `crate::replay_round`), with level 0's hiding
-    /// (`level0`: the session's padding and extra lanes; `rep`: this rep's pair, in place of `level0.rep`)
+    /// (`level0`: the session's padding and extra lanes; `flat`: the same words in one page-locked buffer, else the rep flattens
+    /// its own; `rep`: this rep's pair, in place of `level0.rep`)
     #[cfg(feature = "sha512")]
-    Zk { level0: &'a Level0, rep: usize, rounds: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128> },
+    Zk { level0: &'a Level0, flat: Option<&'a Level0Flat>, rep: usize, rounds: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128> },
+}
+
+/// Level 0's hiding as the device uploads it (M1): every lane's padding, then the extra lanes, each lane after lane, in one buffer
+/// of mapped host memory (else the heap), flattened once for a session's two reps.
+#[cfg(feature = "sha512")]
+pub struct Level0Flat {
+    words: HostBuf,
+    pad_words: usize,
+}
+
+#[cfg(feature = "sha512")]
+impl Level0Flat {
+    pub fn new(z: &Level0) -> Self {
+        use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSlice, ParallelSliceMut};
+        let pads: usize = z.pads.iter().map(Vec::len).sum();
+        let n = pads + z.extra.iter().map(Vec::len).sum::<usize>();
+        let mut words = HostBuf::mapped(2 * n).unwrap_or_else(|| HostBuf::Heap(vec![0; 2 * n]));
+        let mut rest: &mut [u64] = &mut words;
+        for lane in z.pads.iter().chain(z.extra.iter()) {
+            let (d, r) = std::mem::take(&mut rest).split_at_mut(2 * lane.len());
+            d.par_chunks_mut(2 << 16).zip(lane.par_chunks(1 << 16)).for_each(|(d, s)| {
+                for (o, x) in d.chunks_exact_mut(2).zip(s) {
+                    (o[0], o[1]) = (x.lo, x.hi);
+                }
+            });
+            rest = r;
+        }
+        Level0Flat { words, pad_words: 2 * pads }
+    }
+
+    /// The padding's and the extra lanes' words, for `z`'s shape.
+    fn ptrs(&self, z: &Level0) -> (*const u64, *const u64) {
+        assert_eq!(self.pad_words, 2 * z.pads.iter().map(Vec::len).sum::<usize>(), "zk: the flat padding is the level's");
+        assert_eq!(self.words.len() - self.pad_words, 2 * z.extra.iter().map(Vec::len).sum::<usize>(), "zk: the flat extra lanes are the level's");
+        (self.words.as_ptr(), self.words[self.pad_words..].as_ptr())
+    }
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
@@ -773,11 +810,16 @@ pub fn prove_circuit(
         Live::Zk { level0, .. } => sc.with_queries0(level0.queries0),
         Live::Stream(_) => sc,
     };
+    #[cfg(feature = "sha512")]
+    let zk_flat = match &live {
+        Live::Zk { flat, .. } => *flat,
+        Live::Stream(_) => None,
+    };
     let (params, mut rounds, level0, zk_rep): (ProveParams, Option<Rounds<'_>>, Option<&Level0>, usize) = match live {
         Live::Stream(ch) => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, Some(ch)), None, None, 0),
         #[cfg(feature = "sha512")]
-        Live::Zk { level0, rep, rounds } => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None),
-                                             Some(Rounds { handler: rounds, failed: None, rounds: 0 }), Some(level0), rep),
+        Live::Zk { level0, rep, rounds, .. } => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None),
+                                                 Some(Rounds { handler: rounds, failed: None, rounds: 0 }), Some(level0), rep),
     };
     let params = match rounds.as_mut() {
         Some(r) => params.with_rounds(r),
@@ -936,12 +978,15 @@ pub fn prove_circuit(
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (z.pads.concat(), z.extra.concat())
+        if zk_flat.is_some() { (Vec::new(), Vec::new()) } else { (z.pads.concat(), z.extra.concat()) }
     });
     #[cfg(feature = "sha512")]
     if let (Some(z), Some((pads, extra))) = (level0, &zk_words) {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, zk_rep as i32, z.t_pad as i32, z.tamper as i32);
-        (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+        (p.zk_pads, p.zk_extra) = match zk_flat {
+            Some(f) => f.ptrs(z),
+            None => (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64),
+        };
     }
     #[cfg(not(feature = "sha512"))]
     let _ = (level0, zk_rep);
