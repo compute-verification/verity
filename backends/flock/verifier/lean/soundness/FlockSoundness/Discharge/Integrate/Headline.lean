@@ -1,6 +1,7 @@
 import FlockSoundness.Discharge.Integrate.Accepted
 import FlockSoundness.Discharge.Hm.Site
 import FlockSoundness.Discharge.Layout.Tables
+import FlockSoundness.Discharge.Layout.Scope
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -34,7 +35,7 @@ variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.
   (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
   {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hs : I.tags.sharedRows = false)
-  (ho : c.outNet = c.unitNet) (h1 : c.unit.inGroups.size = 1) (hpr : Layout.PortReads c hU) {Reg : Type}
+  (hscope : Layout.scopeOk c = true) {Reg : Type}
 
 /-- **`lay` at the session's tables**: e2e-layout's `keyedLayout` at `sitesAt`, the program's outputs the returned
 outputs' bits, the rows' salts at the `hm96` slots' salt columns, the registration's bits the population's returned
@@ -46,18 +47,21 @@ noncomputable abbrev layAt :
         (Layout.keyPlace (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))) :=
   Layout.keyedLayout (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
 
-/-- **`rs` at the session's tables**: e2e-layout's `keyedRowsOuts` at `sitesAt`, with `hsite` from
-`sitesAt_bcSite` (the public file has no tables under a tag without shared rows, `Layout.loadPublic_tables`). -/
+/-- **`rs` at the session's tables**: e2e-layout's `keyedRowsOuts` at `sitesAt`, its circuit conditions from
+`scopeOk` (`Layout.scopeOk_spec`), with `hsite` from `sitesAt_bcSite` (the public file has no tables under a tag without
+shared rows, `Layout.loadPublic_tables`). -/
 noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) (Reg := Reg)) :=
-  Layout.keyedRowsOuts (sitesAt_parse ht dj x₀ hc) Hm.saltCol hc h1 hpr ho
-    (sitesAt_bcSite ht dj x₀ hc ho hpub (Layout.loadPublic_tables hpub hs))
+  Layout.keyedRowsOuts (sitesAt_parse ht dj x₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
+    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
+    (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub (Layout.loadPublic_tables hpub hs))
 
 /-- **`hHm` at the session's rows**: e2e-hm's `keyedRowsOuts_computes`. In a satisfying witness of a drawn unit's
 table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under the salt at its
 `hm96` slot. -/
-theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).Computes :=
-  Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc h1 hpr ho
-    (sitesAt_bcSite ht dj x₀ hc ho hpub (Layout.loadPublic_tables hpub hs))
+theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hs hscope (Reg := Reg)).Computes :=
+  Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
+    (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
+    (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub (Layout.loadPublic_tables hpub hs))
 
 /-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
 noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAt ht dj x₀ S).T
@@ -71,9 +75,11 @@ program `Placed.keyProg c hU n`, at the simulated prover's committed values (1 o
 the plurality of its openings elsewhere), with probability at most `miss(K) + ε_ks + δ_link`.
 
 Its hypotheses, past the session's inputs:
-* conditions on the circuit that e2e-layout's `rs` takes: the unit returns the outputs (`ho`), has only its leaf group
-  (`h1`), and every input a unit row reads is a port bit (`hpr`, `PortReads`, a real condition: e2e-layout's finding);
-  the statement's tag has no shared-row files (`hs`; M0's `verity/flock-circuit` by `rfl`, `Layout.circuit_sharedRows`);
+* the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the
+  unit has only its leaf group, returns the outputs, has `unitLog ≤ 32`, and reads only port bits among its inputs
+  (`Layout.scopeOk_spec` gives `rs`'s `h1`, `ho` and `PortReads`; e2e-layout's `#eval` on M0's composed RoPE circuit
+  returns `true`); the statement's tag has no shared-row files (`hs`; M0's `verity/flock-circuit` by `rfl`,
+  `Layout.circuit_sharedRows`);
 * `hdec` (`DecodesOn`, R11b, at the law's draws only), open: owner e2e-exec (the framing decoder, `wr` as the server's
   record, `opn`, `fin`, `capOf`). At a draw flock-verify accepts whose record carries the coin server's draw `dj S`,
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
@@ -107,8 +113,8 @@ theorem flock_headline_exec
       (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512
-      (planAt ht dj x₀) (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).binding
-        (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr))
+      (planAt ht dj x₀) (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hs hscope (Reg := Reg)).binding
+        (rsAt_computes hU ht hc dj x₀ hpub hs hscope))
       (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
@@ -120,8 +126,8 @@ theorem flock_headline_exec
         K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planAt ht dj x₀)
-              (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).binding
-        (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr))
+              (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hs hscope (Reg := Reg)).binding
+        (rsAt_computes hU ht hc dj x₀ hpub hs hscope))
               (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
@@ -131,15 +137,15 @@ theorem flock_headline_exec
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀) (tabAt ht dj x₀)
-          ((rsAt hU ht hc dj x₀ hpub hs ho h1 hpr (Reg := Reg)).binding
-        (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr)) k Rw M ρ t' :=
+          ((rsAt hU ht hc dj x₀ hpub hs hscope (Reg := Reg)).binding
+        (rsAt_computes hU ht hc dj x₀ hpub hs hscope)) k Rw M ρ t' :=
   (Placed.keyProg c hU n).flock_headline_live_on (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3
     (tablesAt ht dj x₀) (tabAt ht dj x₀)
     (Placed.Sites.progPlaces_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
     {Layout.oneG} (Const.constCols_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
     {Layout.zeroG} (Zero.zeroCols_keyProg hU (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))
-    (layAt hU ht hc dj x₀ (pub := pub)) (rsAt hU ht hc dj x₀ hpub hs ho h1 hpr)
-    (rsAt_computes hU ht hc dj x₀ hpub hs ho h1 hpr) hk hRw hM hρ hr ht' K I wr
+    (layAt hU ht hc dj x₀ (pub := pub)) (rsAt hU ht hc dj x₀ hpub hs hscope)
+    (rsAt_computes hU ht hc dj x₀ hpub hs hscope) hk hRw hM hρ hr ht' K I wr
     opn dg dec one fin capOf N hdec τ hCR hKS
 
 end FlockSoundness.Discharge.Integrate
