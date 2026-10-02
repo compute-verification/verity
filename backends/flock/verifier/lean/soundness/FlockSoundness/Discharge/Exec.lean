@@ -5,6 +5,10 @@ import FlockSoundness.Discharge.Exec.Tables
 import FlockSoundness.Discharge.Exec.Headline
 import FlockSoundness.Discharge.Exec.CompiledL
 import FlockSoundness.Discharge.Exec.CompiledTableL
+import FlockSoundness.Discharge.Exec.SessionSoundL
+import FlockSoundness.Discharge.Exec.SessionAccL
+import FlockSoundness.Discharge.Exec.SessionBatchL
+import FlockSoundness.Discharge.Exec.SessionBatchAccL
 
 /-!
 # R11: flock-verify's acceptance and the audit as Lean defines it
@@ -19,6 +23,9 @@ import FlockSoundness.Discharge.Exec.CompiledTableL
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of
   it (`advRTL_eq`);
+* `SessionSoundL`, `SessionAccL`, `SessionBatchL`, `SessionBatchAccL`: `Session.lean`, `SessionAcc.lean`,
+  `SessionBatch.lean` and `SessionBatchAcc.lean` over a leaf scheme: each table of the salted batched session is
+  knowledge sound (`session_knowledge_soundL`, `session_knowledge_sound_accL`, `joint_le_BL`, `joint_le_accBL`);
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
   `flock_headline_exec_L`).
 -/

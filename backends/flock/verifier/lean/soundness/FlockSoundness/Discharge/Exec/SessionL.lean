@@ -61,12 +61,16 @@ noncomputable def gamesBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)) :=
   List.ofFn fun i => tabAfterL A H E Lf (ts.get i) (caps i)
 
+/-- After `Commit`: one link-point draw, then the games concurrently. -/
+noncomputable def sessAfterBL (fs : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) :
+    Game (List (OutCL F D Sl)) :=
+  Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
+
 /-- **A batched session under `Lf`** (PROTOCOL.md §5): `Commit` sends every table's level-0 cap, then one link-point
 draw, then every table's reps and salted openings concurrently. -/
 noncomputable def sessionBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) : Game (List (OutCL F D Sl)) :=
-  Game.send (Fin ts.length → Cap D) fun caps =>
-    Game.coin (Fin 2 → Fin mPts → F) fun pts => batch ((gamesBL A H E Lf ts caps).map (· pts))
+  Game.send (Fin ts.length → Cap D) fun caps => sessAfterBL (gamesBL A H E Lf ts caps)
 
 /-- The salted session accepts when every table accepts. -/
 def acceptedBL [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (outs : List (OutCL F D Sl)) : Prop :=
