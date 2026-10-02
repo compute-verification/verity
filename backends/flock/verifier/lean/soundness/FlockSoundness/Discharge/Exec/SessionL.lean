@@ -72,6 +72,29 @@ noncomputable def sessionBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.E
 def acceptedBL [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (outs : List (OutCL F D Sl)) : Prop :=
   ∀ i : Fin ts.length, (outs.getD i dfltOutL).accepted = true
 
+/-- **A batched session over any table run** (PROTOCOL.md §5): `Commit` sends every table's commitment `Cm`, then one
+link-point draw, then every table's run `tab` after them, concurrently. `sessionBL` is its instance at `tabAfterL`
+(`sessionBL_eq`); a session whose tables commit or open more (`--zk`'s pads) is another. -/
+def sessionG {Cm Out : Type} (tab : TabSpec mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
+    (ts : List (TabSpec mPts)) : Game (List Out) :=
+  Game.send (Fin ts.length → Cm) fun cms =>
+    Game.coin (Fin 2 → Fin mPts → F) fun pts => batch ((List.ofFn fun i => tab (ts.get i) (cms i)).map (· pts))
+
+/-- `sessionG` accepts when every table's output is accepted by `acc` (`dflt` past the batch). -/
+def acceptedG {Out : Type} (acc : Out → Bool) (dflt : Out) (ts : List (TabSpec mPts)) (outs : List Out) : Prop :=
+  ∀ i : Fin ts.length, acc (outs.getD i dflt) = true
+
+omit [Fintype K] in
+theorem sessionBL_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) :
+    sessionBL A H E Lf ts = sessionG (tabAfterL A H E Lf) ts :=
+  rfl
+
+omit [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] in
+theorem acceptedBL_eq [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (outs : List (OutCL F D Sl)) :
+    acceptedBL ts outs ↔ acceptedG (·.accepted) dfltOutL ts outs :=
+  Iff.rfl
+
 omit [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] in
 /-- The salts' leaf scheme `Leaf.plain` checks what `OpensOK` checks: at it, a table's salted verdict is the
 unsalted one, whatever the (unit) salts. -/
@@ -91,5 +114,18 @@ noncomputable def batchedSessionL {n : ℕ} {Reg : Type} [Inhabited D] [Inhabite
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) : Game Bool :=
   (sessionBL execArith H E Lf (plan S R)).map fun outs => decide (acceptedBL (plan S R) outs)
+
+open Classical in
+/-- **The batched session on a draw, over any table run**: `sessionG tab` accepted by `acc`. `batchedSessionL` is its
+instance at `tabAfterL` (`batchedSessionL_eq`). -/
+noncomputable def batchedSessionG {n : ℕ} {Reg Cm Out : Type}
+    (tab : TabSpec mPts → Cm → (Fin 2 → Fin mPts → 𝔽) → Game Out) (acc : Out → Bool) (dflt : Out)
+    (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (S : Finset (Fin n)) (R : Reg) : Game Bool :=
+  (sessionG tab (plan S R)).map fun outs => decide (acceptedG acc dflt (plan S R) outs)
+
+theorem batchedSessionL_eq {n : ℕ} {Reg : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) :
+    batchedSessionL H E Lf plan = batchedSessionG (tabAfterL execArith H E Lf) (·.accepted) dfltOutL plan :=
+  rfl
 
 end FlockSoundness.Discharge.Exec
