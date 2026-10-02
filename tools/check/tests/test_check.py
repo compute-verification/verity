@@ -203,6 +203,68 @@ def test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir(tmp_pat
     assert CHECK.STORE_REQUIRED_ENV not in CHECK.env() and CHECK.CUSTODY_ENV not in CHECK.env()
 
 
+def _repo(root: Path):
+    """A PR branch `pr` (b.txt) off `main`, which has since gained c.txt; checked out on `pr`. Returns (git, commit)."""
+    import subprocess
+
+    def git(*args):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=root, check=True,
+                       capture_output=True)
+
+    def commit(rel, text):
+        (root / rel).write_text(text)
+        git("add", "-A")
+        git("commit", "-q", "-m", rel)
+
+    git("init", "-q", "-b", "main")
+    commit("a.txt", "a\n")
+    git("checkout", "-q", "-b", "pr")
+    commit("b.txt", "b\n")
+    git("checkout", "-q", "main")
+    commit("c.txt", "c\n")                                  # main moves past the PR's base
+    git("checkout", "-q", "pr")
+    return git, commit
+
+
+def test_a_commit_lands_as_is_only_when_merging_it_into_main_leaves_its_own_tree(tmp_path, monkeypatch):
+    """The 1 Oct count: 15 of 16 checks of a PR's own head counted for nothing, since `research merge` takes a check only of the tree
+    that lands; `--record` warns before spending a slot on one."""
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    git, commit = _repo(tmp_path)
+    assert not CHECK.landable("main")                                # main gained c.txt, which the PR lacks
+    commit("c.txt", "c\n")                                           # the same change on the PR: the merge is its own tree
+    assert CHECK.landable("main")
+    git("merge", "-q", "--no-edit", "main")                          # main is in it
+    assert CHECK.landable("main")
+    commit("c.txt", "c2\n")
+    git("checkout", "-q", "main")
+    commit("c.txt", "c3\n")
+    git("checkout", "-q", "pr")
+    assert not CHECK.landable("main")                                # a conflict lands nothing
+
+
+def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(monkeypatch, capsys):
+    import subprocess
+    import sys
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    for can, said in ((False, True), (True, False)):
+        monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
+        assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
+        out = capsys.readouterr().out
+        assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
+        launched.clear()
+
+
 def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setenv("VERITY_SKIP_STORE", "1")
