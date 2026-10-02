@@ -17,11 +17,13 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
                                    StorageAlloc, TritonLaunch, ViewDesc)
 from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
 from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent
+from verity_vllm.observe.fold.patterns.norms import eps_input
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
 from verity.ir.defs import bind
 from verity.ir.refs import Affine, Explicit, concat
 from verity_vllm.program.registry import b1
-from verity.ir.types import Array, Value
+from verity_vllm.program.registry import value_inputs as VI
+from verity.ir.types import Array, Record, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -230,8 +232,10 @@ def p_rms_triton(node, ctx):
     if not node.is_triton or not node.op.endswith("_rms_norm_kernel"):
         return None
     a = node.enter.args
-    return Compute(bind(b1.RMSNormTriton, N=C["H"], EPS=C["EPS"]), a["input_ptr"].shape[0], (PerRow(a["input_ptr"]), Shared(a["weight_ptr"])),
-                   (PerRow(a["output_ptr"]),), (node.id,), node.enter.module or "")
+    spec, operands = bind(b1.RMSNormTriton, N=C["H"], EPS=C["EPS"]), (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]))
+    if ctx.profile.registered_values:
+        spec, operands = bind(VI.RMSNormTritonV3, N=C["H"]), operands + (eps_input(C["EPS"]),)
+    return Compute(spec, a["input_ptr"].shape[0], operands, (PerRow(a["output_ptr"]),), (node.id,), node.enter.module or "")
 
 
 def p_mm(node, ctx):
@@ -281,9 +285,12 @@ def p_attention(node, ctx):
     for i, (req, p) in enumerate(ctx.start.rows):
         T = p + 1
         slots = tuple(_slot(ctx, req, j) for j in range(T))
-        parts.append(Compute(bind(b1.AttentionV3, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN), 1,
-                             (Gather(q3, (i,)), GatherMany(_kv_flat(kc), (slots,)), GatherMany(_kv_flat(vc), (slots,))), (Gather(out, (i,)),),
-                             (), node.enter.module or "", attribution=((req, p),)))
+        spec = bind(b1.AttentionV3, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
+        operands = (Gather(q3, (i,)), GatherMany(_kv_flat(kc), (slots,)), GatherMany(_kv_flat(vc), (slots,)))
+        if ctx.profile.registered_values:
+            spec = bind(VI.AttentionV10, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
+            operands += (Supplied("registration", f"scale_log2_d{C['D']}", 32, b1._scale_log2_bits(C["D"])),)
+        parts.append(Compute(spec, 1, operands, (Gather(out, (i,)),), (), node.enter.module or "", attribution=((req, p),)))
     return Group(tuple(parts), (node.id, ch.id), node.enter.module or "")
 
 
@@ -291,8 +298,10 @@ def p_fused_norm(node, ctx):
     if node.op != "_C.fused_add_rms_norm.default":
         return None
     x, res, w, eps = node.args
-    return Compute(bind(b1.RMSNormFusedCuda, N=C["H"], EPS=eps), x.shape[0], (PerRow(x), PerRow(res), Shared(w)), (PerRow(x), PerRow(res)),
-                   (node.id,), node.enter.module or "")
+    spec, operands = bind(b1.RMSNormFusedCuda, N=C["H"], EPS=eps), (PerRow(x), PerRow(res), Shared(w))
+    if ctx.profile.registered_values:
+        spec, operands = bind(VI.RMSNormFusedCudaV4, N=C["H"]), operands + (eps_input(eps),)
+    return Compute(spec, x.shape[0], operands, (PerRow(x), PerRow(res)), (node.id,), node.enter.module or "")
 
 
 def p_silu(node, ctx):
@@ -322,8 +331,8 @@ PATTERNS = [Pat(n, f) for n, f in (("embedding", p_embedding), ("rms_triton", p_
                                     ("silu", p_silu), ("index", p_index), ("argmax", p_argmax))]
 
 
-def toy_profile(accepted=False):
-    return Profile("toy", PATTERNS, dict(C), weight_field, accepted)
+def toy_profile(accepted=False, registered_values=False):
+    return Profile("toy", PATTERNS, dict(C), weight_field, accepted, registered_values=registered_values)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -466,6 +475,46 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert len(r1.body.nodes) == sum(by.values()) == len(r1.instances)
     assert r1.steps[0]["nodes"] + r1.steps[1]["nodes"] == len(r1.body.nodes)
     assert r1.program.gates > 0 and r1.timings["program_s"] >= 0
+
+
+def test_registered_values_are_inputs_of_the_program(memory):
+    """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
+    Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
+    import numpy as np
+
+    from verity.ir.constants import REGISTRATION, RUN, inputs, program_data
+    from verity_vllm.program.registry import prims as P
+
+    r = fold(toy_log(), toy_profile(registered_values=True), strict=True)
+    legacy = fold(toy_log(), toy_profile(), strict=True)
+    assert r.report.unsupported == 0 and not r.errors and r.digest != legacy.digest
+    assert [n for n, _ in r.params] == ["prompt", "run", "values", "weights"]
+    eps, scale = int(P.bits_of(np.float32(C["EPS"]))), b1._scale_log2_bits(C["D"])
+    assert r.params[2][1] == Record(("eps", Value(32)), ("scale_log2_d8", Value(32))) and r.params[1][1] == Record()
+    assert r.supplied == {"registration": {"param": 2, "name": "values", "fields": [
+                              {"name": "eps", "width": 32, "bits": f"0x{eps:08x}", "offset": 0},
+                              {"name": "scale_log2_d8", "width": 32, "bits": f"0x{scale:08x}", "offset": 1}]},
+                          "run": [{"param": 1, "name": "run", "request": REQ, "fields": []}],
+                          "input_nodes": {"prompt": [0], "run": [], "values": [1], "weights": [2]}}
+    assert r.program.bindings == (RUN, RUN, REGISTRATION, RUN)
+    assert len(inputs(r.program.circuit)[REGISTRATION]) == 2
+    by = r.report.by_spec
+    assert by["RMSNormTriton_v3{N=16}"] == 3 and by["RMSNormFusedCuda_v4{N=16}"] == 6
+    assert sum(v for k, v in by.items() if k.startswith("Attention_v10{")) == 3 and not any(k.startswith("Attention_v3{") for k in by)
+    held = {cid for consts in program_data(r.program.root).values() for _g, cid in consts}
+    assert {f"Const32[0x{eps:08x}]_v1", f"Const32[0x{scale:08x}]_v1"} & held == set()
+    held_legacy = {cid for consts in program_data(legacy.program.root).values() for _g, cid in consts}
+    assert {f"Const32[0x{eps:08x}]_v1", f"Const32[0x{scale:08x}]_v1"} <= held_legacy
+
+
+def test_a_supplied_value_must_agree_with_its_first_use(memory, monkeypatch):
+    def p_bad_fused(node, ctx):
+        c = p_fused_norm(node, ctx)
+        return None if c is None else Compute(c.spec, c.rows, c.operands[:3] + (Supplied("registration", "eps", 32, 0x3F800000),),
+                                              c.outputs, c.consumed, c.hint)
+    pats = [Pat(p.name, p_bad_fused) if p.name == "fused_norm" else p for p in PATTERNS]
+    with pytest.raises(FoldError, match="value 'eps' is 32-bit 0x3f800000 here"):
+        fold(toy_log(), Profile("toy", pats, dict(C), weight_field, False, registered_values=True), strict=True)
 
 
 def test_step_link_and_kv_provenance(memory):

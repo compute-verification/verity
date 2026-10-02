@@ -1080,10 +1080,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   `Digest` at the parent root; `Out` on the unit range. Values: the layout's BLAKE3 parameters, the key, the public
   digests and outputs, and META's pinned padding values.
 - Coins: `seed` mode carries `"coins":"coin-commit/sha256/v1"` in `Hello`.
-- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 26`, `m = k_log + nbl`; the spec rejects
+- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 27`, `m = k_log + nbl`; the spec rejects
   `m > 35` (no Fast100 schedule exists above it).
 - **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
-  soundness package's `Stmt.InRange`: `k_log ≤ 26`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
+  soundness package's `Stmt.InRange`: `k_log ≤ 27`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
   and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
   check accepts exactly that range.
 
@@ -1313,12 +1313,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
   failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
-- **Registered reads** (`Flock.Registered`). A shared-row header may name `registered`, `{port: {value, positions,
-  paths}}`: rows of a value committed at registration. The verifier then needs its own `--registered F`
-  (`verity/registered-reads/v0`: per port the value, root, leaf count, domain, and each unit's read position). Every table
-  row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, and every instance's ref must name the
-  position the verifier's program reads for its unit, so units must be `derived`. A port named on one side only refuses.
-  Verdicts report `registered`.
+- **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
+  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be their
+  u16 words, padded. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its position, each
+  instance's ref name its unit's read position in the verifier's program (units `derived`). A port on one side only
+  refuses; verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1429,7 +1429,7 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   salt has the producer's `b ‖ c` as its input leaf. A salt commits one row value: reused for another row, it reveals
   `b₁ ⊕ b₂ = x₁ ⊕ x₂`. A link is as good as both proofs (under a draw, an undrawn producer instance's output is unproven),
   and a deduplicated reader table (`shared_rows`) links at most one producer instance per row.
-- **Registered reads** are §16.10's. A registered port is an input row: an output row is its instance's own.
+- **Registered reads** are §16.10's, of `v1` rows. A registered port is an input row: an output row is its instance's own.
 - **Agreement:** README.
 
 ## 17. Acceptance, assumptions and trust

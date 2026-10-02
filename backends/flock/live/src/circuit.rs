@@ -82,10 +82,10 @@ pub const HM_NET: &str = "hm96";
 pub const PER_SLOT: usize = 3;
 /// META's bindings (what the statement binds about the circuit): a class leaves them out.
 pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
-/// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 26`,
+/// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 27`,
 /// at most 1,024 public regions, at most 64 link-point coordinates; with PROTOCOL.md §16.5's `m <= 35`. A statement outside it
 /// is refused, so an accepted statement is one the pins cover.
-pub const IN_RANGE_K_LOG: usize = 26;
+pub const IN_RANGE_K_LOG: usize = 27;
 pub const IN_RANGE_REGIONS: usize = 1024;
 pub const IN_RANGE_M_PTS: usize = 64;
 pub const M_MAX: usize = 35;

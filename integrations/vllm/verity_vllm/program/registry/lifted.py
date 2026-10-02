@@ -284,8 +284,8 @@ def lifted_prim_v1(p: PrimitiveDefinition) -> PrimitiveDefinition:
         from verity_vllm.program.registry.b1 import const
         lp = const(p.ret.w + 1, p.evaluate())
     elif fam == "Input":
-        from verity.ir.program import input_prim
-        lp = input_prim(p.ret.w + 1)
+        from verity.ir.program import RUN, input_prim
+        lp = input_prim(p.ret.w + 1, getattr(p, "binding", RUN))
     elif p.id in ("SelectI32_v1", "SelectF32_v1"):
         lp = l_select(32)
     elif p.id == "SelectBf16_v1":

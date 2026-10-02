@@ -77,9 +77,9 @@ DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000
           "mxf4": ("GemmCoordinateMxf4_v1", "BlackwellMxf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", None)}
 M = 35
 #: BF16's instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's
-#: row slot and its rows' hashing): 24, 24, 25, 26. K = 16384 is at Stmt.InRange's k_log <= 26. The FP8 / FP4 rows take theirs
+#: row slot and its rows' hashing): 24, 24, 25, 26, 27. K = 32768 is at Stmt.InRange's k_log <= 27. The FP8 / FP4 rows take theirs
 #: from the preflight check's staging (`fill`)
-INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512}
+INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512, 32768: 256}
 #: a session's coins, from its verdict: `os-seed-prf` (M0's default: the verifier's 256-bit OS-random seed, committed at Hello
 #: and opened in the verdict, every round's coins its SHA-256 counter-mode PRF) or `live-os` (the verifier's OS draws, round by
 #: round); points under different coin modes are never compared
