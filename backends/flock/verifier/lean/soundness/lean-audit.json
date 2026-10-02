@@ -4993,7 +4993,7 @@
     "  (hc : Eq (Flock.HmRow.parse I.tags I.circuitFile I.tables) (Except.ok c)) {mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
     "  (x₀ : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S₀ (dj S₀)) {pub : Flock.Public}",
-    "  (hpub : Eq (Flock.HmRow.loadPublic I.tags c I.publicFile) (Except.ok pub)) (hs : Eq I.tags.sharedRows Bool.false)",
+    "  (hpub : Eq (Flock.HmRow.loadPublic I.tags c I.publicFile) (Except.ok pub)) (hpt : Eq pub.tables Option.none)",
     "  (hscope : Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true) {Reg : Type} {m : Nat} (σs : Fin n → Fin m)",
     "  (ks : Fin m → Nat) (hks : ∀ (s : Fin m), instLENat.le (ks s) (FlockSoundness.Audit.Law.stratum σs s).card)",
     "  (St : Fin m → Flock.Draw.Stratum) (hS : FlockSoundness.Audit.Law.ExecStrata σs ks St) (Kd pop : Nat) {Ω : Type}",
@@ -5028,7 +5028,7 @@
     "      ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition (FlockSoundness.Discharge.Layout.outsOf c hU n))",
     "      FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512 FlockSoundness.Refine.leaf512",
     "      (FlockSoundness.Discharge.Integrate.planAt ht dj x₀) (FlockSoundness.Discharge.Integrate.tabAt ht dj x₀)",
-    "      ((FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hs hscope).binding ⋯)",
+    "      ((FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hpt hscope).binding ⋯)",
     "      (FlockSoundness.Audit.reg",
     "        (FlockSoundness.Discharge.Exec.simAuditOn FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
     "          FlockSoundness.Refine.leaf512 (FlockSoundness.Discharge.Integrate.tablesAt ht dj x₀) I wr opn dg dec one fin",
@@ -5081,7 +5081,7 @@
     "                    FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512 FlockSoundness.Refine.leaf512",
     "                    (FlockSoundness.Discharge.Integrate.planAt ht dj x₀)",
     "                    (FlockSoundness.Discharge.Integrate.tabAt ht dj x₀)",
-    "                    ((FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hs hscope).binding ⋯)",
+    "                    ((FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hpt hscope).binding ⋯)",
     "                    (FlockSoundness.Audit.reg",
     "                      (FlockSoundness.Discharge.Exec.simAuditOn FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
     "                        FlockSoundness.Refine.leaf512 (FlockSoundness.Discharge.Integrate.tablesAt ht dj x₀) I wr opn dg",
@@ -5106,10 +5106,10 @@
     "      (((FlockSoundness.Discharge.Placed.keyProg c hU n).partition",
     "            (FlockSoundness.Discharge.Layout.outsOf c hU n)).linkBoundE",
     "        (FlockSoundness.Discharge.Integrate.planAt ht dj x₀) (FlockSoundness.Discharge.Integrate.tabAt ht dj x₀)",
-    "        ((FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hs hscope).binding ⋯) k Rw M ρ t'))"
+    "        ((FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hpt hscope).binding ⋯) k Rw M ρ t'))"
    ],
    "assumptions": [],
-   "type_hash": "ada2455c9915f5a9af82fa1f96711663ffa3ec7e581d6435ab6694a8f14df077"
+   "type_hash": "95c8752729ed611f66e75b2fe4ad8104436d29cea210572fa15adc9adc150c9c"
   },
   "FlockSoundness.Discharge.Integrate.g_pos": {
    "signature": [
@@ -5156,12 +5156,12 @@
     "  (hc : Eq (Flock.HmRow.parse I.tags I.circuitFile I.tables) (Except.ok c)) {mPts : Nat}",
     "  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}",
     "  (x₀ : FlockSoundness.Discharge.Integrate.DrawSetup I mPts S₀ (dj S₀)) {pub : Flock.Public}",
-    "  (hpub : Eq (Flock.HmRow.loadPublic I.tags c I.publicFile) (Except.ok pub)) (hs : Eq I.tags.sharedRows Bool.false)",
+    "  (hpub : Eq (Flock.HmRow.loadPublic I.tags c I.publicFile) (Except.ok pub)) (hpt : Eq pub.tables Option.none)",
     "  (hscope : Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true) {Reg : Type} :",
-    "  (FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hs hscope).Computes"
+    "  (FlockSoundness.Discharge.Integrate.rsAt hU ht hc dj x₀ hpub hpt hscope).Computes"
    ],
    "assumptions": [],
-   "type_hash": "227f8d33d143a32825e915f96b36e01d3a2ecdf66bfa28ee0cd6eeb4534f67ab"
+   "type_hash": "dd135bb9154df17cc93ff059486b675f2cf1f46b25aa75b8b9eddfdd833ba7f2"
   },
   "FlockSoundness.Discharge.Integrate.setupH_leaf": {
    "signature": [
@@ -16036,10 +16036,10 @@
    ]
   },
   "FlockSoundness.Discharge.Integrate.Headline": {
-   "digest": "c06ed2405be80106e13efe4129f05d241faa0e6b7dae851666b91cbef89dc3c3",
+   "digest": "3b990b087aab48b5cafe10d16b2fb15b249133a9c1e465e0b3a10709d4fa4475",
    "definitions": {
     "FlockSoundness.Discharge.Integrate.layAt": "f99ea0564ed5c98049c465c1ec7c9183fe27c2af0be351bca55a5bb2d7fdf176",
-    "FlockSoundness.Discharge.Integrate.rsAt": "10ab7056e8e61790fca49c8e5d9b7c7e8e148c29b5db37aa1ad8308587f73511",
+    "FlockSoundness.Discharge.Integrate.rsAt": "1d17e0e7fc8d74ccec8d712be104e9c649899f3e99c5b6447afaaef63e5614d1",
     "FlockSoundness.Discharge.Integrate.tablesAt": "c262a6aabde5f4a647f7c7944e19bee36f0be1b690155589f0be82881f16c616"
    },
    "pins": [
