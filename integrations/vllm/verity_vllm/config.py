@@ -340,6 +340,9 @@ class CommitConfig:
     replay_args: str | None = option("--replay-args", env="REPLAY_ARGS", default=None, help="extra replay flags, verbatim")
     replay_workers: int = option("--replay-workers", env="REPLAY_WORKERS", type=int, default=32, help="TP: replay workers")
     hot_engine: str = option("--hot-engine", env="HOT_ENGINE", default="0", help="1 = run the Commit on the pod's hot worker")
+    group: str = option("--commit-group", env="COMMIT_GROUP", default="", metavar="MEMBERS_JSON",
+                        help="config run: the rows of one engine (this row included) committed in one process under one GPU lease, and "
+                             "replayed by this row's replay stage (verity_vllm.pipeline.row_group)")
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",

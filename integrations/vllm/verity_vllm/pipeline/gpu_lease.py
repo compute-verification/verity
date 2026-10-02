@@ -21,6 +21,8 @@ pin, the openings after release, the closure) reads host memory only. From there
 (``run_main``), before the interpreter's teardown could open one. A Commit that still needs the device after its last run, or whose
 context did not go, keeps the lease to its exit and says why (``kept_reason``). Prechecks, manifest and weights of record come before
 the Commit process; the verdict, the row's records and the research run's publish after it. Without ``GPU_LEASE`` nothing changes.
+A grouped Commit (`commit_group`: the Commits of several rows of one engine in one process) holds one lease: its first row's
+``acquire`` takes it, its later rows keep it and the devices it set (``LEASED``), and only its last row's last run releases it.
 
 ``gpu_lease.json`` beside the row records the lease: requested and started (written by the Commit and the holder), released and the
 stage it was released after (``released_at``: the Commit's last run, or ``process.end`` with ``kept``, the reason), and the minutes
@@ -48,6 +50,7 @@ WATCH_S = 0.2                      # after the release, how often the Commit che
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
 MAX_MIN = "VERITY_LEASE_MAX_MIN"
 TOOL_START = "GPU_LEASE_STARTED"   # the lease tool's own start-time override (its tests): never passed to it
+LEASED = ("CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "GPU_LEASE_UUID")   # what `acquire` sets from the holder: the leased devices
 WEIGHTS_HASH = "VERITY_WEIGHTS_HASH"   # commit's --weights-hash; a leased Commit's default is device
 
 EMPTY_LOOKS, EMPTY_EVERY_S = 120, 0.5   # how long the holder outlives the Commit's exit at most, waiting for its context to go
@@ -154,9 +157,11 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> 
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease, then see only its devices. Nothing before this call may initialise CUDA (the process sees no device until it returns). The
     lease's locks are this process's from here to its ``release`` or its exit; the holder ending first (the lease tool's --max-min)
-    kills this process."""
+    kills this process. A process that holds its lease already (a grouped Commit's later rows, `commit_group`) keeps it."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
+        return
+    if _HELD:
         return
     if cuda_initialised():
         raise SystemExit("GPU lease: CUDA was initialised before the lease (with no device visible); nothing may touch CUDA before "
