@@ -46,7 +46,8 @@ A leased pod's GPUs come from its queue's pool: VY_LEASE_HOSTDIRS (`QUEUE=DIR,..
 directory mounted at `/run/gpu-lease`, e.g. `deployments-gpu=/run/gpu-lease-circuits` so circuits' Commits lease from holders in
 their own quota; any other queue mounts /run/gpu-lease, the `provers` pool.
 
-**Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
+**Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall), and an `exists` line when the
+task's Job was already created, as this task and try, by another path; `done.jsonl` one per ended item.
 Both are append-only: a wrong outcome is corrected by a later `done.jsonl` line for the key (and an `ev: correct` log line) that
 names the line it corrects in `corrects` and cites its evidence; an item's outcome is its last `done.jsonl` line (`status`).
 Inside the Job, the template's own `research run` writes the Attempt.
@@ -424,6 +425,18 @@ def place(item: dict, key: str, job: dict) -> dict:
     return row
 
 
+def submitted(name: str, key: str, idx: int, tries: int) -> bool:
+    """Whether Job `name` is already this item's task `idx`, try `tries`: submitted by another path (by hand, or a feeder) before the
+    tick routed the task before it. Without this, the tick's `create` fails on every pass and nothing after that Job is handled."""
+    try:
+        meta = json.loads(kubectl("get", "job", name, "-o", "json"))["metadata"]
+    except (RuntimeError, ValueError, KeyError):
+        return False
+    labels = meta.get("labels") or {}
+    return ((meta.get("annotations") or {}).get("verity.dev/item"), labels.get("verity.dev/task"), labels.get("verity.dev/try")) \
+        == (key, str(idx), str(tries))
+
+
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
     item = pin(item, dry)
     job = render(item, key, idx, tries)
@@ -431,7 +444,14 @@ def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False
     if dry:
         print(json.dumps(job, indent=1))
         return name
-    kubectl("create", "-f", "-", stdin=json.dumps(job))
+    try:
+        kubectl("create", "-f", "-", stdin=json.dumps(job))
+    except RuntimeError as e:
+        if "AlreadyExists" not in str(e) or not submitted(name, key, idx, tries):
+            raise
+        append("log.jsonl", {"ev": "exists", "job": name, "key": key, "task": idx, "try": tries})
+        print(f"{name} ({key} task {idx} try {tries}) already exists: counted as submitted")
+        return name
     c = job["spec"]["template"]["spec"]["containers"][0]
     append("log.jsonl", {"ev": "submit", "job": name, "key": key, "task": idx, "try": tries,
                          "queue": job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"],
