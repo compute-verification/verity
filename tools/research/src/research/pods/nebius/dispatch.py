@@ -7,6 +7,9 @@
     dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
 Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/python`) and research's kubeconfig.
+Every invocation reads its settings (the VY_* and PACK_* below) from `$VY_DISPATCH_ROOT/dispatch.env` (`KEY=VALUE` lines, `#`
+comments), under any the caller's environment sets: a one-off `submit`, such as n2_build.sh's and n2_commit.sh's over ssh from
+node 2, renders its Job with the loop's CPU slices and lease pools, not the defaults.
 
 **Templates.** Each task of `sky/jobs/<TEMPLATE>.yaml` becomes one batch/v1 Job labelled `kueue.x-k8s.io/queue-name` (Kueue admits
 it by quota and requeues it itself when it is preempted). The Job runs the task's `setup` then `run` with the task's envs, as the
@@ -122,6 +125,21 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
+
+
+def load_settings(path: Path) -> None:
+    """`KEY=VALUE` lines of `path` into os.environ, each only where the caller's environment doesn't set it; no file, no change."""
+    try:
+        lines = path.read_text().splitlines()
+    except FileNotFoundError:
+        return
+    for line in lines:
+        k, sep, v = line.strip().partition("=")
+        if sep and k and not k.startswith("#"):
+            os.environ.setdefault(k.strip(), v.strip())
+
+
+load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
