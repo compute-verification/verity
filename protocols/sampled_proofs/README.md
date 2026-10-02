@@ -101,10 +101,11 @@ from verity_sampled_proofs.plan import VerificationPlan
   to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the test programs `population_program` and `mixed_population_program`.
-- `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`, `reads` (the
-  verifier's read map from its own program), `reads_file` (the Lean verifier's `--registered`), `verify_read`.
+- `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
+  `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
+  (the Lean verifier's `--registered`), `verify_read`.
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
-  law as core's `Stratified`.
+  law as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `law`: `TwoStageLaw` of `Stage`s and its `profile`, the draws `select_replay_units` and `select_verification_units`
@@ -178,7 +179,8 @@ only inside a proof (`one_stage.registered`).
   `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly when it registers values, so v1's bytes
   are unchanged. R7 (`check`, with the verifier's own `registered = {parameter: words}`): the values are exactly the
   verifier's, each with a SHA-512 hex root and the verifier's leaf count, width and domain (`registered_entries`, from
-  its own program), and a value whose root the verifier already holds (`registered_roots`) keeps it.
+  its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`): the log
+  is the only place the verifier holds roots, so a value is committed once whatever the caller passes.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
@@ -187,11 +189,14 @@ only inside a proof (`one_stage.registered`).
   registration's salts (`Registered.statement`, `table` for each instance's position), so its `b ‖ c` are the
   registered ones, with header `registered: {port: {"value", "positions", "paths"}}`: per table row, its position and
   its frame-v3 path to the registered root (siblings leaf level first, 64 bytes each, hex). The Lean verifier, given the
-  verifier's own `--registered` file (`reads_file`: per port, the value, root, leaf count, domain and every unit's
-  position), checks every table row's path and every instance's position, and refuses a statement that names no
-  `registered` entry for such a port or names one it was not given (`backends/flock/verifier/PROTOCOL.md` §16.10).
+  verifier's own `--registered` file (`reads_file`: per port, the value, leaf count, domain and every unit's position
+  from its own program and query, and the root of the registration it accepted), checks every table row's path and
+  every instance's position, and refuses a statement that names no `registered` entry for such a port or names one it
+  was not given, and one whose units it did not derive (`backends/flock/verifier/PROTOCOL.md` §16.10).
 - The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
-  registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them.
+  registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
+  (`audit.session_registered`) reads them off the accepted verdicts of record (the Lean verdict's `registered`), never
+  off the registration; `benchmarks/one_stage`'s driver passes it.
 
 Pinned by `tests/test_registered.py` and, for the Lean verifier's check, `backends/flock/tests/test_lean_registered_reads.py`.
 

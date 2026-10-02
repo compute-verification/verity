@@ -140,15 +140,21 @@ def test_a_read_that_is_not_one_whole_row_is_refused():
 
 
 def test_the_verifiers_reads_file():
+    """Everything in the file but the root is the verifier's own, from its program: a registration that named another leaf
+    count or domain would change nothing here."""
     prog = _program()
     reg = _registered(prog)
-    doc = G.reads_file([reg.entry()], G.reads(prog, Q, {"W": 2}))
+    doc = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
     assert doc == {"format": "verity/registered-reads/v0",
                    "ports": {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "domain": reg.domain.domain_id.hex(),
                                    "reads": list(POS)}}}
-    assert G.reads_file([reg.entry()], G.reads(prog, Q, {"W": 2}), ports={"w": "cs"})["ports"].keys() == {"cs"}
-    with pytest.raises(ValueError, match="does not name"):
-        G.reads_file([], G.reads(prog, Q, {"W": 2}))
+    assert {k: doc["ports"]["w"][k] for k in ("leaves", "domain")} == {k: G.registered_entries(prog, {"W": 2})["W"][k]
+                                                                       for k in ("leaves", "domain")}
+    assert G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, ports={"w": "cs"})["ports"].keys() == {"cs"}
+    with pytest.raises(ValueError, match="does not hold"):
+        G.reads_file(prog, Q, {"W": 2}, {})
+    with pytest.raises(ValueError):
+        G.reads_file(prog, Q, {"W": 3}, {"W": reg.root.hex()})
 
 
 def test_registration_v2_names_the_registered_values_and_r7_holds_them():
@@ -158,7 +164,6 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     assert rec["format"] == "verity/registration/v2" and rec["registered"] == [reg.entry()]
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports}
     assert R.check(rec, prog, Q, **kw, registered={"W": 2}).ok
-    assert R.check(rec, prog, Q, **kw, registered={"W": 2}, registered_roots={"W": reg.root.hex()}).ok
     assert R.digest(rec) != R.digest({**rec, "format": "verity/registration/v1"})
     e = reg.entry()
     cases = [({"registered": [{**e, "leaves": 4}]}, "R7-leaves"), ({"registered": [{**e, "words": 1}]}, "R7-words"),
@@ -167,12 +172,30 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
              ({"registered": [{**e, "extra": 1}]}, "R7-registered"), ({"format": "verity/registration/v1"}, "R1-protocol")]
     for change, code in cases:
         assert code in R.check({**rec, **change}, prog, Q, **kw, registered={"W": 2}).codes, code
-    assert R.check(rec, prog, Q, **kw, registered={"W": 2}, registered_roots={"W": "cd" * 64}).codes == ("R7-held",)
     assert "R7-registered" in R.check(rec, prog, Q, **kw, registered={"W": 3}).codes
     # a v2 record where the verifier registers nothing, and a v1 record where it registers a value, are refused
     assert R.check(rec, prog, Q, **kw).codes == ("keys",)
     v1 = {k: v for k, v in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
     assert R.check(v1, prog, Q, **kw).ok and R.check(v1, prog, Q, **kw, registered={"W": 2}).codes == ("keys",)
+
+
+def test_a_value_is_committed_once_and_the_log_holds_its_root():
+    """R7 holds a later record's root to the one an earlier record of the log registered: the verifier holds no roots
+    beside its log, so no caller can leave them out."""
+    prog = _program()
+    reg = _registered(prog)
+    rec, ports = _record(prog, reg)
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}}
+
+    def later(window, previous, entry):
+        return R.record(prog, Q, LAW, SCHEME, rec["roots"], {**SERVED, "row": window}, previous=R.digest(previous),
+                        registered=[entry] if entry else ())
+
+    assert R.check(later(8, rec, reg.entry()), prog, Q, **kw, log=[rec]).ok
+    assert R.check(later(8, rec, _registered(prog).entry()), prog, Q, **kw, log=[rec]).codes == ("R7-held",)
+    v1 = later(8, rec, None)
+    assert R.held_roots([rec, v1]) == {"W": reg.root.hex()} and R.held_roots([v1]) == {}
+    assert R.check(later(9, v1, _registered(prog).entry()), prog, Q, **kw, log=[rec, v1]).codes == ("R7-held",)
 
 
 def test_a_record_without_registered_values_keeps_v1s_bytes():
@@ -200,3 +223,29 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
     assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": reg.root.hex()})["accepted"]
+
+
+def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
+    """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
+    passes on what the verifier of record opened, and fails closed on anything else."""
+    prog = _program()
+    reg = _registered(prog)
+    rec, _ = _record(prog, reg)
+    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": {"value": "W", "root": reg.root.hex()}}}
+    assert audit.session_registered({"lean": lean}) == {"W": reg.root.hex()}
+    for v in ({**lean, "accepted": False}, {**lean, "accepted": None}, {**lean, "of_record": False}, {**lean, "registered": None},
+              {k: x for k, x in lean.items() if k != "registered"}):
+        assert audit.session_registered({"lean": v}) is None, v
+    other = {**lean, "registered": {"w": {"value": "W", "root": "cd" * 64}}}
+    assert audit.session_registered({"lean": lean, "lean-2": other}) == {"W": None}
+    assert audit.session_registered({"lean": lean, "lean-2": lean}) == {"W": reg.root.hex()}
+
+    def decide(verdicts):
+        return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, verdicts,
+                                  0.25, session_registered=audit.session_registered(verdicts))
+
+    assert decide({"lean": lean})["accepted"]
+    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
+        r = decide(verdicts)
+        assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts

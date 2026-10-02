@@ -18,7 +18,8 @@
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]`, the program's weights, constants and tables committed once under hiding leaves (`registered`), and R7
-  holds them to the verifier's own list. A record registers values exactly when it is v2; v1's bytes are unchanged.
+  holds them to the verifier's own list and to the roots the log's earlier records registered. A record registers values
+  exactly when it is v2; v1's bytes are unchanged.
 """
 from __future__ import annotations
 
@@ -83,15 +84,13 @@ def digest(rec: Mapping[str, Any]) -> str:
     return hashlib.sha512(tag.encode() + b"\0" + canonical_json(dict(rec))).hexdigest()
 
 
-def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
-    """The verifier's own `{value: {"leaves", "words", "domain"}}` for the parameters it expects registered
-    (`values`: `{parameter: words}`), from its own program."""
-    prog = P.program_sha512(program)
-    out = {}
-    for v, w in values.items():
-        n = G.shape(program, v, w)
-        out[v] = {"leaves": n, "words": int(w), "domain": G.domain(prog, v, w, n).domain_id.hex()}
-    return out
+def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """`{value: root}` for every value an earlier record of the log registered, the root of its first registration."""
+    held: dict[str, str] = {}
+    for rec in log:
+        for e in rec.get("registered") or ():
+            held.setdefault(e["value"], e["root"])
+    return held
 
 
 def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) -> dict[str, Any]:
@@ -103,8 +102,7 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
-          registered_roots: Mapping[str, str] | None = None) -> Verdict:
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, and the parameters it expects registered (`registered`: `{parameter: words}`).  `partition`: the
@@ -112,8 +110,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
-    own (`registered_entries`) and, for a value whose root the verifier already holds (`registered_roots`, from a
-    registration it accepted), to that root: a value is committed once."""
+    own (`registered_entries`) and a value an earlier record of the log registered to that record's root (`held_roots`):
+    a value is committed once, and the log is the only place the verifier holds its roots."""
     c = _Collect()
     v2 = bool(registered)
     keys = _KEYS | {"registered"} if v2 else _KEYS
@@ -185,13 +183,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-window", rec["window"])
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, registered_roots or {})
+        _check_registered(c, rec["registered"], program, registered, held_roots(earlier))
     return c.verdict()
 
 
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str]) -> None:
     try:
-        mine = registered_entries(program, values)
+        mine = G.registered_entries(program, values)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
@@ -230,5 +228,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
     return c.verdict()
 
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "matches_public",
-           "query_digest", "receipt", "record", "registered_entries", "served_domain"]
+registered_entries = G.registered_entries
+
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "held_roots",
+           "matches_public", "query_digest", "receipt", "record", "registered_entries", "served_domain"]

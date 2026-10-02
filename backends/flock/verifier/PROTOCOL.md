@@ -1320,7 +1320,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   registration. The verifier then needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, its
   root, leaf count and domain, and the position each unit reads). Every table row's `b ‖ c` must open the root at its
   position (its `hm96-sha512/row/v1` leaf, climbed through its path), and every instance's ref must name the position the
-  verifier's program reads for its unit. A port one side names and the other doesn't refuses. Verdicts report `registered`.
+  verifier's program reads for its unit, so the units must be `derived`: a position binds only as far as its unit does. A
+  port one side names and the other doesn't refuses. Verdicts report `registered`.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1448,7 +1449,8 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
   server retained them. Closed upstream at `631567f7`, where `from_record` requires `msg` on every round of a statement
   whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
-  refuses a row that does not open its registered root. No corpus vector exercises it yet.
+  refuses a row that does not open its registered root. Set 16 exercises it: fresh salts, rows committed afresh, a wrong
+  position, no `--registered`.
 
 At `631567f7` only D1, D2 and D5 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
 in `redigest.py` and `fuzz.py`).

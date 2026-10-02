@@ -55,15 +55,22 @@ def climb (dom leaf : ByteArray) (i depth : Nat) (path : ByteArray) : ByteArray 
 def finding (own : Array Port) : Json :=
   Json.mkObj (own.toList.map fun p => (p.name, Json.mkObj [("value", Json.str p.value), ("root", Json.str (hexOf p.root))]))
 
+/-- The statement check derived the statement's units from the verifier's own program (its partition finding,
+`HmRow.PartitionFinding`), rather than taking them as stated. -/
+def derived (partition : Json) : Bool := (partition.getObjValAs? String "units").toOption == some "derived"
+
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
 the position the verifier's program reads for its unit. Without `own`, a statement that names registered reads is
-refused: its rows would be checked against no root. -/
-def check (c : Circuit) (pub : Public) (own : Option (Array Port)) : V Unit := do
+refused: its rows would be checked against no root. With `own`, the units must be `derived`: a unit's position is the
+verifier's, but which unit an instance is comes from its label, which binds nothing unless the verifier derived it. -/
+def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) : V Unit := do
   let hdr := pub.header.getObjVal? "registered"
   let some own := own
     | if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+  if !derived then
+    throw "registered reads: the statement's units are taken as stated, and a read's position binds only as far as its unit does: the verifier derives them from its own program (--partition, --program)"
   let .ok (.obj kvs) := hdr
     | throw "registered reads: the statement names no registered rows: a registered value's rows committed afresh open no registered root"
   for (name, _) in kvs.toArray do
